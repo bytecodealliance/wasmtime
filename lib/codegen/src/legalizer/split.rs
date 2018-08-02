@@ -139,7 +139,8 @@ fn split_any(
                 .expect("Branches must have value lists.");
             let num_args = args.len(&pos.func.dfg.value_lists);
             // Get the old value passed to the EBB argument we're repairing.
-            let old_arg = args.get(fixed_args + repair.num, &pos.func.dfg.value_lists)
+            let old_arg = args
+                .get(fixed_args + repair.num, &pos.func.dfg.value_lists)
                 .expect("Too few branch arguments");
 
             // It's possible that the CFG's predecessor list has duplicates. Detect them here.
@@ -153,13 +154,15 @@ fn split_any(
             let (lo, hi) = split_value(pos, old_arg, repair.concat, &mut repairs);
 
             // The `lo` part replaces the original argument.
-            *args.get_mut(fixed_args + repair.num, &mut pos.func.dfg.value_lists)
+            *args
+                .get_mut(fixed_args + repair.num, &mut pos.func.dfg.value_lists)
                 .unwrap() = lo;
 
             // The `hi` part goes at the end. Since multiple repairs may have been scheduled to the
             // same EBB, there could be multiple arguments missing.
             if num_args > fixed_args + repair.hi_num {
-                *args.get_mut(fixed_args + repair.hi_num, &mut pos.func.dfg.value_lists)
+                *args
+                    .get_mut(fixed_args + repair.hi_num, &mut pos.func.dfg.value_lists)
                     .unwrap() = hi;
             } else {
                 // We need to append one or more arguments. If we're adding more than one argument,

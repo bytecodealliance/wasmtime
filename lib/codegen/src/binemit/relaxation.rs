@@ -151,7 +151,8 @@ fn relax_branch(
     // Pick the first encoding that can handle the branch range.
     let dfg = &cur.func.dfg;
     let ctrl_type = dfg.ctrl_typevar(inst);
-    if let Some(enc) = isa.legal_encodings(cur.func, &dfg[inst], ctrl_type)
+    if let Some(enc) = isa
+        .legal_encodings(cur.func, &dfg[inst], ctrl_type)
         .find(|&enc| {
             let range = encinfo.branch_range(enc).expect("Branch with no range");
             if !range.contains(offset, dest_offset) {

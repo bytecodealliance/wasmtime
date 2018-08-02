@@ -282,7 +282,8 @@ impl TranslationState {
         environ: &mut FE,
     ) -> GlobalVariable {
         let index = index as GlobalIndex;
-        *self.globals
+        *self
+            .globals
             .entry(index)
             .or_insert_with(|| environ.make_global(func, index))
     }
@@ -296,7 +297,8 @@ impl TranslationState {
         environ: &mut FE,
     ) -> ir::Heap {
         let index = index as MemoryIndex;
-        *self.heaps
+        *self
+            .heaps
             .entry(index)
             .or_insert_with(|| environ.make_heap(func, index))
     }

@@ -412,9 +412,11 @@ pub fn parse_code_section<'data>(
         }
         let mut reader = parser.create_binary_reader();
         let size = reader.bytes_remaining();
-        environ.define_function_body(reader
-            .read_bytes(size)
-            .map_err(WasmError::from_binary_reader_error)?)?;
+        environ.define_function_body(
+            reader
+                .read_bytes(size)
+                .map_err(WasmError::from_binary_reader_error)?,
+        )?;
     }
     Ok(())
 }

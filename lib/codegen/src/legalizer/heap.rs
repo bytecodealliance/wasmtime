@@ -61,20 +61,23 @@ fn dynamic_addr(
     let oob;
     if access_size == 1 {
         // `offset > bound - 1` is the same as `offset >= bound`.
-        oob = pos.ins()
+        oob = pos
+            .ins()
             .icmp(IntCC::UnsignedGreaterThanOrEqual, offset, bound);
     } else if access_size <= min_size {
         // We know that bound >= min_size, so here we can compare `offset > bound - access_size` without
         // wrapping.
         let adj_bound = pos.ins().iadd_imm(bound, -access_size);
-        oob = pos.ins()
+        oob = pos
+            .ins()
             .icmp(IntCC::UnsignedGreaterThan, offset, adj_bound);
     } else {
         // We need an overflow check for the adjusted offset.
         let access_size_val = pos.ins().iconst(offset_ty, access_size);
         let (adj_offset, overflow) = pos.ins().iadd_cout(offset, access_size_val);
         pos.ins().trapnz(overflow, ir::TrapCode::HeapOutOfBounds);
-        oob = pos.ins()
+        oob = pos
+            .ins()
             .icmp(IntCC::UnsignedGreaterThan, adj_offset, bound);
     }
     pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);

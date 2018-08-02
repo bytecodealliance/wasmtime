@@ -167,7 +167,8 @@ where
                         // capable of having the same successor appear
                         // multiple times, so we must deduplicate.
                         let mut unique = EntitySet::<Ebb>::new();
-                        for dest_ebb in self.builder
+                        for dest_ebb in self
+                            .builder
                             .func
                             .jump_tables
                             .get(table)
@@ -544,7 +545,8 @@ where
             Some(entry) => self.position.ebb.unwrap() == entry,
         };
         !is_entry && self.func_ctx.ssa.is_sealed(self.position.ebb.unwrap())
-            && !self.func_ctx
+            && !self
+                .func_ctx
                 .ssa
                 .has_any_predecessors(self.position.ebb.unwrap())
     }

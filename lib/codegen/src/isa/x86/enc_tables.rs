@@ -345,7 +345,8 @@ fn expand_fcvt_to_sint(
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
 
-    let is_done = pos.ins()
+    let is_done = pos
+        .ins()
         .icmp_imm(IntCC::NotEqual, result, 1 << (ty.lane_bits() - 1));
     pos.ins().brnz(is_done, done, &[]);
 

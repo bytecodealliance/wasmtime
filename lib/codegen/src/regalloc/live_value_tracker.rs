@@ -187,7 +187,8 @@ impl LiveValueTracker {
             // If the immediate dominator exits, we must have a stored list for it. This is a
             // requirement to the order EBBs are visited: All dominators must have been processed
             // before the current EBB.
-            let idom_live_list = self.idom_sets
+            let idom_live_list = self
+                .idom_sets
                 .get(&idom)
                 .expect("No stored live set for dominator");
             let ctx = liveness.context(layout);

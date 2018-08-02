@@ -116,7 +116,8 @@ impl SubTest for TestBinEmit {
         let mut func = func.into_owned();
 
         // Fix the stack frame layout so we can test spill/fill encodings.
-        let min_offset = func.stack_slots
+        let min_offset = func
+            .stack_slots
             .values()
             .map(|slot| slot.offset.unwrap())
             .min();
@@ -133,14 +134,12 @@ impl SubTest for TestBinEmit {
                     // Find an encoding that satisfies both immediate field and register
                     // constraints.
                     if let Some(enc) = {
-                        let mut legal_encodings = isa.legal_encodings(
-                            &func,
-                            &func.dfg[inst],
-                            func.dfg.ctrl_typevar(inst),
-                        ).filter(|e| {
-                            let recipe_constraints = &encinfo.constraints[e.recipe()];
-                            recipe_constraints.satisfied(inst, &divert, &func)
-                        });
+                        let mut legal_encodings = isa
+                            .legal_encodings(&func, &func.dfg[inst], func.dfg.ctrl_typevar(inst))
+                            .filter(|e| {
+                                let recipe_constraints = &encinfo.constraints[e.recipe()];
+                                recipe_constraints.satisfied(inst, &divert, &func)
+                            });
 
                         if opt_level == OptLevel::Best {
                             // Get the smallest legal encoding
@@ -207,7 +206,8 @@ impl SubTest for TestBinEmit {
                 // Send legal encodings into the emitter.
                 if enc.is_legal() {
                     // Generate a better error message if output locations are not specified.
-                    if let Some(&v) = func.dfg
+                    if let Some(&v) = func
+                        .dfg
                         .inst_results(inst)
                         .iter()
                         .find(|&&v| !func.locations[v].is_assigned())
@@ -236,7 +236,8 @@ impl SubTest for TestBinEmit {
                     if !enc.is_legal() {
                         // A possible cause of an unencoded instruction is a missing location for
                         // one of the input operands.
-                        if let Some(&v) = func.dfg
+                        if let Some(&v) = func
+                            .dfg
                             .inst_args(inst)
                             .iter()
                             .find(|&&v| !func.locations[v].is_assigned())
@@ -249,11 +250,9 @@ impl SubTest for TestBinEmit {
                         }
 
                         // Do any encodings exist?
-                        let encodings = isa.legal_encodings(
-                            &func,
-                            &func.dfg[inst],
-                            func.dfg.ctrl_typevar(inst),
-                        ).map(|e| encinfo.display(e))
+                        let encodings = isa
+                            .legal_encodings(&func, &func.dfg[inst], func.dfg.ctrl_typevar(inst))
+                            .map(|e| encinfo.display(e))
                             .collect::<Vec<_>>();
 
                         if encodings.is_empty() {

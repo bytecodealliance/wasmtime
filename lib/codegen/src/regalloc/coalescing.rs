@@ -307,7 +307,8 @@ impl<'a> Context<'a> {
         // Create a live range for the new value.
         // TODO: Should we handle ghost values?
         let affinity = Affinity::new(
-            &self.encinfo
+            &self
+                .encinfo
                 .operand_constraints(pos.func.encodings[inst])
                 .expect("Bad copy encoding")
                 .outs[0],
@@ -352,7 +353,8 @@ impl<'a> Context<'a> {
         // Create a live range for the new value.
         // TODO: Handle affinity for ghost values.
         let affinity = Affinity::new(
-            &self.encinfo
+            &self
+                .encinfo
                 .operand_constraints(pos.func.encodings[inst])
                 .expect("Bad copy encoding")
                 .outs[0],
@@ -419,7 +421,8 @@ impl<'a> Context<'a> {
             let node = Node::value(value, 0, self.func);
 
             // Push this value and get the nearest dominating def back.
-            let parent = match self.forest
+            let parent = match self
+                .forest
                 .push_node(node, self.func, self.domtree, self.preorder)
             {
                 None => continue,

@@ -125,7 +125,8 @@ impl<'a> Context<'a> {
         self.process_spills(tracker);
 
         while let Some(inst) = self.cur.next_inst() {
-            if let Some(constraints) = self.encinfo
+            if let Some(constraints) = self
+                .encinfo
                 .operand_constraints(self.cur.func.encodings[inst])
             {
                 self.visit_inst(inst, ebb, constraints, tracker);
@@ -494,7 +495,8 @@ impl<'a> Context<'a> {
         }
 
         // Assign a spill slot for the whole virtual register.
-        let ss = self.cur
+        let ss = self
+            .cur
             .func
             .stack_slots
             .make_spill_slot(self.cur.func.dfg.value_type(value));
