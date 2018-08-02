@@ -27,8 +27,8 @@ sys.path.insert(0, os.path.abspath('../lib/codegen/meta-python'))
 
 # -- General configuration ------------------------------------------------
 
-# If your documentation needs a minimal Sphinx version, state it here.
-#
+# We don't support Sphinx versions before 1.4 since the format of index
+# tuples has changed.
 needs_sphinx = '1.4'
 
 # Add any Sphinx extension module names here, as strings. They can be
