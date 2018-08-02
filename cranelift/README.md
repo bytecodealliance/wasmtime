@@ -3,7 +3,7 @@ Cranelift Code Generator
 
 Cranelift is a low-level retargetable code generator. It translates a
 [target-independent intermediate
-representation](https://cranelift.readthedocs.io/en/latest/langref.html)
+representation](https://cranelift.readthedocs.io/en/latest/ir.html)
 into executable machine code.
 
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)

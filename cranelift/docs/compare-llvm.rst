@@ -89,7 +89,7 @@ representation. Some target ISAs have a fast instruction selector that can
 translate simple code directly to MachineInstrs, bypassing SelectionDAG when
 possible.
 
-:doc:`Cranelift <langref>` uses a single intermediate representation to cover
+:doc:`Cranelift <ir>` uses a single intermediate representation to cover
 these levels of abstraction. This is possible in part because of Cranelift's
 smaller scope.
 

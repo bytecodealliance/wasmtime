@@ -54,7 +54,7 @@ pub enum WasmError {
     /// Cranelift can compile very large and complicated functions, but the [implementation has
     /// limits][limits] that cause compilation to fail when they are exceeded.
     ///
-    /// [limits]: https://cranelift.readthedocs.io/en/latest/langref.html#implementation-limits
+    /// [limits]: https://cranelift.readthedocs.io/en/latest/ir.html#implementation-limits
     #[fail(display = "Implementation limit exceeded")]
     ImplLimitExceeded,
 }

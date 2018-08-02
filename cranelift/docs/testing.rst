@@ -90,7 +90,7 @@ easier to provide substantial input functions for the compiler tests.
 File tests are :file:`*.clif` files in the :file:`filetests/` directory
 hierarchy. Each file has a header describing what to test followed by a number
 of input functions in the :doc:`Cranelift textual intermediate representation
-<langref>`:
+<ir>`:
 
 .. productionlist::
     test_file     : test_header `function_list`
