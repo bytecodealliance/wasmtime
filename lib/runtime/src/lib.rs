@@ -8,7 +8,6 @@
 extern crate cranelift_codegen;
 extern crate cranelift_wasm;
 extern crate target_lexicon;
-extern crate wasmparser;
 
 pub mod compilation;
 pub mod instance;
@@ -590,9 +589,8 @@ impl<'data, 'module> ModuleTranslation<'data, 'module> {
                 self.module.signatures[self.module.functions[func_index]].clone();
 
             let mut trans = FuncTranslator::new();
-            let reader = wasmparser::BinaryReader::new(input);
             trans
-                .translate_from_reader(reader, &mut context.func, &mut self.func_env())
+                .translate(input, &mut context.func, &mut self.func_env())
                 .map_err(|e| e.to_string())?;
 
             let mut code_buf: Vec<u8> = Vec::new();

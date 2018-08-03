@@ -10,5 +10,4 @@ license = "Apache-2.0 WITH LLVM-exception"
 [dependencies]
 cranelift-codegen = "0.18.1"
 cranelift-wasm = "0.18.1"
-wasmparser = "0.17.2"
 target-lexicon = "0.0.3"
