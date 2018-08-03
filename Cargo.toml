@@ -18,9 +18,6 @@ path = "src/wasm2obj.rs"
 
 [dependencies]
 cranelift-codegen = "0.18.1"
-cranelift-frontend = "0.18.1"
-cranelift-reader = "0.18.1"
-cranelift-wasm = "0.18.1"
 cranelift-native = "0.18.1"
 wasmtime-runtime = { path = "lib/runtime" }
 wasmtime-execute = { path = "lib/execute" }

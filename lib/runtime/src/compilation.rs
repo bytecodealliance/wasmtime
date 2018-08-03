@@ -71,8 +71,8 @@ impl binemit::RelocSink for RelocSink {
 }
 
 impl RelocSink {
-    fn new() -> RelocSink {
-        RelocSink {
+    fn new() -> Self {
+        Self {
             func_relocs: Vec::new(),
         }
     }

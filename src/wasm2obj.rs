@@ -4,9 +4,20 @@
 //! IL, then translates it to native code, and writes it out to a native
 //! object file with relocations.
 
+#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates, unstable_features)]
+#![warn(unused_import_braces)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy", allow(new_without_default, new_without_default_derive))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(
+        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
+        unicode_not_nfc, use_self
+    )
+)]
+
 extern crate cranelift_codegen;
 extern crate cranelift_native;
-extern crate cranelift_wasm;
 extern crate docopt;
 extern crate wasmtime_obj;
 extern crate wasmtime_runtime;
@@ -15,7 +26,6 @@ extern crate serde_derive;
 extern crate faerie;
 
 use cranelift_codegen::settings;
-use cranelift_wasm::translate_module;
 use docopt::Docopt;
 use faerie::Artifact;
 use std::error::Error;
@@ -91,20 +101,18 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
-    let mut module = wasmtime_runtime::Module::new();
-    let mut environ = wasmtime_runtime::ModuleEnvironment::new(&*isa, &mut module);
-    translate_module(&data, &mut environ).map_err(|e| e.to_string())?;
-
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));
+
+    let mut module = wasmtime_runtime::Module::new();
+    let environ = wasmtime_runtime::ModuleEnvironment::new(&*isa, &mut module);
+    let translation = environ.translate(&data).map_err(|e| e.to_string())?;
 
     // FIXME: We need to initialize memory in a way that supports alternate
     // memory spaces, imported base addresses, and offsets.
-    for init in &environ.lazy.data_initializers {
+    for init in &translation.lazy.data_initializers {
         obj.define("memory", Vec::from(init.data))
             .map_err(|err| format!("{}", err))?;
     }
-
-    let translation = environ.finish_translation();
 
     let (compilation, relocations) = compile_module(&translation, &*isa)?;
 

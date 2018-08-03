@@ -5,9 +5,20 @@
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
+#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates, unstable_features)]
+#![warn(unused_import_braces)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy", allow(new_without_default, new_without_default_derive))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(
+        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
+        unicode_not_nfc, use_self
+    )
+)]
+
 extern crate cranelift_codegen;
 extern crate cranelift_native;
-extern crate cranelift_wasm;
 extern crate docopt;
 extern crate wasmtime_execute;
 extern crate wasmtime_runtime;
@@ -18,7 +29,6 @@ extern crate tempdir;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
-use cranelift_wasm::translate_module;
 use docopt::Docopt;
 use std::error::Error;
 use std::fs::File;
@@ -119,9 +129,8 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
         data = read_to_end(file_path).map_err(|err| String::from(err.description()))?;
     }
     let mut module = Module::new();
-    let mut environ = ModuleEnvironment::new(isa, &mut module);
-    translate_module(&data, &mut environ).map_err(|e| e.to_string())?;
-    let translation = environ.finish_translation();
+    let environ = ModuleEnvironment::new(isa, &mut module);
+    let translation = environ.translate(&data).map_err(|e| e.to_string())?;
     let instance = match compile_and_link_module(isa, &translation) {
         Ok(compilation) => {
             let mut instance =

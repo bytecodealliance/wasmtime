@@ -8,10 +8,9 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
-use cranelift_wasm;
 use cranelift_wasm::{
-    FunctionIndex, Global, GlobalIndex, GlobalVariable, Memory, MemoryIndex, SignatureIndex, Table,
-    TableIndex, WasmResult,
+    self, FunctionIndex, Global, GlobalIndex, GlobalVariable, Memory, MemoryIndex, SignatureIndex, Table,
+    TableIndex, WasmResult, translate_module,
 };
 use module::{DataInitializer, Export, LazyContents, Module, TableElements};
 use target_lexicon::Triple;
@@ -23,7 +22,7 @@ pub fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
 }
 
 /// Object containing the standalone runtime information. To be passed after creation as argument
-/// to `cranelift_wasm::translatemodule`.
+/// to `compile_module`.
 pub struct ModuleEnvironment<'data, 'module> {
     /// Compilation setting flags.
     pub isa: &'module isa::TargetIsa,
@@ -54,16 +53,18 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
         self.func_env().pointer_type()
     }
 
-    /// Declare that translation of the module is complete. This consumes the
-    /// `ModuleEnvironment` with its mutable reference to the `Module` and
-    /// produces a `ModuleTranslation` with an immutable reference to the
-    /// `Module`.
-    pub fn finish_translation(self) -> ModuleTranslation<'data, 'module> {
-        ModuleTranslation {
+    /// Translate the given wasm module data using this environment. This consumes the
+    /// `ModuleEnvironment` with its mutable reference to the `Module` and produces a
+    /// `ModuleTranslation` with an immutable reference to the `Module` (which has
+    /// become fully populated).
+    pub fn translate(mut self, data: &'data [u8]) -> WasmResult<ModuleTranslation<'data, 'module>> {
+        translate_module(data, &mut self)?;
+
+        Ok(ModuleTranslation {
             isa: self.isa,
             module: self.module,
             lazy: self.lazy,
-        }
+        })
     }
 }
 
@@ -117,7 +118,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 }
 
 /// This trait is useful for
-/// `cranelift_wasm::translatemodule` because it
+/// `cranelift_wasm::translate_module` because it
 /// tells how to translate runtime-dependent wasm instructions. These functions should not be
 /// called by the user.
 impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
@@ -176,7 +177,7 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         self.module.globals.push(global);
     }
 
-    fn get_global(&self, global_index: GlobalIndex) -> &cranelift_wasm::Global {
+    fn get_global(&self, global_index: GlobalIndex) -> &Global {
         &self.module.globals[global_index]
     }
 
@@ -273,7 +274,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.globals_base = Some(new_base);
             new_base
         });
-        let offset = index as usize * pointer_bytes;
+        let offset = index * pointer_bytes;
         let offset32 = offset as i32;
         debug_assert_eq!(offset32 as usize, offset);
         let gv = func.create_global_value(ir::GlobalValueData::Deref {
@@ -295,7 +296,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.globals_base = Some(new_base);
             new_base
         });
-        let offset = index as usize * pointer_bytes;
+        let offset = index * pointer_bytes;
         let offset32 = offset as i32;
         debug_assert_eq!(offset32 as usize, offset);
         let heap_base_addr = func.create_global_value(ir::GlobalValueData::Deref {

@@ -24,11 +24,10 @@ fuzz_target!(|data: &[u8]| {
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     let mut module = Module::new();
     let mut runtime = ModuleEnvironment::new(&*isa, &mut module);
-    match translate_module(&data, &mut runtime) {
+    let translation = match translate_module(&data, &mut runtime) {
         Ok(()) => (),
         Err(_) => return,
     };
-    let translation = runtime.finish_translation();
     let _exec = match wasmtime_execute::compile_module(&*isa, &translation) {
         Ok(x) => x,
         Err(_) => return,

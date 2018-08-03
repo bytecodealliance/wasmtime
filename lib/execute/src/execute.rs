@@ -37,7 +37,7 @@ fn relocate(compilation: &mut Compilation, relocations: &[Vec<Relocation>]) {
             match r.reloc {
                 Reloc::Abs8 => unsafe {
                     let reloc_address = body.as_mut_ptr().offset(r.offset as isize) as i64;
-                    let reloc_addend = r.addend as i64;
+                    let reloc_addend = r.addend;
                     let reloc_abs = target_func_address as i64 + reloc_addend;
                     write_unaligned(reloc_address as *mut i64, reloc_abs);
                 },
