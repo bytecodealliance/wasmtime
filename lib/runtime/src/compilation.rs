@@ -6,7 +6,7 @@ use module::Module;
 /// An Instance of a WebAssemby module.
 #[derive(Debug)]
 pub struct Compilation<'module> {
-    /// The module this `Instance` is instantiated from.
+    /// The module this `Compilation` is compiled from.
     pub module: &'module Module,
 
     /// Compiled machine code for the function bodies.

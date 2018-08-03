@@ -3,8 +3,8 @@
 
 use cranelift_codegen::ir;
 use cranelift_wasm::GlobalIndex;
+use environ::DataInitializer;
 use module::{Module, TableElements};
-use DataInitializer;
 
 const PAGE_SIZE: usize = 65536;
 
@@ -83,7 +83,8 @@ impl Instance {
 
     /// Returns a slice of the contents of allocated linear memory.
     pub fn inspect_memory(&self, memory_index: usize, address: usize, len: usize) -> &[u8] {
-        &self.memories
+        &self
+            .memories
             .get(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index))
             [address..address + len]
