@@ -71,7 +71,7 @@ pub struct DummyModuleInfo {
     pub globals: Vec<Exportable<Global>>,
 
     /// The start function.
-    pub start_func: Option<DefinedFuncIndex>,
+    pub start_func: Option<FuncIndex>,
 }
 
 impl DummyModuleInfo {
@@ -418,7 +418,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             .push(String::from(name));
     }
 
-    fn declare_start_func(&mut self, func_index: DefinedFuncIndex) {
+    fn declare_start_func(&mut self, func_index: FuncIndex) {
         debug_assert!(self.info.start_func.is_none());
         self.info.start_func = Some(func_index);
     }

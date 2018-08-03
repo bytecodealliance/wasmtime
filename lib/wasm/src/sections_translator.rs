@@ -13,7 +13,7 @@ use environ::{ModuleEnvironment, WasmError, WasmResult};
 use std::str::from_utf8;
 use std::vec::Vec;
 use translation_utils::{
-    type_to_type, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
+    type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
     SignatureIndex, Table, TableElementType, TableIndex,
 };
 use wasmparser;
@@ -172,7 +172,7 @@ pub fn parse_start_section(parser: &mut Parser, environ: &mut ModuleEnvironment)
     loop {
         match *parser.read() {
             ParserState::StartSectionEntry(index) => {
-                environ.declare_start_func(DefinedFuncIndex::new(index as usize));
+                environ.declare_start_func(FuncIndex::new(index as usize));
             }
             ParserState::EndSection => break,
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),

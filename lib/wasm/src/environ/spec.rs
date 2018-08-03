@@ -6,7 +6,7 @@ use cranelift_codegen::settings::Flags;
 use std::vec::Vec;
 use target_lexicon::Triple;
 use translation_utils::{
-    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use wasmparser::BinaryReaderError;
 
@@ -284,7 +284,7 @@ pub trait ModuleEnvironment<'data> {
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str);
 
     /// Declares a start function.
-    fn declare_start_func(&mut self, index: DefinedFuncIndex);
+    fn declare_start_func(&mut self, index: FuncIndex);
 
     /// Provides the contents of a function body.
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()>;
