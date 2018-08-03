@@ -24,13 +24,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::isa;
 use cranelift_wasm::{FuncTranslator, FunctionIndex, GlobalIndex, MemoryIndex, TableIndex};
-use environ::{FuncEnvironment, LazyContents};
-
-/// Compute a `ir::ExternalName` for a given wasm function index.
-pub fn get_func_name(func_index: FunctionIndex) -> cranelift_codegen::ir::ExternalName {
-    debug_assert!(func_index as u32 as FunctionIndex == func_index);
-    ir::ExternalName::user(0, func_index as u32)
-}
+use environ::{FuncEnvironment, LazyContents, get_func_name};
 
 /// An entity to export.
 pub enum Export {
