@@ -36,7 +36,7 @@ cargo update
 echo git commit -a -m "\"Bump version to $version"\"
 echo git push
 for crate in \
-    entity codegen frontend native \
+    entity codegen/meta codegen frontend native \
     reader wasm module simplejit \
     faerie umbrella
 do
