@@ -18,9 +18,12 @@ compete with LLVM-based release builds in terms of optimization, but for
 some users, completely unoptimized code is too slow to test with, so a
 "pretty good" mode might be good enough.
 
-There's plenty of work to do to achieve these goals, and if achieve
+There's plenty of work to do to achieve these goals, and if we achieve
 them, we'll have enabled a Rust compiler written entirely in Rust, and
 enabled faster Rust compile times for important use cases.
+
+See [issues tagged "rustc"](https://github.com/CraneStation/cranelift/labels/rustc)
+for a list of some of the things that will be needed.
 
 With all that said, there is a potential goal beyond that, which is to
 build a full optimizing release-capable backend. We can't predict how
@@ -34,7 +37,7 @@ such a thing might look like, including:
    relationships that Rust provides directly has the potential to be
    very powerful without the need for complex alias analysis logic.
    Unsafe blocks are an interesting challenge, however in many simple
-   cases, like Vec, it may be possible to recover what the optimizer
+   cases, like `Vec`, it may be possible to recover what the optimizer
    needs to know.
  - Design for superoptimization. Traditionally, compiler development
    teams have spent many years of manual effort to identify patterns of
