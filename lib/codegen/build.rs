@@ -18,7 +18,7 @@
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
-extern crate meta;
+extern crate cranelift_codegen_meta as meta;
 
 use std::env;
 use std::process;
@@ -80,11 +80,10 @@ fn main() {
     // Now that the Python build process is complete, generate files that are
     // emitted by the `meta` crate.
     // ------------------------------------------------------------------------
-    // Temporarily disable this while we work out how to publish this crate.
-    //if let Err(err) = meta::gen_types::generate("new_types.rs", &out_dir) {
-    //    eprintln!("Error: {}", err);
-    //    process::exit(1);
-    //}
+    if let Err(err) = meta::gen_types::generate("new_types.rs", &out_dir) {
+        eprintln!("Error: {}", err);
+        process::exit(1);
+    }
 }
 
 fn identify_python() -> &'static str {
