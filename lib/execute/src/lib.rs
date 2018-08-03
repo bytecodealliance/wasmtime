@@ -13,10 +13,10 @@ use region::protect;
 use region::Protection;
 use std::mem::transmute;
 use std::ptr::write_unaligned;
-use wasmtime_runtime::{Compilation, Relocation};
+use wasmtime_runtime::{Compilation, Relocation, compile_module};
 
 /// Executes a module that has been translated with the `standalone::Runtime` runtime implementation.
-pub fn compile_module<'data, 'module>(
+pub fn compile_and_link_module<'data, 'module>(
     isa: &TargetIsa,
     translation: &wasmtime_runtime::ModuleTranslation<'data, 'module>,
 ) -> Result<wasmtime_runtime::Compilation<'module>, String> {
@@ -26,7 +26,7 @@ pub fn compile_module<'data, 'module>(
         "imported start functions not supported yet"
     );
 
-    let (mut compilation, relocations) = translation.compile(isa)?;
+    let (mut compilation, relocations) = compile_module(&translation, isa)?;
 
     // Apply relocations, now that we have virtual addresses for everything.
     relocate(&mut compilation, &relocations);

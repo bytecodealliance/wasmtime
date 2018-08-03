@@ -29,7 +29,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::{exit, Command};
 use tempdir::TempDir;
-use wasmtime_execute::{compile_module, execute};
+use wasmtime_execute::{compile_and_link_module, execute};
 use wasmtime_runtime::{Instance, Module, ModuleEnvironment};
 
 const USAGE: &str = "
@@ -122,7 +122,7 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
     let mut environ = ModuleEnvironment::new(isa, &mut module);
     translate_module(&data, &mut environ).map_err(|e| e.to_string())?;
     let translation = environ.finish_translation();
-    let instance = match compile_module(isa, &translation) {
+    let instance = match compile_and_link_module(isa, &translation) {
         Ok(compilation) => {
             let mut instance =
                 Instance::new(compilation.module, &translation.lazy.data_initializers);

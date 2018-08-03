@@ -1,5 +1,5 @@
 //! A `Module` contains all the relevant information translated from a
-//! WebAssembly module.
+//! WebAssembly module, except for the function bodies and data initializers.
 
 use cranelift_codegen::ir;
 use cranelift_wasm::{

@@ -16,7 +16,6 @@ use cranelift_wasm::{
 use module;
 use module::Module;
 use target_lexicon::Triple;
-use ModuleTranslation;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
@@ -456,5 +455,25 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         self.current_memory_extfunc = Some(cur_mem_func);
         let call_inst = pos.ins().call(cur_mem_func, &[]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+    }
+}
+
+/// The result of translating via `ModuleEnvironment`.
+pub struct ModuleTranslation<'data, 'module> {
+    /// Compilation setting flags.
+    pub isa: &'module isa::TargetIsa,
+
+    /// Module information.
+    pub module: &'module Module,
+
+    /// Pointers into the raw data buffer.
+    pub lazy: LazyContents<'data>,
+}
+
+/// Convenience functions for the user to be called after execution for debug purposes.
+impl<'data, 'module> ModuleTranslation<'data, 'module> {
+    /// Return a new `FuncEnvironment` for translation a function.
+    pub fn func_env(&self) -> FuncEnvironment {
+        FuncEnvironment::new(self.isa, &self.module)
     }
 }

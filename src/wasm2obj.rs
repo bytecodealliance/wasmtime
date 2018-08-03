@@ -27,6 +27,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process;
 use wasmtime_obj::emit_module;
+use wasmtime_runtime::compile_module;
 
 const USAGE: &str = "
 Wasm to native object translation utility.
@@ -105,7 +106,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
 
     let translation = environ.finish_translation();
 
-    let (compilation, relocations) = translation.compile(&*isa)?;
+    let (compilation, relocations) = compile_module(&translation, &*isa)?;
 
     emit_module(&mut obj, &compilation, &relocations)?;
 
