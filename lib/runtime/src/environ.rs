@@ -13,45 +13,13 @@ use cranelift_wasm::{
     FunctionIndex, Global, GlobalIndex, GlobalVariable, Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex, WasmResult,
 };
-use module;
-use module::Module;
+use module::{DataInitializer, Export, LazyContents, Module, TableElements};
 use target_lexicon::Triple;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
     debug_assert!(func_index as u32 as FunctionIndex == func_index);
     ir::ExternalName::user(0, func_index as u32)
-}
-
-/// A data initializer for linear memory.
-pub struct DataInitializer<'data> {
-    /// The index of the memory to initialize.
-    pub memory_index: MemoryIndex,
-    /// Optionally a globalvar base to initialize at.
-    pub base: Option<GlobalIndex>,
-    /// A constant offset to initialize at.
-    pub offset: usize,
-    /// The initialization data.
-    pub data: &'data [u8],
-}
-
-/// References to the input wasm data buffer to be decoded and processed later.
-/// separately from the main module translation.
-pub struct LazyContents<'data> {
-    /// References to the function bodies.
-    pub function_body_inputs: Vec<&'data [u8]>,
-
-    /// References to the data initializers.
-    pub data_initializers: Vec<DataInitializer<'data>>,
-}
-
-impl<'data> LazyContents<'data> {
-    fn new() -> Self {
-        Self {
-            function_body_inputs: Vec::new(),
-            data_initializers: Vec::new(),
-        }
-    }
 }
 
 /// Object containing the standalone runtime information. To be passed after creation as argument
@@ -224,7 +192,7 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         elements: Vec<FunctionIndex>,
     ) {
         debug_assert!(base.is_none(), "global-value offsets not supported yet");
-        self.module.table_elements.push(module::TableElements {
+        self.module.table_elements.push(TableElements {
             table_index,
             base,
             offset,
@@ -255,25 +223,25 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str) {
         self.module
             .exports
-            .insert(String::from(name), module::Export::Function(func_index));
+            .insert(String::from(name), Export::Function(func_index));
     }
 
     fn declare_table_export(&mut self, table_index: TableIndex, name: &str) {
         self.module
             .exports
-            .insert(String::from(name), module::Export::Table(table_index));
+            .insert(String::from(name), Export::Table(table_index));
     }
 
     fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) {
         self.module
             .exports
-            .insert(String::from(name), module::Export::Memory(memory_index));
+            .insert(String::from(name), Export::Memory(memory_index));
     }
 
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) {
         self.module
             .exports
-            .insert(String::from(name), module::Export::Global(global_index));
+            .insert(String::from(name), Export::Global(global_index));
     }
 
     fn declare_start_func(&mut self, func_index: FunctionIndex) {

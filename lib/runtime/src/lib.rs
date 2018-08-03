@@ -11,10 +11,8 @@ extern crate target_lexicon;
 
 mod compilation;
 mod environ;
-mod instance;
 mod module;
 
-pub use compilation::{Compilation, compile_module, Relocation, Relocations};
+pub use compilation::{compile_module, Compilation, Relocation, Relocations};
 pub use environ::{ModuleEnvironment, ModuleTranslation};
-pub use instance::Instance;
-pub use module::Module;
+pub use module::{DataInitializer, Module, TableElements};

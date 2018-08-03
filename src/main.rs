@@ -29,8 +29,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::{exit, Command};
 use tempdir::TempDir;
-use wasmtime_execute::{compile_and_link_module, execute};
-use wasmtime_runtime::{Instance, Module, ModuleEnvironment};
+use wasmtime_execute::{compile_and_link_module, execute, Instance};
+use wasmtime_runtime::{Module, ModuleEnvironment};
 
 const USAGE: &str = "
 Wasm to Cranelift IL translation utility.
@@ -125,8 +125,8 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
     let instance = match compile_and_link_module(isa, &translation) {
         Ok(compilation) => {
             let mut instance =
-                Instance::new(compilation.module, &translation.lazy.data_initializers);
-            execute(&compilation, &mut instance)?;
+                Instance::new(translation.module, &translation.lazy.data_initializers);
+            execute(&translation.module, &compilation, &mut instance)?;
             instance
         }
         Err(s) => {

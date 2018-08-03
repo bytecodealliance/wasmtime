@@ -8,22 +8,18 @@ use cranelift_codegen::isa;
 use cranelift_codegen::Context;
 use cranelift_wasm::{FuncTranslator, FunctionIndex};
 use environ::{get_func_name, ModuleTranslation};
-use module::Module;
 
-/// An Instance of a WebAssemby module.
+/// The result of compiling a WebAssemby module's functions.
 #[derive(Debug)]
-pub struct Compilation<'module> {
-    /// The module this `Compilation` is compiled from.
-    pub module: &'module Module,
-
+pub struct Compilation {
     /// Compiled machine code for the function bodies.
     pub functions: Vec<Vec<u8>>,
 }
 
-impl<'module> Compilation<'module> {
+impl Compilation {
     /// Allocates the runtime data structures with the given flags.
-    pub fn new(module: &'module Module, functions: Vec<Vec<u8>>) -> Self {
-        Self { module, functions }
+    pub fn new(functions: Vec<Vec<u8>>) -> Self {
+        Self { functions }
     }
 }
 
@@ -103,7 +99,7 @@ pub type Relocations = Vec<Vec<Relocation>>;
 pub fn compile_module<'data, 'module>(
     translation: &ModuleTranslation<'data, 'module>,
     isa: &isa::TargetIsa,
-) -> Result<(Compilation<'module>, Relocations), String> {
+) -> Result<(Compilation, Relocations), String> {
     let mut functions = Vec::new();
     let mut relocations = Vec::new();
     for (i, input) in translation.lazy.function_body_inputs.iter().enumerate() {
@@ -127,5 +123,5 @@ pub fn compile_module<'data, 'module>(
         functions.push(code_buf);
         relocations.push(reloc_sink.func_relocs);
     }
-    Ok((Compilation::new(translation.module, functions), relocations))
+    Ok((Compilation::new(functions), relocations))
 }

@@ -3,8 +3,7 @@
 
 use cranelift_codegen::ir;
 use cranelift_wasm::GlobalIndex;
-use environ::DataInitializer;
-use module::{Module, TableElements};
+use wasmtime_runtime::{DataInitializer, Module, TableElements};
 
 const PAGE_SIZE: usize = 65536;
 

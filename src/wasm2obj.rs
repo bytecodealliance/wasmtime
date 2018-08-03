@@ -108,10 +108,10 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
 
     let (compilation, relocations) = compile_module(&translation, &*isa)?;
 
-    emit_module(&mut obj, &compilation, &relocations)?;
+    emit_module(&mut obj, &translation.module, &compilation, &relocations)?;
 
-    if !compilation.module.tables.is_empty() {
-        if compilation.module.tables.len() > 1 {
+    if !translation.module.tables.is_empty() {
+        if translation.module.tables.len() > 1 {
             return Err(String::from("multiple tables not supported yet"));
         }
         return Err(String::from("FIXME: implement tables"));

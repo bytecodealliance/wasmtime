@@ -1,5 +1,4 @@
-//! A `Module` contains all the relevant information translated from a
-//! WebAssembly module, except for the function bodies and data initializers.
+//! Data structures for representing decoded wasm modules.
 
 use cranelift_codegen::ir;
 use cranelift_wasm::{
@@ -78,6 +77,37 @@ impl Module {
             exports: HashMap::new(),
             start_func: None,
             table_elements: Vec::new(),
+        }
+    }
+}
+
+/// A data initializer for linear memory.
+pub struct DataInitializer<'data> {
+    /// The index of the memory to initialize.
+    pub memory_index: MemoryIndex,
+    /// Optionally a globalvar base to initialize at.
+    pub base: Option<GlobalIndex>,
+    /// A constant offset to initialize at.
+    pub offset: usize,
+    /// The initialization data.
+    pub data: &'data [u8],
+}
+
+/// References to the input wasm data buffer to be decoded and processed later,
+/// separately from the main module translation.
+pub struct LazyContents<'data> {
+    /// References to the function bodies.
+    pub function_body_inputs: Vec<&'data [u8]>,
+
+    /// References to the data initializers.
+    pub data_initializers: Vec<DataInitializer<'data>>,
+}
+
+impl<'data> LazyContents<'data> {
+    pub fn new() -> Self {
+        Self {
+            function_body_inputs: Vec::new(),
+            data_initializers: Vec::new(),
         }
     }
 }
