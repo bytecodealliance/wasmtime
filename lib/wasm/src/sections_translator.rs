@@ -13,8 +13,8 @@ use environ::{ModuleEnvironment, WasmError, WasmResult};
 use std::str::from_utf8;
 use std::vec::Vec;
 use translation_utils::{
-    type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
-    SignatureIndex, Table, TableElementType, TableIndex,
+    type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex,
+    Table, TableElementType, TableIndex,
 };
 use wasmparser;
 use wasmparser::{
@@ -383,8 +383,10 @@ pub fn parse_elements_section(
         };
         match *parser.read() {
             ParserState::ElementSectionEntryBody(ref elements) => {
-                let elems: Vec<FuncIndex> =
-                    elements.iter().map(|&x| FuncIndex::new(x as usize)).collect();
+                let elems: Vec<FuncIndex> = elements
+                    .iter()
+                    .map(|&x| FuncIndex::new(x as usize))
+                    .collect();
                 environ.declare_table_elements(table_index, base, offset, elems)
             }
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),

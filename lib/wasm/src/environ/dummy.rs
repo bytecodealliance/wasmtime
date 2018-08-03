@@ -12,7 +12,8 @@ use std::string::String;
 use std::vec::Vec;
 use target_lexicon::Triple;
 use translation_utils::{
-    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
+    TableIndex,
 };
 use wasmparser;
 
@@ -426,7 +427,8 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()> {
         let func = {
             let mut func_environ = DummyFuncEnvironment::new(&self.info);
-            let func_index = FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
+            let func_index =
+                FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
             let name = get_func_name(func_index);
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
             let mut func = ir::Function::with_name_signature(name, sig);
