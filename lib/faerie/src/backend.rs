@@ -362,15 +362,15 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
         name: &ir::ExternalName,
         addend: Addend,
     ) {
-        let ref_name: String = match name {
-            &ir::ExternalName::User { .. } => {
+        let ref_name: String = match *name {
+            ir::ExternalName::User { .. } => {
                 if self.namespace.is_function(name) {
                     self.namespace.get_function_decl(name).name.clone()
                 } else {
                     self.namespace.get_data_decl(name).name.clone()
                 }
             }
-            &ir::ExternalName::LibCall(ref libcall) => {
+            ir::ExternalName::LibCall(ref libcall) => {
                 let sym = (self.libcall_names)(*libcall);
                 self.artifact
                     .declare(sym.clone(), faerie::Decl::FunctionImport)
