@@ -20,7 +20,7 @@ extern crate cranelift_codegen;
 extern crate cranelift_native;
 extern crate docopt;
 extern crate wasmtime_obj;
-extern crate wasmtime_runtime;
+extern crate wasmtime_environ;
 #[macro_use]
 extern crate serde_derive;
 extern crate faerie;
@@ -37,13 +37,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process;
 use wasmtime_obj::emit_module;
-use wasmtime_runtime::compile_module;
+use wasmtime_environ::{compile_module, Module, ModuleEnvironment};
 
 const USAGE: &str = "
 Wasm to native object translation utility.
 Takes a binary WebAssembly module into a native object file.
-The translation is dependent on the runtime chosen.
-The default is a dummy runtime that produces placeholder values.
+The translation is dependent on the environment chosen.
+The default is a dummy environment that produces placeholder values.
 
 Usage:
     wasm2obj <file> -o <output>
@@ -103,8 +103,8 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
 
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));
 
-    let mut module = wasmtime_runtime::Module::new();
-    let environ = wasmtime_runtime::ModuleEnvironment::new(&*isa, &mut module);
+    let mut module = Module::new();
+    let environ = ModuleEnvironment::new(&*isa, &mut module);
     let translation = environ.translate(&data).map_err(|e| e.to_string())?;
 
     // FIXME: We need to initialize memory in a way that supports alternate

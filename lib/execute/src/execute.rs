@@ -5,9 +5,10 @@ use region::protect;
 use region::Protection;
 use std::mem::transmute;
 use std::ptr::write_unaligned;
-use wasmtime_runtime::{compile_module, Compilation, Module, ModuleTranslation, Relocation};
+use wasmtime_environ::{compile_module, Compilation, Module, ModuleTranslation, Relocation};
 
-/// Executes a module that has been translated with the `standalone::Runtime` runtime implementation.
+/// Executes a module that has been translated with the `wasmtime-environ` environment
+/// implementation.
 pub fn compile_and_link_module<'data, 'module>(
     isa: &TargetIsa,
     translation: &ModuleTranslation<'data, 'module>,
@@ -56,7 +57,7 @@ fn relocate(compilation: &mut Compilation, relocations: &[Vec<Relocation>]) {
 }
 
 /// Create the VmCtx data structure for the JIT'd code to use. This must
-/// match the VmCtx layout in the runtime.
+/// match the VmCtx layout in the environment.
 fn make_vmctx(instance: &mut Instance) -> Vec<*mut u8> {
     let mut memories = Vec::new();
     let mut vmctx = Vec::new();

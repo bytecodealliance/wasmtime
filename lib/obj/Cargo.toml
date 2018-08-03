@@ -7,5 +7,5 @@ license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
 cranelift-codegen = "0.18.1"
-wasmtime-runtime = { path = "../runtime" }
+wasmtime-environ = { path = "../environ" }
 faerie = "0.4.4"

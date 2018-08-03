@@ -5,13 +5,13 @@ extern crate libfuzzer_sys;
 extern crate cranelift_codegen;
 extern crate cranelift_wasm;
 extern crate cranelift_native;
-extern crate wasmtime_runtime;
+extern crate wasmtime_environ;
 extern crate wasmtime_execute;
 extern crate wasmparser;
 
 use cranelift_codegen::settings;
 use cranelift_wasm::translate_module;
-use wasmtime_runtime::{ModuleEnvironment, Module};
+use wasmtime_environ::{ModuleEnvironment, Module};
 use wasmparser::{validate};
 
 fuzz_target!(|data: &[u8]| {
@@ -23,8 +23,8 @@ fuzz_target!(|data: &[u8]| {
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     let mut module = Module::new();
-    let mut runtime = ModuleEnvironment::new(&*isa, &mut module);
-    let translation = match translate_module(&data, &mut runtime) {
+    let mut environment = ModuleEnvironment::new(&*isa, &mut module);
+    let translation = match translate_module(&data, &mut environment) {
         Ok(()) => (),
         Err(_) => return,
     };

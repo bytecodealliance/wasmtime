@@ -8,7 +8,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-wasmtime-runtime = { path = "../lib/runtime" }
+wasmtime-environ = { path = "../lib/environ" }
 wasmtime-execute = { path = "../lib/execute" }
 cranelift-codegen = "0.18.1"
 cranelift-wasm = "0.18.1"

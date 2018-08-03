@@ -1,15 +1,15 @@
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use faerie::Artifact;
-use wasmtime_runtime;
+use wasmtime_environ::{Module, Compilation, Relocations};
 
-/// Emits a module that has been emitted with the `WasmRuntime` runtime
+/// Emits a module that has been emitted with the `wasmtime-environ` environment
 /// implementation to a native object file.
 pub fn emit_module(
     obj: &mut Artifact,
-    module: &wasmtime_runtime::Module,
-    compilation: &wasmtime_runtime::Compilation,
-    relocations: &wasmtime_runtime::Relocations,
+    module: &Module,
+    compilation: &Compilation,
+    relocations: &Relocations,
 ) -> Result<(), String> {
     debug_assert!(
         module.start_func.is_none() || module.start_func.unwrap() >= module.imported_funcs.len(),

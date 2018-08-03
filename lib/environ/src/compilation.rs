@@ -17,7 +17,7 @@ pub struct Compilation {
 }
 
 impl Compilation {
-    /// Allocates the runtime data structures with the given flags.
+    /// Allocates the compilation result with the given function bodies.
     pub fn new(functions: Vec<Vec<u8>>) -> Self {
         Self { functions }
     }

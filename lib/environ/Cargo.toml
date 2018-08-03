@@ -1,9 +1,9 @@
 [package]
-name = "wasmtime-runtime"
+name = "wasmtime-environ"
 version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 publish = false
-description = "Standalone runtime support for WebAsssembly code in Cranelift"
+description = "Standalone environment support for WebAsssembly code in Cranelift"
 repository = "https://github.com/sunfishcode/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 

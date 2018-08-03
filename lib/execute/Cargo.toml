@@ -3,7 +3,7 @@ name = "wasmtime-execute"
 version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 publish = false
-description = "JIT-style runtime support for WebAsssembly code in Cranelift"
+description = "JIT-style execution for WebAsssembly code in Cranelift"
 repository = "https://github.com/sunfishcode/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 
@@ -11,4 +11,4 @@ license = "Apache-2.0 WITH LLVM-exception"
 cranelift-codegen = "0.18.1"
 cranelift-wasm = "0.18.1"
 region = "0.3.0"
-wasmtime-runtime = { path = "../runtime" }
+wasmtime-environ = { path = "../environ" }

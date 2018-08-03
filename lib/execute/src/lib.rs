@@ -15,7 +15,7 @@
 extern crate cranelift_codegen;
 extern crate cranelift_wasm;
 extern crate region;
-extern crate wasmtime_runtime;
+extern crate wasmtime_environ;
 
 mod execute;
 mod instance;

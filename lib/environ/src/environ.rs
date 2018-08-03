@@ -21,8 +21,8 @@ pub fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
     ir::ExternalName::user(0, func_index as u32)
 }
 
-/// Object containing the standalone runtime information. To be passed after creation as argument
-/// to `compile_module`.
+/// Object containing the standalone environment information. To be passed after creation as
+/// argument to `compile_module`.
 pub struct ModuleEnvironment<'data, 'module> {
     /// Compilation setting flags.
     pub isa: &'module isa::TargetIsa,
@@ -35,7 +35,7 @@ pub struct ModuleEnvironment<'data, 'module> {
 }
 
 impl<'data, 'module> ModuleEnvironment<'data, 'module> {
-    /// Allocates the runtime data structures with the given isa.
+    /// Allocates the enironment data structures with the given isa.
     pub fn new(isa: &'module isa::TargetIsa, module: &'module mut Module) -> Self {
         Self {
             isa,
@@ -119,7 +119,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
 /// This trait is useful for
 /// `cranelift_wasm::translate_module` because it
-/// tells how to translate runtime-dependent wasm instructions. These functions should not be
+/// tells how to translate enironment-dependent wasm instructions. These functions should not be
 /// called by the user.
 impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     for ModuleEnvironment<'data, 'module>

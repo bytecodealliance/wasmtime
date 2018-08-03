@@ -1,4 +1,4 @@
-//! Object-file writing library using the wasmtime runtime.
+//! Object-file writing library using the wasmtime environment.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates, unstable_features)]
 #![warn(unused_import_braces)]
@@ -14,7 +14,7 @@
 
 extern crate cranelift_codegen;
 extern crate faerie;
-extern crate wasmtime_runtime;
+extern crate wasmtime_environ;
 
 mod emit_module;
 

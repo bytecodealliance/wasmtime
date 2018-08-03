@@ -19,7 +19,7 @@ path = "src/wasm2obj.rs"
 [dependencies]
 cranelift-codegen = "0.18.1"
 cranelift-native = "0.18.1"
-wasmtime-runtime = { path = "lib/runtime" }
+wasmtime-environ = { path = "lib/environ" }
 wasmtime-execute = { path = "lib/execute" }
 wasmtime-obj = { path = "lib/obj" }
 docopt = "1.0.0"
