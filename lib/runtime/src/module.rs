@@ -7,15 +7,6 @@ use cranelift_wasm::{
 };
 use std::collections::HashMap;
 
-/// Possible values for a WebAssembly table element.
-#[derive(Clone, Debug)]
-pub enum TableElement {
-    /// A element that, if called, produces a trap.
-    Trap(),
-    /// A function.
-    Function(FunctionIndex),
-}
-
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug)]
 pub struct TableElements {
