@@ -8,7 +8,7 @@ repository = "https://github.com/sunfishcode/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
-cranelift-codegen = "0.16.1"
-cranelift-wasm = "0.16.1"
+cranelift-codegen = "0.18.1"
+cranelift-wasm = "0.18.1"
 region = "0.3.0"
 wasmtime-runtime = { path = "../runtime" }

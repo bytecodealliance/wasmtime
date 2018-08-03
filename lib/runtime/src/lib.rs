@@ -166,9 +166,9 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
         FuncEnvironment::new(self.isa, &self.module)
     }
 
-    fn native_pointer(&self) -> ir::Type {
+    fn pointer_type(&self) -> ir::Type {
         use cranelift_wasm::FuncEnvironment;
-        self.func_env().native_pointer()
+        self.func_env().pointer_type()
     }
 
     /// Declare that translation of the module is complete. This consumes the
@@ -282,13 +282,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             offset: Offset32::new(0),
         });
         func.create_heap(ir::HeapData {
-            base: ir::HeapBase::GlobalValue(heap_base),
+            base: heap_base,
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static {
                 bound: 0x1_0000_0000.into(),
             },
         })
+    }
+
+    fn make_table(&mut self, _func: &mut ir::Function, _index: TableIndex) -> ir::Table {
+        unimplemented!("make_table");
     }
 
     fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
@@ -313,6 +317,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         table_index: TableIndex,
+        _table: ir::Table,
         _sig_index: SignatureIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
@@ -414,7 +419,7 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     fn declare_signature(&mut self, sig: &ir::Signature) {
         let mut sig = sig.clone();
         sig.params.push(AbiParam {
-            value_type: self.native_pointer(),
+            value_type: self.pointer_type(),
             purpose: ArgumentPurpose::VMContext,
             extension: ArgumentExtension::None,
             location: ArgumentLoc::Unassigned,
