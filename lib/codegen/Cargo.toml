@@ -22,7 +22,7 @@ target-lexicon = { version = "0.0.3", default-features = false }
 # accomodated in `tests`.
 
 [build-dependencies]
-cranelift-codegen-meta = { path = "meta" }
+cranelift-codegen-meta = { path = "meta", version = "0.18.1" }
 
 [features]
 # The "std" feature enables use of libstd. The "core" feature enables use
