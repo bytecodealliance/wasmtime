@@ -5,7 +5,7 @@ version = "0.0.0"
 description = "Command-line interface for the wasmtime crate"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
-repository = "https://github.com/sunfishcode/wasmtime"
+repository = "https://github.com/CraneStation/wasmtime"
 publish = false
 
 [[bin]]
