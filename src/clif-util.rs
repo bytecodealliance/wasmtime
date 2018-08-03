@@ -1,5 +1,5 @@
-#![deny(trivial_numeric_casts)]
-#![warn(unused_import_braces, unstable_features, unused_extern_crates)]
+#![deny(trivial_numeric_casts, unused_extern_crates, unstable_features)]
+#![warn(unused_import_braces)]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
