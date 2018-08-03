@@ -1,4 +1,3 @@
-*.pyc
 *.bk
 *.swp
 *.swo
@@ -8,5 +7,4 @@ target
 Cargo.lock
 .*.rustfmt
 cranelift.dbg*
-.mypy_cache
 rusty-tags.*
