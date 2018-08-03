@@ -111,7 +111,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         real_call_args
     }
 
-    fn ptr_size(&self) -> usize {
+    fn pointer_bytes(&self) -> usize {
         usize::from(self.isa.pointer_bytes())
     }
 }
@@ -265,7 +265,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
-        let ptr_size = self.ptr_size();
+        let pointer_bytes = self.pointer_bytes();
         let globals_base = self.globals_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::VMContext {
                 offset: Offset32::new(0),
@@ -273,7 +273,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.globals_base = Some(new_base);
             new_base
         });
-        let offset = index as usize * ptr_size;
+        let offset = index as usize * pointer_bytes;
         let offset32 = offset as i32;
         debug_assert_eq!(offset32 as usize, offset);
         let gv = func.create_global_value(ir::GlobalValueData::Deref {
@@ -287,15 +287,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap {
-        let ptr_size = self.ptr_size();
+        let pointer_bytes = self.pointer_bytes();
         let memories_base = self.memories_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::VMContext {
-                offset: Offset32::new(ptr_size as i32),
+                offset: Offset32::new(pointer_bytes as i32),
             });
             self.globals_base = Some(new_base);
             new_base
         });
-        let offset = index as usize * ptr_size;
+        let offset = index as usize * pointer_bytes;
         let offset32 = offset as i32;
         debug_assert_eq!(offset32 as usize, offset);
         let heap_base_addr = func.create_global_value(ir::GlobalValueData::Deref {
