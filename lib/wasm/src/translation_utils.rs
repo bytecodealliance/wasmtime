@@ -8,7 +8,7 @@ use wasmparser;
 pub struct FuncIndex(u32);
 entity_impl!(FuncIndex);
 
-/// Index type of a defined function inside the WebAssembly module. 
+/// Index type of a defined function inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DefinedFuncIndex(u32);
 entity_impl!(DefinedFuncIndex);
