@@ -117,10 +117,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 }
 
-/// This trait is useful for
-/// `cranelift_wasm::translate_module` because it
-/// tells how to translate enironment-dependent wasm instructions. These functions should not be
-/// called by the user.
+/// This trait is useful for `translate_module` because it tells how to translate
+/// enironment-dependent wasm instructions. These functions should not be called by the user.
 impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     for ModuleEnvironment<'data, 'module>
 {
