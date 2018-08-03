@@ -1,7 +1,7 @@
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use faerie::Artifact;
-use wasmtime_environ::{Module, Compilation, Relocations};
+use wasmtime_environ::{Compilation, Module, Relocations};
 
 /// Emits a module that has been emitted with the `wasmtime-environ` environment
 /// implementation to a native object file.

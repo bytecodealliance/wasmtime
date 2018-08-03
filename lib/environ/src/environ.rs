@@ -9,8 +9,8 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_wasm::{
-    self, FunctionIndex, Global, GlobalIndex, GlobalVariable, Memory, MemoryIndex, SignatureIndex, Table,
-    TableIndex, WasmResult, translate_module,
+    self, translate_module, FunctionIndex, Global, GlobalIndex, GlobalVariable, Memory,
+    MemoryIndex, SignatureIndex, Table, TableIndex, WasmResult,
 };
 use module::{DataInitializer, Export, LazyContents, Module, TableElements};
 use target_lexicon::Triple;

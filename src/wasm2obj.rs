@@ -19,8 +19,8 @@
 extern crate cranelift_codegen;
 extern crate cranelift_native;
 extern crate docopt;
-extern crate wasmtime_obj;
 extern crate wasmtime_environ;
+extern crate wasmtime_obj;
 #[macro_use]
 extern crate serde_derive;
 extern crate faerie;
@@ -36,8 +36,8 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
-use wasmtime_obj::emit_module;
 use wasmtime_environ::{compile_module, Module, ModuleEnvironment};
+use wasmtime_obj::emit_module;
 
 const USAGE: &str = "
 Wasm to native object translation utility.

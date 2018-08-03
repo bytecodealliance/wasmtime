@@ -20,8 +20,8 @@
 extern crate cranelift_codegen;
 extern crate cranelift_native;
 extern crate docopt;
-extern crate wasmtime_execute;
 extern crate wasmtime_environ;
+extern crate wasmtime_execute;
 #[macro_use]
 extern crate serde_derive;
 extern crate tempdir;
@@ -39,8 +39,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::{exit, Command};
 use tempdir::TempDir;
-use wasmtime_execute::{compile_and_link_module, execute, Instance};
 use wasmtime_environ::{Module, ModuleEnvironment};
+use wasmtime_execute::{compile_and_link_module, execute, Instance};
 
 const USAGE: &str = "
 Wasm to Cranelift IL translation utility.
