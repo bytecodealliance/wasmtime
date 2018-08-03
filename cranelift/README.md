@@ -126,7 +126,7 @@ Building the documentation
 --------------------------
 
 To build the Cranelift documentation, you need the [Sphinx documentation
-generator](https://www.sphinx-doc.org/):
+generator](http://www.sphinx-doc.org/) as well as Python 3::
 
     $ pip install sphinx sphinx-autobuild sphinx_rtd_theme
     $ cd cranelift/docs
