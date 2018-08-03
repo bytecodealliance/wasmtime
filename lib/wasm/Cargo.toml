@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-wasm"
-version = "0.18.0"
+version = "0.18.1"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
 repository = "https://github.com/CraneStation/cranelift"
@@ -10,8 +10,8 @@ keywords = ["webassembly", "wasm"]
 
 [dependencies]
 wasmparser = { version = "0.17.2", default-features = false }
-cranelift-codegen = { path = "../codegen", version = "0.18.0", default-features = false }
-cranelift-frontend = { path = "../frontend", version = "0.18.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.18.1", default-features = false }
+cranelift-frontend = { path = "../frontend", version = "0.18.1", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
