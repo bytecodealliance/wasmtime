@@ -27,8 +27,7 @@ function banner {
 # Run rustfmt if we have it.
 banner "Rust formatting"
 if type rustfmt > /dev/null; then
-    # In newer versions of rustfmt, replace --write-mode=diff with --check.
-    if ! "$topdir/format-all.sh" --write-mode=diff ; then
+    if ! "$topdir/format-all.sh" --check ; then
         echo "Formatting diffs detected! Run \"cargo fmt --all\" to correct."
         exit 1
     fi
@@ -59,7 +58,7 @@ cargo doc
 # Run clippy if we have it.
 banner "Rust linter"
 if "$topdir/check-clippy.sh"; then
-    "$topdir/clippy-all.sh" --write-mode=diff
+    "$topdir/clippy-all.sh"
 else
     echo "\`cargo +nightly install clippy\` for optional rust linting"
 fi
