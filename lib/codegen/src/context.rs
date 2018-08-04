@@ -297,10 +297,6 @@ impl Context {
 
     /// Insert prologue and epilogues after computing the stack frame layout.
     pub fn prologue_epilogue(&mut self, isa: &TargetIsa) -> CodegenResult<()> {
-        assert!(
-            self.func.stack_limit.is_none(),
-            "stack_limit isn't implemented yet"
-        );
         isa.prologue_epilogue(&mut self.func)?;
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
