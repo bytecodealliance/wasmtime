@@ -228,3 +228,28 @@ ebb4:
 ; check: function %divert
 ; check: regmove v5, %rcx -> %rbx
 ; check: [Op1popq#58,%rbx]                   v15 = x86_pop.i64
+
+; Stack limit checking
+
+function %stack_limit(i64 stack_limit) {
+    ss0 = explicit_slot 168
+ebb0(v0: i64):
+    return
+}
+
+; check: function %stack_limit(i64 stack_limit [%rdi], i64 fp [%rbp]) -> i64 fp [%rbp] fast {
+; nextln:     ss0 = explicit_slot 168, offset -184
+; nextln:     ss1 = incoming_arg 16, offset -16
+; nextln: 
+; nextln: ebb0(v0: i64 [%rdi], v4: i64 [%rbp]):
+; nextln:     v1 = copy v0
+; nextln:     v2 = iadd_imm v1, 16
+; nextln:     v3 = ifcmp_sp v2
+; nextln:     trapif uge v3, stk_ovf
+; nextln:     x86_push v4
+; nextln:     copy_special %rsp -> %rbp
+; nextln:     adjust_sp_down_imm 176
+; nextln:     adjust_sp_up_imm 176
+; nextln:     v5 = x86_pop.i64
+; nextln:     return v5
+; nextln: }

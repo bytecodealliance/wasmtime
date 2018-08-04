@@ -274,15 +274,6 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Assign the global for the stack limit.
-    fn set_stack_limit(&mut self, gv: GlobalValue, loc: Location) -> ParseResult<()> {
-        if self.function.set_stack_limit(Some(gv)).is_some() {
-            err!(loc, "multiple stack_limit declarations")
-        } else {
-            Ok(())
-        }
-    }
-
     // Allocate a new EBB.
     fn add_ebb(&mut self, ebb: Ebb, loc: Location) -> ParseResult<Ebb> {
         self.map.def_ebb(ebb, loc)?;
@@ -1032,7 +1023,6 @@ impl<'a> Parser<'a> {
     //                   * function-decl
     //                   * signature-decl
     //                   * jump-table-decl
-    //                   * stack-limit-decl
     //
     // The parsed decls are added to `ctx` rather than returned.
     fn parse_preamble(&mut self, ctx: &mut Context) -> ParseResult<()> {
@@ -1074,9 +1064,6 @@ impl<'a> Parser<'a> {
                     self.parse_jump_table_decl()
                         .and_then(|(jt, dat)| ctx.add_jt(jt, dat, self.loc))
                 }
-                Some(Token::Identifier("stack_limit")) => self
-                    .parse_stack_limit_decl()
-                    .and_then(|gv| ctx.set_stack_limit(gv, self.loc)),
                 // More to come..
                 _ => return Ok(()),
             }?;
@@ -1412,15 +1399,6 @@ impl<'a> Parser<'a> {
             }
             _ => err!(self.loc, "expected jump_table entry"),
         }
-    }
-
-    /// stack-limit-decl ::= "stack_limit" "=" GlobalValue(gv)
-    fn parse_stack_limit_decl(&mut self) -> ParseResult<GlobalValue> {
-        self.consume();
-        self.match_token(Token::Equal, "expected '=' in stack limit declaration")?;
-        let gv = self.match_gv("expected global value")?;
-
-        Ok(gv)
     }
 
     // Parse a function body, add contents to `ctx`.

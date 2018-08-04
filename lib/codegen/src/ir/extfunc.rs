@@ -293,10 +293,25 @@ pub enum ArgumentPurpose {
     /// This is a special-purpose argument used to identify the calling convention expected by the
     /// caller in an indirect call. The callee can verify that the expected signature ID matches.
     SignatureId,
+
+    /// A stack limit pointer.
+    ///
+    /// This is a pointer to a stack limit. It is used to check the current stack pointer
+    /// against. Can only appear once in a signature.
+    StackLimit,
 }
 
 /// Text format names of the `ArgumentPurpose` variants.
-static PURPOSE_NAMES: [&str; 7] = ["normal", "sret", "link", "fp", "csr", "vmctx", "sigid"];
+static PURPOSE_NAMES: [&str; 8] = [
+    "normal",
+    "sret",
+    "link",
+    "fp",
+    "csr",
+    "vmctx",
+    "sigid",
+    "stack_limit",
+];
 
 impl fmt::Display for ArgumentPurpose {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -315,6 +330,7 @@ impl FromStr for ArgumentPurpose {
             "csr" => Ok(ArgumentPurpose::CalleeSaved),
             "vmctx" => Ok(ArgumentPurpose::VMContext),
             "sigid" => Ok(ArgumentPurpose::SignatureId),
+            "stack_limit" => Ok(ArgumentPurpose::StackLimit),
             _ => Err(()),
         }
     }
@@ -370,6 +386,8 @@ mod tests {
             ArgumentPurpose::FramePointer,
             ArgumentPurpose::CalleeSaved,
             ArgumentPurpose::VMContext,
+            ArgumentPurpose::SignatureId,
+            ArgumentPurpose::StackLimit,
         ];
         for (&e, &n) in all_purpose.iter().zip(PURPOSE_NAMES.iter()) {
             assert_eq!(e.to_string(), n);

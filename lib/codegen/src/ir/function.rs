@@ -32,10 +32,6 @@ pub struct Function {
     /// Stack slots allocated in this function.
     pub stack_slots: StackSlots,
 
-    /// If not `None`, represents the address that the stack pointer should
-    /// be checked against.
-    pub stack_limit: Option<ir::GlobalValue>,
-
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
@@ -82,7 +78,6 @@ impl Function {
             name,
             signature: sig,
             stack_slots: StackSlots::new(),
-            stack_limit: None,
             global_values: PrimaryMap::new(),
             heaps: PrimaryMap::new(),
             tables: PrimaryMap::new(),
@@ -131,15 +126,6 @@ impl Function {
     /// `stack_addr` instructions.
     pub fn create_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
         self.stack_slots.push(data)
-    }
-
-    /// Sets the stack limit for the function.
-    ///
-    /// Returns previous one if any.
-    pub fn set_stack_limit(&mut self, stack_limit: Option<GlobalValue>) -> Option<GlobalValue> {
-        let prev = self.stack_limit.take();
-        self.stack_limit = stack_limit;
-        prev
     }
 
     /// Adds a signature which can later be used to declare an external function import.

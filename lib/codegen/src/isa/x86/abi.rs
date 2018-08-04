@@ -427,6 +427,21 @@ fn insert_common_prologue(
     csrs: &RegisterSet,
     isa: &TargetIsa,
 ) {
+    if stack_size > 0 {
+        // Check if there is a special stack limit parameter. If so insert stack check.
+        if let Some(stack_limit_arg) = pos.func.special_param(ArgumentPurpose::StackLimit) {
+            // Total stack size is the size of all stack area used by the function, including
+            // pushed CSRs, frame pointer.
+            // Also, the size of a return address, implicitly pushed by a x86 `call` instruction, also
+            // should be accounted for.
+            // TODO: Check if the function body actually contains a `call` instruction.
+            let word_size = isa.pointer_bytes();
+            let total_stack_size = (csrs.iter(GPR).len() + 1 + 1) as i64 * word_size as i64;
+
+            insert_stack_check(pos, total_stack_size, stack_limit_arg);
+        }
+    }
+
     // Append param to entry EBB
     let ebb = pos.current_ebb().expect("missing ebb under cursor");
     let fp = pos.func.dfg.append_ebb_param(ebb, reg_type);
@@ -491,6 +506,29 @@ fn insert_common_prologue(
             pos.ins().adjust_sp_down_imm(Imm64::new(stack_size));
         }
     }
+}
+
+/// Insert a check that generates a trap if the stack pointer goes
+/// below a value in `stack_limit_arg`.
+fn insert_stack_check(pos: &mut EncCursor, stack_size: i64, stack_limit_arg: ir::Value) {
+    use ir::condcodes::IntCC;
+
+    // Copy `stack_limit_arg` into a %rax and use it for calculating
+    // a SP threshold.
+    let stack_limit_copy = pos.ins().copy(stack_limit_arg);
+    pos.func.locations[stack_limit_copy] = ir::ValueLoc::Reg(RU::rax as RegUnit);
+    let sp_threshold = pos.ins().iadd_imm(stack_limit_copy, stack_size);
+    pos.func.locations[sp_threshold] = ir::ValueLoc::Reg(RU::rax as RegUnit);
+
+    // If the stack pointer currently reaches the SP threshold or below it then after opening
+    // the current stack frame, the current stack pointer will reach the limit.
+    let cflags = pos.ins().ifcmp_sp(sp_threshold);
+    pos.func.locations[cflags] = ir::ValueLoc::Reg(RU::rflags as RegUnit);
+    pos.ins().trapif(
+        IntCC::UnsignedGreaterThanOrEqual,
+        cflags,
+        ir::TrapCode::StackOverflow,
+    );
 }
 
 /// Find all `return` instructions and insert epilogues before them.
