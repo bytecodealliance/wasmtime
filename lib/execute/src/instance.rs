@@ -62,8 +62,8 @@ impl Instance {
         }
         for init in data_initializers {
             debug_assert!(init.base.is_none(), "globalvar base not supported yet");
-            let to_init =
-                &mut self.memories[init.memory_index][init.offset..init.offset + init.data.len()];
+            let mem_mut = self.memories[init.memory_index].as_mut();
+            let to_init = &mut mem_mut[init.offset..init.offset + init.data.len()];
             to_init.copy_from_slice(init.data);
         }
     }
@@ -90,7 +90,7 @@ impl Instance {
             .memories
             .get(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index))
-            [address..address + len]
+            .as_ref()[address..address + len]
     }
 
     /// Shows the value of a global variable.

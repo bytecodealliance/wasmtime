@@ -1,10 +1,13 @@
 use memmap;
 use std::fmt;
-use std::ops::{Deref, DerefMut};
 
 const PAGE_SIZE: u32 = 65536;
 const MAX_PAGES: u32 = 65536;
 
+/// A linear memory instance.
+/// 
+/// This linear memory has a stable base address and at the same time allows
+/// for dynamical growing.
 pub struct LinearMemory {
     mmap: memmap::MmapMut,
     current: u32,
@@ -12,6 +15,10 @@ pub struct LinearMemory {
 }
 
 impl LinearMemory {
+    /// Create a new linear memory instance with specified initial and maximum number of pages.
+    ///
+    /// `maximum` cannot be set to more than `65536` pages. If `maximum` is `None` then it
+    /// will be treated as `65336`.
     pub fn new(initial: u32, maximum: Option<u32>) -> Self {
         let maximum = maximum.unwrap_or(MAX_PAGES);
 
@@ -27,14 +34,20 @@ impl LinearMemory {
         }
     }
 
+    /// Returns an base address of this linear memory.
     pub fn base_addr(&self) -> *mut u8 {
         self.mmap.as_ptr() as *mut u8
     }
 
+    /// Returns a number of allocated wasm pages.
     pub fn current_size(&self) -> u32 {
         self.current
     }
 
+    /// Grow memory by the specified amount of pages.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount
+    /// of pages.
     pub fn grow(&mut self, add_pages: u32) -> Option<u32> {
         let new_pages = self
             .current
@@ -48,7 +61,7 @@ impl LinearMemory {
         let new_start_offset = (prev_pages * PAGE_SIZE) as usize;
         let new_end_offset = (new_pages * PAGE_SIZE) as usize;
         for i in new_start_offset..new_end_offset - 1 {
-            self[i] = 0;
+            self.mmap[i] = 0;
         }
 
         Some(prev_pages)
@@ -64,15 +77,14 @@ impl fmt::Debug for LinearMemory {
     }
 }
 
-impl Deref for LinearMemory {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
+impl AsRef<[u8]> for LinearMemory {
+    fn as_ref(&self) -> &[u8] {
         &self.mmap
     }
 }
 
-impl DerefMut for LinearMemory {
-    fn deref_mut(&mut self) -> &mut [u8] {
+impl AsMut<[u8]> for LinearMemory {
+    fn as_mut(&mut self) -> &mut [u8] {
         &mut self.mmap
     }
 }
