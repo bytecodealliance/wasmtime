@@ -23,6 +23,6 @@ mod compilation;
 mod environ;
 mod module;
 
-pub use compilation::{compile_module, Compilation, Relocation, Relocations};
+pub use compilation::{compile_module, Compilation, Relocation, RelocationTarget, Relocations};
 pub use environ::{ModuleEnvironment, ModuleTranslation};
 pub use module::{DataInitializer, Module, TableElements};

@@ -377,7 +377,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.flags().call_conv(),
                 argument_bytes: None,
-                params: vec![AbiParam::new(I32)],
+                params: vec![
+                    AbiParam::new(I32),
+                    AbiParam {
+                        value_type: self.pointer_type(),
+                        purpose: ArgumentPurpose::VMContext,
+                        extension: ArgumentExtension::None,
+                        location: ArgumentLoc::Unassigned,
+                    },
+                ],
                 returns: vec![AbiParam::new(I32)],
             });
             // We currently allocate all code segments independently, so nothing
@@ -391,7 +399,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             })
         });
         self.grow_memory_extfunc = Some(grow_mem_func);
-        let call_inst = pos.ins().call(grow_mem_func, &[val]);
+        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        let call_inst = pos.ins().call(grow_mem_func, &[val, vmctx]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
@@ -406,7 +415,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.flags().call_conv(),
                 argument_bytes: None,
-                params: Vec::new(),
+                params: vec![AbiParam {
+                    value_type: self.pointer_type(),
+                    purpose: ArgumentPurpose::VMContext,
+                    extension: ArgumentExtension::None,
+                    location: ArgumentLoc::Unassigned,
+                }],
                 returns: vec![AbiParam::new(I32)],
             });
             // We currently allocate all code segments independently, so nothing
@@ -420,7 +434,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             })
         });
         self.current_memory_extfunc = Some(cur_mem_func);
-        let call_inst = pos.ins().call(cur_mem_func, &[]);
+        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        let call_inst = pos.ins().call(cur_mem_func, &[vmctx]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 }
