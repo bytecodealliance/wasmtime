@@ -49,10 +49,10 @@ impl LinearMemory {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
     pub fn grow(&mut self, add_pages: u32) -> Option<u32> {
-        let new_pages = self
-            .current
-            .checked_add(add_pages)
-            .filter(|&new_pages| new_pages <= self.maximum)?;
+        let new_pages = match self.current.checked_add(add_pages) {
+            Some(new_pages) => new_pages,
+            None => return None,
+        };
 
         let prev_pages = self.current;
         self.current = new_pages;
