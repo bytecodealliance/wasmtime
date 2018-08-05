@@ -1,9 +1,10 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
 use instance::Instance;
+use memory::LinearMemory;
 use region::protect;
 use region::Protection;
-use std::mem::{forget, transmute};
+use std::mem::transmute;
 use std::ptr::write_unaligned;
 use wasmtime_environ::{
     compile_module, Compilation, Module, ModuleTranslation, Relocation, RelocationTarget,
@@ -82,19 +83,11 @@ extern "C" fn current_memory(vmctx: *mut *mut u8) -> u32 {
 
 /// Create the VmCtx data structure for the JIT'd code to use. This must
 /// match the VmCtx layout in the environment.
-fn make_vmctx(instance: &mut Instance) -> Vec<*mut u8> {
-    let mut memories = Vec::new();
+fn make_vmctx(instance: &mut Instance, mem_base_addrs: &mut [*mut u8]) -> Vec<*mut u8> {
     let mut vmctx = Vec::new();
     vmctx.push(instance.globals.as_mut_ptr());
-    for mem in &mut instance.memories {
-        memories.push(mem.base_addr());
-    }
-    vmctx.push(memories.as_mut_ptr() as *mut u8);
+    vmctx.push(mem_base_addrs.as_mut_ptr() as *mut u8);
     vmctx.push(instance as *mut Instance as *mut u8);
-
-    // Prevent deallocation of memories.
-    forget(memories);
-
     vmctx
 }
 
@@ -129,7 +122,13 @@ pub fn execute(
 
     let code_buf = &compilation.functions[start_index];
 
-    let vmctx = make_vmctx(instance);
+    // Collect all memory base addresses and Vec.
+    let mut mem_base_addrs = instance
+        .memories
+        .iter()
+        .map(LinearMemory::base_addr)
+        .collect::<Vec<_>>();
+    let vmctx = make_vmctx(instance, &mut mem_base_addrs);
 
     // Rather than writing inline assembly to jump to the code region, we use the fact that
     // the Rust ABI for calling a function with no arguments and no return matches the one of

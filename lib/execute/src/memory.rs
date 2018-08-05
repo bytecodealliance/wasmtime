@@ -5,7 +5,7 @@ const PAGE_SIZE: u32 = 65536;
 const MAX_PAGES: u32 = 65536;
 
 /// A linear memory instance.
-/// 
+///
 /// This linear memory has a stable base address and at the same time allows
 /// for dynamical growing.
 pub struct LinearMemory {
