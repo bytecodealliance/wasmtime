@@ -228,6 +228,7 @@ pub enum SerInstData {
     },
 }
 
+/// Convert Cranelift IR instructions to JSON format.
 pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
     let inst = &func.dfg[inst_index];
     match *inst {
@@ -444,7 +445,6 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 destination: destination.to_string(),
             }
         }
-        // to add: jump table serialization
         InstructionData::BranchTable { opcode, arg, table } => SerInstData::BranchTable {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
@@ -661,6 +661,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
     }
 }
 
+/// Serializable version of Cranelift IR instructions.
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct SerInst {
     pub inst_name: String,
@@ -676,6 +677,7 @@ impl SerInst {
     }
 }
 
+/// Serializable version of Cranelift IR Ebbs.
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct SerEbb {
     pub ebb: String,
@@ -703,6 +705,7 @@ pub fn populate_inst(func: &Function, ebb: Ebb) -> Vec<SerInst> {
     ser_vec
 }
 
+/// Translating Ebb parameters into serializable parameters.
 pub fn populate_params(func: &Function, ebb: &Ebb) -> Vec<String> {
     let mut ser_vec: Vec<String> = Vec::new();
     let parameters = func.dfg.ebb_params(*ebb);
@@ -712,12 +715,13 @@ pub fn populate_params(func: &Function, ebb: &Ebb) -> Vec<String> {
     ser_vec
 }
 
-/// Serializable Data Flow Graph
+/// Serializable Data Flow Graph.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SerDataFlowGraph {
     ebbs: Vec<SerEbb>,
 }
 
+/// Serialize all parts of the Cranelift Ebb data structure, this includes name, parameters, and instructions.
 pub fn populate_ebbs(func: &Function) -> Vec<SerEbb> {
     let mut ebb_vec: Vec<SerEbb> = Vec::new();
     for ebb in func.layout.ebbs() {
@@ -729,6 +733,7 @@ pub fn populate_ebbs(func: &Function) -> Vec<SerEbb> {
     ebb_vec
 }
 
+/// Serializable Cranelift IR data flow graph, including all ebbs.
 impl SerDataFlowGraph {
     pub fn create_new(func: &Function) -> Self {
         Self {
@@ -741,6 +746,7 @@ impl SerDataFlowGraph {
     }
 }
 
+/// Serializable signature including function parameters and returns.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SerSignature {
     pub func_params: Vec<String>,
@@ -748,6 +754,7 @@ pub struct SerSignature {
 }
 
 impl SerSignature {
+    /// Creating serializable signature data structure from all Cranelift IR functions.
     fn create_new(sig: &Signature) -> Self {
         let mut params_vec: Vec<String> = Vec::new();
         let mut returns_vec: Vec<String> = Vec::new();
@@ -768,7 +775,7 @@ impl SerSignature {
     }
 }
 
-/// Serializable Function type
+/// Serializable Function type, including name, signature, global values, and data flow graph.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SerFunction {
     pub name: String,
@@ -778,6 +785,7 @@ pub struct SerFunction {
 }
 
 impl SerFunction {
+    /// Creates serializable global values, as well as the functions signature, name, and data flow graph.
     fn create_new(func: &Function) -> Self {
         let mut global_vec: Vec<String> = Vec::new();
         for (glob_name, _) in func.global_values.iter() {
@@ -796,7 +804,8 @@ impl SerFunction {
     }
 }
 
-/// Must have SerObj for deserialization
+/// Must have SerObj for deserialization, contains all of the functions from inside the file to be serialized.
+/// Files have one SerObj each, with all SerFunctions contained inside that SerObj.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SerObj {
     pub functions: Vec<SerFunction>,
