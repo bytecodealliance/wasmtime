@@ -125,7 +125,7 @@ pub fn execute(
     // Collect all memory base addresses and Vec.
     let mut mem_base_addrs = instance
         .memories
-        .iter()
+        .iter_mut()
         .map(LinearMemory::base_addr)
         .collect::<Vec<_>>();
     let vmctx = make_vmctx(instance, &mut mem_base_addrs);

@@ -35,8 +35,8 @@ impl LinearMemory {
     }
 
     /// Returns an base address of this linear memory.
-    pub fn base_addr(&self) -> *mut u8 {
-        self.mmap.as_ptr() as *mut u8
+    pub fn base_addr(&mut self) -> *mut u8 {
+        self.mmap.as_mut_ptr()
     }
 
     /// Returns a number of allocated wasm pages.
