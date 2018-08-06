@@ -3,10 +3,7 @@
   (func $assert (param i32)
     (block $ok
       (br_if $ok
-        (i32.ne
-          (i32.const 0)
-          (get_local 0)
-        )
+        (get_local 0)
       )
       (unreachable)
     )
