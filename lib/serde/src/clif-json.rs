@@ -70,7 +70,7 @@ fn call_ser(file: &str, pretty: bool) -> CommandResult {
     }
 }
 
-/// Deserialize JSON to Cranelift IR 
+/// Deserialize JSON to Cranelift IR
 fn call_de(file: &File) -> CommandResult {
     let de: serde_clif_json::SerObj = match serde_json::from_reader(file) {
         Result::Ok(val) => val,
