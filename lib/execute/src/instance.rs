@@ -4,7 +4,7 @@
 use cranelift_codegen::ir;
 use cranelift_wasm::GlobalIndex;
 use memory::LinearMemory;
-use wasmtime_environ::{DataInitializer, Module, TableElements};
+use wasmtime_environ::{Compilation, DataInitializer, Module, TableElements};
 
 /// An Instance of a WebAssemby module.
 #[derive(Debug)]
@@ -21,20 +21,29 @@ pub struct Instance {
 
 impl Instance {
     /// Create a new `Instance`.
-    pub fn new(module: &Module, data_initializers: &[DataInitializer]) -> Self {
+    pub fn new(
+        module: &Module,
+        compilation: &Compilation,
+        data_initializers: &[DataInitializer],
+    ) -> Self {
         let mut result = Self {
             tables: Vec::new(),
             memories: Vec::new(),
             globals: Vec::new(),
         };
-        result.instantiate_tables(module, &module.table_elements);
+        result.instantiate_tables(module, compilation, &module.table_elements);
         result.instantiate_memories(module, data_initializers);
         result.instantiate_globals(module);
         result
     }
 
     /// Allocate memory in `self` for just the tables of the current module.
-    fn instantiate_tables(&mut self, module: &Module, table_initializers: &[TableElements]) {
+    fn instantiate_tables(
+        &mut self,
+        module: &Module,
+        compilation: &Compilation,
+        table_initializers: &[TableElements],
+    ) {
         debug_assert!(self.tables.is_empty());
         self.tables.reserve_exact(module.tables.len());
         for table in &module.tables {
@@ -47,7 +56,10 @@ impl Instance {
             debug_assert!(init.base.is_none(), "globalvar base not supported yet");
             let to_init =
                 &mut self.tables[init.table_index][init.offset..init.offset + init.elements.len()];
-            to_init.copy_from_slice(&init.elements);
+            for (i, func_idx) in init.elements.iter().enumerate() {
+                let code_buf = &compilation.functions[*func_idx];
+                to_init[i] = code_buf.as_ptr() as usize;
+            }
         }
     }
 

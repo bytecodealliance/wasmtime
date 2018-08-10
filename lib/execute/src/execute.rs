@@ -5,7 +5,7 @@ use memory::LinearMemory;
 use region::protect;
 use region::Protection;
 use std::mem::transmute;
-use std::ptr::write_unaligned;
+use std::ptr::{self, write_unaligned};
 use wasmtime_environ::{
     compile_module, Compilation, Module, ModuleTranslation, Relocation, RelocationTarget,
 };
@@ -66,7 +66,7 @@ fn relocate(compilation: &mut Compilation, relocations: &[Vec<Relocation>]) {
 
 extern "C" fn grow_memory(size: u32, vmctx: *mut *mut u8) -> u32 {
     unsafe {
-        let instance = (*vmctx.offset(2)) as *mut Instance;
+        let instance = (*vmctx.offset(4)) as *mut Instance;
         (*instance)
             .memory_mut(0)
             .grow(size)
@@ -76,7 +76,7 @@ extern "C" fn grow_memory(size: u32, vmctx: *mut *mut u8) -> u32 {
 
 extern "C" fn current_memory(vmctx: *mut *mut u8) -> u32 {
     unsafe {
-        let instance = (*vmctx.offset(2)) as *mut Instance;
+        let instance = (*vmctx.offset(4)) as *mut Instance;
         (*instance).memory_mut(0).current_size()
     }
 }
@@ -84,10 +84,24 @@ extern "C" fn current_memory(vmctx: *mut *mut u8) -> u32 {
 /// Create the VmCtx data structure for the JIT'd code to use. This must
 /// match the VmCtx layout in the environment.
 fn make_vmctx(instance: &mut Instance, mem_base_addrs: &mut [*mut u8]) -> Vec<*mut u8> {
+    debug_assert!(
+        instance.tables.len() <= 1,
+        "non-default tables is not supported"
+    );
+
+    let (default_table_ptr, default_table_len) = instance
+        .tables
+        .get_mut(0)
+        .map(|table| (table.as_mut_ptr() as *mut u8, table.len()))
+        .unwrap_or((ptr::null_mut(), 0));
+
     let mut vmctx = Vec::new();
     vmctx.push(instance.globals.as_mut_ptr());
     vmctx.push(mem_base_addrs.as_mut_ptr() as *mut u8);
+    vmctx.push(default_table_ptr);
+    vmctx.push(default_table_len as *mut u8);
     vmctx.push(instance as *mut Instance as *mut u8);
+
     vmctx
 }
 
