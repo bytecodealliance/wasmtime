@@ -217,6 +217,7 @@ fn callee_saved_gprs(isa: &TargetIsa) -> &'static [RU] {
     }
 }
 
+/// Get the set of callee-saved registers that are used.
 fn callee_saved_gprs_used(isa: &TargetIsa, func: &ir::Function) -> RegisterSet {
     let mut all_callee_saved = RegisterSet::empty();
     for reg in callee_saved_gprs(isa) {
