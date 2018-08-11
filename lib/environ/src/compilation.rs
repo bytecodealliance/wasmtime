@@ -46,16 +46,19 @@ impl binemit::RelocSink for RelocSink {
         name: &ExternalName,
         addend: binemit::Addend,
     ) {
-        // FIXME: Handle grow_memory/current_memory.
-        let func_index = if let ExternalName::User { namespace, index } = *name {
+        let reloc_target = if let ExternalName::User { namespace, index } = *name {
             debug_assert!(namespace == 0);
-            index
+            RelocationTarget::UserFunc(index as usize)
+        } else if *name == ExternalName::testcase("grow_memory") {
+            RelocationTarget::GrowMemory
+        } else if *name == ExternalName::testcase("current_memory") {
+            RelocationTarget::CurrentMemory
         } else {
             panic!("unrecognized external name")
-        } as usize;
+        };
         self.func_relocs.push(Relocation {
             reloc,
-            func_index,
+            reloc_target,
             offset,
             addend,
         });
@@ -83,12 +86,23 @@ impl RelocSink {
 pub struct Relocation {
     /// The relocation code.
     pub reloc: binemit::Reloc,
-    /// The function index.
-    pub func_index: FunctionIndex,
+    /// Relocation target.
+    pub reloc_target: RelocationTarget,
     /// The offset where to apply the relocation.
     pub offset: binemit::CodeOffset,
     /// The addend to add to the relocation value.
     pub addend: binemit::Addend,
+}
+
+/// Destination function. Can be either user function or some special one, like grow_memory.
+#[derive(Debug)]
+pub enum RelocationTarget {
+    /// The user function index.
+    UserFunc(FunctionIndex),
+    /// Function for growing the default memory by the specified amount of pages.
+    GrowMemory,
+    /// Function for query current size of the default linear memory.
+    CurrentMemory,
 }
 
 /// Relocations to apply to function bodies.

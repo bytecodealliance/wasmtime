@@ -14,11 +14,13 @@
 
 extern crate cranelift_codegen;
 extern crate cranelift_wasm;
+extern crate memmap;
 extern crate region;
 extern crate wasmtime_environ;
 
 mod execute;
 mod instance;
+mod memory;
 
 pub use execute::{compile_and_link_module, execute};
 pub use instance::Instance;

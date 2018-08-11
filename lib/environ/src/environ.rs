@@ -3,8 +3,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef,
-    Function, InstBuilder, Signature,
+    AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, InstBuilder, Signature,
 };
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
@@ -132,12 +131,10 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
 
     fn declare_signature(&mut self, sig: &ir::Signature) {
         let mut sig = sig.clone();
-        sig.params.push(AbiParam {
-            value_type: self.pointer_type(),
-            purpose: ArgumentPurpose::VMContext,
-            extension: ArgumentExtension::None,
-            location: ArgumentLoc::Unassigned,
-        });
+        sig.params.push(AbiParam::special(
+            self.pointer_type(),
+            ArgumentPurpose::VMContext,
+        ));
         // TODO: Deduplicate signatures.
         self.module.signatures.push(sig);
     }
@@ -377,7 +374,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.flags().call_conv(),
                 argument_bytes: None,
-                params: vec![AbiParam::new(I32)],
+                params: vec![
+                    AbiParam::new(I32),
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                ],
                 returns: vec![AbiParam::new(I32)],
             });
             // We currently allocate all code segments independently, so nothing
@@ -391,7 +391,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             })
         });
         self.grow_memory_extfunc = Some(grow_mem_func);
-        let call_inst = pos.ins().call(grow_mem_func, &[val]);
+        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        let call_inst = pos.ins().call(grow_mem_func, &[val, vmctx]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
@@ -406,7 +407,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.flags().call_conv(),
                 argument_bytes: None,
-                params: Vec::new(),
+                params: vec![AbiParam::special(
+                    self.pointer_type(),
+                    ArgumentPurpose::VMContext,
+                )],
                 returns: vec![AbiParam::new(I32)],
             });
             // We currently allocate all code segments independently, so nothing
@@ -420,7 +424,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             })
         });
         self.current_memory_extfunc = Some(cur_mem_func);
-        let call_inst = pos.ins().call(cur_mem_func, &[]);
+        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        let call_inst = pos.ins().call(cur_mem_func, &[vmctx]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 }

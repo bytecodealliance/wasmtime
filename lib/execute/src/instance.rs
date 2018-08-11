@@ -3,9 +3,8 @@
 
 use cranelift_codegen::ir;
 use cranelift_wasm::GlobalIndex;
+use memory::LinearMemory;
 use wasmtime_environ::{DataInitializer, Module, TableElements};
-
-const PAGE_SIZE: usize = 65536;
 
 /// An Instance of a WebAssemby module.
 #[derive(Debug)]
@@ -14,7 +13,7 @@ pub struct Instance {
     pub tables: Vec<Vec<usize>>,
 
     /// WebAssembly linear memory data.
-    pub memories: Vec<Vec<u8>>,
+    pub memories: Vec<LinearMemory>,
 
     /// WebAssembly global variable data.
     pub globals: Vec<u8>,
@@ -58,15 +57,13 @@ impl Instance {
         // Allocate the underlying memory and initialize it to all zeros.
         self.memories.reserve_exact(module.memories.len());
         for memory in &module.memories {
-            let len = memory.pages_count * PAGE_SIZE;
-            let mut v = Vec::with_capacity(len);
-            v.resize(len, 0);
+            let v = LinearMemory::new(memory.pages_count as u32, memory.maximum.map(|m| m as u32));
             self.memories.push(v);
         }
         for init in data_initializers {
             debug_assert!(init.base.is_none(), "globalvar base not supported yet");
-            let to_init =
-                &mut self.memories[init.memory_index][init.offset..init.offset + init.data.len()];
+            let mem_mut = self.memories[init.memory_index].as_mut();
+            let to_init = &mut mem_mut[init.offset..init.offset + init.data.len()];
             to_init.copy_from_slice(init.data);
         }
     }
@@ -80,13 +77,20 @@ impl Instance {
         self.globals.resize(globals_data_size, 0);
     }
 
+    /// Returns a mutable reference to a linear memory under the specified index.
+    pub fn memory_mut(&mut self, memory_index: usize) -> &mut LinearMemory {
+        self.memories
+            .get_mut(memory_index)
+            .unwrap_or_else(|| panic!("no memory for index {}", memory_index))
+    }
+
     /// Returns a slice of the contents of allocated linear memory.
     pub fn inspect_memory(&self, memory_index: usize, address: usize, len: usize) -> &[u8] {
         &self
             .memories
             .get(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index))
-            [address..address + len]
+            .as_ref()[address..address + len]
     }
 
     /// Shows the value of a global variable.
