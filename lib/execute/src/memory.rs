@@ -11,21 +11,21 @@ const MAX_PAGES: u32 = 65536;
 pub struct LinearMemory {
     mmap: memmap::MmapMut,
     current: u32,
-    maximum: u32,
+    maximum: Option<u32>,
 }
 
 impl LinearMemory {
     /// Create a new linear memory instance with specified initial and maximum number of pages.
     ///
-    /// `maximum` cannot be set to more than `65536` pages. If `maximum` is `None` then it
-    /// will be treated as `65336`.
+    /// `maximum` cannot be set to more than `65536` pages.
     pub fn new(initial: u32, maximum: Option<u32>) -> Self {
-        let maximum = maximum.unwrap_or(MAX_PAGES);
-
         assert!(initial <= MAX_PAGES);
-        assert!(maximum <= MAX_PAGES);
+        assert!(maximum.is_none() || maximum.unwrap() <= MAX_PAGES);
 
-        let len = maximum.saturating_mul(MAX_PAGES);
+        let len = PAGE_SIZE * match maximum {
+            Some(val) => val,
+            None => initial,
+        };
         let mmap = memmap::MmapMut::map_anon(len as usize).unwrap();
         Self {
             mmap,
@@ -53,15 +53,29 @@ impl LinearMemory {
             Some(new_pages) => new_pages,
             None => return None,
         };
+        if let Some(val) = self.maximum {
+            if new_pages > val {
+                return None;
+            }
+        }
 
         let prev_pages = self.current;
+        let new_bytes = (new_pages * PAGE_SIZE) as usize;
+
+        if self.mmap.len() < new_bytes {
+            assert!(self.maximum.is_none());
+            let mut new_mmap = memmap::MmapMut::map_anon(new_bytes).unwrap();
+            new_mmap.copy_from_slice(&self.mmap);
+            self.mmap = new_mmap;
+        }
+
         self.current = new_pages;
 
         // Ensure that newly allocated area is zeroed.
         let new_start_offset = (prev_pages * PAGE_SIZE) as usize;
         let new_end_offset = (new_pages * PAGE_SIZE) as usize;
-        for i in new_start_offset..new_end_offset - 1 {
-            self.mmap[i] = 0;
+        for i in new_start_offset..new_end_offset {
+            assert!(self.mmap[i] == 0);
         }
 
         Some(prev_pages)
