@@ -411,12 +411,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _heap: ir::Heap,
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
-        debug_assert_eq!(index, 0, "non-default memories not supported yet");
         let grow_mem_func = self.grow_memory_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.flags().call_conv(),
                 argument_bytes: None,
                 params: vec![
+                    AbiParam::new(I32),
                     AbiParam::new(I32),
                     AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
                 ],
@@ -433,8 +433,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             })
         });
         self.grow_memory_extfunc = Some(grow_mem_func);
+        let memory_index = pos.ins().iconst(I32, index as i64);
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-        let call_inst = pos.ins().call(grow_mem_func, &[val, vmctx]);
+        let call_inst = pos.ins().call(grow_mem_func, &[val, memory_index, vmctx]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
@@ -444,15 +445,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: MemoryIndex,
         _heap: ir::Heap,
     ) -> WasmResult<ir::Value> {
-        debug_assert_eq!(index, 0, "non-default memories not supported yet");
         let cur_mem_func = self.current_memory_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.flags().call_conv(),
                 argument_bytes: None,
-                params: vec![AbiParam::special(
-                    self.pointer_type(),
-                    ArgumentPurpose::VMContext,
-                )],
+                params: vec![
+                    AbiParam::new(I32),
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                ],
                 returns: vec![AbiParam::new(I32)],
             });
             // We currently allocate all code segments independently, so nothing
@@ -466,8 +466,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             })
         });
         self.current_memory_extfunc = Some(cur_mem_func);
+        let memory_index = pos.ins().iconst(I32, index as i64);
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-        let call_inst = pos.ins().call(cur_mem_func, &[vmctx]);
+        let call_inst = pos.ins().call(cur_mem_func, &[memory_index, vmctx]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 }
