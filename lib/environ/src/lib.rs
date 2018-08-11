@@ -1,5 +1,5 @@
 //! Standalone environment for WebAssembly using Cranelift. Provides functions to translate
-//! `get_global`, `set_global`, `current_memory`, `grow_memory`, `call_indirect` that hardcode in
+//! `get_global`, `set_global`, `memory.size`, `memory.grow`, `call_indirect` that hardcode in
 //! the translation the base addresses of regions of memory that will hold the globals, tables and
 //! linear memories.
 

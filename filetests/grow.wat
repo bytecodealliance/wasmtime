@@ -11,13 +11,13 @@
   (func $main (local i32)
     (call $assert
       (i32.eq
-        (grow_memory (i32.const 1))
+        (memory.grow (i32.const 1))
         (i32.const 1)
       )
     )
     (call $assert
       (i32.eq
-        (current_memory)
+        (memory.size)
         (i32.const 2)
       )
     )
