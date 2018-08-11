@@ -1,5 +1,6 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
+use cranelift_wasm::MemoryIndex;
 use instance::Instance;
 use memory::LinearMemory;
 use region::protect;
@@ -64,20 +65,22 @@ fn relocate(compilation: &mut Compilation, relocations: &[Vec<Relocation>]) {
     }
 }
 
-extern "C" fn grow_memory(size: u32, vmctx: *mut *mut u8) -> u32 {
+extern "C" fn grow_memory(size: u32, memory_index: u32, vmctx: *mut *mut u8) -> u32 {
     unsafe {
         let instance = (*vmctx.offset(4)) as *mut Instance;
         (*instance)
-            .memory_mut(0)
+            .memory_mut(memory_index as MemoryIndex)
             .grow(size)
             .unwrap_or(u32::max_value())
     }
 }
 
-extern "C" fn current_memory(vmctx: *mut *mut u8) -> u32 {
+extern "C" fn current_memory(memory_index: u32, vmctx: *mut *mut u8) -> u32 {
     unsafe {
         let instance = (*vmctx.offset(4)) as *mut Instance;
-        (*instance).memory_mut(0).current_size()
+        (*instance)
+            .memory_mut(memory_index as MemoryIndex)
+            .current_size()
     }
 }
 
