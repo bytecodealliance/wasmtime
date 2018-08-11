@@ -8,7 +8,8 @@ use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder};
 use isa::TargetIsa;
 
-/// Expand a `call` instruction.
+/// Expand a `call` instruction. This lowers it to a `call_indirect`, which
+/// is only done if the ABI doesn't support direct calls.
 pub fn expand_call(
     inst: ir::Inst,
     func: &mut ir::Function,
