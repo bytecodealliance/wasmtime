@@ -1,5 +1,7 @@
 //! B+-tree node pool.
 
+#[cfg(test)]
+use super::Comparator;
 use super::{Forest, Node, NodeData};
 use entity::PrimaryMap;
 #[cfg(test)]
@@ -76,12 +78,11 @@ impl<F: Forest> NodePool<F> {
 #[cfg(test)]
 impl<F: Forest> NodePool<F> {
     /// Verify the consistency of the tree rooted at `node`.
-    pub fn verify_tree(&self, node: Node, comp: &F::Comparator)
+    pub fn verify_tree<C: Comparator<F::Key>>(&self, node: Node, comp: &C)
     where
         NodeData<F>: fmt::Display,
         F::Key: fmt::Display,
     {
-        use super::Comparator;
         use entity::SparseSet;
         use std::borrow::Borrow;
         use std::cmp::Ordering;

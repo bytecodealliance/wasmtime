@@ -112,6 +112,7 @@ use entity::SparseMapValue;
 use ir::{Ebb, ExpandedProgramPoint, Inst, Layout, ProgramOrder, ProgramPoint, Value};
 use regalloc::affinity::Affinity;
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 
 /// Global live range of a single SSA value.
 ///
@@ -172,7 +173,9 @@ pub struct GenLiveRange<PO: ProgramOrder> {
     ///
     /// The entries are non-overlapping, and none of them overlap the EBB where the value is
     /// defined.
-    liveins: bforest::Map<Ebb, Inst, PO>,
+    liveins: bforest::Map<Ebb, Inst>,
+
+    po: PhantomData<*const PO>,
 }
 
 /// Context information needed to query a `LiveRange`.
@@ -180,14 +183,14 @@ pub struct LiveRangeContext<'a, PO: 'a + ProgramOrder> {
     /// Ordering of EBBs.
     pub order: &'a PO,
     /// Memory pool.
-    pub forest: &'a bforest::MapForest<Ebb, Inst, PO>,
+    pub forest: &'a bforest::MapForest<Ebb, Inst>,
 }
 
 impl<'a, PO: ProgramOrder> LiveRangeContext<'a, PO> {
     /// Make a new context.
     pub fn new(
         order: &'a PO,
-        forest: &'a bforest::MapForest<Ebb, Inst, PO>,
+        forest: &'a bforest::MapForest<Ebb, Inst>,
     ) -> LiveRangeContext<'a, PO> {
         LiveRangeContext { order, forest }
     }
@@ -205,11 +208,13 @@ impl<'a, PO: ProgramOrder> Clone for LiveRangeContext<'a, PO> {
 impl<'a, PO: ProgramOrder> Copy for LiveRangeContext<'a, PO> {}
 
 /// Forest of B-trees used for storing live ranges.
-pub type LiveRangeForest = bforest::MapForest<Ebb, Inst, Layout>;
+pub type LiveRangeForest = bforest::MapForest<Ebb, Inst>;
 
-impl<PO: ProgramOrder> bforest::Comparator<Ebb> for PO {
+struct Cmp<'a, PO: ProgramOrder + 'a>(&'a PO);
+
+impl<'a, PO: ProgramOrder> bforest::Comparator<Ebb> for Cmp<'a, PO> {
     fn cmp(&self, a: Ebb, b: Ebb) -> Ordering {
-        self.cmp(a, b)
+        self.0.cmp(a, b)
     }
 }
 
@@ -224,6 +229,7 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
             def_begin: def,
             def_end: def,
             liveins: bforest::Map::new(),
+            po: PhantomData,
         }
     }
 
@@ -243,7 +249,7 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
         ebb: Ebb,
         to: Inst,
         order: &PO,
-        forest: &mut bforest::MapForest<Ebb, Inst, PO>,
+        forest: &mut bforest::MapForest<Ebb, Inst>,
     ) -> bool {
         // First check if we're extending the def interval.
         //
@@ -264,7 +270,8 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
         }
 
         // Now check if we're extending any of the existing live-in intervals.
-        let mut c = self.liveins.cursor(forest, order);
+        let cmp = Cmp(order);
+        let mut c = self.liveins.cursor(forest, &cmp);
         let first_time_livein;
 
         if let Some(end) = c.goto(ebb) {
@@ -367,8 +374,9 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
     /// answer, but it is also possible that an even later program point is returned. So don't
     /// depend on the returned `Inst` to belong to `ebb`.
     pub fn livein_local_end(&self, ebb: Ebb, ctx: LiveRangeContext<PO>) -> Option<Inst> {
+        let cmp = Cmp(ctx.order);
         self.liveins
-            .get_or_less(ebb, ctx.forest, ctx.order)
+            .get_or_less(ebb, ctx.forest, &cmp)
             .and_then(|(_, inst)| {
                 // We have an entry that ends at `inst`.
                 if ctx.order.cmp(inst, ebb) == Ordering::Greater {
@@ -390,10 +398,7 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
     ///
     /// Note that the intervals are stored in a compressed form so each entry may span multiple
     /// EBBs where the value is live in.
-    pub fn liveins<'a>(
-        &'a self,
-        ctx: LiveRangeContext<'a, PO>,
-    ) -> bforest::MapIter<'a, Ebb, Inst, PO> {
+    pub fn liveins<'a>(&'a self, ctx: LiveRangeContext<'a, PO>) -> bforest::MapIter<'a, Ebb, Inst> {
         self.liveins.iter(ctx.forest)
     }
 
@@ -507,11 +512,7 @@ mod tests {
         }
 
         // Validate the live range invariants.
-        fn validate(
-            &self,
-            lr: &GenLiveRange<ProgOrder>,
-            forest: &bforest::MapForest<Ebb, Inst, ProgOrder>,
-        ) {
+        fn validate(&self, lr: &GenLiveRange<ProgOrder>, forest: &bforest::MapForest<Ebb, Inst>) {
             // The def interval must cover a single EBB.
             let def_ebb = self.pp_ebb(lr.def_begin);
             assert_eq!(def_ebb, self.pp_ebb(lr.def_end));
