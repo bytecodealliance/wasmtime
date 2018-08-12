@@ -49,7 +49,7 @@ impl<F: Forest> Path<F> {
         key: F::Key,
         root: Node,
         pool: &NodePool<F>,
-        comp: &F::Comparator,
+        comp: &Comparator<F::Key>,
     ) -> Option<F::Value> {
         let mut node = root;
         for level in 0.. {
@@ -723,7 +723,6 @@ mod test {
         type Value = char;
         type LeafKeys = [i32; 7];
         type LeafValues = [char; 7];
-        type Comparator = TC;
 
         fn splat_key(key: Self::Key) -> Self::LeafKeys {
             [key; 7]

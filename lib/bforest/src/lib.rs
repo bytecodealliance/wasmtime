@@ -114,9 +114,6 @@ trait Forest {
     /// An array of values for the leaf nodes.
     type LeafValues: Copy + BorrowMut<[Self::Value]>;
 
-    /// Type used for key comparisons.
-    type Comparator: Comparator<Self::Key>;
-
     /// Splat a single key into a whole array.
     fn splat_key(key: Self::Key) -> Self::LeafKeys;
 
