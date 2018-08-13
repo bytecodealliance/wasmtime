@@ -41,14 +41,15 @@ fi
 
 # Check if any Python files have changed since we last checked them.
 tsfile="$topdir/target/meta-checked"
+meta_python="$topdir/lib/codegen/meta-python"
 if [ -f "$tsfile" ]; then
-    needcheck=$(find "$topdir/lib/codegen/meta-python" -name '*.py' -newer "$tsfile")
+    needcheck=$(find "$meta_python" -name '*.py' -newer "$tsfile")
 else
     needcheck=yes
 fi
 if [ -n "$needcheck" ]; then
     banner "Checking python source files"
-    "$topdir/lib/codegen/meta-python/check.sh"
+    "$meta_python/check.sh"
     touch "$tsfile" || echo no target directory
 fi
 
