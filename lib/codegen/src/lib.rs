@@ -49,7 +49,6 @@ extern crate failure_derive;
 #[cfg_attr(test, macro_use)]
 extern crate target_lexicon;
 
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate log;
 

@@ -6,7 +6,6 @@
 //! parameter will belong to the same virtual register as the EBB parameter value itself.
 
 use cursor::{Cursor, EncCursor};
-#[cfg(feature = "std")]
 use dbg::DisplayList;
 use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::{BasicBlock, ControlFlowGraph};
