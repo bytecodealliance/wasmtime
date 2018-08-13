@@ -61,11 +61,11 @@ struct CFGNode {
     ///
     /// The redundant EBB stored here is always consistent with the CFG successor lists, even after
     /// the IR has been edited.
-    pub predecessors: bforest::Map<Inst, Ebb, ()>,
+    pub predecessors: bforest::Map<Inst, Ebb>,
 
     /// Set of EBBs that are the targets of branches and jumps in this EBB.
     /// The set is ordered by EBB number, indicated by the `()` comparator type.
-    pub successors: bforest::Set<Ebb, ()>,
+    pub successors: bforest::Set<Ebb>,
 }
 
 /// The Control Flow Graph maintains a mapping of ebbs to their predecessors
@@ -73,8 +73,8 @@ struct CFGNode {
 /// extended basic blocks.
 pub struct ControlFlowGraph {
     data: EntityMap<Ebb, CFGNode>,
-    pred_forest: bforest::MapForest<Inst, Ebb, ()>,
-    succ_forest: bforest::SetForest<Ebb, ()>,
+    pred_forest: bforest::MapForest<Inst, Ebb>,
+    succ_forest: bforest::SetForest<Ebb>,
     valid: bool,
 }
 
@@ -193,7 +193,7 @@ impl ControlFlowGraph {
 /// An iterator over EBB predecessors. The iterator type is `BasicBlock`.
 ///
 /// Each predecessor is an instruction that branches to the EBB.
-pub struct PredIter<'a>(bforest::MapIter<'a, Inst, Ebb, ()>);
+pub struct PredIter<'a>(bforest::MapIter<'a, Inst, Ebb>);
 
 impl<'a> Iterator for PredIter<'a> {
     type Item = BasicBlock;
@@ -204,7 +204,7 @@ impl<'a> Iterator for PredIter<'a> {
 }
 
 /// An iterator over EBB successors. The iterator type is `Ebb`.
-pub type SuccIter<'a> = bforest::SetIter<'a, Ebb, ()>;
+pub type SuccIter<'a> = bforest::SetIter<'a, Ebb>;
 
 #[cfg(test)]
 mod tests {

@@ -595,7 +595,6 @@ mod test {
         type Value = SetValue;
         type LeafKeys = [char; 15];
         type LeafValues = [SetValue; 15];
-        type Comparator = ();
 
         fn splat_key(key: Self::Key) -> Self::LeafKeys {
             [key; 15]
