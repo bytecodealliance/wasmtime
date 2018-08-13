@@ -12,9 +12,9 @@
 extern crate cfg_if;
 extern crate cranelift_codegen;
 extern crate cranelift_filetests;
-extern crate file_per_thread_logger;
 extern crate cranelift_reader;
 extern crate docopt;
+extern crate file_per_thread_logger;
 extern crate filecheck;
 #[macro_use]
 extern crate serde_derive;

@@ -19,8 +19,8 @@
 )]
 
 extern crate cranelift_codegen;
-extern crate file_per_thread_logger;
 extern crate cranelift_reader;
+extern crate file_per_thread_logger;
 extern crate filecheck;
 extern crate num_cpus;
 #[macro_use]
