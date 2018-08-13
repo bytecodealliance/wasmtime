@@ -257,6 +257,15 @@ for int_ty in [types.i8, types.i16]:
         )
     )
 
+for int_ty in [types.i8, types.i16]:
+    widen.legalize(
+        a << insts.bint.bind(int_ty)(b),
+        Rtl(
+            x << insts.bint.i32(b),
+            a << ireduce.bind(int_ty)(x)
+        )
+    )
+
 # Expand integer operations with carry for RISC architectures that don't have
 # the flags.
 expand.legalize(
