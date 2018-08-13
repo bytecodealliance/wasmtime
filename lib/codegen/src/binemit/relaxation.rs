@@ -140,7 +140,7 @@ fn relax_branch(
     isa: &TargetIsa,
 ) -> CodeOffset {
     let inst = cur.current_inst().unwrap();
-    dbg!(
+    debug!(
         "Relaxing [{}] {} for {:#x}-{:#x} range",
         encinfo.display(cur.func.encodings[inst]),
         cur.func.dfg.display_inst(inst, isa),
@@ -156,7 +156,7 @@ fn relax_branch(
         .find(|&enc| {
             let range = encinfo.branch_range(enc).expect("Branch with no range");
             if !range.contains(offset, dest_offset) {
-                dbg!("  trying [{}]: out of range", encinfo.display(enc));
+                debug!("  trying [{}]: out of range", encinfo.display(enc));
                 false
             } else if encinfo.operand_constraints(enc)
                 != encinfo.operand_constraints(cur.func.encodings[inst])
@@ -166,10 +166,10 @@ fn relax_branch(
                 // which the existing operands don't satisfy. We can't check for
                 // validity directly because we don't have a RegDiversions active so
                 // we don't know which registers are actually in use.
-                dbg!("  trying [{}]: constraints differ", encinfo.display(enc));
+                debug!("  trying [{}]: constraints differ", encinfo.display(enc));
                 false
             } else {
-                dbg!("  trying [{}]: OK", encinfo.display(enc));
+                debug!("  trying [{}]: OK", encinfo.display(enc));
                 true
             }
         }) {

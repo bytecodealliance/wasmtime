@@ -41,7 +41,7 @@ impl SubTest for TestCompile {
             .compile(isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
 
-        dbg!(
+        info!(
             "Generated {} bytes of code:\n{}",
             code_size,
             comp_ctx.func.display(isa)

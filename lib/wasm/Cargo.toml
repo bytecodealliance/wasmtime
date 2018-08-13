@@ -17,6 +17,7 @@ hashmap_core = { version = "0.1.9", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 target-lexicon = { version = "0.0.3", default-features = false }
+log = { version = "0.4.3", default-features = false, features = ["release_max_level_warn"] }
 
 [dev-dependencies]
 wabt = "0.4"

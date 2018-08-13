@@ -10,6 +10,7 @@ use cranelift_module::{
 use cranelift_native;
 use libc;
 use memory::Memory;
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::ptr;
 use target_lexicon::PointerWidth;
@@ -19,6 +20,7 @@ use winapi;
 /// A builder for `SimpleJITBackend`.
 pub struct SimpleJITBuilder {
     isa: Box<TargetIsa>,
+    symbols: HashMap<String, *const u8>,
 }
 
 impl SimpleJITBuilder {
@@ -40,7 +42,44 @@ impl SimpleJITBuilder {
     /// instead.
     pub fn with_isa(isa: Box<TargetIsa>) -> Self {
         debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
-        Self { isa }
+        let symbols = HashMap::new();
+        Self { isa, symbols }
+    }
+
+    /// Define a symbol in the internal symbol table.
+    ///
+    /// The JIT will use the symbol table to resolve names that are declared,
+    /// but not defined, in the module being compiled.  A common example is
+    /// external functions.  With this method, functions and data can be exposed
+    /// to the code being compiled which are defined by the host.
+    ///
+    /// If a symbol is defined more than once, the most recent definition will
+    /// be retained.
+    ///
+    /// If the JIT fails to find a symbol in its internal table, it will fall
+    /// back to a platform-specific search (this typically involves searching
+    /// the current process for public symbols, followed by searching the
+    /// platform's C runtime).
+    pub fn symbol<'a, K>(&'a mut self, name: K, ptr: *const u8) -> &'a mut Self
+    where
+        K: Into<String>,
+    {
+        self.symbols.insert(name.into(), ptr);
+        self
+    }
+
+    /// Define multiple symbols in the internal symbol table.
+    ///
+    /// Using this is equivalent to calling `symbol` on each element.
+    pub fn symbols<'a, It, K>(&'a mut self, symbols: It) -> &'a mut Self
+    where
+        It: IntoIterator<Item = (K, *const u8)>,
+        K: Into<String>,
+    {
+        for (name, ptr) in symbols {
+            self.symbols.insert(name.into(), ptr);
+        }
+        self
     }
 }
 
@@ -48,6 +87,7 @@ impl SimpleJITBuilder {
 /// directly called and accessed.
 pub struct SimpleJITBackend {
     isa: Box<TargetIsa>,
+    symbols: HashMap<String, *const u8>,
     code_memory: Memory,
     readonly_memory: Memory,
     writable_memory: Memory,
@@ -73,6 +113,15 @@ pub struct SimpleJITCompiledData {
     relocs: Vec<RelocRecord>,
 }
 
+impl SimpleJITBackend {
+    fn lookup_symbol(&self, name: &str) -> *const u8 {
+        match self.symbols.get(name) {
+            Some(&ptr) => ptr,
+            None => lookup_with_dlsym(name),
+        }
+    }
+}
+
 impl<'simple_jit_backend> Backend for SimpleJITBackend {
     type Builder = SimpleJITBuilder;
 
@@ -96,6 +145,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn new(builder: SimpleJITBuilder) -> Self {
         Self {
             isa: builder.isa,
+            symbols: builder.symbols,
             code_memory: Memory::new(),
             readonly_memory: Memory::new(),
             writable_memory: Memory::new(),
@@ -249,13 +299,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 let (def, name_str, _signature) = namespace.get_function_definition(&name);
                 match def {
                     Some(compiled) => compiled.code,
-                    None => lookup_with_dlsym(name_str),
+                    None => self.lookup_symbol(name_str),
                 }
             } else {
                 let (def, name_str, _writable) = namespace.get_data_definition(&name);
                 match def {
                     Some(compiled) => compiled.storage,
-                    None => lookup_with_dlsym(name_str),
+                    None => self.lookup_symbol(name_str),
                 }
             };
             // TODO: Handle overflow.
@@ -314,13 +364,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                         let (def, name_str, _signature) = namespace.get_function_definition(&name);
                         match def {
                             Some(compiled) => compiled.code,
-                            None => lookup_with_dlsym(name_str),
+                            None => self.lookup_symbol(name_str),
                         }
                     } else {
                         let (def, name_str, _writable) = namespace.get_data_definition(&name);
                         match def {
                             Some(compiled) => compiled.storage,
-                            None => lookup_with_dlsym(name_str),
+                            None => self.lookup_symbol(name_str),
                         }
                     };
                     // TODO: Handle overflow.

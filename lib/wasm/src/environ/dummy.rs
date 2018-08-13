@@ -1,4 +1,5 @@
-//! "Dummy" environment for testing wasm translation.
+//! "Dummy" implementations of `ModuleEnvironment` and `FuncEnvironment` for testing
+//! wasm translation.
 
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Imm64;
