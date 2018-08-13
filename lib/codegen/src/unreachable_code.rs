@@ -24,14 +24,14 @@ pub fn eliminate_unreachable_code(
             continue;
         }
 
-        dbg!("Eliminating unreachable {}", ebb);
+        debug!("Eliminating unreachable {}", ebb);
         // Move the cursor out of the way and make sure the next lop iteration goes to the right
         // EBB.
         pos.prev_ebb();
 
         // Remove all instructions from `ebb`.
         while let Some(inst) = pos.func.layout.first_inst(ebb) {
-            dbg!(" - {}", pos.func.dfg.display_inst(inst, None));
+            debug!(" - {}", pos.func.dfg.display_inst(inst, None));
             pos.func.layout.remove_inst(inst);
         }
 

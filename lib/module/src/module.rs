@@ -467,7 +467,7 @@ where
     pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
         let compiled = {
             let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
-                dbg!(
+                info!(
                     "defining function {}: {}",
                     func,
                     ctx.func.display(self.backend.isa())

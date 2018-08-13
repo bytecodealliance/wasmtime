@@ -2,7 +2,7 @@
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", warn(unstable_features))]
+#![cfg_attr(feature = "std", deny(unstable_features))]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(feature="cargo-clippy", allow(
 // This requires Rust 1.27 or later.
@@ -49,6 +49,9 @@ extern crate failure_derive;
 #[cfg_attr(test, macro_use)]
 extern crate target_lexicon;
 
+#[macro_use]
+extern crate log;
+
 pub use context::Context;
 pub use legalizer::legalize_function;
 pub use verifier::verify_function;
@@ -59,15 +62,12 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[macro_use]
 pub extern crate cranelift_entity as entity;
-
 pub extern crate cranelift_bforest as bforest;
-
-#[macro_use]
-pub mod dbg;
 
 pub mod binemit;
 pub mod cfg_printer;
 pub mod cursor;
+pub mod dbg;
 pub mod dominator_tree;
 pub mod flowgraph;
 pub mod ir;

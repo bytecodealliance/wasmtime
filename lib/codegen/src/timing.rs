@@ -179,7 +179,7 @@ mod details {
     /// This function is called by the publicly exposed pass functions.
     pub(super) fn start_pass(pass: Pass) -> TimingToken {
         let prev = CURRENT_PASS.with(|p| p.replace(pass));
-        dbg!("timing: Starting {}, (during {})", pass, prev);
+        debug!("timing: Starting {}, (during {})", pass, prev);
         TimingToken {
             start: Instant::now(),
             pass,
@@ -191,7 +191,7 @@ mod details {
     impl Drop for TimingToken {
         fn drop(&mut self) {
             let duration = self.start.elapsed();
-            dbg!("timing: Ending {}", self.pass);
+            debug!("timing: Ending {}", self.pass);
             let old_cur = CURRENT_PASS.with(|p| p.replace(self.prev));
             debug_assert_eq!(self.pass, old_cur, "Timing tokens dropped out of order");
             PASS_TIME.with(|rc| {

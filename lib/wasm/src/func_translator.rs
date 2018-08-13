@@ -67,7 +67,7 @@ impl FuncTranslator {
         environ: &mut FE,
     ) -> WasmResult<()> {
         let _tt = timing::wasm_translate_function();
-        dbg!(
+        info!(
             "translate({} bytes, {}{})",
             reader.bytes_remaining(),
             func.name,
@@ -265,7 +265,7 @@ mod tests {
         trans
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
-        dbg!("{}", ctx.func.display(None));
+        debug!("{}", ctx.func.display(None));
         ctx.verify(runtime.func_env().flags()).unwrap();
     }
 
@@ -296,7 +296,7 @@ mod tests {
         trans
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
-        dbg!("{}", ctx.func.display(None));
+        debug!("{}", ctx.func.display(None));
         ctx.verify(runtime.func_env().flags()).unwrap();
     }
 
@@ -335,7 +335,7 @@ mod tests {
         trans
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
-        dbg!("{}", ctx.func.display(None));
+        debug!("{}", ctx.func.display(None));
         ctx.verify(runtime.func_env().flags()).unwrap();
     }
 }

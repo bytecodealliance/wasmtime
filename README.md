@@ -8,7 +8,7 @@ into executable machine code.
 
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
 [![Build Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
-[![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby/~chat)
+[![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
 
 For more information, see [the
 documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
@@ -127,7 +127,7 @@ Building the documentation
 --------------------------
 
 To build the Cranelift documentation, you need the [Sphinx documentation
-generator](https://www.sphinx-doc.org/):
+generator](http://www.sphinx-doc.org/) as well as Python 3::
 
     $ pip install sphinx sphinx-autobuild sphinx_rtd_theme
     $ cd cranelift/docs

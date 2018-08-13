@@ -1,8 +1,8 @@
 //! Performs autodetection of the host for the purposes of running
 //! Cranelift to generate code to run on the same machine.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces, unstable_features)]
+#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates, unstable_features)]
+#![warn(unused_import_braces)]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(feature = "cargo-clippy", allow(new_without_default, new_without_default_derive))]
 #![cfg_attr(
