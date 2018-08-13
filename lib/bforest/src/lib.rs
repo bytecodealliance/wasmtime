@@ -1,6 +1,6 @@
 //! A forest of B+-trees.
 //!
-//! This module provides a data structures representing a set of small ordered sets or maps.
+//! This crate provides a data structures representing a set of small ordered sets or maps.
 //! It is implemented as a forest of B+-trees all allocating nodes out of the same pool.
 //!
 //! **These are not general purpose data structures that are somehow magically faster that the
@@ -12,6 +12,34 @@
 //! - A comparator object is used to compare keys, allowing smaller "context free" keys.
 //! - Empty trees have a very small 32-bit footprint.
 //! - All the trees in a forest can be cleared in constant time.
+
+#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![warn(unused_import_braces)]
+#![cfg_attr(feature = "std", warn(unstable_features))]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy", allow(new_without_default, new_without_default_derive))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(
+        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
+        print_stdout, unicode_not_nfc, use_self
+    )
+)]
+// Turns on no_std and alloc features if std is not available.
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+/// This replaces `std` in builds with `core`.
+#[cfg(not(feature = "std"))]
+mod std {
+    extern crate alloc;
+    pub use self::alloc::{boxed, string, vec};
+    pub use core::*;
+}
+
+#[macro_use]
+extern crate cranelift_entity as entity;
+use entity::packed_option;
 
 use std::borrow::BorrowMut;
 use std::cmp::Ordering;
@@ -86,9 +114,6 @@ trait Forest {
     /// An array of values for the leaf nodes.
     type LeafValues: Copy + BorrowMut<[Self::Value]>;
 
-    /// Type used for key comparisons.
-    type Comparator: Comparator<Self::Key>;
-
     /// Splat a single key into a whole array.
     fn splat_key(key: Self::Key) -> Self::LeafKeys;
 
@@ -124,7 +149,11 @@ fn slice_shift<T: Copy>(s: &mut [T], n: usize) {
 mod test {
     use super::*;
     use entity::EntityRef;
-    use ir::Ebb;
+
+    /// An opaque reference to an extended basic block in a function.
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    pub struct Ebb(u32);
+    entity_impl!(Ebb, "ebb");
 
     #[test]
     fn comparator() {

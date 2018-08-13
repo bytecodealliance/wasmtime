@@ -9,19 +9,17 @@ use std::marker::PhantomData;
 use std::string::String;
 
 /// Tag type defining forest types for a map.
-struct MapTypes<K, V, C>(PhantomData<(K, V, C)>);
+struct MapTypes<K, V>(PhantomData<(K, V)>);
 
-impl<K, V, C> Forest for MapTypes<K, V, C>
+impl<K, V> Forest for MapTypes<K, V>
 where
     K: Copy,
     V: Copy,
-    C: Comparator<K>,
 {
     type Key = K;
     type Value = V;
     type LeafKeys = [K; INNER_SIZE - 1];
     type LeafValues = [V; INNER_SIZE - 1];
-    type Comparator = C;
 
     fn splat_key(key: Self::Key) -> Self::LeafKeys {
         [key; INNER_SIZE - 1]
@@ -33,20 +31,18 @@ where
 }
 
 /// Memory pool for a forest of `Map` instances.
-pub struct MapForest<K, V, C>
+pub struct MapForest<K, V>
 where
     K: Copy,
     V: Copy,
-    C: Comparator<K>,
 {
-    nodes: NodePool<MapTypes<K, V, C>>,
+    nodes: NodePool<MapTypes<K, V>>,
 }
 
-impl<K, V, C> MapForest<K, V, C>
+impl<K, V> MapForest<K, V>
 where
     K: Copy,
     V: Copy,
-    C: Comparator<K>,
 {
     /// Create a new empty forest.
     pub fn new() -> Self {
@@ -63,7 +59,7 @@ where
     }
 }
 
-/// B-tree mapping from `K` to `V` using `C` for comparing keys.
+/// B-tree mapping from `K` to `V`.
 ///
 /// This is not a general-purpose replacement for `BTreeMap`. See the [module
 /// documentation](index.html) for more information about design tradeoffs.
@@ -72,21 +68,19 @@ where
 /// they belong to. *Cloning a map does not allocate new memory for the clone*. It creates an alias
 /// of the same memory.
 #[derive(Clone)]
-pub struct Map<K, V, C>
+pub struct Map<K, V>
 where
     K: Copy,
     V: Copy,
-    C: Comparator<K>,
 {
     root: PackedOption<Node>,
-    unused: PhantomData<(K, V, C)>,
+    unused: PhantomData<(K, V)>,
 }
 
-impl<K, V, C> Map<K, V, C>
+impl<K, V> Map<K, V>
 where
     K: Copy,
     V: Copy,
-    C: Comparator<K>,
 {
     /// Make an empty map.
     pub fn new() -> Self {
@@ -102,7 +96,7 @@ where
     }
 
     /// Get the value stored for `key`.
-    pub fn get(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> Option<V> {
+    pub fn get<C: Comparator<K>>(&self, key: K, forest: &MapForest<K, V>, comp: &C) -> Option<V> {
         self.root
             .expand()
             .and_then(|root| Path::default().find(key, root, &forest.nodes, comp))
@@ -115,7 +109,12 @@ where
     /// Otherwise, return the last key-value pair with a key that is less than or equal to `key`.
     ///
     /// If no stored keys are less than or equal to `key`, return `None`.
-    pub fn get_or_less(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> Option<(K, V)> {
+    pub fn get_or_less<C: Comparator<K>>(
+        &self,
+        key: K,
+        forest: &MapForest<K, V>,
+        comp: &C,
+    ) -> Option<(K, V)> {
         self.root.expand().and_then(|root| {
             let mut path = Path::default();
             match path.find(key, root, &forest.nodes, comp) {
@@ -126,18 +125,23 @@ where
     }
 
     /// Insert `key, value` into the map and return the old value stored for `key`, if any.
-    pub fn insert(
+    pub fn insert<C: Comparator<K>>(
         &mut self,
         key: K,
         value: V,
-        forest: &mut MapForest<K, V, C>,
+        forest: &mut MapForest<K, V>,
         comp: &C,
     ) -> Option<V> {
         self.cursor(forest, comp).insert(key, value)
     }
 
     /// Remove `key` from the map and return the removed value for `key`, if any.
-    pub fn remove(&mut self, key: K, forest: &mut MapForest<K, V, C>, comp: &C) -> Option<V> {
+    pub fn remove<C: Comparator<K>>(
+        &mut self,
+        key: K,
+        forest: &mut MapForest<K, V>,
+        comp: &C,
+    ) -> Option<V> {
         let mut c = self.cursor(forest, comp);
         if c.goto(key).is_some() {
             c.remove()
@@ -147,7 +151,7 @@ where
     }
 
     /// Remove all entries.
-    pub fn clear(&mut self, forest: &mut MapForest<K, V, C>) {
+    pub fn clear(&mut self, forest: &mut MapForest<K, V>) {
         if let Some(root) = self.root.take() {
             forest.nodes.free_tree(root);
         }
@@ -158,7 +162,7 @@ where
     /// Remove all key-value pairs where the predicate returns false.
     ///
     /// The predicate is allowed to update the values stored in the map.
-    pub fn retain<F>(&mut self, forest: &mut MapForest<K, V, C>, mut predicate: F)
+    pub fn retain<F>(&mut self, forest: &mut MapForest<K, V>, mut predicate: F)
     where
         F: FnMut(K, &mut V) -> bool,
     {
@@ -181,16 +185,16 @@ where
 
     /// Create a cursor for navigating this map. The cursor is initially positioned off the end of
     /// the map.
-    pub fn cursor<'a>(
+    pub fn cursor<'a, C: Comparator<K>>(
         &'a mut self,
-        forest: &'a mut MapForest<K, V, C>,
+        forest: &'a mut MapForest<K, V>,
         comp: &'a C,
     ) -> MapCursor<'a, K, V, C> {
         MapCursor::new(self, forest, comp)
     }
 
     /// Create an iterator traversing this map. The iterator type is `(K, V)`.
-    pub fn iter<'a>(&'a self, forest: &'a MapForest<K, V, C>) -> MapIter<'a, K, V, C> {
+    pub fn iter<'a>(&'a self, forest: &'a MapForest<K, V>) -> MapIter<'a, K, V> {
         MapIter {
             root: self.root,
             pool: &forest.nodes,
@@ -199,11 +203,10 @@ where
     }
 }
 
-impl<K, V, C> Default for Map<K, V, C>
+impl<K, V> Default for Map<K, V>
 where
     K: Copy,
     V: Copy,
-    C: Comparator<K>,
 {
     fn default() -> Self {
         Self::new()
@@ -211,16 +214,15 @@ where
 }
 
 #[cfg(test)]
-impl<K, V, C> Map<K, V, C>
+impl<K, V> Map<K, V>
 where
     K: Copy + fmt::Display,
     V: Copy,
-    C: Comparator<K>,
 {
     /// Verify consistency.
-    fn verify(&self, forest: &MapForest<K, V, C>, comp: &C)
+    fn verify<C: Comparator<K>>(&self, forest: &MapForest<K, V>, comp: &C)
     where
-        NodeData<MapTypes<K, V, C>>: fmt::Display,
+        NodeData<MapTypes<K, V>>: fmt::Display,
     {
         if let Some(root) = self.root.expand() {
             forest.nodes.verify_tree(root, comp);
@@ -228,7 +230,7 @@ where
     }
 
     /// Get a text version of the path to `key`.
-    fn tpath(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> String {
+    fn tpath<C: Comparator<K>>(&self, key: K, forest: &MapForest<K, V>, comp: &C) -> String {
         use std::string::ToString;
         match self.root.expand() {
             None => "map(empty)".to_string(),
@@ -252,9 +254,9 @@ where
     C: 'a + Comparator<K>,
 {
     root: &'a mut PackedOption<Node>,
-    pool: &'a mut NodePool<MapTypes<K, V, C>>,
+    pool: &'a mut NodePool<MapTypes<K, V>>,
     comp: &'a C,
-    path: Path<MapTypes<K, V, C>>,
+    path: Path<MapTypes<K, V>>,
 }
 
 impl<'a, K, V, C> MapCursor<'a, K, V, C>
@@ -265,8 +267,8 @@ where
 {
     /// Create a cursor with a default (off-the-end) location.
     fn new(
-        container: &'a mut Map<K, V, C>,
-        forest: &'a mut MapForest<K, V, C>,
+        container: &'a mut Map<K, V>,
+        forest: &'a mut MapForest<K, V>,
         comp: &'a C,
     ) -> MapCursor<'a, K, V, C> {
         MapCursor {
@@ -379,22 +381,20 @@ where
 }
 
 /// An iterator visiting the key-value pairs of a `Map`.
-pub struct MapIter<'a, K, V, C>
+pub struct MapIter<'a, K, V>
 where
     K: 'a + Copy,
     V: 'a + Copy,
-    C: 'a + Comparator<K>,
 {
     root: PackedOption<Node>,
-    pool: &'a NodePool<MapTypes<K, V, C>>,
-    path: Path<MapTypes<K, V, C>>,
+    pool: &'a NodePool<MapTypes<K, V>>,
+    path: Path<MapTypes<K, V>>,
 }
 
-impl<'a, K, V, C> Iterator for MapIter<'a, K, V, C>
+impl<'a, K, V> Iterator for MapIter<'a, K, V>
 where
     K: 'a + Copy,
     V: 'a + Copy,
-    C: 'a + Comparator<K>,
 {
     type Item = (K, V);
 
@@ -438,16 +438,16 @@ mod test {
     #[test]
     fn node_size() {
         // check that nodes are cache line sized when keys and values are 32 bits.
-        type F = MapTypes<u32, u32, ()>;
+        type F = MapTypes<u32, u32>;
         assert_eq!(mem::size_of::<NodeData<F>>(), 64);
     }
 
     #[test]
     fn empty() {
-        let mut f = MapForest::<u32, f32, ()>::new();
+        let mut f = MapForest::<u32, f32>::new();
         f.clear();
 
-        let mut m = Map::<u32, f32, ()>::new();
+        let mut m = Map::<u32, f32>::new();
         assert!(m.is_empty());
         m.clear(&mut f);
 
@@ -470,8 +470,8 @@ mod test {
 
     #[test]
     fn inserting() {
-        let f = &mut MapForest::<u32, f32, ()>::new();
-        let mut m = Map::<u32, f32, ()>::new();
+        let f = &mut MapForest::<u32, f32>::new();
+        let mut m = Map::<u32, f32>::new();
 
         // The first seven values stay in a single leaf node.
         assert_eq!(m.insert(50, 5.0, f, &()), None);
@@ -577,9 +577,9 @@ mod test {
     #[test]
     fn split_level0_leaf() {
         // Various ways of splitting a full leaf node at level 0.
-        let f = &mut MapForest::<u32, f32, ()>::new();
+        let f = &mut MapForest::<u32, f32>::new();
 
-        fn full_leaf(f: &mut MapForest<u32, f32, ()>) -> Map<u32, f32, ()> {
+        fn full_leaf(f: &mut MapForest<u32, f32>) -> Map<u32, f32> {
             let mut m = Map::new();
             for n in 1..8 {
                 m.insert(n * 10, n as f32 * 1.1, f, &());
@@ -628,7 +628,7 @@ mod test {
     #[test]
     fn split_level1_leaf() {
         // Various ways of splitting a full leaf node at level 1.
-        let f = &mut MapForest::<u32, f32, ()>::new();
+        let f = &mut MapForest::<u32, f32>::new();
 
         // Return a map whose root node is a full inner node, and the leaf nodes are all full
         // containing:
@@ -637,7 +637,7 @@ mod test {
         // 210, 220, ..., 270
         // ...
         // 810, 820, ..., 870
-        fn full(f: &mut MapForest<u32, f32, ()>) -> Map<u32, f32, ()> {
+        fn full(f: &mut MapForest<u32, f32>) -> Map<u32, f32> {
             let mut m = Map::new();
 
             // Start by inserting elements in order.
@@ -756,7 +756,7 @@ mod test {
 
     // Make a tree with two barely healthy leaf nodes:
     // [ 10 20 30 40 ] [ 50 60 70 80 ]
-    fn two_leaf(f: &mut MapForest<u32, f32, ()>) -> Map<u32, f32, ()> {
+    fn two_leaf(f: &mut MapForest<u32, f32>) -> Map<u32, f32> {
         f.clear();
         let mut m = Map::new();
         for n in 1..9 {
@@ -767,7 +767,7 @@ mod test {
 
     #[test]
     fn remove_level1() {
-        let f = &mut MapForest::<u32, f32, ()>::new();
+        let f = &mut MapForest::<u32, f32>::new();
         let mut m = two_leaf(f);
 
         // Verify geometry.
@@ -830,7 +830,7 @@ mod test {
 
     #[test]
     fn remove_level1_rightmost() {
-        let f = &mut MapForest::<u32, f32, ()>::new();
+        let f = &mut MapForest::<u32, f32>::new();
         let mut m = two_leaf(f);
 
         // [ 10 20 30 40 ] [ 50 60 70 80 ]
@@ -852,7 +852,7 @@ mod test {
 
     // Make a 3-level tree with barely healthy nodes.
     // 1 root, 8 inner nodes, 7*4+5=33 leaf nodes, 4 entries each.
-    fn level3_sparse(f: &mut MapForest<u32, f32, ()>) -> Map<u32, f32, ()> {
+    fn level3_sparse(f: &mut MapForest<u32, f32>) -> Map<u32, f32> {
         f.clear();
         let mut m = Map::new();
         for n in 1..133 {
@@ -863,7 +863,7 @@ mod test {
 
     #[test]
     fn level3_removes() {
-        let f = &mut MapForest::<u32, f32, ()>::new();
+        let f = &mut MapForest::<u32, f32>::new();
         let mut m = level3_sparse(f);
         m.verify(f, &());
 
@@ -894,8 +894,8 @@ mod test {
 
     #[test]
     fn insert_many() {
-        let f = &mut MapForest::<u32, f32, ()>::new();
-        let mut m = Map::<u32, f32, ()>::new();
+        let f = &mut MapForest::<u32, f32>::new();
+        let mut m = Map::<u32, f32>::new();
 
         let mm = 4096;
         let mut x = 0;

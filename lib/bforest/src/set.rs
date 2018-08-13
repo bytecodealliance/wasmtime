@@ -9,18 +9,16 @@ use std::marker::PhantomData;
 use std::string::String;
 
 /// Tag type defining forest types for a set.
-struct SetTypes<K, C>(PhantomData<(K, C)>);
+struct SetTypes<K>(PhantomData<K>);
 
-impl<K, C> Forest for SetTypes<K, C>
+impl<K> Forest for SetTypes<K>
 where
     K: Copy,
-    C: Comparator<K>,
 {
     type Key = K;
     type Value = SetValue;
     type LeafKeys = [K; 2 * INNER_SIZE - 1];
     type LeafValues = [SetValue; 2 * INNER_SIZE - 1];
-    type Comparator = C;
 
     fn splat_key(key: Self::Key) -> Self::LeafKeys {
         [key; 2 * INNER_SIZE - 1]
@@ -32,18 +30,16 @@ where
 }
 
 /// Memory pool for a forest of `Set` instances.
-pub struct SetForest<K, C>
+pub struct SetForest<K>
 where
     K: Copy,
-    C: Comparator<K>,
 {
-    nodes: NodePool<SetTypes<K, C>>,
+    nodes: NodePool<SetTypes<K>>,
 }
 
-impl<K, C> SetForest<K, C>
+impl<K> SetForest<K>
 where
     K: Copy,
-    C: Comparator<K>,
 {
     /// Create a new empty forest.
     pub fn new() -> Self {
@@ -69,19 +65,17 @@ where
 /// they belong to. *Cloning a set does not allocate new memory for the clone*. It creates an alias
 /// of the same memory.
 #[derive(Clone)]
-pub struct Set<K, C>
+pub struct Set<K>
 where
     K: Copy,
-    C: Comparator<K>,
 {
     root: PackedOption<Node>,
-    unused: PhantomData<(K, C)>,
+    unused: PhantomData<K>,
 }
 
-impl<K, C> Set<K, C>
+impl<K> Set<K>
 where
     K: Copy,
-    C: Comparator<K>,
 {
     /// Make an empty set.
     pub fn new() -> Self {
@@ -97,7 +91,7 @@ where
     }
 
     /// Does the set contain `key`?.
-    pub fn contains(&self, key: K, forest: &SetForest<K, C>, comp: &C) -> bool {
+    pub fn contains<C: Comparator<K>>(&self, key: K, forest: &SetForest<K>, comp: &C) -> bool {
         self.root
             .expand()
             .and_then(|root| Path::default().find(key, root, &forest.nodes, comp))
@@ -109,14 +103,24 @@ where
     /// If the set did not contain `key`, insert it and return true.
     ///
     /// If `key` is already present, don't change the set and return false.
-    pub fn insert(&mut self, key: K, forest: &mut SetForest<K, C>, comp: &C) -> bool {
+    pub fn insert<C: Comparator<K>>(
+        &mut self,
+        key: K,
+        forest: &mut SetForest<K>,
+        comp: &C,
+    ) -> bool {
         self.cursor(forest, comp).insert(key)
     }
 
     /// Remove `key` from the set and return true.
     ///
     /// If `key` was not present in the set, return false.
-    pub fn remove(&mut self, key: K, forest: &mut SetForest<K, C>, comp: &C) -> bool {
+    pub fn remove<C: Comparator<K>>(
+        &mut self,
+        key: K,
+        forest: &mut SetForest<K>,
+        comp: &C,
+    ) -> bool {
         let mut c = self.cursor(forest, comp);
         if c.goto(key) {
             c.remove();
@@ -127,7 +131,7 @@ where
     }
 
     /// Remove all entries.
-    pub fn clear(&mut self, forest: &mut SetForest<K, C>) {
+    pub fn clear(&mut self, forest: &mut SetForest<K>) {
         if let Some(root) = self.root.take() {
             forest.nodes.free_tree(root);
         }
@@ -136,7 +140,7 @@ where
     /// Retains only the elements specified by the predicate.
     ///
     /// Remove all elements where the predicate returns false.
-    pub fn retain<F>(&mut self, forest: &mut SetForest<K, C>, mut predicate: F)
+    pub fn retain<F>(&mut self, forest: &mut SetForest<K>, mut predicate: F)
     where
         F: FnMut(K) -> bool,
     {
@@ -155,16 +159,16 @@ where
 
     /// Create a cursor for navigating this set. The cursor is initially positioned off the end of
     /// the set.
-    pub fn cursor<'a>(
+    pub fn cursor<'a, C: Comparator<K>>(
         &'a mut self,
-        forest: &'a mut SetForest<K, C>,
+        forest: &'a mut SetForest<K>,
         comp: &'a C,
     ) -> SetCursor<'a, K, C> {
         SetCursor::new(self, forest, comp)
     }
 
     /// Create an iterator traversing this set. The iterator type is `K`.
-    pub fn iter<'a>(&'a self, forest: &'a SetForest<K, C>) -> SetIter<'a, K, C> {
+    pub fn iter<'a>(&'a self, forest: &'a SetForest<K>) -> SetIter<'a, K> {
         SetIter {
             root: self.root,
             pool: &forest.nodes,
@@ -173,10 +177,9 @@ where
     }
 }
 
-impl<K, C> Default for Set<K, C>
+impl<K> Default for Set<K>
 where
     K: Copy,
-    C: Comparator<K>,
 {
     fn default() -> Self {
         Self::new()
@@ -193,9 +196,9 @@ where
     C: 'a + Comparator<K>,
 {
     root: &'a mut PackedOption<Node>,
-    pool: &'a mut NodePool<SetTypes<K, C>>,
+    pool: &'a mut NodePool<SetTypes<K>>,
     comp: &'a C,
-    path: Path<SetTypes<K, C>>,
+    path: Path<SetTypes<K>>,
 }
 
 impl<'a, K, C> SetCursor<'a, K, C>
@@ -205,8 +208,8 @@ where
 {
     /// Create a cursor with a default (invalid) location.
     fn new(
-        container: &'a mut Set<K, C>,
-        forest: &'a mut SetForest<K, C>,
+        container: &'a mut Set<K>,
+        forest: &'a mut SetForest<K>,
         comp: &'a C,
     ) -> SetCursor<'a, K, C> {
         SetCursor {
@@ -327,20 +330,18 @@ where
 }
 
 /// An iterator visiting the elements of a `Set`.
-pub struct SetIter<'a, K, C>
+pub struct SetIter<'a, K>
 where
     K: 'a + Copy,
-    C: 'a + Comparator<K>,
 {
     root: PackedOption<Node>,
-    pool: &'a NodePool<SetTypes<K, C>>,
-    path: Path<SetTypes<K, C>>,
+    pool: &'a NodePool<SetTypes<K>>,
+    path: Path<SetTypes<K>>,
 }
 
-impl<'a, K, C> Iterator for SetIter<'a, K, C>
+impl<'a, K> Iterator for SetIter<'a, K>
 where
     K: 'a + Copy,
-    C: 'a + Comparator<K>,
 {
     type Item = K;
 
@@ -365,16 +366,16 @@ mod test {
     #[test]
     fn node_size() {
         // check that nodes are cache line sized when keys are 32 bits.
-        type F = SetTypes<u32, ()>;
+        type F = SetTypes<u32>;
         assert_eq!(mem::size_of::<NodeData<F>>(), 64);
     }
 
     #[test]
     fn empty() {
-        let mut f = SetForest::<u32, ()>::new();
+        let mut f = SetForest::<u32>::new();
         f.clear();
 
-        let mut s = Set::<u32, ()>::new();
+        let mut s = Set::<u32>::new();
         assert!(s.is_empty());
         s.clear(&mut f);
         assert!(!s.contains(7, &f, &()));
@@ -394,8 +395,8 @@ mod test {
 
     #[test]
     fn simple_cursor() {
-        let mut f = SetForest::<u32, ()>::new();
-        let mut s = Set::<u32, ()>::new();
+        let mut f = SetForest::<u32>::new();
+        let mut s = Set::<u32>::new();
         let mut c = SetCursor::new(&mut s, &mut f, &());
 
         assert!(c.insert(50));
@@ -436,8 +437,8 @@ mod test {
 
     #[test]
     fn two_level_sparse_tree() {
-        let mut f = SetForest::<u32, ()>::new();
-        let mut s = Set::<u32, ()>::new();
+        let mut f = SetForest::<u32>::new();
+        let mut s = Set::<u32>::new();
         let mut c = SetCursor::new(&mut s, &mut f, &());
 
         // Insert enough elements that we get a two-level tree.
@@ -482,8 +483,8 @@ mod test {
 
     #[test]
     fn three_level_sparse_tree() {
-        let mut f = SetForest::<u32, ()>::new();
-        let mut s = Set::<u32, ()>::new();
+        let mut f = SetForest::<u32>::new();
+        let mut s = Set::<u32>::new();
         let mut c = SetCursor::new(&mut s, &mut f, &());
 
         // Insert enough elements that we get a 3-level tree.
@@ -535,7 +536,7 @@ mod test {
     // Level 4: 512 leafs, up to 7680 elements
     //
     // A 3-level tree can hold at most 960 elements.
-    fn dense4l(f: &mut SetForest<i32, ()>) -> Set<i32, ()> {
+    fn dense4l(f: &mut SetForest<i32>) -> Set<i32> {
         f.clear();
         let mut s = Set::new();
 
@@ -549,7 +550,7 @@ mod test {
 
     #[test]
     fn four_level() {
-        let mut f = SetForest::<i32, ()>::new();
+        let mut f = SetForest::<i32>::new();
         let mut s = dense4l(&mut f);
 
         assert_eq!(
@@ -593,7 +594,7 @@ mod test {
 
     #[test]
     fn four_level_clear() {
-        let mut f = SetForest::<i32, ()>::new();
+        let mut f = SetForest::<i32>::new();
         let mut s = dense4l(&mut f);
         s.clear(&mut f);
     }
