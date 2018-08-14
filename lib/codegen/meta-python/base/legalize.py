@@ -407,6 +407,7 @@ for ty,             minus_zero in [
                 a << bor(a1, a2)
             ))
 
+expand.custom_legalize(insts.br_icmp, 'expand_br_icmp')
 
 # Expansions using CPU flags.
 
