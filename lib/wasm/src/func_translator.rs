@@ -19,7 +19,7 @@ use wasmparser::{self, BinaryReader};
 /// by a `FuncEnvironment` object. A single translator instance can be reused to translate multiple
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
-    func_ctx: FunctionBuilderContext<Variable>,
+    func_ctx: FunctionBuilderContext,
     state: TranslationState,
 }
 
@@ -105,7 +105,7 @@ impl FuncTranslator {
 /// Declare local variables for the signature parameters that correspond to WebAssembly locals.
 ///
 /// Return the number of local variables declared.
-fn declare_wasm_parameters(builder: &mut FunctionBuilder<Variable>, entry_block: Ebb) -> usize {
+fn declare_wasm_parameters(builder: &mut FunctionBuilder, entry_block: Ebb) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
     for i in 0..sig_len {
@@ -131,7 +131,7 @@ fn declare_wasm_parameters(builder: &mut FunctionBuilder<Variable>, entry_block:
 /// Declare local variables, starting from `num_params`.
 fn parse_local_decls(
     reader: &mut BinaryReader,
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
     num_params: usize,
 ) -> WasmResult<()> {
     let mut next_local = num_params;
@@ -155,7 +155,7 @@ fn parse_local_decls(
 ///
 /// Fail of too many locals are declared in the function, or if the type is not valid for a local.
 fn declare_locals(
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
     count: u32,
     wasm_type: wasmparser::Type,
     next_local: &mut usize,
@@ -185,7 +185,7 @@ fn declare_locals(
 /// arguments and locals are declared in the builder.
 fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     mut reader: BinaryReader,
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
     state: &mut TranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {

@@ -43,7 +43,7 @@ use wasmparser::{MemoryImmediate, Operator};
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     op: Operator,
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
     state: &mut TranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
@@ -904,7 +904,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 /// portion so the translation state muts be updated accordingly.
 fn translate_unreachable_operator(
     op: &Operator,
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
     state: &mut TranslationState,
 ) {
     match *op {
@@ -988,7 +988,7 @@ fn get_heap_addr(
     addr32: ir::Value,
     offset: u32,
     addr_ty: Type,
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
 ) -> (ir::Value, i32) {
     use std::cmp::min;
 
@@ -1024,7 +1024,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
     result_ty: Type,
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
     state: &mut TranslationState,
     environ: &mut FE,
 ) {
@@ -1046,7 +1046,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
 fn translate_store<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
     state: &mut TranslationState,
     environ: &mut FE,
 ) {
@@ -1063,21 +1063,13 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
         .Store(opcode, val_ty, flags, offset.into(), val, base);
 }
 
-fn translate_icmp(
-    cc: IntCC,
-    builder: &mut FunctionBuilder<Variable>,
-    state: &mut TranslationState,
-) {
+fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut TranslationState) {
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().icmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
 }
 
-fn translate_fcmp(
-    cc: FloatCC,
-    builder: &mut FunctionBuilder<Variable>,
-    state: &mut TranslationState,
-) {
+fn translate_fcmp(cc: FloatCC, builder: &mut FunctionBuilder, state: &mut TranslationState) {
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().fcmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
@@ -1085,7 +1077,7 @@ fn translate_fcmp(
 
 fn translate_br_if(
     relative_depth: u32,
-    builder: &mut FunctionBuilder<Variable>,
+    builder: &mut FunctionBuilder,
     state: &mut TranslationState,
 ) {
     let val = state.pop1();
