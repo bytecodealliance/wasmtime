@@ -12,49 +12,23 @@
     )
 )]
 
+extern crate clap;
 extern crate cranelift_reader;
-extern crate docopt;
+extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 extern crate cranelift_codegen;
 
-extern crate serde_json;
-
+use clap::{App, Arg, SubCommand};
 use cranelift_reader::parse_functions;
-use docopt::Docopt;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{self, Write};
 use std::process;
-use std::vec::Vec;
 
 mod serde_clif_json;
 
-const USAGE: &str = "
-Cranelift JSON serializer/deserializer utility
-
-Usage:
-    clif-json serialize [-p] <file>
-    clif-json deserialize <file>
-
-Options:
-    -p, --pretty     print pretty json
-
-";
-
-#[derive(Deserialize, Debug)]
-struct Args {
-    cmd_serialize: bool,
-    cmd_deserialize: bool,
-    flag_pretty: bool,
-    arg_file: Vec<String>,
-}
-
-/// A command either succeeds or fails with an error message.
-pub type CommandResult = Result<(), String>;
-
-/// Serialize Cranelift IR to JSON
-fn call_ser(file: &str, pretty: bool) -> CommandResult {
+fn call_ser(file: &str, pretty: bool) -> Result<(), String> {
     let ret_of_parse = parse_functions(file);
     match ret_of_parse {
         Ok(funcs) => {
@@ -68,12 +42,11 @@ fn call_ser(file: &str, pretty: bool) -> CommandResult {
             println!("{}", ser_str);
             Ok(())
         }
-        Err(_pe) => Err(format!("this was a parsing error")),
+        Err(_pe) => Err(format!("There was a parsing error")),
     }
 }
 
-/// Deserialize JSON to Cranelift IR
-fn call_de(file: &File) -> CommandResult {
+fn call_de(file: &File) -> Result<(), String> {
     let de: serde_clif_json::SerObj = match serde_json::from_reader(file) {
         Result::Ok(val) => val,
         Result::Err(err) => panic!("{}", err),
@@ -82,41 +55,54 @@ fn call_de(file: &File) -> CommandResult {
     Ok(())
 }
 
-/// Parse the command line arguments and run the requested command.
-fn clif_json() -> CommandResult {
-    // Parse command line arguments.
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| d.help(true).deserialize())
-        .unwrap_or_else(|e| e.exit());
+fn main() {
+    let matches = App::new("Cranelift JSON serializer/deserializer utility")
+        .subcommand(
+            SubCommand::with_name("serialize")
+                .display_order(1)
+                .about("Serializes Cranelift IR into JSON.")
+                .arg(Arg::with_name("pretty").short("p").help("pretty json"))
+                .arg(
+                    Arg::with_name("FILE")
+                        .required(true)
+                        .value_name("FILE")
+                        .help("Input file for serialization"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("deserialize")
+                .about("Deserializes Cranelift IR into JSON.")
+                .arg(
+                    Arg::with_name("FILE")
+                        .required(true)
+                        .value_name("FILE")
+                        .help("Input file for deserialization"),
+                ),
+        )
+        .get_matches();
 
-    // Find the sub-command to execute.
-    let result = if args.cmd_serialize {
-        if let Some(first_file) = args.arg_file.first() {
-            let mut file = File::open(first_file).expect("Unable to open the file");
+    let res_serde = match matches.subcommand() {
+        ("serialize", Some(m)) => {
+            let mut file =
+                File::open(m.value_of("FILE").unwrap()).expect("Unable to open the file");
             let mut contents = String::new();
             file.read_to_string(&mut contents)
                 .expect("Unable to read the file");
-            call_ser(&contents, args.flag_pretty)
-        } else {
-            Err(format!("No file was passed"))
+
+            match m.occurrences_of("pretty") {
+                0 => call_ser(&contents, false),
+                _ => call_ser(&contents, true),
+            }
         }
-    } else if args.cmd_deserialize {
-        if let Some(first_file) = args.arg_file.first() {
-            let mut file = File::open(first_file).expect("Unable to open the file");
+        ("deserialize", Some(m)) => {
+            let mut file =
+                File::open(m.value_of("FILE").unwrap()).expect("Unable to open the file");
             call_de(&file)
-        } else {
-            Err(format!("No file was passed"))
         }
-    } else {
-        // Debugging / shouldn't happen with proper command line handling above.
-        Err(format!("Unhandled args: {:?}", args))
+        _ => Err(format!("Invalid subcommand.")),
     };
 
-    result
-}
-
-fn main() {
-    if let Err(mut msg) = clif_json() {
+    if let Err(mut msg) = res_serde {
         if !msg.ends_with('\n') {
             msg.push('\n');
         }

@@ -13,7 +13,7 @@ name = "clif-json"
 path = "src/clif-json.rs"
 
 [dependencies]
-docopt = "1"
+clap = "2.32.0"
 serde = "1.0.8"
 serde_derive = "1.0.8"
 serde_json = "1.0"
