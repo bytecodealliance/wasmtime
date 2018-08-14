@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-serde"
-version = "0.18.1"
+version = "0.19.0"
 authors = ["The Cranelift Project Developers"]
 description = "Serializer/Deserializer for Cranelift IR"
 repository = "https://github.com/CraneStation/cranelift"
@@ -17,8 +17,8 @@ docopt = "1"
 serde = "1.0.8"
 serde_derive = "1.0.8"
 serde_json = "1.0"
-cranelift-codegen = { path = "../codegen", version = "0.18.1", default-features = false }
-cranelift-reader = { path = "../reader", version = "0.18.1", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.19.0", default-features = false }
+cranelift-reader = { path = "../reader", version = "0.19.0", default-features = false }
 
 [features]
 default = ["std"]

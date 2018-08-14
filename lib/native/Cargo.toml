@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-native"
-version = "0.18.1"
+version = "0.19.0"
 authors = ["The Cranelift Project Developers"]
 description = "Support for targeting the host with Cranelift"
 repository = "https://github.com/CraneStation/cranelift"
@@ -8,7 +8,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.18.1", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.19.0", default-features = false }
 target-lexicon = { version = "0.0.3", default-features = false }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
