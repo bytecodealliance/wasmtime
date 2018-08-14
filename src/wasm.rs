@@ -148,9 +148,9 @@ fn handle_module(
 
         let func_index = num_func_imports + def_index.index();
         if flag_check_translation {
-            context
-                .verify(fisa)
-                .map_err(|err| pretty_verifier_error(&context.func, fisa.isa, None, &err))?;
+            if let Err(errors) = context.verify(fisa) {
+                return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
+            }
         } else {
             let compiled_size = context
                 .compile(isa)

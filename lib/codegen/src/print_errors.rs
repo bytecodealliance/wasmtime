@@ -9,7 +9,7 @@ use std::boxed::Box;
 use std::fmt;
 use std::fmt::Write;
 use std::string::{String, ToString};
-use verifier::VerifierError;
+use verifier::{VerifierError, VerifierErrors};
 use write::{decorate_function, FuncWriter, PlainWriter};
 
 /// Pretty-print a verifier error.
@@ -17,21 +17,26 @@ pub fn pretty_verifier_error<'a>(
     func: &ir::Function,
     isa: Option<&TargetIsa>,
     func_w: Option<Box<FuncWriter + 'a>>,
-    err: &VerifierError,
+    errors: VerifierErrors,
 ) -> String {
+    let mut errors = errors.0;
     let mut w = String::new();
 
-    match err.location {
-        ir::entities::AnyEntity::Inst(_) => {}
-        _ => {
-            // Print the error, because the pretty_function_error below won't do it since it isn't
-            // tied to an instruction.
-            writeln!(w, "verifier error summary: {}\n", err.to_string()).unwrap();
+    // TODO: Use drain_filter here when it gets stabilized
+    let mut i = 0;
+
+    while i != errors.len() {
+        if let ir::entities::AnyEntity::Inst(_) = errors[i].location {
+            let err = errors.remove(i);
+
+            writeln!(w, "Miscellaneous error: {}\n", err).unwrap()
+        } else {
+            i += 1;
         }
     }
 
     decorate_function(
-        &mut PrettyVerifierError(func_w.unwrap_or(Box::new(PlainWriter)), err),
+        &mut PrettyVerifierError(func_w.unwrap_or(Box::new(PlainWriter)), &mut errors),
         &mut w,
         func,
         isa,
@@ -39,7 +44,7 @@ pub fn pretty_verifier_error<'a>(
     w
 }
 
-struct PrettyVerifierError<'a>(Box<FuncWriter + 'a>, &'a VerifierError);
+struct PrettyVerifierError<'a>(Box<FuncWriter + 'a>, &'a mut Vec<VerifierError>);
 
 impl<'a> FuncWriter for PrettyVerifierError<'a> {
     fn write_instruction(
@@ -71,31 +76,35 @@ fn pretty_function_error(
     cur_inst: Inst,
     indent: usize,
     func_w: &mut FuncWriter,
-    err: &VerifierError,
+    errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
-    match err.location {
-        ir::entities::AnyEntity::Inst(inst) if inst == cur_inst => {
-            func_w.write_instruction(w, func, isa, cur_inst, indent)?;
-            write!(w, "{1:0$}^", indent, "")?;
-            for _c in cur_inst.to_string().chars() {
-                write!(w, "~")?;
+    // TODO: Use drain_filter here when it gets stabilized
+    let mut i = 0;
+
+    while i != errors.len() {
+        match errors[i].location {
+            ir::entities::AnyEntity::Inst(inst) if inst == cur_inst => {
+                let err = errors.remove(i);
+
+                func_w.write_instruction(w, func, isa, cur_inst, indent)?;
+                write!(w, "{1:0$}^", indent, "")?;
+                for _c in cur_inst.to_string().chars() {
+                    write!(w, "~")?;
+                }
+                writeln!(w, " verifier {}\n", err.to_string())?;
             }
-            writeln!(w, " verifier {}\n", err.to_string())
+            ir::entities::AnyEntity::Inst(_) => i += 1,
+            _ => unreachable!(),
         }
-        _ => writeln!(
-            w,
-            "{1:0$}{2}",
-            indent,
-            "",
-            func.dfg.display_inst(cur_inst, isa)
-        ),
     }
+
+    Ok(())
 }
 
 /// Pretty-print a Cranelift error.
 pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CodegenError) -> String {
     if let CodegenError::Verifier(e) = err {
-        pretty_verifier_error(func, isa, None, &e)
+        pretty_verifier_error(func, isa, None, e)
     } else {
         err.to_string()
     }

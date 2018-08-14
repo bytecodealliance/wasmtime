@@ -673,7 +673,7 @@ mod test {
     use ir::types::*;
     use ir::{Function, InstBuilder, TrapCode};
     use settings;
-    use verifier::verify_context;
+    use verifier::{verify_context, VerifierErrors};
 
     #[test]
     fn empty() {
@@ -931,6 +931,10 @@ mod test {
         cfg.compute(cur.func);
 
         let flags = settings::Flags::new(settings::builder());
-        verify_context(cur.func, &cfg, &dt, &flags).unwrap();
+        let mut errors = VerifierErrors::default();
+
+        verify_context(cur.func, &cfg, &dt, &flags, &mut errors).unwrap();
+
+        assert!(errors.0.is_empty());
     }
 }

@@ -8,7 +8,7 @@ use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
 use std::cmp::Ordering;
 use timing;
-use verifier::VerifierResult;
+use verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify liveness information for `func`.
 ///
@@ -27,7 +27,8 @@ pub fn verify_liveness(
     func: &Function,
     cfg: &ControlFlowGraph,
     liveness: &Liveness,
-) -> VerifierResult<()> {
+    errors: &mut VerifierErrors,
+) -> VerifierStepResult<()> {
     let _tt = timing::verify_liveness();
     let verifier = LivenessVerifier {
         isa,
@@ -35,8 +36,8 @@ pub fn verify_liveness(
         cfg,
         liveness,
     };
-    verifier.check_ebbs()?;
-    verifier.check_insts()?;
+    verifier.check_ebbs(errors)?;
+    verifier.check_insts(errors)?;
     Ok(())
 }
 
@@ -49,21 +50,21 @@ struct LivenessVerifier<'a> {
 
 impl<'a> LivenessVerifier<'a> {
     /// Check all EBB arguments.
-    fn check_ebbs(&self) -> VerifierResult<()> {
+    fn check_ebbs(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for ebb in self.func.layout.ebbs() {
             for &val in self.func.dfg.ebb_params(ebb) {
                 let lr = match self.liveness.get(val) {
                     Some(lr) => lr,
-                    None => return err!(ebb, "EBB arg {} has no live range", val),
+                    None => return fatal!(errors, ebb, "EBB arg {} has no live range", val),
                 };
-                self.check_lr(ebb.into(), val, lr)?;
+                self.check_lr(ebb.into(), val, lr, errors)?;
             }
         }
         Ok(())
     }
 
     /// Check all instructions.
-    fn check_insts(&self) -> VerifierResult<()> {
+    fn check_insts(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 let encoding = self.func.encodings[inst];
@@ -72,14 +73,15 @@ impl<'a> LivenessVerifier<'a> {
                 for &val in self.func.dfg.inst_results(inst) {
                     let lr = match self.liveness.get(val) {
                         Some(lr) => lr,
-                        None => return err!(inst, "{} has no live range", val),
+                        None => return fatal!(errors, inst, "{} has no live range", val),
                     };
-                    self.check_lr(inst.into(), val, lr)?;
+                    self.check_lr(inst.into(), val, lr, errors)?;
 
                     if encoding.is_legal() {
                         // A legal instruction is not allowed to define ghost values.
                         if lr.affinity.is_unassigned() {
-                            return err!(
+                            return fatal!(
+                                errors,
                                 inst,
                                 "{} is a ghost value defined by a real [{}] instruction",
                                 val,
@@ -88,7 +90,8 @@ impl<'a> LivenessVerifier<'a> {
                         }
                     } else if !lr.affinity.is_unassigned() {
                         // A non-encoded instruction can only define ghost values.
-                        return err!(
+                        return fatal!(
+                            errors,
                             inst,
                             "{} is a real {} value defined by a ghost instruction",
                             val,
@@ -101,15 +104,16 @@ impl<'a> LivenessVerifier<'a> {
                 for &val in self.func.dfg.inst_args(inst) {
                     let lr = match self.liveness.get(val) {
                         Some(lr) => lr,
-                        None => return err!(inst, "{} has no live range", val),
+                        None => return fatal!(errors, inst, "{} has no live range", val),
                     };
                     if !self.live_at_use(lr, inst) {
-                        return err!(inst, "{} is not live at this use", val);
+                        return fatal!(errors, inst, "{} is not live at this use", val);
                     }
 
                     // A legal instruction is not allowed to depend on ghost values.
                     if encoding.is_legal() && lr.affinity.is_unassigned() {
-                        return err!(
+                        return fatal!(
+                            errors,
                             inst,
                             "{} is a ghost value used by a real [{}] instruction",
                             val,
@@ -141,7 +145,13 @@ impl<'a> LivenessVerifier<'a> {
     }
 
     /// Check the integrity of the live range `lr`.
-    fn check_lr(&self, def: ProgramPoint, val: Value, lr: &LiveRange) -> VerifierResult<()> {
+    fn check_lr(
+        &self,
+        def: ProgramPoint,
+        val: Value,
+        lr: &LiveRange,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         let l = &self.func.layout;
 
         let loc: AnyEntity = match def.into() {
@@ -149,11 +159,17 @@ impl<'a> LivenessVerifier<'a> {
             ExpandedProgramPoint::Inst(i) => i.into(),
         };
         if lr.def() != def {
-            return err!(loc, "Wrong live range def ({}) for {}", lr.def(), val);
+            return fatal!(
+                errors,
+                loc,
+                "Wrong live range def ({}) for {}",
+                lr.def(),
+                val
+            );
         }
         if lr.is_dead() {
             if !lr.is_local() {
-                return err!(loc, "Dead live range {} should be local", val);
+                return fatal!(errors, loc, "Dead live range {} should be local", val);
             } else {
                 return Ok(());
             }
@@ -164,11 +180,17 @@ impl<'a> LivenessVerifier<'a> {
         };
         match lr.def_local_end().into() {
             ExpandedProgramPoint::Ebb(e) => {
-                return err!(loc, "Def local range for {} can't end at {}", val, e)
+                return fatal!(
+                    errors,
+                    loc,
+                    "Def local range for {} can't end at {}",
+                    val,
+                    e
+                )
             }
             ExpandedProgramPoint::Inst(i) => {
                 if self.func.layout.inst_ebb(i) != Some(def_ebb) {
-                    return err!(loc, "Def local end for {} in wrong ebb", val);
+                    return fatal!(errors, loc, "Def local end for {} in wrong ebb", val);
                 }
             }
         }
@@ -176,12 +198,19 @@ impl<'a> LivenessVerifier<'a> {
         // Now check the live-in intervals against the CFG.
         for (mut ebb, end) in lr.liveins(self.liveness.context(l)) {
             if !l.is_ebb_inserted(ebb) {
-                return err!(loc, "{} livein at {} which is not in the layout", val, ebb);
+                return fatal!(
+                    errors,
+                    loc,
+                    "{} livein at {} which is not in the layout",
+                    val,
+                    ebb
+                );
             }
             let end_ebb = match l.inst_ebb(end) {
                 Some(e) => e,
                 None => {
-                    return err!(
+                    return fatal!(
+                        errors,
                         loc,
                         "{} livein for {} ends at {} which is not in the layout",
                         val,
@@ -196,7 +225,8 @@ impl<'a> LivenessVerifier<'a> {
                 // If `val` is live-in at `ebb`, it must be live at all the predecessors.
                 for BasicBlock { inst: pred, .. } in self.cfg.pred_iter(ebb) {
                     if !self.live_at_use(lr, pred) {
-                        return err!(
+                        return fatal!(
+                            errors,
                             pred,
                             "{} is live in to {} but not live at predecessor",
                             val,
@@ -210,7 +240,15 @@ impl<'a> LivenessVerifier<'a> {
                 }
                 ebb = match l.next_ebb(ebb) {
                     Some(e) => e,
-                    None => return err!(loc, "end of {} livein ({}) never reached", val, end_ebb),
+                    None => {
+                        return fatal!(
+                            errors,
+                            loc,
+                            "end of {} livein ({}) never reached",
+                            val,
+                            end_ebb
+                        )
+                    }
                 };
             }
         }
