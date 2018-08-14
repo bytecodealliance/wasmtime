@@ -47,7 +47,7 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
     ctx.func = Function::with_name_signature(ExternalName::user(0, func_id.index() as u32), sig);
     let mut func_ctx = FunctionBuilderContext::new();
     {
-        let mut bcx: FunctionBuilder<Variable> = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
         let ebb = bcx.create_ebb();
         bcx.switch_to_block(ebb);
         bcx.ins().return_(&[]);
