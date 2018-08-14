@@ -9,13 +9,13 @@ topdir=$(dirname "$0")
 cd "$topdir"
 
 # All the cranelift-* crates have the same version number
-version="0.18.1"
+version="0.19.0"
 
 # Update all of the Cargo.toml files.
 #
 # The main Cargo.toml in the top-level directory is the cranelift-tools crate which we don't publish.
 echo "Updating crate versions to $version"
-for crate in . lib/*; do
+for crate in . lib/* lib/codegen/meta; do
     # Update the version number of this crate to $version.
     sed -i.bk -e "s/^version = .*/version = \"$version\"/" \
         "$crate/Cargo.toml"
