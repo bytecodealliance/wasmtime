@@ -9,6 +9,7 @@ use std::boxed::Box;
 use std::fmt;
 use std::fmt::Write;
 use std::string::{String, ToString};
+use std::vec::Vec;
 use verifier::{VerifierError, VerifierErrors};
 use write::{decorate_function, FuncWriter, PlainWriter};
 
