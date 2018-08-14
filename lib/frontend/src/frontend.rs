@@ -1,6 +1,6 @@
 //! A frontend for building Cranelift IR from other languages.
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
-use cranelift_codegen::entity::{EntityMap, EntityRef, EntitySet};
+use cranelift_codegen::entity::{EntityMap, EntitySet};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
@@ -11,7 +11,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::packed_option::PackedOption;
 use ssa::{Block, SSABuilder, SideEffects};
-use std::fmt::Debug;
+use variable::Variable;
 
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
@@ -22,20 +22,14 @@ use std::fmt::Debug;
 /// The `Variable` parameter can be any index-like type that can be made to
 /// implement `EntityRef`. For frontends that don't have an obvious type to
 /// use here, `variable::Variable` can be used.
-pub struct FunctionBuilderContext<Variable>
-where
-    Variable: EntityRef + Debug,
-{
+pub struct FunctionBuilderContext {
     ssa: SSABuilder<Variable>,
     ebbs: EntityMap<Ebb, EbbData>,
     types: EntityMap<Variable, Type>,
 }
 
 /// Temporary object used to build a single Cranelift IR `Function`.
-pub struct FunctionBuilder<'a, Variable: 'a>
-where
-    Variable: EntityRef + Debug,
-{
+pub struct FunctionBuilder<'a> {
     /// The function currently being built.
     /// This field is public so the function can be re-borrowed.
     pub func: &'a mut Function,
@@ -43,7 +37,7 @@ where
     /// Source location to assign to all new instructions.
     srcloc: ir::SourceLoc,
 
-    func_ctx: &'a mut FunctionBuilderContext<Variable>,
+    func_ctx: &'a mut FunctionBuilderContext,
     position: Position,
 }
 
@@ -79,10 +73,7 @@ impl Position {
     }
 }
 
-impl<Variable> FunctionBuilderContext<Variable>
-where
-    Variable: EntityRef + Debug,
-{
+impl FunctionBuilderContext {
     /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after
     /// each [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
     pub fn new() -> Self {
@@ -106,30 +97,18 @@ where
 
 /// Implementation of the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html) that has
 /// one convenience method per Cranelift IR instruction.
-pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
-where
-    Variable: EntityRef + Debug,
-{
-    builder: &'short mut FunctionBuilder<'long, Variable>,
+pub struct FuncInstBuilder<'short, 'long: 'short> {
+    builder: &'short mut FunctionBuilder<'long>,
     ebb: Ebb,
 }
 
-impl<'short, 'long, Variable> FuncInstBuilder<'short, 'long, Variable>
-where
-    Variable: EntityRef + Debug,
-{
-    fn new<'s, 'l>(
-        builder: &'s mut FunctionBuilder<'l, Variable>,
-        ebb: Ebb,
-    ) -> FuncInstBuilder<'s, 'l, Variable> {
+impl<'short, 'long> FuncInstBuilder<'short, 'long> {
+    fn new<'s, 'l>(builder: &'s mut FunctionBuilder<'l>, ebb: Ebb) -> FuncInstBuilder<'s, 'l> {
         FuncInstBuilder { builder, ebb }
     }
 }
 
-impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long, Variable>
-where
-    Variable: EntityRef + Debug,
-{
+impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         &self.builder.func.dfg
     }
@@ -229,16 +208,13 @@ where
 /// function in a way that violate the coherence of the code. For instance: switching to a new
 /// `Ebb` when you haven't filled the current one with a terminator instruction, inserting a
 /// return instruction with arguments that don't match the function's signature.
-impl<'a, Variable> FunctionBuilder<'a, Variable>
-where
-    Variable: EntityRef + Debug,
-{
+impl<'a> FunctionBuilder<'a> {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
     /// `FunctionBuilderContext`.
     pub fn new(
         func: &'a mut Function,
-        func_ctx: &'a mut FunctionBuilderContext<Variable>,
-    ) -> FunctionBuilder<'a, Variable> {
+        func_ctx: &'a mut FunctionBuilderContext,
+    ) -> FunctionBuilder<'a> {
         debug_assert!(func_ctx.is_empty());
         FunctionBuilder {
             func,
@@ -393,7 +369,7 @@ where
 
     /// Returns an object with the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html)
     /// trait that allows to conveniently append an instruction to the current `Ebb` being built.
-    pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a, Variable> {
+    pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a> {
         let ebb = self.position.ebb.unwrap();
         FuncInstBuilder::new(self, ebb)
     }
@@ -486,10 +462,7 @@ where
 /// performance of your translation perform more complex transformations to your Cranelift IR
 /// function. The functions below help you inspect the function you're creating and modify it
 /// in ways that can be unsafe if used incorrectly.
-impl<'a, Variable> FunctionBuilder<'a, Variable>
-where
-    Variable: EntityRef + Debug,
-{
+impl<'a> FunctionBuilder<'a> {
     /// Retrieves all the parameters for an `Ebb` currently inferred from the jump instructions
     /// inserted that target it and the SSA construction.
     pub fn ebb_params(&self, ebb: Ebb) -> &[Value] {
@@ -574,10 +547,7 @@ where
 }
 
 // Helper functions
-impl<'a, Variable> FunctionBuilder<'a, Variable>
-where
-    Variable: EntityRef + Debug,
-{
+impl<'a> FunctionBuilder<'a> {
     fn move_to_next_basic_block(&mut self) {
         self.position.basic_block = PackedOption::from(
             self.func_ctx
@@ -625,10 +595,10 @@ mod tests {
         sig.returns.push(AbiParam::new(I32));
         sig.params.push(AbiParam::new(I32));
 
-        let mut fn_ctx = FunctionBuilderContext::<Variable>::new();
+        let mut fn_ctx = FunctionBuilderContext::new();
         let mut func = Function::with_name_signature(ExternalName::testcase("sample"), sig);
         {
-            let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut fn_ctx);
+            let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
             let block0 = builder.create_ebb();
             let block1 = builder.create_ebb();
