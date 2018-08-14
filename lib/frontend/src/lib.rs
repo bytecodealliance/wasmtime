@@ -10,8 +10,8 @@
 //!
 //! The most interesting feature of this API is that it provides a single way to deal with all your
 //! variable problems. Indeed, the [`FunctionBuilder`](struct.FunctionBuilder.html) struct has a
-//! type parameter `Variable` that should be instantiated with the type of your source language
-//! variables. Then, through calling the functions
+//! type `Variable` that should be an index of your source language variables. Then, through
+//! calling the functions
 //! [`declare_var`](struct.FunctionBuilder.html#method.declare_var),
 //! [`def_var`](struct.FunctionBuilder.html#method.def_var) and
 //! [`use_var`](struct.FunctionBuilder.html#method.use_var), the
@@ -29,17 +29,13 @@
 //! would also work but with a slight additional overhead (the SSA algorithm does not know
 //! beforehand if a variable is immutable or not).
 //!
-//!
-//! The moral is that you should use these three functions to handle all your mutable variables, even those
-//! that are not present in the source code but artefacts of the translation. Hence The `Variable` type that you
-//! would pass to [`FunctionBuilder`](struct.FunctionBuilder.html) could look like this
-//!
-//! ```
-//! enum Variable {
-//!     OriginalSourceVariable(String),
-//!     TranslationArtefact(u32)
-//! }
-//! ```
+//! The moral is that you should use these three functions to handle all your mutable variables,
+//! even those that are not present in the source code but artefacts of the translation. It is up
+//! to you to keep a mapping between the mutable variables of your language and their `Variable`
+//! index that is used by Cranelift. Caution: as the `Variable` is used by Cranelift to index an
+//! array containing information about your mutable variables, when you create a new `Variable`
+//! with [`Variable::new(var_index)`] you should make sure that `var_index` is provided by a
+//! counter incremented by 1 each time you encounter a new mutable variable.
 //!
 //! # Example
 //!
