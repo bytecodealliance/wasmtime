@@ -244,6 +244,40 @@ fn expand_select(
     cfg.recompute_ebb(pos.func, old_ebb);
 }
 
+fn expand_br_icmp(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &TargetIsa,
+) {
+    let (cond, a, b, destination, ebb_args) = match func.dfg[inst] {
+        ir::InstructionData::BranchIcmp {
+            cond,
+            destination,
+            ref args,
+            ..
+        } => (
+            cond,
+            args.get(0, &func.dfg.value_lists).unwrap(),
+            args.get(1, &func.dfg.value_lists).unwrap(),
+            destination,
+            args.as_slice(&func.dfg.value_lists)[2..].to_vec(),
+        ),
+        _ => panic!("Expected br_icmp {}", func.dfg.display_inst(inst, None)),
+    };
+
+    let old_ebb = func.layout.pp_ebb(inst);
+    func.dfg.clear_results(inst);
+
+    let icmp_res = func.dfg.replace(inst).icmp(cond, a, b);
+    let mut pos = FuncCursor::new(func).after_inst(inst);
+    pos.use_srcloc(inst);
+    pos.ins().brnz(icmp_res, destination, &ebb_args);
+
+    cfg.recompute_ebb(pos.func, destination);
+    cfg.recompute_ebb(pos.func, old_ebb);
+}
+
 /// Expand illegal `f32const` and `f64const` instructions.
 fn expand_fconst(
     inst: ir::Inst,

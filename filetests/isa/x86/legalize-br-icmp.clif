@@ -1,0 +1,46 @@
+test legalizer
+
+target x86_64
+
+function %br_icmp(i64) fast {
+ebb0(v0: i64):
+    v1 = iconst.i64 0
+    br_icmp eq v0, v1, ebb1
+    jump ebb1
+
+ebb1:
+    return
+}
+
+; sameln: function %br_icmp(i64 [%rdi]) fast {
+; nextln:                                 ebb0(v0: i64):
+; nextln: [RexOp1pu_id#b8]                    v1 = iconst.i64 0
+; nextln: [RexOp1icscc#8039]                  v2 = icmp eq v0, v1
+; nextln: [RexOp1t8jccb#75]                   brnz v2, ebb1
+; nextln: [RexOp1jmpb#eb]                     jump ebb1
+; nextln: 
+; nextln:                                 ebb1:
+; nextln: [Op1ret#c3]                         return
+; nextln: }
+
+
+function %br_icmp_ebb_args(i64) fast {
+ebb0(v0: i64):
+    v1 = iconst.i64 0
+    br_icmp eq v0, v1, ebb1(v0)
+    jump ebb1(v0)
+
+ebb1(v2: i64):
+    return
+}
+
+; sameln: function %br_icmp_ebb_args(i64 [%rdi]) fast {
+; nextln:                                 ebb0(v0: i64):
+; nextln: [RexOp1pu_id#b8]                    v1 = iconst.i64 0
+; nextln: [RexOp1icscc#8039]                  v3 = icmp eq v0, v1
+; nextln: [RexOp1t8jccb#75]                   brnz v3, ebb1(v0)
+; nextln: [RexOp1jmpb#eb]                     jump ebb1(v0)
+; nextln: 
+; nextln:                                 ebb1(v2: i64):
+; nextln: [Op1ret#c3]                         return
+; nextln: }
