@@ -562,6 +562,10 @@ where
 
     /// Perform all outstanding relocations on the given function. This requires all `Local`
     /// and `Export` entities referenced to be defined.
+    ///
+    /// # Panics
+    ///
+    /// When the function has already been finalized this panics
     pub fn finalize_function(&mut self, func: FuncId) -> B::FinalizedFunction {
         let output = {
             let info = &self.contents.functions[func];
@@ -569,6 +573,7 @@ where
                 info.decl.linkage.is_definable(),
                 "imported function cannot be finalized"
             );
+            assert!(!info.finalized, "function can't be finalized twice");
             self.backend.finalize_function(
                 info.compiled
                     .as_ref()
@@ -584,6 +589,10 @@ where
 
     /// Perform all outstanding relocations on the given data object. This requires all
     /// `Local` and `Export` entities referenced to be defined.
+    ///
+    /// # Panics
+    ///
+    /// When the data object has already been finalized this panics
     pub fn finalize_data(&mut self, data: DataId) -> B::FinalizedData {
         let output = {
             let info = &self.contents.data_objects[data];
@@ -591,6 +600,7 @@ where
                 info.decl.linkage.is_definable(),
                 "imported data cannot be finalized"
             );
+            assert!(!info.finalized, "data object can't be finalized twice");
             self.backend.finalize_data(
                 info.compiled
                     .as_ref()
