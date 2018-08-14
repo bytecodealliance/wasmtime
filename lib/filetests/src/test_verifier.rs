@@ -14,6 +14,7 @@ use cranelift_codegen::verify_function;
 use cranelift_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
+use std::fmt::Write;
 use subtest::{Context, SubTest, SubtestResult};
 
 struct TestVerifier;
@@ -41,37 +42,48 @@ impl SubTest for TestVerifier {
         let func = func.borrow();
 
         // Scan source annotations for "error:" directives.
-        let mut expected = None;
+        let mut expected = Vec::new();
+
         for comment in &context.details.comments {
             if let Some(tail) = match_directive(comment.text, "error:") {
-                // Currently, the verifier can only report one problem at a time.
-                // Reject more than one `error:` directives.
-                if expected.is_some() {
-                    return Err("cannot handle multiple error: directives".to_string());
-                }
-                expected = Some((comment.entity, tail));
+                expected.push((comment.entity, tail));
             }
         }
 
         match verify_function(func, context.flags_or_isa()) {
-            Ok(_) => match expected {
-                None => Ok(()),
-                Some((_, msg)) => Err(format!("passed, expected error: {}", msg)),
-            },
-            Err(got) => match expected {
-                None => Err(format!("verifier pass, got {}", got)),
-                Some((want_loc, want_msg)) if got.message.contains(want_msg) => {
-                    if want_loc == got.location {
-                        Ok(())
-                    } else {
-                        Err(format!(
-                            "correct error reported on {}, but wanted {}",
-                            got.location, want_loc
-                        ))
+            Ok(()) if expected.len() == 0 => Ok(()),
+            Ok(()) => Err(format!("passed, but expected errors: {:?}", expected)),
+
+            Err(ref errors) if expected.len() == 0 => {
+                Err(format!("expected no error, but got:\n{}", errors))
+            }
+
+            Err(errors) => {
+                let mut errors = errors.0;
+                let mut msg = String::new();
+
+                // for each expected error, find a suitable match
+                for expect in expected {
+                    let pos = errors
+                        .iter()
+                        .position(|err| err.message.contains(expect.1) && err.location == expect.0);
+
+                    match pos {
+                        None => {
+                            write!(msg, "expected error {}", expect.0).unwrap();
+                        }
+                        Some(pos) => {
+                            errors.swap_remove(pos);
+                        }
                     }
                 }
-                Some(_) => Err(format!("mismatching error: {}", got)),
-            },
+
+                if msg.len() == 0 {
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
         }
     }
 }

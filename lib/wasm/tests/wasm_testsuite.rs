@@ -77,7 +77,7 @@ fn handle_module(path: &Path, flags: &Flags) {
     translate_module(&data, &mut dummy_environ).unwrap();
     for func in dummy_environ.info.function_bodies.values() {
         verifier::verify_function(func, flags)
-            .map_err(|err| panic!(pretty_verifier_error(func, None, None, &err)))
+            .map_err(|errors| panic!(pretty_verifier_error(func, None, None, errors)))
             .unwrap();
     }
 }

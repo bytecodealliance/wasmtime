@@ -18,7 +18,7 @@ use regalloc::virtregs::VirtRegs;
 use result::CodegenResult;
 use timing;
 use topo_order::TopoOrder;
-use verifier::{verify_context, verify_cssa, verify_liveness, verify_locations};
+use verifier::{verify_context, verify_cssa, verify_liveness, verify_locations, VerifierErrors};
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {
@@ -76,6 +76,8 @@ impl Context {
         let _tt = timing::regalloc();
         debug_assert!(domtree.is_valid());
 
+        let mut errors = VerifierErrors::default();
+
         // `Liveness` and `Coloring` are self-clearing.
         self.virtregs.clear();
 
@@ -87,7 +89,11 @@ impl Context {
         self.liveness.compute(isa, func, cfg);
 
         if isa.flags().enable_verifier() {
-            verify_liveness(isa, func, cfg, &self.liveness)?;
+            let ok = verify_liveness(isa, func, cfg, &self.liveness, &mut errors).is_ok();
+
+            if !ok {
+                return Err(errors.into());
+            }
         }
 
         // Pass: Coalesce and create Conventional SSA form.
@@ -101,9 +107,20 @@ impl Context {
         );
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree, isa)?;
-            verify_liveness(isa, func, cfg, &self.liveness)?;
-            verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
+            let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
+                && verify_liveness(isa, func, cfg, &self.liveness, &mut errors).is_ok()
+                && verify_cssa(
+                    func,
+                    cfg,
+                    domtree,
+                    &self.liveness,
+                    &self.virtregs,
+                    &mut errors,
+                ).is_ok();
+
+            if !ok {
+                return Err(errors.into());
+            }
         }
 
         // Pass: Spilling.
@@ -118,9 +135,20 @@ impl Context {
         );
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree, isa)?;
-            verify_liveness(isa, func, cfg, &self.liveness)?;
-            verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
+            let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
+                && verify_liveness(isa, func, cfg, &self.liveness, &mut errors).is_ok()
+                && verify_cssa(
+                    func,
+                    cfg,
+                    domtree,
+                    &self.liveness,
+                    &self.virtregs,
+                    &mut errors,
+                ).is_ok();
+
+            if !ok {
+                return Err(errors.into());
+            }
         }
 
         // Pass: Reload.
@@ -134,9 +162,20 @@ impl Context {
         );
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree, isa)?;
-            verify_liveness(isa, func, cfg, &self.liveness)?;
-            verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
+            let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
+                && verify_liveness(isa, func, cfg, &self.liveness, &mut errors).is_ok()
+                && verify_cssa(
+                    func,
+                    cfg,
+                    domtree,
+                    &self.liveness,
+                    &self.virtregs,
+                    &mut errors,
+                ).is_ok();
+
+            if !ok {
+                return Err(errors.into());
+            }
         }
 
         // Pass: Coloring.
@@ -144,11 +183,29 @@ impl Context {
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree, isa)?;
-            verify_liveness(isa, func, cfg, &self.liveness)?;
-            verify_locations(isa, func, Some(&self.liveness))?;
-            verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
+            let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
+                && verify_liveness(isa, func, cfg, &self.liveness, &mut errors).is_ok()
+                && verify_locations(isa, func, Some(&self.liveness), &mut errors).is_ok()
+                && verify_cssa(
+                    func,
+                    cfg,
+                    domtree,
+                    &self.liveness,
+                    &self.virtregs,
+                    &mut errors,
+                ).is_ok();
+
+            if !ok {
+                return Err(errors.into());
+            }
         }
-        Ok(())
+
+        // Even if we arrive here, (non-fatal) errors might have been reported, so we
+        // must make sure absolutely nothing is wrong
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.into())
+        }
     }
 }

@@ -1,18 +1,18 @@
 //! Result and error types representing the outcome of compiling a function.
 
-use verifier::VerifierError;
+use verifier::VerifierErrors;
 
 /// A compilation error.
 ///
 /// When Cranelift fails to compile a function, it will return one of these error codes.
 #[derive(Fail, Debug, PartialEq, Eq)]
 pub enum CodegenError {
-    /// An IR verifier error.
+    /// A list of IR verifier errors.
     ///
     /// This always represents a bug, either in the code that generated IR for Cranelift, or a bug
     /// in Cranelift itself.
-    #[fail(display = "Verifier error: {}", _0)]
-    Verifier(#[cause] VerifierError),
+    #[fail(display = "Verifier errors:\n{}", _0)]
+    Verifier(#[cause] VerifierErrors),
 
     /// An implementation limit was exceeded.
     ///
@@ -34,8 +34,8 @@ pub enum CodegenError {
 /// A convenient alias for a `Result` that uses `CodegenError` as the error type.
 pub type CodegenResult<T> = Result<T, CodegenError>;
 
-impl From<VerifierError> for CodegenError {
-    fn from(e: VerifierError) -> Self {
+impl From<VerifierErrors> for CodegenError {
+    fn from(e: VerifierErrors) -> Self {
         CodegenError::Verifier(e)
     }
 }

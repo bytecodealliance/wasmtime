@@ -5,7 +5,7 @@ use isa;
 use regalloc::liveness::Liveness;
 use regalloc::RegDiversions;
 use timing;
-use verifier::VerifierResult;
+use verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify value locations for `func`.
 ///
@@ -22,7 +22,8 @@ pub fn verify_locations(
     isa: &isa::TargetIsa,
     func: &ir::Function,
     liveness: Option<&Liveness>,
-) -> VerifierResult<()> {
+    errors: &mut VerifierErrors,
+) -> VerifierStepResult<()> {
     let _tt = timing::verify_locations();
     let verifier = LocationVerifier {
         isa,
@@ -31,7 +32,7 @@ pub fn verify_locations(
         encinfo: isa.encoding_info(),
         liveness,
     };
-    verifier.check_constraints()?;
+    verifier.check_constraints(errors)?;
     Ok(())
 }
 
@@ -45,7 +46,7 @@ struct LocationVerifier<'a> {
 
 impl<'a> LocationVerifier<'a> {
     /// Check that the assigned value locations match the operand constraints of their uses.
-    fn check_constraints(&self) -> VerifierResult<()> {
+    fn check_constraints(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         let dfg = &self.func.dfg;
         let mut divert = RegDiversions::new();
 
@@ -57,23 +58,23 @@ impl<'a> LocationVerifier<'a> {
                 let enc = self.func.encodings[inst];
 
                 if enc.is_legal() {
-                    self.check_enc_constraints(inst, enc, &divert)?
+                    self.check_enc_constraints(inst, enc, &divert, errors)?
                 } else {
-                    self.check_ghost_results(inst)?;
+                    self.check_ghost_results(inst, errors)?;
                 }
 
                 if let Some(sig) = dfg.call_signature(inst) {
-                    self.check_call_abi(inst, sig, &divert)?;
+                    self.check_call_abi(inst, sig, &divert, errors)?;
                 }
 
                 let opcode = dfg[inst].opcode();
                 if opcode.is_return() {
-                    self.check_return_abi(inst, &divert)?;
+                    self.check_return_abi(inst, &divert, errors)?;
                 } else if opcode.is_branch() && !divert.is_empty() {
-                    self.check_cfg_edges(inst, &divert)?;
+                    self.check_cfg_edges(inst, &divert, errors)?;
                 }
 
-                self.update_diversions(inst, &mut divert)?;
+                self.update_diversions(inst, &mut divert, errors)?;
             }
         }
 
@@ -86,7 +87,8 @@ impl<'a> LocationVerifier<'a> {
         inst: ir::Inst,
         enc: isa::Encoding,
         divert: &RegDiversions,
-    ) -> VerifierResult<()> {
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         let constraints = self
             .encinfo
             .operand_constraints(enc)
@@ -97,7 +99,8 @@ impl<'a> LocationVerifier<'a> {
         }
 
         // TODO: We could give a better error message here.
-        err!(
+        fatal!(
+            errors,
             inst,
             "{} constraints not satisfied",
             self.encinfo.display(enc)
@@ -106,13 +109,18 @@ impl<'a> LocationVerifier<'a> {
 
     /// Check that the result values produced by a ghost instruction are not assigned a value
     /// location.
-    fn check_ghost_results(&self, inst: ir::Inst) -> VerifierResult<()> {
+    fn check_ghost_results(
+        &self,
+        inst: ir::Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         let results = self.func.dfg.inst_results(inst);
 
         for &res in results {
             let loc = self.func.locations[res];
             if loc.is_assigned() {
-                return err!(
+                return fatal!(
+                    errors,
                     inst,
                     "ghost result {} value must not have a location ({}).",
                     res,
@@ -130,7 +138,8 @@ impl<'a> LocationVerifier<'a> {
         inst: ir::Inst,
         sig: ir::SigRef,
         divert: &RegDiversions,
-    ) -> VerifierResult<()> {
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         let sig = &self.func.dfg.signatures[sig];
         let varargs = self.func.dfg.inst_variable_args(inst);
         let results = self.func.dfg.inst_results(inst);
@@ -142,6 +151,7 @@ impl<'a> LocationVerifier<'a> {
                 abi,
                 divert.get(value, &self.func.locations),
                 ir::StackSlotKind::OutgoingArg,
+                errors,
             )?;
         }
 
@@ -152,6 +162,7 @@ impl<'a> LocationVerifier<'a> {
                 abi,
                 self.func.locations[value],
                 ir::StackSlotKind::OutgoingArg,
+                errors,
             )?;
         }
 
@@ -159,7 +170,12 @@ impl<'a> LocationVerifier<'a> {
     }
 
     /// Check the ABI argument locations for a return.
-    fn check_return_abi(&self, inst: ir::Inst, divert: &RegDiversions) -> VerifierResult<()> {
+    fn check_return_abi(
+        &self,
+        inst: ir::Inst,
+        divert: &RegDiversions,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         let sig = &self.func.signature;
         let varargs = self.func.dfg.inst_variable_args(inst);
 
@@ -170,6 +186,7 @@ impl<'a> LocationVerifier<'a> {
                 abi,
                 divert.get(value, &self.func.locations),
                 ir::StackSlotKind::IncomingArg,
+                errors,
             )?;
         }
 
@@ -184,12 +201,14 @@ impl<'a> LocationVerifier<'a> {
         abi: &ir::AbiParam,
         loc: ir::ValueLoc,
         want_kind: ir::StackSlotKind,
-    ) -> VerifierResult<()> {
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         match abi.location {
             ir::ArgumentLoc::Unassigned => {}
             ir::ArgumentLoc::Reg(reg) => {
                 if loc != ir::ValueLoc::Reg(reg) {
-                    return err!(
+                    return fatal!(
+                        errors,
                         inst,
                         "ABI expects {} in {}, got {}",
                         value,
@@ -202,7 +221,8 @@ impl<'a> LocationVerifier<'a> {
                 if let ir::ValueLoc::Stack(ss) = loc {
                     let slot = &self.func.stack_slots[ss];
                     if slot.kind != want_kind {
-                        return err!(
+                        return fatal!(
+                            errors,
                             inst,
                             "call argument {} should be in a {} slot, but {} is {}",
                             value,
@@ -212,7 +232,8 @@ impl<'a> LocationVerifier<'a> {
                         );
                     }
                     if slot.offset.unwrap() != offset {
-                        return err!(
+                        return fatal!(
+                            errors,
                             inst,
                             "ABI expects {} at stack offset {}, but {} is at {}",
                             value,
@@ -222,7 +243,8 @@ impl<'a> LocationVerifier<'a> {
                         );
                     }
                 } else {
-                    return err!(
+                    return fatal!(
+                        errors,
                         inst,
                         "ABI expects {} at stack offset {}, got {}",
                         value,
@@ -237,7 +259,12 @@ impl<'a> LocationVerifier<'a> {
     }
 
     /// Update diversions to reflect the current instruction and check their consistency.
-    fn update_diversions(&self, inst: ir::Inst, divert: &mut RegDiversions) -> VerifierResult<()> {
+    fn update_diversions(
+        &self,
+        inst: ir::Inst,
+        divert: &mut RegDiversions,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         let (arg, src) = match self.func.dfg[inst] {
             ir::InstructionData::RegMove { arg, src, .. }
             | ir::InstructionData::RegSpill { arg, src, .. } => (arg, ir::ValueLoc::Reg(src)),
@@ -247,14 +274,16 @@ impl<'a> LocationVerifier<'a> {
 
         if let Some(d) = divert.diversion(arg) {
             if d.to != src {
-                return err!(
+                return fatal!(
+                    errors,
                     inst,
                     "inconsistent with current diversion to {}",
                     d.to.display(&self.reginfo)
                 );
             }
         } else if self.func.locations[arg] != src {
-            return err!(
+            return fatal!(
+                errors,
                 inst,
                 "inconsistent with global location {}",
                 self.func.locations[arg].display(&self.reginfo)
@@ -268,7 +297,12 @@ impl<'a> LocationVerifier<'a> {
 
     /// We have active diversions before a branch. Make sure none of the diverted values are live
     /// on the outgoing CFG edges.
-    fn check_cfg_edges(&self, inst: ir::Inst, divert: &RegDiversions) -> VerifierResult<()> {
+    fn check_cfg_edges(
+        &self,
+        inst: ir::Inst,
+        divert: &RegDiversions,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         use ir::instructions::BranchInfo::*;
 
         // We can only check CFG edges if we have a liveness analysis.
@@ -287,7 +321,8 @@ impl<'a> LocationVerifier<'a> {
                 for d in divert.all() {
                     let lr = &liveness[d.value];
                     if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
-                        return err!(
+                        return fatal!(
+                            errors,
                             inst,
                             "{} is diverted to {} and live in to {}",
                             d.value,
@@ -302,7 +337,8 @@ impl<'a> LocationVerifier<'a> {
                     let lr = &liveness[d.value];
                     for (_, ebb) in self.func.jump_tables[jt].entries() {
                         if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
-                            return err!(
+                            return fatal!(
+                                errors,
                                 inst,
                                 "{} is diverted to {} and live in to {}",
                                 d.value,

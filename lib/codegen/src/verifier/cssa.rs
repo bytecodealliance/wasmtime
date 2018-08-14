@@ -7,7 +7,7 @@ use ir::{ExpandedProgramPoint, Function};
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
 use timing;
-use verifier::VerifierResult;
+use verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify conventional SSA form for `func`.
 ///
@@ -29,7 +29,8 @@ pub fn verify_cssa(
     domtree: &DominatorTree,
     liveness: &Liveness,
     virtregs: &VirtRegs,
-) -> VerifierResult<()> {
+    errors: &mut VerifierErrors,
+) -> VerifierStepResult<()> {
     let _tt = timing::verify_cssa();
 
     let mut preorder = DominatorTreePreorder::new();
@@ -43,8 +44,8 @@ pub fn verify_cssa(
         liveness,
         preorder,
     };
-    verifier.check_virtregs()?;
-    verifier.check_cssa()?;
+    verifier.check_virtregs(errors)?;
+    verifier.check_cssa(errors)?;
     Ok(())
 }
 
@@ -58,19 +59,19 @@ struct CssaVerifier<'a> {
 }
 
 impl<'a> CssaVerifier<'a> {
-    fn check_virtregs(&self) -> VerifierResult<()> {
+    fn check_virtregs(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for vreg in self.virtregs.all_virtregs() {
             let values = self.virtregs.values(vreg);
 
             for (idx, &val) in values.iter().enumerate() {
                 if !self.func.dfg.value_is_valid(val) {
-                    return err!(val, "Invalid value in {}", vreg);
+                    return fatal!(errors, val, "Invalid value in {}", vreg);
                 }
                 if !self.func.dfg.value_is_attached(val) {
-                    return err!(val, "Detached value in {}", vreg);
+                    return fatal!(errors, val, "Detached value in {}", vreg);
                 }
                 if self.liveness.get(val).is_none() {
-                    return err!(val, "Value in {} has no live range", vreg);
+                    return fatal!(errors, val, "Value in {} has no live range", vreg);
                 };
 
                 // Check topological ordering with the previous values in the virtual register.
@@ -81,7 +82,8 @@ impl<'a> CssaVerifier<'a> {
                     let prev_ebb = self.func.layout.pp_ebb(prev_def);
 
                     if prev_def == def {
-                        return err!(
+                        return fatal!(
+                            errors,
                             val,
                             "Values {} and {} in {} = {} defined at the same program point",
                             prev_val,
@@ -95,7 +97,8 @@ impl<'a> CssaVerifier<'a> {
                     if self.preorder.dominates(def_ebb, prev_ebb)
                         && self.domtree.dominates(def, prev_def, &self.func.layout)
                     {
-                        return err!(
+                        return fatal!(
+                            errors,
                             val,
                             "Value in {} = {} def dominates previous {}",
                             vreg,
@@ -117,7 +120,8 @@ impl<'a> CssaVerifier<'a> {
                     {
                         let ctx = self.liveness.context(&self.func.layout);
                         if self.liveness[prev_val].overlaps_def(def, def_ebb, ctx) {
-                            return err!(
+                            return fatal!(
+                                errors,
                                 val,
                                 "Value def in {} = {} interferes with {}",
                                 vreg,
@@ -135,7 +139,7 @@ impl<'a> CssaVerifier<'a> {
         Ok(())
     }
 
-    fn check_cssa(&self) -> VerifierResult<()> {
+    fn check_cssa(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for ebb in self.func.layout.ebbs() {
             let ebb_params = self.func.dfg.ebb_params(ebb);
             for BasicBlock { inst: pred, .. } in self.cfg.pred_iter(ebb) {
@@ -149,7 +153,8 @@ impl<'a> CssaVerifier<'a> {
 
                 for (&ebb_param, &pred_arg) in ebb_params.iter().zip(pred_args) {
                     if !self.virtregs.same_class(ebb_param, pred_arg) {
-                        return err!(
+                        return fatal!(
+                            errors,
                             pred,
                             "{} and {} must be in the same virtual register",
                             ebb_param,
