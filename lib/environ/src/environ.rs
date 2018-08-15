@@ -365,6 +365,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
+        // TODO: Cranelift's call_indirect doesn't implement signature checking,
+        // so we need to implement it ourselves.
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
 
         let callee_ty = pos.func.dfg.value_type(callee);
