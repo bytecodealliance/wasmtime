@@ -97,8 +97,8 @@
 //!
 //! Cranelift uses a very similar data structures and algorithms to LLVM, with the important
 //! difference that live ranges are computed per SSA value instead of per virtual register, and the
-//! uses in Cranelift IR refers to SSA values instead of virtual registers. This means that Cranelift
-//! can skip the last step of reconstructing SSA form for the virtual register uses.
+//! uses in Cranelift IR refers to SSA values instead of virtual registers. This means that
+//! Cranelift can skip the last step of reconstructing SSA form for the virtual register uses.
 //!
 //! ## Fast Liveness Checking for SSA-Form Programs
 //!

@@ -433,8 +433,8 @@ fn insert_common_prologue(
         if let Some(stack_limit_arg) = pos.func.special_param(ArgumentPurpose::StackLimit) {
             // Total stack size is the size of all stack area used by the function, including
             // pushed CSRs, frame pointer.
-            // Also, the size of a return address, implicitly pushed by a x86 `call` instruction, also
-            // should be accounted for.
+            // Also, the size of a return address, implicitly pushed by a x86 `call` instruction,
+            // also should be accounted for.
             // TODO: Check if the function body actually contains a `call` instruction.
             let word_size = isa.pointer_bytes();
             let total_stack_size = (csrs.iter(GPR).len() + 1 + 1) as i64 * word_size as i64;

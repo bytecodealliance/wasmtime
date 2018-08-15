@@ -721,7 +721,8 @@ pub struct SerDataFlowGraph {
     ebbs: Vec<SerEbb>,
 }
 
-/// Serialize all parts of the Cranelift Ebb data structure, this includes name, parameters, and instructions.
+/// Serialize all parts of the Cranelift Ebb data structure, this includes name, parameters, and
+/// instructions.
 pub fn populate_ebbs(func: &Function) -> Vec<SerEbb> {
     let mut ebb_vec: Vec<SerEbb> = Vec::new();
     for ebb in func.layout.ebbs() {
@@ -785,7 +786,8 @@ pub struct SerFunction {
 }
 
 impl SerFunction {
-    /// Creates serializable global values, as well as the functions signature, name, and data flow graph.
+    /// Creates serializable global values, as well as the functions signature, name, and data flow
+    /// graph.
     fn create_new(func: &Function) -> Self {
         let mut global_vec: Vec<String> = Vec::new();
         for (glob_name, _) in func.global_values.iter() {
@@ -804,8 +806,8 @@ impl SerFunction {
     }
 }
 
-/// Must have SerObj for deserialization, contains all of the functions from inside the file to be serialized.
-/// Files have one SerObj each, with all SerFunctions contained inside that SerObj.
+/// Must have SerObj for deserialization, contains all of the functions from inside the file to be
+/// serialized. Files have one SerObj each, with all SerFunctions contained inside that SerObj.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SerObj {
     pub functions: Vec<SerFunction>,

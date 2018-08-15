@@ -367,23 +367,27 @@ fn expand_fcvt_to_sint(
     let output_bits = ty.lane_bits();
     let flimit = match xty {
         ir::types::F32 =>
-            // An f32 can represent `i16::min_value() - 1` exactly with precision to spare, so
-            // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+        // An f32 can represent `i16::min_value() - 1` exactly with precision to spare, so
+        // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+        {
             pos.ins().f32const(if output_bits < 32 {
                 overflow_cc = FloatCC::LessThanOrEqual;
                 Ieee32::fcvt_to_sint_negative_overflow(output_bits)
             } else {
                 Ieee32::pow2(output_bits - 1).neg()
-            }),
+            })
+        }
         ir::types::F64 =>
-            // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
-            // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+        // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
+        // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+        {
             pos.ins().f64const(if output_bits < 64 {
                 overflow_cc = FloatCC::LessThanOrEqual;
                 Ieee64::fcvt_to_sint_negative_overflow(output_bits)
             } else {
                 Ieee64::pow2(output_bits - 1).neg()
-            }),
+            })
+        }
         _ => panic!("Can't convert {}", xty),
     };
     let overflow = pos.ins().fcmp(overflow_cc, x, flimit);
@@ -464,23 +468,27 @@ fn expand_fcvt_to_sint_sat(
     let output_bits = ty.lane_bits();
     let flimit = match xty {
         ir::types::F32 =>
-            // An f32 can represent `i16::min_value() - 1` exactly with precision to spare, so
-            // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+        // An f32 can represent `i16::min_value() - 1` exactly with precision to spare, so
+        // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+        {
             pos.ins().f32const(if output_bits < 32 {
                 overflow_cc = FloatCC::LessThanOrEqual;
                 Ieee32::fcvt_to_sint_negative_overflow(output_bits)
             } else {
                 Ieee32::pow2(output_bits - 1).neg()
-            }),
+            })
+        }
         ir::types::F64 =>
-            // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
-            // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+        // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
+        // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+        {
             pos.ins().f64const(if output_bits < 64 {
                 overflow_cc = FloatCC::LessThanOrEqual;
                 Ieee64::fcvt_to_sint_negative_overflow(output_bits)
             } else {
                 Ieee64::pow2(output_bits - 1).neg()
-            }),
+            })
+        }
         _ => panic!("Can't convert {}", xty),
     };
 

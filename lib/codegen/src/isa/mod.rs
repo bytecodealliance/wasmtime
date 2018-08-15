@@ -23,8 +23,8 @@
 //! # extern crate cranelift_codegen;
 //! # #[macro_use] extern crate target_lexicon;
 //! # fn main() {
-//! use cranelift_codegen::settings::{self, Configurable};
 //! use cranelift_codegen::isa;
+//! use cranelift_codegen::settings::{self, Configurable};
 //! use std::str::FromStr;
 //! use target_lexicon::Triple;
 //!

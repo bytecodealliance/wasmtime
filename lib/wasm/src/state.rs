@@ -277,8 +277,8 @@ impl TranslationState {
 
 /// Methods for handling entity references.
 impl TranslationState {
-    /// Get the `GlobalVariable` reference that should be used to access the global variable `index`.
-    /// Create the reference if necessary.
+    /// Get the `GlobalVariable` reference that should be used to access the global variable
+    /// `index`. Create the reference if necessary.
     /// Also return the WebAssembly type of the global.
     pub fn get_global<FE: FuncEnvironment + ?Sized>(
         &mut self,

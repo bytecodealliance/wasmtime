@@ -1,19 +1,21 @@
 This crate performs serialization of the [Cranelift](https://crates.io/crates/cranelift) IR.
 
-This crate is structured as an optional ability to serialize and deserialize cranelift IR into JSON format.
+This crate is structured as an optional ability to serialize and deserialize cranelift IR into JSON
+format.
 
 Status
 ------
 
 Cranelift IR can be serialized into JSON.
 
-Deserialize is a work in progress, as it currently deserializes into the serializable data structure that can be utilized by serde instead of the actual Cranelift IR data structure. 
+Deserialize is a work in progress, as it currently deserializes into the serializable data structure
+that can be utilized by serde instead of the actual Cranelift IR data structure.
 
 
 Building and Using Cranelift Serde
 ----------------------------------
 
-clif-json usage: 
+clif-json usage:
 
     clif-json serialize [-p] <file>
     clif-json deserialize <file>
