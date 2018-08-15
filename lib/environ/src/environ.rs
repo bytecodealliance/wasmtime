@@ -370,11 +370,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
 
         let callee_ty = pos.func.dfg.value_type(callee);
-        debug_assert_eq!(callee_ty, I32);
-
-        // For some reason table_addr only works with I64.
-        let callee_i64 = pos.ins().uextend(I64, callee);
-        let table_entry_addr = pos.ins().table_addr(I64, table, callee_i64, 0);
+        debug_assert_eq!(callee_ty, I32, "wasm call indirect index should be I32");
+        let callee = if self.pointer_type() == I64 {
+            // The current limitation of `table_addr` is that the index should be
+            // the same type as `self.pointer_type()`. So we just extend the given
+            // index to 64-bit here.
+            pos.ins().uextend(I64, callee)
+        } else {
+            callee
+        };
+        let table_entry_addr = pos.ins().table_addr(I64, table, callee, 0);
 
         // Dereference table_entry_addr to get the function address.
         let mut mem_flags = ir::MemFlags::new();
