@@ -1,7 +1,7 @@
 //! Runtime support for precomputed constant hash tables.
 //!
-//! The `lib/codegen/meta-python/constant_hash.py` Python module can generate constant hash tables using
-//! open addressing and quadratic probing. The hash tables are arrays that are guaranteed to:
+//! The `lib/codegen/meta-python/constant_hash.py` Python module can generate constant hash tables
+//! using open addressing and quadratic probing. The hash tables are arrays that are guaranteed to:
 //!
 //! - Have a power-of-two size.
 //! - Contain at least one empty slot.

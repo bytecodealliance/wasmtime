@@ -876,8 +876,8 @@ struct VirtualCopies {
 
     // Filter for the currently active node iterator.
     //
-    // An ebb => (set_id, num) entry means that branches to `ebb` are active in `set_id` with branch
-    // argument number `num`.
+    // An ebb => (set_id, num) entry means that branches to `ebb` are active in `set_id` with
+    // branch argument number `num`.
     filter: FxHashMap<Ebb, (u8, usize)>,
 }
 

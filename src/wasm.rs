@@ -4,9 +4,9 @@
 //! Reads Wasm binary files, translates the functions' code to Cranelift IR.
 #![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments, cyclomatic_complexity))]
 
-use cranelift_codegen::Context;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
+use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment};
 use std::error::Error;
@@ -80,7 +80,8 @@ fn handle_module(
     vprint!(flag_verbose, "Translating... ");
     terminal.reset().unwrap();
 
-    let mut module_binary = read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
+    let mut module_binary =
+        read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
 
     if !module_binary.starts_with(&[b'\0', b'a', b's', b'm']) {
         module_binary = match wat2wasm(&module_binary) {
@@ -91,7 +92,11 @@ fn handle_module(
 
     let isa = match fisa.isa {
         Some(isa) => isa,
-        None => return Err(String::from("Error: the wasm command requires an explicit isa."))
+        None => {
+            return Err(String::from(
+                "Error: the wasm command requires an explicit isa.",
+            ))
+        }
     };
 
     let mut dummy_environ =
@@ -118,7 +123,9 @@ fn handle_module(
                 }
             }
             vprintln!(flag_verbose, "");
-            for export_name in &dummy_environ.info.functions[FuncIndex::new(func_index)].export_names {
+            for export_name in
+                &dummy_environ.info.functions[FuncIndex::new(func_index)].export_names
+            {
                 println!("; Exported as \"{}\"", export_name);
             }
             println!("{}", context.func.display(None));
@@ -163,7 +170,8 @@ fn handle_module(
                 total_module_code_size += compiled_size;
                 println!(
                     "Function #{} bytecode size: {} bytes",
-                    func_index, dummy_environ.func_bytecode_sizes[def_index.index()]
+                    func_index,
+                    dummy_environ.func_bytecode_sizes[def_index.index()]
                 );
             }
         }
@@ -175,7 +183,9 @@ fn handle_module(
                     println!("; Selected as wasm start function");
                 }
             }
-            for export_name in &dummy_environ.info.functions[FuncIndex::new(func_index)].export_names {
+            for export_name in
+                &dummy_environ.info.functions[FuncIndex::new(func_index)].export_names
+            {
                 println!("; Exported as \"{}\"", export_name);
             }
             println!("{}", context.func.display(fisa.isa));

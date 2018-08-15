@@ -92,8 +92,8 @@ struct Context<'a> {
 
     /// Reference to the unique_isa for things like parsing target-specific instruction encoding
     /// information. This is only `Some` if exactly one set of `isa` directives were found in the
-    /// prologue (it is valid to have directives for multiple different targets, but in that case we
-    /// couldn't know which target the provided encodings are intended for)
+    /// prologue (it is valid to have directives for multiple different targets, but in that case
+    /// we couldn't know which target the provided encodings are intended for)
     unique_isa: Option<&'a TargetIsa>,
 }
 

@@ -66,11 +66,11 @@
 //! extern crate cranelift_frontend;
 //!
 //! use cranelift_codegen::entity::EntityRef;
-//! use cranelift_codegen::ir::{ExternalName, Function, Signature, AbiParam, InstBuilder};
 //! use cranelift_codegen::ir::types::*;
+//! use cranelift_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
 //! use cranelift_codegen::settings::{self, CallConv};
-//! use cranelift_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
 //! use cranelift_codegen::verifier::verify_function;
+//! use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::SystemV);

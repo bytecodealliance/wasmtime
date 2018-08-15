@@ -65,8 +65,8 @@ fn dynamic_addr(
             .ins()
             .icmp(IntCC::UnsignedGreaterThanOrEqual, offset, bound);
     } else if access_size <= min_size {
-        // We know that bound >= min_size, so here we can compare `offset > bound - access_size` without
-        // wrapping.
+        // We know that bound >= min_size, so here we can compare `offset > bound - access_size`
+        // without wrapping.
         let adj_bound = pos.ins().iadd_imm(bound, -access_size);
         oob = pos
             .ins()
