@@ -133,8 +133,11 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
     let translation = environ.translate(&data).map_err(|e| e.to_string())?;
     let instance = match compile_and_link_module(isa, &translation) {
         Ok(compilation) => {
-            let mut instance =
-                Instance::new(translation.module, &translation.lazy.data_initializers);
+            let mut instance = Instance::new(
+                translation.module,
+                &compilation,
+                &translation.lazy.data_initializers,
+            );
             execute(&translation.module, &compilation, &mut instance)?;
             instance
         }

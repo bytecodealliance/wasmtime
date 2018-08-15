@@ -1,6 +1,6 @@
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::immediates::Offset32;
+use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, InstBuilder, Signature,
@@ -312,8 +312,29 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         })
     }
 
-    fn make_table(&mut self, _func: &mut ir::Function, _index: TableIndex) -> ir::Table {
-        unimplemented!("make_table");
+    fn make_table(&mut self, func: &mut ir::Function, _index: TableIndex) -> ir::Table {
+        let pointer_bytes = self.pointer_bytes();
+        let base_gv_addr = func.create_global_value(ir::GlobalValueData::VMContext {
+            offset: Offset32::new(pointer_bytes as i32 * 2),
+        });
+        let base_gv = func.create_global_value(ir::GlobalValueData::Deref {
+            base: base_gv_addr,
+            offset: 0.into(),
+        });
+        let bound_gv_addr = func.create_global_value(ir::GlobalValueData::VMContext {
+            offset: Offset32::new(pointer_bytes as i32 * 3),
+        });
+        let bound_gv = func.create_global_value(ir::GlobalValueData::Deref {
+            base: bound_gv_addr,
+            offset: 0.into(),
+        });
+
+        func.create_table(ir::TableData {
+            base_gv,
+            min_size: Imm64::new(0),
+            bound_gv,
+            element_size: Imm64::new(i64::from(self.pointer_bytes() as i64)),
+        })
     }
 
     fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
@@ -338,17 +359,38 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         table_index: TableIndex,
-        _table: ir::Table,
+        table: ir::Table,
         _sig_index: SignatureIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        // TODO: Cranelift's call_indirect doesn't implement bounds checking
-        // or signature checking, so we need to implement it ourselves.
+        // TODO: Cranelift's call_indirect doesn't implement signature checking,
+        // so we need to implement it ourselves.
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
+
+        let callee_ty = pos.func.dfg.value_type(callee);
+        debug_assert_eq!(callee_ty, I32, "wasm call indirect index should be I32");
+        let callee = if self.pointer_type() == I64 {
+            // The current limitation of `table_addr` is that the index should be
+            // the same type as `self.pointer_type()`. So we just extend the given
+            // index to 64-bit here.
+            pos.ins().uextend(I64, callee)
+        } else {
+            callee
+        };
+        let table_entry_addr = pos.ins().table_addr(I64, table, callee, 0);
+
+        // Dereference table_entry_addr to get the function address.
+        let mut mem_flags = ir::MemFlags::new();
+        mem_flags.set_notrap();
+        mem_flags.set_aligned();
+        let func_addr = pos
+            .ins()
+            .load(self.pointer_type(), mem_flags, table_entry_addr, 0);
+
         let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
-        Ok(pos.ins().call_indirect(sig_ref, callee, &real_call_args))
+        Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
     fn translate_call(
