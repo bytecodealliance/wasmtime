@@ -230,6 +230,17 @@ impl VerifierErrors {
     pub fn has_error(&self) -> bool {
         !self.0.is_empty()
     }
+
+    /// Return a `VerifierStepResult` that is fatal if at least one error was reported,
+    /// and non-fatal otherwise.
+    #[inline]
+    pub fn as_result(&self) -> VerifierStepResult<()> {
+        if self.is_empty() {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
 }
 
 impl From<Vec<VerifierError>> for VerifierErrors {
@@ -241,6 +252,16 @@ impl From<Vec<VerifierError>> for VerifierErrors {
 impl Into<Vec<VerifierError>> for VerifierErrors {
     fn into(self) -> Vec<VerifierError> {
         self.0
+    }
+}
+
+impl Into<VerifierResult<()>> for VerifierErrors {
+    fn into(self) -> VerifierResult<()> {
+        if self.is_empty() {
+            Ok(())
+        } else {
+            Err(self)
+        }
     }
 }
 
@@ -309,14 +330,15 @@ impl<'a> Verifier<'a> {
     fn verify_global_values(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         let mut seen = SparseSet::new();
 
-        for gv in self.func.global_values.keys() {
+        'gvs: for gv in self.func.global_values.keys() {
             seen.clear();
             seen.insert(gv);
 
             let mut cur = gv;
             while let ir::GlobalValueData::Deref { base, .. } = self.func.global_values[cur] {
                 if seen.insert(base).is_some() {
-                    return fatal!(errors, gv, "deref cycle: {}", DisplayList(seen.as_slice()));
+                    report!(errors, gv, "deref cycle: {}", DisplayList(seen.as_slice()));
+                    continue 'gvs;
                 }
 
                 cur = base;
@@ -328,11 +350,12 @@ impl<'a> Verifier<'a> {
                     .special_param(ir::ArgumentPurpose::VMContext)
                     .is_none()
                 {
-                    return fatal!(errors, cur, "undeclared vmctx reference {}", cur);
+                    report!(errors, cur, "undeclared vmctx reference {}", cur);
                 }
             }
         }
 
+        // Invalid global values shouldn't stop us from verifying the rest of the function
         Ok(())
     }
 
@@ -437,7 +460,7 @@ impl<'a> Verifier<'a> {
             // All used values must be attached to something.
             let original = self.func.dfg.resolve_aliases(arg);
             if !self.func.dfg.value_is_attached(original) {
-                return fatal!(
+                report!(
                     errors,
                     inst,
                     "argument {} -> {} is not attached",
@@ -448,7 +471,7 @@ impl<'a> Verifier<'a> {
         }
 
         for &res in self.func.dfg.inst_results(inst) {
-            self.verify_inst_result(inst, res, errors)?;
+            self.verify_inst_result(inst, res, errors).is_ok();
         }
 
         match self.func.dfg[inst] {
@@ -594,7 +617,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.dfg.ext_funcs.is_valid(f) {
-            fatal!(errors, inst, "invalid function reference {}", f)
+            nonfatal!(errors, inst, "invalid function reference {}", f)
         } else {
             Ok(())
         }
@@ -607,7 +630,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.stack_slots.is_valid(ss) {
-            fatal!(errors, inst, "invalid stack slot {}", ss)
+            nonfatal!(errors, inst, "invalid stack slot {}", ss)
         } else {
             Ok(())
         }
@@ -620,7 +643,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.global_values.is_valid(gv) {
-            fatal!(errors, inst, "invalid global value {}", gv)
+            nonfatal!(errors, inst, "invalid global value {}", gv)
         } else {
             Ok(())
         }
@@ -633,7 +656,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.heaps.is_valid(heap) {
-            fatal!(errors, inst, "invalid heap {}", heap)
+            nonfatal!(errors, inst, "invalid heap {}", heap)
         } else {
             Ok(())
         }
@@ -646,7 +669,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.tables.is_valid(table) {
-            fatal!(errors, inst, "invalid table {}", table)
+            nonfatal!(errors, inst, "invalid table {}", table)
         } else {
             Ok(())
         }
@@ -659,7 +682,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !l.is_valid(&self.func.dfg.value_lists) {
-            fatal!(errors, inst, "invalid value list reference {:?}", l)
+            nonfatal!(errors, inst, "invalid value list reference {:?}", l)
         } else {
             Ok(())
         }
@@ -672,7 +695,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.jump_tables.is_valid(j) {
-            fatal!(errors, inst, "invalid jump table reference {}", j)
+            nonfatal!(errors, inst, "invalid jump table reference {}", j)
         } else {
             Ok(())
         }
@@ -686,7 +709,7 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult<()> {
         let dfg = &self.func.dfg;
         if !dfg.value_is_valid(v) {
-            fatal!(errors, loc_inst, "invalid value reference {}", v)
+            nonfatal!(errors, loc_inst, "invalid value reference {}", v)
         } else {
             Ok(())
         }
@@ -897,7 +920,7 @@ impl<'a> Verifier<'a> {
             for (i, &arg) in self.func.dfg.ebb_params(ebb).iter().enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
                 if arg_type != expected_types[i].value_type {
-                    return fatal!(
+                    report!(
                         errors,
                         ebb,
                         "entry block parameter {} expected to have type {}, got {}",
@@ -908,7 +931,8 @@ impl<'a> Verifier<'a> {
                 }
             }
         }
-        Ok(())
+
+        errors.as_result()
     }
 
     fn typecheck(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
@@ -920,7 +944,7 @@ impl<'a> Verifier<'a> {
             let ctrl_type = self.func.dfg.ctrl_typevar(inst);
 
             if !value_typeset.contains(ctrl_type) {
-                return fatal!(
+                report!(
                     errors,
                     inst,
                     "has an invalid controlling type {}",
@@ -935,11 +959,12 @@ impl<'a> Verifier<'a> {
             types::VOID
         };
 
-        self.typecheck_results(inst, ctrl_type, errors)?;
-        self.typecheck_fixed_args(inst, ctrl_type, errors)?;
-        self.typecheck_variable_args(inst, errors)?;
-        self.typecheck_return(inst, errors)?;
-        self.typecheck_special(inst, ctrl_type, errors)?;
+        // Typechecking instructions is never fatal
+        self.typecheck_results(inst, ctrl_type, errors).is_ok();
+        self.typecheck_fixed_args(inst, ctrl_type, errors).is_ok();
+        self.typecheck_variable_args(inst, errors).is_ok();
+        self.typecheck_return(inst, errors).is_ok();
+        self.typecheck_special(inst, ctrl_type, errors).is_ok();
 
         Ok(())
     }
@@ -956,7 +981,7 @@ impl<'a> Verifier<'a> {
             let expected_type = self.func.dfg.compute_result_type(inst, i, ctrl_type);
             if let Some(expected_type) = expected_type {
                 if result_type != expected_type {
-                    return fatal!(
+                    report!(
                         errors,
                         inst,
                         "expected result {} ({}) to have type {}, found {}",
@@ -967,14 +992,14 @@ impl<'a> Verifier<'a> {
                     );
                 }
             } else {
-                return fatal!(errors, inst, "has more result values than expected");
+                return nonfatal!(errors, inst, "has more result values than expected");
             }
             i += 1;
         }
 
         // There aren't any more result types left.
         if self.func.dfg.compute_result_type(inst, i, ctrl_type) != None {
-            return fatal!(errors, inst, "has fewer result values than expected");
+            return nonfatal!(errors, inst, "has fewer result values than expected");
         }
         Ok(())
     }
@@ -992,7 +1017,7 @@ impl<'a> Verifier<'a> {
             match constraints.value_argument_constraint(i, ctrl_type) {
                 ResolvedConstraint::Bound(expected_type) => {
                     if arg_type != expected_type {
-                        return fatal!(
+                        report!(
                             errors,
                             inst,
                             "arg {} ({}) has type {}, expected {}",
@@ -1005,7 +1030,7 @@ impl<'a> Verifier<'a> {
                 }
                 ResolvedConstraint::Free(type_set) => {
                     if !type_set.contains(arg_type) {
-                        return fatal!(
+                        report!(
                             errors,
                             inst,
                             "arg {} ({}) with type {} failed to satisfy type set {:?}",
@@ -1040,7 +1065,7 @@ impl<'a> Verifier<'a> {
                 for (_, ebb) in self.func.jump_tables[table].entries() {
                     let arg_count = self.func.dfg.num_ebb_params(ebb);
                     if arg_count != 0 {
-                        return fatal!(
+                        return nonfatal!(
                             errors,
                             inst,
                             "takes no arguments, but had target {} with {} arguments",
@@ -1094,7 +1119,7 @@ impl<'a> Verifier<'a> {
             let arg = variable_args[i];
             let arg_type = self.func.dfg.value_type(arg);
             if expected_type != arg_type {
-                return fatal!(
+                report!(
                     errors,
                     inst,
                     "arg {} ({}) has type {}, expected {}",
@@ -1107,7 +1132,7 @@ impl<'a> Verifier<'a> {
             i += 1;
         }
         if i != variable_args.len() {
-            return fatal!(
+            return nonfatal!(
                 errors,
                 inst,
                 "mismatched argument count for `{}`: got {}, expected {}",
@@ -1199,7 +1224,7 @@ impl<'a> Verifier<'a> {
             let args = self.func.dfg.inst_variable_args(inst);
             let expected_types = &self.func.signature.returns;
             if args.len() != expected_types.len() {
-                return fatal!(
+                return nonfatal!(
                     errors,
                     inst,
                     "arguments of return must match function signature"
@@ -1208,7 +1233,7 @@ impl<'a> Verifier<'a> {
             for (i, (&arg, &expected_type)) in args.iter().zip(expected_types).enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
                 if arg_type != expected_type.value_type {
-                    return fatal!(
+                    report!(
                         errors,
                         inst,
                         "arg {} ({}) has type {}, must match function signature of {}",
@@ -1236,7 +1261,7 @@ impl<'a> Verifier<'a> {
             match opcode {
                 Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
                     if arg_type.lane_count() != ctrl_type.lane_count() {
-                        return fatal!(
+                        return nonfatal!(
                             errors,
                             inst,
                             "input {} and output {} must have same number of lanes",
@@ -1245,7 +1270,7 @@ impl<'a> Verifier<'a> {
                         );
                     }
                     if arg_type.lane_bits() >= ctrl_type.lane_bits() {
-                        return fatal!(
+                        return nonfatal!(
                             errors,
                             inst,
                             "input {} must be smaller than output {}",
@@ -1256,7 +1281,7 @@ impl<'a> Verifier<'a> {
                 }
                 Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
                     if arg_type.lane_count() != ctrl_type.lane_count() {
-                        return fatal!(
+                        return nonfatal!(
                             errors,
                             inst,
                             "input {} and output {} must have same number of lanes",
@@ -1265,7 +1290,7 @@ impl<'a> Verifier<'a> {
                         );
                     }
                     if arg_type.lane_bits() <= ctrl_type.lane_bits() {
-                        return fatal!(
+                        return nonfatal!(
                             errors,
                             inst,
                             "input {} must be larger than output {}",
@@ -1296,22 +1321,24 @@ impl<'a> Verifier<'a> {
 
             let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
             if !missing_succs.is_empty() {
-                return fatal!(
+                report!(
                     errors,
                     ebb,
                     "cfg lacked the following successor(s) {:?}",
                     missing_succs
                 );
+                continue;
             }
 
             let excess_succs: Vec<Ebb> = got_succs.difference(&expected_succs).cloned().collect();
             if !excess_succs.is_empty() {
-                return fatal!(
+                report!(
                     errors,
                     ebb,
                     "cfg had unexpected successor(s) {:?}",
                     excess_succs
                 );
+                continue;
             }
 
             expected_preds.extend(
@@ -1323,22 +1350,24 @@ impl<'a> Verifier<'a> {
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
             if !missing_preds.is_empty() {
-                return fatal!(
+                report!(
                     errors,
                     ebb,
                     "cfg lacked the following predecessor(s) {:?}",
                     missing_preds
                 );
+                continue;
             }
 
             let excess_preds: Vec<Inst> = got_preds.difference(&expected_preds).cloned().collect();
             if !excess_preds.is_empty() {
-                return fatal!(
+                report!(
                     errors,
                     ebb,
                     "cfg had unexpected predecessor(s) {:?}",
                     excess_preds
                 );
+                continue;
             }
 
             expected_succs.clear();
@@ -1346,7 +1375,7 @@ impl<'a> Verifier<'a> {
             expected_preds.clear();
             got_preds.clear();
         }
-        Ok(())
+        errors.as_result()
     }
 
     /// If the verifier has been set up with an ISA, make sure that the recorded encoding for the
@@ -1375,7 +1404,7 @@ impl<'a> Verifier<'a> {
                 ).peekable();
 
             if encodings.peek().is_none() {
-                return fatal!(
+                return nonfatal!(
                     errors,
                     inst,
                     "Instruction failed to re-encode {}",
@@ -1403,7 +1432,7 @@ impl<'a> Verifier<'a> {
                         .unwrap();
                 }
 
-                return fatal!(
+                return nonfatal!(
                     errors,
                     inst,
                     "encoding {} should be {}{}",
@@ -1446,7 +1475,7 @@ impl<'a> Verifier<'a> {
             // Provide the ISA default encoding as a hint.
             match self.func.encode(inst, isa) {
                 Ok(enc) => {
-                    return fatal!(
+                    return nonfatal!(
                         errors,
                         inst,
                         "{} must have an encoding (e.g., {})",
@@ -1454,7 +1483,7 @@ impl<'a> Verifier<'a> {
                         isa.encoding_info().display(enc)
                     )
                 }
-                Err(_) => return fatal!(errors, inst, "{} must have an encoding", text),
+                Err(_) => return nonfatal!(errors, inst, "{} must have an encoding", text),
             }
         }
 
@@ -1468,7 +1497,7 @@ impl<'a> Verifier<'a> {
             let inst = self.func.layout.last_inst(ebb).unwrap();
             if self.func.dfg[inst].opcode().is_return() && Some(ebb) != self.func.layout.last_ebb()
             {
-                return fatal!(
+                report!(
                     errors,
                     inst,
                     "Internal return not allowed with return_at_end=1"
@@ -1476,7 +1505,7 @@ impl<'a> Verifier<'a> {
             }
         }
 
-        Ok(())
+        errors.as_result()
     }
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
