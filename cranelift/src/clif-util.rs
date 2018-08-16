@@ -21,12 +21,12 @@ extern crate serde_derive;
 #[cfg(feature = "disas")]
 extern crate capstone;
 extern crate pretty_env_logger;
-extern crate term;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {
         extern crate cranelift_entity;
         extern crate cranelift_wasm;
+        extern crate term;
         extern crate wabt;
         mod wasm;
     }
