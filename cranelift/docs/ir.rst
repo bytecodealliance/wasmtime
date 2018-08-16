@@ -750,6 +750,40 @@ bounds checking is required for each access:
     :lines: 2-
 
 
+Tables
+------
+
+Code compiled from WebAssembly often needs access to objects outside of its
+linear memory. WebAssembly uses *tables* to allow programs to refer to opaque
+values through integer indices.
+
+A table is declared in the function preamble and can be accessed with the
+:inst:`table_addr` instruction that :term:`traps` on out-of-bounds accesses.
+Table addresses can be smaller than the native pointer size, for example
+unsigned :type:`i32` offsets on a 64-bit architecture.
+
+A table appears as a consecutive range of address space, conceptually
+divided into elements of fixed sizes, which are identified by their index.
+The memory is :term:`accessible`.
+
+The *table bound* is the number of elements currently in the table. This is
+the bound that :inst:`table_addr` checks against.
+
+.. autoinst:: table_addr
+
+A table can be relocated to a different base address when it is resized, and
+its bound can move dynamically. The bound of a table is stored in a global
+value.
+
+.. inst:: T = dynamic Base, min MinElements, bound BoundGV, element_size ElementSize
+
+    Declare a table in the preamble.
+
+    :arg Base: Global value holding the table's base address.
+    :arg MinElements: Guaranteed minimum table size in elements.
+    :arg BoundGV: Global value containing the current heap bound in elements.
+    :arg ElementSize: Size of each element.
+
 Operations
 ==========
 
@@ -1121,10 +1155,10 @@ Glossary
     accessible
         :term:`Addressable` memory in which loads and stores always succeed
         without :term:`trapping`, except where specified otherwise (eg. with the
-        `aligned` flag). Heaps, globals, and the stack may contain accessible,
-        merely addressable, and outright unaddressable regions. There may also
-        be additional regions of addressable and/or accessible memory not
-        explicitly declared.
+        `aligned` flag). Heaps, globals, tables, and the stack may contain
+        accessible, merely addressable, and outright unaddressable regions.
+        There may also be additional regions of addressable and/or accessible
+        memory not explicitly declared.
 
     basic block
         A maximal sequence of instructions that can only be entered from the
