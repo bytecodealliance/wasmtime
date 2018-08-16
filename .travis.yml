@@ -13,6 +13,9 @@ matrix:
         # fail, so we don't allow them to hold up people using stable.
         - rust: beta
         - rust: nightly
+    # Similarly, we don't need to hold up people using stable while we wait
+    # for the results which may fail.
+    fast_finish: true
 dist: trusty
 sudo: false
 addons:
