@@ -404,7 +404,7 @@ convention:
     retlist      : paramlist
     param        : type [paramext] [paramspecial]
     paramext     : "uext" | "sext"
-    paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx"
+    paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
     callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash"
 
 A function's calling convention determines exactly how arguments and return
@@ -412,6 +412,18 @@ values are passed, and how stack frames are managed. Since all of these details
 depend on both the instruction set /// architecture and possibly the operating
 system, a function's calling convention is only fully determined by a
 `(TargetIsa, CallConv)` tuple.
+
+=========== ===========================================
+Name        Description
+=========== ===========================================
+sret        pointer to a return value in memory
+link        return address
+fp          the initial value of the frame pointer
+csr         callee-saved register
+vmctx       VM context pointer, which may contain pointers to heaps etc.
+sigid       signature id, for checking caller/callee signature compatibility
+stack_limit limit value for the size of the stack
+=========== ===========================================
 
 ========== ===========================================
 Name       Description
