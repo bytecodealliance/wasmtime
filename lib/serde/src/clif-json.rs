@@ -33,16 +33,15 @@ fn call_ser(file: &str, pretty: bool) -> Result<(), String> {
     match ret_of_parse {
         Ok(funcs) => {
             let ser_funcs = serde_clif_json::SerObj::new(&funcs);
-            let ser_str: String;
-            if pretty {
-                ser_str = serde_json::to_string_pretty(&ser_funcs).unwrap();
+            let ser_str = if pretty {
+                serde_json::to_string_pretty(&ser_funcs).unwrap()
             } else {
-                ser_str = serde_json::to_string(&ser_funcs).unwrap();
-            }
+                serde_json::to_string(&ser_funcs).unwrap()
+            };
             println!("{}", ser_str);
             Ok(())
         }
-        Err(_pe) => Err(format!("There was a parsing error")),
+        Err(_pe) => Err("There was a parsing error".to_string()),
     }
 }
 
@@ -99,7 +98,7 @@ fn main() {
                 File::open(m.value_of("FILE").unwrap()).expect("Unable to open the file");
             call_de(&file)
         }
-        _ => Err(format!("Invalid subcommand.")),
+        _ => Err("Invalid subcommand.".to_string()),
     };
 
     if let Err(mut msg) = res_serde {

@@ -60,7 +60,7 @@ impl SimpleJITBuilder {
     /// back to a platform-specific search (this typically involves searching
     /// the current process for public symbols, followed by searching the
     /// platform's C runtime).
-    pub fn symbol<'a, K>(&'a mut self, name: K, ptr: *const u8) -> &'a mut Self
+    pub fn symbol<K>(&mut self, name: K, ptr: *const u8) -> &Self
     where
         K: Into<String>,
     {
@@ -71,7 +71,7 @@ impl SimpleJITBuilder {
     /// Define multiple symbols in the internal symbol table.
     ///
     /// Using this is equivalent to calling `symbol` on each element.
-    pub fn symbols<'a, It, K>(&'a mut self, symbols: It) -> &'a mut Self
+    pub fn symbols<It, K>(&mut self, symbols: It) -> &Self
     where
         It: IntoIterator<Item = (K, *const u8)>,
         K: Into<String>,
