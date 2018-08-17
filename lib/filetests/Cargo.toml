@@ -14,4 +14,4 @@ cranelift-reader = { path = "../reader", version = "0.19.0" }
 file-per-thread-logger = "0.1.1"
 filecheck = "0.3.0"
 num_cpus = "1.8.0"
-log = "0.4.3"
+log = "0.4.4"

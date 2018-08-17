@@ -13,7 +13,7 @@ cranelift-codegen = { path = "../codegen", version = "0.19.0", default-features 
 cranelift-entity = { path = "../entity", version = "0.19.0", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
 failure = "0.1.1"
-log = { version = "0.4.3", default-features = false, features = ["release_max_level_warn"] }
+log = { version = "0.4.4", default-features = false, features = ["release_max_level_warn"] }
 
 [features]
 default = ["std"]
