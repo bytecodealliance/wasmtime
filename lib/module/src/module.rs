@@ -507,6 +507,7 @@ where
             }
             Some(self.backend.define_data(
                 &info.decl.name,
+                info.decl.writable,
                 data_ctx,
                 &ModuleNamespace::<B> {
                     contents: &self.contents,

@@ -33,7 +33,7 @@ mod data_context;
 mod module;
 
 pub use backend::Backend;
-pub use data_context::{DataContext, DataDescription, Init, Writability};
+pub use data_context::{DataContext, DataDescription, Init};
 pub use module::{
     DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleNamespace, ModuleResult,
 };
