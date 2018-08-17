@@ -16,6 +16,7 @@ use cranelift_codegen::packed_option::ReservedValue;
 use std::mem;
 use std::u32;
 use std::vec::Vec;
+use Variable;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -32,17 +33,14 @@ use std::vec::Vec;
 /// A basic block is said _filled_ if all the instruction that it contains have been translated,
 /// and it is said _sealed_ if all of its predecessors have been declared. Only filled predecessors
 /// can be declared.
-pub struct SSABuilder<Variable>
-where
-    Variable: EntityRef,
-{
+pub struct SSABuilder {
     // Records for every variable and for every relevant block, the last definition of
     // the variable in the block.
     // TODO: Consider a sparse representation rather than EntityMap-of-EntityMap.
     variables: EntityMap<Variable, EntityMap<Block, PackedOption<Value>>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
-    blocks: PrimaryMap<Block, BlockData<Variable>>,
+    blocks: PrimaryMap<Block, BlockData>,
     // Records the basic blocks at the beginning of the `Ebb`s.
     ebb_headers: EntityMap<Ebb, PackedOption<Block>>,
 
@@ -79,15 +77,15 @@ impl SideEffects {
 }
 
 /// Describes the current position of a basic block in the control flow graph.
-enum BlockData<Variable> {
+enum BlockData {
     /// A block at the top of an `Ebb`.
-    EbbHeader(EbbHeaderBlockData<Variable>),
+    EbbHeader(EbbHeaderBlockData),
     /// A block inside an `Ebb` with an unique other block as its predecessor.
     /// The block is implicitly sealed at creation.
     EbbBody { predecessor: Block },
 }
 
-impl<Variable> BlockData<Variable> {
+impl BlockData {
     fn add_predecessor(&mut self, pred: Block, inst: Inst) {
         match *self {
             BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
@@ -125,7 +123,7 @@ impl PredBlock {
     }
 }
 
-struct EbbHeaderBlockData<Variable> {
+struct EbbHeaderBlockData {
     // The predecessors of the Ebb header block, with the block and branch instruction.
     predecessors: Vec<PredBlock>,
     // A ebb header block is sealed if all of its predecessors have been declared.
@@ -156,10 +154,7 @@ impl ReservedValue for Block {
     }
 }
 
-impl<Variable> SSABuilder<Variable>
-where
-    Variable: EntityRef,
-{
+impl SSABuilder {
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
     pub fn new() -> Self {
         Self {
@@ -266,10 +261,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// as well as modify the jump instruction and `Ebb` headers parameters to account for the SSA
 /// Phi functions.
 ///
-impl<Variable> SSABuilder<Variable>
-where
-    Variable: EntityRef,
-{
+impl SSABuilder {
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
@@ -751,7 +743,7 @@ mod tests {
     #[test]
     fn simple_block() {
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         // Here is the pseudo-program we want to translate:
         // x = 1;
@@ -798,7 +790,7 @@ mod tests {
     #[test]
     fn sequence_of_blocks() {
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let ebb1 = func.dfg.make_ebb();
         // Here is the pseudo-program we want to translate:
@@ -879,7 +871,7 @@ mod tests {
     #[test]
     fn program_with_loop() {
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
@@ -991,7 +983,7 @@ mod tests {
     fn br_table_with_args() {
         // This tests the on-demand splitting of critical edges for br_table with jump arguments
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let ebb1 = func.dfg.make_ebb();
         // Here is the pseudo-program we want to translate:
@@ -1061,7 +1053,7 @@ mod tests {
     #[test]
     fn undef_values_reordering() {
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let ebb1 = func.dfg.make_ebb();
         // Here is the pseudo-program we want to translate:
@@ -1137,7 +1129,7 @@ mod tests {
     fn undef() {
         // Use vars of various types which have not been defined.
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
@@ -1159,7 +1151,7 @@ mod tests {
         // Use a var which has not been defined. The search should hit the
         // top of the entry block, and then fall back to inserting an iconst.
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
@@ -1179,7 +1171,7 @@ mod tests {
         // until afterward. Before sealing, the SSA builder should insert an
         // ebb param; after sealing, it should be removed.
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
         let x_var = Variable::new(0);
@@ -1197,7 +1189,7 @@ mod tests {
     #[test]
     fn unreachable_use() {
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let ebb1 = func.dfg.make_ebb();
         // Here is the pseudo-program we want to translate:
@@ -1240,7 +1232,7 @@ mod tests {
     #[test]
     fn unreachable_use_with_multiple_preds() {
         let mut func = Function::new();
-        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let mut ssa = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();

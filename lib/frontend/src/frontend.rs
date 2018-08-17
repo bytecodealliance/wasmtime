@@ -23,7 +23,7 @@ use variable::Variable;
 /// implement `EntityRef`. For frontends that don't have an obvious type to
 /// use here, `variable::Variable` can be used.
 pub struct FunctionBuilderContext {
-    ssa: SSABuilder<Variable>,
+    ssa: SSABuilder,
     ebbs: EntityMap<Ebb, EbbData>,
     types: EntityMap<Variable, Type>,
 }
