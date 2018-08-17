@@ -250,7 +250,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
         },
         InstructionData::UnaryBool { opcode, imm } => SerInstData::UnaryBool {
             opcode: opcode.to_string(),
-            imm: imm,
+            imm,
         },
         InstructionData::UnaryGlobalValue {
             opcode,
@@ -759,10 +759,10 @@ impl SerSignature {
     fn create_new(sig: &Signature) -> Self {
         let mut params_vec: Vec<String> = Vec::new();
         let mut returns_vec: Vec<String> = Vec::new();
-        for param in sig.params.iter() {
+        for param in &sig.params {
             params_vec.push(param.to_string());
         }
-        for ret in sig.returns.iter() {
+        for ret in &sig.returns {
             returns_vec.push(ret.to_string());
         }
         Self {
@@ -818,7 +818,7 @@ impl SerObj {
         Self { functions: funcs }
     }
 
-    pub fn new(funcs: &Vec<Function>) -> Self {
+    pub fn new(funcs: &[Function]) -> Self {
         let mut func_vec: Vec<SerFunction> = Vec::new();
         for func in funcs {
             let mut ser_func: SerFunction = SerFunction::new(&func);

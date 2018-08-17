@@ -51,10 +51,10 @@ impl SubTest for TestVerifier {
         }
 
         match verify_function(func, context.flags_or_isa()) {
-            Ok(()) if expected.len() == 0 => Ok(()),
+            Ok(()) if expected.is_empty() => Ok(()),
             Ok(()) => Err(format!("passed, but expected errors: {:?}", expected)),
 
-            Err(ref errors) if expected.len() == 0 => {
+            Err(ref errors) if expected.is_empty() => {
                 Err(format!("expected no error, but got:\n{}", errors))
             }
 
@@ -78,7 +78,7 @@ impl SubTest for TestVerifier {
                     }
                 }
 
-                if msg.len() == 0 {
+                if msg.is_empty() {
                     Ok(())
                 } else {
                     Err(msg)
