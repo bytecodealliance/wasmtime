@@ -34,19 +34,8 @@ impl Init {
     }
 }
 
-/// A flag specifying whether data is readonly or may be written to.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Writability {
-    /// Data is readonly, meaning writes to it will trap.
-    Readonly,
-    /// Data is writable.
-    Writable,
-}
-
 /// A description of a data object.
 pub struct DataDescription {
-    /// Whether the data readonly or writable.
-    pub writable: Writability,
     /// How the data should be initialized.
     pub init: Init,
     /// External function declarations.
@@ -69,7 +58,6 @@ impl DataContext {
     pub fn new() -> Self {
         Self {
             description: DataDescription {
-                writable: Writability::Readonly,
                 init: Init::Uninitialized,
                 function_decls: PrimaryMap::new(),
                 data_decls: PrimaryMap::new(),
@@ -81,7 +69,6 @@ impl DataContext {
 
     /// Clear all data structures in this context.
     pub fn clear(&mut self) {
-        self.description.writable = Writability::Readonly;
         self.description.init = Init::Uninitialized;
         self.description.function_decls.clear();
         self.description.data_decls.clear();
@@ -90,18 +77,16 @@ impl DataContext {
     }
 
     /// Define a zero-initialized object with the given size.
-    pub fn define_zeroinit(&mut self, size: usize, writable: Writability) {
+    pub fn define_zeroinit(&mut self, size: usize) {
         debug_assert_eq!(self.description.init, Init::Uninitialized);
-        self.description.writable = writable;
         self.description.init = Init::Zeros { size };
     }
 
     /// Define an object initialized with the given contents.
     ///
     /// TODO: Can we avoid a Box here?
-    pub fn define(&mut self, contents: Box<[u8]>, writable: Writability) {
+    pub fn define(&mut self, contents: Box<[u8]>) {
         debug_assert_eq!(self.description.init, Init::Uninitialized);
-        self.description.writable = writable;
         self.description.init = Init::Bytes { contents };
     }
 
@@ -148,14 +133,13 @@ impl DataContext {
 #[cfg(test)]
 mod tests {
     use cranelift_codegen::ir;
-    use {DataContext, Init, Writability};
+    use {DataContext, Init};
 
     #[test]
     fn basic_data_context() {
         let mut data_ctx = DataContext::new();
         {
             let description = &data_ctx.description;
-            assert_eq!(description.writable, Writability::Readonly);
             assert_eq!(description.init, Init::Uninitialized);
             assert!(description.function_decls.is_empty());
             assert!(description.data_decls.is_empty());
@@ -163,7 +147,7 @@ mod tests {
             assert!(description.data_relocs.is_empty());
         }
 
-        data_ctx.define_zeroinit(256, Writability::Writable);
+        data_ctx.define_zeroinit(256);
 
         let _func_a = data_ctx.import_function(ir::ExternalName::user(0, 0));
         let func_b = data_ctx.import_function(ir::ExternalName::user(0, 1));
@@ -177,7 +161,6 @@ mod tests {
 
         {
             let description = data_ctx.description();
-            assert_eq!(description.writable, Writability::Writable);
             assert_eq!(description.init, Init::Zeros { size: 256 });
             assert_eq!(description.function_decls.len(), 3);
             assert_eq!(description.data_decls.len(), 2);
@@ -188,7 +171,6 @@ mod tests {
         data_ctx.clear();
         {
             let description = &data_ctx.description;
-            assert_eq!(description.writable, Writability::Readonly);
             assert_eq!(description.init, Init::Uninitialized);
             assert!(description.function_decls.is_empty());
             assert!(description.data_decls.is_empty());
@@ -198,10 +180,9 @@ mod tests {
 
         let contents = vec![33, 34, 35, 36];
         let contents_clone = contents.clone();
-        data_ctx.define(contents.into_boxed_slice(), Writability::Readonly);
+        data_ctx.define(contents.into_boxed_slice());
         {
             let description = data_ctx.description();
-            assert_eq!(description.writable, Writability::Readonly);
             assert_eq!(
                 description.init,
                 Init::Bytes {

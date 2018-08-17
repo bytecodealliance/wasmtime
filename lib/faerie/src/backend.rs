@@ -193,11 +193,11 @@ impl Backend for FaerieBackend {
     fn define_data(
         &mut self,
         name: &str,
+        _writable: bool,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
     ) -> ModuleResult<FaerieCompiledData> {
         let &DataDescription {
-            writable: _writable,
             ref init,
             ref function_decls,
             ref data_decls,

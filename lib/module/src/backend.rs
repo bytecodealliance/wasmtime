@@ -65,6 +65,7 @@ where
     fn define_data(
         &mut self,
         name: &str,
+        writable: bool,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
     ) -> ModuleResult<Self::CompiledData>;

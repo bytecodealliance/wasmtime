@@ -5,7 +5,6 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_module::{
     Backend, DataContext, DataDescription, Init, Linkage, ModuleNamespace, ModuleResult,
-    Writability,
 };
 use cranelift_native;
 use libc;
@@ -192,11 +191,11 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn define_data(
         &mut self,
         _name: &str,
+        writable: bool,
         data: &DataContext,
         _namespace: &ModuleNamespace<Self>,
     ) -> ModuleResult<Self::CompiledData> {
         let &DataDescription {
-            writable,
             ref init,
             ref function_decls,
             ref data_decls,
@@ -205,15 +204,14 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         } = data.description();
 
         let size = init.size();
-        let storage = match writable {
-            Writability::Readonly => self
-                .readonly_memory
+        let storage = if writable {
+            self.writable_memory
                 .allocate(size)
-                .expect("TODO: handle OOM etc."),
-            Writability::Writable => self
-                .writable_memory
+                .expect("TODO: handle OOM etc.")
+        } else {
+            self.readonly_memory
                 .allocate(size)
-                .expect("TODO: handle OOM etc."),
+                .expect("TODO: handle OOM etc.")
         };
 
         match *init {
