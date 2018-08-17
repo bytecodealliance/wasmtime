@@ -207,7 +207,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         let size = init.size();
         let storage = match writable {
             Writability::Readonly => self
-                .writable_memory
+                .readonly_memory
                 .allocate(size)
                 .expect("TODO: handle OOM etc."),
             Writability::Writable => self
