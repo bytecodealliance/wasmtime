@@ -330,11 +330,11 @@ fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
         Linkage::Import => faerie::Decl::DataImport,
         Linkage::Local => faerie::Decl::Data {
             global: false,
-            writeable: writable,
+            writable,
         },
         Linkage::Export => faerie::Decl::Data {
             global: true,
-            writeable: writable,
+            writable,
         },
         Linkage::Preemptible => {
             unimplemented!("faerie doesn't support preemptible globals yet");
