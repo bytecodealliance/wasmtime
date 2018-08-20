@@ -5,6 +5,7 @@ authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
 repository = "https://github.com/CraneStation/cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
+categories = ["no-std", "wasm"]
 readme = "README.md"
 keywords = ["webassembly", "wasm"]
 
