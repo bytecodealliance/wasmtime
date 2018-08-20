@@ -5,6 +5,7 @@ authors = ["The Cranelift Project Developers"]
 description = "Serializer/Deserializer for Cranelift IR"
 repository = "https://github.com/CraneStation/cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
+categories = ["no-std"]
 readme = "README.md"
 keywords = ["webassembly", "serde"]
 
