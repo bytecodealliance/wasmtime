@@ -1,7 +1,6 @@
 " Vim syntax file
 " Language:     Cranelift
-" Maintainer:   Jakob Stoklund Olesen <stoklund@2pi.dk
-" Last Change:  Jun 16, 2017
+" Maintainer:   The Cranelift Project Developers
 
 if version < 600
   syntax clear
