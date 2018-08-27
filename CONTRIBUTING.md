@@ -44,14 +44,14 @@ be aware of.
 
 ### rustfmt
 
-All PRs must be formatted according to the current stable [rustfmt], and this
-is checked in the continuous integration tests. See the [rustfmt quickstart]
-for setup.
+All PRs must be formatted according to rustfmt, and this is checked in the
+continuous integration tests. We use the current stable [rustfmt-preview]
+version. See the [rustfmt quickstart] for setup.
 
 [format-all.sh] is a script for running the appropriate version of rustfmt,
 which may be convenient when there are multiple versions installed.
 
-[rustfmt]: https://github.com/rust-lang-nursery/rustfmt
+[rustfmt-preview]: https://github.com/rust-lang-nursery/rustfmt
 [rustfmt quickstart]: https://github.com/rust-lang-nursery/rustfmt#quick-start
 [format-all.sh]: https://github.com/CraneStation/cranelift/blob/master/format-all.sh
 
