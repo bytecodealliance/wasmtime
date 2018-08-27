@@ -1,9 +1,9 @@
 //! Utility routines for pretty-printing error messages.
 
 use ir;
-use ir::entities::Inst;
+use ir::entities::{AnyEntity, Inst};
 use ir::function::Function;
-use isa::{RegInfo, TargetIsa};
+use isa::TargetIsa;
 use result::CodegenError;
 use std::boxed::Box;
 use std::fmt;
@@ -22,25 +22,6 @@ pub fn pretty_verifier_error<'a>(
 ) -> String {
     let mut errors = errors.0;
     let mut w = String::new();
-
-    // TODO: Use drain_filter here when it gets stabilized
-    let mut i = 0;
-    let mut wrote_error = false;
-
-    while i != errors.len() {
-        if let ir::entities::AnyEntity::Inst(_) = errors[i].location {
-            i += 1;
-        } else {
-            let err = errors.remove(i);
-
-            writeln!(w, "verifier at {}", err).unwrap();
-            wrote_error = true;
-        }
-    }
-
-    if wrote_error {
-        w.push('\n');
-    }
 
     decorate_function(
         &mut PrettyVerifierError(func_w.unwrap_or(Box::new(PlainWriter)), &mut errors),
@@ -62,21 +43,22 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        pretty_function_error(w, func, isa, inst, indent, &mut *self.0, self.1)
+        pretty_instruction_error(w, func, isa, inst, indent, &mut *self.0, self.1)
     }
 
-    fn write_preamble(
+    fn write_entity_definition(
         &mut self,
         w: &mut Write,
         func: &Function,
-        regs: Option<&RegInfo>,
-    ) -> Result<bool, fmt::Error> {
-        self.0.write_preamble(w, func, regs)
+        entity: AnyEntity,
+        value: &fmt::Display,
+    ) -> fmt::Result {
+        pretty_preamble_error(w, func, entity, value, &mut *self.0, self.1)
     }
 }
 
 /// Pretty-print a function verifier error.
-fn pretty_function_error(
+fn pretty_instruction_error(
     w: &mut Write,
     func: &Function,
     isa: Option<&TargetIsa>,
@@ -120,6 +102,48 @@ fn pretty_function_error(
             "",
             func.dfg.display_inst(cur_inst, isa)
         )?;
+    }
+
+    Ok(())
+}
+
+fn pretty_preamble_error(
+    w: &mut Write,
+    func: &Function,
+    entity: AnyEntity,
+    value: &fmt::Display,
+    func_w: &mut FuncWriter,
+    errors: &mut Vec<VerifierError>,
+) -> fmt::Result {
+    // TODO: Use drain_filter here when it gets stabilized
+    let indent = 4;
+
+    let mut i = 0;
+    let mut printed_entity = false;
+
+    while i != errors.len() {
+        if entity == errors[i].location {
+            let err = errors.remove(i);
+
+            if !printed_entity {
+                func_w.write_entity_definition(w, func, entity, value)?;
+                printed_entity = true;
+            }
+
+            write!(w, "{1:0$}^", indent, "")?;
+            for _c in entity.to_string().chars() {
+                write!(w, "~")?;
+            }
+            writeln!(w, " verifier {}", err.to_string())?;
+        } else {
+            i += 1
+        }
+    }
+
+    if printed_entity {
+        w.write_char('\n')?;
+    } else {
+        func_w.write_entity_definition(w, func, entity, value)?;
     }
 
     Ok(())
