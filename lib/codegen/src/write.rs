@@ -3,15 +3,16 @@
 //! The `write` module provides the `write_function` function which converts an IR `Function` to an
 //! equivalent textual form. This textual form can be read back by the `cranelift-reader` crate.
 
+use ir::entities::AnyEntity;
 use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
 use isa::{RegInfo, TargetIsa};
 use packed_option::ReservedValue;
 use std::fmt::{self, Write};
 use std::string::String;
 
-/// A `FuncWriter` is used to decorate functions during printing
+/// A `FuncWriter` used to decorate functions during printing.
 pub trait FuncWriter {
-    /// Write the given inst to w
+    /// Write the given `inst` to `w`.
     fn write_instruction(
         &mut self,
         w: &mut Write,
@@ -21,16 +22,66 @@ pub trait FuncWriter {
         ident: usize,
     ) -> fmt::Result;
 
-    /// Write the preamble to w
+    /// Write the preamble to `w`. By default, this uses `write_entity_definition`.
     fn write_preamble(
         &mut self,
         w: &mut Write,
         func: &Function,
         regs: Option<&RegInfo>,
-    ) -> Result<bool, fmt::Error>;
+    ) -> Result<bool, fmt::Error> {
+        let mut any = false;
+
+        for (ss, slot) in func.stack_slots.iter() {
+            any = true;
+            self.write_entity_definition(w, func, ss.into(), slot)?;
+        }
+
+        for (gv, gv_data) in &func.global_values {
+            any = true;
+            self.write_entity_definition(w, func, gv.into(), gv_data)?;
+        }
+
+        for (heap, heap_data) in &func.heaps {
+            any = true;
+            self.write_entity_definition(w, func, heap.into(), heap_data)?;
+        }
+
+        // Write out all signatures before functions since function declarations can refer to
+        // signatures.
+        for (sig, sig_data) in &func.dfg.signatures {
+            any = true;
+            self.write_entity_definition(w, func, sig.into(), &sig_data.display(regs))?;
+        }
+
+        for (fnref, ext_func) in &func.dfg.ext_funcs {
+            any = true;
+            if ext_func.signature != SigRef::reserved_value() {
+                self.write_entity_definition(w, func, fnref.into(), ext_func)?;
+            }
+        }
+
+        for (jt, jt_data) in &func.jump_tables {
+            any = true;
+            self.write_entity_definition(w, func, jt.into(), jt_data)?;
+        }
+
+        Ok(any)
+    }
+
+    /// Write an entity definition defined in the preamble to `w`.
+    #[allow(unused_variables)]
+    fn write_entity_definition(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        entity: AnyEntity,
+        value: &fmt::Display,
+    ) -> fmt::Result {
+        writeln!(w, "    {} = {}", entity, value)
+    }
 }
 
-/// A `PlainWriter` doesn't decorate the function
+/// A `PlainWriter` that doesn't decorate the function.
 pub struct PlainWriter;
 
 impl FuncWriter for PlainWriter {
@@ -44,15 +95,6 @@ impl FuncWriter for PlainWriter {
     ) -> fmt::Result {
         write_instruction(w, func, isa, inst, indent)
     }
-
-    fn write_preamble(
-        &mut self,
-        w: &mut Write,
-        func: &Function,
-        regs: Option<&RegInfo>,
-    ) -> Result<bool, fmt::Error> {
-        write_preamble(w, func, regs)
-    }
 }
 
 /// Write `func` to `w` as equivalent text.
@@ -61,7 +103,7 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
     decorate_function(&mut PlainWriter, w, func, isa)
 }
 
-/// Writes 'func' to 'w' as text.
+/// Writes `func` to `w` as text.
 /// write_function_plain is passed as 'closure' to print instructions as text.
 /// pretty_function_error is passed as 'closure' to add error decoration.
 pub fn decorate_function<FW: FuncWriter>(
@@ -93,50 +135,6 @@ pub fn decorate_function<FW: FuncWriter>(
 
 fn write_spec(w: &mut Write, func: &Function, regs: Option<&RegInfo>) -> fmt::Result {
     write!(w, "{}{}", func.name, func.signature.display(regs))
-}
-
-fn write_preamble(
-    w: &mut Write,
-    func: &Function,
-    regs: Option<&RegInfo>,
-) -> Result<bool, fmt::Error> {
-    let mut any = false;
-
-    for (ss, slot) in func.stack_slots.iter() {
-        any = true;
-        writeln!(w, "    {} = {}", ss, slot)?;
-    }
-
-    for (gv, gv_data) in &func.global_values {
-        any = true;
-        writeln!(w, "    {} = {}", gv, gv_data)?;
-    }
-
-    for (heap, heap_data) in &func.heaps {
-        any = true;
-        writeln!(w, "    {} = {}", heap, heap_data)?;
-    }
-
-    // Write out all signatures before functions since function declarations can refer to
-    // signatures.
-    for (sig, sig_data) in &func.dfg.signatures {
-        any = true;
-        writeln!(w, "    {} = {}", sig, sig_data.display(regs))?;
-    }
-
-    for (fnref, ext_func) in &func.dfg.ext_funcs {
-        any = true;
-        if ext_func.signature != SigRef::reserved_value() {
-            writeln!(w, "    {} = {}", fnref, ext_func)?;
-        }
-    }
-
-    for (jt, jt_data) in &func.jump_tables {
-        any = true;
-        writeln!(w, "    {} = {}", jt, jt_data)?;
-    }
-
-    Ok(any)
 }
 
 //----------------------------------------------------------------------
