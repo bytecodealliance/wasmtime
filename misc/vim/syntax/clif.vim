@@ -13,7 +13,7 @@ endif
 " They tend to refer to weird stuff like assembler mnemonics anyway.
 syn spell notoplevel
 
-syn keyword clifHeader test isa set
+syn keyword clifHeader test target set
 syn keyword clifDecl function jump_table incoming_arg outgoing_arg spill_slot explicit_slot emergency_slot
 syn keyword clifFilecheck check sameln nextln unordered not regex contained
 
