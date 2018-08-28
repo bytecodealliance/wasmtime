@@ -17,7 +17,7 @@ ebb0(v0: i64):
 
 function %deref(i64 vmctx) -> i32 {
     gv3 = vmctx+16
-    gv4 = deref(gv3)-32
+    gv4 = deref(gv3)-32: i32
     ; check: gv4 = deref(gv3)-32
 ebb0(v0: i64):
     v1 = global_value.i32 gv4
@@ -27,7 +27,7 @@ ebb0(v0: i64):
 
 ; Refer to a global value before it's been declared.
 function %backref(i64 vmctx) -> i32 {
-    gv1 = deref(gv2)-32
+    gv1 = deref(gv2)-32: i32
     ; check: gv1 = deref(gv2)-32
     gv2 = vmctx+16
     ; check: gv2 = vmctx+16

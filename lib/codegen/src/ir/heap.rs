@@ -1,7 +1,7 @@
 //! Heaps.
 
 use ir::immediates::Imm64;
-use ir::GlobalValue;
+use ir::{GlobalValue, Type};
 use std::fmt;
 
 /// Information about a heap declaration.
@@ -19,6 +19,9 @@ pub struct HeapData {
 
     /// Heap style, with additional style-specific info.
     pub style: HeapStyle,
+
+    /// The index type for the heap.
+    pub index_type: Type,
 }
 
 /// Style of heap including style-specific information.
@@ -50,6 +53,10 @@ impl fmt::Display for HeapData {
             HeapStyle::Dynamic { bound_gv } => write!(f, ", bound {}", bound_gv)?,
             HeapStyle::Static { bound } => write!(f, ", bound {}", bound)?,
         }
-        write!(f, ", guard {}", self.guard_size)
+        write!(
+            f,
+            ", guard {}, index_type {}",
+            self.guard_size, self.index_type
+        )
     }
 }
