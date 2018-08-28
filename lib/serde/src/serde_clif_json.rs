@@ -706,9 +706,9 @@ pub fn populate_inst(func: &Function, ebb: Ebb) -> Vec<SerInst> {
 }
 
 /// Translating Ebb parameters into serializable parameters.
-pub fn populate_params(func: &Function, ebb: &Ebb) -> Vec<String> {
+pub fn populate_params(func: &Function, ebb: Ebb) -> Vec<String> {
     let mut ser_vec: Vec<String> = Vec::new();
-    let parameters = func.dfg.ebb_params(*ebb);
+    let parameters = func.dfg.ebb_params(ebb);
     for param in parameters {
         ser_vec.push(param.to_string());
     }
@@ -727,7 +727,7 @@ pub fn populate_ebbs(func: &Function) -> Vec<SerEbb> {
     let mut ebb_vec: Vec<SerEbb> = Vec::new();
     for ebb in func.layout.ebbs() {
         let mut ser_ebb: SerEbb = SerEbb::new(ebb.to_string());
-        ser_ebb.params = populate_params(&func, &ebb);
+        ser_ebb.params = populate_params(&func, ebb);
         ser_ebb.insts = populate_inst(&func, ebb);
         ebb_vec.push(ser_ebb);
     }
