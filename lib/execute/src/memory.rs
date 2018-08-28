@@ -57,6 +57,13 @@ impl LinearMemory {
             if new_pages > val {
                 return None;
             }
+        } else {
+            // Wasm linear memories are never allowed to grow beyond what is
+            // indexable. If the memory has no maximum, enforce the greatest
+            // limit here.
+            if new_pages >= 65536 {
+                return None;
+            }
         }
 
         let prev_pages = self.current;
