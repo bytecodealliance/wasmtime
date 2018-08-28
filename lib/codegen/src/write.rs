@@ -46,6 +46,11 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, heap.into(), heap_data)?;
         }
 
+        for (table, table_data) in &func.tables {
+            any = true;
+            self.write_entity_definition(w, func, table.into(), table_data)?;
+        }
+
         // Write out all signatures before functions since function declarations can refer to
         // signatures.
         for (sig, sig_data) in &func.dfg.signatures {

@@ -213,6 +213,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             min_size: Imm64::new(0),
             bound_gv,
             element_size: Imm64::new(i64::from(self.pointer_bytes()) * 2),
+            index_type: I32,
         })
     }
 

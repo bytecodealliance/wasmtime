@@ -49,7 +49,7 @@ fn dynamic_addr(
     pos.use_srcloc(inst);
 
     // Start with the bounds check. Trap if `index + 1 > bound`.
-    let bound = pos.ins().global_value(addr_ty, bound_gv);
+    let bound = pos.ins().global_value(index_ty, bound_gv);
 
     // `index > bound - 1` is the same as `index >= bound`.
     let oob = pos
