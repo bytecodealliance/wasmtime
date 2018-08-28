@@ -339,13 +339,28 @@ where
         ctx
     }
 
-    /// Create a new `Context` initialized for use with this `Module`.
+    /// Clear the given `Context` and reset it for use with a new function.
     ///
     /// This ensures that the `Context` is initialized with the default calling
     /// convention for the `TargetIsa`.
     pub fn clear_context(&self, ctx: &mut Context) {
         ctx.clear();
         ctx.func.signature.call_conv = self.backend.isa().flags().call_conv();
+    }
+
+    /// Create a new empty `Signature` with the default calling convention for
+    /// the `TargetIsa`, to which parameter and return types can be added for
+    /// declaring a function to be called by this `Module`.
+    pub fn make_signature(&self) -> ir::Signature {
+        ir::Signature::new(self.backend.isa().flags().call_conv())
+    }
+
+    /// Clear the given `Signature` and reset for use with a new function.
+    ///
+    /// This ensures that the `Signature` is initialized with the default
+    /// calling convention for the `TargetIsa`.
+    pub fn clear_signature(&self, sig: &mut ir::Signature) {
+        sig.clear(self.backend.isa().flags().call_conv());
     }
 
     /// Declare a function in this module.
