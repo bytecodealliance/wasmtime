@@ -63,6 +63,8 @@ impl LinearMemory {
         let new_bytes = (new_pages * PAGE_SIZE) as usize;
 
         if self.mmap.len() < new_bytes {
+            // If we have no maximum, this is a "dynamic" heap, and it's allowed
+            // to move.
             assert!(self.maximum.is_none());
             let mut new_mmap = memmap::MmapMut::map_anon(new_bytes).unwrap();
             new_mmap.copy_from_slice(&self.mmap);
