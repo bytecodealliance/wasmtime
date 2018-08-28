@@ -433,6 +433,48 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn verify_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        if let Some(isa) = self.isa {
+            for (table, table_data) in &self.func.tables {
+                let base = table_data.base_gv;
+                if !self.func.global_values.is_valid(base) {
+                    return nonfatal!(errors, table, "invalid base global value {}", base);
+                }
+
+                let pointer_type = isa.pointer_type();
+                let base_type = self.func.global_values[base].global_type(isa);
+                if base_type != pointer_type {
+                    report!(
+                        errors,
+                        table,
+                        "table base has type {}, which is not the pointer type {}",
+                        base_type,
+                        pointer_type
+                    );
+                }
+
+                let bound_gv = table_data.bound_gv;
+                if !self.func.global_values.is_valid(bound_gv) {
+                    return nonfatal!(errors, table, "invalid bound global value {}", bound_gv);
+                }
+
+                let index_type = table_data.index_type;
+                let bound_type = self.func.global_values[bound_gv].global_type(isa);
+                if index_type != bound_type {
+                    report!(
+                        errors,
+                        table,
+                        "table index type {} differs from the type of its bound, {}",
+                        index_type,
+                        bound_type
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn ebb_integrity(
         &self,
         ebb: Ebb,
@@ -1385,6 +1427,19 @@ impl<'a> Verifier<'a> {
                     );
                 }
             }
+            ir::InstructionData::TableAddr { table, arg, .. } => {
+                let index_type = self.func.dfg.value_type(arg);
+                let table_index_type = self.func.tables[table].index_type;
+                if index_type != table_index_type {
+                    return nonfatal!(
+                        errors,
+                        inst,
+                        "index type {} differs from table index type {}",
+                        index_type,
+                        table_index_type
+                    );
+                }
+            }
             ir::InstructionData::UnaryGlobalValue { global_value, .. } => {
                 if let Some(isa) = self.isa {
                     let inst_type = self.func.dfg.value_type(self.func.dfg.first_result(inst));
@@ -1611,6 +1666,7 @@ impl<'a> Verifier<'a> {
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
+        self.verify_tables(errors)?;
         self.typecheck_entry_block_params(errors)?;
 
         for ebb in self.func.layout.ebbs() {

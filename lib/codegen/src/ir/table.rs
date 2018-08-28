@@ -1,7 +1,7 @@
 //! Tables.
 
 use ir::immediates::Imm64;
-use ir::GlobalValue;
+use ir::{GlobalValue, Type};
 use std::fmt;
 
 /// Information about a table declaration.
@@ -19,14 +19,18 @@ pub struct TableData {
 
     /// The size of a table element, in bytes.
     pub element_size: Imm64,
+
+    /// The index type for the table.
+    pub index_type: Type,
 }
 
 impl fmt::Display for TableData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("dynamic")?;
         write!(
             f,
-            "{}, min {}, bound {}, element_size {}",
-            self.base_gv, self.min_size, self.bound_gv, self.element_size
+            " {}, min {}, bound {}, element_size {}, index_type {}",
+            self.base_gv, self.min_size, self.bound_gv, self.element_size, self.index_type
         )
     }
 }

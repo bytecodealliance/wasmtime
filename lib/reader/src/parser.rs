@@ -198,6 +198,7 @@ impl<'a> Context<'a> {
                 min_size: Imm64::new(0),
                 bound_gv: GlobalValue::reserved_value(),
                 element_size: Imm64::new(0),
+                index_type: VOID,
             });
         }
         self.function.tables[table] = data;
@@ -1161,6 +1162,7 @@ impl<'a> Parser<'a> {
     // heap-attr ::= "min" Imm64(bytes)
     //             | "bound" Imm64(bytes)
     //             | "guard" Imm64(bytes)
+    //             | "index_type" type
     //
     fn parse_heap_decl(&mut self) -> ParseResult<(Heap, HeapData)> {
         let heap = self.match_heap("expected heap number: heap«n»")?;
@@ -1230,6 +1232,7 @@ impl<'a> Parser<'a> {
     // table-attr ::= "min" Imm64(bytes)
     //              | "bound" Imm64(bytes)
     //              | "element_size" Imm64(bytes)
+    //              | "index_type" type
     //
     fn parse_table_decl(&mut self) -> ParseResult<(Table, TableData)> {
         let table = self.match_table("expected table number: table«n»")?;
@@ -1253,6 +1256,7 @@ impl<'a> Parser<'a> {
             min_size: 0.into(),
             bound_gv: GlobalValue::reserved_value(),
             element_size: 0.into(),
+            index_type: ir::types::I32,
         };
 
         // table-desc ::= * { "," table-attr }
@@ -1269,6 +1273,9 @@ impl<'a> Parser<'a> {
                 }
                 "element_size" => {
                     data.element_size = self.match_imm64("expected integer element size")?;
+                }
+                "index_type" => {
+                    data.index_type = self.match_type("expected index type")?;
                 }
                 t => return err!(self.loc, "unknown table attribute '{}'", t),
             }
