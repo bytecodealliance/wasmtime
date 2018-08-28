@@ -16,7 +16,6 @@ use translation_utils::{
     DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex,
 };
-use wasmparser;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
@@ -438,9 +437,8 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             let name = get_func_name(func_index);
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
             let mut func = ir::Function::with_name_signature(name, sig);
-            let reader = wasmparser::BinaryReader::new(body_bytes);
             self.trans
-                .translate_from_reader(reader, &mut func, &mut func_environ)?;
+                .translate(body_bytes, &mut func, &mut func_environ)?;
             func
         };
         self.func_bytecode_sizes.push(body_bytes.len());
