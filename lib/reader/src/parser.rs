@@ -919,10 +919,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if sig.params.iter().all(|a| a.location.is_assigned()) {
-            sig.compute_argument_bytes();
-        }
-
         Ok(sig)
     }
 

@@ -57,7 +57,6 @@ pub fn legalize_libcall_signature(signature: &mut Signature, isa: &TargetIsa) {
 /// `current` is true if this is the signature for the current function.
 fn legalize_signature(signature: &mut Signature, current: bool, isa: &TargetIsa) {
     isa.legalize_signature(signature, current);
-    signature.compute_argument_bytes();
 }
 
 /// Legalize the entry block parameters after `func`'s signature has been legalized.
