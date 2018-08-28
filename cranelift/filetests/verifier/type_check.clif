@@ -82,6 +82,7 @@ function %jump_args() {
         v0 = iconst.i16 10
         v3 = iconst.i64 20
         jump ebb1(v0, v3) ; error: arg 0 (v0) has type i16, expected i64
+                          ; error: arg 1 (v3) has type i64, expected i16
     ebb1(v10: i64, v11: i16):
         return
 }
@@ -91,6 +92,7 @@ function %jump_args2() {
         v0 = iconst.i16 10
         v3 = iconst.i64 20
         brz v0, ebb1(v0, v3) ; error: arg 0 (v0) has type i16, expected i64
+                             ; error: arg 1 (v3) has type i64, expected i16
         jump ebb1(v3, v0)
     ebb1(v10: i64, v11: i16):
         return
