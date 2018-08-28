@@ -1160,11 +1160,6 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult<()> {
         let sig = &self.func.dfg.signatures[sig_ref];
 
-        // Before legalization, there's nothing to check.
-        if sig.argument_bytes.is_none() {
-            return Ok(());
-        }
-
         let args = self.func.dfg.inst_variable_args(inst);
         let expected_args = &sig.params[..];
 

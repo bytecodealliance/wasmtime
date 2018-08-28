@@ -8,7 +8,6 @@
 use ir::{ArgumentLoc, ExternalName, SigRef, Type};
 use isa::{RegInfo, RegUnit};
 use settings::CallConv;
-use std::cmp;
 use std::fmt;
 use std::str::FromStr;
 use std::vec::Vec;
@@ -29,13 +28,6 @@ pub struct Signature {
 
     /// Calling convention.
     pub call_conv: CallConv,
-
-    /// When the signature has been legalized to a specific ISA, this holds the size of the
-    /// argument array on the stack. Before legalization, this is `None`.
-    ///
-    /// This can be computed from the legalized `params` array as the maximum (offset plus
-    /// byte size) of the `ArgumentLoc::Stack(offset)` argument.
-    pub argument_bytes: Option<u32>,
 }
 
 impl Signature {
@@ -45,7 +37,6 @@ impl Signature {
             params: Vec::new(),
             returns: Vec::new(),
             call_conv,
-            argument_bytes: None,
         }
     }
 
@@ -54,25 +45,6 @@ impl Signature {
         self.params.clear();
         self.returns.clear();
         self.call_conv = call_conv;
-        self.argument_bytes = None;
-    }
-
-    /// Compute the size of the stack arguments and mark signature as legalized.
-    ///
-    /// Even if there are no stack arguments, this will set `params` to `Some(0)` instead
-    /// of `None`. This indicates that the signature has been legalized.
-    pub fn compute_argument_bytes(&mut self) {
-        let bytes = self
-            .params
-            .iter()
-            .filter_map(|arg| match arg.location {
-                ArgumentLoc::Stack(offset) if offset >= 0 => {
-                    Some(offset as u32 + arg.value_type.bytes())
-                }
-                _ => None,
-            })
-            .fold(0, cmp::max);
-        self.argument_bytes = Some(bytes);
     }
 
     /// Return an object that can display `self` with correct register names.
@@ -421,16 +393,9 @@ mod tests {
         sig.returns.push(AbiParam::new(B8));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 baldrdash");
 
-        // Test the offset computation algorithm.
-        assert_eq!(sig.argument_bytes, None);
-        sig.params[1].location = ArgumentLoc::Stack(8);
-        sig.compute_argument_bytes();
-        // An `i32x4` at offset 8 requires a 24-byte argument array.
-        assert_eq!(sig.argument_bytes, Some(24));
         // Order does not matter.
         sig.params[0].location = ArgumentLoc::Stack(24);
-        sig.compute_argument_bytes();
-        assert_eq!(sig.argument_bytes, Some(28));
+        sig.params[1].location = ArgumentLoc::Stack(8);
 
         // Writing ABI-annotated signatures.
         assert_eq!(

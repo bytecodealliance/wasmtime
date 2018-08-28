@@ -19,7 +19,6 @@ fn error_on_incompatible_sig_in_declare_function() {
         params: vec![AbiParam::new(types::I64)],
         returns: vec![],
         call_conv: CallConv::SystemV,
-        argument_bytes: None,
     };
     module
         .declare_function("abc", Linkage::Local, &sig)
@@ -36,7 +35,6 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
         params: vec![],
         returns: vec![],
         call_conv: CallConv::SystemV,
-        argument_bytes: None,
     };
 
     let func_id = module
