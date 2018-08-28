@@ -335,8 +335,6 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             }
         }
 
-        // Now that we're done patching, make the memory executable.
-        self.code_memory.set_executable();
         func.code
     }
 
@@ -397,8 +395,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             }
         }
 
-        self.readonly_memory.set_readonly();
         (data.storage, data.size)
+    }
+
+    fn publish(&mut self) {
+        // Now that we're done patching, prepare the memory for execution!
+        self.readonly_memory.set_readonly();
+        self.code_memory.set_executable();
     }
 
     /// SimpleJIT emits code and data into memory as it processes them, so it
