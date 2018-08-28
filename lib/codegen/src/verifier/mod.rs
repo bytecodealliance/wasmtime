@@ -328,6 +328,7 @@ impl<'a> Verifier<'a> {
     //  - cycles in the global value declarations.
     //  - use of 'vmctx' when no special parameter declares it.
     fn verify_global_values(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        let mut cycle_seen = false;
         let mut seen = SparseSet::new();
 
         'gvs: for gv in self.func.global_values.keys() {
@@ -337,7 +338,10 @@ impl<'a> Verifier<'a> {
             let mut cur = gv;
             while let ir::GlobalValueData::Deref { base, .. } = self.func.global_values[cur] {
                 if seen.insert(base).is_some() {
-                    report!(errors, gv, "deref cycle: {}", DisplayList(seen.as_slice()));
+                    if !cycle_seen {
+                        report!(errors, gv, "deref cycle: {}", DisplayList(seen.as_slice()));
+                        cycle_seen = true; // ensures we don't report the cycle multiple times
+                    }
                     continue 'gvs;
                 }
 
@@ -1511,6 +1515,7 @@ impl<'a> Verifier<'a> {
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.typecheck_entry_block_params(errors)?;
+
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst, errors)?;

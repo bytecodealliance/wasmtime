@@ -66,7 +66,7 @@ impl SubTest for TestVerifier {
                 for expect in expected {
                     let pos = errors
                         .iter()
-                        .position(|err| err.message.contains(expect.1) && err.location == expect.0);
+                        .position(|err| err.location == expect.0 && err.message.contains(expect.1));
 
                     match pos {
                         None => {
@@ -76,6 +76,11 @@ impl SubTest for TestVerifier {
                             errors.swap_remove(pos);
                         }
                     }
+                }
+
+                // report remaining errors
+                for err in errors {
+                    write!(msg, "unexpected error {}", err).unwrap();
                 }
 
                 if msg.is_empty() {

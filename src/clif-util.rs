@@ -15,13 +15,13 @@ extern crate cfg_if;
 extern crate capstone;
 extern crate clap;
 extern crate cranelift_codegen;
-extern crate cranelift_entity;
 extern crate cranelift_filetests;
 extern crate cranelift_reader;
 extern crate pretty_env_logger;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {
+        extern crate cranelift_entity;
         extern crate cranelift_wasm;
         extern crate term;
         extern crate wabt;
