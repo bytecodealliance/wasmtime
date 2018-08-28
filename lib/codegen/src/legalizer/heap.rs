@@ -57,7 +57,7 @@ fn dynamic_addr(
     pos.use_srcloc(inst);
 
     // Start with the bounds check. Trap if `offset + access_size > bound`.
-    let bound = pos.ins().global_value(addr_ty, bound_gv);
+    let bound = pos.ins().global_value(offset_ty, bound_gv);
     let oob;
     if access_size == 1 {
         // `offset > bound - 1` is the same as `offset >= bound`.

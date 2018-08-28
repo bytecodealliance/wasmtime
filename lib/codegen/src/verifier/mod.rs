@@ -348,18 +348,88 @@ impl<'a> Verifier<'a> {
                 cur = base;
             }
 
-            if let ir::GlobalValueData::VMContext { .. } = self.func.global_values[cur] {
-                if self
-                    .func
-                    .special_param(ir::ArgumentPurpose::VMContext)
-                    .is_none()
-                {
-                    report!(errors, cur, "undeclared vmctx reference {}", cur);
+            match self.func.global_values[gv] {
+                ir::GlobalValueData::VMContext { .. } => {
+                    if self
+                        .func
+                        .special_param(ir::ArgumentPurpose::VMContext)
+                        .is_none()
+                    {
+                        report!(errors, gv, "undeclared vmctx reference {}", gv);
+                    }
                 }
+                ir::GlobalValueData::Deref { base, .. } => {
+                    if let Some(isa) = self.isa {
+                        let base_type = self.func.global_values[base].global_type(isa);
+                        let pointer_type = isa.pointer_type();
+                        if base_type != pointer_type {
+                            report!(
+                                errors,
+                                gv,
+                                "deref base {} has type {}, which is not the pointer type {}",
+                                base,
+                                base_type,
+                                pointer_type
+                            );
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
         // Invalid global values shouldn't stop us from verifying the rest of the function
+        Ok(())
+    }
+
+    fn verify_heaps(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        if let Some(isa) = self.isa {
+            for (heap, heap_data) in &self.func.heaps {
+                let base = heap_data.base;
+                if !self.func.global_values.is_valid(base) {
+                    return nonfatal!(errors, heap, "invalid base global value {}", base);
+                }
+
+                let pointer_type = isa.pointer_type();
+                let base_type = self.func.global_values[base].global_type(isa);
+                if base_type != pointer_type {
+                    report!(
+                        errors,
+                        heap,
+                        "heap base has type {}, which is not the pointer type {}",
+                        base_type,
+                        pointer_type
+                    );
+                }
+
+                match heap_data.style {
+                    ir::HeapStyle::Dynamic { bound_gv, .. } => {
+                        if !self.func.global_values.is_valid(bound_gv) {
+                            return nonfatal!(
+                                errors,
+                                heap,
+                                "invalid bound global value {}",
+                                bound_gv
+                            );
+                        }
+
+                        let index_type = heap_data.index_type;
+                        let bound_type = self.func.global_values[bound_gv].global_type(isa);
+                        if index_type != bound_type {
+                            report!(
+                                errors,
+                                heap,
+                                "heap index type {} differs from the type of its bound, {}",
+                                index_type,
+                                bound_type
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -1255,51 +1325,82 @@ impl<'a> Verifier<'a> {
         ctrl_type: Type,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        if let ir::InstructionData::Unary { opcode, arg } = self.func.dfg[inst] {
-            let arg_type = self.func.dfg.value_type(arg);
-            match opcode {
-                Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
-                    if arg_type.lane_count() != ctrl_type.lane_count() {
-                        return nonfatal!(
-                            errors,
-                            inst,
-                            "input {} and output {} must have same number of lanes",
-                            arg_type,
-                            ctrl_type
-                        );
+        match self.func.dfg[inst] {
+            ir::InstructionData::Unary { opcode, arg } => {
+                let arg_type = self.func.dfg.value_type(arg);
+                match opcode {
+                    Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
+                        if arg_type.lane_count() != ctrl_type.lane_count() {
+                            return nonfatal!(
+                                errors,
+                                inst,
+                                "input {} and output {} must have same number of lanes",
+                                arg_type,
+                                ctrl_type
+                            );
+                        }
+                        if arg_type.lane_bits() >= ctrl_type.lane_bits() {
+                            return nonfatal!(
+                                errors,
+                                inst,
+                                "input {} must be smaller than output {}",
+                                arg_type,
+                                ctrl_type
+                            );
+                        }
                     }
-                    if arg_type.lane_bits() >= ctrl_type.lane_bits() {
-                        return nonfatal!(
-                            errors,
-                            inst,
-                            "input {} must be smaller than output {}",
-                            arg_type,
-                            ctrl_type
-                        );
+                    Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
+                        if arg_type.lane_count() != ctrl_type.lane_count() {
+                            return nonfatal!(
+                                errors,
+                                inst,
+                                "input {} and output {} must have same number of lanes",
+                                arg_type,
+                                ctrl_type
+                            );
+                        }
+                        if arg_type.lane_bits() <= ctrl_type.lane_bits() {
+                            return nonfatal!(
+                                errors,
+                                inst,
+                                "input {} must be larger than output {}",
+                                arg_type,
+                                ctrl_type
+                            );
+                        }
                     }
+                    _ => {}
                 }
-                Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
-                    if arg_type.lane_count() != ctrl_type.lane_count() {
-                        return nonfatal!(
-                            errors,
-                            inst,
-                            "input {} and output {} must have same number of lanes",
-                            arg_type,
-                            ctrl_type
-                        );
-                    }
-                    if arg_type.lane_bits() <= ctrl_type.lane_bits() {
-                        return nonfatal!(
-                            errors,
-                            inst,
-                            "input {} must be larger than output {}",
-                            arg_type,
-                            ctrl_type
-                        );
-                    }
-                }
-                _ => {}
             }
+            ir::InstructionData::HeapAddr { heap, arg, .. } => {
+                let index_type = self.func.dfg.value_type(arg);
+                let heap_index_type = self.func.heaps[heap].index_type;
+                if index_type != heap_index_type {
+                    return nonfatal!(
+                        errors,
+                        inst,
+                        "index type {} differs from heap index type {}",
+                        index_type,
+                        heap_index_type
+                    );
+                }
+            }
+            ir::InstructionData::UnaryGlobalValue { global_value, .. } => {
+                if let Some(isa) = self.isa {
+                    let inst_type = self.func.dfg.value_type(self.func.dfg.first_result(inst));
+                    let global_type = self.func.global_values[global_value].global_type(isa);
+                    if inst_type != global_type {
+                        return nonfatal!(
+                        errors,
+                        inst,
+                        "global_value instruction with type {} references global value with type {}",
+                        inst_type,
+                        global_type
+                    );
+                    }
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -1509,6 +1610,7 @@ impl<'a> Verifier<'a> {
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
+        self.verify_heaps(errors)?;
         self.typecheck_entry_block_params(errors)?;
 
         for ebb in self.func.layout.ebbs() {

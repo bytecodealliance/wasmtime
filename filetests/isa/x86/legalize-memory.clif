@@ -17,7 +17,7 @@ ebb1(v1: i64):
 
 function %deref(i64 vmctx) -> i64 {
     gv1 = vmctx-16
-    gv2 = deref(gv1)+32
+    gv2 = deref(gv1)+32: i64
 
 ebb1(v1: i64):
     v2 = global_value.i64 gv2

@@ -177,6 +177,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         let gv = func.create_global_value(ir::GlobalValueData::Deref {
             base: addr,
             offset: 0.into(),
+            memory_type: self.pointer_type(),
         });
 
         func.create_heap(ir::HeapData {
@@ -186,6 +187,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             style: ir::HeapStyle::Static {
                 bound: 0x1_0000_0000.into(),
             },
+            index_type: I32,
         })
     }
 
@@ -196,12 +198,14 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         let base_gv = func.create_global_value(ir::GlobalValueData::Deref {
             base: base_gv_addr,
             offset: 0.into(),
+            memory_type: self.pointer_type(),
         });
         let bound_gv_addr =
             func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Deref {
             base: bound_gv_addr,
             offset: 0.into(),
+            memory_type: self.pointer_type(),
         });
 
         func.create_table(ir::TableData {
