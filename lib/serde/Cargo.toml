@@ -16,8 +16,8 @@ path = "src/clif-json.rs"
 [dependencies]
 clap = "2.32.0"
 serde = "1.0.8"
-serde_derive = "1.0.8"
-serde_json = "1.0"
+serde_derive = "1.0.75"
+serde_json = "1.0.26"
 cranelift-codegen = { path = "../codegen", version = "0.19.0", default-features = false }
 cranelift-reader = { path = "../reader", version = "0.19.0", default-features = false }
 
