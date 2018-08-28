@@ -105,6 +105,9 @@ where
         namespace: &ModuleNamespace<Self>,
     ) -> Self::FinalizedData;
 
+    /// "Publish" all finalized functions and data objects to their ultimate destinations.
+    fn publish(&mut self);
+
     /// Consume this `Backend` and return a result. Some implementations may
     /// provide additional functionality through this result.
     fn finish(self) -> Self::Product;

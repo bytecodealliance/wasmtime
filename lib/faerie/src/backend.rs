@@ -281,6 +281,10 @@ impl Backend for FaerieBackend {
         // Nothing to do.
     }
 
+    fn publish(&mut self) {
+        // Nothing to do.
+    }
+
     fn finish(self) -> FaerieProduct {
         FaerieProduct {
             artifact: self.artifact,
