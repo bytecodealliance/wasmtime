@@ -206,7 +206,7 @@ impl<'a> Context<'a> {
     }
 
     // Resolve a reference to a table.
-    fn check_table(&self, table: Table, loc: &Location) -> ParseResult<()> {
+    fn check_table(&self, table: Table, loc: Location) -> ParseResult<()> {
         if !self.map.contains_table(table) {
             err!(loc, "undefined table {}", table)
         } else {
@@ -2249,7 +2249,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::TableAddr => {
                 let table = self.match_table("expected table identifier")?;
-                ctx.check_table(table, &self.loc)?;
+                ctx.check_table(table, self.loc)?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let arg = self.match_value("expected SSA value table address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
