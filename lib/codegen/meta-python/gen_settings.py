@@ -271,23 +271,17 @@ def gen_constructor(sgrp, parent, fmt):
         with fmt.indented(
                 'pub fn new({}) -> Self {{'.format(args), '}'):
             fmt.line('let bvec = builder.state_for("{}");'.format(sgrp.name))
-            fmt.line('let mut bytes = [0; {}];'.format(sgrp.byte_size()))
             fmt.line(
-                'debug_assert_eq!(bvec.len(), {});'.format(sgrp.settings_size))
-            with fmt.indented(
-                    'for (i, b) in bvec.iter().enumerate() {', '}'):
-                fmt.line('bytes[i] = *b;')
-
-            # Stop here without predicates.
-            if len(sgrp.predicate_number) == sgrp.boolean_settings:
-                fmt.line('Self { bytes }')
-                return
+                'let mut {} = Self {{ bytes: [0; {}] }};'
+                .format(sgrp.name, sgrp.byte_size()))
+            fmt.line(
+                'debug_assert_eq!(bvec.len(), {});'
+                .format(sgrp.settings_size))
+            fmt.line(
+                '{}.bytes[0..{}].copy_from_slice(&bvec);'
+                .format(sgrp.name, sgrp.settings_size))
 
             # Now compute the predicates.
-            fmt.line(
-                    'let mut {} = Self {{ bytes }};'
-                    .format(sgrp.name))
-
             for pred, number in sgrp.predicate_number.items():
                 # Don't compute our own settings.
                 if number < sgrp.boolean_settings:
