@@ -581,7 +581,7 @@ where
     ///
     /// # Panics
     ///
-    /// When the function has already been finalized this panics
+    /// When the function has already been finalized this panics.
     pub fn finalize_function(&mut self, func: FuncId) -> B::FinalizedFunction {
         let output = {
             let info = &self.contents.functions[func];
@@ -604,12 +604,23 @@ where
         output
     }
 
+    /// Return the finalized artifact from the backend, if it provides one.
+    pub fn get_finalized_function(&mut self, func: FuncId) -> B::FinalizedFunction {
+        let info = &self.contents.functions[func];
+        debug_assert!(info.finalized, "data object not yet finalized");
+        self.backend.get_finalized_function(
+            info.compiled
+                .as_ref()
+                .expect("function must be compiled before it can be finalized"),
+        )
+    }
+
     /// Perform all outstanding relocations on the given data object. This requires all
     /// `Local` and `Export` entities referenced to be defined.
     ///
     /// # Panics
     ///
-    /// When the data object has already been finalized this panics
+    /// When the data object has already been finalized this panics.
     pub fn finalize_data(&mut self, data: DataId) -> B::FinalizedData {
         let output = {
             let info = &self.contents.data_objects[data];
@@ -632,8 +643,21 @@ where
         output
     }
 
+    /// Return the finalized artifact from the backend, if it provides one.
+    pub fn get_finalized_data(&mut self, data: DataId) -> B::FinalizedData {
+        let info = &self.contents.data_objects[data];
+        debug_assert!(info.finalized, "data object not yet finalized");
+        self.backend.get_finalized_data(
+            info.compiled
+                .as_ref()
+                .expect("data object must be compiled before it can be finalized"),
+        )
+    }
+
     /// Finalize all functions and data objects. Note that this doesn't return the
-    /// final artifacts returned from `finalize_function` or `finalize_data`.
+    /// final artifacts returned from `finalize_function` or `finalize_data`. Use
+    /// `get_finalized_function` and `get_finalized_data` to obtain the final
+    /// artifacts.
     pub fn finalize_all(&mut self) {
         // TODO: Could we use something like `into_iter()` here?
         for info in self.contents.functions.values() {
@@ -666,13 +690,13 @@ where
         for info in self.contents.data_objects.values_mut() {
             info.finalized = true;
         }
+        self.backend.publish();
     }
 
     /// Consume the module and return the resulting `Product`. Some `Backend`
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
-    pub fn finish(mut self) -> B::Product {
-        self.backend.publish();
+    pub fn finish(self) -> B::Product {
         self.backend.finish()
     }
 }

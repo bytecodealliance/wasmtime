@@ -97,6 +97,9 @@ where
         namespace: &ModuleNamespace<Self>,
     ) -> Self::FinalizedFunction;
 
+    /// Return the finalized artifact from the backend, if relevant.
+    fn get_finalized_function(&self, func: &Self::CompiledFunction) -> Self::FinalizedFunction;
+
     /// Perform all outstanding relocations on the given data object. This requires all
     /// `Local` and `Export` entities referenced to be defined.
     fn finalize_data(
@@ -104,6 +107,9 @@ where
         data: &Self::CompiledData,
         namespace: &ModuleNamespace<Self>,
     ) -> Self::FinalizedData;
+
+    /// Return the finalized artifact from the backend, if relevant.
+    fn get_finalized_data(&self, data: &Self::CompiledData) -> Self::FinalizedData;
 
     /// "Publish" all finalized functions and data objects to their ultimate destinations.
     fn publish(&mut self);

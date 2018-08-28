@@ -277,7 +277,15 @@ impl Backend for FaerieBackend {
         // Nothing to do.
     }
 
+    fn get_finalized_function(&self, _func: &FaerieCompiledFunction) {
+        // Nothing to do.
+    }
+
     fn finalize_data(&mut self, _data: &FaerieCompiledData, _namespace: &ModuleNamespace<Self>) {
+        // Nothing to do.
+    }
+
+    fn get_finalized_data(&self, _data: &FaerieCompiledData) {
         // Nothing to do.
     }
 

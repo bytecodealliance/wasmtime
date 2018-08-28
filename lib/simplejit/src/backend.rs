@@ -334,7 +334,10 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 _ => unimplemented!(),
             }
         }
+        func.code
+    }
 
+    fn get_finalized_function(&self, func: &Self::CompiledFunction) -> Self::FinalizedFunction {
         func.code
     }
 
@@ -394,7 +397,10 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 }
             }
         }
+        (data.storage, data.size)
+    }
 
+    fn get_finalized_data(&self, data: &Self::CompiledData) -> Self::FinalizedData {
         (data.storage, data.size)
     }
 
