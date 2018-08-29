@@ -11,7 +11,7 @@ readme = "README.md"
 keywords = ["btree", "forest", "set", "map"]
 
 [dependencies]
-cranelift-entity = { path = "../entity", version = "0.20.0", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.20.1", default-features = false }
 
 [features]
 default = ["std"]

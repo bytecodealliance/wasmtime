@@ -12,7 +12,7 @@ keywords = ["compile", "compiler", "jit"]
 build = "build.rs"
 
 [dependencies]
-cranelift-entity = { path = "../entity", version = "0.20.0", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.20.1", default-features = false }
 cranelift-bforest = { path = "../bforest", version = "0.20.0", default-features = false }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
