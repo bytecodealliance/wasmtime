@@ -1,6 +1,6 @@
 //! Densely numbered entity references as mapping keys.
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::ops::{Index, IndexMut};
 use std::slice;
 use std::vec::Vec;
 use {EntityRef, Iter, IterMut, Keys};
@@ -14,6 +14,11 @@ use {EntityRef, Iter, IterMut, Keys};
 ///
 /// There should only be a single `PrimaryMap` instance for a given `EntityRef` type, otherwise
 /// conflicting references will be created. Using unknown keys for indexing will cause a panic.
+///
+/// Note that `PrimaryMap` doesn't implement `Deref` or `DerefMut`, which would allow
+/// `&PrimaryMap<K, V>` to convert to `&[V]`. One of the main advantages of `PrimaryMap` is
+/// that it only allows indexing with the distinct `EntityRef` key type, so converting to a
+/// plain slice would make it easier to use incorrectly.
 #[derive(Debug, Clone)]
 pub struct PrimaryMap<K, V>
 where
@@ -142,26 +147,6 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         IterMut::new(self.elems.iter_mut())
-    }
-}
-
-impl<K, V> Deref for PrimaryMap<K, V>
-where
-    K: EntityRef,
-{
-    type Target = [V];
-
-    fn deref(&self) -> &Self::Target {
-        &self.elems
-    }
-}
-
-impl<K, V> DerefMut for PrimaryMap<K, V>
-where
-    K: EntityRef,
-{
-    fn deref_mut(&mut self) -> &mut [V] {
-        &mut self.elems
     }
 }
 
@@ -340,14 +325,5 @@ mod tests {
                 _ => panic!(),
             }
         }
-    }
-
-    #[test]
-    fn deref() {
-        let mut m = PrimaryMap::<E, isize>::new();
-        let _: &[isize] = m.as_ref();
-        let _: &mut [isize] = m.as_mut();
-        let _: &[isize] = &m;
-        let _: &mut [isize] = &mut m;
     }
 }
