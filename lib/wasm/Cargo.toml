@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-wasm"
-version = "0.20.0"
+version = "0.20.1"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
 repository = "https://github.com/CraneStation/cranelift"
