@@ -4,6 +4,7 @@ version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 publish = false
 repository = "https://github.com/CraneStation/wasmtime"
+categories = ["wasm"]
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]

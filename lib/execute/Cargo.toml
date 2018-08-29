@@ -4,6 +4,7 @@ version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 publish = false
 description = "JIT-style execution for WebAsssembly code in Cranelift"
+categories = ["wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 
