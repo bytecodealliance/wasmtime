@@ -4,12 +4,12 @@ use std::u32;
 use wasmparser;
 
 /// Index type of a function (imported or defined) inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct FuncIndex(u32);
 entity_impl!(FuncIndex);
 
 /// Index type of a defined function inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct DefinedFuncIndex(u32);
 entity_impl!(DefinedFuncIndex);
 
