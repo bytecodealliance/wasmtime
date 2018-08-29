@@ -6,19 +6,20 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::isa;
 use cranelift_codegen::Context;
-use cranelift_wasm::{FuncTranslator, FunctionIndex};
+use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
 use environ::{get_func_name, ModuleTranslation};
 
 /// The result of compiling a WebAssemby module's functions.
 #[derive(Debug)]
 pub struct Compilation {
     /// Compiled machine code for the function bodies.
-    pub functions: Vec<Vec<u8>>,
+    pub functions: PrimaryMap<DefinedFuncIndex, Vec<u8>>,
 }
 
 impl Compilation {
     /// Allocates the compilation result with the given function bodies.
-    pub fn new(functions: Vec<Vec<u8>>) -> Self {
+    pub fn new(functions: PrimaryMap<DefinedFuncIndex, Vec<u8>>) -> Self {
         Self { functions }
     }
 }
@@ -48,7 +49,7 @@ impl binemit::RelocSink for RelocSink {
     ) {
         let reloc_target = if let ExternalName::User { namespace, index } = *name {
             debug_assert!(namespace == 0);
-            RelocationTarget::UserFunc(index as usize)
+            RelocationTarget::UserFunc(FuncIndex::new(index as usize))
         } else if *name == ExternalName::testcase("grow_memory") {
             RelocationTarget::GrowMemory
         } else if *name == ExternalName::testcase("current_memory") {
@@ -82,7 +83,7 @@ impl RelocSink {
 }
 
 /// A record of a relocation to perform.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Relocation {
     /// The relocation code.
     pub reloc: binemit::Reloc,
@@ -95,10 +96,10 @@ pub struct Relocation {
 }
 
 /// Destination function. Can be either user function or some special one, like grow_memory.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum RelocationTarget {
     /// The user function index.
-    UserFunc(FunctionIndex),
+    UserFunc(FuncIndex),
     /// Function for growing the default memory by the specified amount of pages.
     GrowMemory,
     /// Function for query current size of the default linear memory.
@@ -106,7 +107,7 @@ pub enum RelocationTarget {
 }
 
 /// Relocations to apply to function bodies.
-pub type Relocations = Vec<Vec<Relocation>>;
+pub type Relocations = PrimaryMap<DefinedFuncIndex, Vec<Relocation>>;
 
 /// Compile the module, producing a compilation result with associated
 /// relocations.
@@ -114,10 +115,10 @@ pub fn compile_module<'data, 'module>(
     translation: &ModuleTranslation<'data, 'module>,
     isa: &isa::TargetIsa,
 ) -> Result<(Compilation, Relocations), String> {
-    let mut functions = Vec::new();
-    let mut relocations = Vec::new();
-    for (i, input) in translation.lazy.function_body_inputs.iter().enumerate() {
-        let func_index = i + translation.module.imported_funcs.len();
+    let mut functions = PrimaryMap::new();
+    let mut relocations = PrimaryMap::new();
+    for (i, input) in translation.lazy.function_body_inputs.iter() {
+        let func_index = translation.module.func_index(i);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
         context.func.signature =

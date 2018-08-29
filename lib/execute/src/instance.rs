@@ -57,7 +57,9 @@ impl Instance {
             let to_init =
                 &mut self.tables[init.table_index][init.offset..init.offset + init.elements.len()];
             for (i, func_idx) in init.elements.iter().enumerate() {
-                let code_buf = &compilation.functions[*func_idx];
+                let code_buf = &compilation.functions[module.defined_func_index(*func_idx).expect(
+                    "table element initializer with imported function not supported yet",
+                )];
                 to_init[i] = code_buf.as_ptr() as usize;
             }
         }

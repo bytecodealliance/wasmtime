@@ -1,6 +1,7 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_wasm::MemoryIndex;
+use cranelift_entity::PrimaryMap;
+use cranelift_wasm::{DefinedFuncIndex, MemoryIndex};
 use instance::Instance;
 use memory::LinearMemory;
 use region::protect;
@@ -17,28 +18,30 @@ pub fn compile_and_link_module<'data, 'module>(
     isa: &TargetIsa,
     translation: &ModuleTranslation<'data, 'module>,
 ) -> Result<Compilation, String> {
-    debug_assert!(
-        translation.module.start_func.is_none()
-            || translation.module.start_func.unwrap() >= translation.module.imported_funcs.len(),
-        "imported start functions not supported yet"
-    );
-
     let (mut compilation, relocations) = compile_module(&translation, isa)?;
 
     // Apply relocations, now that we have virtual addresses for everything.
-    relocate(&mut compilation, &relocations);
+    relocate(&mut compilation, &relocations, &translation.module);
 
     Ok(compilation)
 }
 
 /// Performs the relocations inside the function bytecode, provided the necessary metadata
-fn relocate(compilation: &mut Compilation, relocations: &[Vec<Relocation>]) {
+fn relocate(
+    compilation: &mut Compilation,
+    relocations: &PrimaryMap<DefinedFuncIndex, Vec<Relocation>>,
+    module: &Module,
+) {
     // The relocations are relative to the relocation's address plus four bytes
     // TODO: Support architectures other than x64, and other reloc kinds.
-    for (i, function_relocs) in relocations.iter().enumerate() {
+    for (i, function_relocs) in relocations.iter() {
         for r in function_relocs {
             let target_func_address: isize = match r.reloc_target {
-                RelocationTarget::UserFunc(index) => compilation.functions[index].as_ptr() as isize,
+                RelocationTarget::UserFunc(index) => {
+                    compilation.functions[module.defined_func_index(index).expect(
+                        "relocation to imported function not supported yet",
+                    )].as_ptr() as isize
+                }
                 RelocationTarget::GrowMemory => grow_memory as isize,
                 RelocationTarget::CurrentMemory => current_memory as isize,
             };
@@ -119,7 +122,7 @@ pub fn execute(
         .ok_or_else(|| String::from("No start function defined, aborting execution"))?;
     // TODO: Put all the function bodies into a page-aligned memory region, and
     // then make them ReadExecute rather than ReadWriteExecute.
-    for code_buf in &compilation.functions {
+    for code_buf in compilation.functions.values() {
         match unsafe {
             protect(
                 code_buf.as_ptr(),
@@ -137,7 +140,9 @@ pub fn execute(
         }
     }
 
-    let code_buf = &compilation.functions[start_index];
+    let code_buf = &compilation.functions[module.defined_func_index(start_index).expect(
+        "imported start functions not supported yet",
+    )];
 
     // Collect all memory base addresses and Vec.
     let mut mem_base_addrs = instance
@@ -149,7 +154,7 @@ pub fn execute(
 
     // Rather than writing inline assembly to jump to the code region, we use the fact that
     // the Rust ABI for calling a function with no arguments and no return matches the one of
-    // the generated code.Thanks to this, we can transmute the code region into a first-class
+    // the generated code. Thanks to this, we can transmute the code region into a first-class
     // Rust function and call it.
     unsafe {
         let start_func = transmute::<_, fn(*const *mut u8)>(code_buf.as_ptr());

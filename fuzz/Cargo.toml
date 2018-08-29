@@ -10,9 +10,9 @@ cargo-fuzz = true
 [dependencies]
 wasmtime-environ = { path = "../lib/environ" }
 wasmtime-execute = { path = "../lib/execute" }
-cranelift-codegen = "0.18.1"
-cranelift-wasm = "0.18.1"
-cranelift-native = "0.18.1"
+cranelift-codegen = "0.20.0"
+cranelift-wasm = "0.20.1"
+cranelift-native = "0.20.0"
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
 wasmparser = { version = "0.17.2", default-features = false }
 

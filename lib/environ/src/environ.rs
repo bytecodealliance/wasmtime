@@ -7,17 +7,18 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
+use cranelift_entity::EntityRef;
 use cranelift_wasm::{
-    self, translate_module, FunctionIndex, Global, GlobalIndex, GlobalVariable, Memory,
-    MemoryIndex, SignatureIndex, Table, TableIndex, WasmResult,
+    self, translate_module, FuncIndex, Global, GlobalIndex, GlobalVariable, Memory, MemoryIndex,
+    SignatureIndex, Table, TableIndex, WasmResult,
 };
 use module::{DataInitializer, Export, LazyContents, Module, TableElements};
 use target_lexicon::Triple;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
-pub fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
-    debug_assert!(func_index as u32 as FunctionIndex == func_index);
-    ir::ExternalName::user(0, func_index as u32)
+pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
+    debug_assert!(FuncIndex::new(func_index.index() as u32 as usize) == func_index);
+    ir::ExternalName::user(0, func_index.index() as u32)
 }
 
 /// Object containing the standalone environment information. To be passed after creation as
@@ -121,7 +122,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     for ModuleEnvironment<'data, 'module>
 {
-    fn get_func_name(&self, func_index: FunctionIndex) -> ir::ExternalName {
+    fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName {
         get_func_name(func_index)
     }
 
@@ -164,7 +165,7 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         self.module.functions.push(sig_index);
     }
 
-    fn get_func_type(&self, func_index: FunctionIndex) -> SignatureIndex {
+    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
         self.module.functions[func_index]
     }
 
@@ -185,7 +186,7 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         table_index: TableIndex,
         base: Option<GlobalIndex>,
         offset: usize,
-        elements: Vec<FunctionIndex>,
+        elements: Vec<FuncIndex>,
     ) {
         debug_assert!(base.is_none(), "global-value offsets not supported yet");
         self.module.table_elements.push(TableElements {
@@ -216,7 +217,7 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         });
     }
 
-    fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str) {
+    fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) {
         self.module
             .exports
             .insert(String::from(name), Export::Function(func_index));
@@ -240,7 +241,7 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
             .insert(String::from(name), Export::Global(global_index));
     }
 
-    fn declare_start_func(&mut self, func_index: FunctionIndex) {
+    fn declare_start_func(&mut self, func_index: FuncIndex) {
         debug_assert!(self.module.start_func.is_none());
         self.module.start_func = Some(func_index);
     }
@@ -275,6 +276,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let gv = func.create_global_value(ir::GlobalValueData::Deref {
             base: globals_base,
             offset: Offset32::new(offset32),
+            memory_type: self.pointer_type(),
         });
         GlobalVariable::Memory {
             gv,
@@ -297,10 +299,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let heap_base_addr = func.create_global_value(ir::GlobalValueData::Deref {
             base: memories_base,
             offset: Offset32::new(offset32),
+            memory_type: self.pointer_type(),
         });
         let heap_base = func.create_global_value(ir::GlobalValueData::Deref {
             base: heap_base_addr,
             offset: Offset32::new(0),
+            memory_type: self.pointer_type(),
         });
         func.create_heap(ir::HeapData {
             base: heap_base,
@@ -309,6 +313,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             style: ir::HeapStyle::Static {
                 bound: 0x1_0000_0000.into(),
             },
+            index_type: I32,
         })
     }
 
@@ -320,6 +325,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let base_gv = func.create_global_value(ir::GlobalValueData::Deref {
             base: base_gv_addr,
             offset: 0.into(),
+            memory_type: self.pointer_type(),
         });
         let bound_gv_addr = func.create_global_value(ir::GlobalValueData::VMContext {
             offset: Offset32::new(pointer_bytes as i32 * 3),
@@ -327,6 +333,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let bound_gv = func.create_global_value(ir::GlobalValueData::Deref {
             base: bound_gv_addr,
             offset: 0.into(),
+            memory_type: I32,
         });
 
         func.create_table(ir::TableData {
@@ -334,6 +341,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             min_size: Imm64::new(0),
             bound_gv,
             element_size: Imm64::new(i64::from(self.pointer_bytes() as i64)),
+            index_type: I32,
         })
     }
 
@@ -341,7 +349,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func.import_signature(self.module.signatures[index].clone())
     }
 
-    fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
+    fn make_direct_func(&mut self, func: &mut ir::Function, index: FuncIndex) -> ir::FuncRef {
         let sigidx = self.module.functions[index];
         let signature = func.import_signature(self.module.signatures[sigidx].clone());
         let name = get_func_name(index);
@@ -369,16 +377,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // so we need to implement it ourselves.
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
 
-        let callee_ty = pos.func.dfg.value_type(callee);
-        debug_assert_eq!(callee_ty, I32, "wasm call indirect index should be I32");
-        let callee = if self.pointer_type() == I64 {
-            // The current limitation of `table_addr` is that the index should be
-            // the same type as `self.pointer_type()`. So we just extend the given
-            // index to 64-bit here.
-            pos.ins().uextend(I64, callee)
-        } else {
-            callee
-        };
         let table_entry_addr = pos.ins().table_addr(I64, table, callee, 0);
 
         // Dereference table_entry_addr to get the function address.
@@ -396,7 +394,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_call(
         &mut self,
         mut pos: FuncCursor,
-        _callee_index: FunctionIndex,
+        _callee_index: FuncIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
@@ -414,7 +412,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let grow_mem_func = self.grow_memory_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.flags().call_conv(),
-                argument_bytes: None,
                 params: vec![
                     AbiParam::new(I32),
                     AbiParam::new(I32),
@@ -448,7 +445,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let cur_mem_func = self.current_memory_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.flags().call_conv(),
-                argument_bytes: None,
                 params: vec![
                     AbiParam::new(I32),
                     AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),

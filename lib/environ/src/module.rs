@@ -1,8 +1,10 @@
 //! Data structures for representing decoded wasm modules.
 
 use cranelift_codegen::ir;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
-    FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
+    TableIndex,
 };
 use std::collections::HashMap;
 
@@ -16,14 +18,14 @@ pub struct TableElements {
     /// The offset to add to the base.
     pub offset: usize,
     /// The values to write into the table elements.
-    pub elements: Vec<FunctionIndex>,
+    pub elements: Vec<FuncIndex>,
 }
 
 /// An entity to export.
 #[derive(Clone, Debug)]
 pub enum Export {
     /// Function export.
-    Function(FunctionIndex),
+    Function(FuncIndex),
     /// Table export.
     Table(TableIndex),
     /// Memory export.
@@ -43,7 +45,7 @@ pub struct Module {
     pub imported_funcs: Vec<(String, String)>,
 
     /// Types of functions, imported and local.
-    pub functions: Vec<SignatureIndex>,
+    pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
 
     /// WebAssembly tables.
     pub tables: Vec<Table>,
@@ -58,7 +60,7 @@ pub struct Module {
     pub exports: HashMap<String, Export>,
 
     /// The module "start" function, if present.
-    pub start_func: Option<FunctionIndex>,
+    pub start_func: Option<FuncIndex>,
 
     /// WebAssembly table initializers.
     pub table_elements: Vec<TableElements>,
@@ -70,13 +72,30 @@ impl Module {
         Self {
             signatures: Vec::new(),
             imported_funcs: Vec::new(),
-            functions: Vec::new(),
+            functions: PrimaryMap::new(),
             tables: Vec::new(),
             memories: Vec::new(),
             globals: Vec::new(),
             exports: HashMap::new(),
             start_func: None,
             table_elements: Vec::new(),
+        }
+    }
+
+    /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
+    pub fn func_index(&self, defined_func: DefinedFuncIndex) -> FuncIndex {
+        FuncIndex::new(self.imported_funcs.len() + defined_func.index())
+    }
+
+    /// Convert a `FuncIndex` into a `DefinedFuncIndex`. Returns None if the
+    /// index is an imported function.
+    pub fn defined_func_index(&self, func: FuncIndex) -> Option<DefinedFuncIndex> {
+        if func.index() < self.imported_funcs.len() {
+            None
+        } else {
+            Some(DefinedFuncIndex::new(
+                func.index() - self.imported_funcs.len(),
+            ))
         }
     }
 }
@@ -97,7 +116,7 @@ pub struct DataInitializer<'data> {
 /// separately from the main module translation.
 pub struct LazyContents<'data> {
     /// References to the function bodies.
-    pub function_body_inputs: Vec<&'data [u8]>,
+    pub function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
 
     /// References to the data initializers.
     pub data_initializers: Vec<DataInitializer<'data>>,
@@ -106,7 +125,7 @@ pub struct LazyContents<'data> {
 impl<'data> LazyContents<'data> {
     pub fn new() -> Self {
         Self {
-            function_body_inputs: Vec::new(),
+            function_body_inputs: PrimaryMap::new(),
             data_initializers: Vec::new(),
         }
     }
