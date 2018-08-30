@@ -175,6 +175,7 @@ impl TranslationState {
         self.reachable = true;
         self.globals.clear();
         self.heaps.clear();
+        self.tables.clear();
         self.signatures.clear();
         self.functions.clear();
     }
