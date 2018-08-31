@@ -34,6 +34,12 @@ involved, as there aren't a lot of things set in stone yet.
 
 [good first issue]: https://github.com/CraneStation/cranelift/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
 
+### Code of Conduct
+
+We abide by our [Code of Conduct] and ask that you do as well.
+
+[Code of Conduct](CODE_OF_CONDUCT.md)
+
 ## Coding Guidelines
 
 For the most part, Cranelift follows common Rust conventions and
