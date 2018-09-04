@@ -27,12 +27,12 @@ fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
 /// Load `path` and run the test in it.
 ///
 /// If running this test causes a panic, it will propagate as normal.
-pub fn run(path: &Path) -> TestResult {
+pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> TestResult {
     let _tt = timing::process_file();
     info!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
     let buffer = read_to_string(path).map_err(|e| e.to_string())?;
-    let testfile = parse_test(&buffer).map_err(|e| e.to_string())?;
+    let testfile = parse_test(&buffer, passes, target).map_err(|e| e.to_string())?;
     if testfile.functions.is_empty() {
         return Err("no functions found".to_string());
     }

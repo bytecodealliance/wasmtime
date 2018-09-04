@@ -80,7 +80,7 @@ fn handle_module(
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", name, e))?;
-    let test_file = parse_test(&buffer).map_err(|e| format!("{}: {}", name, e))?;
+    let test_file = parse_test(&buffer, None, None).map_err(|e| format!("{}: {}", name, e))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.
