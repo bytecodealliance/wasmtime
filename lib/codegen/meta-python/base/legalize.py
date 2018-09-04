@@ -26,6 +26,7 @@ from .instructions import rotl, rotl_imm, rotr, rotr_imm
 from .instructions import f32const, f64const
 from .instructions import store, load
 from .instructions import br_table
+from .instructions import bitrev
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 
@@ -91,17 +92,35 @@ y = Var('y')
 a = Var('a')
 a1 = Var('a1')
 a2 = Var('a2')
+a3 = Var('a3')
+a4 = Var('a4')
 b = Var('b')
 b1 = Var('b1')
 b2 = Var('b2')
+b3 = Var('b3')
+b4 = Var('b4')
 b_in = Var('b_in')
 b_int = Var('b_int')
 c = Var('c')
 c1 = Var('c1')
 c2 = Var('c2')
+c3 = Var('c3')
+c4 = Var('c4')
 c_in = Var('c_in')
 c_int = Var('c_int')
 d = Var('d')
+d1 = Var('d1')
+d2 = Var('d2')
+d3 = Var('d3')
+d4 = Var('d4')
+e = Var('e')
+e1 = Var('e1')
+e2 = Var('e2')
+e3 = Var('e3')
+e4 = Var('e4')
+f = Var('f')
+f1 = Var('f1')
+f2 = Var('f2')
 xl = Var('xl')
 xh = Var('xh')
 yl = Var('yl')
@@ -380,6 +399,115 @@ expand.legalize(
         Rtl(
             y << iconst(imm64(-1)),
             a << bxor(x, y)
+        ))
+
+# Expand bitrev
+# Adapted from Stack Overflow.
+# https://stackoverflow.com/questions/746171/most-efficient-algorithm-for-bit-reversal-from-msb-lsb-to-lsb-msb-in-c
+widen.legalize(
+        a << bitrev.i8(x),
+        Rtl(
+            a1 << band_imm(x, imm64(0xaa)),
+            a2 << ushr_imm(a1, imm64(1)),
+            a3 << band_imm(x, imm64(0x55)),
+            a4 << ishl_imm(a3, imm64(1)),
+            b << bor(a2, a4),
+            b1 << band_imm(b, imm64(0xcc)),
+            b2 << ushr_imm(b1, imm64(2)),
+            b3 << band_imm(b, imm64(0x33)),
+            b4 << ushr_imm(b3, imm64(2)),
+            c << bor(b2, b4),
+            c1 << band_imm(c, imm64(0xf0)),
+            c2 << ushr_imm(c1, imm64(4)),
+            c3 << band_imm(c, imm64(0x0f)),
+            c4 << ishl_imm(c3, imm64(4)),
+            a << bor(c2, c4),
+        ))
+
+widen.legalize(
+        a << bitrev.i16(x),
+        Rtl(
+            a1 << band_imm(x, imm64(0xaaaa)),
+            a2 << ushr_imm(a1, imm64(1)),
+            a3 << band_imm(x, imm64(0x5555)),
+            a4 << ishl_imm(a3, imm64(1)),
+            b << bor(a2, a4),
+            b1 << band_imm(b, imm64(0xcccc)),
+            b2 << ushr_imm(b1, imm64(2)),
+            b3 << band_imm(b, imm64(0x3333)),
+            b4 << ushr_imm(b3, imm64(2)),
+            c << bor(b2, b4),
+            c1 << band_imm(c, imm64(0xf0f0)),
+            c2 << ushr_imm(c1, imm64(4)),
+            c3 << band_imm(c, imm64(0x0f0f)),
+            c4 << ishl_imm(c3, imm64(4)),
+            d << bor(c2, c4),
+            d1 << band_imm(d, imm64(0xff00)),
+            d2 << ushr_imm(d1, imm64(8)),
+            d3 << band_imm(d, imm64(0x00ff)),
+            d4 << ishl_imm(d3, imm64(8)),
+            a << bor(d2, d4),
+        ))
+
+expand.legalize(
+        a << bitrev.i32(x),
+        Rtl(
+            a1 << band_imm(x, imm64(0xaaaaaaaa)),
+            a2 << ushr_imm(a1, imm64(1)),
+            a3 << band_imm(x, imm64(0x55555555)),
+            a4 << ishl_imm(a3, imm64(1)),
+            b << bor(a2, a4),
+            b1 << band_imm(b, imm64(0xcccccccc)),
+            b2 << ushr_imm(b1, imm64(2)),
+            b3 << band_imm(b, imm64(0x33333333)),
+            b4 << ushr_imm(b3, imm64(2)),
+            c << bor(b2, b4),
+            c1 << band_imm(c, imm64(0xf0f0f0f0)),
+            c2 << ushr_imm(c1, imm64(4)),
+            c3 << band_imm(c, imm64(0x0f0f0f0f)),
+            c4 << ishl_imm(c3, imm64(4)),
+            d << bor(c2, c4),
+            d1 << band_imm(d, imm64(0xff00ff00)),
+            d2 << ushr_imm(d1, imm64(8)),
+            d3 << band_imm(d, imm64(0x00ff00ff)),
+            d4 << ishl_imm(d3, imm64(8)),
+            e << bor(d2, d4),
+            e1 << ushr_imm(e, imm64(16)),
+            e2 << ishl_imm(e, imm64(16)),
+            a << bor(e1, e2),
+        ))
+
+expand.legalize(
+        a << bitrev.i64(x),
+        Rtl(
+            a1 << band_imm(x, imm64(0xaaaaaaaaaaaaaaaa)),
+            a2 << ushr_imm(a1, imm64(1)),
+            a3 << band_imm(x, imm64(0x5555555555555555)),
+            a4 << ishl_imm(a3, imm64(1)),
+            b << bor(a2, a4),
+            b1 << band_imm(b, imm64(0xcccccccccccccccc)),
+            b2 << ushr_imm(b1, imm64(2)),
+            b3 << band_imm(b, imm64(0x3333333333333333)),
+            b4 << ushr_imm(b3, imm64(2)),
+            c << bor(b2, b4),
+            c1 << band_imm(c, imm64(0xf0f0f0f0f0f0f0f0)),
+            c2 << ushr_imm(c1, imm64(4)),
+            c3 << band_imm(c, imm64(0x0f0f0f0f0f0f0f0f)),
+            c4 << ishl_imm(c3, imm64(4)),
+            d << bor(c2, c4),
+            d1 << band_imm(d, imm64(0xff00ff00ff00ff00)),
+            d2 << ushr_imm(d1, imm64(8)),
+            d3 << band_imm(d, imm64(0x00ff00ff00ff00ff)),
+            d4 << ishl_imm(d3, imm64(8)),
+            e << bor(d2, d4),
+            e1 << band_imm(e, imm64(0xffff0000ffff0000)),
+            e2 << ushr_imm(e1, imm64(16)),
+            e3 << band_imm(e, imm64(0x0000ffff0000ffff)),
+            e4 << ishl_imm(e3, imm64(16)),
+            f << bor(e2, e4),
+            f1 << ushr_imm(f, imm64(32)),
+            f2 << ishl_imm(f, imm64(32)),
+            a << bor(f1, f2),
         ))
 
 # Floating-point sign manipulations.

@@ -1409,6 +1409,14 @@ sshr_imm = Instruction(
 x = Operand('x', iB)
 a = Operand('a', iB)
 
+bitrev = Instruction(
+        'bitrev', r"""
+        Reverse the bits of a integer.
+
+        Reverses the bits in ``x``.
+        """,
+        ins=x, outs=a)
+
 clz = Instruction(
         'clz', r"""
         Count leading zero bits.

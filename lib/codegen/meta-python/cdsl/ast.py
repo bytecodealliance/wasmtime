@@ -523,10 +523,14 @@ class ConstantInt(Literal):
 
     def __str__(self):
         # type: () -> str
-        """
-        Get the Rust expression form of this constant.
-        """
-        return str(self.value)
+        # If the value is in the signed imm64 range, print it as-is.
+        if self.value >= -(2**63) and self.value < (2**63):
+            return str(self.value)
+        # Otherwise if the value is in the unsigned imm64 range, print its
+        # bitwise counterpart in the signed imm64 range.
+        if self.value >= (2**63) and self.value < (2**64):
+            return str(self.value - (2**64))
+        assert False, "immediate value not in signed or unsigned imm64 range"
 
 
 class ConstantBits(Literal):
