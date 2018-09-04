@@ -1,7 +1,8 @@
 //! Utility routines for pretty-printing error messages.
 
+use entity::EntityMap;
 use ir;
-use ir::entities::{AnyEntity, Inst};
+use ir::entities::{AnyEntity, Inst, Value};
 use ir::function::Function;
 use isa::TargetIsa;
 use result::CodegenError;
@@ -39,11 +40,12 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         &mut self,
         w: &mut Write,
         func: &Function,
+        aliases: &EntityMap<Value, Vec<Value>>,
         isa: Option<&TargetIsa>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        pretty_instruction_error(w, func, isa, inst, indent, &mut *self.0, self.1)
+        pretty_instruction_error(w, func, aliases, isa, inst, indent, &mut *self.0, self.1)
     }
 
     fn write_entity_definition(
@@ -61,6 +63,7 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
 fn pretty_instruction_error(
     w: &mut Write,
     func: &Function,
+    aliases: &EntityMap<Value, Vec<Value>>,
     isa: Option<&TargetIsa>,
     cur_inst: Inst,
     indent: usize,
@@ -77,7 +80,7 @@ fn pretty_instruction_error(
                 let err = errors.remove(i);
 
                 if !printed_instr {
-                    func_w.write_instruction(w, func, isa, cur_inst, indent)?;
+                    func_w.write_instruction(w, func, aliases, isa, cur_inst, indent)?;
                     printed_instr = true;
                 }
 
