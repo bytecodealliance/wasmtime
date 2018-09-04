@@ -32,20 +32,39 @@ use testfile::{Comment, Details, TestFile};
 /// Any test commands or target declarations are ignored.
 pub fn parse_functions(text: &str) -> ParseResult<Vec<Function>> {
     let _tt = timing::parse_text();
-    parse_test(text).map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
+    parse_test(text, None, None)
+        .map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
 }
 
 /// Parse the entire `text` as a test case file.
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
-pub fn parse_test(text: &str) -> ParseResult<TestFile> {
+pub fn parse_test<'a>(
+    text: &'a str,
+    passes: Option<&'a [String]>,
+    target: Option<&str>,
+) -> ParseResult<TestFile<'a>> {
     let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
     // Gather the preamble comments.
     parser.start_gathering_comments();
 
-    let commands = parser.parse_test_commands();
-    let isa_spec = parser.parse_target_specs()?;
+    let isa_spec: isaspec::IsaSpec;
+    let commands: Vec<TestCommand<'a>>;
+
+    // Check for specified passes and target, if present throw out test commands/targets specified in file.
+    match passes {
+        Some(pass_vec) => {
+            parser.parse_test_commands();
+            commands = parser.parse_cmdline_passes(pass_vec);
+            parser.parse_target_specs()?;
+            isa_spec = parser.parse_cmdline_target(target)?;
+        }
+        None => {
+            commands = parser.parse_test_commands();
+            isa_spec = parser.parse_target_specs()?;
+        }
+    };
 
     parser.token();
     parser.claim_gathered_comments(AnyEntity::Function);
@@ -705,6 +724,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a list of test command passes specified in command line.
+    pub fn parse_cmdline_passes(&mut self, passes: &'a [String]) -> Vec<TestCommand<'a>> {
+        let mut list = Vec::new();
+        for pass in passes {
+            list.push(TestCommand::new(pass));
+        }
+        list
+    }
+
     /// Parse a list of test commands.
     pub fn parse_test_commands(&mut self) -> Vec<TestCommand<'a>> {
         let mut list = Vec::new();
@@ -714,12 +742,58 @@ impl<'a> Parser<'a> {
         list
     }
 
+    /// Parse a target spec.
+    ///
+    /// Accept the target from the command line for pass command.
+    ///
+    pub fn parse_cmdline_target(
+        &mut self,
+        target_pass: Option<&str>,
+    ) -> ParseResult<isaspec::IsaSpec> {
+        // Were there any `target` commands specified?
+        let mut specified_target = false;
+
+        let mut targets = Vec::new();
+        let flag_builder = settings::builder();
+
+        match target_pass {
+            Some(targ) => {
+                let loc = self.loc;
+                let triple = match Triple::from_str(targ) {
+                    Ok(triple) => triple,
+                    Err(err) => return err!(loc, err),
+                };
+                let mut isa_builder = match isa::lookup(triple) {
+                    Err(isa::LookupError::SupportDisabled) => {
+                        return err!(loc, "support disabled target '{}'", targ)
+                    }
+                    Err(isa::LookupError::Unsupported) => {
+                        return err!(loc, "unsupported target '{}'", targ)
+                    }
+                    Ok(b) => b,
+                };
+                specified_target = true;
+
+                // Construct a trait object with the aggregate settings.
+                targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
+            }
+            None => (),
+        };
+
+        if !specified_target {
+            // No `target` commands.
+            Ok(isaspec::IsaSpec::None(settings::Flags::new(flag_builder)))
+        } else {
+            Ok(isaspec::IsaSpec::Some(targets))
+        }
+    }
+
     /// Parse a list of target specs.
     ///
     /// Accept a mix of `target` and `set` command lines. The `set` commands are cumulative.
     ///
     pub fn parse_target_specs(&mut self) -> ParseResult<isaspec::IsaSpec> {
-        // Was there any `target` commands?
+        // Were there any `target` commands?
         let mut seen_target = false;
         // Location of last `set` command since the last `target`.
         let mut last_set_loc = None;
@@ -2703,6 +2777,8 @@ mod tests {
                              set enable_float=false
                              ; still preamble
                              function %comment() system_v {}",
+            None,
+            None,
         ).unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");

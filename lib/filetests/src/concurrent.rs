@@ -131,17 +131,18 @@ fn worker_thread(
                 // The receiver should always be present for this as long as we have jobs.
                 replies.send(Reply::Starting { jobid, thread_num }).unwrap();
 
-                let result = catch_unwind(|| runone::run(path.as_path())).unwrap_or_else(|e| {
-                    // The test panicked, leaving us a `Box<Any>`.
-                    // Panics are usually strings.
-                    if let Some(msg) = e.downcast_ref::<String>() {
-                        Err(format!("panicked in worker #{}: {}", thread_num, msg))
-                    } else if let Some(msg) = e.downcast_ref::<&'static str>() {
-                        Err(format!("panicked in worker #{}: {}", thread_num, msg))
-                    } else {
-                        Err(format!("panicked in worker #{}", thread_num))
-                    }
-                });
+                let result = catch_unwind(|| runone::run(path.as_path(), None, None))
+                    .unwrap_or_else(|e| {
+                        // The test panicked, leaving us a `Box<Any>`.
+                        // Panics are usually strings.
+                        if let Some(msg) = e.downcast_ref::<String>() {
+                            Err(format!("panicked in worker #{}: {}", thread_num, msg))
+                        } else if let Some(msg) = e.downcast_ref::<&'static str>() {
+                            Err(format!("panicked in worker #{}: {}", thread_num, msg))
+                        } else {
+                            Err(format!("panicked in worker #{}", thread_num))
+                        }
+                    });
 
                 if let Err(ref msg) = result {
                     error!("FAIL: {}", msg);

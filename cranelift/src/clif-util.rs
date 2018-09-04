@@ -1,5 +1,5 @@
-#![deny(trivial_numeric_casts, unused_extern_crates, unstable_features)]
-#![warn(unused_import_braces)]
+#![deny(trivial_numeric_casts)]
+#![warn(unused_import_braces, unstable_features, unused_extern_crates)]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
@@ -15,13 +15,13 @@ extern crate cfg_if;
 extern crate capstone;
 extern crate clap;
 extern crate cranelift_codegen;
+extern crate cranelift_entity;
 extern crate cranelift_filetests;
 extern crate cranelift_reader;
 extern crate pretty_env_logger;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {
-        extern crate cranelift_entity;
         extern crate cranelift_wasm;
         extern crate term;
         extern crate wabt;
@@ -51,6 +51,21 @@ fn add_input_file_arg<'a>() -> clap::Arg<'a, 'a> {
         .multiple(true)
         .value_name("file")
         .help("Specify file(s) to be used for test")
+}
+
+fn add_single_input_file_arg<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("single-file")
+        .required(true)
+        .value_name("single-file")
+        .help("Specify a file to be used")
+}
+
+fn add_pass_arg<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("pass")
+        .required(true)
+        .multiple(true)
+        .value_name("pass")
+        .help("Specify pass(s) to be run on test file")
 }
 
 fn add_verbose_flag<'a>() -> clap::Arg<'a, 'a> {
@@ -162,7 +177,16 @@ fn main() {
                     "Just checks the correctness of Cranelift IR translated from WebAssembly",
                 )),
         )
-        .subcommand(add_wasm_or_compile("wasm"));
+        .subcommand(add_wasm_or_compile("wasm"))
+        .subcommand(
+            SubCommand::with_name("pass")
+                .about("Run specified pass(s) on an input file.")
+                .arg(add_single_input_file_arg())
+                .arg(add_target_flag())
+                .arg(add_pass_arg())
+                .arg(add_debug_flag())
+                .arg(add_time_flag()),
+        );
 
     let res_util = match app_cmds.get_matches().subcommand() {
         ("cat", Some(rest_cmd)) => {
@@ -172,8 +196,24 @@ fn main() {
         ("test", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
             cranelift_filetests::run(
-                rest_cmd.is_present("time-passes"),
+                rest_cmd.is_present("verbose"),
                 &get_vec(rest_cmd.values_of("file")),
+            ).map(|_time| ())
+        }
+        ("pass", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+
+            let mut target_val: &str = "";
+            if let Some(clap_target) = rest_cmd.value_of("target") {
+                target_val = clap_target;
+            }
+
+            // Can be unwrapped because 'single-file' is required
+            cranelift_filetests::run_passes(
+                rest_cmd.is_present("verbose"),
+                &get_vec(rest_cmd.values_of("pass")),
+                target_val,
+                &rest_cmd.value_of("single-file").unwrap().to_string(),
             ).map(|_time| ())
         }
         ("print-cfg", Some(rest_cmd)) => {
