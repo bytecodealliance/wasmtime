@@ -1688,7 +1688,7 @@ impl<'a> Parser<'a> {
 
         // Allow duplicate definitions of aliases, as long as they are identical.
         if ctx.map.contains_value(result) {
-            if let Some(old) = ctx.function.dfg.value_alias_dest_for_parser(result) {
+            if let Some(old) = ctx.function.dfg.value_alias_dest_for_serialization(result) {
                 if old != dest {
                     return err!(
                         self.loc,
@@ -1708,7 +1708,9 @@ impl<'a> Parser<'a> {
             return err!(self.loc, "value {} is not yet defined", dest);
         }
 
-        ctx.function.dfg.make_value_alias_for_parser(dest, result);
+        ctx.function
+            .dfg
+            .make_value_alias_for_serialization(dest, result);
 
         ctx.aliases.push(result);
         Ok(())
