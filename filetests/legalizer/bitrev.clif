@@ -1,0 +1,149 @@
+test legalizer
+target x86_64
+
+function %reverse_bits_8(i8) -> i8 {
+ebb0(v0: i8):
+    v1 = bitrev.i8 v0
+    return v1
+}
+; check: v2 = band_imm v0, 170
+; check: v3 = ushr_imm v2, 1
+; check: v4 = band_imm v0, 85
+; check: v5 = ishl_imm v4, 1
+; check: v16 = uextend.i32 v3
+; check: v17 = uextend.i32 v5
+; check: v18 = bor v16, v17
+; check: v6 = ireduce.i8 v18
+; check: v7 = band_imm v6, 204
+; check: v8 = ushr_imm v7, 2
+; check: v9 = band_imm v6, 51
+; check: v10 = ushr_imm v9, 2
+; check: v19 = uextend.i32 v8
+; check: v20 = uextend.i32 v10
+; check: v21 = bor v19, v20
+; check: v11 = ireduce.i8 v21
+; check: v12 = band_imm v11, 240
+; check: v13 = ushr_imm v12, 4
+; check: v14 = band_imm v11, 15
+; check: v15 = ishl_imm v14, 4
+; check: v22 = uextend.i32 v13
+; check: v23 = uextend.i32 v15
+; check: v24 = bor v22, v23
+; check: v1 = ireduce.i8 v24
+
+function %reverse_bits_16(i16) -> i16 {
+ebb0(v0: i16):
+    v1 = bitrev.i16 v0
+    return v1
+}
+; check: v2 = band_imm v0, 0xaaaa
+; check: v3 = ushr_imm v2, 1
+; check: v4 = band_imm v0, 0x5555
+; check: v5 = ishl_imm v4, 1
+; check: v21 = uextend.i32 v3
+; check: v22 = uextend.i32 v5
+; check: v23 = bor v21, v22
+; check: v6 = ireduce.i16 v23
+; check: v7 = band_imm v6, 0xcccc
+; check: v8 = ushr_imm v7, 2
+; check: v9 = band_imm v6, 0x3333
+; check: v10 = ushr_imm v9, 2
+; check: v24 = uextend.i32 v8
+; check: v25 = uextend.i32 v10
+; check: v26 = bor v24, v25
+; check: v11 = ireduce.i16 v26
+; check: v12 = band_imm v11, 0xf0f0
+; check: v13 = ushr_imm v12, 4
+; check: v14 = band_imm v11, 3855
+; check: v15 = ishl_imm v14, 4
+; check: v27 = uextend.i32 v13
+; check: v28 = uextend.i32 v15
+; check: v29 = bor v27, v28
+; check: v16 = ireduce.i16 v29
+; check: v17 = band_imm v16, 0xff00
+; check: v18 = ushr_imm v17, 8
+; check: v19 = band_imm v16, 255
+; check: v20 = ishl_imm v19, 8
+; check: v30 = uextend.i32 v18
+; check: v31 = uextend.i32 v20
+; check: v32 = bor v30, v31
+; check: v1 = ireduce.i16 v32
+; check: return v1
+
+function %reverse_bits_32(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = bitrev.i32 v0
+    return v1
+}
+; check: v24 = iconst.i32 0xaaaa_aaaa
+; check: v2 = band v0, v24
+; check: v3 = ushr_imm v2, 1
+; check: v4 = band_imm v0, 0x5555_5555
+; check: v5 = ishl_imm v4, 1
+; check: v6 = bor v3, v5
+; check: v25 = iconst.i32 0xcccc_cccc
+; check: v7 = band v6, v25
+; check: v8 = ushr_imm v7, 2
+; check: v9 = band_imm v6, 0x3333_3333
+; check: v10 = ushr_imm v9, 2
+; check: v11 = bor v8, v10
+; check: v26 = iconst.i32 0xf0f0_f0f0
+; check: v12 = band v11, v26
+; check: v13 = ushr_imm v12, 4
+; check: v14 = band_imm v11, 0x0f0f_0f0f
+; check: v15 = ishl_imm v14, 4
+; check: v16 = bor v13, v15
+; check: v27 = iconst.i32 0xff00_ff00
+; check: v17 = band v16, v27
+; check: v18 = ushr_imm v17, 8
+; check: v19 = band_imm v16, 0x00ff_00ff
+; check: v20 = ishl_imm v19, 8
+; check: v21 = bor v18, v20
+; check: v22 = ushr_imm v21, 16
+; check: v23 = ishl_imm v21, 16
+; check: v1 = bor v22, v23
+
+
+function %reverse_bits_64(i64) -> i64 {
+ebb0(v0: i64):
+    v1 = bitrev.i64 v0
+    return v1
+}
+; check: v29 = iconst.i64 0xaaaa_aaaa_aaaa_aaaa
+; check: v2 = band v0, v29
+; check: v3 = ushr_imm v2, 1
+; check: v30 = iconst.i64 0x5555_5555_5555_5555
+; check: v4 = band v0, v30
+; check: v5 = ishl_imm v4, 1
+; check: v6 = bor v3, v5
+; check: v31 = iconst.i64 0xcccc_cccc_cccc_cccc
+; check: v7 = band v6, v31
+; check: v8 = ushr_imm v7, 2
+; check: v32 = iconst.i64 0x3333_3333_3333_3333
+; check: v9 = band v6, v32
+; check: v10 = ushr_imm v9, 2
+; check: v11 = bor v8, v10
+; check: v33 = iconst.i64 0xf0f0_f0f0_f0f0_f0f0
+; check: v12 = band v11, v33
+; check: v13 = ushr_imm v12, 4
+; check: v34 = iconst.i64 0x0f0f_0f0f_0f0f_0f0f
+; check: v14 = band v11, v34
+; check: v15 = ishl_imm v14, 4
+; check: v16 = bor v13, v15
+; check: v35 = iconst.i64 0xff00_ff00_ff00_ff00
+; check: v17 = band v16, v35
+; check: v18 = ushr_imm v17, 8
+; check: v36 = iconst.i64 0x00ff_00ff_00ff_00ff
+; check: v19 = band v16, v36
+; check: v20 = ishl_imm v19, 8
+; check: v21 = bor v18, v20
+; check: v37 = iconst.i64 0xffff_0000_ffff_0000
+; check: v22 = band v21, v37
+; check: v23 = ushr_imm v22, 16
+; check: v38 = iconst.i64 0xffff_0000_ffff
+; check: v24 = band v21, v38
+; check: v25 = ishl_imm v24, 16
+; check: v26 = bor v23, v25
+; check: v27 = ushr_imm v26, 32
+; check: v28 = ishl_imm v26, 32
+; check: v1 = bor v27, v28
