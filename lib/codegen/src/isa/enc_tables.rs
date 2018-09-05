@@ -30,7 +30,7 @@ pub type LegalizeCode = u8;
 /// Level 1 hash table entry.
 ///
 /// One level 1 hash table is generated per CPU mode. This table is keyed by the controlling type
-/// variable, using `VOID` for non-polymorphic instructions.
+/// variable, using `INVALID` for non-polymorphic instructions.
 ///
 /// The hash table values are references to level 2 hash tables, encoded as an offset in `LEVEL2`
 /// where the table begins, and the binary logarithm of its length. All the level 2 hash tables

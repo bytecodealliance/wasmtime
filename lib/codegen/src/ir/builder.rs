@@ -28,7 +28,7 @@ pub trait InstBuilderBase<'f>: Sized {
     /// Insert an instruction and return a reference to it, consuming the builder.
     ///
     /// The result types may depend on a controlling type variable. For non-polymorphic
-    /// instructions with multiple results, pass `VOID` for the `ctrl_typevar` argument.
+    /// instructions with multiple results, pass `INVALID` for the `ctrl_typevar` argument.
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'f mut DataFlowGraph);
 }
 

@@ -5,7 +5,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cranelift_codegen::ir::types::VOID;
+use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
@@ -194,7 +194,7 @@ impl<'a> Context<'a> {
                 style: HeapStyle::Static {
                     bound: Imm64::new(0),
                 },
-                index_type: VOID,
+                index_type: INVALID,
             });
         }
         self.function.heaps[heap] = data;
@@ -218,7 +218,7 @@ impl<'a> Context<'a> {
                 min_size: Imm64::new(0),
                 bound_gv: GlobalValue::reserved_value(),
                 element_size: Imm64::new(0),
-                index_type: VOID,
+                index_type: INVALID,
             });
         }
         self.function.tables[table] = data;
@@ -1951,7 +1951,7 @@ impl<'a> Parser<'a> {
     // The controlling type variable can be specified explicitly as 'splat.i32x4 v5', or it can be
     // inferred from `inst_data.typevar_operand` for some opcodes.
     //
-    // Returns the controlling typevar for a polymorphic opcode, or `VOID` for a non-polymorphic
+    // Returns the controlling typevar for a polymorphic opcode, or `INVALID` for a non-polymorphic
     // opcode.
     fn infer_typevar(
         &self,
@@ -2006,7 +2006,7 @@ impl<'a> Parser<'a> {
                     );
                 } else {
                     // This is a non-polymorphic opcode. No typevar needed.
-                    VOID
+                    INVALID
                 }
             }
         };
@@ -2025,7 +2025,7 @@ impl<'a> Parser<'a> {
                 );
             }
         // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
-        } else if ctrl_type != VOID {
+        } else if ctrl_type != INVALID {
             return err!(self.loc, "{} does not take a typevar", opcode);
         }
 
