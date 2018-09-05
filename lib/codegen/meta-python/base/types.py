@@ -4,13 +4,16 @@ The base.types module predefines all the Cranelift scalar types.
 from __future__ import absolute_import
 from cdsl.types import IntType, FloatType, BoolType, FlagsType
 
-#: Boolean.
-b1 = BoolType(1)    #: 1-bit bool. Type is abstract (can't be stored in mem)
+#: Abstract boolean (can't be stored in memory, use bint to convert to 0 or 1).
+b1 = BoolType(1)    #: 1-bit bool.
+
+#: Booleans used as SIMD elements (can be stored in memory, true is all-ones).
 b8 = BoolType(8)    #: 8-bit bool.
 b16 = BoolType(16)  #: 16-bit bool.
 b32 = BoolType(32)  #: 32-bit bool.
 b64 = BoolType(64)  #: 64-bit bool.
 
+# Integers.
 i8 = IntType(8)     #: 8-bit int.
 i16 = IntType(16)   #: 16-bit int.
 i32 = IntType(32)   #: 32-bit int.
