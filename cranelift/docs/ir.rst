@@ -96,12 +96,16 @@ different types.
 Boolean types
 -------------
 
-Boolean values are either true or false. While this only requires a single bit
-to represent, more bits are often used when holding a boolean value in a
-register or in memory. The :type:`b1` type represents an abstract boolean
-value. It can only exist as an SSA value, it can't be stored in memory or
-converted to another type. The larger boolean types can be stored in memory.
-They are represented as either all zero bits or all one bits.
+Boolean values are either true or false.
+
+The :type:`b1` type represents an abstract boolean value. It can only exist as
+an SSA value, and can't be directly stored in memory. It can, however, be
+converted into an integer with value 0 or 1 by the :inst:`bint` instruction (and
+converted back with :inst:`icmp_imm` with 0).
+
+Several larger boolean types are also defined, primarily to be used as SIMD
+element types. They can be stored in memory, and are represented as either all
+zero bits or all one bits.
 
 .. autocliftype:: b1
 .. autocliftype:: b8
