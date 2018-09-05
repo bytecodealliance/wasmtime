@@ -10,6 +10,15 @@ use ModuleNamespace;
 use ModuleResult;
 
 /// A `Backend` implements the functionality needed to support a `Module`.
+///
+/// Two notable implementations of this trait are:
+///  - `SimpleJITBackend`, defined in [cranelift-simplejit], which JITs
+///    the contents of a `Module` to memory which can be directly executed.
+///  - `FaerieBackend`, defined in [cranelift-faerie], which writes the
+///    contents of a `Module` out as a native object file.
+///
+/// [cranelift-simplejit]: https://docs.rs/cranelift-simplejit/
+/// [cranelift-faerie]: https://docs.rs/cranelift-faerie/
 pub trait Backend
 where
     Self: marker::Sized,
