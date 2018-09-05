@@ -1008,14 +1008,10 @@ Conversion operations
 .. autoinst:: fdemote
 .. autoinst:: fcvt_to_uint
 .. autoinst:: fcvt_to_sint
+.. autoinst:: fcvt_to_uint_sat
+.. autoinst:: fcvt_to_sint_sat
 .. autoinst:: fcvt_from_uint
 .. autoinst:: fcvt_from_sint
-
-.. todo:: Saturating fcvt_to_sint and fcvt_to_uint.
-
-    For example, these appear in
-    `Rust <https://github.com/rust-lang/rust/pull/45205>`_ and
-    `WebAssembly <https://github.com/WebAssembly/nontrapping-float-to-int-conversions>`_.
 
 Legalization operations
 -----------------------
