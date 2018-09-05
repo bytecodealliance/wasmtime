@@ -44,13 +44,17 @@ pub trait FuncWriter {
         }
 
         for (heap, heap_data) in &func.heaps {
-            any = true;
-            self.write_entity_definition(w, func, heap.into(), heap_data)?;
+            if !heap_data.index_type.is_invalid() {
+                any = true;
+                self.write_entity_definition(w, func, heap.into(), heap_data)?;
+            }
         }
 
         for (table, table_data) in &func.tables {
-            any = true;
-            self.write_entity_definition(w, func, table.into(), table_data)?;
+            if !table_data.index_type.is_invalid() {
+                any = true;
+                self.write_entity_definition(w, func, table.into(), table_data)?;
+            }
         }
 
         // Write out all signatures before functions since function declarations can refer to
@@ -61,8 +65,8 @@ pub trait FuncWriter {
         }
 
         for (fnref, ext_func) in &func.dfg.ext_funcs {
-            any = true;
             if ext_func.signature != SigRef::reserved_value() {
+                any = true;
                 self.write_entity_definition(w, func, fnref.into(), ext_func)?;
             }
         }
@@ -265,7 +269,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
 
     let rtype = func.dfg.ctrl_typevar(inst);
     assert!(
-        !rtype.is_void(),
+        !rtype.is_invalid(),
         "Polymorphic instruction must produce a result"
     );
     Some(rtype)

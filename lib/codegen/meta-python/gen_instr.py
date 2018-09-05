@@ -705,7 +705,7 @@ def gen_inst_builder(inst, fmt):
             args.append(inst.ctrl_typevar.name)
         elif not inst.is_polymorphic:
             # No controlling type variable needed.
-            args.append('types::VOID')
+            args.append('types::INVALID')
         else:
             assert inst.is_polymorphic and inst.use_typevar_operand
             # Infer the controlling type variable from the input operands.

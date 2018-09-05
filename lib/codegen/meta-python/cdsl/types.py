@@ -179,7 +179,7 @@ class SpecialType(ValueType):
     def __init__(self, name, membytes, doc):
         # type: (str, int, str) -> None
         super(SpecialType, self).__init__(name, membytes, doc)
-        # Assign numbers starting from 1. (0 is VOID)
+        # Assign numbers starting from 1. (0 is INVALID)
         ValueType.all_special_types.append(self)
         self.number = len(ValueType.all_special_types)
         assert self.number < LANE_BASE, 'Too many special types'

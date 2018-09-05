@@ -22,8 +22,8 @@ This is the information available to us:
 ## Level 1 table lookup
 
 The CPU mode provides the first table. The key is the instruction's controlling
-type variable. If the instruction is not polymorphic, use `VOID` for the type
-variable. The table values are level 2 tables.
+type variable. If the instruction is not polymorphic, use `INVALID` for the
+type variable. The table values are level 2 tables.
 
 ## Level 2 table lookup
 
@@ -682,7 +682,7 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
             # Empty hash table entry. Include the default legalization action.
             if not level2:
                 fmt.format(
-                        'Level1Entry {{ ty: ir::types::VOID, log2len: !0, '
+                        'Level1Entry {{ ty: ir::types::INVALID, log2len: !0, '
                         'offset: 0, legalize: {} }},',
                         level1.legalize_code)
                 continue
@@ -690,7 +690,7 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
             if level2.ty is not None:
                 tyname = level2.ty.rust_name()
             else:
-                tyname = 'ir::types::VOID'
+                tyname = 'ir::types::INVALID'
 
             lcode = cpumode.isa.legalize_code(level2.legalize)
 

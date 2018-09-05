@@ -1106,8 +1106,8 @@ impl<'a> Verifier<'a> {
             ctrl_type
         } else {
             // Non-polymorphic instructions don't check the controlling type variable, so `Option`
-            // is unnecessary and we can just make it `VOID`.
-            types::VOID
+            // is unnecessary and we can just make it `INVALID`.
+            types::INVALID
         };
 
         // Typechecking instructions is never fatal
