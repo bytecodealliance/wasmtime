@@ -14,7 +14,7 @@ function %I64() {
     fn0 = %foo()
     fn1 = colocated %bar()
 
-    gv0 = globalsym %some_gv
+    gv0 = symbol %some_gv
 
     ; Use incoming_arg stack slots because they won't be relocated by the frame
     ; layout.
@@ -518,11 +518,11 @@ ebb0:
     call_indirect sig0, v412()                  ; bin: stk_ovf 41 ff d2
 
     ; asm: movabsq $-1, %rcx
-    [-,%rcx]            v450 = globalsym_addr.i64 gv0    ; bin: 48 b9 Abs8(%some_gv) 0000000000000000
+    [-,%rcx]            v450 = symbol_value.i64 gv0    ; bin: 48 b9 Abs8(%some_gv) 0000000000000000
     ; asm: movabsq $-1, %rsi
-    [-,%rsi]            v451 = globalsym_addr.i64 gv0    ; bin: 48 be Abs8(%some_gv) 0000000000000000
+    [-,%rsi]            v451 = symbol_value.i64 gv0    ; bin: 48 be Abs8(%some_gv) 0000000000000000
     ; asm: movabsq $-1, %r10
-    [-,%r10]            v452 = globalsym_addr.i64 gv0    ; bin: 49 ba Abs8(%some_gv) 0000000000000000
+    [-,%r10]            v452 = symbol_value.i64 gv0    ; bin: 49 ba Abs8(%some_gv) 0000000000000000
 
     ; Spill / Fill.
 

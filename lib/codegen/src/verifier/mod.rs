@@ -43,7 +43,7 @@
 //!
 //! Global values
 //!
-//! - Detect cycles in deref(base) declarations.
+//! - Detect cycles in global values.
 //! - Detect use of 'vmctx' global value when no corresponding parameter is defined.
 //!
 //! TODO:
@@ -336,16 +336,28 @@ impl<'a> Verifier<'a> {
             seen.insert(gv);
 
             let mut cur = gv;
-            while let ir::GlobalValueData::Deref { base, .. } = self.func.global_values[cur] {
-                if seen.insert(base).is_some() {
-                    if !cycle_seen {
-                        report!(errors, gv, "deref cycle: {}", DisplayList(seen.as_slice()));
-                        cycle_seen = true; // ensures we don't report the cycle multiple times
-                    }
-                    continue 'gvs;
-                }
+            loop {
+                match self.func.global_values[cur] {
+                    ir::GlobalValueData::Load { base, .. }
+                    | ir::GlobalValueData::IAddImm { base, .. } => {
+                        if seen.insert(base).is_some() {
+                            if !cycle_seen {
+                                report!(
+                                    errors,
+                                    gv,
+                                    "global value cycle: {}",
+                                    DisplayList(seen.as_slice())
+                                );
+                                // ensures we don't report the cycle multiple times
+                                cycle_seen = true;
+                            }
+                            continue 'gvs;
+                        }
 
-                cur = base;
+                        cur = base;
+                    }
+                    _ => break,
+                }
             }
 
             match self.func.global_values[gv] {
@@ -358,7 +370,30 @@ impl<'a> Verifier<'a> {
                         report!(errors, gv, "undeclared vmctx reference {}", gv);
                     }
                 }
-                ir::GlobalValueData::Deref { base, .. } => {
+                ir::GlobalValueData::IAddImm {
+                    base, global_type, ..
+                } => {
+                    if !global_type.is_int() {
+                        report!(
+                            errors,
+                            gv,
+                            "iadd_imm global value with non-int type {}",
+                            global_type
+                        );
+                    } else if let Some(isa) = self.isa {
+                        let base_type = self.func.global_values[base].global_type(isa);
+                        if global_type != base_type {
+                            report!(
+                                errors,
+                                gv,
+                                "iadd_imm type {} differs from operand type {}",
+                                global_type,
+                                base_type
+                            );
+                        }
+                    }
+                }
+                ir::GlobalValueData::Load { base, .. } => {
                     if let Some(isa) = self.isa {
                         let base_type = self.func.global_values[base].global_type(isa);
                         let pointer_type = isa.pointer_type();
@@ -366,7 +401,7 @@ impl<'a> Verifier<'a> {
                             report!(
                                 errors,
                                 gv,
-                                "deref base {} has type {}, which is not the pointer type {}",
+                                "base {} has type {}, which is not the pointer type {}",
                                 base,
                                 base_type,
                                 pointer_type

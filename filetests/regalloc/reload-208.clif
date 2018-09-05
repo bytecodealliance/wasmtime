@@ -11,7 +11,8 @@ target x86_64 haswell
 ; The problem was the reload pass rewriting EBB arguments on "brnz v9, ebb3(v9)"
 
 function %pr208(i64 vmctx [%rdi]) system_v {
-    gv0 = vmctx-8
+    gv1 = vmctx
+    gv0 = iadd_imm.i64 gv1, -8
     heap0 = static gv0, min 0, bound 0x5000, guard 0x0040_0000
     sig0 = (i64 vmctx [%rdi]) -> i32 [%rax] system_v
     sig1 = (i64 vmctx [%rdi], i32 [%rsi]) system_v

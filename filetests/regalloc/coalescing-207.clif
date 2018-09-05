@@ -5,7 +5,8 @@ target x86_64 haswell
 ;
 ; The coalescer creates a virtual register with two interfering values.
 function %pr207(i64 vmctx, i32, i32) -> i32 system_v {
-    gv0 = vmctx-8
+    gv1 = vmctx
+    gv0 = iadd_imm.i64 gv1, -8
     heap0 = static gv0, min 0, bound 0x5000, guard 0x0040_0000
     sig0 = (i64 vmctx, i32, i32) -> i32 system_v
     sig1 = (i64 vmctx, i32, i32, i32) -> i32 system_v

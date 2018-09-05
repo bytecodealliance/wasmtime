@@ -562,58 +562,58 @@ to have access to a *VM context pointer* which is used as the base address.
 Typically, the VM context pointer is passed as a hidden function argument to
 Cranelift functions.
 
-.. inst:: GV = vmctx+Offset
+Chains of global value expressions are possible, but cycles are not allowed.
+They will be caught by the IR verifier.
 
-    Declare a global value of the address of a field in the VM context struct.
+.. inst:: GV = vmctx
 
-    This declares a global value which is a constant offset from the
-    VM context pointer which is passed as a hidden argument to all functions
-    JIT-compiled for the VM.
+    Declare a global value of the address of the VM context struct.
 
-    Typically, the VM context is a C struct, and the declared global value
-    is the address of a member of the struct.
+    This declares a global value which is the VM context pointer which may
+    be passed as a hidden argument to functions JIT-compiled for a VM.
 
-    :arg Offset: Byte offset from the VM context pointer to the global
-                 value.
+    Typically, the VM context is a `#[repr(C, packed)]` struct.
+
     :result GV: Global value.
 
-The address of a global value can also be derived by treating another global
-variable as a struct pointer. This makes it possible to chase pointers into VM
-runtime data structures.
+A global value can also be derived by treating another global variable as a
+struct pointer and loading from one of its fields. This makes it possible to
+chase pointers into VM runtime data structures.
 
-.. inst:: GV = deref(BaseGV)+Offset
+.. inst:: GV = load.Type BaseGV [Offset]
 
-    Declare a global value in a struct pointed to by BaseGV.
+    Declare a global value pointed to by BaseGV plus Offset, with type Type.
 
-    The address of GV can be computed by first loading a pointer from BaseGV
-    and adding Offset to it.
-
-    It is assumed the BaseGV resides in accessible memory with the appropriate
-    alignment for storing a pointer.
-
-    Chains of ``deref`` global values are possible, but cycles are not
-    allowed. They will be caught by the IR verifier.
+    It is assumed the BaseGV plus Offset resides in accessible memory with the
+    appropriate alignment for storing a value with type Type.
 
     :arg BaseGV: Global value providing the base pointer.
-    :arg Offset: Byte offset added to the loaded value.
+    :arg Offset: Offset added to the base before loading.
     :result GV: Global value.
 
-.. inst:: GV = [colocated] globalsym name
+.. inst:: GV = iadd_imm BaseGV, Offset
 
-    Declare a global value at a symbolic address.
+    Declare a global value which has the value of BaseGV offset by Offset.
 
-    The address of GV is symbolic and will be assigned a relocation, so that
+    :arg BaseGV: Global value providing the base value.
+    :arg Offset: Offset added to the base value.
+
+.. inst:: GV = [colocated] symbol Name
+
+    Declare a symbolic address global value.
+
+    The value of GV is symbolic and will be assigned a relocation, so that
     it can be resolved by a later linking phase.
 
     If the colocated keyword is present, the symbol's definition will be
     defined along with the current function, such that it can use more
     efficient addressing.
 
-    :arg name: External name.
+    :arg Name: External name.
     :result GV: Global value.
 
 .. autoinst:: global_value
-.. autoinst:: globalsym_addr
+.. autoinst:: symbol_value
 
 
 Heaps

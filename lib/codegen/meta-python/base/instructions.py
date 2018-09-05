@@ -506,9 +506,9 @@ global_value = Instruction(
 
 # A specialized form of global_value instructions that only handles
 # symbolic names.
-globalsym_addr = Instruction(
-        'globalsym_addr', r"""
-        Compute the address of global GV, which is a symbolic name.
+symbol_value = Instruction(
+        'symbol_value', r"""
+        Compute the value of global GV, which is a symbolic address.
         """,
         ins=GV, outs=addr)
 

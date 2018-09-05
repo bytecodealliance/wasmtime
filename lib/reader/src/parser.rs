@@ -164,8 +164,9 @@ impl<'a> Context<'a> {
     fn add_gv(&mut self, gv: GlobalValue, data: GlobalValueData, loc: Location) -> ParseResult<()> {
         self.map.def_gv(gv, loc)?;
         while self.function.global_values.next_key().index() <= gv.index() {
-            self.function.create_global_value(GlobalValueData::Sym {
+            self.function.create_global_value(GlobalValueData::Symbol {
                 name: ExternalName::testcase(""),
+                offset: Imm64::new(0),
                 colocated: false,
             });
         }
@@ -590,14 +591,32 @@ impl<'a> Parser<'a> {
     // present, it must contain a sign.
     fn optional_offset32(&mut self) -> ParseResult<Offset32> {
         if let Some(Token::Integer(text)) = self.token() {
-            self.consume();
-            // Lexer just gives us raw text that looks like an integer.
-            // Parse it as an `Offset32` to check for overflow and other issues.
-            text.parse().map_err(|e| self.error(e))
-        } else {
-            // An offset32 operand can be absent.
-            Ok(Offset32::new(0))
+            if text.starts_with('+') || text.starts_with('-') {
+                self.consume();
+                // Lexer just gives us raw text that looks like an integer.
+                // Parse it as an `Offset32` to check for overflow and other issues.
+                return text.parse().map_err(|e| self.error(e));
+            }
         }
+        // An offset32 operand can be absent.
+        Ok(Offset32::new(0))
+    }
+
+    // Match and consume an optional offset32 immediate.
+    //
+    // Note that this will match an empty string as an empty offset, and that if an offset is
+    // present, it must contain a sign.
+    fn optional_offset_imm64(&mut self) -> ParseResult<Imm64> {
+        if let Some(Token::Integer(text)) = self.token() {
+            if text.starts_with('+') || text.starts_with('-') {
+                self.consume();
+                // Lexer just gives us raw text that looks like an integer.
+                // Parse it as an `Offset32` to check for overflow and other issues.
+                return text.parse().map_err(|e| self.error(e));
+            }
+        }
+        // If no explicit offset is present, the offset is 0.
+        Ok(Imm64::new(0))
     }
 
     // Match and consume an Ieee32 immediate.
@@ -1185,9 +1204,10 @@ impl<'a> Parser<'a> {
     // Parse a global value decl.
     //
     // global-val-decl ::= * GlobalValue(gv) "=" global-val-desc
-    // global-val-desc ::= "vmctx" offset32
-    //                   | "deref" "(" GlobalValue(base) ")" offset32
-    //                   | globalsym ["colocated"] name
+    // global-val-desc ::= "vmctx"
+    //                   | "load" "." type "notrap" "aligned" GlobalValue(base) [offset]
+    //                   | "iadd_imm" "(" GlobalValue(base) ")" imm64
+    //                   | "symbol" ["colocated"] name + imm64
     //
     fn parse_global_value_decl(&mut self) -> ParseResult<(GlobalValue, GlobalValueData)> {
         let gv = self.match_gv("expected global value number: gv«n»")?;
@@ -1195,27 +1215,55 @@ impl<'a> Parser<'a> {
         self.match_token(Token::Equal, "expected '=' in global value declaration")?;
 
         let data = match self.match_any_identifier("expected global value kind")? {
-            "vmctx" => {
-                let offset = self.optional_offset32()?;
-                GlobalValueData::VMContext { offset }
-            }
-            "deref" => {
-                self.match_token(Token::LPar, "expected '(' in 'deref' global value decl")?;
+            "vmctx" => GlobalValueData::VMContext,
+            "load" => {
+                self.match_token(
+                    Token::Dot,
+                    "expected '.' followed by type in load global value decl",
+                )?;
+                let global_type = self.match_type("expected load type")?;
+                let flags = self.optional_memflags();
                 let base = self.match_gv("expected global value: gv«n»")?;
-                self.match_token(Token::RPar, "expected ')' in 'deref' global value decl")?;
                 let offset = self.optional_offset32()?;
-                self.match_token(Token::Colon, "expected ':' in 'deref' global value decl")?;
-                let memory_type = self.match_type("expected deref type")?;
-                GlobalValueData::Deref {
+                let mut expected_flags = MemFlags::new();
+                expected_flags.set_notrap();
+                expected_flags.set_aligned();
+                if flags != expected_flags {
+                    return err!(self.loc, "global-value load must be notrap and aligned");
+                }
+                GlobalValueData::Load {
                     base,
                     offset,
-                    memory_type,
+                    global_type,
                 }
             }
-            "globalsym" => {
+            "iadd_imm" => {
+                self.match_token(
+                    Token::Dot,
+                    "expected '.' followed by type in iadd_imm global value decl",
+                )?;
+                let global_type = self.match_type("expected iadd type")?;
+                let base = self.match_gv("expected global value: gv«n»")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' followed by rhs in iadd_imm global value decl",
+                )?;
+                let offset = self.match_imm64("expected iadd_imm immediate")?;
+                GlobalValueData::IAddImm {
+                    base,
+                    offset,
+                    global_type,
+                }
+            }
+            "symbol" => {
                 let colocated = self.optional(Token::Identifier("colocated"));
                 let name = self.parse_external_name()?;
-                GlobalValueData::Sym { name, colocated }
+                let offset = self.optional_offset_imm64()?;
+                GlobalValueData::Symbol {
+                    name,
+                    offset,
+                    colocated,
+                }
             }
             other => return err!(self.loc, "Unknown global value kind '{}'", other),
         };
@@ -2680,8 +2728,8 @@ mod tests {
     fn duplicate_gv() {
         let ParseError { location, message } = Parser::new(
             "function %ebbs() system_v {
-                gv0 = vmctx+64
-                gv0 = vmctx+64",
+                gv0 = vmctx
+                gv0 = vmctx",
         ).parse_function(None)
             .unwrap_err();
 

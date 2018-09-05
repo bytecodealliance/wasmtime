@@ -428,18 +428,18 @@ X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
 #
 
 # Non-PIC
-X86_32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8),
+X86_32.enc(base.symbol_value.i32, *r.gvaddr4(0xb8),
            isap=Not(is_pic))
-X86_64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1),
+X86_64.enc(base.symbol_value.i64, *r.gvaddr8.rex(0xb8, w=1),
            isap=Not(is_pic))
 
 # PIC, colocated
-X86_64.enc(base.globalsym_addr.i64, *r.pcrel_gvaddr8.rex(0x8d, w=1),
+X86_64.enc(base.symbol_value.i64, *r.pcrel_gvaddr8.rex(0x8d, w=1),
            isap=is_pic,
            instp=IsColocatedData())
 
 # PIC, non-colocated
-X86_64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
+X86_64.enc(base.symbol_value.i64, *r.got_gvaddr8.rex(0x8b, w=1),
            isap=is_pic)
 
 #
