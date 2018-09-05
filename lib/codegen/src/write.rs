@@ -10,6 +10,7 @@ use isa::{RegInfo, TargetIsa};
 use packed_option::ReservedValue;
 use std::fmt::{self, Write};
 use std::string::String;
+use std::vec::Vec;
 
 /// A `FuncWriter` used to decorate functions during printing.
 pub trait FuncWriter {
