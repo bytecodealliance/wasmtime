@@ -85,6 +85,8 @@ impl FaerieBuilder {
 }
 
 /// A `FaerieBackend` implements `Backend` and emits ".o" files using the `faerie` library.
+///
+/// See the `FaerieBuilder` for a convenient way to construct `FaerieBackend` instances.
 pub struct FaerieBackend {
     isa: Box<TargetIsa>,
     artifact: faerie::Artifact,

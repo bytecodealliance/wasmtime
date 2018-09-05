@@ -84,6 +84,8 @@ impl SimpleJITBuilder {
 
 /// A `SimpleJITBackend` implements `Backend` and emits code and data into memory where it can be
 /// directly called and accessed.
+///
+/// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITBackend` instances.
 pub struct SimpleJITBackend {
     isa: Box<TargetIsa>,
     symbols: HashMap<String, *const u8>,
