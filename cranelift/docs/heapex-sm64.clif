@@ -1,8 +1,9 @@
 test verifier
 
 function %add_members(i32, i64 vmctx) -> f32 baldrdash {
-    gv0 = vmctx+64
-    heap0 = static gv0, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+64
+    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
 
 ebb0(v0: i32, v5: i64):
     v1 = heap_addr.i64 heap0, v0, 1

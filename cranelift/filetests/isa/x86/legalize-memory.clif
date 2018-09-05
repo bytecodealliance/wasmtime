@@ -6,7 +6,8 @@ target x86_64
 ; regex: EBB=ebb\d+
 
 function %vmctx(i64 vmctx) -> i64 {
-    gv1 = vmctx-16
+    gv0 = vmctx
+    gv1 = iadd_imm.i64 gv0, -16
 
 ebb1(v1: i64):
     v2 = global_value.i64 gv1
@@ -15,28 +16,28 @@ ebb1(v1: i64):
     ; check: return v2
 }
 
-function %deref(i64 vmctx) -> i64 {
-    gv1 = vmctx-16
-    gv2 = deref(gv1)+32: i64
+function %load(i64 vmctx) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0-16
+    gv2 = iadd_imm.i64 gv1, 32
 
 ebb1(v1: i64):
     v2 = global_value.i64 gv2
-    ; check: $(a1=$V) = iadd_imm v1, -16
-    ; check: $(p1=$V) = load.i64 notrap aligned $a1
+    ; check: $(p1=$V) = load.i64 notrap aligned v1-16
     ; check: v2 = iadd_imm $p1, 32
     return v2
     ; check: return v2
 }
 
-function %sym() -> i64 {
-    gv0 = globalsym %something
-    gv1 = globalsym u123:456
+function %symbol() -> i64 {
+    gv0 = symbol %something
+    gv1 = symbol u123:456
 
 ebb1:
     v0 = global_value.i64 gv0
-    ; check: v0 = globalsym_addr.i64 gv0
+    ; check: v0 = symbol_value.i64 gv0
     v1 = global_value.i64 gv1
-    ; check: v1 = globalsym_addr.i64 gv1
+    ; check: v1 = symbol_value.i64 gv1
     v2 = bxor v0, v1
     return v2
 }
@@ -44,8 +45,9 @@ ebb1:
 ; SpiderMonkey VM-style static 4+2 GB heap.
 ; This eliminates bounds checks completely for offsets < 2GB.
 function %staticheap_sm64(i32, i64 vmctx) -> f32 baldrdash {
-    gv0 = vmctx+64
-    heap0 = static gv0, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
+    gv0 = vmctx
+    gv1 = iadd_imm.i64 gv0, 64
+    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
 
 ebb0(v0: i32, v999: i64):
     ; check: ebb0(
@@ -64,8 +66,9 @@ ebb0(v0: i32, v999: i64):
 }
 
 function %staticheap_static_oob_sm64(i32, i64 vmctx) -> f32 baldrdash {
-    gv0 = vmctx+64
-    heap0 = static gv0, min 0x1000, bound 0x1000_0000, guard 0x8000_0000
+    gv0 = vmctx
+    gv1 = iadd_imm.i64 gv0, 64
+    heap0 = static gv1, min 0x1000, bound 0x1000_0000, guard 0x8000_0000
 
 ebb0(v0: i32, v999: i64):
     ; Everything after the obviously OOB access should be eliminated, leaving
@@ -87,8 +90,9 @@ ebb0(v0: i32, v999: i64):
 ; SpiderMonkey VM-style static 4+2 GB heap.
 ; Offsets >= 2 GB do require a boundscheck.
 function %staticheap_sm64(i32, i64 vmctx) -> f32 baldrdash {
-    gv0 = vmctx+64
-    heap0 = static gv0, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
+    gv0 = vmctx
+    gv1 = iadd_imm.i64 gv0, 64
+    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
 
 ebb0(v0: i32, v999: i64):
     ; check: ebb0(

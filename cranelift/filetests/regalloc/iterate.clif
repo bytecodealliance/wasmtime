@@ -104,7 +104,8 @@ ebb1(v31: i64):
 }
 
 function u0:26(i64 vmctx [%r14]) -> i64 [%rax] baldrdash {
-    gv0 = vmctx+48
+    gv1 = vmctx
+    gv0 = iadd_imm.i64 gv1, 48
     sig0 = (i32 [%rdi], i64 [%rsi], i64 vmctx [%r14], i64 sigid [%rbx]) -> i64 [%rax] baldrdash
 
 ebb0(v0: i64):

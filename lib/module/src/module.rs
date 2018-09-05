@@ -462,8 +462,9 @@ where
     pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
         let decl = &self.contents.data_objects[data].decl;
         let colocated = decl.linkage.is_final();
-        func.create_global_value(ir::GlobalValueData::Sym {
+        func.create_global_value(ir::GlobalValueData::Symbol {
             name: ir::ExternalName::user(1, data.index() as u32),
+            offset: ir::immediates::Imm64::new(0),
             colocated,
         })
     }
