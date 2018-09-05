@@ -37,8 +37,8 @@ echo git commit -a -m "\"Bump version to $version"\"
 echo git push
 for crate in \
     entity bforest codegen/meta codegen frontend native \
-    reader wasm module simplejit \
-    faerie umbrella
+    reader wasm module \
+    faerie umbrella simplejit
 do
     echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
