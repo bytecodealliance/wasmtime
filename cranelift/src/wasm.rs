@@ -72,13 +72,13 @@ fn handle_module(
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
-    terminal.fg(term::color::YELLOW).unwrap();
+    let _ = terminal.fg(term::color::YELLOW);
     vprint!(flag_verbose, "Handling: ");
-    terminal.reset().unwrap();
+    let _ = terminal.reset();
     vprintln!(flag_verbose, "\"{}\"", name);
-    terminal.fg(term::color::MAGENTA).unwrap();
+    let _ = terminal.fg(term::color::MAGENTA);
     vprint!(flag_verbose, "Translating... ");
-    terminal.reset().unwrap();
+    let _ = terminal.reset();
 
     let mut module_binary =
         read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
@@ -103,9 +103,9 @@ fn handle_module(
         DummyEnvironment::with_triple_flags(isa.triple().clone(), fisa.flags.clone());
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
-    terminal.fg(term::color::GREEN).unwrap();
+    let _ = terminal.fg(term::color::GREEN);
     vprintln!(flag_verbose, "ok");
-    terminal.reset().unwrap();
+    let _ = terminal.reset();
 
     if flag_just_decode {
         if !flag_print {
@@ -131,17 +131,17 @@ fn handle_module(
             println!("{}", context.func.display(None));
             vprintln!(flag_verbose, "");
         }
-        terminal.reset().unwrap();
+        let _ = terminal.reset();
         return Ok(());
     }
 
-    terminal.fg(term::color::MAGENTA).unwrap();
+    let _ = terminal.fg(term::color::MAGENTA);
     if flag_check_translation {
         vprint!(flag_verbose, "Checking... ");
     } else {
         vprint!(flag_verbose, "Compiling... ");
     }
-    terminal.reset().unwrap();
+    let _ = terminal.reset();
 
     if flag_print_size {
         vprintln!(flag_verbose, "");
@@ -201,8 +201,8 @@ fn handle_module(
         println!("Total module bytecode size: {} bytes", total_bytecode_size);
     }
 
-    terminal.fg(term::color::GREEN).unwrap();
+    let _ = terminal.fg(term::color::GREEN);
     vprintln!(flag_verbose, "ok");
-    terminal.reset().unwrap();
+    let _ = terminal.reset();
     Ok(())
 }
