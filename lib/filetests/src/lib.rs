@@ -88,7 +88,7 @@ pub fn run_passes(verbose: bool, passes: &[String], target: &str, file: &String)
     let mut runner = TestRunner::new(verbose);
 
     let path = Path::new(file);
-    if path.is_file() {
+    if path == Path::new("-") || path.is_file() {
         runner.push_test(path);
     } else {
         runner.push_dir(path);

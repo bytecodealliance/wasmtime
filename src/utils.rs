@@ -12,17 +12,29 @@ use target_lexicon::Triple;
 
 /// Read an entire file into a string.
 pub fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
-    let mut file = File::open(path)?;
     let mut buffer = String::new();
-    file.read_to_string(&mut buffer)?;
+    if path.as_ref() == Path::new("-") {
+        let stdin = io::stdin();
+        let mut stdin = stdin.lock();
+        stdin.read_to_string(&mut buffer)?;
+    } else {
+        let mut file = File::open(path)?;
+        file.read_to_string(&mut buffer)?;
+    }
     Ok(buffer)
 }
 
 /// Read an entire file into a vector of bytes.
 pub fn read_to_end<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
-    let mut file = File::open(path)?;
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
+    if path.as_ref() == Path::new("-") {
+        let stdin = io::stdin();
+        let mut stdin = stdin.lock();
+        stdin.read_to_end(&mut buffer)?;
+    } else {
+        let mut file = File::open(path)?;
+        file.read_to_end(&mut buffer)?;
+    }
     Ok(buffer)
 }
 

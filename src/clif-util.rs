@@ -47,17 +47,17 @@ pub type CommandResult = Result<(), String>;
 
 fn add_input_file_arg<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("file")
-        .required(true)
+        .default_value("-")
         .multiple(true)
         .value_name("file")
-        .help("Specify file(s) to be used for test")
+        .help("Specify file(s) to be used for test. Defaults to reading from stdin.")
 }
 
 fn add_single_input_file_arg<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("single-file")
-        .required(true)
+        .default_value("-")
         .value_name("single-file")
-        .help("Specify a file to be used")
+        .help("Specify a file to be used. Defaults to reading from stdin.")
 }
 
 fn add_pass_arg<'a>() -> clap::Arg<'a, 'a> {
