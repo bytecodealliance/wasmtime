@@ -22,7 +22,7 @@ target-lexicon = { version = "0.0.3", default-features = false }
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 
 [dev-dependencies]
-cranelift = { path = "../umbrella", version = "0.21.0", default-features = false }
+cranelift = { path = "../umbrella", version = "0.21.0" }
 
 [features]
 default = ["std"]
