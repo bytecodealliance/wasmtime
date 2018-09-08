@@ -55,9 +55,9 @@ fn add_input_file_arg<'a>() -> clap::Arg<'a, 'a> {
 
 fn add_single_input_file_arg<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("single-file")
-        .default_value("-")
+        .required(true)
         .value_name("single-file")
-        .help("Specify a file to be used. Defaults to reading from stdin.")
+        .help("Specify a file to be used. Use '-' for stdin.")
 }
 
 fn add_pass_arg<'a>() -> clap::Arg<'a, 'a> {
