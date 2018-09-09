@@ -11,6 +11,7 @@ readme = "README.md"
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.22.0", default-features = false }
+target-lexicon = { version = "0.0.3", default-features = false }
 
 [features]
 default = ["std"]
