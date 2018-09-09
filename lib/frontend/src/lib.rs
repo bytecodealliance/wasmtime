@@ -177,6 +177,8 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate cranelift_codegen;
+#[cfg(test)]
+extern crate target_lexicon;
 
 pub use frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use variable::Variable;

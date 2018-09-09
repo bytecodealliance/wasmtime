@@ -80,6 +80,9 @@ impl FaerieBuilder {
             ir::LibCall::TruncF64 => "trunc".to_owned(),
             ir::LibCall::NearestF32 => "nearbyintf".to_owned(),
             ir::LibCall::NearestF64 => "nearbyint".to_owned(),
+            ir::LibCall::Memcpy => "memcpy".to_owned(),
+            ir::LibCall::Memset => "memset".to_owned(),
+            ir::LibCall::Memmove => "memmove".to_owned(),
         })
     }
 }
