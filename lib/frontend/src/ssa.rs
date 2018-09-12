@@ -657,7 +657,7 @@ impl SSABuilder {
                 self.blocks[middle_block].add_predecessor(jump_inst_block, jump_inst);
                 self.mark_ebb_header_block_sealed(middle_block);
                 for old_dest in func.jump_tables[jt].as_mut_slice() {
-                    if old_dest.unwrap() == dest_ebb {
+                    if *old_dest == PackedOption::from(dest_ebb) {
                         *old_dest = PackedOption::from(middle_ebb);
                     }
                 }
@@ -1013,6 +1013,7 @@ mod tests {
         ssa.def_var(x_var, x1, block0);
         let mut data = JumpTableData::new();
         data.push_entry(ebb1);
+        data.set_entry(2, ebb1);
         let jt = func.create_jump_table(data);
         ssa.use_var(&mut func, x_var, I32, block0).0;
         let br_table = {
