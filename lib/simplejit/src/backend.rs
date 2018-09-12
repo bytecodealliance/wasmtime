@@ -350,53 +350,50 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     ) -> Self::FinalizedData {
         use std::ptr::write_unaligned;
 
-        for record in &data.relocs {
-            match *record {
-                RelocRecord {
-                    reloc,
-                    offset,
-                    ref name,
-                    addend,
-                } => {
-                    let ptr = data.storage;
-                    debug_assert!((offset as usize) < data.size);
-                    let at = unsafe { ptr.offset(offset as isize) };
-                    let base = if namespace.is_function(name) {
-                        let (def, name_str, _signature) = namespace.get_function_definition(&name);
-                        match def {
-                            Some(compiled) => compiled.code,
-                            None => self.lookup_symbol(name_str),
-                        }
-                    } else {
-                        let (def, name_str, _writable) = namespace.get_data_definition(&name);
-                        match def {
-                            Some(compiled) => compiled.storage,
-                            None => self.lookup_symbol(name_str),
-                        }
-                    };
-                    // TODO: Handle overflow.
-                    let what = unsafe { base.offset(addend as isize) };
-                    match reloc {
-                        Reloc::Abs4 => {
-                            // TODO: Handle overflow.
-                            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
-                            unsafe {
-                                write_unaligned(at as *mut u32, what as u32)
-                            };
-                        }
-                        Reloc::Abs8 => {
-                            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
-                            unsafe {
-                                write_unaligned(at as *mut u64, what as u64)
-                            };
-                        }
-                        Reloc::X86PCRel4
-                        | Reloc::X86CallPCRel4
-                        | Reloc::X86GOTPCRel4
-                        | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
-                        _ => unimplemented!(),
-                    }
+        for &RelocRecord {
+            reloc,
+            offset,
+            ref name,
+            addend,
+        } in &data.relocs
+        {
+            let ptr = data.storage;
+            debug_assert!((offset as usize) < data.size);
+            let at = unsafe { ptr.offset(offset as isize) };
+            let base = if namespace.is_function(name) {
+                let (def, name_str, _signature) = namespace.get_function_definition(&name);
+                match def {
+                    Some(compiled) => compiled.code,
+                    None => self.lookup_symbol(name_str),
                 }
+            } else {
+                let (def, name_str, _writable) = namespace.get_data_definition(&name);
+                match def {
+                    Some(compiled) => compiled.storage,
+                    None => self.lookup_symbol(name_str),
+                }
+            };
+            // TODO: Handle overflow.
+            let what = unsafe { base.offset(addend as isize) };
+            match reloc {
+                Reloc::Abs4 => {
+                    // TODO: Handle overflow.
+                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u32, what as u32)
+                    };
+                }
+                Reloc::Abs8 => {
+                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u64, what as u64)
+                    };
+                }
+                Reloc::X86PCRel4
+                | Reloc::X86CallPCRel4
+                | Reloc::X86GOTPCRel4
+                | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
+                _ => unimplemented!(),
             }
         }
         (data.storage, data.size)
