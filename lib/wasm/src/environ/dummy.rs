@@ -206,7 +206,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
             offset: Offset32::new(0),
-            global_type: self.pointer_type(),
+            global_type: I32,
         });
 
         func.create_table(ir::TableData {
