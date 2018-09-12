@@ -442,14 +442,18 @@ impl SSABuilder {
     fn seal_one_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) {
         let block = self.header_block(ebb);
 
-        let (undef_vars, ebb): (Vec<(Variable, Value)>, Ebb) = match self.blocks[block] {
+        let undef_vars = match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
-                debug_assert!(!data.sealed);
+                debug_assert!(
+                    !data.sealed,
+                    "Attempting to seal {} which is already sealed.",
+                    ebb
+                );
+                debug_assert_eq!(ebb, data.ebb);
                 // Extract the undef_variables data from the block so that we
                 // can iterate over it without borrowing the whole builder.
-                let undef_variables = mem::replace(&mut data.undef_variables, Vec::new());
-                (undef_variables, data.ebb)
+                mem::replace(&mut data.undef_variables, Vec::new())
             }
         };
 
