@@ -4,6 +4,7 @@ extern crate cranelift_wasm;
 extern crate target_lexicon;
 extern crate wabt;
 
+use cranelift_codegen::isa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::{self, Configurable, Flags};
 use cranelift_codegen::verifier;
@@ -75,9 +76,13 @@ fn handle_module(path: &Path, flags: &Flags) {
     };
     let mut dummy_environ = DummyEnvironment::with_triple_flags(triple!("riscv64"), flags.clone());
     translate_module(&data, &mut dummy_environ).unwrap();
+
+    let isa = isa::lookup(dummy_environ.info.triple)
+        .unwrap()
+        .finish(dummy_environ.info.flags);
     for func in dummy_environ.info.function_bodies.values() {
-        verifier::verify_function(func, flags)
-            .map_err(|errors| panic!(pretty_verifier_error(func, None, None, errors)))
+        verifier::verify_function(func, &*isa)
+            .map_err(|errors| panic!(pretty_verifier_error(func, Some(&*isa), None, errors)))
             .unwrap();
     }
 }
