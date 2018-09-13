@@ -3,7 +3,12 @@
 //! This crate contains the main test driver as well as implementations of the
 //! available filetest commands.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates, unstable_features)]
+#![deny(
+    missing_docs,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unstable_features
+)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "cargo-clippy",
     allow(
@@ -13,7 +18,11 @@
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else, unicode_not_nfc,
+        mut_mut,
+        nonminimal_bool,
+        option_map_unwrap_or,
+        option_map_unwrap_or_else,
+        unicode_not_nfc,
         use_self
     )
 )]

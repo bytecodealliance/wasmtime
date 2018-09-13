@@ -569,8 +569,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             rt.purpose == ArgumentPurpose::Link
                 || rt.purpose == ArgumentPurpose::StructReturn
                 || rt.purpose == ArgumentPurpose::VMContext
-        })
-        .count();
+        }).count();
     let abi_args = func.signature.returns.len() - special_args;
 
     let pos = &mut FuncCursor::new(func).at_inst(inst);
@@ -689,8 +688,7 @@ fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
                     }
                     _ => None,
                 }
-            })
-            .collect::<Vec<_>>()
+            }).collect::<Vec<_>>()
     };
 
     if arglist.is_empty() {

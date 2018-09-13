@@ -228,8 +228,7 @@ impl Backend for FaerieBackend {
                     from: name,
                     to,
                     at: u64::from(offset),
-                })
-                .map_err(|e| ModuleError::Backend(e.to_string()))?;
+                }).map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
         for &(offset, id, addend) in data_relocs {
             debug_assert_eq!(
@@ -242,8 +241,7 @@ impl Backend for FaerieBackend {
                     from: name,
                     to,
                     at: u64::from(offset),
-                })
-                .map_err(|e| ModuleError::Backend(e.to_string()))?;
+                }).map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
 
         self.artifact
@@ -409,8 +407,7 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
                     reloc: raw_reloc,
                     addend: addend_i32,
                 },
-            )
-            .expect("faerie relocation error");
+            ).expect("faerie relocation error");
     }
 
     fn reloc_jt(&mut self, _offset: CodeOffset, _reloc: Reloc, _jt: ir::JumpTable) {

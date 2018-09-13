@@ -1,14 +1,30 @@
 //! Utility for `cranelift_serde`.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates, unstable_features)]
+#![deny(
+    missing_docs,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unstable_features
+)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
-#![cfg_attr(feature = "cargo-clippy", allow(new_without_default, new_without_default_derive))]
+#![cfg_attr(
+    feature = "clippy",
+    plugin(clippy(conf_file = "../../clippy.toml"))
+)]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    allow(new_without_default, new_without_default_derive)
+)]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
-        unicode_not_nfc, use_self
+        float_arithmetic,
+        mut_mut,
+        nonminimal_bool,
+        option_map_unwrap_or,
+        option_map_unwrap_or_else,
+        unicode_not_nfc,
+        use_self
     )
 )]
 
@@ -67,8 +83,7 @@ fn main() {
                         .value_name("FILE")
                         .help("Input file for serialization"),
                 ),
-        )
-        .subcommand(
+        ).subcommand(
             SubCommand::with_name("deserialize")
                 .about("Deserializes Cranelift IR into JSON.")
                 .arg(
@@ -77,8 +92,7 @@ fn main() {
                         .value_name("FILE")
                         .help("Input file for deserialization"),
                 ),
-        )
-        .get_matches();
+        ).get_matches();
 
     let res_serde = match matches.subcommand() {
         ("serialize", Some(m)) => {

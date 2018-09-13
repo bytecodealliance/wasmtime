@@ -129,7 +129,10 @@ pub enum ModuleError {
     #[fail(display = "Duplicate definition of identifier: {}", _0)]
     DuplicateDefinition(String),
     /// Indicates an identifier was defined, but was declared as an import
-    #[fail(display = "Invalid to define identifier declared as an import: {}", _0)]
+    #[fail(
+        display = "Invalid to define identifier declared as an import: {}",
+        _0
+    )]
     InvalidImportDefinition(String),
     /// Wraps a `cranelift-codegen` error
     #[fail(display = "Compilation error: {}", _0)]
