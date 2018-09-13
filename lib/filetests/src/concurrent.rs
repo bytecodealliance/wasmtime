@@ -106,8 +106,7 @@ fn heartbeat_thread(replies: Sender<Reply>) -> thread::JoinHandle<()> {
             while replies.send(Reply::Tick).is_ok() {
                 thread::sleep(Duration::from_secs(1));
             }
-        })
-        .unwrap()
+        }).unwrap()
 }
 
 /// Spawn a worker thread running tests.
@@ -154,6 +153,5 @@ fn worker_thread(
             // Timing is accumulated independently per thread.
             // Timings from this worker thread will be aggregated by `ConcurrentRunner::join()`.
             timing::take_current()
-        })
-        .unwrap()
+        }).unwrap()
 }

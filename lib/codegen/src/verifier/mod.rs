@@ -941,11 +941,11 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // The defining EBB dominates the instruction using this value.
-                if is_reachable
-                    && !self
-                        .expected_domtree
-                        .dominates(ebb, loc_inst, &self.func.layout)
-                {
+                if is_reachable && !self.expected_domtree.dominates(
+                    ebb,
+                    loc_inst,
+                    &self.func.layout,
+                ) {
                     return fatal!(
                         errors,
                         loc_inst,
@@ -1039,7 +1039,8 @@ impl<'a> Verifier<'a> {
         for (&prev_ebb, &next_ebb) in domtree.cfg_postorder().iter().adjacent_pairs() {
             if self
                 .expected_domtree
-                .rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater
+                .rpo_cmp(prev_ebb, next_ebb, &self.func.layout)
+                != Ordering::Greater
             {
                 return fatal!(
                     errors,
@@ -1586,8 +1587,8 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
-            let mut encodings =
-                isa.legal_encodings(
+            let mut encodings = isa
+                .legal_encodings(
                     &self.func,
                     &self.func.dfg[inst],
                     self.func.dfg.ctrl_typevar(inst),

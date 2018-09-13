@@ -315,8 +315,7 @@ impl TestRunner {
                     ..
                 } => Some(dur),
                 _ => None,
-            })
-            .collect::<Vec<_>>();
+            }).collect::<Vec<_>>();
 
         // Get me some real data, kid.
         let len = times.len();

@@ -163,8 +163,14 @@
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
-        print_stdout, unicode_not_nfc, use_self
+        float_arithmetic,
+        mut_mut,
+        nonminimal_bool,
+        option_map_unwrap_or,
+        option_map_unwrap_or_else,
+        print_stdout,
+        unicode_not_nfc,
+        use_self
     )
 )]
 #![cfg_attr(not(feature = "std"), no_std)]

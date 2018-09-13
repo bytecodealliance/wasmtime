@@ -969,9 +969,10 @@ impl<'a> Parser<'a> {
                         self.consume();
                         match self.token() {
                             Some(Token::Integer(index_str)) => {
-                                let index: u32 = u32::from_str_radix(index_str, 10).map_err(
-                                    |_| self.error("the integer given overflows the u32 type"),
-                                )?;
+                                let index: u32 =
+                                    u32::from_str_radix(index_str, 10).map_err(|_| {
+                                        self.error("the integer given overflows the u32 type")
+                                    })?;
                                 self.consume();
                                 Ok(ExternalName::user(namespace, index))
                             }
@@ -2557,7 +2558,7 @@ mod tests {
                                              v1 = iadd_imm v3, 17
                                            }",
         ).parse_function(None)
-            .unwrap();
+        .unwrap();
         assert_eq!(func.name.to_string(), "%qux");
         let v4 = details.map.lookup_str("v4").unwrap();
         assert_eq!(v4.to_string(), "v4");
@@ -2633,7 +2634,7 @@ mod tests {
                                        ss1 = spill_slot 1
                                      }",
         ).parse_function(None)
-            .unwrap();
+        .unwrap();
         assert_eq!(func.name.to_string(), "%foo");
         let mut iter = func.stack_slots.keys();
         let _ss0 = iter.next().unwrap();
@@ -2656,8 +2657,8 @@ mod tests {
                                     ss1  = spill_slot 1
                                 }",
             ).parse_function(None)
-                .unwrap_err()
-                .to_string(),
+            .unwrap_err()
+            .to_string(),
             "3: duplicate entity: ss1"
         );
     }
@@ -2670,7 +2671,7 @@ mod tests {
                                      ebb4(v3: i32):
                                      }",
         ).parse_function(None)
-            .unwrap();
+        .unwrap();
         assert_eq!(func.name.to_string(), "%ebbs");
 
         let mut ebbs = func.layout.ebbs();
@@ -2692,7 +2693,7 @@ mod tests {
                 ebb0:
                     return 2",
         ).parse_function(None)
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: ebb0");
@@ -2705,7 +2706,7 @@ mod tests {
                 jt0 = jump_table 0, 0
                 jt0 = jump_table 0, 0",
         ).parse_function(None)
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: jt0");
@@ -2718,7 +2719,7 @@ mod tests {
                 ss0 = explicit_slot 8
                 ss0 = explicit_slot 8",
         ).parse_function(None)
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: ss0");
@@ -2731,7 +2732,7 @@ mod tests {
                 gv0 = vmctx
                 gv0 = vmctx",
         ).parse_function(None)
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: gv0");
@@ -2744,7 +2745,7 @@ mod tests {
                 heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000
                 heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000",
         ).parse_function(None)
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: heap0");
@@ -2757,7 +2758,7 @@ mod tests {
                 sig0 = ()
                 sig0 = ()",
         ).parse_function(None)
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: sig0");
@@ -2771,7 +2772,7 @@ mod tests {
                 fn0 = %foo sig0
                 fn0 = %foo sig0",
         ).parse_function(None)
-            .unwrap_err();
+        .unwrap_err();
 
         assert_eq!(location.line_number, 4);
         assert_eq!(message, "duplicate entity: fn0");
@@ -2791,7 +2792,7 @@ mod tests {
                          } ; Trailing.
                          ; More trailing.",
         ).parse_function(None)
-            .unwrap();
+        .unwrap();
         assert_eq!(func.name.to_string(), "%comment");
         assert_eq!(comments.len(), 8); // no 'before' comment.
         assert_eq!(
@@ -2868,7 +2869,7 @@ mod tests {
                           isa riscv
                           function %foo() system_v {}",
         ).unwrap()
-            .isa_spec
+        .isa_spec
         {
             IsaSpec::None(_) => panic!("Expected some ISA"),
             IsaSpec::Some(v) => {
@@ -2887,8 +2888,8 @@ mod tests {
                                              trap int_divz
                                            }",
         ).parse_function(None)
-            .unwrap()
-            .0;
+        .unwrap()
+        .0;
         assert_eq!(func.name.to_string(), "u1:2");
 
         // Invalid characters in the name:
