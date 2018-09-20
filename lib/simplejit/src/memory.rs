@@ -113,15 +113,15 @@ impl Memory {
         Ok(self.current.ptr)
     }
 
-    /// Set all memory allocated in this `Memory` up to now as executable.
-    pub fn set_executable(&mut self) {
+    /// Set all memory allocated in this `Memory` up to now as readable and executable.
+    pub fn set_readable_and_executable(&mut self) {
         self.finish_current();
 
         for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
             if len != 0 {
                 unsafe {
-                    region::protect(ptr, len, region::Protection::Execute)
-                        .expect("unable to make memory executable");
+                    region::protect(ptr, len, region::Protection::ReadExecute)
+                        .expect("unable to make memory readable+executable");
                 }
             }
         }
