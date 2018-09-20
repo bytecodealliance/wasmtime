@@ -90,7 +90,7 @@ impl<F: Forest> NodePool<F> {
 
         // The root node can't be an inner node with just a single sub-tree. It should have been
         // pruned.
-        if let &NodeData::Inner { size, .. } = &self[node] {
+        if let NodeData::Inner { size, .. } = self[node] {
             assert!(size > 0, "Root must have more than one sub-tree");
         }
 
