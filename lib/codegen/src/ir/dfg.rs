@@ -156,10 +156,10 @@ pub struct Values<'a> {
 
 /// Check for non-values
 fn valid_valuedata(data: &ValueData) -> bool {
-    if let &ValueData::Alias {
+    if let ValueData::Alias {
         ty: types::INVALID,
         original,
-    } = data
+    } = *data
     {
         if original == Value::reserved_value() {
             return false;
