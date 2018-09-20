@@ -23,6 +23,8 @@ winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 
 [dev-dependencies]
 cranelift = { path = "../umbrella", version = "0.21.1" }
+cranelift-frontend = { path = "../frontend", version = "0.21.1" }
+cranelift-entity = { path = "../entity", version = "0.21.1" }
 
 [features]
 default = ["std"]
