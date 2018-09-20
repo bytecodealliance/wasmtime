@@ -406,7 +406,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn publish(&mut self) {
         // Now that we're done patching, prepare the memory for execution!
         self.readonly_memory.set_readonly();
-        self.code_memory.set_executable();
+        self.code_memory.set_readable_and_executable();
     }
 
     /// SimpleJIT emits code and data into memory as it processes them, so it
