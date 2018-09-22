@@ -13,6 +13,11 @@ into executable machine code.
 For more information, see [the
 documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
 
+For an example of how to use the JIT, see the [SimpleJIT Demo], which
+implements a toy language.
+
+[SimpleJIT Demo]: https://github.com/CraneStation/simplejit-demo
+
 Status
 ------
 
