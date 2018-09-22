@@ -2,7 +2,10 @@
 //! crate.
 //!
 //! Reads Wasm binary files, translates the functions' code to Cranelift IR.
-#![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments, cyclomatic_complexity))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    allow(too_many_arguments, cyclomatic_complexity)
+)]
 
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
