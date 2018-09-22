@@ -24,10 +24,10 @@ implementation.
 
 The x86-64 backend is currently the most complete and stable; other
 architectures are in various stages of development. Cranelift currently
-supports the System V AMD64 ABI calling convention used on many
-platforms, but does not yet support the Windows x64 calling convention.
-The performance of code produced by Cranelift is not yet impressive,
-though we have plans to fix that.
+supports both the System V AMD64 ABI calling convention used on many
+platforms and the Windows x64 calling convention. The performance
+of code produced by Cranelift is not yet impressive, though we have plans
+to fix that.
 
 The core codegen crates have minimal dependencies, support
 [no\_std](#building-with-no-std) mode, and do not require any host
