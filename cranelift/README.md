@@ -29,9 +29,8 @@ platforms and the Windows x64 calling convention. The performance
 of code produced by Cranelift is not yet impressive, though we have plans
 to fix that.
 
-The core codegen crates have minimal dependencies, support
-[no\_std](#building-with-no-std) mode, and do not require any host
-floating-point support.
+The core codegen crates have minimal dependencies, support no\_std mode
+(see below), and do not require any host floating-point support.
 
 Cranelift does not yet perform mitigations for Spectre or related
 security issues, though it may do so in the future. It does not
@@ -74,10 +73,10 @@ to tell cargo to visit all of the crates.
 `test-all.sh` at the top level is a script which runs all the cargo
 tests and also performs code format, lint, and documentation checks.
 
-Building with no\_std
----------------------
+<details>
+<summary>Building with no_std</summary>
 
-The following crates support \`no\_std\`:
+The following crates support \`no\_std\`, although they do depend on liballoc:
  - cranelift-entity
  - cranelift-bforest
  - cranelift-codegen
@@ -123,13 +122,19 @@ called hashmap\_core is pulled in (via the core feature). This is mostly
 the same as std::collections::HashMap, except that it doesn't have DOS
 protection. Just something to think about.
 
-Building the documentation
---------------------------
+</details>
 
-To build the Cranelift documentation, you need the [Sphinx documentation
+<details>
+<summary>Building the documentation</summary>
+
+Cranelift's documentation is [published online](https://cranelift.readthedocs.io/).
+
+To build the documentation locally, you need the [Sphinx documentation
 generator](http://www.sphinx-doc.org/) as well as Python 3::
 
     $ pip install sphinx sphinx-autobuild sphinx_rtd_theme
     $ cd cranelift/docs
     $ make html
     $ open _build/html/index.html
+
+</details>
