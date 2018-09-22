@@ -11,6 +11,7 @@ use data_context::DataContext;
 use std::borrow::ToOwned;
 use std::collections::HashMap;
 use std::string::String;
+use std::vec::Vec;
 use Backend;
 
 /// A function identifier for use in the `Module` interface.
