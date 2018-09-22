@@ -67,7 +67,7 @@ fn main() {
     module.clear_context(&mut ctx);
 
     // Perform linking.
-    module.finalize_all();
+    module.finalize_definitions();
 
     // Get a raw pointer to the generated code.
     let code_b = module.get_finalized_function(func_b);

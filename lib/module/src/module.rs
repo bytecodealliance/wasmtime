@@ -154,8 +154,6 @@ where
     decl: FunctionDeclaration,
     /// The compiled artifact, once it's available.
     compiled: Option<B::CompiledFunction>,
-    /// A flag indicating whether the function has been finalized.
-    finalized: bool,
 }
 
 impl<B> ModuleFunction<B>
@@ -187,8 +185,6 @@ where
     decl: DataDeclaration,
     /// The "compiled" artifact, once it's available.
     compiled: Option<B::CompiledData>,
-    /// A flag indicating whether the data object has been finalized.
-    finalized: bool,
 }
 
 impl<B> ModuleData<B>
@@ -314,6 +310,8 @@ where
 {
     names: HashMap<String, FuncOrDataId>,
     contents: ModuleContents<B>,
+    functions_to_finalize: Vec<FuncId>,
+    data_objects_to_finalize: Vec<DataId>,
     backend: B,
 }
 
@@ -329,6 +327,8 @@ where
                 functions: PrimaryMap::new(),
                 data_objects: PrimaryMap::new(),
             },
+            functions_to_finalize: Vec::new(),
+            data_objects_to_finalize: Vec::new(),
             backend: B::new(backend_builder),
         }
     }
@@ -407,7 +407,6 @@ where
                         signature: signature.clone(),
                     },
                     compiled: None,
-                    finalized: false,
                 });
                 entry.insert(FuncOrDataId::Func(id));
                 self.backend.declare_function(name, linkage);
@@ -447,7 +446,6 @@ where
                         writable,
                     },
                     compiled: None,
-                    finalized: false,
                 });
                 entry.insert(FuncOrDataId::Data(id));
                 self.backend.declare_data(name, linkage, writable);
@@ -523,6 +521,7 @@ where
             )?)
         };
         self.contents.functions[func].compiled = compiled;
+        self.functions_to_finalize.push(func);
         Ok(())
     }
 
@@ -546,6 +545,7 @@ where
             )?)
         };
         self.contents.data_objects[data].compiled = compiled;
+        self.data_objects_to_finalize.push(data);
         Ok(())
     }
 
@@ -592,20 +592,16 @@ where
         );
     }
 
-    /// Perform all outstanding relocations on the given function. This requires all `Local`
-    /// and `Export` entities referenced to be defined.
+    /// Finalize all functions and data objects that are defined but not yet finalized.
+    /// All symbols referenced in their bodies that are declared as needing a definition
+    /// must be defined by this point.
     ///
-    /// # Panics
-    ///
-    /// When the function has already been finalized this panics.
-    pub fn finalize_function(&mut self, func: FuncId) -> B::FinalizedFunction {
-        let output = {
+    /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
+    /// artifacts.
+    pub fn finalize_definitions(&mut self) {
+        for func in self.functions_to_finalize.drain(..) {
             let info = &self.contents.functions[func];
-            debug_assert!(
-                info.decl.linkage.is_definable(),
-                "imported function cannot be finalized"
-            );
-            assert!(!info.finalized, "function can't be finalized twice");
+            debug_assert!(info.decl.linkage.is_definable());
             self.backend.finalize_function(
                 info.compiled
                     .as_ref()
@@ -613,38 +609,11 @@ where
                 &ModuleNamespace::<B> {
                     contents: &self.contents,
                 },
-            )
-        };
-        self.contents.functions[func].finalized = true;
-        self.backend.publish();
-        output
-    }
-
-    /// Return the finalized artifact from the backend, if it provides one.
-    pub fn get_finalized_function(&mut self, func: FuncId) -> B::FinalizedFunction {
-        let info = &self.contents.functions[func];
-        debug_assert!(info.finalized, "data object not yet finalized");
-        self.backend.get_finalized_function(
-            info.compiled
-                .as_ref()
-                .expect("function must be compiled before it can be finalized"),
-        )
-    }
-
-    /// Perform all outstanding relocations on the given data object. This requires all
-    /// `Local` and `Export` entities referenced to be defined.
-    ///
-    /// # Panics
-    ///
-    /// When the data object has already been finalized this panics.
-    pub fn finalize_data(&mut self, data: DataId) -> B::FinalizedData {
-        let output = {
-            let info = &self.contents.data_objects[data];
-            debug_assert!(
-                info.decl.linkage.is_definable(),
-                "imported data cannot be finalized"
             );
-            assert!(!info.finalized, "data object can't be finalized twice");
+        }
+        for data in self.data_objects_to_finalize.drain(..) {
+            let info = &self.contents.data_objects[data];
+            debug_assert!(info.decl.linkage.is_definable());
             self.backend.finalize_data(
                 info.compiled
                     .as_ref()
@@ -652,61 +621,37 @@ where
                 &ModuleNamespace::<B> {
                     contents: &self.contents,
                 },
-            )
-        };
-        self.contents.data_objects[data].finalized = true;
+            );
+        }
         self.backend.publish();
-        output
+    }
+
+    /// Return the finalized artifact from the backend, if it provides one.
+    pub fn get_finalized_function(&mut self, func: FuncId) -> B::FinalizedFunction {
+        let info = &self.contents.functions[func];
+        debug_assert!(
+            !self.functions_to_finalize.iter().any(|x| *x == func),
+            "function not yet finalized"
+        );
+        self.backend.get_finalized_function(
+            info.compiled
+                .as_ref()
+                .expect("function must be compiled before it can be finalized"),
+        )
     }
 
     /// Return the finalized artifact from the backend, if it provides one.
     pub fn get_finalized_data(&mut self, data: DataId) -> B::FinalizedData {
         let info = &self.contents.data_objects[data];
-        debug_assert!(info.finalized, "data object not yet finalized");
+        debug_assert!(
+            !self.data_objects_to_finalize.iter().any(|x| *x == data),
+            "data object not yet finalized"
+        );
         self.backend.get_finalized_data(
             info.compiled
                 .as_ref()
                 .expect("data object must be compiled before it can be finalized"),
         )
-    }
-
-    /// Finalize all functions and data objects. Note that this doesn't return the
-    /// final artifacts returned from `finalize_function` or `finalize_data`. Use
-    /// `get_finalized_function` and `get_finalized_data` to obtain the final
-    /// artifacts.
-    pub fn finalize_all(&mut self) {
-        // TODO: Could we use something like `into_iter()` here?
-        for info in self.contents.functions.values() {
-            if info.decl.linkage.is_definable() && !info.finalized {
-                self.backend.finalize_function(
-                    info.compiled
-                        .as_ref()
-                        .expect("function must be compiled before it can be finalized"),
-                    &ModuleNamespace::<B> {
-                        contents: &self.contents,
-                    },
-                );
-            }
-        }
-        for info in self.contents.functions.values_mut() {
-            info.finalized = true;
-        }
-        for info in self.contents.data_objects.values() {
-            if info.decl.linkage.is_definable() && !info.finalized {
-                self.backend.finalize_data(
-                    info.compiled
-                        .as_ref()
-                        .expect("data object must be compiled before it can be finalized"),
-                    &ModuleNamespace::<B> {
-                        contents: &self.contents,
-                    },
-                );
-            }
-        }
-        for info in self.contents.data_objects.values_mut() {
-            info.finalized = true;
-        }
-        self.backend.publish();
     }
 
     /// Consume the module and return the resulting `Product`. Some `Backend`
