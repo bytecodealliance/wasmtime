@@ -41,7 +41,7 @@ needed before it would be ready for a production use case.
 
 Cranelift's APIs are not yet stable.
 
-Cranelift currently supports Rust 1.25.1 and later. We intend to always
+Cranelift currently supports Rust 1.25.0 and later. We intend to always
 support the latest *stable* Rust. And, we currently support the version
 of Rust in the latest Ubuntu LTS, although whether we will always do so
 is not yet determined. Cranelift requires Python 2.7 or Python 3 to
