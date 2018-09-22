@@ -57,13 +57,15 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
 }
 
 #[test]
-#[should_panic(expected = "function can't be finalized twice")]
-fn panic_on_double_finalize() {
+fn double_finalize() {
     let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new());
 
     let func_id = define_simple_function(&mut module);
-    module.finalize_function(func_id);
-    module.finalize_function(func_id);
+    module.finalize_definitions();
+
+    // Calling `finalize_definitions` a second time without any new definitions
+    // should have no effect.
+    module.finalize_definitions();
 }
 
 #[test]
@@ -72,6 +74,6 @@ fn panic_on_define_after_finalize() {
     let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new());
 
     let func_id = define_simple_function(&mut module);
-    module.finalize_function(func_id);
+    module.finalize_definitions();
     define_simple_function(&mut module);
 }
