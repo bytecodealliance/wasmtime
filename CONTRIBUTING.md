@@ -27,12 +27,24 @@ We're happy to mentor people, whether you're learning Rust, learning about
 compiler backends, learning about machine code, learning about how Cranelift
 does things, or all together at once.
 
-We tag issues in the issue tracker marked [good first issue] when we can, so
-that's sometimes a good place to get started. Also, we encourage people to just
-look around and find things they're interested in. This a good time to get
-involved, as there aren't a lot of things set in stone yet.
+We categorize issues in the issue tracker using a tag scheme inspired by
+[Rust's issue tags]. For example, the [E-easy] marks good beginner issues,
+and [E-rust] marks issues which likely require some familiarity with Rust,
+though not necessarily Cranelift-specific or even compiler-specific
+experience. [E-compiler-easy] marks issues good for beginners who have
+some familiarity with compilers, or are interested in gaining some :-).
 
-[good first issue]: https://github.com/CraneStation/cranelift/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+See also the [full list of labels].
+
+Also, we encourage people to just look around and find things they're
+interested in. This a good time to get involved, as there aren't a lot of
+things set in stone yet.
+
+[Rust's issue tags]: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#issue-triage
+[E-easy]: https://github.com/CraneStation/cranelift/labels/E-easy
+[E-rust]: https://github.com/CraneStation/cranelift/labels/E-rust
+[E-compiler-easy]: https://github.com/CraneStation/cranelift/labels/E-compiler-easy
+[full list of labels]: https://github.com/CraneStation/cranelift/labels
 
 ### Code of Conduct
 
