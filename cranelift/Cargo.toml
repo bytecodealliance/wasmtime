@@ -30,7 +30,7 @@ filecheck = "0.3.0"
 clap = "2.32.0"
 serde = "1.0.8"
 term = "0.5.1"
-capstone = { version = "0.4", optional = true }
+capstone = { version = "0.5.0", optional = true }
 wabt = { version = "0.5", optional = true }
 target-lexicon = "0.0.3"
 pretty_env_logger = "0.2.4"
