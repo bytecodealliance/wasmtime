@@ -40,21 +40,9 @@ pub enum LibCall {
     NearestF64,
 }
 
-const NAME: [&str; 9] = [
-    "Probestack",
-    "CeilF32",
-    "CeilF64",
-    "FloorF32",
-    "FloorF64",
-    "TruncF32",
-    "TruncF64",
-    "NearestF32",
-    "NearestF64",
-];
-
 impl fmt::Display for LibCall {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(NAME[*self as usize])
+        fmt::Debug::fmt(self, f)
     }
 }
 
