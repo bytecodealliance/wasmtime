@@ -16,6 +16,12 @@ goblin = "0.0.17"
 failure = "0.1.2"
 target-lexicon = "0.0.3"
 
+# Temporarily depend on 0.9.0 since 0.9.1 uses i128 which isn't
+# supported in Rust 1.25.0. And scroll 0.9.0 doesn't work with
+# scroll_derive 0.9.5. See https://github.com/m4b/scroll/issues/40 .
+scroll = { version = "=0.9.0", default-features = false }
+scroll_derive = { version = "=0.9.4", default-features = false }
+
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }
