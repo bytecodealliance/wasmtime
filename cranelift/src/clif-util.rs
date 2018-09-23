@@ -264,7 +264,7 @@ fn main() {
 
             result
         }
-        _ => Err(format!("Invalid subcommand.")),
+        _ => Err("Invalid subcommand.".to_owned()),
     };
 
     if let Err(mut msg) = res_util {
