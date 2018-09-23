@@ -217,7 +217,7 @@ fn main() {
                 rest_cmd.is_present("verbose"),
                 &get_vec(rest_cmd.values_of("pass")),
                 target_val,
-                &rest_cmd.value_of("single-file").unwrap().to_string(),
+                rest_cmd.value_of("single-file").unwrap(),
             ).map(|_time| ())
         }
         ("print-cfg", Some(rest_cmd)) => {
