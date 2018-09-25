@@ -10,7 +10,6 @@ use isa;
 use isa::constraints::*;
 use isa::enc_tables::*;
 use isa::encoding::RecipeSizing;
-use predicates;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-x86.rs"));

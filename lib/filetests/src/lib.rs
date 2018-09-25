@@ -93,7 +93,7 @@ pub fn run(verbose: bool, files: &[String]) -> TestResult {
 ///
 /// Directories are scanned recursively for test cases ending in `.clif`.
 ///
-pub fn run_passes(verbose: bool, passes: &[String], target: &str, file: &String) -> TestResult {
+pub fn run_passes(verbose: bool, passes: &[String], target: &str, file: &str) -> TestResult {
     let mut runner = TestRunner::new(verbose);
 
     let path = Path::new(file);

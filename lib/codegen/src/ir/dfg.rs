@@ -165,19 +165,18 @@ fn valid_valuedata(data: &ValueData) -> bool {
             return false;
         }
     }
-    return true;
+    true
 }
 
 impl<'a> Iterator for Values<'a> {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        return self
-            .inner
+        self.inner
             .by_ref()
             .filter(|kv| valid_valuedata(kv.1))
             .next()
-            .map(|kv| kv.0);
+            .map(|kv| kv.0)
     }
 }
 
