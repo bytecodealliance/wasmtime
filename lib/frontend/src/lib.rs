@@ -179,12 +179,16 @@
 extern crate cranelift_codegen;
 #[cfg(test)]
 extern crate target_lexicon;
+#[macro_use]
+extern crate log;
 
 pub use frontend::{FunctionBuilder, FunctionBuilderContext};
+pub use switch::Switch;
 pub use variable::Variable;
 
 mod frontend;
 mod ssa;
+mod switch;
 mod variable;
 
 #[cfg(not(feature = "std"))]

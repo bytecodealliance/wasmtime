@@ -30,6 +30,13 @@ from .instructions import bitrev
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 
+try:
+    from typing import TYPE_CHECKING # noqa
+    if TYPE_CHECKING:
+        from cdsl.instructions import Instruction # noqa
+except ImportError:
+    TYPE_CHECKING = False
+
 
 narrow = XFormGroup('narrow', """
         Legalize instructions by narrowing.
@@ -89,6 +96,7 @@ expand.custom_legalize(insts.stack_store, 'expand_stack_store')
 
 x = Var('x')
 y = Var('y')
+z = Var('z')
 a = Var('a')
 a1 = Var('a1')
 a2 = Var('a2')
@@ -174,6 +182,92 @@ narrow.legalize(
             a << iconcat(al, ah)
         ))
 
+
+def widen_one_arg(signed, op):
+    # type: (bool, Instruction) -> None
+    for int_ty in [types.i8, types.i16]:
+        if signed:
+            widen.legalize(
+                a << op.bind(int_ty)(b),
+                Rtl(
+                    x << sextend.i32(b),
+                    z << op.i32(x),
+                    a << ireduce.bind(int_ty)(z)
+                ))
+        else:
+            widen.legalize(
+                a << op.bind(int_ty)(b),
+                Rtl(
+                    x << uextend.i32(b),
+                    z << op.i32(x),
+                    a << ireduce.bind(int_ty)(z)
+                ))
+
+
+def widen_two_arg(signed, op):
+    # type: (bool, Instruction) -> None
+    for int_ty in [types.i8, types.i16]:
+        if signed:
+            widen.legalize(
+                a << op.bind(int_ty)(b, c),
+                Rtl(
+                    x << sextend.i32(b),
+                    y << sextend.i32(c),
+                    z << op.i32(x, y),
+                    a << ireduce.bind(int_ty)(z)
+                ))
+        else:
+            widen.legalize(
+                a << op.bind(int_ty)(b, c),
+                Rtl(
+                    x << uextend.i32(b),
+                    y << uextend.i32(c),
+                    z << op.i32(x, y),
+                    a << ireduce.bind(int_ty)(z)
+                ))
+
+
+def widen_imm(signed, op):
+    # type: (bool, Instruction) -> None
+    for int_ty in [types.i8, types.i16]:
+        if signed:
+            widen.legalize(
+                a << op.bind(int_ty)(b, c),
+                Rtl(
+                    x << sextend.i32(b),
+                    z << op.i32(x, c),
+                    a << ireduce.bind(int_ty)(z)
+                ))
+        else:
+            widen.legalize(
+                a << op.bind(int_ty)(b, c),
+                Rtl(
+                    x << uextend.i32(b),
+                    z << op.i32(x, c),
+                    a << ireduce.bind(int_ty)(z)
+                ))
+
+
+for binop in [iadd, isub, imul, udiv, urem]:
+    widen_two_arg(False, binop)
+
+widen_two_arg(True, sdiv)
+
+widen_one_arg(False, bnot)
+
+for binop in [iadd_imm, imul_imm, udiv_imm, urem_imm]:
+    widen_imm(False, binop)
+
+for binop in [sdiv_imm, srem_imm]:
+    widen_imm(True, binop)
+
+# bit ops
+for binop in [band, bor, bxor, band_not, bor_not, bxor_not]:
+    widen_two_arg(False, binop)
+
+for binop in [band_imm, bor_imm, bxor_imm]:
+    widen_imm(False, binop)
+
 for int_ty in [types.i8, types.i16]:
     widen.legalize(
         a << iconst.bind(int_ty)(b),
@@ -210,63 +304,6 @@ widen.legalize(
         a << ireduce(b)
     ))
 
-for binop in [iadd, isub, imul, udiv, band, bor, bxor]:
-    for int_ty in [types.i8, types.i16]:
-        widen.legalize(
-            a << binop.bind(int_ty)(x, y),
-            Rtl(
-                b << uextend.i32(x),
-                c << uextend.i32(y),
-                d << binop(b, c),
-                a << ireduce(d)
-            )
-        )
-
-for binop in [sdiv]:
-    for int_ty in [types.i8, types.i16]:
-        widen.legalize(
-            a << binop.bind(int_ty)(x, y),
-            Rtl(
-                b << sextend.i32(x),
-                c << sextend.i32(y),
-                d << binop(b, c),
-                a << ireduce(d)
-            )
-        )
-
-for unop in [bnot]:
-    for int_ty in [types.i8, types.i16]:
-        widen.legalize(
-            a << unop.bind(int_ty)(x),
-            Rtl(
-                b << sextend.i32(x),
-                d << unop(b),
-                a << ireduce(d)
-            )
-        )
-
-for binop in [iadd_imm, imul_imm, udiv_imm]:
-    for int_ty in [types.i8, types.i16]:
-        widen.legalize(
-            a << binop.bind(int_ty)(x, y),
-            Rtl(
-                b << uextend.i32(x),
-                c << binop(b, y),
-                a << ireduce(c)
-            )
-        )
-
-for binop in [sdiv_imm]:
-    for int_ty in [types.i8, types.i16]:
-        widen.legalize(
-            a << binop.bind(int_ty)(x, y),
-            Rtl(
-                b << sextend.i32(x),
-                c << binop(b, y),
-                a << ireduce(c)
-            )
-        )
-
 for int_ty in [types.i8, types.i16]:
     widen.legalize(
         br_table.bind(int_ty)(x, y),
@@ -284,6 +321,72 @@ for int_ty in [types.i8, types.i16]:
             a << ireduce.bind(int_ty)(x)
         )
     )
+
+for int_ty in [types.i8, types.i16]:
+    for op in [ushr_imm, ishl_imm]:
+        widen.legalize(
+            a << op.bind(int_ty)(b, c),
+            Rtl(
+                x << uextend.i32(b),
+                z << op.i32(x, c),
+                a << ireduce.bind(int_ty)(z)
+            ))
+
+    widen.legalize(
+        a << ishl.bind(int_ty)(b, c),
+        Rtl(
+            x << uextend.i32(b),
+            z << ishl.i32(x, c),
+            a << ireduce.bind(int_ty)(z)
+        ))
+
+    widen.legalize(
+        a << ushr.bind(int_ty)(b, c),
+        Rtl(
+            x << uextend.i32(b),
+            z << ushr.i32(x, c),
+            a << ireduce.bind(int_ty)(z)
+        ))
+
+    widen.legalize(
+        a << sshr.bind(int_ty)(b, c),
+        Rtl(
+            x << sextend.i32(b),
+            z << sshr.i32(x, c),
+            a << ireduce.bind(int_ty)(z)
+        ))
+
+    for w_cc in [
+        intcc.eq, intcc.ne, intcc.ugt, intcc.ult, intcc.uge, intcc.ule
+    ]:
+        widen.legalize(
+            a << insts.icmp_imm.bind(int_ty)(w_cc, b, c),
+            Rtl(
+                x << uextend.i32(b),
+                a << insts.icmp_imm(w_cc, x, c)
+            ))
+        widen.legalize(
+            a << insts.icmp.bind(int_ty)(w_cc, b, c),
+            Rtl(
+                x << uextend.i32(b),
+                y << uextend.i32(c),
+                a << insts.icmp.i32(w_cc, x, y)
+            ))
+    for w_cc in [intcc.sgt, intcc.slt, intcc.sge, intcc.sle]:
+        widen.legalize(
+            a << insts.icmp_imm.bind(int_ty)(w_cc, b, c),
+            Rtl(
+                x << sextend.i32(b),
+                a << insts.icmp_imm(w_cc, x, c)
+            ))
+        widen.legalize(
+            a << insts.icmp.bind(int_ty)(w_cc, b, c),
+            Rtl(
+                x << sextend.i32(b),
+                y << sextend.i32(c),
+                a << insts.icmp(w_cc, x, y)
+            )
+        )
 
 # Expand integer operations with carry for RISC architectures that don't have
 # the flags.
