@@ -35,7 +35,8 @@ of code produced by Cranelift is not yet impressive, though we have plans
 to fix that.
 
 The core codegen crates have minimal dependencies, support no\_std mode
-(see below), and do not require any host floating-point support.
+(see below), and do not require any host floating-point support, and
+do not use callstack recursion.
 
 Cranelift does not yet perform mitigations for Spectre or related
 security issues, though it may do so in the future. It does not
