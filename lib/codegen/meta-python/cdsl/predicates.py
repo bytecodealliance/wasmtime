@@ -244,7 +244,7 @@ class FieldPredicate(object):
         """
         # Prepend `field` to the predicate function arguments.
         args = (self.field.rust_name(),) + tuple(map(str, self.args))
-        return 'predicates::{}({})'.format(self.function, ', '.join(args))
+        return '::predicates::{}({})'.format(self.function, ', '.join(args))
 
 
 class IsEqual(FieldPredicate):
