@@ -1,6 +1,6 @@
 //! A frontend for building Cranelift IR from other languages.
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
-use cranelift_codegen::entity::{EntityMap, EntitySet};
+use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
@@ -24,8 +24,8 @@ use variable::Variable;
 /// use here, `variable::Variable` can be used.
 pub struct FunctionBuilderContext {
     ssa: SSABuilder,
-    ebbs: EntityMap<Ebb, EbbData>,
-    types: EntityMap<Variable, Type>,
+    ebbs: SecondaryMap<Ebb, EbbData>,
+    types: SecondaryMap<Variable, Type>,
 }
 
 /// Temporary object used to build a single Cranelift IR `Function`.
@@ -79,8 +79,8 @@ impl FunctionBuilderContext {
     pub fn new() -> Self {
         Self {
             ssa: SSABuilder::new(),
-            ebbs: EntityMap::new(),
-            types: EntityMap::new(),
+            ebbs: SecondaryMap::new(),
+            types: SecondaryMap::new(),
         }
     }
 

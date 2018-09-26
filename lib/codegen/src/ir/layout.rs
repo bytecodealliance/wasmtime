@@ -3,7 +3,7 @@
 //! The order of extended basic blocks in a function and the order of instructions in an EBB is
 //! determined by the `Layout` data structure defined in this module.
 
-use entity::EntityMap;
+use entity::SecondaryMap;
 use ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
 use ir::{Ebb, Inst};
 use packed_option::PackedOption;
@@ -28,11 +28,11 @@ use timing;
 pub struct Layout {
     /// Linked list nodes for the layout order of EBBs Forms a doubly linked list, terminated in
     /// both ends by `None`.
-    ebbs: EntityMap<Ebb, EbbNode>,
+    ebbs: SecondaryMap<Ebb, EbbNode>,
 
     /// Linked list nodes for the layout order of instructions. Forms a double linked list per EBB,
     /// terminated in both ends by `None`.
-    insts: EntityMap<Inst, InstNode>,
+    insts: SecondaryMap<Inst, InstNode>,
 
     /// First EBB in the layout order, or `None` when no EBBs have been laid out.
     first_ebb: Option<Ebb>,
@@ -45,8 +45,8 @@ impl Layout {
     /// Create a new empty `Layout`.
     pub fn new() -> Self {
         Self {
-            ebbs: EntityMap::new(),
-            insts: EntityMap::new(),
+            ebbs: SecondaryMap::new(),
+            insts: SecondaryMap::new(),
             first_ebb: None,
             last_ebb: None,
         }

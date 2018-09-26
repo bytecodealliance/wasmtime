@@ -1,6 +1,6 @@
 //! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
-use entity::EntityMap;
+use entity::SecondaryMap;
 use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::instructions::BranchInfo;
 use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
@@ -38,7 +38,7 @@ struct DomNode {
 
 /// The dominator tree for a single function.
 pub struct DominatorTree {
-    nodes: EntityMap<Ebb, DomNode>,
+    nodes: SecondaryMap<Ebb, DomNode>,
 
     /// CFG post-order of all reachable EBBs.
     postorder: Vec<Ebb>,
@@ -217,7 +217,7 @@ impl DominatorTree {
     /// function.
     pub fn new() -> Self {
         Self {
-            nodes: EntityMap::new(),
+            nodes: SecondaryMap::new(),
             postorder: Vec::new(),
             stack: Vec::new(),
             valid: false,
@@ -505,7 +505,7 @@ impl DominatorTree {
 /// The information in this auxillary data structure is not easy to update when the control flow
 /// graph changes, which is why it is kept separate.
 pub struct DominatorTreePreorder {
-    nodes: EntityMap<Ebb, ExtraNode>,
+    nodes: SecondaryMap<Ebb, ExtraNode>,
 
     // Scratch memory used by `compute_postorder()`.
     stack: Vec<Ebb>,
@@ -533,7 +533,7 @@ impl DominatorTreePreorder {
     /// Create a new blank `DominatorTreePreorder`.
     pub fn new() -> Self {
         Self {
-            nodes: EntityMap::new(),
+            nodes: SecondaryMap::new(),
             stack: Vec::new(),
         }
     }

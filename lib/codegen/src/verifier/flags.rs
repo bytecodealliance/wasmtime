@@ -1,6 +1,6 @@
 //! Verify CPU flags values.
 
-use entity::{EntityMap, SparseSet};
+use entity::{SecondaryMap, SparseSet};
 use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir;
 use ir::instructions::BranchInfo;
@@ -32,7 +32,7 @@ pub fn verify_flags(
         func,
         cfg,
         encinfo: isa.map(|isa| isa.encoding_info()),
-        livein: EntityMap::new(),
+        livein: SecondaryMap::new(),
     };
     verifier.check(errors)
 }
@@ -43,7 +43,7 @@ struct FlagsVerifier<'a> {
     encinfo: Option<isa::EncInfo>,
 
     /// The single live-in flags value (if any) for each EBB.
-    livein: EntityMap<ir::Ebb, PackedOption<ir::Value>>,
+    livein: SecondaryMap<ir::Ebb, PackedOption<ir::Value>>,
 }
 
 impl<'a> FlagsVerifier<'a> {

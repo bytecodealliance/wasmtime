@@ -4,7 +4,7 @@
 //! instructions.
 
 use binemit::CodeOffset;
-use entity::{EntityMap, PrimaryMap};
+use entity::{PrimaryMap, SecondaryMap};
 use ir;
 use ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use ir::{
@@ -84,10 +84,10 @@ impl Function {
             jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
-            encodings: EntityMap::new(),
-            locations: EntityMap::new(),
-            offsets: EntityMap::new(),
-            srclocs: EntityMap::new(),
+            encodings: SecondaryMap::new(),
+            locations: SecondaryMap::new(),
+            offsets: SecondaryMap::new(),
+            srclocs: SecondaryMap::new(),
         }
     }
 

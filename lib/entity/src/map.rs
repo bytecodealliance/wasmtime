@@ -8,14 +8,14 @@ use {EntityRef, Iter, IterMut, Keys};
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///
-/// The `EntityMap` data structure uses the dense index space to implement a map with a vector.
-/// Unlike `PrimaryMap`, an `EntityMap` can't be used to allocate entity references. It is used to
+/// The `SecondaryMap` data structure uses the dense index space to implement a map with a vector.
+/// Unlike `PrimaryMap`, an `SecondaryMap` can't be used to allocate entity references. It is used to
 /// associate secondary information with entities.
 ///
 /// The map does not track if an entry for a key has been inserted or not. Instead it behaves as if
 /// all keys have a default entry from the beginning.
 #[derive(Debug, Clone)]
-pub struct EntityMap<K, V>
+pub struct SecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone,
@@ -25,8 +25,8 @@ where
     unused: PhantomData<K>,
 }
 
-/// Shared `EntityMap` implementation for all value types.
-impl<K, V> EntityMap<K, V>
+/// Shared `SecondaryMap` implementation for all value types.
+impl<K, V> SecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone,
@@ -100,10 +100,10 @@ where
     }
 }
 
-/// Immutable indexing into an `EntityMap`.
+/// Immutable indexing into an `SecondaryMap`.
 ///
 /// All keys are permitted. Untouched entries have the default value.
-impl<K, V> Index<K> for EntityMap<K, V>
+impl<K, V> Index<K> for SecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone,
@@ -115,10 +115,10 @@ where
     }
 }
 
-/// Mutable indexing into an `EntityMap`.
+/// Mutable indexing into an `SecondaryMap`.
 ///
 /// The map grows as needed to accommodate new keys.
-impl<K, V> IndexMut<K> for EntityMap<K, V>
+impl<K, V> IndexMut<K> for SecondaryMap<K, V>
 where
     K: EntityRef,
     V: Clone,
@@ -154,7 +154,7 @@ mod tests {
         let r0 = E(0);
         let r1 = E(1);
         let r2 = E(2);
-        let mut m = EntityMap::new();
+        let mut m = SecondaryMap::new();
 
         let v: Vec<E> = m.keys().collect();
         assert_eq!(v, []);

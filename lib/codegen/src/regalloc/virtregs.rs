@@ -15,7 +15,7 @@ use dbg::DisplayList;
 use dominator_tree::DominatorTreePreorder;
 use entity::EntityRef;
 use entity::{EntityList, ListPool};
-use entity::{EntityMap, Keys, PrimaryMap};
+use entity::{Keys, PrimaryMap, SecondaryMap};
 use ir::{Function, Value};
 use packed_option::PackedOption;
 use ref_slice::ref_slice;
@@ -45,10 +45,10 @@ pub struct VirtRegs {
     unused_vregs: Vec<VirtReg>,
 
     /// Each value belongs to at most one virtual register.
-    value_vregs: EntityMap<Value, PackedOption<VirtReg>>,
+    value_vregs: SecondaryMap<Value, PackedOption<VirtReg>>,
 
     /// Table used during the union-find phase while `vregs` is empty.
-    union_find: EntityMap<Value, i32>,
+    union_find: SecondaryMap<Value, i32>,
 
     /// Values that have been activated in the `union_find` table, but not yet added to any virtual
     /// registers by the `finish_union_find()` function.
@@ -62,8 +62,8 @@ impl VirtRegs {
             pool: ListPool::new(),
             vregs: PrimaryMap::new(),
             unused_vregs: Vec::new(),
-            value_vregs: EntityMap::new(),
-            union_find: EntityMap::new(),
+            value_vregs: SecondaryMap::new(),
+            union_find: SecondaryMap::new(),
             pending_values: Vec::new(),
         }
     }

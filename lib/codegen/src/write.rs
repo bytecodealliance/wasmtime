@@ -3,7 +3,7 @@
 //! The `write` module provides the `write_function` function which converts an IR `Function` to an
 //! equivalent textual form. This textual form can be read back by the `cranelift-reader` crate.
 
-use entity::EntityMap;
+use entity::SecondaryMap;
 use ir::entities::AnyEntity;
 use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
 use isa::{RegInfo, TargetIsa};
@@ -19,7 +19,7 @@ pub trait FuncWriter {
         &mut self,
         w: &mut Write,
         func: &Function,
-        aliases: &EntityMap<Value, Vec<Value>>,
+        aliases: &SecondaryMap<Value, Vec<Value>>,
         isa: Option<&TargetIsa>,
         inst: Inst,
         ident: usize,
@@ -101,7 +101,7 @@ impl FuncWriter for PlainWriter {
         &mut self,
         w: &mut Write,
         func: &Function,
-        aliases: &EntityMap<Value, Vec<Value>>,
+        aliases: &SecondaryMap<Value, Vec<Value>>,
         isa: Option<&TargetIsa>,
         inst: Inst,
         indent: usize,
@@ -117,8 +117,8 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
 }
 
 /// Create a reverse-alias map from a value to all aliases having that value as a direct target
-fn alias_map(func: &Function) -> EntityMap<Value, Vec<Value>> {
-    let mut aliases = EntityMap::<_, Vec<_>>::new();
+fn alias_map(func: &Function) -> SecondaryMap<Value, Vec<Value>> {
+    let mut aliases = SecondaryMap::<_, Vec<_>>::new();
     for v in func.dfg.values() {
         // VADFS returns the immediate target of an alias
         if let Some(k) = func.dfg.value_alias_dest_for_serialization(v) {
@@ -216,7 +216,7 @@ fn decorate_ebb<FW: FuncWriter>(
     func_w: &mut FW,
     w: &mut Write,
     func: &Function,
-    aliases: &EntityMap<Value, Vec<Value>>,
+    aliases: &SecondaryMap<Value, Vec<Value>>,
     isa: Option<&TargetIsa>,
     ebb: Ebb,
 ) -> fmt::Result {
@@ -279,7 +279,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
 /// Write out any aliases to the given target, including indirect aliases
 fn write_value_aliases(
     w: &mut Write,
-    aliases: &EntityMap<Value, Vec<Value>>,
+    aliases: &SecondaryMap<Value, Vec<Value>>,
     target: Value,
     indent: usize,
 ) -> fmt::Result {
@@ -293,7 +293,7 @@ fn write_value_aliases(
 fn write_instruction(
     w: &mut Write,
     func: &Function,
-    aliases: &EntityMap<Value, Vec<Value>>,
+    aliases: &SecondaryMap<Value, Vec<Value>>,
     isa: Option<&TargetIsa>,
     inst: Inst,
     indent: usize,
