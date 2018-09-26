@@ -38,6 +38,12 @@ pub enum LibCall {
     NearestF32,
     /// nearest.f64
     NearestF64,
+    /// libc.memcpy
+    Memcpy,
+    /// libc.memset
+    Memset,
+    /// libc.memmove
+    Memmove,
 }
 
 impl fmt::Display for LibCall {
@@ -60,6 +66,9 @@ impl FromStr for LibCall {
             "TruncF64" => Ok(LibCall::TruncF64),
             "NearestF32" => Ok(LibCall::NearestF32),
             "NearestF64" => Ok(LibCall::NearestF64),
+            "Memcpy" => Ok(LibCall::Memcpy),
+            "Memset" => Ok(LibCall::Memset),
+            "Memmove" => Ok(LibCall::Memmove),
             _ => Err(()),
         }
     }
