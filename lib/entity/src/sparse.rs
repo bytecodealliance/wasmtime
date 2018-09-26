@@ -11,7 +11,7 @@ use std::mem;
 use std::slice;
 use std::u32;
 use std::vec::Vec;
-use {EntityMap, EntityRef};
+use {EntityRef, SecondaryMap};
 
 /// Trait for extracting keys from values stored in a `SparseMap`.
 ///
@@ -27,16 +27,16 @@ pub trait SparseMapValue<K> {
 ///
 /// A `SparseMap<K, V>` map provides:
 ///
-/// - Memory usage equivalent to `EntityMap<K, u32>` + `Vec<V>`, so much smaller than
-///   `EntityMap<K, V>` for sparse mappings of larger `V` types.
-/// - Constant time lookup, slightly slower than `EntityMap`.
+/// - Memory usage equivalent to `SecondaryMap<K, u32>` + `Vec<V>`, so much smaller than
+///   `SecondaryMap<K, V>` for sparse mappings of larger `V` types.
+/// - Constant time lookup, slightly slower than `SecondaryMap`.
 /// - A very fast, constant time `clear()` operation.
 /// - Fast insert and erase operations.
 /// - Stable iteration that is as fast as a `Vec<V>`.
 ///
-/// # Compared to `EntityMap`
+/// # Compared to `SecondaryMap`
 ///
-/// When should we use a `SparseMap` instead of a secondary `EntityMap`? First of all, `SparseMap`
+/// When should we use a `SparseMap` instead of a secondary `SecondaryMap`? First of all, `SparseMap`
 /// does not provide the functionality of a `PrimaryMap` which can allocate and assign entity
 /// references to objects as they are pushed onto the map. It is only the secondary entity maps
 /// that can be replaced with a `SparseMap`.
@@ -44,10 +44,10 @@ pub trait SparseMapValue<K> {
 /// - A secondary entity map assigns a default mapping to all keys. It doesn't distinguish between
 ///   an unmapped key and one that maps to the default value. `SparseMap` does not require
 ///   `Default` values, and it tracks accurately if a key has been mapped or not.
-/// - Iterating over the contents of an `EntityMap` is linear in the size of the *key space*, while
+/// - Iterating over the contents of an `SecondaryMap` is linear in the size of the *key space*, while
 ///   iterating over a `SparseMap` is linear in the number of elements in the mapping. This is an
 ///   advantage precisely when the mapping is sparse.
-/// - `SparseMap::clear()` is constant time and super-fast. `EntityMap::clear()` is linear in the
+/// - `SparseMap::clear()` is constant time and super-fast. `SecondaryMap::clear()` is linear in the
 ///   size of the key space. (Or, rather the required `resize()` call following the `clear()` is).
 /// - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
 ///   contain their own key.
@@ -56,7 +56,7 @@ where
     K: EntityRef,
     V: SparseMapValue<K>,
 {
-    sparse: EntityMap<K, u32>,
+    sparse: SecondaryMap<K, u32>,
     dense: Vec<V>,
 }
 
@@ -68,7 +68,7 @@ where
     /// Create a new empty mapping.
     pub fn new() -> Self {
         Self {
-            sparse: EntityMap::new(),
+            sparse: SecondaryMap::new(),
             dense: Vec::new(),
         }
     }

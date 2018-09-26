@@ -2,7 +2,7 @@
 //! and parent in the loop tree.
 
 use dominator_tree::DominatorTree;
-use entity::EntityMap;
+use entity::SecondaryMap;
 use entity::{Keys, PrimaryMap};
 use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::{Ebb, Function, Layout};
@@ -21,7 +21,7 @@ entity_impl!(Loop, "loop");
 /// its eventual parent in the loop tree and all the EBB belonging to the loop.
 pub struct LoopAnalysis {
     loops: PrimaryMap<Loop, LoopData>,
-    ebb_loop_map: EntityMap<Ebb, PackedOption<Loop>>,
+    ebb_loop_map: SecondaryMap<Ebb, PackedOption<Loop>>,
     valid: bool,
 }
 
@@ -48,7 +48,7 @@ impl LoopAnalysis {
         Self {
             valid: false,
             loops: PrimaryMap::new(),
-            ebb_loop_map: EntityMap::new(),
+            ebb_loop_map: SecondaryMap::new(),
         }
     }
 

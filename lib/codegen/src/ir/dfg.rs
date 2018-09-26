@@ -1,6 +1,6 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity::{self, EntityMap, PrimaryMap};
+use entity::{self, PrimaryMap, SecondaryMap};
 use ir;
 use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;
@@ -34,7 +34,7 @@ pub struct DataFlowGraph {
     ///
     /// This map gets resized automatically by `make_inst()` so it is always in sync with the
     /// primary `insts` map.
-    results: EntityMap<Inst, ValueList>,
+    results: SecondaryMap<Inst, ValueList>,
 
     /// Extended basic blocks in the function and their parameters.
     ///
@@ -67,7 +67,7 @@ impl DataFlowGraph {
     pub fn new() -> Self {
         Self {
             insts: PrimaryMap::new(),
-            results: EntityMap::new(),
+            results: SecondaryMap::new(),
             ebbs: PrimaryMap::new(),
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
@@ -90,7 +90,7 @@ impl DataFlowGraph {
     /// Get the total number of instructions created in this function, whether they are currently
     /// inserted in the layout or not.
     ///
-    /// This is intended for use with `EntityMap::with_capacity`.
+    /// This is intended for use with `SecondaryMap::with_capacity`.
     pub fn num_insts(&self) -> usize {
         self.insts.len()
     }
@@ -103,7 +103,7 @@ impl DataFlowGraph {
     /// Get the total number of extended basic blocks created in this function, whether they are
     /// currently inserted in the layout or not.
     ///
-    /// This is intended for use with `EntityMap::with_capacity`.
+    /// This is intended for use with `SecondaryMap::with_capacity`.
     pub fn num_ebbs(&self) -> usize {
         self.ebbs.len()
     }

@@ -24,7 +24,7 @@
 //! and `(Ebb0, jmp Ebb2)` respectively.
 
 use bforest;
-use entity::EntityMap;
+use entity::SecondaryMap;
 use ir::instructions::BranchInfo;
 use ir::{Ebb, Function, Inst};
 use std::mem;
@@ -72,7 +72,7 @@ struct CFGNode {
 /// and successors where predecessors are basic blocks and successors are
 /// extended basic blocks.
 pub struct ControlFlowGraph {
-    data: EntityMap<Ebb, CFGNode>,
+    data: SecondaryMap<Ebb, CFGNode>,
     pred_forest: bforest::MapForest<Inst, Ebb>,
     succ_forest: bforest::SetForest<Ebb>,
     valid: bool,
@@ -82,7 +82,7 @@ impl ControlFlowGraph {
     /// Allocate a new blank control flow graph.
     pub fn new() -> Self {
         Self {
-            data: EntityMap::new(),
+            data: SecondaryMap::new(),
             valid: false,
             pred_forest: bforest::MapForest::new(),
             succ_forest: bforest::SetForest::new(),

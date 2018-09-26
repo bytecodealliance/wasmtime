@@ -6,7 +6,7 @@
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
-use cranelift_codegen::entity::{EntityMap, EntityRef, PrimaryMap};
+use cranelift_codegen::entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64};
@@ -36,13 +36,13 @@ use Variable;
 pub struct SSABuilder {
     // Records for every variable and for every relevant block, the last definition of
     // the variable in the block.
-    // TODO: Consider a sparse representation rather than EntityMap-of-EntityMap.
-    variables: EntityMap<Variable, EntityMap<Block, PackedOption<Value>>>,
+    // TODO: Consider a sparse representation rather than SecondaryMap-of-SecondaryMap.
+    variables: SecondaryMap<Variable, SecondaryMap<Block, PackedOption<Value>>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
     blocks: PrimaryMap<Block, BlockData>,
     // Records the basic blocks at the beginning of the `Ebb`s.
-    ebb_headers: EntityMap<Ebb, PackedOption<Block>>,
+    ebb_headers: SecondaryMap<Ebb, PackedOption<Block>>,
 
     // Call and result stacks for use in the `use_var`/`predecessors_lookup` state machine.
     calls: Vec<Call>,
@@ -158,9 +158,9 @@ impl SSABuilder {
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
     pub fn new() -> Self {
         Self {
-            variables: EntityMap::with_default(EntityMap::new()),
+            variables: SecondaryMap::with_default(SecondaryMap::new()),
             blocks: PrimaryMap::new(),
-            ebb_headers: EntityMap::new(),
+            ebb_headers: SecondaryMap::new(),
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),

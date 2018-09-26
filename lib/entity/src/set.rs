@@ -7,7 +7,7 @@ use {EntityRef, Keys};
 /// A set of `K` for densely indexed entity references.
 ///
 /// The `EntitySet` data structure uses the dense index space to implement a set with a bitvector.
-/// Like `EntityMap`, an `EntitySet` is used to associate secondary information with entities.
+/// Like `SecondaryMap`, an `EntitySet` is used to associate secondary information with entities.
 #[derive(Debug, Clone)]
 pub struct EntitySet<K>
 where

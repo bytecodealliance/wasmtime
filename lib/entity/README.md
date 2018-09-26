@@ -17,11 +17,11 @@ easy to declare new unique types for use as keys. Any attempt to use a key in
 a map it's not intended for is diagnosed with a type error.
 
 Another is that this crate has two core map types, `PrimaryMap` and
-`EntityMap`, which serve complementary purposes. A `PrimaryMap` creates its
-own keys when elements are inserted, while an `EntityMap` reuses the keys
+`SecondaryMap`, which serve complementary purposes. A `PrimaryMap` creates its
+own keys when elements are inserted, while an `SecondaryMap` reuses the keys
 values of a `PrimaryMap`, conceptually storing additional data in the same
-index space. `EntityMap`'s values must implement `Default` and all elements
-in an `EntityMap` initially have the value of `default()`.
+index space. `SecondaryMap`'s values must implement `Default` and all elements
+in an `SecondaryMap` initially have the value of `default()`.
 
 A common way to implement `Default` is to wrap a type in `Option`, however
 this crate also provides the `PackedOption` utility which can use less memory
@@ -30,9 +30,9 @@ in some cases.
 Additional utilities provided by this crate include:
  - `EntityList`, for allocating many small arrays (such as instruction operand
     lists in a compiler code generator).
- - `SparseMap`: an alternative to `EntityMap` which can use less memory
+ - `SparseMap`: an alternative to `SecondaryMap` which can use less memory
    in some situations.
- - `EntitySet`: a specialized form of `EntityMap` using a bitvector to
+ - `EntitySet`: a specialized form of `SecondaryMap` using a bitvector to
    record which entities are members of the set.
 
 [slotmap]: https://crates.io/crates/slotmap

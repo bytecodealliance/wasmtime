@@ -1,6 +1,6 @@
 //! Utility routines for pretty-printing error messages.
 
-use entity::EntityMap;
+use entity::SecondaryMap;
 use ir;
 use ir::entities::{AnyEntity, Inst, Value};
 use ir::function::Function;
@@ -40,7 +40,7 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         &mut self,
         w: &mut Write,
         func: &Function,
-        aliases: &EntityMap<Value, Vec<Value>>,
+        aliases: &SecondaryMap<Value, Vec<Value>>,
         isa: Option<&TargetIsa>,
         inst: Inst,
         indent: usize,
@@ -63,7 +63,7 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
 fn pretty_instruction_error(
     w: &mut Write,
     func: &Function,
-    aliases: &EntityMap<Value, Vec<Value>>,
+    aliases: &SecondaryMap<Value, Vec<Value>>,
     isa: Option<&TargetIsa>,
     cur_inst: Inst,
     indent: usize,
