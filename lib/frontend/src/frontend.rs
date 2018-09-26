@@ -4,9 +4,9 @@ use cranelift_codegen::entity::{EntityMap, EntitySet};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
-    DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalValue, GlobalValueData, Heap,
-    HeapData, Inst, InstBuilderBase, InstructionData, JumpTable, JumpTableData, SigRef, Signature,
-    StackSlot, StackSlotData, Type, Value,
+    types, AbiParam, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
+    GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData,
+    JumpTable, JumpTableData, LibCall, SigRef, Signature, StackSlot, StackSlotData, Type, Value,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::packed_option::PackedOption;
@@ -545,6 +545,80 @@ impl<'a> FunctionBuilder<'a> {
     }
 }
 
+/// Helper functions
+impl<'a> FunctionBuilder<'a> {
+    /// Calls libc.memcpy
+    ///
+    /// Copies the `size` bytes from `src` to `dest`, assumes that `src + size`
+    /// won't overlap onto `dest`. If `dest` and `src` overlap, the behavior is
+    /// undefined. Applications in which `dest` and `src` might overlap should
+    /// use `call_memmove` instead.
+    pub fn call_memcpy(&mut self, isa: &TargetIsa, dest: Value, src: Value, size: Value) {
+        let pointer_type = isa.pointer_type();
+        let signature = {
+            let mut s = Signature::new(isa.flags().call_conv());
+            s.params.push(AbiParam::new(pointer_type));
+            s.params.push(AbiParam::new(pointer_type));
+            s.params.push(AbiParam::new(pointer_type));
+            self.import_signature(s)
+        };
+
+        let libc_memcpy = self.import_function(ExtFuncData {
+            name: ExternalName::LibCall(LibCall::Memcpy),
+            signature,
+            colocated: false,
+        });
+
+        self.ins().call(libc_memcpy, &[dest, src, size]);
+    }
+
+    /// Calls libc.memset
+    ///
+    /// Writes `len` bytes of value `ch` to memory starting at `buffer`.
+    pub fn call_memset(&mut self, isa: &TargetIsa, buffer: Value, ch: Value, len: Value) {
+        let pointer_type = isa.pointer_type();
+        let signature = {
+            let mut s = Signature::new(isa.flags().call_conv());
+            s.params.push(AbiParam::new(pointer_type));
+            s.params.push(AbiParam::new(types::I32));
+            s.params.push(AbiParam::new(pointer_type));
+            self.import_signature(s)
+        };
+
+        let libc_memset = self.import_function(ExtFuncData {
+            name: ExternalName::LibCall(LibCall::Memset),
+            signature,
+            colocated: false,
+        });
+
+        self.ins().uextend(types::I32, ch);
+        self.ins().call(libc_memset, &[buffer, ch, len]);
+    }
+
+    /// Calls libc.memmove
+    ///
+    /// Copies `len` bytes from memory starting at `source` to memory starting
+    /// at `dest`. `source` is always read before writing to `dest`.
+    pub fn call_memmove(&mut self, isa: &TargetIsa, dest: Value, source: Value, num: Value) {
+        let pointer_type = isa.pointer_type();
+        let signature = {
+            let mut s = Signature::new(isa.flags().call_conv());
+            s.params.push(AbiParam::new(pointer_type));
+            s.params.push(AbiParam::new(pointer_type));
+            s.params.push(AbiParam::new(pointer_type));
+            self.import_signature(s)
+        };
+
+        let libc_memmove = self.import_function(ExtFuncData {
+            name: ExternalName::LibCall(LibCall::Memmove),
+            signature,
+            colocated: false,
+        });
+
+        self.ins().call(libc_memmove, &[dest, source, num]);
+    }
+}
+
 // Helper functions
 impl<'a> FunctionBuilder<'a> {
     fn move_to_next_basic_block(&mut self) {
@@ -690,5 +764,66 @@ mod tests {
     #[test]
     fn sample_with_lazy_seal() {
         sample_function(true)
+    }
+
+    #[test]
+    fn memcpy() {
+        use cranelift_codegen::{isa, settings};
+        use std::str::FromStr;
+
+        let shared_builder = settings::builder();
+        let shared_flags = settings::Flags::new(shared_builder);
+
+        let triple = ::target_lexicon::Triple::from_str("arm").expect("Couldn't create arm triple");
+
+        let target = isa::lookup(triple)
+            .ok()
+            .map(|b| b.finish(shared_flags))
+            .expect("This test requires arm support.");
+
+        let mut sig = Signature::new(target.flags().call_conv());
+        sig.returns.push(AbiParam::new(I32));
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ExternalName::testcase("sample"), sig);
+        {
+            let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+            let block0 = builder.create_ebb();
+            let x = Variable::new(0);
+            let y = Variable::new(1);
+            let z = Variable::new(2);
+            builder.declare_var(x, target.pointer_type());
+            builder.declare_var(y, target.pointer_type());
+            builder.declare_var(z, I32);
+            builder.append_ebb_params_for_function_params(block0);
+            builder.switch_to_block(block0);
+
+            let src = builder.use_var(x);
+            let dest = builder.use_var(y);
+            let size = builder.use_var(y);
+            builder.call_memcpy(&*target, dest, src, size);
+            builder.ins().return_(&[size]);
+
+            builder.seal_all_blocks();
+            builder.finalize();
+        }
+
+        assert_eq!(
+            func.display(None).to_string(),
+            "function %sample() -> i32 fast {
+    sig0 = (i32, i32, i32) fast
+    fn0 = %Memcpy sig0
+
+ebb0:
+    v3 = iconst.i32 0
+    v1 -> v3
+    v2 = iconst.i32 0
+    v0 -> v2
+    call fn0(v1, v0, v1)
+    return v1
+}
+"
+        );
     }
 }
