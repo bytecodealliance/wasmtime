@@ -4,6 +4,7 @@ set -euo pipefail
 # This is the top-level test script:
 #
 # - Check code formatting.
+# - Perform checks on Python code.
 # - Make a debug build.
 # - Make a release build.
 # - Run unit tests for all Rust crates (including the filetests)
