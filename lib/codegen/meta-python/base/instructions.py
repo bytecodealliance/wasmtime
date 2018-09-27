@@ -502,15 +502,15 @@ global_value = Instruction(
         'global_value', r"""
         Compute the value of global GV.
         """,
-        ins=GV, outs=addr)
+        ins=GV, outs=a)
 
 # A specialized form of global_value instructions that only handles
 # symbolic names.
 symbol_value = Instruction(
         'symbol_value', r"""
-        Compute the value of global GV, which is a symbolic address.
+        Compute the value of global GV, which is a symbolic value.
         """,
-        ins=GV, outs=addr)
+        ins=GV, outs=a)
 
 #
 # WebAssembly bounds-checked heap accesses.

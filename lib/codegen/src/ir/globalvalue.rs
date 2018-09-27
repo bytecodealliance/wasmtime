@@ -39,8 +39,13 @@ pub enum GlobalValueData {
         global_type: Type,
     },
 
-    /// Value is a symbolic address. Cranelift itself does not interpret this name;
-    /// it's used by embedders to link with other data structures.
+    /// Value is symbolic, meaning it's a name which will be resolved to an
+    /// actual value later (eg. by linking). Cranelift itself does not interpret
+    /// this name; it's used by embedders to link with other data structures.
+    ///
+    /// For now, symbolic values always have pointer type, and represent
+    /// addresses, however in the future they could be used to represent other
+    /// things as well.
     Symbol {
         /// The symbolic name.
         name: ExternalName,
