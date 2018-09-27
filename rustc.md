@@ -51,13 +51,14 @@ such a thing might look like, including:
  - Build an optimizer IR without the constraints of fast-debug-build
    compilation. Cranelift's base IR is focused on Codegen, so a
    full-strength optimizer would either use an IR layer on top of it
-   (possibly using Cranelift's flexible EntityMap system), or possibly
-   an independent IR that could be translated to/from the base IR.
-   Either way, this overall architecture would keep the optimizer out
-   of the way of the non-optimizing build path, which keeps that path
-   fast and simple, and gives the optimizer more flexibility. If we
-   then want to base the IR on a powerful data structure like the Value
-   State Dependence Graph (VSDG), we can do so with fewer compromises.
+   (possibly using cranelift-entity's flexible `SecondaryMap`s), or
+   possibly an independent IR that could be translated to/from the base
+   IR. Either way, this overall architecture would keep the optimizer
+   out of the way of the non-optimizing build path, which keeps that
+   path fast and simple, and gives the optimizer more flexibility. If we
+   then want to base the IR on a powerful data structure like the
+   Value State Dependence Graph (VSDG), we can do so with fewer
+   compromises.
 
 And, these ideas build on each other. For example, one of the challenges
 for dependence-graph-oriented IRs like the VSDG is getting good enough
