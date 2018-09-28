@@ -13,11 +13,12 @@ readme = "README.md"
 cranelift-codegen = { path = "../codegen", version = "0.22.0", default-features = false }
 target-lexicon = { version = "0.0.3", default-features = false }
 log = { version = "0.4.4", default-features = false, features = ["release_max_level_warn"] }
+hashmap_core = { version = "0.1.9", optional = true }
 
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]
-core = ["cranelift-codegen/core"]
+core = ["hashmap_core", "cranelift-codegen/core"]
 
 [badges]
 maintenance = { status = "experimental" }
