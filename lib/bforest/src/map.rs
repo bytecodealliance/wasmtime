@@ -429,7 +429,7 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::super::NodeData;
     use super::*;
     use std::mem;

@@ -666,7 +666,7 @@ impl DominatorTreePreorder {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use cursor::{Cursor, FuncCursor};
     use flowgraph::ControlFlowGraph;

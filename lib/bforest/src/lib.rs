@@ -158,7 +158,7 @@ fn slice_shift<T: Copy>(s: &mut [T], n: usize) {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use entity::EntityRef;
 

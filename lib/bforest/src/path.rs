@@ -703,7 +703,7 @@ impl<F: Forest> fmt::Display for Path<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::super::{Forest, NodeData, NodePool};
     use super::*;
     use std::cmp::Ordering;
