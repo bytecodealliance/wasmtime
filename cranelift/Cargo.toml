@@ -26,7 +26,7 @@ cranelift-module = { path = "lib/module", version = "0.22.0" }
 cranelift-faerie = { path = "lib/faerie", version = "0.22.0" }
 cranelift-simplejit = { path = "lib/simplejit", version = "0.22.0" }
 cranelift = { path = "lib/umbrella", version = "0.22.0" }
-filecheck = "0.3.0"
+filecheck = "0.4.0"
 clap = "2.32.0"
 serde = "1.0.8"
 term = "0.5.1"
