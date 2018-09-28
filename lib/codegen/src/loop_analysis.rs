@@ -230,8 +230,7 @@ impl LoopAnalysis {
 }
 
 #[cfg(test)]
-mod test {
-
+mod tests {
     use cursor::{Cursor, FuncCursor};
     use dominator_tree::DominatorTree;
     use flowgraph::ControlFlowGraph;

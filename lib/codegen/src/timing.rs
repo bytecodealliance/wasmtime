@@ -242,7 +242,7 @@ mod details {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use std::string::ToString;
 

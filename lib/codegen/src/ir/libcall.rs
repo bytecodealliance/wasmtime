@@ -190,7 +190,7 @@ fn make_funcref(libcall: LibCall, func: &mut Function, sig: Signature, isa: &Tar
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use std::string::ToString;
 

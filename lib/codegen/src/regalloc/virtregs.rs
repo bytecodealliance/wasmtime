@@ -396,7 +396,7 @@ impl VirtRegs {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use entity::EntityRef;
     use ir::Value;
