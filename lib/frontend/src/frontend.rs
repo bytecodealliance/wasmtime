@@ -653,7 +653,6 @@ impl<'a> FunctionBuilder<'a> {
 
 #[cfg(test)]
 mod tests {
-
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::types::*;
     use cranelift_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
@@ -661,6 +660,7 @@ mod tests {
     use cranelift_codegen::settings::CallConv;
     use cranelift_codegen::verifier::verify_function;
     use frontend::{FunctionBuilder, FunctionBuilderContext};
+    use std::string::ToString;
     use Variable;
 
     fn sample_function(lazy_seal: bool) {
