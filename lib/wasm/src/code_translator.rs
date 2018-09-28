@@ -255,7 +255,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::BrTable { table } => {
             let (depths, default) = table.read_table();
             let mut min_depth = default;
-            for depth in &depths {
+            for depth in &*depths {
                 if *depth < min_depth {
                     min_depth = *depth;
                 }
@@ -273,9 +273,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let mut data = JumpTableData::with_capacity(depths.len());
             if jump_args_count == 0 {
                 // No jump arguments
-                for depth in depths {
+                for depth in &*depths {
                     let ebb = {
-                        let i = state.control_stack.len() - 1 - (depth as usize);
+                        let i = state.control_stack.len() - 1 - (*depth as usize);
                         let frame = &mut state.control_stack[i];
                         frame.set_branched_to_exit();
                         frame.br_destination()
@@ -297,12 +297,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let return_count = jump_args_count;
                 let mut dest_ebb_sequence = Vec::new();
                 let mut dest_ebb_map = HashMap::new();
-                for depth in depths {
-                    let branch_ebb = match dest_ebb_map.entry(depth as usize) {
+                for depth in &*depths {
+                    let branch_ebb = match dest_ebb_map.entry(*depth as usize) {
                         hash_map::Entry::Occupied(entry) => *entry.get(),
                         hash_map::Entry::Vacant(entry) => {
                             let ebb = builder.create_ebb();
-                            dest_ebb_sequence.push((depth as usize, ebb));
+                            dest_ebb_sequence.push((*depth as usize, ebb));
                             *entry.insert(ebb)
                         }
                     };
@@ -892,6 +892,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64AtomicRmw16UCmpxchg { .. }
         | Operator::I64AtomicRmw32UCmpxchg { .. } => {
             return Err(WasmError::Unsupported("proposed thread operators"));
+        }
+        Operator::RefNull | Operator::RefIsNull { .. } => {
+            return Err(WasmError::Unsupported("proposed reference-type operators"));
         }
     };
     Ok(())
