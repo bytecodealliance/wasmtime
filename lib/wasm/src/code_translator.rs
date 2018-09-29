@@ -417,7 +417,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         /******************************* Load instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cranelift.
          * The memory base address is provided by the environment.
-         * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
         Operator::I32Load8U {
             memarg: MemoryImmediate { flags: _, offset },
@@ -492,7 +491,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         /****************************** Store instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cranelift.
          * The memory base address is provided by the environment.
-         * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
         Operator::I32Store {
             memarg: MemoryImmediate { flags: _, offset },
