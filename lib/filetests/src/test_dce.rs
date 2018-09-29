@@ -41,7 +41,7 @@ impl SubTest for TestDCE {
             .dce(context.flags_or_isa())
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
-        let text = comp_ctx.func.to_string();
+        let text = comp_ctx.func.display(context.isa).to_string();
         run_filecheck(&text, context)
     }
 }
