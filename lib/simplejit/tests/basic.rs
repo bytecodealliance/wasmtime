@@ -60,7 +60,7 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
 fn double_finalize() {
     let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new());
 
-    let func_id = define_simple_function(&mut module);
+    define_simple_function(&mut module);
     module.finalize_definitions();
 
     // Calling `finalize_definitions` a second time without any new definitions
@@ -73,7 +73,7 @@ fn double_finalize() {
 fn panic_on_define_after_finalize() {
     let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new());
 
-    let func_id = define_simple_function(&mut module);
+    define_simple_function(&mut module);
     module.finalize_definitions();
     define_simple_function(&mut module);
 }
