@@ -179,6 +179,7 @@ struct MemOpInfo {
 }
 
 fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) {
+    // Look for simple loads and stores we can optimize.
     let info = match pos.func.dfg[inst] {
         InstructionData::Load {
             opcode,
@@ -209,103 +210,144 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
         _ => return,
     };
 
-    let add_args = if let ValueDef::Result(result_inst, _) = pos.func.dfg.value_def(info.arg) {
+    // Examine the instruction that defines the address operand.
+    if let ValueDef::Result(result_inst, _) = pos.func.dfg.value_def(info.arg) {
         match pos.func.dfg[result_inst] {
             InstructionData::Binary {
                 opcode: Opcode::Iadd,
                 args,
-            } => args,
-            _ => return,
+            } => match info.opcode {
+                // Operand is an iadd. Fold it into a memory address with a complex address mode.
+                Opcode::Load => {
+                    pos.func.dfg.replace(inst).load_complex(
+                        info.itype,
+                        info.flags,
+                        &args,
+                        info.offset,
+                    );
+                }
+                Opcode::Uload8 => {
+                    pos.func.dfg.replace(inst).uload8_complex(
+                        info.itype,
+                        info.flags,
+                        &args,
+                        info.offset,
+                    );
+                }
+                Opcode::Sload8 => {
+                    pos.func.dfg.replace(inst).sload8_complex(
+                        info.itype,
+                        info.flags,
+                        &args,
+                        info.offset,
+                    );
+                }
+                Opcode::Uload16 => {
+                    pos.func.dfg.replace(inst).uload16_complex(
+                        info.itype,
+                        info.flags,
+                        &args,
+                        info.offset,
+                    );
+                }
+                Opcode::Sload16 => {
+                    pos.func.dfg.replace(inst).sload16_complex(
+                        info.itype,
+                        info.flags,
+                        &args,
+                        info.offset,
+                    );
+                }
+                Opcode::Uload32 => {
+                    pos.func
+                        .dfg
+                        .replace(inst)
+                        .uload32_complex(info.flags, &args, info.offset);
+                }
+                Opcode::Sload32 => {
+                    pos.func
+                        .dfg
+                        .replace(inst)
+                        .sload32_complex(info.flags, &args, info.offset);
+                }
+                Opcode::Store => {
+                    pos.func.dfg.replace(inst).store_complex(
+                        info.flags,
+                        info.st_arg.unwrap(),
+                        &args,
+                        info.offset,
+                    );
+                }
+                Opcode::Istore8 => {
+                    pos.func.dfg.replace(inst).istore8_complex(
+                        info.flags,
+                        info.st_arg.unwrap(),
+                        &args,
+                        info.offset,
+                    );
+                }
+                Opcode::Istore16 => {
+                    pos.func.dfg.replace(inst).istore16_complex(
+                        info.flags,
+                        info.st_arg.unwrap(),
+                        &args,
+                        info.offset,
+                    );
+                }
+                Opcode::Istore32 => {
+                    pos.func.dfg.replace(inst).istore32_complex(
+                        info.flags,
+                        info.st_arg.unwrap(),
+                        &args,
+                        info.offset,
+                    );
+                }
+                _ => panic!("Unsupported load or store opcode"),
+            },
+            InstructionData::BinaryImm {
+                opcode: Opcode::IaddImm,
+                arg,
+                imm,
+            } => match pos.func.dfg[inst] {
+                // Operand is an iadd_imm. Fold the immediate into the offset if possible.
+                InstructionData::Load {
+                    arg: ref mut load_arg,
+                    ref mut offset,
+                    ..
+                } => {
+                    if let Some(imm) = offset.try_add_i64(imm.into()) {
+                        *load_arg = arg;
+                        *offset = imm;
+                    } else {
+                        // Overflow.
+                        return;
+                    }
+                }
+                InstructionData::Store {
+                    args: ref mut store_args,
+                    ref mut offset,
+                    ..
+                } => {
+                    if let Some(imm) = offset.try_add_i64(imm.into()) {
+                        store_args[0] = arg;
+                        *offset = imm;
+                    } else {
+                        // Overflow.
+                        return;
+                    }
+                }
+                _ => panic!(),
+            },
+            _ => {
+                // Address value is defined by some other kind of instruction.
+                return;
+            }
         }
     } else {
+        // Address value is not the result of an instruction.
         return;
-    };
-
-    match info.opcode {
-        Opcode::Load => {
-            pos.func
-                .dfg
-                .replace(inst)
-                .load_complex(info.itype, info.flags, &add_args, info.offset);
-        }
-        Opcode::Uload8 => {
-            pos.func.dfg.replace(inst).uload8_complex(
-                info.itype,
-                info.flags,
-                &add_args,
-                info.offset,
-            );
-        }
-        Opcode::Sload8 => {
-            pos.func.dfg.replace(inst).sload8_complex(
-                info.itype,
-                info.flags,
-                &add_args,
-                info.offset,
-            );
-        }
-        Opcode::Uload16 => {
-            pos.func.dfg.replace(inst).uload16_complex(
-                info.itype,
-                info.flags,
-                &add_args,
-                info.offset,
-            );
-        }
-        Opcode::Sload16 => {
-            pos.func.dfg.replace(inst).sload16_complex(
-                info.itype,
-                info.flags,
-                &add_args,
-                info.offset,
-            );
-        }
-        Opcode::Uload32 => {
-            pos.func
-                .dfg
-                .replace(inst)
-                .uload32_complex(info.flags, &add_args, info.offset);
-        }
-        Opcode::Sload32 => {
-            pos.func
-                .dfg
-                .replace(inst)
-                .sload32_complex(info.flags, &add_args, info.offset);
-        }
-        Opcode::Store => {
-            pos.func.dfg.replace(inst).store_complex(
-                info.flags,
-                info.st_arg.unwrap(),
-                &add_args,
-                info.offset,
-            );
-        }
-        Opcode::Istore8 => {
-            pos.func.dfg.replace(inst).istore8_complex(
-                info.flags,
-                info.st_arg.unwrap(),
-                &add_args,
-                info.offset,
-            );
-        }
-        Opcode::Istore16 => {
-            pos.func.dfg.replace(inst).istore16_complex(
-                info.flags,
-                info.st_arg.unwrap(),
-                &add_args,
-                info.offset,
-            );
-        }
-        Opcode::Istore32 => {
-            pos.func.dfg.replace(inst).istore32_complex(
-                info.flags,
-                info.st_arg.unwrap(),
-                &add_args,
-                info.offset,
-            );
-        }
-        _ => return,
     }
+
     let ok = pos.func.update_encoding(inst, isa).is_ok();
     debug_assert!(ok);
 }

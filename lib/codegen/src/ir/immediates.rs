@@ -224,6 +224,16 @@ impl Offset32 {
             None
         }
     }
+
+    /// Add in the signed number `x` if possible.
+    pub fn try_add_i64(self, x: i64) -> Option<Self> {
+        let casted = x as i32;
+        if casted as i64 == x {
+            self.0.checked_add(casted).map(Self::new)
+        } else {
+            None
+        }
+    }
 }
 
 impl Into<i32> for Offset32 {
