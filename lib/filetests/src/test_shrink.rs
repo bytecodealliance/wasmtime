@@ -40,7 +40,7 @@ impl SubTest for TestShrink {
             .shrink_instructions(isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
-        let text = comp_ctx.func.to_string();
+        let text = comp_ctx.func.display(isa).to_string();
         run_filecheck(&text, context)
     }
 }
