@@ -215,7 +215,7 @@ impl Offset32 {
         Offset32(x)
     }
 
-    /// Create a new `Offset32` representing the signed numver `x` if possible.
+    /// Create a new `Offset32` representing the signed number `x` if possible.
     pub fn try_from_i64(x: i64) -> Option<Self> {
         let casted = x as i32;
         if casted as i64 == x {
