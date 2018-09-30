@@ -261,6 +261,23 @@ for binop in [iadd_imm, imul_imm, udiv_imm, urem_imm]:
 for binop in [sdiv_imm, srem_imm]:
     widen_imm(True, binop)
 
+# Use expand instead of widen, because widen only gets applied for i8 and i16
+# base type vars, but these take f32 and f64 as base type var.
+for ty in [types.f32, types.f64]:
+    for int_ty in [types.i8, types.i16]:
+        expand.legalize(
+            a << insts.fcvt_from_uint.bind(ty).bind(int_ty)(b),
+            Rtl(
+                x << uextend.i32(b),
+                a << insts.fcvt_from_uint.bind(ty).i32(x),
+            ))
+        expand.legalize(
+            a << insts.fcvt_from_sint.bind(ty).bind(int_ty)(b),
+            Rtl(
+                x << sextend.i32(b),
+                a << insts.fcvt_from_sint.bind(ty).i32(x),
+            ))
+
 widen_imm(False, irsub_imm)
 
 # bit ops
