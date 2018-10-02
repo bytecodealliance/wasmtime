@@ -147,15 +147,18 @@ impl Configurable for Builder {
 }
 
 /// An error produced when changing a setting.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Fail, Debug, PartialEq, Eq)]
 pub enum SetError {
     /// No setting by this name exists.
+    #[fail(display = "No existing setting with this name")]
     BadName,
 
     /// Type mismatch for setting (e.g., setting an enum setting as a bool).
+    #[fail(display = "Trying to set a setting with the wrong type")]
     BadType,
 
     /// This is not a valid value for this setting.
+    #[fail(display = "Unexpected value for a setting")]
     BadValue,
 }
 

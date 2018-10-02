@@ -120,12 +120,14 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
 }
 
 /// Describes reason for target lookup failure
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(Fail, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum LookupError {
     /// Support for this target was disabled in the current build.
+    #[fail(display = "Support for this target is disabled")]
     SupportDisabled,
 
     /// Support for this target has not yet been implemented.
+    #[fail(display = "Support for this target has not been implemented yet")]
     Unsupported,
 }
 
