@@ -12,7 +12,7 @@ readme = "README.md"
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.22.0", default-features = false }
 target-lexicon = { version = "0.0.3", default-features = false }
-log = { version = "0.4.4", default-features = false, features = ["release_max_level_warn"] }
+log = { version = "0.4.4", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
 
 [features]

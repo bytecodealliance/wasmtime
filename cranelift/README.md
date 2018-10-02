@@ -131,6 +131,22 @@ protection. Just something to think about.
 </details>
 
 <details>
+<summary>Log configuration</summary>
+
+Cranelift uses the `log` crate to log messages at various levels. It doesn't
+specify any maximal logging level, so embedders can choose what it should be;
+however, this can have an impact of Cranelift's code size. You can use `log`
+features to reduce the maximum logging level. For instance if you want to limit
+the level of logging to `warn` messages and above in release mode:
+
+```
+[dependency.log]
+...
+features = ["release_max_level_warn"]
+```
+</details>
+
+<details>
 <summary>Building the documentation</summary>
 
 Cranelift's documentation is [published online](https://cranelift.readthedocs.io/).

@@ -151,7 +151,7 @@ pub struct RegClassData {
     /// first register unit in each allocatable register.
     pub mask: RegUnitMask,
 
-    /// The global `RegInfo` instance containing that this register class.
+    /// The global `RegInfo` instance containing this register class.
     pub info: &'static RegInfo,
 }
 
