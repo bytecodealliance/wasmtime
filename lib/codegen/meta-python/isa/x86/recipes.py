@@ -14,6 +14,7 @@ from base.formats import IntCompare, IntCompareImm, FloatCompare
 from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
+from base.formats import BranchTableEntry, BranchTableBase, IndirectJump
 from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
@@ -274,6 +275,18 @@ def floatccs(iform):
     directly supported floating point condition codes.
     """
     return Or(*(IsEqual(iform.cond, cc) for cc in supported_floatccs))
+
+
+def valid_scale(iform):
+    # type: (InstructionFormat) -> PredNode
+    """
+    Return an instruction predicate that checks if `iform.imm` is a valid
+    `scale` for a SIB byte.
+    """
+    return Or(IsEqual(iform.imm, 1),
+              IsEqual(iform.imm, 2),
+              IsEqual(iform.imm, 4),
+              IsEqual(iform.imm, 8))
 
 
 # A null unary instruction that takes a GPR register. Can be used for identity
@@ -1471,6 +1484,38 @@ brfd = TailRecipe(
         emit='''
         PUT_OP(bits | fcc2opc(cond), BASE_REX, sink);
         disp4(destination, func, sink);
+        ''')
+
+indirect_jmp = TailRecipe(
+        'indirect_jmp', IndirectJump, size=1, ins=GPR, outs=(),
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        ''')
+
+jt_entry = TailRecipe(
+        'jt_entry', BranchTableEntry, size=2,
+        ins=(GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE),
+        outs=(GPR),
+        clobbers_flags=False,
+        instp=valid_scale(BranchTableEntry),
+        emit='''
+        PUT_OP(bits, rex3(in_reg1, out_reg0, in_reg0), sink);
+        modrm_sib(out_reg0, sink);
+        sib(imm.trailing_zeros() as u8, in_reg0, in_reg1, sink);
+        ''')
+
+jt_base = TailRecipe(
+        'jt_base', BranchTableBase, size=5, ins=(), outs=(GPR),
+        clobbers_flags=False,
+        emit='''
+        // No reloc is needed here as the jump table is emitted directly after
+        // the function body.
+        PUT_OP(bits, rex2(0, out_reg0), sink);
+        modrm_riprel(out_reg0, sink);
+
+        jt_disp4(table, func, sink);
         ''')
 
 #

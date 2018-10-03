@@ -156,8 +156,7 @@ impl Switch {
 
             bx.switch_to_block(jt_ebb);
             let discr = bx.ins().iadd_imm(val, (first_index as i64).wrapping_neg());
-            bx.ins().br_table(discr, jump_table);
-            bx.ins().jump(otherwise, &[]);
+            bx.ins().br_table(discr, otherwise, jump_table);
         }
     }
 
@@ -256,8 +255,7 @@ ebb0:
 
 ebb3:
     v3 = iadd_imm.i32 v1, 0
-    br_table v3, jt0
-    jump ebb0"
+    br_table v3, ebb0, jt0"
         );
     }
 
@@ -308,13 +306,11 @@ ebb8:
 
 ebb11:
     v7 = iadd_imm.i32 v1, 0
-    br_table v7, jt0
-    jump ebb0
+    br_table v7, ebb0, jt0
 
 ebb10:
     v8 = iadd_imm.i32 v1, -10
-    br_table v8, jt1
-    jump ebb0"
+    br_table v8, ebb0, jt1"
         );
     }
 

@@ -16,6 +16,7 @@
 use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
+use ir::types::I32;
 use ir::{self, InstBuilder, MemFlags};
 use isa::TargetIsa;
 use timing;
@@ -173,21 +174,87 @@ fn expand_br_table(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
+    isa: &TargetIsa,
+) {
+    if isa.flags().jump_tables_enabled() {
+        expand_br_table_jt(inst, func, cfg, isa);
+    } else {
+        expand_br_table_conds(inst, func, cfg, isa);
+    }
+}
+
+/// Expand br_table to jump table.
+fn expand_br_table_jt(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    isa: &TargetIsa,
+) {
+    use ir::condcodes::IntCC;
+
+    let (arg, default_ebb, table) = match func.dfg[inst] {
+        ir::InstructionData::BranchTable {
+            opcode: ir::Opcode::BrTable,
+            arg,
+            destination,
+            table,
+        } => (arg, destination, table),
+        _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
+    };
+
+    let table_size = func.jump_tables[table].len();
+    let table_is_fully_dense = func.jump_tables[table].fully_dense();
+    let addr_ty = isa.pointer_type();
+    let entry_ty = I32;
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    // Bounds check
+    let oob = pos
+        .ins()
+        .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, arg, table_size as i64);
+
+    pos.ins().brnz(oob, default_ebb, &[]);
+
+    let base_addr = pos.ins().jump_table_base(addr_ty, table);
+    let entry = pos
+        .ins()
+        .jump_table_entry(addr_ty, arg, base_addr, entry_ty.bytes() as u8, table);
+
+    // If the table isn't fully dense, zero-check the entry.
+    if !table_is_fully_dense {
+        pos.ins().brz(entry, default_ebb, &[]);
+    }
+
+    let addr = pos.ins().iadd(base_addr, entry);
+    pos.ins().indirect_jump_table_br(addr, table);
+
+    let ebb = pos.current_ebb().unwrap();
+    pos.remove_inst();
+    cfg.recompute_ebb(pos.func, ebb);
+}
+
+/// Expand br_table to series of conditionals.
+fn expand_br_table_conds(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
     _isa: &TargetIsa,
 ) {
     use ir::condcodes::IntCC;
 
-    let (arg, table) = match func.dfg[inst] {
+    let (arg, default_ebb, table) = match func.dfg[inst] {
         ir::InstructionData::BranchTable {
             opcode: ir::Opcode::BrTable,
             arg,
+            destination,
             table,
-        } => (arg, table),
+        } => (arg, destination, table),
         _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
     };
 
     // This is a poor man's jump table using just a sequence of conditional branches.
-    // TODO: Lower into a jump table load and indirect branch.
     let table_size = func.jump_tables[table].len();
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -199,7 +266,9 @@ fn expand_br_table(
         }
     }
 
-    // `br_table` falls through when nothing matches.
+    // `br_table` jumps to the default destination if nothing matches
+    pos.ins().jump(default_ebb, &[]);
+
     let ebb = pos.current_ebb().unwrap();
     pos.remove_inst();
     cfg.recompute_ebb(pos.func, ebb);

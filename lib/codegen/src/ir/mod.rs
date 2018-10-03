@@ -62,5 +62,8 @@ pub type InstEncodings = SecondaryMap<Inst, isa::Encoding>;
 /// Code offsets for EBBs.
 pub type EbbOffsets = SecondaryMap<Ebb, binemit::CodeOffset>;
 
+/// Code offsets for Jump Tables.
+pub type JumpTableOffsets = SecondaryMap<JumpTable, binemit::CodeOffset>;
+
 /// Source locations for instructions.
 pub type SourceLocs = SecondaryMap<Inst, SourceLoc>;

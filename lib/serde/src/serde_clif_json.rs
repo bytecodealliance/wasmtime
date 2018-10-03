@@ -119,6 +119,22 @@ pub enum SerInstData {
     BranchTable {
         opcode: String,
         arg: String,
+        destination: String,
+        table: String,
+    },
+    BranchTableEntry {
+        opcode: String,
+        args: [String; 2],
+        imm: String,
+        table: String,
+    },
+    BranchTableBase {
+        opcode: String,
+        table: String,
+    },
+    IndirectJump {
+        opcode: String,
+        arg: String,
         table: String,
     },
     Call {
@@ -445,7 +461,36 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 destination: destination.to_string(),
             }
         }
-        InstructionData::BranchTable { opcode, arg, table } => SerInstData::BranchTable {
+        InstructionData::BranchTable {
+            opcode,
+            arg,
+            destination,
+            table,
+        } => SerInstData::BranchTable {
+            opcode: opcode.to_string(),
+            arg: arg.to_string(),
+            destination: destination.to_string(),
+            table: table.to_string(),
+        },
+        InstructionData::BranchTableBase { opcode, table } => SerInstData::BranchTableBase {
+            opcode: opcode.to_string(),
+            table: table.to_string(),
+        },
+        InstructionData::BranchTableEntry {
+            opcode,
+            args,
+            imm,
+            table,
+        } => {
+            let hold_args = [args[0].to_string(), args[1].to_string()];
+            SerInstData::BranchTableEntry {
+                opcode: opcode.to_string(),
+                args: hold_args,
+                imm: imm.to_string(),
+                table: table.to_string(),
+            }
+        }
+        InstructionData::IndirectJump { opcode, arg, table } => SerInstData::IndirectJump {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             table: table.to_string(),

@@ -469,7 +469,7 @@ class Encoding(object):
                 "Format {} must match recipe: {}".format(
                     self.inst.format, recipe.format))
 
-        if self.inst.is_branch:
+        if self.inst.is_branch and not self.inst.is_indirect_branch:
             assert recipe.branch_range, (
                     'Recipe {} for {} must have a branch_range'
                     .format(recipe, self.inst.name))

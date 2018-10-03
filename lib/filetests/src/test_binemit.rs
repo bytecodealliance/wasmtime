@@ -4,7 +4,7 @@
 //! functions and compares the results to the expected output.
 
 use cranelift_codegen::binemit;
-use cranelift_codegen::binemit::RegDiversions;
+use cranelift_codegen::binemit::{CodeSink, RegDiversions};
 use cranelift_codegen::dbg::DisplayList;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -30,6 +30,7 @@ pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
 
 /// Code sink that generates text.
 struct TextSink {
+    code_size: binemit::CodeOffset,
     offset: binemit::CodeOffset,
     text: String,
 }
@@ -38,6 +39,7 @@ impl TextSink {
     /// Create a new empty TextSink.
     pub fn new() -> Self {
         Self {
+            code_size: 0,
             offset: 0,
             text: String::new(),
         }
@@ -92,6 +94,10 @@ impl binemit::CodeSink for TextSink {
 
     fn trap(&mut self, code: ir::TrapCode, _srcloc: ir::SourceLoc) {
         write!(self.text, "{} ", code).unwrap();
+    }
+
+    fn begin_rodata(&mut self) {
+        self.code_size = self.offset
     }
 }
 
@@ -277,6 +283,21 @@ impl SubTest for TestBinEmit {
                             have
                         ));
                     }
+                }
+            }
+        }
+
+        sink.begin_rodata();
+
+        for (jt, jt_data) in func.jump_tables.iter() {
+            let jt_offset = func.jt_offsets[jt];
+            for idx in 0..jt_data.len() {
+                match jt_data.get_entry(idx) {
+                    Some(ebb) => {
+                        let rel_offset: i32 = func.offsets[ebb] as i32 - jt_offset as i32;
+                        sink.put4(rel_offset as u32)
+                    }
+                    None => sink.put4(0),
                 }
             }
         }

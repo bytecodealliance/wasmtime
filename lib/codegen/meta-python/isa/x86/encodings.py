@@ -508,6 +508,17 @@ enc_both(base.brnz.b1, r.t8jccb_abcd, 0x75)
 enc_both(base.brnz.b1, r.t8jccd_abcd, 0x85)
 
 #
+# Jump tables
+#
+X86_64.enc(base.jump_table_entry.i64.any.any, *r.jt_entry.rex(0x63, w=1))
+X86_32.enc(base.jump_table_entry.i32.any.any, *r.jt_entry(0x8b))
+
+X86_64.enc(base.jump_table_base.i64, *r.jt_base.rex(0x8d, w=1))
+X86_32.enc(base.jump_table_base.i32, *r.jt_base(0x8d))
+
+enc_x86_64(base.indirect_jump_table_br.i64, r.indirect_jmp, 0xff, rrr=4)
+X86_32.enc(base.indirect_jump_table_br.i32, *r.indirect_jmp(0xff, rrr=4))
+#
 # Trap as ud2
 #
 X86_32.enc(base.trap, *r.trap(0x0f, 0x0b))

@@ -71,9 +71,11 @@ function %jump_table_args() {
     jt1 = jump_table ebb1
     ebb0:
         v0 = iconst.i32 0
-        br_table v0, jt1 ; error: takes no arguments, but had target ebb1 with 1 arguments
-        return
+        br_table v0, ebb2, jt1 ; error: takes no arguments, but had target ebb1 with 1 arguments
+
     ebb1(v5: i32):
+        return
+    ebb2:
         return
 }
 
