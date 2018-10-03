@@ -345,22 +345,25 @@ impl DominatorTree {
     fn push_successors(&mut self, func: &Function, ebb: Ebb) {
         for inst in func.layout.ebb_insts(ebb) {
             match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(succ, _) => {
-                    if self.nodes[succ].rpo_number == 0 {
-                        self.nodes[succ].rpo_number = SEEN;
-                        self.stack.push(succ);
-                    }
-                }
-                BranchInfo::Table(jt) => {
+                BranchInfo::SingleDest(succ, _) => self.push_if_unseen(succ),
+                BranchInfo::Table(jt, dest) => {
                     for (_, succ) in func.jump_tables[jt].entries() {
-                        if self.nodes[succ].rpo_number == 0 {
-                            self.nodes[succ].rpo_number = SEEN;
-                            self.stack.push(succ);
-                        }
+                        self.push_if_unseen(succ);
+                    }
+                    if let Some(dest) = dest {
+                        self.push_if_unseen(dest);
                     }
                 }
                 BranchInfo::NotABranch => {}
             }
+        }
+    }
+
+    /// Push `ebb` onto `self.stack` if it has not already been seen.
+    fn push_if_unseen(&mut self, ebb: Ebb) {
+        if self.nodes[ebb].rpo_number == 0 {
+            self.nodes[ebb].rpo_number = SEEN;
+            self.stack.push(ebb);
         }
     }
 

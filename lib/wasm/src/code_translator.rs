@@ -283,14 +283,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     data.push_entry(ebb);
                 }
                 let jt = builder.create_jump_table(data);
-                builder.ins().br_table(val, jt);
                 let ebb = {
                     let i = state.control_stack.len() - 1 - (default as usize);
                     let frame = &mut state.control_stack[i];
                     frame.set_branched_to_exit();
                     frame.br_destination()
                 };
-                builder.ins().jump(ebb, &[]);
+                builder.ins().br_table(val, ebb, jt);
             } else {
                 // Here we have jump arguments, but Cranelift's br_table doesn't support them
                 // We then proceed to split the edges going out of the br_table
@@ -309,14 +308,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     data.push_entry(branch_ebb);
                 }
                 let jt = builder.create_jump_table(data);
-                builder.ins().br_table(val, jt);
                 let default_ebb = {
                     let i = state.control_stack.len() - 1 - (default as usize);
                     let frame = &mut state.control_stack[i];
                     frame.set_branched_to_exit();
                     frame.br_destination()
                 };
-                builder.ins().jump(default_ebb, state.peekn(return_count));
+                dest_ebb_sequence.push((default as usize, default_ebb));
+                builder.ins().br_table(val, default_ebb, jt);
                 for (depth, dest_ebb) in dest_ebb_sequence {
                     builder.switch_to_block(dest_ebb);
                     builder.seal_block(dest_ebb);

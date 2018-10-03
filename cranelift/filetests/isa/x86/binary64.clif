@@ -1402,3 +1402,41 @@ ebb0:
 
     trap user0                                          ; bin: user0 0f 0b
 }
+
+; Tests for i64 jump table instructions.
+function %I64_JT(i64 [%rdi]) {
+    jt0 = jump_table ebb1, ebb2, ebb3
+
+ebb0(v0: i64 [%rdi]):
+    ; Note: The next two lines will need to change whenever instructions are
+    ;        added or removed from this test.
+    [-, %rax]           v1 = jump_table_base.i64 jt0    ; bin: 48 8d 05 00000039
+    [-, %r10]           v2 = jump_table_base.i64 jt0    ; bin: 4c 8d 15 00000032
+
+    [-, %rbx]           v10 = iconst.i64 1
+    [-, %r13]           v11 = iconst.i64 2
+
+    [-, %rax]           v20 = jump_table_entry.i64 v10, v1, 4, jt0      ; bin: 48 63 04 98
+    [-, %rax]           v21 = jump_table_entry.i64 v10, v2, 4, jt0      ; bin: 49 63 04 9a
+    [-, %rax]           v22 = jump_table_entry.i64 v11, v1, 4, jt0      ; bin: 4a 63 04 a8
+    [-, %rax]           v23 = jump_table_entry.i64 v11, v2, 4, jt0      ; bin: 4b 63 04 aa
+
+    [-, %r10]           v30 = jump_table_entry.i64 v10, v1, 4, jt0      ; bin: 4c 63 14 98
+    [-, %r10]           v31 = jump_table_entry.i64 v10, v2, 4, jt0      ; bin: 4d 63 14 9a
+    [-, %r10]           v32 = jump_table_entry.i64 v11, v1, 4, jt0      ; bin: 4e 63 14 a8
+    [-, %r10]           v33 = jump_table_entry.i64 v11, v2, 4, jt0      ; bin: 4f 63 14 aa
+
+    fallthrough ebb10
+
+ebb10:
+    indirect_jump_table_br v10, jt0             ; bin: ff e3
+ebb11:
+    indirect_jump_table_br v11, jt0             ; bin: 41 ff e5
+
+ebb1:
+    fallthrough ebb2
+ebb2:
+    fallthrough ebb3
+ebb3:
+    trap user0
+}

@@ -380,7 +380,8 @@ mod tests {
              allones_funcaddrs = false\n\
              probestack_enabled = true\n\
              probestack_func_adjusts_sp = false\n\
-             probestack_size_log2 = 12\n"
+             probestack_size_log2 = 12\n\
+             jump_tables_enabled = true\n"
         );
         assert_eq!(f.opt_level(), super::OptLevel::Default);
         assert_eq!(f.enable_simd(), true);

@@ -2225,9 +2225,44 @@ impl<'a> Parser<'a> {
             InstructionFormat::BranchTable => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
+                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.match_jt()?;
                 ctx.check_jt(table, self.loc)?;
-                InstructionData::BranchTable { opcode, arg, table }
+                InstructionData::BranchTable {
+                    opcode,
+                    arg,
+                    destination: ebb_num,
+                    table,
+                }
+            }
+            InstructionFormat::BranchTableBase => {
+                let table = self.match_jt()?;
+                ctx.check_jt(table, self.loc)?;
+                InstructionData::BranchTableBase { opcode, table }
+            }
+            InstructionFormat::BranchTableEntry => {
+                let index = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let base = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm8("expected width")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let table = self.match_jt()?;
+                ctx.check_jt(table, self.loc)?;
+                InstructionData::BranchTableEntry {
+                    opcode,
+                    args: [index, base],
+                    imm,
+                    table,
+                }
+            }
+            InstructionFormat::IndirectJump => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let table = self.match_jt()?;
+                ctx.check_jt(table, self.loc)?;
+                InstructionData::IndirectJump { opcode, arg, table }
             }
             InstructionFormat::InsertLane => {
                 let lhs = self.match_value("expected SSA value first operand")?;

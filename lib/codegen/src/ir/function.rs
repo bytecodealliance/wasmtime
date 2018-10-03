@@ -11,7 +11,8 @@ use ir::{
     Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
     JumpTableData, SigRef, StackSlot, StackSlotData, Table, TableData,
 };
-use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
+use ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
+use ir::{JumpTableOffsets, JumpTables};
 use isa::{EncInfo, Encoding, Legalize, TargetIsa};
 use settings::CallConv;
 use std::fmt;
@@ -64,6 +65,9 @@ pub struct Function {
     /// in the textual IR format.
     pub offsets: EbbOffsets,
 
+    /// Code offsets of Jump Table headers.
+    pub jt_offsets: JumpTableOffsets,
+
     /// Source locations.
     ///
     /// Track the original source location for each instruction. The source locations are not
@@ -87,6 +91,7 @@ impl Function {
             encodings: SecondaryMap::new(),
             locations: SecondaryMap::new(),
             offsets: SecondaryMap::new(),
+            jt_offsets: SecondaryMap::new(),
             srclocs: SecondaryMap::new(),
         }
     }

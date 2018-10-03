@@ -130,6 +130,8 @@ brff = Instruction(
         ins=(Cond, f, EBB, args), is_branch=True)
 
 x = Operand('x', iB, doc='index into jump table')
+Entry = TypeVar('Entry', 'A scalar integer type', ints=True)
+entry = Operand('entry', Entry, doc='entry of jump table')
 JT = Operand('JT', entities.jump_table)
 br_table = Instruction(
         'br_table', r"""
@@ -137,12 +139,47 @@ br_table = Instruction(
 
         Use ``x`` as an unsigned index into the jump table ``JT``. If a jump
         table entry is found, branch to the corresponding EBB. If no entry was
-        found fall through to the next instruction.
+        found or the index is out-of-bounds, branch to the given default EBB.
 
         Note that this branch instruction can't pass arguments to the targeted
         blocks. Split critical edges as needed to work around this.
         """,
-        ins=(x, JT), is_branch=True)
+        ins=(x, EBB, JT), is_branch=True, is_terminator=True)
+
+Size = Operand('Size', uimm8, 'Size in bytes')
+jump_table_entry = Instruction(
+    'jump_table_entry', r"""
+    Get an entry from a jump table.
+
+    Load a serialized ``entry`` from a jump table ``JT`` at a given index
+    ``addr`` with a specific ``Size``. The retrieved entry may need to be
+    decoded after loading, depending upon the jump table type used.
+
+    Currently, the only type supported is entries which are relative to the
+    base of the jump table.
+    """,
+    ins=(x, addr, Size, JT), outs=entry)
+
+jump_table_base = Instruction(
+    'jump_table_base', r"""
+    Get the absolute base address of a jump table.
+
+    This is used for jump tables wherein the entries are stored relative to
+    the base of jump table. In order to use these, generated code should first
+    load an entry using ``jump_table_entry``, then use this instruction to add
+    the relative base back to it.
+    """,
+    ins=JT, outs=addr)
+
+indirect_jump_table_br = Instruction(
+    'indirect_jump_table_br', r"""
+    Branch indirectly via a jump table entry.
+
+    Unconditionally jump via a jump table entry that was previously loaded
+    with the ``jump_table_entry`` instruction.
+    """,
+    ins=(addr, JT),
+    is_branch=True, is_indirect_branch=True, is_terminator=True)
 
 code = Operand('code', trapcode)
 trap = Instruction(

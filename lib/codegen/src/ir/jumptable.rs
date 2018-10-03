@@ -45,6 +45,11 @@ impl JumpTableData {
         self.table.len()
     }
 
+    /// Boolean that is false if the table has missing entries.
+    pub fn fully_dense(&self) -> bool {
+        self.holes == 0
+    }
+
     /// Set a table entry.
     ///
     /// The table will grow as needed to fit `idx`.

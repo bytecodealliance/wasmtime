@@ -94,6 +94,9 @@ pub trait CodeSink {
 
     /// Add trap information for the current offset.
     fn trap(&mut self, TrapCode, SourceLoc);
+
+    /// Code output is complete, read-only data may follow.
+    fn begin_rodata(&mut self);
 }
 
 /// Report a bad encoding error.
@@ -121,6 +124,22 @@ where
         debug_assert_eq!(func.offsets[ebb], sink.offset());
         for inst in func.layout.ebb_insts(ebb) {
             emit_inst(func, inst, &mut divert, sink);
+        }
+    }
+
+    sink.begin_rodata();
+
+    // output jump tables
+    for (jt, jt_data) in func.jump_tables.iter() {
+        let jt_offset = func.jt_offsets[jt];
+        for idx in 0..jt_data.len() {
+            match jt_data.get_entry(idx) {
+                Some(ebb) => {
+                    let rel_offset: i32 = func.offsets[ebb] as i32 - jt_offset as i32;
+                    sink.put4(rel_offset as u32)
+                }
+                None => sink.put4(0),
+            }
         }
     }
 }

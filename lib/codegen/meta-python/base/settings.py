@@ -166,4 +166,13 @@ probestack_size_log2 = NumSetting(
         """,
         default=12)
 
+#
+# Jump table options.
+#
+jump_tables_enabled = BoolSetting(
+        """
+        Enable the use of jump tables in generated machine code.
+        """,
+        default=True)
+
 group.close(globals())

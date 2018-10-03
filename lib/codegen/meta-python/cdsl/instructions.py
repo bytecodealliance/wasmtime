@@ -89,6 +89,7 @@ class Instruction(object):
     :param constraints: Tuple of instruction-specific TypeConstraints.
     :param is_terminator: This is a terminator instruction.
     :param is_branch: This is a branch instruction.
+    :param is_indirect_branch: This is an indirect branch instruction.
     :param is_call: This is a call instruction.
     :param is_return: This is a return instruction.
     :param can_trap: This instruction can trap.
@@ -103,6 +104,8 @@ class Instruction(object):
     ATTRIBS = {
             'is_terminator': 'True for instructions that terminate the EBB.',
             'is_branch': 'True for all branch or jump instructions.',
+            'is_indirect_branch':
+            'True for all indirect branch or jump instructions.',
             'is_call': 'Is this a call instruction?',
             'is_return': 'Is this a return instruction?',
             'can_load': 'Can this instruction read from memory?',

@@ -3,7 +3,7 @@
 use super::registers::RU;
 use binemit::{bad_encoding, CodeSink, Reloc};
 use ir::condcodes::{CondCode, FloatCC, IntCC};
-use ir::{Ebb, Function, Inst, InstructionData, Opcode, TrapCode};
+use ir::{Ebb, Function, Inst, InstructionData, JumpTable, Opcode, TrapCode};
 use isa::{RegUnit, StackBase, StackBaseMask, StackRef};
 use regalloc::RegDiversions;
 
@@ -249,6 +249,7 @@ fn sib_noindex<CS: CodeSink + ?Sized>(base: RegUnit, sink: &mut CS) {
     sink.put1(b);
 }
 
+/// Emit a SIB byte with a scale, base, and index.
 fn sib<CS: CodeSink + ?Sized>(scale: u8, index: RegUnit, base: RegUnit, sink: &mut CS) {
     // SIB        SS_III_BBB.
     debug_assert_eq!(scale & !0x03, 0, "Scale out of range");
@@ -330,5 +331,10 @@ fn disp1<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS
 /// Emit a single-byte branch displacement to `destination`.
 fn disp4<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS) {
     let delta = func.offsets[destination].wrapping_sub(sink.offset() + 4);
+    sink.put4(delta);
+}
+
+fn jt_disp4<CS: CodeSink + ?Sized>(jt: JumpTable, func: &Function, sink: &mut CS) {
+    let delta = func.jt_offsets[jt].wrapping_sub(sink.offset() + 4);
     sink.put4(delta);
 }

@@ -306,10 +306,10 @@ widen.legalize(
 
 for int_ty in [types.i8, types.i16]:
     widen.legalize(
-        br_table.bind(int_ty)(x, y),
+        br_table.bind(int_ty)(x, y, z),
         Rtl(
             b << uextend.i32(x),
-            br_table(b, y),
+            br_table(b, y, z),
         )
     )
 

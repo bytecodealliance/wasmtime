@@ -85,21 +85,22 @@ function %jumptable(i32) {
     jt2 = jump_table 0, 0, ebb10, ebb40, ebb20, ebb30
 
 ebb10(v3: i32):
-    br_table v3, jt2
-    trap user1
+    br_table v3, ebb50, jt2
+
 ebb20:
     trap user2
 ebb30:
     trap user3
 ebb40:
     trap user4
+ebb50:
+    trap user1    
 }
 ; sameln: function %jumptable(i32) fast {
 ; check:      jt2 = jump_table 0, 0, ebb10, ebb40, ebb20, ebb30
 ; check:      jt200 = jump_table 0
 ; check:  ebb10(v3: i32):
-; nextln:     br_table v3, jt2
-; nextln:     trap user1
+; nextln:     br_table v3, ebb50, jt2
 ; nextln: 
 ; nextln: ebb20:
 ; nextln:     trap user2
@@ -109,4 +110,7 @@ ebb40:
 ; nextln: 
 ; nextln: ebb40:
 ; nextln:     trap user4
+; nextln: 
+; nextln: ebb50:
+; nextln:     trap user1
 ; nextln: }

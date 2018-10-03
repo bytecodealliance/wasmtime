@@ -95,6 +95,13 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<Cod
         }
     }
 
+    for (jt, jt_data) in func.jump_tables.iter() {
+        func.jt_offsets[jt] = offset;
+        // TODO: this should be computed based on the min size needed to hold
+        //        the furthest branch.
+        offset += jt_data.len() as u32 * 4;
+    }
+
     Ok(offset)
 }
 
