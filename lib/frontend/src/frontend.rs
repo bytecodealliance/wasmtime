@@ -591,7 +591,7 @@ impl<'a> FunctionBuilder<'a> {
             colocated: false,
         });
 
-        self.ins().uextend(types::I32, ch);
+        let ch = self.ins().uextend(types::I32, ch);
         self.ins().call(libc_memset, &[buffer, ch, len]);
     }
 
