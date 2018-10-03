@@ -248,12 +248,12 @@ def widen_imm(signed, op):
                 ))
 
 
+# int ops
 for binop in [iadd, isub, imul, udiv, urem]:
     widen_two_arg(False, binop)
 
-widen_two_arg(True, sdiv)
-
-widen_one_arg(False, bnot)
+for binop in [sdiv, srem]:
+    widen_two_arg(True, binop)
 
 for binop in [iadd_imm, imul_imm, udiv_imm, urem_imm]:
     widen_imm(False, binop)
@@ -261,13 +261,50 @@ for binop in [iadd_imm, imul_imm, udiv_imm, urem_imm]:
 for binop in [sdiv_imm, srem_imm]:
     widen_imm(True, binop)
 
+widen_imm(False, irsub_imm)
+
 # bit ops
+widen_one_arg(False, bnot)
+
 for binop in [band, bor, bxor, band_not, bor_not, bxor_not]:
     widen_two_arg(False, binop)
 
 for binop in [band_imm, bor_imm, bxor_imm]:
     widen_imm(False, binop)
 
+widen_one_arg(False, insts.popcnt)
+
+for (int_ty, num) in [(types.i8, 24), (types.i16, 16)]:
+    widen.legalize(
+        a << insts.clz.bind(int_ty)(b),
+        Rtl(
+            c << uextend.i32(b),
+            d << insts.clz.i32(c),
+            e << iadd_imm(d, imm64(-num)),
+            a << ireduce.bind(int_ty)(e)
+        ))
+
+    widen.legalize(
+        a << insts.cls.bind(int_ty)(b),
+        Rtl(
+            c << sextend.i32(b),
+            d << insts.cls.i32(c),
+            e << iadd_imm(d, imm64(-num)),
+            a << ireduce.bind(int_ty)(e)
+        ))
+
+for (int_ty, num) in [(types.i8, 1 << 8), (types.i16, 1 << 16)]:
+    widen.legalize(
+        a << insts.ctz.bind(int_ty)(b),
+        Rtl(
+            c << uextend.i32(b),
+            # When `b` is zero, returns the size of x in bits.
+            d << bor_imm(c, imm64(num)),
+            e << insts.ctz.i32(d),
+            a << ireduce.bind(int_ty)(e)
+        ))
+
+# iconst
 for int_ty in [types.i8, types.i16]:
     widen.legalize(
         a << iconst.bind(int_ty)(b),
@@ -275,6 +312,21 @@ for int_ty in [types.i8, types.i16]:
             c << iconst.i32(b),
             a << ireduce.bind(int_ty)(c)
         ))
+
+widen.legalize(
+    a << uextend.i16.i8(b),
+    Rtl(
+        c << uextend.i32(b),
+        a << ireduce(c)
+    ))
+
+widen.legalize(
+    a << sextend.i16.i8(b),
+    Rtl(
+        c << sextend.i32(b),
+        a << ireduce(c)
+    ))
+
 
 widen.legalize(
     store.i8(flags, a, ptr, offset),

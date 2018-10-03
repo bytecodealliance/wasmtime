@@ -173,7 +173,8 @@ enc_i32_i64(x86.smulx, r.mulx, 0xf7, rrr=5)
 enc_i32_i64(x86.umulx, r.mulx, 0xf7, rrr=4)
 
 enc_i32_i64(base.copy, r.umr, 0x89)
-enc_both(base.copy.b1, r.umr, 0x89)
+for ty in [types.b1, types.i8, types.i16]:
+    enc_both(base.copy.bind(ty), r.umr, 0x89)
 
 # For x86-64, only define REX forms for now, since we can't describe the
 # special regunit immediate operands with the current constraint language.
@@ -301,11 +302,12 @@ for recipe in [r.st_abcd, r.stDisp8_abcd, r.stDisp32_abcd]:
 enc_i32_i64(base.spill, r.spillSib32, 0x89)
 enc_i32_i64(base.regspill, r.regspill32, 0x89)
 
-# Use a 32-bit write for spilling `b1` to avoid constraining the permitted
-# registers.
+# Use a 32-bit write for spilling `b1`, `i8` and `i16` to avoid
+# constraining the permitted registers.
 # See MIN_SPILL_SLOT_SIZE which makes this safe.
-enc_both(base.spill.b1, r.spillSib32, 0x89)
-enc_both(base.regspill.b1, r.regspill32, 0x89)
+for ty in [types.b1, types.i8, types.i16]:
+    enc_both(base.spill.bind(ty), r.spillSib32, 0x89)
+    enc_both(base.regspill.bind(ty), r.regspill32, 0x89)
 
 for recipe in [r.ld, r.ldDisp8, r.ldDisp32]:
     enc_i32_i64_ld_st(base.load, True, recipe, 0x8b)
@@ -319,9 +321,10 @@ for recipe in [r.ld, r.ldDisp8, r.ldDisp32]:
 enc_i32_i64(base.fill, r.fillSib32, 0x8b)
 enc_i32_i64(base.regfill, r.regfill32, 0x8b)
 
-# Load 32 bits from `b1` spill slots. See `spill.b1` above.
-enc_both(base.fill.b1, r.fillSib32, 0x8b)
-enc_both(base.regfill.b1, r.regfill32, 0x8b)
+# Load 32 bits from `b1`, `i8` and `i16` spill slots. See `spill.b1` above.
+for ty in [types.b1, types.i8, types.i16]:
+    enc_both(base.fill.bind(ty), r.fillSib32, 0x8b)
+    enc_both(base.regfill.bind(ty), r.regfill32, 0x8b)
 
 # Push and Pop
 X86_32.enc(x86.push.i32, *r.pushq(0x50))
@@ -578,8 +581,11 @@ X86_64.enc(base.bint.i32.b1, *r.urm_noflags_abcd(0x0f, 0xb6))
 # Numerical conversions.
 
 # Reducing an integer is a no-op.
+X86_32.enc(base.ireduce.i8.i16, r.null, 0)
 X86_32.enc(base.ireduce.i8.i32, r.null, 0)
 X86_32.enc(base.ireduce.i16.i32, r.null, 0)
+
+X86_64.enc(base.ireduce.i8.i16, r.null, 0)
 X86_64.enc(base.ireduce.i8.i32, r.null, 0)
 X86_64.enc(base.ireduce.i16.i32, r.null, 0)
 X86_64.enc(base.ireduce.i8.i64, r.null, 0)
