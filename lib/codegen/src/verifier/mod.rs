@@ -1229,8 +1229,8 @@ impl<'a> Verifier<'a> {
                         );
                     }
                 }
-                for (_, ebb) in self.func.jump_tables[table].entries() {
-                    let arg_count = self.func.dfg.num_ebb_params(ebb);
+                for ebb in self.func.jump_tables[table].iter() {
+                    let arg_count = self.func.dfg.num_ebb_params(*ebb);
                     if arg_count != 0 {
                         return nonfatal!(
                             errors,

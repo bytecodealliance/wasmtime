@@ -152,12 +152,11 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                             .jump_tables
                             .get(table)
                             .expect("you are referencing an undeclared jump table")
-                            .entries()
-                            .map(|(_, ebb)| ebb)
-                            .filter(|dest_ebb| unique.insert(*dest_ebb))
+                            .iter()
+                            .filter(|&dest_ebb| unique.insert(*dest_ebb))
                         {
                             self.builder.func_ctx.ssa.declare_ebb_predecessor(
-                                dest_ebb,
+                                *dest_ebb,
                                 self.builder.position.basic_block.unwrap(),
                                 inst,
                             )
@@ -334,11 +333,6 @@ impl<'a> FunctionBuilder<'a> {
     /// Creates a jump table in the function, to be used by `br_table` instructions.
     pub fn create_jump_table(&mut self, data: JumpTableData) -> JumpTable {
         self.func.create_jump_table(data)
-    }
-
-    /// Inserts an entry in a previously declared jump table.
-    pub fn insert_jump_table_entry(&mut self, jt: JumpTable, index: usize, ebb: Ebb) {
-        self.func.insert_jump_table_entry(jt, index, ebb)
     }
 
     /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and

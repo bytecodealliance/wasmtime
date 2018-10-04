@@ -1494,48 +1494,48 @@ impl<'a> Parser<'a> {
 
     // Parse a jump table decl.
     //
-    // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" jt-entry {"," jt-entry}
+    // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" "[" jt-entry {"," jt-entry} "]"
     fn parse_jump_table_decl(&mut self) -> ParseResult<(JumpTable, JumpTableData)> {
         let jt = self.match_jt()?;
         self.match_token(Token::Equal, "expected '=' in jump_table decl")?;
         self.match_identifier("jump_table", "expected 'jump_table'")?;
+        self.match_token(Token::LBracket, "expected '[' before jump table contents")?;
 
         let mut data = JumpTableData::new();
 
-        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" * jt-entry {"," jt-entry}
-        for idx in 0_usize.. {
-            if let Some(dest) = self.parse_jump_table_entry()? {
-                data.set_entry(idx, dest);
-            }
-            if !self.optional(Token::Comma) {
-                // Collect any trailing comments.
-                self.token();
-                self.claim_gathered_comments(jt);
-
-                return Ok((jt, data));
-            }
-        }
-
-        err!(self.loc, "jump_table too long")
-    }
-
-    // jt-entry ::= * Ebb(dest) | "0"
-    fn parse_jump_table_entry(&mut self) -> ParseResult<Option<Ebb>> {
+        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" "[" * Ebb(dest) {"," Ebb(dest)} "]"
         match self.token() {
-            Some(Token::Integer(s)) => {
-                if s == "0" {
-                    self.consume();
-                    Ok(None)
-                } else {
-                    err!(self.loc, "invalid jump_table entry '{}'", s)
-                }
-            }
             Some(Token::Ebb(dest)) => {
                 self.consume();
-                Ok(Some(dest))
+                data.push_entry(dest);
+
+                loop {
+                    match self.token() {
+                        Some(Token::Comma) => {
+                            self.consume();
+                            if let Some(Token::Ebb(dest)) = self.token() {
+                                self.consume();
+                                data.push_entry(dest);
+                            } else {
+                                return err!(self.loc, "expected jump_table entry");
+                            }
+                        }
+                        Some(Token::RBracket) => break,
+                        _ => return err!(self.loc, "expected ']' after jump table contents"),
+                    }
+                }
             }
-            _ => err!(self.loc, "expected jump_table entry"),
+            Some(Token::RBracket) => (),
+            _ => return err!(self.loc, "expected jump_table entry"),
         }
+
+        self.consume();
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(jt);
+
+        Ok((jt, data))
     }
 
     // Parse a function body, add contents to `ctx`.
@@ -2738,8 +2738,8 @@ mod tests {
     fn duplicate_jt() {
         let ParseError { location, message } = Parser::new(
             "function %ebbs() system_v {
-                jt0 = jump_table 0, 0
-                jt0 = jump_table 0, 0",
+                jt0 = jump_table []
+                jt0 = jump_table []",
         ).parse_function(None)
         .unwrap_err();
 
@@ -2820,7 +2820,7 @@ mod tests {
                          function %comment() system_v { ; decl
                             ss10  = outgoing_arg 13 ; stackslot.
                             ; Still stackslot.
-                            jt10 = jump_table ebb0
+                            jt10 = jump_table [ebb0]
                             ; Jumptable
                          ebb0: ; Basic block
                          trap user42; Instruction

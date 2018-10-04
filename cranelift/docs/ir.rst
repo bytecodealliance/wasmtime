@@ -360,13 +360,12 @@ instruction in the EBB.
 .. autoinst:: brff
 .. autoinst:: br_table
 
-.. inst:: JT = jump_table EBB0, EBB1, ..., EBBn
+.. inst:: JT = jump_table [EBB0, EBB1, ..., EBBn]
 
     Declare a jump table in the :term:`function preamble`.
 
     This declares a jump table for use by the :inst:`br_table` indirect branch
-    instruction. Entries in the table are either EBB names, or ``0`` which
-    indicates an absent entry.
+    instruction. Entries in the table are EBB names.
 
     The EBBs listed must belong to the current function, and they can't have
     any arguments.

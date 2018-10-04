@@ -48,7 +48,7 @@ ebb0:
 }
 
 function %br_table(i32) {
-jt0 = jump_table ebb3, ebb1, 0, ebb2
+jt0 = jump_table [ebb3, ebb1, ebb2]
 
 ebb0(v0: i32):
     br_table v0, ebb4, jt0

@@ -203,7 +203,6 @@ fn expand_br_table_jt(
     };
 
     let table_size = func.jump_tables[table].len();
-    let table_is_fully_dense = func.jump_tables[table].fully_dense();
     let addr_ty = isa.pointer_type();
     let entry_ty = I32;
 
@@ -221,11 +220,6 @@ fn expand_br_table_jt(
     let entry = pos
         .ins()
         .jump_table_entry(addr_ty, arg, base_addr, entry_ty.bytes() as u8, table);
-
-    // If the table isn't fully dense, zero-check the entry.
-    if !table_is_fully_dense {
-        pos.ins().brz(entry, default_ebb, &[]);
-    }
 
     let addr = pos.ins().iadd(base_addr, entry);
     pos.ins().indirect_jump_table_br(addr, table);
@@ -260,10 +254,9 @@ fn expand_br_table_conds(
     pos.use_srcloc(inst);
 
     for i in 0..table_size {
-        if let Some(dest) = pos.func.jump_tables[table].get_entry(i) {
-            let t = pos.ins().icmp_imm(IntCC::Equal, arg, i as i64);
-            pos.ins().brnz(t, dest, &[]);
-        }
+        let dest = pos.func.jump_tables[table].as_slice()[i];
+        let t = pos.ins().icmp_imm(IntCC::Equal, arg, i as i64);
+        pos.ins().brnz(t, dest, &[]);
     }
 
     // `br_table` jumps to the default destination if nothing matches

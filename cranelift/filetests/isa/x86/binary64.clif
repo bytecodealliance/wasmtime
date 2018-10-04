@@ -1405,7 +1405,7 @@ ebb0:
 
 ; Tests for i64 jump table instructions.
 function %I64_JT(i64 [%rdi]) {
-    jt0 = jump_table ebb1, ebb2, ebb3
+    jt0 = jump_table [ebb1, ebb2, ebb3]
 
 ebb0(v0: i64 [%rdi]):
     ; Note: The next two lines will need to change whenever instructions are

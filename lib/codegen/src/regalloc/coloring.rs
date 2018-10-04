@@ -907,8 +907,8 @@ impl<'a> Context<'a> {
                         .cur
                         .func
                         .jump_tables[jt]
-                        .entries()
-                        .any(|(_, ebb)| lr.is_livein(ebb, ctx)))
+                        .iter()
+                        .any(|ebb| lr.is_livein(*ebb, ctx)))
             }
         }
     }

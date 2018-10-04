@@ -347,8 +347,8 @@ impl DominatorTree {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(succ, _) => self.push_if_unseen(succ),
                 BranchInfo::Table(jt, dest) => {
-                    for (_, succ) in func.jump_tables[jt].entries() {
-                        self.push_if_unseen(succ);
+                    for succ in func.jump_tables[jt].iter() {
+                        self.push_if_unseen(*succ);
                     }
                     if let Some(dest) = dest {
                         self.push_if_unseen(dest);
