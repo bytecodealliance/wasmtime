@@ -1510,11 +1510,11 @@ jt_base = TailRecipe(
         'jt_base', BranchTableBase, size=5, ins=(), outs=(GPR),
         clobbers_flags=False,
         emit='''
-        // No reloc is needed here as the jump table is emitted directly after
-        // the function body.
         PUT_OP(bits, rex2(0, out_reg0), sink);
         modrm_riprel(out_reg0, sink);
 
+        // No reloc is needed here as the jump table is emitted directly after
+        // the function body.
         jt_disp4(table, func, sink);
         ''')
 

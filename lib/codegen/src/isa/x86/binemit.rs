@@ -328,12 +328,13 @@ fn disp1<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS
     sink.put1(delta as u8);
 }
 
-/// Emit a single-byte branch displacement to `destination`.
+/// Emit a four-byte branch displacement to `destination`.
 fn disp4<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS) {
     let delta = func.offsets[destination].wrapping_sub(sink.offset() + 4);
     sink.put4(delta);
 }
 
+/// Emit a four-byte displacement to jump table `jt`.
 fn jt_disp4<CS: CodeSink + ?Sized>(jt: JumpTable, func: &Function, sink: &mut CS) {
     let delta = func.jt_offsets[jt].wrapping_sub(sink.offset() + 4);
     sink.put4(delta);
