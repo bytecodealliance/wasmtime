@@ -122,11 +122,6 @@ impl Function {
         self.jump_tables.push(data)
     }
 
-    /// Inserts an entry in a previously declared jump table.
-    pub fn insert_jump_table_entry(&mut self, jt: JumpTable, index: usize, ebb: Ebb) {
-        self.jump_tables[jt].set_entry(index, ebb);
-    }
-
     /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and
     /// `stack_addr` instructions.
     pub fn create_stack_slot(&mut self, data: StackSlotData) -> StackSlot {

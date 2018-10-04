@@ -244,7 +244,7 @@ mod tests {
         let func = setup!(0, [0, 1,]);
         assert_eq!(
             func,
-            "    jt0 = jump_table ebb1, ebb2
+            "    jt0 = jump_table [ebb1, ebb2]
 
 ebb0:
     v0 = iconst.i8 0
@@ -280,8 +280,8 @@ ebb3:
         let func = setup!(0, [0, 1, 5, 7, 10, 11, 12,]);
         assert_eq!(
             func,
-            "    jt0 = jump_table ebb1, ebb2
-    jt1 = jump_table ebb5, ebb6, ebb7
+            "    jt0 = jump_table [ebb1, ebb2]
+    jt1 = jump_table [ebb5, ebb6, ebb7]
 
 ebb0:
     v0 = iconst.i8 0

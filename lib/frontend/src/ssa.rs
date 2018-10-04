@@ -672,8 +672,8 @@ impl SSABuilder {
                 }
 
                 for old_dest in func.jump_tables[jt].as_mut_slice() {
-                    if *old_dest == PackedOption::from(dest_ebb) {
-                        *old_dest = PackedOption::from(middle_ebb);
+                    if *old_dest == dest_ebb {
+                        *old_dest = middle_ebb;
                     }
                 }
                 let mut cur = FuncCursor::new(func).at_bottom(middle_ebb);
@@ -1005,7 +1005,7 @@ mod tests {
         // Here is the pseudo-program we want to translate:
         //
         // function %f {
-        // jt = jump_table ebb2, 0, ebb1
+        // jt = jump_table [ebb2, ebb1]
         // ebb0:
         //    x = 1;
         //    br_table x, ebb2, jt
@@ -1039,9 +1039,9 @@ mod tests {
         };
         ssa.def_var(x_var, x1, block0);
 
-        // jt = jump_table ebb2, 0, ebb1
+        // jt = jump_table [ebb2, ebb1]
         jump_table.push_entry(ebb2);
-        jump_table.set_entry(2, ebb1);
+        jump_table.push_entry(ebb1);
         let jt = func.create_jump_table(jump_table);
 
         // ebb0:

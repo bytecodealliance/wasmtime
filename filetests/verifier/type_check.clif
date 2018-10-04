@@ -68,7 +68,7 @@ function %fn_call_incorrect_arg_type(i64) {
 ; TODO: Should we instead just verify that jump tables contain no EBBs that take arguments? This
 ; error doesn't occur if no instruction uses the jump table.
 function %jump_table_args() {
-    jt1 = jump_table ebb1
+    jt1 = jump_table [ebb1]
     ebb0:
         v0 = iconst.i32 0
         br_table v0, ebb2, jt1 ; error: takes no arguments, but had target ebb1 with 1 arguments

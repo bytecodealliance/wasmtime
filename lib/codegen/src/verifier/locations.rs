@@ -347,8 +347,8 @@ impl<'a> LocationVerifier<'a> {
                             );
                         }
                     }
-                    for (_, ebb) in self.func.jump_tables[jt].entries() {
-                        if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
+                    for ebb in self.func.jump_tables[jt].iter() {
+                        if lr.is_livein(*ebb, liveness.context(&self.func.layout)) {
                             return fatal!(
                                 errors,
                                 inst,

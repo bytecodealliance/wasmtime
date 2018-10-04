@@ -141,8 +141,8 @@ impl<'a> FlagsVerifier<'a> {
                             merge(&mut live_val, val, inst, errors)?;
                         }
                     }
-                    for (_, dest) in self.func.jump_tables[jt].entries() {
-                        if let Some(val) = self.livein[dest].expand() {
+                    for dest in self.func.jump_tables[jt].iter() {
+                        if let Some(val) = self.livein[*dest].expand() {
                             merge(&mut live_val, val, inst, errors)?;
                         }
                     }

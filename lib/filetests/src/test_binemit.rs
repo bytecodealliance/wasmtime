@@ -291,14 +291,9 @@ impl SubTest for TestBinEmit {
 
         for (jt, jt_data) in func.jump_tables.iter() {
             let jt_offset = func.jt_offsets[jt];
-            for idx in 0..jt_data.len() {
-                match jt_data.get_entry(idx) {
-                    Some(ebb) => {
-                        let rel_offset: i32 = func.offsets[ebb] as i32 - jt_offset as i32;
-                        sink.put4(rel_offset as u32)
-                    }
-                    None => sink.put4(0),
-                }
+            for ebb in jt_data.iter() {
+                let rel_offset: i32 = func.offsets[*ebb] as i32 - jt_offset as i32;
+                sink.put4(rel_offset as u32)
             }
         }
 
