@@ -120,53 +120,6 @@ macro_rules! nonfatal {
     });
 }
 
-/// Shorthand syntax for calling functions of the form
-/// `verify_foo(a, b, &mut VerifierErrors) -> VerifierStepResult<T>`
-/// as if they had the form `verify_foo(a, b) -> VerifierResult<T>`.
-///
-/// This syntax also ensures that no errors whatsoever were reported,
-/// even if they were not fatal.
-///
-/// # Example
-/// ```rust,ignore
-/// verify!(verify_context, func, cfg, domtree, fisa)
-///
-/// // ... is equivalent to...
-///
-/// let mut errors = VerifierErrors::new();
-/// let result = verify_context(func, cfg, domtree, fisa, &mut errors);
-///
-/// if errors.is_empty() {
-///     Ok(result.unwrap())
-/// } else {
-///     Err(errors)
-/// }
-/// ```
-#[macro_export]
-macro_rules! verify {
-    ( $verifier: expr; $fun: ident $(, $arg: expr )* ) => ({
-        let mut errors = $crate::verifier::VerifierErrors::default();
-        let result = $verifier.$fun( $( $arg, )* &mut errors);
-
-        if errors.is_empty() {
-            Ok(result.unwrap())
-        } else {
-            Err(errors)
-        }
-    });
-
-    ( $fun: path, $(, $arg: expr )* ) => ({
-        let mut errors = $crate::verifier::VerifierErrors::default();
-        let result = $fun( $( $arg, )* &mut errors);
-
-        if errors.is_empty() {
-            Ok(result.unwrap())
-        } else {
-            Err(errors)
-        }
-    });
-}
-
 mod cssa;
 mod flags;
 mod liveness;
@@ -203,9 +156,6 @@ pub type VerifierStepResult<T> = Result<T, ()>;
 ///
 /// Unlike `VerifierStepResult<()>` which may be `Ok` while still having reported
 /// errors, this type always returns `Err` if an error (fatal or not) was reported.
-///
-/// Typically, this error will be constructed by using `verify!` on a function
-/// that returns `VerifierStepResult<T>`.
 pub type VerifierResult<T> = Result<T, VerifierErrors>;
 
 /// List of verifier errors.
@@ -280,7 +230,14 @@ pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(
     fisa: FOI,
 ) -> VerifierResult<()> {
     let _tt = timing::verifier();
-    verify!(Verifier::new(func, fisa.into()); run)
+    let mut errors = VerifierErrors::default();
+    let verifier = Verifier::new(func, fisa.into());
+    let result = verifier.run(&mut errors);
+    if errors.is_empty() {
+        Ok(result.unwrap())
+    } else {
+        Err(errors)
+    }
 }
 
 /// Verify `func` after checking the integrity of associated context data structures `cfg` and
