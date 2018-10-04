@@ -34,13 +34,13 @@ impl binemit::RelocSink for PrintRelocs {
         addend: binemit::Addend,
     ) {
         if self.flag_print {
-            println!("reloc_ebb: {} {} {} at {}", r, name, addend, where_);
+            println!("reloc_external: {} {} {} at {}", r, name, addend, where_);
         }
     }
 
     fn reloc_jt(&mut self, where_: binemit::CodeOffset, r: binemit::Reloc, jt: ir::JumpTable) {
         if self.flag_print {
-            println!("reloc_ebb: {} {} at {}", r, jt, where_);
+            println!("reloc_jt: {} {} at {}", r, jt, where_);
         }
     }
 }
