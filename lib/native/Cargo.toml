@@ -13,7 +13,7 @@ cranelift-codegen = { path = "../codegen", version = "0.22.0", default-features 
 target-lexicon = { version = "0.0.3", default-features = false }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
-raw-cpuid = "5.0.0"
+raw-cpuid = "6.0.0"
 
 [features]
 default = ["std"]
