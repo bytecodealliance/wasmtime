@@ -70,7 +70,7 @@ use ir::{
 };
 use isa::TargetIsa;
 use iterators::IteratorExtras;
-use settings::{Flags, FlagsOrIsa};
+use settings::FlagsOrIsa;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter, Write};
