@@ -117,8 +117,8 @@ struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    fn new(f: Function, unique_isa: Option<&'a TargetIsa>) -> Context<'a> {
-        Context {
+    fn new(f: Function, unique_isa: Option<&'a TargetIsa>) -> Self {
+        Self {
             function: f,
             map: SourceMap::new(),
             unique_isa,
@@ -309,8 +309,8 @@ impl<'a> Context<'a> {
 
 impl<'a> Parser<'a> {
     /// Create a new `Parser` which reads `text`. The referenced text must outlive the parser.
-    pub fn new(text: &'a str) -> Parser {
-        Parser {
+    pub fn new(text: &'a str) -> Self {
+        Self {
             lex: Lexer::new(text),
             lex_error: None,
             lookahead: None,

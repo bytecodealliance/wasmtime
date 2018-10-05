@@ -311,10 +311,10 @@ struct Verifier<'a> {
 }
 
 impl<'a> Verifier<'a> {
-    pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Verifier<'a> {
+    pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Self {
         let expected_cfg = ControlFlowGraph::with_function(func);
         let expected_domtree = DominatorTree::with_function(func, &expected_cfg);
-        Verifier {
+        Self {
             func,
             expected_cfg,
             expected_domtree,

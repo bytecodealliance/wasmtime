@@ -182,7 +182,7 @@ impl<'a> PredicateView<'a> {
     /// Create a new view of a precomputed predicate vector.
     ///
     /// See the `predicate_view()` method on the various `Flags` types defined for each ISA.
-    pub fn new(bits: &'a [u8]) -> PredicateView {
+    pub fn new(bits: &'a [u8]) -> Self {
         PredicateView(bits)
     }
 

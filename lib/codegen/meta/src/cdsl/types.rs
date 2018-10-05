@@ -300,8 +300,8 @@ pub struct VectorType {
 
 impl VectorType {
     /// Initialize a new integer type with `n` bits.
-    pub fn new(base: LaneType, lanes: u64) -> VectorType {
-        VectorType { base, lanes }
+    pub fn new(base: LaneType, lanes: u64) -> Self {
+        Self { base, lanes }
     }
 
     /// Return a string containing the documentation comment for this vector type.

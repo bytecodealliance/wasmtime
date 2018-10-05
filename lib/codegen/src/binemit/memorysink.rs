@@ -43,12 +43,8 @@ impl<'a> MemoryCodeSink<'a> {
     ///
     /// This function is unsafe since `MemoryCodeSink` does not perform bounds checking on the
     /// memory buffer, and it can't guarantee that the `data` pointer is valid.
-    pub unsafe fn new<'sink>(
-        data: *mut u8,
-        relocs: &'sink mut RelocSink,
-        traps: &'sink mut TrapSink,
-    ) -> MemoryCodeSink<'sink> {
-        MemoryCodeSink {
+    pub unsafe fn new(data: *mut u8, relocs: &'a mut RelocSink, traps: &'a mut TrapSink) -> Self {
+        Self {
             data,
             offset: 0,
             code_size: 0,

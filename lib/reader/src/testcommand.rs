@@ -35,10 +35,10 @@ pub enum TestOption<'a> {
 impl<'a> TestCommand<'a> {
     /// Create a new TestCommand by parsing `s`.
     /// The returned command contains references into `s`.
-    pub fn new(s: &'a str) -> TestCommand<'a> {
+    pub fn new(s: &'a str) -> Self {
         let mut parts = s.split_whitespace();
         let cmd = parts.next().unwrap_or("");
-        TestCommand {
+        Self {
             command: cmd,
             options: parts
                 .filter(|s| !s.is_empty())
@@ -61,7 +61,7 @@ impl<'a> Display for TestCommand<'a> {
 impl<'a> TestOption<'a> {
     /// Create a new TestOption by parsing `s`.
     /// The returned option contains references into `s`.
-    pub fn new(s: &'a str) -> TestOption<'a> {
+    pub fn new(s: &'a str) -> Self {
         match s.find('=') {
             None => TestOption::Flag(s),
             Some(p) => TestOption::Value(&s[0..p], &s[p + 1..]),
