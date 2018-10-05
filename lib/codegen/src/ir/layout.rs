@@ -782,8 +782,8 @@ mod tests {
     impl<'f> LayoutCursor<'f> {
         /// Create a new `LayoutCursor` for `layout`.
         /// The cursor holds a mutable reference to `layout` for its entire lifetime.
-        pub fn new(layout: &'f mut Layout) -> LayoutCursor<'f> {
-            LayoutCursor {
+        pub fn new(layout: &'f mut Layout) -> Self {
+            Self {
                 layout,
                 pos: CursorPosition::Nowhere,
             }

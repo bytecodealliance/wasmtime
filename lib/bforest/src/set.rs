@@ -207,12 +207,8 @@ where
     C: Comparator<K>,
 {
     /// Create a cursor with a default (invalid) location.
-    fn new(
-        container: &'a mut Set<K>,
-        forest: &'a mut SetForest<K>,
-        comp: &'a C,
-    ) -> SetCursor<'a, K, C> {
-        SetCursor {
+    fn new(container: &'a mut Set<K>, forest: &'a mut SetForest<K>, comp: &'a C) -> Self {
+        Self {
             root: &mut container.root,
             pool: &mut forest.nodes,
             comp,

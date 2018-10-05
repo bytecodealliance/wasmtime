@@ -128,8 +128,8 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(s: &'a str) -> Lexer {
-        let mut lex = Lexer {
+    pub fn new(s: &'a str) -> Self {
+        let mut lex = Self {
             source: s,
             chars: s.char_indices(),
             lookahead: None,

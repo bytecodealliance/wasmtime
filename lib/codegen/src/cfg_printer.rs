@@ -15,8 +15,8 @@ pub struct CFGPrinter<'a> {
 /// A utility for pretty-printing the CFG of a `Function`.
 impl<'a> CFGPrinter<'a> {
     /// Create a new CFGPrinter.
-    pub fn new(func: &'a Function) -> CFGPrinter<'a> {
-        CFGPrinter {
+    pub fn new(func: &'a Function) -> Self {
+        Self {
             func,
             cfg: ControlFlowGraph::with_function(func),
         }

@@ -266,12 +266,8 @@ where
     C: Comparator<K>,
 {
     /// Create a cursor with a default (off-the-end) location.
-    fn new(
-        container: &'a mut Map<K, V>,
-        forest: &'a mut MapForest<K, V>,
-        comp: &'a C,
-    ) -> MapCursor<'a, K, V, C> {
-        MapCursor {
+    fn new(container: &'a mut Map<K, V>, forest: &'a mut MapForest<K, V>, comp: &'a C) -> Self {
+        Self {
             root: &mut container.root,
             pool: &mut forest.nodes,
             comp,

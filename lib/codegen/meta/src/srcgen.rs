@@ -38,8 +38,8 @@ pub struct Formatter {
 impl Formatter {
     /// Source code formatter class. Used to collect source code to be written
     /// to a file, and keep track of indentation.
-    pub fn new() -> Formatter {
-        Formatter {
+    pub fn new() -> Self {
+        Self {
             indent: 0,
             lines: Vec::new(),
         }

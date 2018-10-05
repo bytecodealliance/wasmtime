@@ -103,8 +103,8 @@ pub struct FuncInstBuilder<'short, 'long: 'short> {
 }
 
 impl<'short, 'long> FuncInstBuilder<'short, 'long> {
-    fn new<'s, 'l>(builder: &'s mut FunctionBuilder<'l>, ebb: Ebb) -> FuncInstBuilder<'s, 'l> {
-        FuncInstBuilder { builder, ebb }
+    fn new(builder: &'short mut FunctionBuilder<'long>, ebb: Ebb) -> Self {
+        Self { builder, ebb }
     }
 }
 
@@ -210,12 +210,9 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
 impl<'a> FunctionBuilder<'a> {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
     /// `FunctionBuilderContext`.
-    pub fn new(
-        func: &'a mut Function,
-        func_ctx: &'a mut FunctionBuilderContext,
-    ) -> FunctionBuilder<'a> {
+    pub fn new(func: &'a mut Function, func_ctx: &'a mut FunctionBuilderContext) -> Self {
         debug_assert!(func_ctx.is_empty());
-        FunctionBuilder {
+        Self {
             func,
             srcloc: Default::default(),
             func_ctx,

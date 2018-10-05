@@ -188,11 +188,8 @@ pub struct LiveRangeContext<'a, PO: 'a + ProgramOrder> {
 
 impl<'a, PO: ProgramOrder> LiveRangeContext<'a, PO> {
     /// Make a new context.
-    pub fn new(
-        order: &'a PO,
-        forest: &'a bforest::MapForest<Ebb, Inst>,
-    ) -> LiveRangeContext<'a, PO> {
-        LiveRangeContext { order, forest }
+    pub fn new(order: &'a PO, forest: &'a bforest::MapForest<Ebb, Inst>) -> Self {
+        Self { order, forest }
     }
 }
 
