@@ -11,3 +11,5 @@ cranelift.dbg*
 .mypy_cache
 rusty-tags.*
 docs/_build
+*~
+\#*\#
