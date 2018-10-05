@@ -59,7 +59,8 @@ mod state;
 mod translation_utils;
 
 pub use environ::{
-    DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, WasmError, WasmResult,
+    DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmError,
+    WasmResult,
 };
 pub use func_translator::FuncTranslator;
 pub use module_translator::translate_module;

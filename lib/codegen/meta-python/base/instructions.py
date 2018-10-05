@@ -234,6 +234,16 @@ x_return = Instruction(
         """,
         ins=rvals, is_return=True, is_terminator=True)
 
+fallthrough_return = Instruction(
+        'fallthrough_return', r"""
+        Return from the function by fallthrough.
+
+        This is a specialized instruction for use where one wants to append
+        a custom epilogue, which will then perform the real return. This
+        instruction has no encoding.
+        """,
+        ins=rvals, is_return=True, is_terminator=True)
+
 FN = Operand(
         'FN',
         entities.func_ref,

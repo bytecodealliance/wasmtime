@@ -9,7 +9,7 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Ebb, InstBuilder};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use environ::{FuncEnvironment, WasmError, WasmResult};
+use environ::{FuncEnvironment, ReturnMode, WasmError, WasmResult};
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
 
@@ -209,7 +209,10 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     if state.reachable {
         debug_assert!(builder.is_pristine());
         if !builder.is_unreachable() {
-            builder.ins().return_(&state.stack);
+            match environ.return_mode() {
+                ReturnMode::NormalReturns => builder.ins().return_(&state.stack),
+                ReturnMode::FallthroughReturn => builder.ins().fallthrough_return(&state.stack),
+            };
         }
     }
 
