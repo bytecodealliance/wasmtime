@@ -34,6 +34,9 @@ cranelift-codegen-meta = { path = "meta", version = "0.22.0" }
 default = ["std"]
 std = ["cranelift-entity/std", "cranelift-bforest/std", "target-lexicon/std"]
 core = ["hashmap_core"]
+# This enables some additional functions useful for writing tests, but which
+# can significantly increase the size of the library.
+testing_hooks = []
 
 [badges]
 maintenance = { status = "experimental" }

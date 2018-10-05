@@ -307,6 +307,10 @@ pub trait TargetIsa: fmt::Display {
     ///
     /// Note that this will call `put*` methods on the `sink` trait object via its vtable which
     /// is not the fastest way of emitting code.
+    ///
+    /// This function is under the "testing_hooks" feature, and is only suitable for use by
+    /// test harnesses. It increases code size, and is inefficient.
+    #[cfg(feature = "testing_hooks")]
     fn emit_inst(
         &self,
         func: &ir::Function,
@@ -316,7 +320,5 @@ pub trait TargetIsa: fmt::Display {
     );
 
     /// Emit a whole function into memory.
-    ///
-    /// This is more performant than calling `emit_inst` for each instruction.
     fn emit_function_to_memory(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
 }
