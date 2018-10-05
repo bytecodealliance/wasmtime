@@ -370,7 +370,6 @@ mod tests {
              call_conv = \"fast\"\n\
              is_pic = false\n\
              colocated_libcalls = false\n\
-             return_at_end = false\n\
              avoid_div_traps = false\n\
              enable_float = true\n\
              enable_nan_canonicalization = false\n\

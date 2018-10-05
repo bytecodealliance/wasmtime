@@ -28,7 +28,7 @@ use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
 use cranelift_frontend::{FunctionBuilder, Variable};
-use environ::{FuncEnvironment, GlobalVariable, WasmError, WasmResult};
+use environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
 use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
@@ -340,11 +340,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             };
             {
                 let args = state.peekn(return_count);
-                if environ.flags().return_at_end() {
-                    builder.ins().jump(br_destination, args);
-                } else {
-                    builder.ins().return_(args);
-                }
+                match environ.return_mode() {
+                    ReturnMode::NormalReturns => builder.ins().return_(args),
+                    ReturnMode::FallthroughReturn => builder.ins().jump(br_destination, args),
+                };
             }
             state.popn(return_count);
             state.reachable = false;

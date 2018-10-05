@@ -11,7 +11,9 @@ use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
-use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment};
+use cranelift_wasm::{
+    translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment, ReturnMode,
+};
 use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
@@ -102,8 +104,11 @@ fn handle_module(
         }
     };
 
-    let mut dummy_environ =
-        DummyEnvironment::with_triple_flags(isa.triple().clone(), fisa.flags.clone());
+    let mut dummy_environ = DummyEnvironment::with_triple_flags(
+        isa.triple().clone(),
+        fisa.flags.clone(),
+        ReturnMode::NormalReturns,
+    );
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
     let _ = terminal.fg(term::color::GREEN);

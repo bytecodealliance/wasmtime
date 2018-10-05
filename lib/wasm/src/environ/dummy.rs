@@ -7,7 +7,7 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::settings;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, WasmResult};
+use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
 use func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
@@ -105,38 +105,55 @@ pub struct DummyEnvironment {
 
     /// Vector of wasm bytecode size for each function.
     pub func_bytecode_sizes: Vec<usize>,
+
+    /// How to return from functions.
+    return_mode: ReturnMode,
 }
 
 impl DummyEnvironment {
     /// Allocates the data structures with default flags.
     pub fn with_triple(triple: Triple) -> Self {
-        Self::with_triple_flags(triple, settings::Flags::new(settings::builder()))
+        Self::with_triple_flags(
+            triple,
+            settings::Flags::new(settings::builder()),
+            ReturnMode::NormalReturns,
+        )
     }
 
-    /// Allocates the data structures with the given flags.
-    pub fn with_triple_flags(triple: Triple, flags: settings::Flags) -> Self {
+    /// Allocates the data structures with the given triple.
+    pub fn with_triple_flags(
+        triple: Triple,
+        flags: settings::Flags,
+        return_mode: ReturnMode,
+    ) -> Self {
         Self {
             info: DummyModuleInfo::with_triple_flags(triple, flags),
             trans: FuncTranslator::new(),
             func_bytecode_sizes: Vec::new(),
+            return_mode,
         }
     }
 
     /// Return a `DummyFuncEnvironment` for translating functions within this
     /// `DummyEnvironment`.
     pub fn func_env(&self) -> DummyFuncEnvironment {
-        DummyFuncEnvironment::new(&self.info)
+        DummyFuncEnvironment::new(&self.info, self.return_mode)
     }
 }
 
 /// The `FuncEnvironment` implementation for use by the `DummyEnvironment`.
 pub struct DummyFuncEnvironment<'dummy_environment> {
     pub mod_info: &'dummy_environment DummyModuleInfo,
+
+    return_mode: ReturnMode,
 }
 
 impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
-    pub fn new(mod_info: &'dummy_environment DummyModuleInfo) -> Self {
-        Self { mod_info }
+    pub fn new(mod_info: &'dummy_environment DummyModuleInfo, return_mode: ReturnMode) -> Self {
+        Self {
+            mod_info,
+            return_mode,
+        }
     }
 
     // Create a signature for `sigidx` amended with a `vmctx` argument after the standard wasm
@@ -321,6 +338,10 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, -1))
     }
+
+    fn return_mode(&self) -> ReturnMode {
+        self.return_mode
+    }
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
@@ -433,7 +454,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
 
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()> {
         let func = {
-            let mut func_environ = DummyFuncEnvironment::new(&self.info);
+            let mut func_environ = DummyFuncEnvironment::new(&self.info, self.return_mode);
             let func_index =
                 FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
             let name = get_func_name(func_index);

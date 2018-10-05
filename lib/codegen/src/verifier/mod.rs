@@ -307,7 +307,6 @@ struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
     expected_domtree: DominatorTree,
-    flags: &'a Flags,
     isa: Option<&'a TargetIsa>,
 }
 
@@ -319,7 +318,6 @@ impl<'a> Verifier<'a> {
             func,
             expected_cfg,
             expected_domtree,
-            flags: fisa.flags,
             isa: fisa.isa,
         }
     }
@@ -1654,9 +1652,9 @@ impl<'a> Verifier<'a> {
         // Instructions with side effects are not allowed to be ghost instructions.
         let opcode = self.func.dfg[inst].opcode();
 
-        // The `fallthrough` instruction is marked as a terminator and a branch, but it is not
-        // required to have an encoding.
-        if opcode == Opcode::Fallthrough {
+        // The `fallthrough` and `fallthrough_return` instructions are marked as terminators and
+        // branches, but they are not required to have an encoding.
+        if opcode == Opcode::Fallthrough || opcode == Opcode::FallthroughReturn {
             return Ok(());
         }
 
@@ -1696,24 +1694,6 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    /// Verify the `return_at_end` property which requires that there are no internal return
-    /// instructions.
-    fn verify_return_at_end(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        for ebb in self.func.layout.ebbs() {
-            let inst = self.func.layout.last_inst(ebb).unwrap();
-            if self.func.dfg[inst].opcode().is_return() && Some(ebb) != self.func.layout.last_ebb()
-            {
-                report!(
-                    errors,
-                    inst,
-                    "Internal return not allowed with return_at_end=1"
-                );
-            }
-        }
-
-        errors.as_result()
-    }
-
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
@@ -1727,10 +1707,6 @@ impl<'a> Verifier<'a> {
                 self.typecheck(inst, errors)?;
                 self.verify_encoding(inst, errors)?;
             }
-        }
-
-        if self.flags.return_at_end() {
-            self.verify_return_at_end(errors)?;
         }
 
         verify_flags(self.func, &self.expected_cfg, self.isa, errors)?;

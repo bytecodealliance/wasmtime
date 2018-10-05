@@ -6,9 +6,9 @@ extern crate wabt;
 
 use cranelift_codegen::isa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
-use cranelift_codegen::settings::{self, Configurable, Flags};
+use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::verifier;
-use cranelift_wasm::{translate_module, DummyEnvironment};
+use cranelift_wasm::{translate_module, DummyEnvironment, ReturnMode};
 use std::fs;
 use std::fs::File;
 use std::io;
@@ -35,16 +35,18 @@ fn testsuite() {
     let flags = Flags::new(settings::builder());
     for path in paths {
         let path = path.path();
-        handle_module(&path, &flags);
+        handle_module(&path, &flags, ReturnMode::NormalReturns);
     }
 }
 
 #[test]
-fn return_at_end() {
-    let mut flag_builder = settings::builder();
-    flag_builder.enable("return_at_end").unwrap();
-    let flags = Flags::new(flag_builder);
-    handle_module(Path::new("../../wasmtests/return_at_end.wat"), &flags);
+fn use_fallthrough_return() {
+    let flags = Flags::new(settings::builder());
+    handle_module(
+        Path::new("../../wasmtests/use_fallthrough_return.wat"),
+        &flags,
+        ReturnMode::FallthroughReturn,
+    );
 }
 
 fn read_file(path: &Path) -> io::Result<Vec<u8>> {
@@ -54,7 +56,7 @@ fn read_file(path: &Path) -> io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-fn handle_module(path: &Path, flags: &Flags) {
+fn handle_module(path: &Path, flags: &Flags, return_mode: ReturnMode) {
     let data = match path.extension() {
         None => {
             panic!("the file extension is not wasm or wat");
@@ -73,7 +75,9 @@ fn handle_module(path: &Path, flags: &Flags) {
             None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
         },
     };
-    let mut dummy_environ = DummyEnvironment::with_triple_flags(triple!("riscv64"), flags.clone());
+    let mut dummy_environ =
+        DummyEnvironment::with_triple_flags(triple!("riscv64"), flags.clone(), return_mode);
+
     translate_module(&data, &mut dummy_environ).unwrap();
 
     let isa = isa::lookup(dummy_environ.info.triple)

@@ -74,6 +74,15 @@ impl WasmError {
 /// A convenient alias for a `Result` that uses `WasmError` as the error type.
 pub type WasmResult<T> = Result<T, WasmError>;
 
+/// How to return from functions.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum ReturnMode {
+    /// Use normal return instructions as needed.
+    NormalReturns,
+    /// Use a single fallthrough return at the end of the function.
+    FallthroughReturn,
+}
+
 /// Environment affecting the translation of a single WebAssembly function.
 ///
 /// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cranelift
@@ -216,6 +225,11 @@ pub trait FuncEnvironment {
     fn translate_loop_header(&mut self, _pos: FuncCursor) {
         // By default, don't emit anything.
     }
+
+    /// Should the code be structured to use a single `fallthrough_return` instruction at the end
+    /// of the function body, rather than `return` instructions as needed? This is used by VMs
+    /// to append custom epilogues.
+    fn return_mode(&self) -> ReturnMode;
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

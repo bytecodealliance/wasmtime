@@ -65,16 +65,6 @@ colocated_libcalls = BoolSetting(
         they can use more efficient addressing.
         """)
 
-return_at_end = BoolSetting(
-        """
-        Generate functions with at most a single return instruction at the
-        end of the function.
-
-        This guarantees that functions do not have any internal return
-        instructions. Either they never return, or they have a single return
-        instruction at the end.
-        """)
-
 avoid_div_traps = BoolSetting(
         """
         Generate explicit checks around native division instructions to avoid
