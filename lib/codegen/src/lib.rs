@@ -48,6 +48,8 @@
 // Turns on no_std and alloc features if std is not available.
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
+// TODO: Remove this workaround once https://github.com/rust-lang/rust/issues/27747 is done.
+#![cfg_attr(not(feature = "std"), feature(slice_concat_ext))]
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
@@ -119,7 +121,7 @@ pub use result::{CodegenError, CodegenResult};
 /// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]
 mod std {
-    pub use alloc::{boxed, string, vec};
+    pub use alloc::{boxed, slice, string, vec};
     pub use core::*;
     pub mod collections {
         #[allow(unused_extern_crates)]
