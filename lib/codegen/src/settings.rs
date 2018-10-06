@@ -25,6 +25,11 @@ use isa::TargetIsa;
 use std::boxed::Box;
 use std::fmt;
 use std::str;
+use std::string::{String, ToString};
+
+// TODO: Remove this workaround once https://github.com/rust-lang/rust/issues/27747 is done.
+#[cfg(not(feature = "std"))]
+use std::slice::SliceConcatExt;
 
 /// A string-based configurator for settings groups.
 ///
