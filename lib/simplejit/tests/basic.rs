@@ -77,3 +77,76 @@ fn panic_on_define_after_finalize() {
     module.finalize_definitions();
     define_simple_function(&mut module);
 }
+
+#[test]
+fn switch_error() {
+    use cranelift_codegen::settings;
+
+    let sig = Signature {
+        params: vec![AbiParam::new(types::I32)],
+        returns: vec![AbiParam::new(types::I32)],
+        call_conv: CallConv::SystemV,
+    };
+
+    let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+
+    let mut func_ctx = FunctionBuilderContext::new();
+    {
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut func, &mut func_ctx);
+        let start = bcx.create_ebb();
+        let bb0 = bcx.create_ebb();
+        let bb1 = bcx.create_ebb();
+        let bb2 = bcx.create_ebb();
+        let bb3 = bcx.create_ebb();
+        println!("{} {} {} {} {}", start, bb0, bb1, bb2, bb3);
+
+        bcx.declare_var(Variable::new(0), types::I32);
+        bcx.declare_var(Variable::new(1), types::I32);
+        let in_val = bcx.append_ebb_param(start, types::I32);
+        bcx.switch_to_block(start);
+        bcx.def_var(Variable::new(0), in_val);
+        bcx.ins().jump(bb0, &[]);
+
+        bcx.switch_to_block(bb0);
+        let discr = bcx.use_var(Variable::new(0));
+        let mut switch = cranelift_frontend::Switch::new();
+        for &(index, bb) in &[
+            (9, bb1),
+            (13, bb1),
+            (10, bb1),
+            (92, bb1),
+            (39, bb1),
+            (34, bb1),
+        ] {
+            switch.set_entry(index, bb);
+        }
+        switch.emit(&mut bcx, discr, bb2);
+
+        bcx.switch_to_block(bb1);
+        let v = bcx.use_var(Variable::new(0));
+        bcx.def_var(Variable::new(1), v);
+        bcx.ins().jump(bb3, &[]);
+
+        bcx.switch_to_block(bb2);
+        let v = bcx.use_var(Variable::new(0));
+        bcx.def_var(Variable::new(1), v);
+        bcx.ins().jump(bb3, &[]);
+
+        bcx.switch_to_block(bb3);
+        let r = bcx.use_var(Variable::new(1));
+        bcx.ins().return_(&[r]);
+
+        bcx.seal_all_blocks();
+        bcx.finalize();
+    }
+
+    let flags = settings::Flags::new(settings::builder());
+    match cranelift_codegen::verify_function(&func, &flags) {
+        Ok(_) => {}
+        Err(err) => {
+            let pretty_error =
+                cranelift_codegen::print_errors::pretty_verifier_error(&func, None, None, err);
+            panic!("pretty_error:\n{}", pretty_error);
+        }
+    }
+}
