@@ -40,8 +40,10 @@ extern crate wasmtime_obj;
 #[macro_use]
 extern crate serde_derive;
 extern crate faerie;
+extern crate target_lexicon;
 
-use cranelift_codegen::settings;
+use cranelift_codegen::isa;
+use cranelift_codegen::settings::{self, Configurable};
 use docopt::Docopt;
 use faerie::Artifact;
 use std::error::Error;
@@ -52,6 +54,8 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
+use std::str::FromStr;
+use target_lexicon::{OperatingSystem, Triple};
 use wasmtime_environ::{compile_module, Module, ModuleEnvironment};
 use wasmtime_obj::emit_module;
 
@@ -62,12 +66,13 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj <file> -o <output>
+    wasm2obj [--target TARGET] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
     -v, --verbose       displays the module and translated functions
     -h, --help          print this help message
+    --target <TARGET>   build for the target triple; default is the host machine
     --version           print the Cranelift version
 ";
 
@@ -75,6 +80,7 @@ Options:
 struct Args {
     arg_file: String,
     arg_output: String,
+    arg_target: Option<String>,
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -93,7 +99,7 @@ fn main() {
         }).unwrap_or_else(|e| e.exit());
 
     let path = Path::new(&args.arg_file);
-    match handle_module(path.to_path_buf(), &args.arg_output) {
+    match handle_module(path.to_path_buf(), &args.arg_target, &args.arg_output) {
         Ok(()) => {}
         Err(message) => {
             println!(" error: {}", message);
@@ -102,7 +108,7 @@ fn main() {
     }
 }
 
-fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
+fn handle_module(path: PathBuf, target: &Option<String>, output: &str) -> Result<(), String> {
     let data = match read_wasm_file(path) {
         Ok(data) => data,
         Err(err) => {
@@ -110,10 +116,31 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
         }
     };
 
-    // FIXME: Make the target a parameter.
-    let (flag_builder, isa_builder) = cranelift_native::builders().unwrap_or_else(|_| {
-        panic!("host machine is not a supported target");
-    });
+    let (flag_builder, isa_builder) = match *target {
+        Some(ref target) => {
+            let target = Triple::from_str(&target).map_err(|_| "could not parse --target")?;
+            let mut flag_builder = settings::builder();
+            match target.operating_system {
+                OperatingSystem::Windows => {
+                    flag_builder.set("call_conv", "windows_fastcall").unwrap();
+                }
+                _ => {
+                    flag_builder.set("call_conv", "system_v").unwrap();
+                }
+            };
+
+            let isa_builder = isa::lookup(target).map_err(|err| match err {
+                isa::LookupError::SupportDisabled => {
+                    "support for architecture disabled at compile time"
+                }
+                isa::LookupError::Unsupported => "unsupported architecture",
+            })?;
+            (flag_builder, isa_builder)
+        }
+        None => cranelift_native::builders().unwrap_or_else(|_| {
+            panic!("host machine is not a supported target");
+        }),
+    };
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));

@@ -28,5 +28,6 @@ serde = "1.0.75"
 serde_derive = "1.0.75"
 tempdir = "*"
 faerie = "0.5.0"
+target-lexicon = { version = "0.0.3", default-features = false }
 
 [workspace]
