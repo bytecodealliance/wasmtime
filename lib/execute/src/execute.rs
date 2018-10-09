@@ -140,9 +140,10 @@ pub fn execute(
         }
     }
 
-    let code_buf = &compilation.functions[module.defined_func_index(start_index).expect(
-        "imported start functions not supported yet",
-    )];
+    let code_buf =
+        &compilation.functions[module
+                                   .defined_func_index(start_index)
+                                   .expect("imported start functions not supported yet")];
 
     // Collect all memory base addresses and Vec.
     let mut mem_base_addrs = instance

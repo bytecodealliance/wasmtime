@@ -4,15 +4,31 @@
 //! IL, then translates it to native code, and writes it out to a native
 //! object file with relocations.
 
-#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates, unstable_features)]
+#![deny(
+    missing_docs,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unstable_features
+)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
-#![cfg_attr(feature = "cargo-clippy", allow(new_without_default, new_without_default_derive))]
+#![cfg_attr(
+    feature = "clippy",
+    plugin(clippy(conf_file = "../../clippy.toml"))
+)]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    allow(new_without_default, new_without_default_derive)
+)]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
-        unicode_not_nfc, use_self
+        float_arithmetic,
+        mut_mut,
+        nonminimal_bool,
+        option_map_unwrap_or,
+        option_map_unwrap_or_else,
+        unicode_not_nfc,
+        use_self
     )
 )]
 
@@ -74,8 +90,7 @@ fn main() {
             d.help(true)
                 .version(Some(String::from("0.0.0")))
                 .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
+        }).unwrap_or_else(|e| e.exit());
 
     let path = Path::new(&args.arg_file);
     match handle_module(path.to_path_buf(), &args.arg_output) {
