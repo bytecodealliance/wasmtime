@@ -8,7 +8,7 @@ set -euo pipefail
 # - Make a release build.
 # - Run unit tests for all Rust crates (including the filetests)
 # - Build API documentation.
-# - Optionally, run clippy and fuzzing.
+# - Optionally, run fuzzing.
 #
 # All tests run by this script should be passing at all times.
 
@@ -50,14 +50,6 @@ cargo test --all
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/wasmtime/index.html"
 cargo doc
-
-# Run clippy if we have it.
-banner "Rust linter"
-if "$topdir/check-clippy.sh"; then
-    "$topdir/clippy-all.sh"
-else
-    echo "\`cargo +nightly install clippy\` for optional rust linting"
-fi
 
 # Ensure fuzzer works by running it with a single input
 # Note LSAN is disabled due to https://github.com/google/sanitizers/issues/764
