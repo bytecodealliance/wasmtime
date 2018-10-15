@@ -199,10 +199,12 @@ fn main() {
         }
         ("test", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-            cranelift_filetests::run(
+            let result = cranelift_filetests::run(
                 rest_cmd.is_present("verbose"),
+                rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("file")),
-            ).map(|_time| ())
+            ).map(|_time| ());
+            result
         }
         ("pass", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
@@ -215,6 +217,7 @@ fn main() {
             // Can be unwrapped because 'single-file' is required
             cranelift_filetests::run_passes(
                 rest_cmd.is_present("verbose"),
+                rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("pass")),
                 target_val,
                 rest_cmd.value_of("single-file").unwrap(),
@@ -235,6 +238,7 @@ fn main() {
             compile::run(
                 get_vec(rest_cmd.values_of("file")),
                 rest_cmd.is_present("print"),
+                rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
             )
@@ -257,6 +261,7 @@ fn main() {
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
                 rest_cmd.is_present("print-size"),
+                rest_cmd.is_present("time-passes"),
             );
 
             #[cfg(not(feature = "wasm"))]

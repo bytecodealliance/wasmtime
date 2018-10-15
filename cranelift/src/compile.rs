@@ -3,6 +3,7 @@
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
+use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_reader::parse_test;
@@ -60,6 +61,7 @@ impl binemit::TrapSink for PrintTraps {
 pub fn run(
     files: Vec<String>,
     flag_print: bool,
+    flag_report_times: bool,
     flag_set: &[String],
     flag_isa: &str,
 ) -> Result<(), String> {
@@ -68,13 +70,20 @@ pub fn run(
     for filename in files {
         let path = Path::new(&filename);
         let name = String::from(path.as_os_str().to_string_lossy());
-        handle_module(flag_print, &path.to_path_buf(), &name, parsed.as_fisa())?;
+        handle_module(
+            flag_print,
+            flag_report_times,
+            &path.to_path_buf(),
+            &name,
+            parsed.as_fisa(),
+        )?;
     }
     Ok(())
 }
 
 fn handle_module(
     flag_print: bool,
+    flag_report_times: bool,
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
@@ -132,6 +141,10 @@ fn handle_module(
             print_disassembly(isa, &mem[0..code_sink.code_size as usize])?;
             print_readonly_data(&mem[code_sink.code_size as usize..total_size as usize]);
         }
+    }
+
+    if flag_report_times {
+        print!("{}", timing::take_current());
     }
 
     Ok(())
