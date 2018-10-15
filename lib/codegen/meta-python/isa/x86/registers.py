@@ -46,14 +46,7 @@ FlagRegs = RegBank(
         names=['rflags'])
 
 GPR = RegClass(IntRegs)
-# Certain types of deref encodings cannot be used with all registers.
-#   R13/RBP cannot be used with zero-offset load or store instructions.
-#   R12 cannot be used with a non-SIB-byte encoding of all derefs.
-GPR_DEREF_SAFE = GPR.without(GPR.rsp, GPR.r12)
-GPR_ZERO_DEREF_SAFE = GPR_DEREF_SAFE.without(GPR.rbp, GPR.r13)
 GPR8 = GPR[0:8]
-GPR8_DEREF_SAFE = GPR8.without(GPR.rsp)
-GPR8_ZERO_DEREF_SAFE = GPR8_DEREF_SAFE.without(GPR.rbp)
 ABCD = GPR[0:4]
 FPR = RegClass(FloatRegs)
 FPR8 = FPR[0:8]

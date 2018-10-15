@@ -832,7 +832,8 @@ def emit_recipe_sizing(isa, fmt):
         for r in isa.all_recipes:
             fmt.comment('Code size information for recipe {}:'.format(r.name))
             with fmt.indented('RecipeSizing {', '},'):
-                fmt.format('bytes: {},', r.size)
+                fmt.format('base_size: {},', r.base_size)
+                fmt.format('compute_size: {},', r.compute_size)
                 if r.branch_range:
                     fmt.format(
                         'branch_range: '

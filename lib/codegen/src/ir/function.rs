@@ -14,6 +14,7 @@ use ir::{
 use ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use ir::{JumpTableOffsets, JumpTables};
 use isa::{EncInfo, Encoding, Legalize, TargetIsa};
+use regalloc::RegDiversions;
 use settings::CallConv;
 use std::fmt;
 use write::write_function;
@@ -177,13 +178,20 @@ impl Function {
     ///
     /// This function can only be used after the code layout has been computed by the
     /// `binemit::relax_branches()` function.
-    pub fn inst_offsets<'a>(&'a self, ebb: Ebb, encinfo: &EncInfo) -> InstOffsetIter<'a> {
+    pub fn inst_offsets<'a>(
+        &'a self,
+        func: &'a Function,
+        ebb: Ebb,
+        encinfo: &EncInfo,
+    ) -> InstOffsetIter<'a> {
         assert!(
             !self.offsets.is_empty(),
             "Code layout must be computed first"
         );
         InstOffsetIter {
             encinfo: encinfo.clone(),
+            func,
+            divert: RegDiversions::new(),
             encodings: &self.encodings,
             offset: self.offsets[ebb],
             iter: self.layout.ebb_insts(ebb),
@@ -226,6 +234,8 @@ impl fmt::Debug for Function {
 /// Iterator returning instruction offsets and sizes: `(offset, inst, size)`.
 pub struct InstOffsetIter<'a> {
     encinfo: EncInfo,
+    divert: RegDiversions,
+    func: &'a Function,
     encodings: &'a InstEncodings,
     offset: CodeOffset,
     iter: ir::layout::Insts<'a>,
@@ -236,10 +246,13 @@ impl<'a> Iterator for InstOffsetIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|inst| {
-            let size = self.encinfo.bytes(self.encodings[inst]);
+            self.divert.apply(&self.func.dfg[inst]);
+            let byte_size =
+                self.encinfo
+                    .byte_size(self.encodings[inst], inst, &self.divert, self.func);
             let offset = self.offset;
-            self.offset += size;
-            (offset, inst, size)
+            self.offset += byte_size;
+            (offset, inst, byte_size)
         })
     }
 }

@@ -328,7 +328,6 @@ impl Context {
         let code_size = relax_branches(&mut self.func, isa)?;
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
-
         Ok(code_size)
     }
 }
