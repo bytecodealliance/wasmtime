@@ -10,6 +10,7 @@
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::Context;
+use cranelift_codegen::timing;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
     translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment, ReturnMode,
@@ -46,6 +47,7 @@ pub fn run(
     flag_set: &[String],
     flag_triple: &str,
     flag_print_size: bool,
+    flag_report_times: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
 
@@ -58,6 +60,7 @@ pub fn run(
             flag_check_translation,
             flag_print,
             flag_print_size,
+            flag_report_times,
             &path.to_path_buf(),
             &name,
             parsed.as_fisa(),
@@ -72,6 +75,7 @@ fn handle_module(
     flag_check_translation: bool,
     flag_print: bool,
     flag_print_size: bool,
+    flag_report_times: bool,
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
@@ -207,6 +211,10 @@ fn handle_module(
         println!("Total module code size: {} bytes", total_module_code_size);
         let total_bytecode_size: usize = dummy_environ.func_bytecode_sizes.iter().sum();
         println!("Total module bytecode size: {} bytes", total_bytecode_size);
+    }
+
+    if flag_report_times {
+        println!("{}", timing::take_current());
     }
 
     let _ = terminal.fg(term::color::GREEN);

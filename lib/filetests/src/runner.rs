@@ -4,6 +4,7 @@
 //! scanning directories for tests.
 
 use concurrent::{ConcurrentRunner, Reply};
+use cranelift_codegen::timing;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::{self, Display};
@@ -62,6 +63,9 @@ impl Display for QueueEntry {
 pub struct TestRunner {
     verbose: bool,
 
+    // Should we print the timings out?
+    report_times: bool,
+
     // Directories that have not yet been scanned.
     dir_stack: Vec<PathBuf>,
 
@@ -85,9 +89,10 @@ pub struct TestRunner {
 
 impl TestRunner {
     /// Create a new blank TrstRunner.
-    pub fn new(verbose: bool) -> Self {
+    pub fn new(verbose: bool, report_times: bool) -> Self {
         Self {
             verbose,
+            report_times,
             dir_stack: Vec::new(),
             tests: Vec::new(),
             new_tests: 0,
@@ -300,6 +305,9 @@ impl TestRunner {
                 }
             }
             conc.join();
+            if self.report_times {
+                println!("{}", timing::take_current());
+            }
         }
     }
 
