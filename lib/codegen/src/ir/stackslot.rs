@@ -63,7 +63,7 @@ pub enum StackSlotKind {
     /// An emergency spill slot.
     ///
     /// Emergency slots are allocated late when the register's constraint solver needs extra space
-    /// to shuffle registers around. The are only used briefly, and can be reused.
+    /// to shuffle registers around. They are only used briefly, and can be reused.
     EmergencySlot,
 }
 

@@ -316,7 +316,8 @@ class EncRecipe(object):
     :param name: Short mnemonic name for this recipe.
     :param format: All encoded instructions must have this
             :py:class:`InstructionFormat`.
-    :param size: Number of bytes in the binary encoded instruction.
+    :param base_size: Base number of bytes in the binary encoded instruction.
+    :param compute_size: Function name to use when computing actual size.
     :param ins: Tuple of register constraints for value operands.
     :param outs: Tuple of register constraints for results.
     :param branch_range: `(origin, bits)` range for branches.
@@ -328,22 +329,25 @@ class EncRecipe(object):
 
     def __init__(
             self,
-            name,                 # type: str
-            format,               # type: InstructionFormat
-            size,                 # type: int
-            ins,                  # type: ConstraintSeq
-            outs,                 # type: ConstraintSeq
-            branch_range=None,    # type: BranchRange
-            clobbers_flags=True,  # type: bool
-            instp=None,           # type: PredNode
-            isap=None,            # type: PredNode
-            emit=None             # type: str
+            name,                     # type: str
+            format,                   # type: InstructionFormat
+            base_size,                # type: int
+            ins,                      # type: ConstraintSeq
+            outs,                     # type: ConstraintSeq
+            compute_size=None,        # type: str
+            branch_range=None,        # type: BranchRange
+            clobbers_flags=True,      # type: bool
+            instp=None,               # type: PredNode
+            isap=None,                # type: PredNode
+            emit=None                 # type: str
             ):
         # type: (...) -> None
         self.name = name
         self.format = format
-        assert size >= 0
-        self.size = size
+        assert base_size >= 0
+        self.base_size = base_size
+        self.compute_size = compute_size if compute_size is not None \
+            else 'base_size'
         self.branch_range = branch_range
         self.clobbers_flags = clobbers_flags
         self.instp = instp

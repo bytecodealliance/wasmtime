@@ -47,7 +47,7 @@
 //! concurrent function compilations.
 
 pub use isa::constraints::{BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints};
-pub use isa::encoding::{EncInfo, Encoding};
+pub use isa::encoding::{base_size, EncInfo, Encoding};
 pub use isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
 pub use isa::stack::{StackBase, StackBaseMask, StackRef};
 
@@ -204,7 +204,7 @@ pub trait TargetIsa: fmt::Display {
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
 
-    /// Returns an iterartor over legal encodings for the instruction.
+    /// Returns an iterator over legal encodings for the instruction.
     fn legal_encodings<'a>(
         &'a self,
         func: &'a ir::Function,

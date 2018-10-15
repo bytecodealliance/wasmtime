@@ -1,5 +1,6 @@
 //! Emitting binary x86 machine code.
 
+use super::enc_tables::{needs_offset, needs_sib_byte};
 use super::registers::RU;
 use binemit::{bad_encoding, CodeSink, Reloc};
 use ir::condcodes::{CondCode, FloatCC, IntCC};
