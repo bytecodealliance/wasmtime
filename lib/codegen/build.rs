@@ -80,7 +80,7 @@ fn main() {
     // Now that the Python build process is complete, generate files that are
     // emitted by the `meta` crate.
     // ------------------------------------------------------------------------
-    if let Err(err) = meta::gen_types::generate("new_types.rs", &out_dir) {
+    if let Err(err) = meta::gen_types::generate("types.rs", &out_dir) {
         eprintln!("Error: {}", err);
         process::exit(1);
     }
