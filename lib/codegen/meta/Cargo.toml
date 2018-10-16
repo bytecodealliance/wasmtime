@@ -7,6 +7,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/CraneStation/cranelift"
 readme = "README.md"
 
+[dependencies]
+cranelift-entity = { path = "../../entity", version = "0.22.0", default-features = false }
+
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }

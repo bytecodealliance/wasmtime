@@ -50,6 +50,11 @@ where
         self.elems.get(k.index())
     }
 
+    /// Get the element at `k` if it exists, mutable version.
+    pub fn get_mut(&mut self, k: K) -> Option<&mut V> {
+        self.elems.get_mut(k.index())
+    }
+
     /// Is this map completely empty?
     pub fn is_empty(&self) -> bool {
         self.elems.is_empty()
@@ -100,6 +105,11 @@ where
         let k = self.next_key();
         self.elems.push(v);
         k
+    }
+
+    /// Returns the last element that was inserted in the map.
+    pub fn last(&self) -> Option<&V> {
+        self.elems.last()
     }
 }
 
