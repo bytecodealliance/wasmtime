@@ -1,3 +1,11 @@
+use cdsl::isa::TargetIsa;
+use std::fmt;
+
+mod arm32;
+mod arm64;
+mod riscv;
+mod x86;
+
 /// Represents known ISA target.
 #[derive(Copy, Clone)]
 pub enum Isa {
@@ -13,7 +21,7 @@ impl Isa {
         Isa::all()
             .iter()
             .cloned()
-            .filter(|isa| isa.name() == name)
+            .filter(|isa| isa.to_string() == name)
             .next()
     }
 
@@ -31,16 +39,6 @@ impl Isa {
         [Isa::Riscv, Isa::X86, Isa::Arm32, Isa::Arm64]
     }
 
-    /// Returns name of the isa target.
-    pub fn name(&self) -> &'static str {
-        match *self {
-            Isa::Riscv => "riscv",
-            Isa::X86 => "x86",
-            Isa::Arm32 => "arm32",
-            Isa::Arm64 => "arm64",
-        }
-    }
-
     /// Checks if arch is applicable for the isa target.
     fn is_arch_applicable(&self, arch: &str) -> bool {
         match *self {
@@ -50,4 +48,28 @@ impl Isa {
             Isa::Arm64 => arch == "aarch64",
         }
     }
+}
+
+impl fmt::Display for Isa {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Isa::Riscv => write!(f, "riscv"),
+            Isa::X86 => write!(f, "x86"),
+            Isa::Arm32 => write!(f, "arm32"),
+            Isa::Arm64 => write!(f, "arm64"),
+        }
+    }
+}
+
+pub fn define_all() -> Vec<TargetIsa> {
+    let isas = vec![
+        riscv::define(),
+        arm32::define(),
+        arm64::define(),
+        x86::define(),
+    ];
+    for isa in isas.iter() {
+        isa.check();
+    }
+    isas
 }
