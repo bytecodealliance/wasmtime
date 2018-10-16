@@ -5,7 +5,6 @@
 from __future__ import absolute_import
 import argparse
 import isa
-import gen_types
 import gen_instr
 import gen_settings
 import gen_build_deps
@@ -26,7 +25,6 @@ def main():
 
     isas = isa.all_isas()
 
-    gen_types.generate(out_dir)
     gen_instr.generate(isas, out_dir)
     gen_settings.generate(isas, out_dir)
     gen_encoding.generate(isas, out_dir)
