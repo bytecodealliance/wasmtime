@@ -6,7 +6,8 @@ use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
     types, AbiParam, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
     GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData,
-    JumpTable, JumpTableData, LibCall, SigRef, Signature, StackSlot, StackSlotData, Type, Value,
+    JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Type,
+    Value,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::packed_option::PackedOption;
@@ -567,10 +568,51 @@ impl<'a> FunctionBuilder<'a> {
         self.ins().call(libc_memcpy, &[dest, src, size]);
     }
 
+    /// Optimised memcpy for small copys.
+    pub fn emit_small_memcpy(
+        &mut self,
+        isa: &TargetIsa,
+        dest: Value,
+        src: Value,
+        size: u64,
+        dest_align: u8,
+        src_align: u8,
+    ) {
+        // Currently the result of guess work, not actual profiling.
+        const THRESHOLD: u64 = 4;
+
+        let access_size = greatest_divisible_power_of_two(size);
+        assert!(
+            access_size.is_power_of_two(),
+            "`size` is not a power of two"
+        );
+        assert!(
+            access_size >= ::std::cmp::min(src_align, dest_align) as u64,
+            "`size` is smaller than `dest` and `src`'s alignment value."
+        );
+        let load_and_store_amount = size / access_size;
+
+        if load_and_store_amount > THRESHOLD {
+            let size_value = self.ins().iconst(isa.pointer_type(), size as i64);
+            self.call_memcpy(isa, dest, src, size_value);
+            return;
+        }
+
+        let mut flags = MemFlags::new();
+        flags.set_aligned();
+
+        for i in 0..load_and_store_amount {
+            let offset = (access_size * i) as i32;
+            let int_type = Type::int(access_size as u16).unwrap();
+            let value = self.ins().load(int_type, flags, src, offset);
+            self.ins().store(flags, value, dest, offset);
+        }
+    }
+
     /// Calls libc.memset
     ///
-    /// Writes `len` bytes of value `ch` to memory starting at `buffer`.
-    pub fn call_memset(&mut self, isa: &TargetIsa, buffer: Value, ch: Value, len: Value) {
+    /// Writes `size` bytes of value `ch` to memory starting at `buffer`.
+    pub fn call_memset(&mut self, isa: &TargetIsa, buffer: Value, ch: Value, size: Value) {
         let pointer_type = isa.pointer_type();
         let signature = {
             let mut s = Signature::new(isa.flags().call_conv());
@@ -587,14 +629,68 @@ impl<'a> FunctionBuilder<'a> {
         });
 
         let ch = self.ins().uextend(types::I32, ch);
-        self.ins().call(libc_memset, &[buffer, ch, len]);
+        self.ins().call(libc_memset, &[buffer, ch, size]);
+    }
+
+    /// Calls libc.memset
+    ///
+    /// Writes `size` bytes of value `ch` to memory starting at `buffer`.
+    pub fn emit_small_memset(
+        &mut self,
+        isa: &TargetIsa,
+        buffer: Value,
+        ch: u32,
+        size: u64,
+        buffer_align: u8,
+    ) {
+        // Currently the result of guess work, not actual profiling.
+        const THRESHOLD: u64 = 4;
+
+        let access_size = greatest_divisible_power_of_two(size);
+        assert!(
+            access_size.is_power_of_two(),
+            "`size` is not a power of two"
+        );
+        assert!(
+            access_size >= buffer_align as u64,
+            "`size` is smaller than `dest` and `src`'s alignment value."
+        );
+        let load_and_store_amount = size / access_size;
+
+        if load_and_store_amount > THRESHOLD {
+            let ch = self.ins().iconst(types::I32, ch as i64);
+            let size = self.ins().iconst(isa.pointer_type(), size as i64);
+            self.call_memset(isa, buffer, ch, size);
+        } else {
+            let mut flags = MemFlags::new();
+            flags.set_aligned();
+
+            let ch = ch as u64;
+            let int_type = Type::int(access_size as u16).unwrap();
+            let raw_value = if int_type == types::I64 {
+                (ch << 32) | (ch << 16) | (ch << 8) | ch
+            } else if int_type == types::I32 {
+                (ch << 16) | (ch << 8) | ch
+            } else if int_type == types::I16 {
+                (ch << 8) | ch
+            } else {
+                assert_eq!(int_type, types::I8);
+                ch
+            };
+
+            let value = self.ins().iconst(int_type, raw_value as i64);
+            for i in 0..load_and_store_amount {
+                let offset = (access_size * i) as i32;
+                self.ins().store(flags, value, buffer, offset);
+            }
+        }
     }
 
     /// Calls libc.memmove
     ///
-    /// Copies `len` bytes from memory starting at `source` to memory starting
+    /// Copies `size` bytes from memory starting at `source` to memory starting
     /// at `dest`. `source` is always read before writing to `dest`.
-    pub fn call_memmove(&mut self, isa: &TargetIsa, dest: Value, source: Value, num: Value) {
+    pub fn call_memmove(&mut self, isa: &TargetIsa, dest: Value, source: Value, size: Value) {
         let pointer_type = isa.pointer_type();
         let signature = {
             let mut s = Signature::new(isa.flags().call_conv());
@@ -610,8 +706,57 @@ impl<'a> FunctionBuilder<'a> {
             colocated: false,
         });
 
-        self.ins().call(libc_memmove, &[dest, source, num]);
+        self.ins().call(libc_memmove, &[dest, source, size]);
     }
+
+    /// Optimised memmove for small moves.
+    pub fn emit_small_memmove(
+        &mut self,
+        isa: &TargetIsa,
+        dest: Value,
+        src: Value,
+        size: u64,
+        dest_align: u8,
+        src_align: u8,
+    ) {
+        // Currently the result of guess work, not actual profiling.
+        const THRESHOLD: u64 = 4;
+
+        let access_size = greatest_divisible_power_of_two(size);
+        assert!(
+            access_size.is_power_of_two(),
+            "`size` is not a power of two"
+        );
+        assert!(
+            access_size >= ::std::cmp::min(src_align, dest_align) as u64,
+            "`size` is smaller than `dest` and `src`'s alignment value."
+        );
+        let load_and_store_amount = size / access_size;
+
+        if load_and_store_amount > THRESHOLD {
+            let size_value = self.ins().iconst(isa.pointer_type(), size as i64);
+            self.call_memmove(isa, dest, src, size_value);
+            return;
+        }
+
+        let mut flags = MemFlags::new();
+        flags.set_aligned();
+
+        // Load all of the memory first in case `dest` overlaps.
+        let registers: Vec<_> = (0..load_and_store_amount)
+            .map(|i| {
+                let offset = (access_size * i) as i32;
+                (self.ins().load(types::I8, flags, src, offset), offset)
+            }).collect();
+
+        for (value, offset) in registers {
+            self.ins().store(flags, value, dest, offset);
+        }
+    }
+}
+
+fn greatest_divisible_power_of_two(size: u64) -> u64 {
+    (size as i64 & -(size as i64)) as u64
 }
 
 // Helper functions
@@ -648,6 +793,7 @@ impl<'a> FunctionBuilder<'a> {
 
 #[cfg(test)]
 mod tests {
+    use super::greatest_divisible_power_of_two;
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::types::*;
     use cranelift_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
@@ -820,5 +966,13 @@ ebb0:
 }
 "
         );
+    }
+
+    #[test]
+    fn test_greatest_divisible_power_of_two() {
+        assert_eq!(64, greatest_divisible_power_of_two(64));
+        assert_eq!(16, greatest_divisible_power_of_two(48));
+        assert_eq!(8, greatest_divisible_power_of_two(24));
+        assert_eq!(1, greatest_divisible_power_of_two(25));
     }
 }
