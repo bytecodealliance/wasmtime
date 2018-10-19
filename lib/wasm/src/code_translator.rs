@@ -380,9 +380,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let callee = state.pop1();
             let call = environ.translate_call_indirect(
                 builder.cursor(),
-                table_index as TableIndex,
+                TableIndex::new(table_index as usize),
                 table,
-                index as SignatureIndex,
+                SignatureIndex::new(index as usize),
                 sigref,
                 callee,
                 state.peekn(num_args),
@@ -403,13 +403,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::MemoryGrow { reserved } => {
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
-            let heap_index = reserved as MemoryIndex;
+            let heap_index = MemoryIndex::new(reserved as usize);
             let heap = state.get_heap(builder.func, reserved, environ);
             let val = state.pop1();
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::MemorySize { reserved } => {
-            let heap_index = reserved as MemoryIndex;
+            let heap_index = MemoryIndex::new(reserved as usize);
             let heap = state.get_heap(builder.func, reserved, environ);
             state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);
         }

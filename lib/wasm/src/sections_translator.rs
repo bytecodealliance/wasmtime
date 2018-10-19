@@ -72,7 +72,11 @@ pub fn parse_import_section<'data>(
                 // becomes a concern here.
                 let module_name = from_utf8(module).unwrap();
                 let field_name = from_utf8(field).unwrap();
-                environ.declare_func_import(sig as SignatureIndex, module_name, field_name);
+                environ.declare_func_import(
+                    SignatureIndex::new(sig as usize),
+                    module_name,
+                    field_name,
+                );
             }
             ParserState::ImportSectionEntry {
                 ty:
@@ -125,7 +129,7 @@ pub fn parse_function_section(
     loop {
         match *parser.read() {
             ParserState::FunctionSectionEntry(sigindex) => {
-                environ.declare_func_type(sigindex as SignatureIndex);
+                environ.declare_func_type(SignatureIndex::new(sigindex as usize));
             }
             ParserState::EndSection => break,
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
@@ -151,12 +155,20 @@ pub fn parse_export_section<'data>(
                 // assume valid UTF-8 and use `from_utf8_unchecked` if performance
                 // becomes a concern here.
                 let name = from_utf8(field).unwrap();
-                let func_index = FuncIndex::new(index as usize);
+                let index = index as usize;
                 match *kind {
-                    ExternalKind::Function => environ.declare_func_export(func_index, name),
-                    ExternalKind::Table => environ.declare_table_export(func_index.index(), name),
-                    ExternalKind::Memory => environ.declare_memory_export(func_index.index(), name),
-                    ExternalKind::Global => environ.declare_global_export(func_index.index(), name),
+                    ExternalKind::Function => {
+                        environ.declare_func_export(FuncIndex::new(index), name)
+                    }
+                    ExternalKind::Table => {
+                        environ.declare_table_export(TableIndex::new(index), name)
+                    }
+                    ExternalKind::Memory => {
+                        environ.declare_memory_export(MemoryIndex::new(index), name)
+                    }
+                    ExternalKind::Global => {
+                        environ.declare_global_export(GlobalIndex::new(index), name)
+                    }
                 }
             }
             ParserState::EndSection => break,
@@ -235,7 +247,7 @@ pub fn parse_global_section(
                 GlobalInit::F64Const(value.bits())
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                GlobalInit::GlobalRef(global_index as GlobalIndex)
+                GlobalInit::GlobalRef(GlobalIndex::new(global_index as usize))
             }
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
             ref s => panic!("unexpected section content: {:?}", s),
@@ -281,9 +293,12 @@ pub fn parse_data_section<'data>(
                 (None, value as u32 as usize)
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match environ.get_global(global_index as GlobalIndex).initializer {
+                match environ
+                    .get_global(GlobalIndex::new(global_index as usize))
+                    .initializer
+                {
                     GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                    GlobalInit::Import() => (Some(global_index as GlobalIndex), 0),
+                    GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
                     _ => panic!("should not happen"),
                 }
             }
@@ -309,7 +324,7 @@ pub fn parse_data_section<'data>(
                 ref s => panic!("unexpected section content: {:?}", s),
             };
             environ.declare_data_initialization(
-                memory_index as MemoryIndex,
+                MemoryIndex::new(memory_index as usize),
                 base,
                 running_offset,
                 data,
@@ -352,7 +367,9 @@ pub fn parse_elements_section(
 ) -> WasmResult<()> {
     loop {
         let table_index = match *parser.read() {
-            ParserState::BeginElementSectionEntry(table_index) => table_index as TableIndex,
+            ParserState::BeginElementSectionEntry(table_index) => {
+                TableIndex::new(table_index as usize)
+            }
             ParserState::EndSection => break,
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
             ref s => panic!("unexpected section content: {:?}", s),
@@ -367,9 +384,12 @@ pub fn parse_elements_section(
                 (None, value as u32 as usize)
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match environ.get_global(global_index as GlobalIndex).initializer {
+                match environ
+                    .get_global(GlobalIndex::new(global_index as usize))
+                    .initializer
+                {
                     GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                    GlobalInit::Import() => (Some(global_index as GlobalIndex), 0),
+                    GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
                     _ => panic!("should not happen"),
                 }
             }

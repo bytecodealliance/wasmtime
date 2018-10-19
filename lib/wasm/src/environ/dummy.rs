@@ -51,7 +51,7 @@ pub struct DummyModuleInfo {
     pub flags: settings::Flags,
 
     /// Signatures as provided by `declare_signature`.
-    pub signatures: Vec<ir::Signature>,
+    pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
 
     /// Module and field names of imported functions as provided by `declare_func_import`.
     pub imported_funcs: Vec<(String, String)>,
@@ -63,13 +63,13 @@ pub struct DummyModuleInfo {
     pub function_bodies: PrimaryMap<DefinedFuncIndex, ir::Function>,
 
     /// Tables as provided by `declare_table`.
-    pub tables: Vec<Exportable<Table>>,
+    pub tables: PrimaryMap<TableIndex, Exportable<Table>>,
 
     /// Memories as provided by `declare_memory`.
-    pub memories: Vec<Exportable<Memory>>,
+    pub memories: PrimaryMap<MemoryIndex, Exportable<Memory>>,
 
     /// Globals as provided by `declare_global`.
-    pub globals: Vec<Exportable<Global>>,
+    pub globals: PrimaryMap<GlobalIndex, Exportable<Global>>,
 
     /// The start function.
     pub start_func: Option<FuncIndex>,
@@ -81,13 +81,13 @@ impl DummyModuleInfo {
         Self {
             triple,
             flags,
-            signatures: Vec::new(),
+            signatures: PrimaryMap::new(),
             imported_funcs: Vec::new(),
             functions: PrimaryMap::new(),
             function_bodies: PrimaryMap::new(),
-            tables: Vec::new(),
-            memories: Vec::new(),
-            globals: Vec::new(),
+            tables: PrimaryMap::new(),
+            memories: PrimaryMap::new(),
+            globals: PrimaryMap::new(),
             start_func: None,
         }
     }
@@ -179,7 +179,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         // Just create a dummy `vmctx` global.
-        let offset = ((index * 8) as i64 + 8).into();
+        let offset = ((index.index() * 8) as i64 + 8).into();
         let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
         let iadd = func.create_global_value(ir::GlobalValueData::IAddImm {
             base: vmctx,
