@@ -13,14 +13,25 @@ entity_impl!(FuncIndex);
 pub struct DefinedFuncIndex(u32);
 entity_impl!(DefinedFuncIndex);
 
-/// Index of a table (imported or defined) inside the WebAssembly module.
-pub type TableIndex = usize;
-/// Index of a global variable (imported or defined) inside the WebAssembly module.
-pub type GlobalIndex = usize;
-/// Index of a linear memory (imported or defined) inside the WebAssembly module.
-pub type MemoryIndex = usize;
-/// Index of a signature (imported or defined) inside the WebAssembly module.
-pub type SignatureIndex = usize;
+/// Index type of a table (imported or defined) inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct TableIndex(u32);
+entity_impl!(TableIndex);
+
+/// Index type of a global variable (imported or defined) inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct GlobalIndex(u32);
+entity_impl!(GlobalIndex);
+
+/// Index type of a linear memory (imported or defined) inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct MemoryIndex(u32);
+entity_impl!(MemoryIndex);
+
+/// Index type of a signature (imported or defined) inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct SignatureIndex(u32);
+entity_impl!(SignatureIndex);
 
 /// WebAssembly global.
 #[derive(Debug, Clone, Copy)]
