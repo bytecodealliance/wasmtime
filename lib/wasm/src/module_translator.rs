@@ -3,7 +3,7 @@
 use cranelift_codegen::timing;
 use environ::{ModuleEnvironment, WasmError, WasmResult};
 use sections_translator::{
-    parse_code_section, parse_data_section, parse_elements_section, parse_export_section,
+    parse_code_section, parse_data_section, parse_element_section, parse_export_section,
     parse_function_section, parse_function_signatures, parse_global_section, parse_import_section,
     parse_memory_section, parse_start_section, parse_table_section,
 };
@@ -88,7 +88,7 @@ pub fn translate_module<'data>(
                 code: SectionCode::Element,
                 ..
             } => {
-                parse_elements_section(&mut parser, environ)?;
+                parse_element_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection {

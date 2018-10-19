@@ -360,8 +360,8 @@ pub fn parse_table_section(parser: &mut Parser, environ: &mut ModuleEnvironment)
     Ok(())
 }
 
-/// Retrieves the tables from the table section
-pub fn parse_elements_section(
+/// Retrieves the elements from the element section
+pub fn parse_element_section(
     parser: &mut Parser,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
