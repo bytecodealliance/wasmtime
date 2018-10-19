@@ -9,6 +9,7 @@ into executable machine code.
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
 [![Build Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
+![Minimum rustc 1.25](https://img.shields.io/badge/rustc-1.25+-red.svg)
 
 For more information, see [the
 documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
