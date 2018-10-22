@@ -18,10 +18,6 @@ use variable::Variable;
 /// In order to reduce memory reallocations when compiling multiple functions,
 /// `FunctionBuilderContext` holds various data structures which are cleared between
 /// functions, rather than dropped, preserving the underlying allocations.
-///
-/// The `Variable` parameter can be any index-like type that can be made to
-/// implement `EntityRef`. For frontends that don't have an obvious type to
-/// use here, `variable::Variable` can be used.
 pub struct FunctionBuilderContext {
     ssa: SSABuilder,
     ebbs: SecondaryMap<Ebb, EbbData>,
