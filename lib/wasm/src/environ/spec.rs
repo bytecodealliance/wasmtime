@@ -3,6 +3,7 @@
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
+use std::convert::From;
 use std::vec::Vec;
 use translation_utils::{
     FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
@@ -62,9 +63,9 @@ pub enum WasmError {
     ImplLimitExceeded,
 }
 
-impl WasmError {
+impl From<BinaryReaderError> for WasmError {
     /// Convert from a `BinaryReaderError` to a `WasmError`.
-    pub fn from_binary_reader_error(e: BinaryReaderError) -> Self {
+    fn from(e: BinaryReaderError) -> Self {
         let BinaryReaderError { message, offset } = e;
         WasmError::InvalidWebAssembly { message, offset }
     }

@@ -9,32 +9,32 @@
 //! interpreted on the fly.
 use cranelift_codegen::ir::{self, AbiParam, Signature};
 use cranelift_entity::EntityRef;
-use environ::{ModuleEnvironment, WasmError, WasmResult};
+use environ::{ModuleEnvironment, WasmResult};
 use std::str::from_utf8;
 use std::vec::Vec;
 use translation_utils::{
     type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex,
     Table, TableElementType, TableIndex,
 };
-use wasmparser;
 use wasmparser::{
-    ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser, ParserState,
-    WasmDecoder,
+    self, CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
+    ExportSectionReader, ExternalKind, FuncType, FunctionSectionReader, GlobalSectionReader,
+    GlobalType, Import, ImportSectionEntryType, ImportSectionReader, MemorySectionReader,
+    MemoryType, Operator, TableSectionReader, TypeSectionReader,
 };
 
-/// Reads the Type Section of the wasm module and returns the corresponding function signatures.
-pub fn parse_function_signatures(
-    parser: &mut Parser,
+/// Parses the Type section of the wasm module.
+pub fn parse_type_section(
+    types: TypeSectionReader,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
-    loop {
-        match *parser.read() {
-            ParserState::EndSection => break,
-            ParserState::TypeSectionEntry(FuncType {
+    for entry in types {
+        match entry? {
+            FuncType {
                 form: wasmparser::Type::Func,
                 ref params,
                 ref returns,
-            }) => {
+            } => {
                 let mut sig = Signature::new(environ.target_config().default_call_conv);
                 sig.params.extend(params.iter().map(|ty| {
                     let cret_arg: ir::Type = type_to_type(*ty)
@@ -48,24 +48,23 @@ pub fn parse_function_signatures(
                 }));
                 environ.declare_signature(&sig);
             }
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
+            ref s => panic!("unsupported type: {:?}", s),
         }
     }
     Ok(())
 }
 
-/// Retrieves the imports from the imports section of the binary.
+/// Parses the Import section of the wasm module.
 pub fn parse_import_section<'data>(
-    parser: &mut Parser<'data>,
+    imports: ImportSectionReader<'data>,
     environ: &mut ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    loop {
-        match *parser.read() {
-            ParserState::ImportSectionEntry {
-                ty: ImportSectionEntryType::Function(sig),
+    for entry in imports {
+        match entry? {
+            Import {
                 module,
                 field,
+                ty: ImportSectionEntryType::Function(sig),
             } => {
                 // The input has already been validated, so we should be able to
                 // assume valid UTF-8 and use `from_utf8_unchecked` if performance
@@ -78,7 +77,7 @@ pub fn parse_import_section<'data>(
                     field_name,
                 );
             }
-            ParserState::ImportSectionEntry {
+            Import {
                 ty:
                     ImportSectionEntryType::Memory(MemoryType {
                         limits: ref memlimits,
@@ -92,7 +91,7 @@ pub fn parse_import_section<'data>(
                     shared,
                 });
             }
-            ParserState::ImportSectionEntry {
+            Import {
                 ty: ImportSectionEntryType::Global(ref ty),
                 ..
             } => {
@@ -102,7 +101,7 @@ pub fn parse_import_section<'data>(
                     initializer: GlobalInit::Import(),
                 });
             }
-            ParserState::ImportSectionEntry {
+            Import {
                 ty: ImportSectionEntryType::Table(ref tab),
                 ..
             } => environ.declare_table(Table {
@@ -113,333 +112,203 @@ pub fn parse_import_section<'data>(
                 size: tab.limits.initial as usize,
                 maximum: tab.limits.maximum.map(|x| x as usize),
             }),
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-    }
-    Ok(())
-}
-
-/// Retrieves the correspondences between functions and signatures from the function section
-pub fn parse_function_section(
-    parser: &mut Parser,
-    environ: &mut ModuleEnvironment,
-) -> WasmResult<()> {
-    loop {
-        match *parser.read() {
-            ParserState::FunctionSectionEntry(sigindex) => {
-                environ.declare_func_type(SignatureIndex::new(sigindex as usize));
-            }
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-    }
-    Ok(())
-}
-
-/// Retrieves the names of the functions from the export section
-pub fn parse_export_section<'data>(
-    parser: &mut Parser<'data>,
-    environ: &mut ModuleEnvironment<'data>,
-) -> WasmResult<()> {
-    loop {
-        match *parser.read() {
-            ParserState::ExportSectionEntry {
-                field,
-                ref kind,
-                index,
-            } => {
-                // The input has already been validated, so we should be able to
-                // assume valid UTF-8 and use `from_utf8_unchecked` if performance
-                // becomes a concern here.
-                let name = from_utf8(field).unwrap();
-                let index = index as usize;
-                match *kind {
-                    ExternalKind::Function => {
-                        environ.declare_func_export(FuncIndex::new(index), name)
-                    }
-                    ExternalKind::Table => {
-                        environ.declare_table_export(TableIndex::new(index), name)
-                    }
-                    ExternalKind::Memory => {
-                        environ.declare_memory_export(MemoryIndex::new(index), name)
-                    }
-                    ExternalKind::Global => {
-                        environ.declare_global_export(GlobalIndex::new(index), name)
-                    }
-                }
-            }
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-    }
-    Ok(())
-}
-
-/// Retrieves the start function index from the start section
-pub fn parse_start_section(parser: &mut Parser, environ: &mut ModuleEnvironment) -> WasmResult<()> {
-    loop {
-        match *parser.read() {
-            ParserState::StartSectionEntry(index) => {
-                environ.declare_start_func(FuncIndex::new(index as usize));
-            }
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-    }
-    Ok(())
-}
-
-/// Retrieves the size and maximum fields of memories from the memory section
-pub fn parse_memory_section(
-    parser: &mut Parser,
-    environ: &mut ModuleEnvironment,
-) -> WasmResult<()> {
-    loop {
-        match *parser.read() {
-            ParserState::MemorySectionEntry(ref ty) => {
-                environ.declare_memory(Memory {
-                    pages_count: ty.limits.initial as usize,
-                    maximum: ty.limits.maximum.map(|x| x as usize),
-                    shared: ty.shared,
-                });
-            }
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-    }
-    Ok(())
-}
-
-/// Retrieves the size and maximum fields of memories from the memory section
-pub fn parse_global_section(
-    parser: &mut Parser,
-    environ: &mut ModuleEnvironment,
-) -> WasmResult<()> {
-    loop {
-        let (content_type, mutability) = match *parser.read() {
-            ParserState::BeginGlobalSectionEntry(ref ty) => (ty.content_type, ty.mutable),
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        match *parser.read() {
-            ParserState::BeginInitExpressionBody => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
         }
-        let initializer = match *parser.read() {
-            ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
-                GlobalInit::I32Const(value)
-            }
-            ParserState::InitExpressionOperator(Operator::I64Const { value }) => {
-                GlobalInit::I64Const(value)
-            }
-            ParserState::InitExpressionOperator(Operator::F32Const { value }) => {
-                GlobalInit::F32Const(value.bits())
-            }
-            ParserState::InitExpressionOperator(Operator::F64Const { value }) => {
-                GlobalInit::F64Const(value.bits())
-            }
-            ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
+    }
+    Ok(())
+}
+
+/// Parses the Function section of the wasm module.
+pub fn parse_function_section(
+    functions: FunctionSectionReader,
+    environ: &mut ModuleEnvironment,
+) -> WasmResult<()> {
+    for entry in functions {
+        let sigindex = entry?;
+        environ.declare_func_type(SignatureIndex::new(sigindex as usize));
+    }
+    Ok(())
+}
+
+/// Parses the Table section of the wasm module.
+pub fn parse_table_section(
+    tables: TableSectionReader,
+    environ: &mut ModuleEnvironment,
+) -> WasmResult<()> {
+    for entry in tables {
+        let table = entry?;
+        environ.declare_table(Table {
+            ty: match type_to_type(table.element_type) {
+                Ok(t) => TableElementType::Val(t),
+                Err(()) => TableElementType::Func(),
+            },
+            size: table.limits.initial as usize,
+            maximum: table.limits.maximum.map(|x| x as usize),
+        });
+    }
+    Ok(())
+}
+
+/// Parses the Memory section of the wasm module.
+pub fn parse_memory_section(
+    memories: MemorySectionReader,
+    environ: &mut ModuleEnvironment,
+) -> WasmResult<()> {
+    for entry in memories {
+        let memory = entry?;
+        environ.declare_memory(Memory {
+            pages_count: memory.limits.initial as usize,
+            maximum: memory.limits.maximum.map(|x| x as usize),
+            shared: memory.shared,
+        });
+    }
+    Ok(())
+}
+
+/// Parses the Global section of the wasm module.
+pub fn parse_global_section(
+    globals: GlobalSectionReader,
+    environ: &mut ModuleEnvironment,
+) -> WasmResult<()> {
+    for entry in globals {
+        let wasmparser::Global {
+            ty: GlobalType {
+                content_type,
+                mutable,
+            },
+            init_expr,
+        } = entry?;
+        let mut init_expr_reader = init_expr.get_binary_reader();
+        let initializer = match init_expr_reader.read_operator()? {
+            Operator::I32Const { value } => GlobalInit::I32Const(value),
+            Operator::I64Const { value } => GlobalInit::I64Const(value),
+            Operator::F32Const { value } => GlobalInit::F32Const(value.bits()),
+            Operator::F64Const { value } => GlobalInit::F64Const(value.bits()),
+            Operator::GetGlobal { global_index } => {
                 GlobalInit::GlobalRef(GlobalIndex::new(global_index as usize))
             }
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
+            ref s => panic!("unsupported init expr in global section: {:?}", s),
         };
-        match *parser.read() {
-            ParserState::EndInitExpressionBody => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        }
         let global = Global {
             ty: type_to_type(content_type).unwrap(),
-            mutability,
+            mutability: mutable,
             initializer,
         };
         environ.declare_global(global);
-        match *parser.read() {
-            ParserState::EndGlobalSectionEntry => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        }
     }
     Ok(())
 }
 
-pub fn parse_data_section<'data>(
-    parser: &mut Parser<'data>,
+/// Parses the Export section of the wasm module.
+pub fn parse_export_section<'data>(
+    exports: ExportSectionReader<'data>,
     environ: &mut ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    loop {
-        let memory_index = match *parser.read() {
-            ParserState::BeginDataSectionEntry(memory_index) => memory_index,
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        match *parser.read() {
-            ParserState::BeginInitExpressionBody => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        let (base, offset) = match *parser.read() {
-            ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
-                (None, value as u32 as usize)
-            }
-            ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match environ
-                    .get_global(GlobalIndex::new(global_index as usize))
-                    .initializer
-                {
-                    GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                    GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
-                    _ => panic!("should not happen"),
-                }
-            }
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        match *parser.read() {
-            ParserState::EndInitExpressionBody => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        match *parser.read() {
-            ParserState::BeginDataSectionEntryBody(_) => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        let mut running_offset = offset;
-        loop {
-            let data = match *parser.read() {
-                ParserState::DataSectionEntryBodyChunk(data) => data,
-                ParserState::EndDataSectionEntryBody => break,
-                ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-                ref s => panic!("unexpected section content: {:?}", s),
-            };
-            environ.declare_data_initialization(
-                MemoryIndex::new(memory_index as usize),
-                base,
-                running_offset,
-                data,
-            );
-            running_offset += data.len();
+    for entry in exports {
+        let Export {
+            field,
+            ref kind,
+            index,
+        } = entry?;
+
+        // The input has already been validated, so we should be able to
+        // assume valid UTF-8 and use `from_utf8_unchecked` if performance
+        // becomes a concern here.
+        let name = from_utf8(field).unwrap();
+        let index = index as usize;
+        match *kind {
+            ExternalKind::Function => environ.declare_func_export(FuncIndex::new(index), name),
+            ExternalKind::Table => environ.declare_table_export(TableIndex::new(index), name),
+            ExternalKind::Memory => environ.declare_memory_export(MemoryIndex::new(index), name),
+            ExternalKind::Global => environ.declare_global_export(GlobalIndex::new(index), name),
         }
-        match *parser.read() {
-            ParserState::EndDataSectionEntry => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
     }
     Ok(())
 }
 
-/// Retrieves the tables from the table section
-pub fn parse_table_section(parser: &mut Parser, environ: &mut ModuleEnvironment) -> WasmResult<()> {
-    loop {
-        match *parser.read() {
-            ParserState::TableSectionEntry(ref table) => environ.declare_table(Table {
-                ty: match type_to_type(table.element_type) {
-                    Ok(t) => TableElementType::Val(t),
-                    Err(()) => TableElementType::Func(),
-                },
-                size: table.limits.initial as usize,
-                maximum: table.limits.maximum.map(|x| x as usize),
-            }),
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-    }
+/// Parses the Start section of the wasm module.
+pub fn parse_start_section(index: u32, environ: &mut ModuleEnvironment) -> WasmResult<()> {
+    environ.declare_start_func(FuncIndex::new(index as usize));
     Ok(())
 }
 
-/// Retrieves the elements from the element section
-pub fn parse_element_section(
-    parser: &mut Parser,
+/// Parses the Element section of the wasm module.
+pub fn parse_element_section<'data>(
+    elements: ElementSectionReader<'data>,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
-    loop {
-        let table_index = match *parser.read() {
-            ParserState::BeginElementSectionEntry(table_index) => {
-                TableIndex::new(table_index as usize)
-            }
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
+    for entry in elements {
+        let Element {
+            table_index,
+            init_expr,
+            items,
+        } = entry?;
+        let mut init_expr_reader = init_expr.get_binary_reader();
+        let (base, offset) = match init_expr_reader.read_operator()? {
+            Operator::I32Const { value } => (None, value as u32 as usize),
+            Operator::GetGlobal { global_index } => match environ
+                .get_global(GlobalIndex::new(global_index as usize))
+                .initializer
+            {
+                GlobalInit::I32Const(value) => (None, value as u32 as usize),
+                GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
+                _ => panic!("should not happen"),
+            },
+            ref s => panic!("unsupported init expr in element section: {:?}", s),
         };
-        match *parser.read() {
-            ParserState::BeginInitExpressionBody => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        let (base, offset) = match *parser.read() {
-            ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
-                (None, value as u32 as usize)
-            }
-            ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match environ
-                    .get_global(GlobalIndex::new(global_index as usize))
-                    .initializer
-                {
-                    GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                    GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
-                    _ => panic!("should not happen"),
-                }
-            }
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        match *parser.read() {
-            ParserState::EndInitExpressionBody => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        match *parser.read() {
-            ParserState::ElementSectionEntryBody(ref elements) => {
-                let elems: Vec<FuncIndex> = elements
-                    .iter()
-                    .map(|&x| FuncIndex::new(x as usize))
-                    .collect();
-                environ.declare_table_elements(table_index, base, offset, elems)
-            }
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
-        match *parser.read() {
-            ParserState::EndElementSectionEntry => (),
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("unexpected section content: {:?}", s),
-        };
+        let items_reader = items.get_items_reader()?;
+        let mut elems = Vec::new();
+        for item in items_reader {
+            let x = item?;
+            elems.push(FuncIndex::new(x as usize));
+        }
+        environ.declare_table_elements(TableIndex::new(table_index as usize), base, offset, elems)
     }
     Ok(())
 }
 
-/// Parses every function body in the code section and defines the corresponding function.
+/// Parses the Code section of the wasm module.
 pub fn parse_code_section<'data>(
-    parser: &mut Parser<'data>,
+    code: CodeSectionReader<'data>,
     environ: &mut ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    loop {
-        match *parser.read() {
-            ParserState::BeginFunctionBody { .. } => {}
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("wrong content in code section: {:?}", s),
-        }
-        let mut reader = parser.create_binary_reader();
+    for body in code {
+        let mut reader = body?.get_binary_reader();
         let size = reader.bytes_remaining();
-        environ.define_function_body(
-            reader
-                .read_bytes(size)
-                .map_err(WasmError::from_binary_reader_error)?,
-        )?;
+        environ.define_function_body(reader.read_bytes(size)?)?;
+    }
+    Ok(())
+}
+
+/// Parses the Data section of the wasm module.
+pub fn parse_data_section<'data>(
+    data: DataSectionReader<'data>,
+    environ: &mut ModuleEnvironment<'data>,
+) -> WasmResult<()> {
+    for entry in data {
+        let Data {
+            memory_index,
+            init_expr,
+            data,
+        } = entry?;
+        let mut init_expr_reader = init_expr.get_binary_reader();
+        let (base, offset) = match init_expr_reader.read_operator()? {
+            Operator::I32Const { value } => (None, value as u32 as usize),
+            Operator::GetGlobal { global_index } => match environ
+                .get_global(GlobalIndex::new(global_index as usize))
+                .initializer
+            {
+                GlobalInit::I32Const(value) => (None, value as u32 as usize),
+                GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
+                _ => panic!("should not happen"),
+            },
+            ref s => panic!("unsupported init expr in data section: {:?}", s),
+        };
+        environ.declare_data_initialization(
+            MemoryIndex::new(memory_index as usize),
+            base,
+            offset,
+            data,
+        );
     }
     Ok(())
 }
