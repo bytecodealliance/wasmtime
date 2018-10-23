@@ -25,7 +25,7 @@ pub fn pretty_verifier_error<'a>(
     let mut w = String::new();
 
     decorate_function(
-        &mut PrettyVerifierError(func_w.unwrap_or(Box::new(PlainWriter)), &mut errors),
+        &mut PrettyVerifierError(func_w.unwrap_or_else(|| Box::new(PlainWriter)), &mut errors),
         &mut w,
         func,
         isa,

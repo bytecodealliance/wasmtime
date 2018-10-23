@@ -47,8 +47,7 @@ fn emit_vectors(bits: u64, fmt: &mut srcgen::Formatter) -> Result<(), error::Err
 /// Emit types using the given formatter object.
 fn emit_types(fmt: &mut srcgen::Formatter) -> Result<(), error::Error> {
     // Emit all of the special types, such as types for CPU flags.
-    for spec in cdsl_types::ValueType::all_special_types().map(|ty| cdsl_types::ValueType::from(ty))
-    {
+    for spec in cdsl_types::ValueType::all_special_types().map(cdsl_types::ValueType::from) {
         emit_type(&spec, fmt)?;
     }
 

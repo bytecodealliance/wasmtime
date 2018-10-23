@@ -411,7 +411,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     /// SimpleJIT emits code and data into memory as it processes them, so it
     /// doesn't need to provide anything after the `Module` is complete.
-    fn finish(self) -> () {}
+    fn finish(self) {}
 }
 
 #[cfg(not(windows))]

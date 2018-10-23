@@ -775,29 +775,26 @@ impl<'a> Parser<'a> {
         let mut targets = Vec::new();
         let flag_builder = settings::builder();
 
-        match target_pass {
-            Some(targ) => {
-                let loc = self.loc;
-                let triple = match Triple::from_str(targ) {
-                    Ok(triple) => triple,
-                    Err(err) => return err!(loc, err),
-                };
-                let mut isa_builder = match isa::lookup(triple) {
-                    Err(isa::LookupError::SupportDisabled) => {
-                        return err!(loc, "support disabled target '{}'", targ)
-                    }
-                    Err(isa::LookupError::Unsupported) => {
-                        return err!(loc, "unsupported target '{}'", targ)
-                    }
-                    Ok(b) => b,
-                };
-                specified_target = true;
+        if let Some(targ) = target_pass {
+            let loc = self.loc;
+            let triple = match Triple::from_str(targ) {
+                Ok(triple) => triple,
+                Err(err) => return err!(loc, err),
+            };
+            let mut isa_builder = match isa::lookup(triple) {
+                Err(isa::LookupError::SupportDisabled) => {
+                    return err!(loc, "support disabled target '{}'", targ)
+                }
+                Err(isa::LookupError::Unsupported) => {
+                    return err!(loc, "unsupported target '{}'", targ)
+                }
+                Ok(b) => b,
+            };
+            specified_target = true;
 
-                // Construct a trait object with the aggregate settings.
-                targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
-            }
-            None => (),
-        };
+            // Construct a trait object with the aggregate settings.
+            targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
+        }
 
         if !specified_target {
             // No `target` commands.

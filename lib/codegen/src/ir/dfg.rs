@@ -127,7 +127,7 @@ fn maybe_resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) ->
     let mut v = value;
 
     // Note that values may be empty here.
-    for _ in 0..1 + values.len() {
+    for _ in 0..values.len() + 1 {
         if let ValueData::Alias { original, .. } = values[v] {
             v = original;
         } else {
@@ -174,8 +174,7 @@ impl<'a> Iterator for Values<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
             .by_ref()
-            .filter(|kv| valid_valuedata(kv.1))
-            .next()
+            .find(|kv| valid_valuedata(kv.1))
             .map(|kv| kv.0)
     }
 }

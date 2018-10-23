@@ -31,7 +31,7 @@ enum State {
     Done(TestResult),
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum IsPass {
     Pass,
     NotPass,
