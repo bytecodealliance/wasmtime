@@ -1226,16 +1226,15 @@ impl<'a> Parser<'a> {
                 let flags = self.optional_memflags();
                 let base = self.match_gv("expected global value: gv«n»")?;
                 let offset = self.optional_offset32()?;
-                let mut expected_flags = MemFlags::new();
-                expected_flags.set_notrap();
-                expected_flags.set_aligned();
-                if flags != expected_flags {
+
+                if !(flags.notrap() && flags.aligned()) {
                     return err!(self.loc, "global-value load must be notrap and aligned");
                 }
                 GlobalValueData::Load {
                     base,
                     offset,
                     global_type,
+                    readonly: flags.readonly(),
                 }
             }
             "iadd_imm" => {

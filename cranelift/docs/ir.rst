@@ -502,12 +502,13 @@ Memory operation flags
 Loads and stores can have flags that loosen their semantics in order to enable
 optimizations.
 
-======= ===========================================
-Flag    Description
-======= ===========================================
-notrap  Memory is assumed to be :term:`accessible`.
-aligned Trapping allowed for misaligned accesses.
-======= ===========================================
+=======  ===========================================
+Flag     Description
+=======  ===========================================
+notrap   Memory is assumed to be :term:`accessible`.
+aligned  Trapping allowed for misaligned accesses.
+readonly The data at the specified address will not modified between when this function is called and exited.
+=======  ===========================================
 
 When the ``accessible`` flag is set, the behavior is undefined if the memory
 is not :term:`accessible`.
