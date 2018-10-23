@@ -1651,6 +1651,31 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn immediate_constraints(
+        &self,
+        inst: Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let inst_data = &self.func.dfg[inst];
+
+        // If this is some sort of a store instruction, get the memflags, else, just return.
+        let memflags = match *inst_data {
+            ir::InstructionData::Store { flags, .. }
+            | ir::InstructionData::StoreComplex { flags, .. } => flags,
+            _ => return Ok(()),
+        };
+
+        if memflags.readonly() {
+            fatal!(
+                errors,
+                inst,
+                "A store instruction cannot have the `readonly` MemFlag"
+            )
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
@@ -1663,6 +1688,7 @@ impl<'a> Verifier<'a> {
                 self.instruction_integrity(inst, errors)?;
                 self.typecheck(inst, errors)?;
                 self.verify_encoding(inst, errors)?;
+                self.immediate_constraints(inst, errors)?;
             }
         }
 

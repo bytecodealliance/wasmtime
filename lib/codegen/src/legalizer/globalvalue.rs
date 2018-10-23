@@ -38,7 +38,8 @@ pub fn expand_global_value(
             base,
             offset,
             global_type,
-        } => load_addr(inst, func, base, offset, global_type, isa),
+            readonly,
+        } => load_addr(inst, func, base, offset, global_type, readonly, isa),
         ir::GlobalValueData::Symbol { .. } => symbol(inst, func, gv, isa),
     }
 }
@@ -88,6 +89,7 @@ fn load_addr(
     base: ir::GlobalValue,
     offset: ir::immediates::Offset32,
     global_type: ir::Type,
+    readonly: bool,
     isa: &TargetIsa,
 ) {
     // We need to load a pointer from the `base` global value, so insert a new `global_value`
@@ -107,10 +109,13 @@ fn load_addr(
         pos.ins().global_value(ptr_ty, base)
     };
 
-    // Global-value loads are always notrap and aligned.
+    // Global-value loads are always notrap and aligned. They may be readonly.
     let mut mflags = ir::MemFlags::new();
     mflags.set_notrap();
     mflags.set_aligned();
+    if readonly {
+        mflags.set_readonly();
+    }
 
     // Perform the load.
     pos.func

@@ -15,7 +15,8 @@ pub enum GlobalValueData {
     ///
     /// The `base` global value is assumed to contain a pointer. This global value is computed
     /// by loading from memory at that pointer value. The memory must be accessible, and
-    /// naturally aligned to hold a value of the type.
+    /// naturally aligned to hold a value of the type. The data at this address is assumed
+    /// to never change while the current function is executing.
     Load {
         /// The base pointer global value.
         base: GlobalValue,
@@ -25,6 +26,9 @@ pub enum GlobalValueData {
 
         /// Type of the loaded value.
         global_type: Type,
+
+        /// Specifies whether the memory that this refers to is readonly, allowing for the elimination of redundant loads.
+        readonly: bool,
     },
 
     /// Value is an offset from another global value.
@@ -90,7 +94,15 @@ impl fmt::Display for GlobalValueData {
                 base,
                 offset,
                 global_type,
-            } => write!(f, "load.{} notrap aligned {}{}", global_type, base, offset),
+                readonly,
+            } => write!(
+                f,
+                "load.{} notrap aligned {}{}{}",
+                global_type,
+                if readonly { "readonly " } else { "" },
+                base,
+                offset
+            ),
             GlobalValueData::IAddImm {
                 global_type,
                 base,
