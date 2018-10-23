@@ -161,8 +161,8 @@ pub enum LaneType {
 
 impl LaneType {
     /// Return a string containing the documentation comment for this lane type.
-    pub fn doc(&self) -> String {
-        match *self {
+    pub fn doc(self) -> String {
+        match self {
             LaneType::BoolType(_) => format!("A boolean type with {} bits.", self.lane_bits()),
             LaneType::FloatType(base_types::Float::F32) => String::from(
                 "A 32-bit floating point type represented in the IEEE 754-2008
@@ -185,8 +185,8 @@ impl LaneType {
     }
 
     /// Return the number of bits in a lane.
-    pub fn lane_bits(&self) -> u64 {
-        match *self {
+    pub fn lane_bits(self) -> u64 {
+        match self {
             LaneType::BoolType(ref b) => *b as u64,
             LaneType::FloatType(ref f) => *f as u64,
             LaneType::IntType(ref i) => *i as u64,
@@ -194,8 +194,8 @@ impl LaneType {
     }
 
     /// Get the name of this lane type.
-    pub fn name(&self) -> String {
-        match *self {
+    pub fn name(self) -> String {
+        match self {
             LaneType::BoolType(_) => format!("b{}", self.lane_bits()),
             LaneType::FloatType(_) => format!("f{}", self.lane_bits()),
             LaneType::IntType(_) => format!("i{}", self.lane_bits()),
@@ -203,8 +203,8 @@ impl LaneType {
     }
 
     /// Find the unique number associated with this lane type.
-    pub fn number(&self) -> u8 {
-        LANE_BASE + match *self {
+    pub fn number(self) -> u8 {
+        LANE_BASE + match self {
             LaneType::BoolType(base_types::Bool::B1) => 0,
             LaneType::BoolType(base_types::Bool::B8) => 1,
             LaneType::BoolType(base_types::Bool::B16) => 2,
@@ -394,8 +394,8 @@ pub enum SpecialType {
 
 impl SpecialType {
     /// Return a string containing the documentation comment for this special type.
-    pub fn doc(&self) -> String {
-        match *self {
+    pub fn doc(self) -> String {
+        match self {
             SpecialType::Flag(base_types::Flag::IFlags) => String::from(
                 "CPU flags representing the result of an integer comparison. These flags
                 can be tested with an :type:`intcc` condition code.",
@@ -408,23 +408,23 @@ impl SpecialType {
     }
 
     /// Return the number of bits in a lane.
-    pub fn lane_bits(&self) -> u64 {
-        match *self {
+    pub fn lane_bits(self) -> u64 {
+        match self {
             SpecialType::Flag(_) => 0,
         }
     }
 
     /// Get the name of this special type.
-    pub fn name(&self) -> String {
-        match *self {
+    pub fn name(self) -> String {
+        match self {
             SpecialType::Flag(base_types::Flag::IFlags) => "iflags".to_string(),
             SpecialType::Flag(base_types::Flag::FFlags) => "fflags".to_string(),
         }
     }
 
     /// Find the unique number associated with this special type.
-    pub fn number(&self) -> u8 {
-        match *self {
+    pub fn number(self) -> u8 {
+        match self {
             SpecialType::Flag(base_types::Flag::IFlags) => 1,
             SpecialType::Flag(base_types::Flag::FFlags) => 2,
         }

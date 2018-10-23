@@ -115,7 +115,7 @@ fn add_debug_flag<'a>() -> clap::Arg<'a, 'a> {
 }
 
 /// Returns a vector of clap value options and changes these options into a vector of strings
-fn get_vec<'a>(argument_vec: Option<clap::Values<'a>>) -> Vec<String> {
+fn get_vec(argument_vec: Option<clap::Values>) -> Vec<String> {
     let mut ret_vec: Vec<String> = Vec::new();
     if let Some(clap_vec) = argument_vec {
         for val in clap_vec {
@@ -199,12 +199,11 @@ fn main() {
         }
         ("test", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-            let result = cranelift_filetests::run(
+            cranelift_filetests::run(
                 rest_cmd.is_present("verbose"),
                 rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("file")),
-            ).map(|_time| ());
-            result
+            ).map(|_time| ())
         }
         ("pass", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));

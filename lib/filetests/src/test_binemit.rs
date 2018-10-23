@@ -205,7 +205,7 @@ impl SubTest for TestBinEmit {
                 "Inconsistent {} header offset",
                 ebb
             );
-            for (offset, inst, enc_bytes) in func.inst_offsets(&func, ebb, &encinfo) {
+            for (offset, inst, enc_bytes) in func.inst_offsets(ebb, &encinfo) {
                 assert_eq!(sink.offset, offset);
                 sink.text.clear();
                 let enc = func.encodings[inst];

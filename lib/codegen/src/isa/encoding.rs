@@ -85,7 +85,7 @@ type SizeCalculatorFn = fn(&RecipeSizing, Inst, &RegDiversions, &Function) -> u8
 /// Returns the base size of the Recipe, assuming it's fixed. This is the default for most
 /// encodings; others can be variable and longer than this base size, depending on the registers
 /// they're using and use a different function, specific per platform.
-pub fn base_size(sizing: &RecipeSizing, _: Inst, _2: &RegDiversions, _3: &Function) -> u8 {
+pub fn base_size(sizing: &RecipeSizing, _: Inst, _: &RegDiversions, _: &Function) -> u8 {
     sizing.base_size
 }
 

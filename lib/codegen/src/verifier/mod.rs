@@ -234,7 +234,8 @@ pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(
     let verifier = Verifier::new(func, fisa.into());
     let result = verifier.run(&mut errors);
     if errors.is_empty() {
-        Ok(result.unwrap())
+        result.unwrap();
+        Ok(())
     } else {
         Err(errors)
     }
@@ -392,30 +393,22 @@ impl<'a> Verifier<'a> {
                     );
                 }
 
-                match heap_data.style {
-                    ir::HeapStyle::Dynamic { bound_gv, .. } => {
-                        if !self.func.global_values.is_valid(bound_gv) {
-                            return nonfatal!(
-                                errors,
-                                heap,
-                                "invalid bound global value {}",
-                                bound_gv
-                            );
-                        }
-
-                        let index_type = heap_data.index_type;
-                        let bound_type = self.func.global_values[bound_gv].global_type(isa);
-                        if index_type != bound_type {
-                            report!(
-                                errors,
-                                heap,
-                                "heap index type {} differs from the type of its bound, {}",
-                                index_type,
-                                bound_type
-                            );
-                        }
+                if let ir::HeapStyle::Dynamic { bound_gv, .. } = heap_data.style {
+                    if !self.func.global_values.is_valid(bound_gv) {
+                        return nonfatal!(errors, heap, "invalid bound global value {}", bound_gv);
                     }
-                    _ => {}
+
+                    let index_type = heap_data.index_type;
+                    let bound_type = self.func.global_values[bound_gv].global_type(isa);
+                    if index_type != bound_type {
+                        report!(
+                            errors,
+                            heap,
+                            "heap index type {} differs from the type of its bound, {}",
+                            index_type,
+                            bound_type
+                        );
+                    }
                 }
             }
         }

@@ -151,7 +151,7 @@ fn handle_module(
 }
 
 fn print_readonly_data(mem: &[u8]) {
-    if mem.len() == 0 {
+    if mem.is_empty() {
         return;
     }
 
