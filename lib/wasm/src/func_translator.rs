@@ -9,7 +9,7 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Ebb, InstBuilder};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use environ::{FuncEnvironment, ReturnMode, WasmError, WasmResult};
+use environ::{FuncEnvironment, ReturnMode, WasmResult};
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
 
@@ -135,16 +135,12 @@ fn parse_local_decls(
     num_params: usize,
 ) -> WasmResult<()> {
     let mut next_local = num_params;
-    let local_count = reader
-        .read_local_count()
-        .map_err(WasmError::from_binary_reader_error)?;
+    let local_count = reader.read_local_count()?;
 
     let mut locals_total = 0;
     for _ in 0..local_count {
         builder.set_srcloc(cur_srcloc(reader));
-        let (count, ty) = reader
-            .read_local_decl(&mut locals_total)
-            .map_err(WasmError::from_binary_reader_error)?;
+        let (count, ty) = reader.read_local_decl(&mut locals_total)?;
         declare_locals(builder, count, ty, &mut next_local);
     }
 
@@ -195,9 +191,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     // Keep going until the final `End` operator which pops the outermost block.
     while !state.control_stack.is_empty() {
         builder.set_srcloc(cur_srcloc(&reader));
-        let op = reader
-            .read_operator()
-            .map_err(WasmError::from_binary_reader_error)?;
+        let op = reader.read_operator()?;
         translate_operator(op, builder, state, environ)?;
     }
 

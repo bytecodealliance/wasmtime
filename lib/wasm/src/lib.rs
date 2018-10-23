@@ -76,6 +76,7 @@ mod std {
 
     pub use self::alloc::string;
     pub use self::alloc::vec;
+    pub use core::convert;
     pub use core::fmt;
     pub use core::option;
     pub use core::{cmp, i32, str, u32};
