@@ -120,7 +120,7 @@ def legal_bool(bits):
     # type: (int) -> bool
     """
     True iff bits is a legal bit width for a bool type.
-    bits == 1 || bits \in { 8, 16, .. MAX_BITS }
+    bits == 1 || bits \\in { 8, 16, .. MAX_BITS }
     """
     return bits == 1 or \
         (bits >= 8 and bits <= MAX_BITS and is_power_of_two(bits))

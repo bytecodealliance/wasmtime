@@ -98,7 +98,7 @@ def check_concrete_typing_rtl(var_types, rtl):
     Check that a concrete type assignment var_types (Dict[Var, TypeVar]) is
     valid for an Rtl rtl. Specifically check that:
 
-    1) For each Var v \in rtl, v is defined in var_types
+    1) For each Var v \\in rtl, v is defined in var_types
 
     2) For all v, var_types[v] is a singleton type
 
