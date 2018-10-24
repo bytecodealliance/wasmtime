@@ -9,7 +9,7 @@ into executable machine code.
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
 [![Build Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
-![Minimum rustc 1.25](https://img.shields.io/badge/rustc-1.25+-red.svg)
+![Minimum rustc 1.29](https://img.shields.io/badge/rustc-1.29+-red.svg)
 
 For more information, see [the
 documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
@@ -47,11 +47,8 @@ needed before it would be ready for a production use case.
 
 Cranelift's APIs are not yet stable.
 
-Cranelift currently supports Rust 1.25.0 and later. We intend to always
-support the latest *stable* Rust. And, we currently support the version
-of Rust in the latest Ubuntu LTS, although whether we will always do so
-is not yet determined. Cranelift requires Python 2.7 or Python 3 to
-build.
+Cranelift currently requires Rust 1.29 or later, and Python 2.7 or 3
+to build.
 
 Planned uses
 ------------

@@ -2,9 +2,9 @@
 
 language: rust
 rust:
-    - stable
-    # The version of rust in the latest Ubuntu LTS, currently Bionic.
-    - 1.25.0
+    # The oldest version we currently support. See
+    # CONTRIBUTING.md#rustc-version-support for details.
+    - 1.29.0
     - beta
     - nightly
 matrix:
