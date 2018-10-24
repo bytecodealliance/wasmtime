@@ -100,7 +100,7 @@ impl Memory {
     pub fn allocate(&mut self, size: usize) -> Result<*mut u8, String> {
         if size <= self.current.len - self.position {
             // TODO: Ensure overflow is not possible.
-            let ptr = unsafe { self.current.ptr.offset(self.position as isize) };
+            let ptr = unsafe { self.current.ptr.add(self.position) };
             self.position += size;
             return Ok(ptr);
         }

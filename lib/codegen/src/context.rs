@@ -101,14 +101,7 @@ impl Context {
         let code_size = self.compile(isa)?;
         let old_len = mem.len();
         mem.resize(old_len + code_size as usize, 0);
-        unsafe {
-            self.emit_to_memory(
-                isa,
-                mem.as_mut_ptr().offset(old_len as isize),
-                relocs,
-                traps,
-            )
-        };
+        unsafe { self.emit_to_memory(isa, mem.as_mut_ptr().add(old_len), relocs, traps) };
         Ok(())
     }
 
