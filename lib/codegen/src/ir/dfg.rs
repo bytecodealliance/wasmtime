@@ -127,7 +127,7 @@ fn maybe_resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) ->
     let mut v = value;
 
     // Note that values may be empty here.
-    for _ in 0..values.len() + 1 {
+    for _ in 0..=values.len() {
         if let ValueData::Alias { original, .. } = values[v] {
             v = original;
         } else {

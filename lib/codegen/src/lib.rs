@@ -8,8 +8,6 @@
     plugin(clippy(conf_file = "../../clippy.toml"))
 )]
 #![cfg_attr(feature="cargo-clippy", allow(
-// This requires Rust 1.27 or later.
-                duration_subsec,
 // Produces only a false positive:
                 while_let_loop,
 // Produces many false positives, but did produce some valid lints, now fixed:

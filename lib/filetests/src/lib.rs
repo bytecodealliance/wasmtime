@@ -10,11 +10,7 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "cargo-clippy",
-    allow(
-          type_complexity,
-          // This requires Rust 1.27 or later.
-          duration_subsec))]
+#![cfg_attr(feature = "cargo-clippy", allow(type_complexity))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(

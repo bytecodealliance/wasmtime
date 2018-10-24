@@ -234,7 +234,7 @@ impl<T: EntityRef> EntityList<T> {
 
         let block = pool.alloc(sclass_for_length(len));
         pool.data[block] = T::new(len);
-        pool.data[block + 1..block + len + 1].copy_from_slice(slice);
+        pool.data[block + 1..=block + len].copy_from_slice(slice);
 
         Self {
             index: (block + 1) as u32,
