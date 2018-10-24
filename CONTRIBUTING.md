@@ -75,17 +75,14 @@ which may be convenient when there are multiple versions installed.
 
 ### Rustc version support
 
-Our current policy is to support the version of Rustc that ships with the
-latest Ubuntu LTS release, as well as the current stable version. This means
-we don't use some of the very latest released Rust features.
+Cranelift supports stable Rust, and follows the
+[Rust Update Policy for Firefox].
 
 Some of the developer scripts depend on nightly Rust, for example to run
 clippy and other tools, however we avoid depending on these for the main
 build.
 
-That said, if there are any new Rust features that would be particularly
-valuable to use, please bring them up, as we may be able to find ways to
-accommodate them.
+[Rust Update Policy for Firefox]: https://wiki.mozilla.org/Rust_Update_Policy_for_Firefox#Schedule
 
 ### Python
 
