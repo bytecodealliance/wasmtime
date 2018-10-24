@@ -419,7 +419,7 @@ class TypeEnv(object):
         E.g. if we have a root of the tree that looks like:
 
           typeof_a   typeof_b
-                 \  /
+                 \\  /
               typeof_x
                   |
                 half_width(1)
@@ -430,7 +430,7 @@ class TypeEnv(object):
         resulting graph is:
 
           typeof_a   typeof_b
-                 \  /
+                 \\  /
               typeof_x
         """
         source_tvs = set([v.get_typevar() for v in self.vars])

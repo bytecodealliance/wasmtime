@@ -113,7 +113,7 @@ class Rtl(object):
         # type: (Rtl) -> None
         """
         Given that there is only 1 possible concrete typing T for self, assign
-        a singleton TV with type t=T[v] for each Var v \in self. Its an error
+        a singleton TV with type t=T[v] for each Var v \\in self. Its an error
         to call this on an Rtl with more than 1 possible typing. This modifies
         the Rtl in-place.
         """

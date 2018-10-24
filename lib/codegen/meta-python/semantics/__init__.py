@@ -19,11 +19,11 @@ def verify_semantics(inst, src, xforms):
     Verify that the semantics transforms in xforms correctly describe the
     instruction described by the src Rtl. This involves checking that:
         0) src is a single instance of inst
-        1) For all x\in xforms x.src is a single instance of inst
+        1) For all x \\in xforms x.src is a single instance of inst
         2) For any concrete values V of Literals in inst:
             For all concrete typing T of inst:
-                Exists single x \in xforms that applies to src conretazied to V
-                and T
+                Exists single x \\in xforms that applies to src conretazied to
+                V and T
     """
     # 0) The source rtl is always a single instance of inst
     assert len(src.rtl) == 1 and src.rtl[0].expr.inst == inst

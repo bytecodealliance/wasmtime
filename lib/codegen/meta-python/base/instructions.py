@@ -1134,7 +1134,7 @@ srem_imm = Instruction(
 
 irsub_imm = Instruction(
         'irsub_imm', """
-        Immediate reverse wrapping subtraction: :math:`a := Y - x \pmod{2^B}`.
+        Immediate reverse wrapping subtraction: :math:`a := Y - x \\pmod{2^B}`.
 
         Also works as integer negation when :math:`Y = 0`. Use :inst:`iadd_imm`
         with a negative immediate operand for the reverse immediate

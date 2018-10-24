@@ -345,7 +345,7 @@ class Instruction(object):
         `(inst, typevars)` pair.
 
         This version in `Instruction` itself allows non-polymorphic
-        instructions to duck-type as `BoundInstruction`\s.
+        instructions to duck-type as `BoundInstruction`\\s.
         """
         assert not self.is_polymorphic, self
         return (self, ())
