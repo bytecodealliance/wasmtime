@@ -9,8 +9,8 @@
 
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
-use cranelift_codegen::Context;
 use cranelift_codegen::timing;
+use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
     translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment, ReturnMode,
@@ -89,13 +89,12 @@ fn handle_module(
     vprint!(flag_verbose, "Translating... ");
     let _ = terminal.reset();
 
-    let mut module_binary =
-        read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
+    let mut module_binary = read_to_end(path.clone()).map_err(|err| err.to_string())?;
 
     if !module_binary.starts_with(&[b'\0', b'a', b's', b'm']) {
         module_binary = match wat2wasm(&module_binary) {
             Ok(data) => data,
-            Err(e) => return Err(String::from(e.description())),
+            Err(e) => return Err(e.to_string()),
         };
     }
 
