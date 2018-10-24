@@ -15,7 +15,6 @@ use cranelift_entity::EntityRef;
 use cranelift_wasm::{
     translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment, ReturnMode,
 };
-use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
 use term;
