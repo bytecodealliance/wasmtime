@@ -1,0 +1,40 @@
+test legalizer
+set probestack_enabled=false
+set jump_tables_enabled=false
+target x86_64
+
+; Test that when jump_tables_enables is false, all jump tables are eliminated.
+
+function u0:0(i64 vmctx) baldrdash {
+    gv0 = vmctx
+    gv1 = iadd_imm.i64 gv0, 48
+    jt0 = jump_table [ebb2, ebb2, ebb7]
+    jt1 = jump_table [ebb8, ebb8]
+
+ebb0(v0: i64):
+    jump ebb5
+
+ebb5:
+    v1 = global_value.i64 gv1
+    v2 = load.i64 v1
+    trapnz v2, interrupt
+    v3 = iconst.i32 0
+    br_table v3, ebb3, jt0
+
+ebb7:
+    v4 = iconst.i32 0
+    br_table v4, ebb3, jt1
+
+ebb8:
+    jump ebb5
+
+ebb3:
+    jump ebb2
+
+ebb2:
+    jump ebb1
+
+ebb1:
+    fallthrough_return
+}
+; not: jump_table
