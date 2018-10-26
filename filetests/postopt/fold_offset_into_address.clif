@@ -16,3 +16,17 @@ ebb0(v0: i64):
 ; nextln: [RexOp1ldDisp8#808b]                v2 = load.i64 notrap aligned v0+16
 ; nextln: [Op1ret#c3]                         return v2
 ; nextln: }
+
+function u0:1(i64, i64 vmctx) {
+ebb0(v3: i64, v0: i64):
+                     v1 = iadd_imm.i64 v0, 16
+[RexOp1stDisp8#8089] store.i64 notrap aligned v3, v1
+[Op1ret#c3]          return
+}
+
+; sameln: function u0:1(i64, i64 vmctx) fast {
+; nextln: ebb0(v3: i64, v0: i64):
+; nextln:                                     v1 = iadd_imm v0, 16
+; nextln: [RexOp1stDisp8#8089]                store notrap aligned v3, v0+16
+; nextln: [Op1ret#c3]                         return
+; nextln: }

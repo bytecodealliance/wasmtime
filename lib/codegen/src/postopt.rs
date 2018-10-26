@@ -329,7 +329,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
                     ..
                 } => {
                     if let Some(imm) = offset.try_add_i64(imm.into()) {
-                        store_args[0] = arg;
+                        store_args[1] = arg;
                         *offset = imm;
                     } else {
                         // Overflow.
