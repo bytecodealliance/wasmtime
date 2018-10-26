@@ -12,6 +12,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::packed_option::PackedOption;
 use ssa::{Block, SSABuilder, SideEffects};
+use std::vec::Vec;
 use variable::Variable;
 
 /// Structure used for translating a series of functions into Cranelift IR.
