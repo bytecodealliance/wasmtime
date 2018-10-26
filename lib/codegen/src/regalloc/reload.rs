@@ -125,8 +125,8 @@ impl<'a> Context<'a> {
 
         // visit_ebb_header() places us at the first interesting instruction in the EBB.
         while let Some(inst) = self.cur.current_inst() {
-            let encoding = self.cur.func.encodings[inst];
-            if encoding.is_legal() {
+            if !self.cur.func.dfg[inst].opcode().is_ghost() {
+                let encoding = self.cur.func.encodings[inst];
                 self.visit_inst(ebb, inst, encoding, tracker);
                 tracker.drop_dead(inst);
             } else {
@@ -200,10 +200,7 @@ impl<'a> Context<'a> {
         self.cur.use_srcloc(inst);
 
         // Get the operand constraints for `inst` that we are trying to satisfy.
-        let constraints = self
-            .encinfo
-            .operand_constraints(encoding)
-            .expect("Missing instruction encoding");
+        let constraints = self.encinfo.operand_constraints(encoding);
 
         // Identify reload candidates.
         debug_assert!(self.candidates.is_empty());
@@ -240,27 +237,32 @@ impl<'a> Context<'a> {
         // v2 = spill v7
         //
         // That way, we don't need to rewrite all future uses of v2.
-        for (lv, op) in defs.iter().zip(constraints.outs) {
-            if lv.affinity.is_stack() && op.kind != ConstraintKind::Stack {
-                if let InstructionData::Unary {
-                    opcode: Opcode::Copy,
-                    arg,
-                } = self.cur.func.dfg[inst]
-                {
-                    self.cur.func.dfg.replace(inst).spill(arg);
-                    let ok = self.cur.func.update_encoding(inst, self.cur.isa).is_ok();
-                    debug_assert!(ok);
-                } else {
-                    let value_type = self.cur.func.dfg.value_type(lv.value);
-                    let reg = self.cur.func.dfg.replace_result(lv.value, value_type);
-                    self.liveness.create_dead(reg, inst, Affinity::new(op));
-                    self.insert_spill(ebb, lv.value, reg);
+        if let Some(constraints) = constraints {
+            for (lv, op) in defs.iter().zip(constraints.outs) {
+                if lv.affinity.is_stack() && op.kind != ConstraintKind::Stack {
+                    if let InstructionData::Unary {
+                        opcode: Opcode::Copy,
+                        arg,
+                    } = self.cur.func.dfg[inst]
+                    {
+                        self.cur.func.dfg.replace(inst).spill(arg);
+                        let ok = self.cur.func.update_encoding(inst, self.cur.isa).is_ok();
+                        debug_assert!(ok);
+                    } else {
+                        let value_type = self.cur.func.dfg.value_type(lv.value);
+                        let reg = self.cur.func.dfg.replace_result(lv.value, value_type);
+                        self.liveness.create_dead(reg, inst, Affinity::new(op));
+                        self.insert_spill(ebb, lv.value, reg);
+                    }
                 }
             }
         }
 
         // Same thing for spilled call return values.
-        let retvals = &defs[constraints.outs.len()..];
+        let retvals = &defs[self.cur.func.dfg[inst]
+                                .opcode()
+                                .constraints()
+                                .fixed_results()..];
         if !retvals.is_empty() {
             let sig = self
                 .cur
@@ -342,21 +344,26 @@ impl<'a> Context<'a> {
     // Find reload candidates for `inst` and add them to `self.candidates`.
     //
     // These are uses of spilled values where the operand constraint requires a register.
-    fn find_candidates(&mut self, inst: Inst, constraints: &RecipeConstraints) {
+    fn find_candidates(&mut self, inst: Inst, constraints: Option<&RecipeConstraints>) {
         let args = self.cur.func.dfg.inst_args(inst);
 
-        for (argidx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
-            if op.kind != ConstraintKind::Stack && self.liveness[arg].affinity.is_stack() {
-                self.candidates.push(ReloadCandidate {
-                    argidx,
-                    value: arg,
-                    regclass: op.regclass,
-                })
+        if let Some(constraints) = constraints {
+            for (argidx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
+                if op.kind != ConstraintKind::Stack && self.liveness[arg].affinity.is_stack() {
+                    self.candidates.push(ReloadCandidate {
+                        argidx,
+                        value: arg,
+                        regclass: op.regclass,
+                    })
+                }
             }
         }
 
         // If we only have the fixed arguments, we're done now.
-        let offset = constraints.ins.len();
+        let offset = self.cur.func.dfg[inst]
+            .opcode()
+            .constraints()
+            .fixed_value_arguments();
         if args.len() == offset {
             return;
         }
