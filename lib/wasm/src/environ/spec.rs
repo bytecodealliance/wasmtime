@@ -230,7 +230,9 @@ pub trait FuncEnvironment {
     /// Should the code be structured to use a single `fallthrough_return` instruction at the end
     /// of the function body, rather than `return` instructions as needed? This is used by VMs
     /// to append custom epilogues.
-    fn return_mode(&self) -> ReturnMode;
+    fn return_mode(&self) -> ReturnMode {
+        ReturnMode::NormalReturns
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
