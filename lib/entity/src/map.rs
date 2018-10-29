@@ -84,12 +84,12 @@ where
         Keys::with_len(self.elems.len())
     }
 
-    /// Iterate over all the keys in this map.
+    /// Iterate over all the values in this map.
     pub fn values(&self) -> slice::Iter<V> {
         self.elems.iter()
     }
 
-    /// Iterate over all the keys in this map, mutable edition.
+    /// Iterate over all the values in this map, mutable edition.
     pub fn values_mut(&mut self) -> slice::IterMut<V> {
         self.elems.iter_mut()
     }

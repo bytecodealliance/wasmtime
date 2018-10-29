@@ -283,10 +283,14 @@ fn write_value_aliases(
     target: Value,
     indent: usize,
 ) -> fmt::Result {
-    for &a in &aliases[target] {
-        writeln!(w, "{1:0$}{2} -> {3}", indent, "", a, target)?;
-        write_value_aliases(w, aliases, a, indent)?;
+    let mut todo_stack = vec![target];
+    while let Some(target) = todo_stack.pop() {
+        for &a in &aliases[target] {
+            writeln!(w, "{1:0$}{2} -> {3}", indent, "", a, target)?;
+            todo_stack.push(a);
+        }
     }
+
     Ok(())
 }
 
