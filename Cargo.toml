@@ -1,0 +1,17 @@
+[package]
+name = "wasm-singlepass-experiment"
+version = "0.0.0"
+authors = ["Dan Gohman <sunfish@mozilla.com>"]
+license = "Apache-2.0 WITH LLVM-exception"
+publish = false
+
+[dependencies]
+dynasm = "0.2.3"
+dynasmrt = "0.2.3"
+wasmparser = "0.21.6"
+capstone = "0.5.0"
+failure = "0.1.3"
+failure_derive = "0.1.3"
+
+[badges]
+maintenance = { status = "experimental" }
