@@ -26,6 +26,14 @@ class TypeConstraint(object):
     """
     Base class for all runtime-emittable type constraints.
     """
+
+    def __init__(self, tv, tc):
+        # type: (TypeVar, Union[TypeVar, TypeSet]) -> None
+        """
+        Abstract "constructor" for linters
+        """
+        assert False, "Abstract"
+
     def translate(self, m):
         # type: (Union[TypeEnv, TypeMap]) -> TypeConstraint
         """
@@ -75,7 +83,7 @@ class TypeConstraint(object):
         """
         Return the typevars contained in this constraint.
         """
-        return filter(lambda x:  isinstance(x, TypeVar), self._args())
+        return list(filter(lambda x: isinstance(x, TypeVar), self._args()))
 
     def is_trivial(self):
         # type: () -> bool
