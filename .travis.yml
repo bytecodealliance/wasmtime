@@ -23,9 +23,7 @@ addons:
         packages:
             - python3-pip
 install:
-    # Fix the mypy version at 0.630 since version 0.641 is more strict and the
-    # code is not yet updated.
-    - pip3 install --user --upgrade mypy==0.630 flake8
+    - pip3 install --user --upgrade mypy flake8
     - mypy --version
 before_script:
     # If an old version of rustfmt from cargo is already installed, uninstall
