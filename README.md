@@ -1,7 +1,7 @@
 # Lightbeam
 
 This is an early-stage experimental project to build a single-pass
-wasm-function-to-machine-code translator.
+linear-time wasm-function-to-machine-code translator.
 
 It's currently built with [dynasm](https://crates.io/crates/dynasm) and
 targets x86-64, however the function\_body.rs/backend.rs split is likely
