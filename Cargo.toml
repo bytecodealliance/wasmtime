@@ -1,7 +1,7 @@
 [package]
-name = "wasm-singlepass-experiment"
+name = "lightbeam"
 version = "0.0.0"
-authors = ["Dan Gohman <sunfish@mozilla.com>"]
+authors = ["The Lightbeam Project Developers"]
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 categories = ["wasm"]

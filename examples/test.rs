@@ -1,10 +1,10 @@
-extern crate wasm_singlepass_experiment;
+extern crate lightbeam;
 
+use lightbeam::translate;
 use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::path::Path;
-use wasm_singlepass_experiment::translate;
 
 fn read_to_end<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     let mut buffer = Vec::new();

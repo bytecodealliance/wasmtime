@@ -1,4 +1,4 @@
-# Wasm Singlepass Experiment
+# Lightbeam
 
 This is an early-stage experimental project to build a single-pass
 wasm-function-to-machine-code translator.
@@ -13,4 +13,4 @@ WebAssembly works at a low level, for learning assembly programming, or
 both! And we're happy to mentor. So welcome, and check out the
 [issue tracker] to see what's happening and how to get involved!
 
-[issue tracker]: https://github.com/CraneStation/wasm-singlepass-experiment/issues
+[issue tracker]: https://github.com/CraneStation/lightbeam/issues
