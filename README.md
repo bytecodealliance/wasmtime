@@ -13,4 +13,4 @@ WebAssembly works at a low level, for learning assembly programming, or
 both! And we're happy to mentor. So welcome, and check out the
 [issue tracker] to see what's happening and how to get involved!
 
-[issue tracker]: https://github.com/sunfishcode/wasm-singlepass-experiment/issues
+[issue tracker]: https://github.com/CraneStation/wasm-singlepass-experiment/issues
