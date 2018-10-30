@@ -91,7 +91,7 @@ fn main() {
     }
 
     for isa in isas {
-        if let Err(err) = meta::gen_registers::generate(isa, "new_registers", &out_dir) {
+        if let Err(err) = meta::gen_registers::generate(isa, "registers", &out_dir) {
             eprintln!("Error: {}", err);
             process::exit(1);
         }
