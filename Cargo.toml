@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-tools"
-authors = ["The Cranelift Project Developers"]
+authors = ["The Wasmtime Project Developers"]
 version = "0.0.0"
 description = "Command-line interface for the wasmtime crate"
 license = "Apache-2.0 WITH LLVM-exception"
