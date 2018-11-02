@@ -290,7 +290,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             let new_base = func.create_global_value(ir::GlobalValueData::VMContext {
                 offset: Offset32::new(pointer_bytes as i32),
             });
-            self.globals_base = Some(new_base);
+            self.memories_base = Some(new_base);
             new_base
         });
         let offset = index * pointer_bytes;
