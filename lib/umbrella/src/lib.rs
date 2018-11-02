@@ -46,7 +46,7 @@ pub mod prelude {
         MemFlags, Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value,
     };
     pub use codegen::isa;
-    pub use codegen::settings::{self, CallConv, Configurable};
+    pub use codegen::settings::{self, Configurable};
 
     pub use frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 }

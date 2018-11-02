@@ -6,8 +6,7 @@
 //! This module declares the data types used to represent external functions and call signatures.
 
 use ir::{ArgumentLoc, ExternalName, SigRef, Type};
-use isa::{RegInfo, RegUnit};
-use settings::CallConv;
+use isa::{CallConv, RegInfo, RegUnit};
 use std::fmt;
 use std::str::FromStr;
 use std::vec::Vec;

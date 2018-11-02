@@ -10,10 +10,9 @@ use ir::{
     get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, InstBuilder,
     ValueLoc,
 };
-use isa::{RegClass, RegUnit, TargetIsa};
+use isa::{CallConv, RegClass, RegUnit, TargetIsa};
 use regalloc::RegisterSet;
 use result::CodegenResult;
-use settings::CallConv;
 use stack_layout::layout_stack;
 use std::i32;
 use target_lexicon::{PointerWidth, Triple};
@@ -189,12 +188,12 @@ pub fn allocatable_registers(_func: &ir::Function, triple: &Triple) -> RegisterS
 }
 
 /// Get the set of callee-saved registers.
-fn callee_saved_gprs(isa: &TargetIsa) -> &'static [RU] {
+fn callee_saved_gprs(isa: &TargetIsa, call_conv: CallConv) -> &'static [RU] {
     match isa.triple().pointer_width().unwrap() {
         PointerWidth::U16 => panic!(),
         PointerWidth::U32 => &[RU::rbx, RU::rsi, RU::rdi],
         PointerWidth::U64 => {
-            if isa.flags().call_conv() == CallConv::WindowsFastcall {
+            if call_conv == CallConv::WindowsFastcall {
                 // "registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15 are considered nonvolatile
                 //  and must be saved and restored by a function that uses them."
                 // as per https://msdn.microsoft.com/en-us/library/6t169e9c.aspx
@@ -219,7 +218,7 @@ fn callee_saved_gprs(isa: &TargetIsa) -> &'static [RU] {
 /// Get the set of callee-saved registers that are used.
 fn callee_saved_gprs_used(isa: &TargetIsa, func: &ir::Function) -> RegisterSet {
     let mut all_callee_saved = RegisterSet::empty();
-    for reg in callee_saved_gprs(isa) {
+    for reg in callee_saved_gprs(isa, func.signature.call_conv) {
         all_callee_saved.free(GPR, *reg as RegUnit);
     }
 

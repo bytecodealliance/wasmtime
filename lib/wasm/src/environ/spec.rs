@@ -2,9 +2,8 @@
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, InstBuilder};
-use cranelift_codegen::settings::Flags;
+use cranelift_codegen::isa::TargetFrontendConfig;
 use std::vec::Vec;
-use target_lexicon::Triple;
 use translation_utils::{
     FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
@@ -89,22 +88,19 @@ pub enum ReturnMode {
 /// IR. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment {
-    /// Get the triple for the current compilation.
-    fn triple(&self) -> &Triple;
-
-    /// Get the flags for the current compilation.
-    fn flags(&self) -> &Flags;
+    /// Get the information needed to produce Cranelift IR for the given target.
+    fn target_config(&self) -> TargetFrontendConfig;
 
     /// Get the Cranelift integer type to use for native pointers.
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
     fn pointer_type(&self) -> ir::Type {
-        ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
+        ir::Type::int(u16::from(self.target_config().pointer_bits())).unwrap()
     }
 
     /// Get the size of a native pointer, in bytes.
     fn pointer_bytes(&self) -> u8 {
-        self.triple().pointer_width().unwrap().bytes()
+        self.target_config().pointer_bytes()
     }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable
@@ -239,8 +235,8 @@ pub trait FuncEnvironment {
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cranelift-wasm` internal use.
 pub trait ModuleEnvironment<'data> {
-    /// Get the flags for the current compilation.
-    fn flags(&self) -> &Flags;
+    /// Get the information needed to produce Cranelift IR for the current target.
+    fn target_config(&self) -> &TargetFrontendConfig;
 
     /// Return the name for the given function index.
     fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName;

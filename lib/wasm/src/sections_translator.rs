@@ -35,7 +35,7 @@ pub fn parse_function_signatures(
                 ref params,
                 ref returns,
             }) => {
-                let mut sig = Signature::new(environ.flags().call_conv());
+                let mut sig = Signature::new(environ.target_config().default_call_conv);
                 sig.params.extend(params.iter().map(|ty| {
                     let cret_arg: ir::Type = type_to_type(*ty)
                         .expect("only numeric types are supported in function signatures");

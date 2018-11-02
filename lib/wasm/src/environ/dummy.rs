@@ -5,13 +5,12 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
-use cranelift_codegen::settings;
+use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
 use func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
-use target_lexicon::Triple;
 use translation_utils::{
     DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex,
@@ -44,11 +43,8 @@ impl<T> Exportable<T> {
 /// `DummyEnvironment` to allow it to be borrowed separately from the
 /// `FuncTranslator` field.
 pub struct DummyModuleInfo {
-    /// Target description.
-    pub triple: Triple,
-
-    /// Compilation setting flags.
-    pub flags: settings::Flags,
+    /// Target description relevant to frontends producing Cranelift IR.
+    config: TargetFrontendConfig,
 
     /// Signatures as provided by `declare_signature`.
     pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
@@ -76,11 +72,10 @@ pub struct DummyModuleInfo {
 }
 
 impl DummyModuleInfo {
-    /// Allocates the data structures with the given flags.
-    pub fn with_triple_flags(triple: Triple, flags: settings::Flags) -> Self {
+    /// Creates a new `DummyModuleInfo` instance.
+    pub fn new(config: TargetFrontendConfig) -> Self {
         Self {
-            triple,
-            flags,
+            config,
             signatures: PrimaryMap::new(),
             imported_funcs: Vec::new(),
             functions: PrimaryMap::new(),
@@ -111,23 +106,10 @@ pub struct DummyEnvironment {
 }
 
 impl DummyEnvironment {
-    /// Allocates the data structures with default flags.
-    pub fn with_triple(triple: Triple) -> Self {
-        Self::with_triple_flags(
-            triple,
-            settings::Flags::new(settings::builder()),
-            ReturnMode::NormalReturns,
-        )
-    }
-
-    /// Allocates the data structures with the given triple.
-    pub fn with_triple_flags(
-        triple: Triple,
-        flags: settings::Flags,
-        return_mode: ReturnMode,
-    ) -> Self {
+    /// Creates a new `DummyEnvironment` instance.
+    pub fn new(config: TargetFrontendConfig, return_mode: ReturnMode) -> Self {
         Self {
-            info: DummyModuleInfo::with_triple_flags(triple, flags),
+            info: DummyModuleInfo::new(config),
             trans: FuncTranslator::new(),
             func_bytecode_sizes: Vec::new(),
             return_mode,
@@ -169,12 +151,8 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
-    fn triple(&self) -> &Triple {
-        &self.mod_info.triple
-    }
-
-    fn flags(&self) -> &settings::Flags {
-        &self.mod_info.flags
+    fn target_config(&self) -> TargetFrontendConfig {
+        self.mod_info.config
     }
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
@@ -348,8 +326,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn flags(&self) -> &settings::Flags {
-        &self.info.flags
+    fn target_config(&self) -> &TargetFrontendConfig {
+        &self.info.config
     }
 
     fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName {

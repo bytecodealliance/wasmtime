@@ -372,7 +372,6 @@ mod tests {
             "[shared]\n\
              opt_level = \"default\"\n\
              enable_verifier = true\n\
-             call_conv = \"fast\"\n\
              is_pic = false\n\
              colocated_libcalls = false\n\
              avoid_div_traps = false\n\

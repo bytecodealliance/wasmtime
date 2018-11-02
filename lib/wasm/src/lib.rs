@@ -40,6 +40,7 @@ extern crate cranelift_codegen;
 #[macro_use]
 extern crate cranelift_entity;
 extern crate cranelift_frontend;
+#[cfg(test)]
 extern crate target_lexicon;
 extern crate wasmparser;
 

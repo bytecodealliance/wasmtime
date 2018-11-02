@@ -106,11 +106,7 @@ fn handle_module(
         }
     };
 
-    let mut dummy_environ = DummyEnvironment::with_triple_flags(
-        isa.triple().clone(),
-        fisa.flags.clone(),
-        ReturnMode::NormalReturns,
-    );
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns);
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
     let _ = terminal.fg(term::color::GREEN);
