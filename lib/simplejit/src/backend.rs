@@ -11,6 +11,7 @@ use libc;
 use memory::Memory;
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::io::Write;
 use std::ptr;
 use target_lexicon::PointerWidth;
 #[cfg(windows)]
@@ -167,7 +168,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn define_function(
         &mut self,
-        _name: &str,
+        name: &str,
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
@@ -177,6 +178,17 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             .code_memory
             .allocate(size)
             .expect("TODO: handle OOM etc.");
+
+        if cfg!(target_os = "linux") && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
+            let mut map_file = ::std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(format!("/tmp/perf-{}.map", ::std::process::id()))
+                .unwrap();
+
+            writeln!(map_file, "{:x} {:x} {}", ptr as usize, code_size, name);
+        }
+
         let mut reloc_sink = SimpleJITRelocSink::new();
         // Ignore traps for now. For now, frontends should just avoid generating code
         // that traps.
