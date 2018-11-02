@@ -13,9 +13,8 @@ use ir::{
 };
 use ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use ir::{JumpTableOffsets, JumpTables};
-use isa::{EncInfo, Encoding, Legalize, TargetIsa};
+use isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
 use regalloc::RegDiversions;
-use settings::CallConv;
 use std::fmt;
 use write::write_function;
 

@@ -26,8 +26,9 @@ pub struct SimpleJITBuilder {
 impl SimpleJITBuilder {
     /// Create a new `SimpleJITBuilder`.
     pub fn new() -> Self {
-        let (flag_builder, isa_builder) = cranelift_native::builders().unwrap_or_else(|_| {
-            panic!("host machine is not a supported target");
+        let flag_builder = settings::builder();
+        let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
+            panic!("host machine is not supported: {}", msg);
         });
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
         Self::with_isa(isa)

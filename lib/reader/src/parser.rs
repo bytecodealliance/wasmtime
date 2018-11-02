@@ -12,9 +12,8 @@ use cranelift_codegen::ir::{
     Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
     Value, ValueLoc,
 };
-use cranelift_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
+use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
-use cranelift_codegen::settings::CallConv;
 use cranelift_codegen::{settings, timing};
 use error::{Location, ParseError, ParseResult};
 use isaspec;
@@ -2562,7 +2561,7 @@ mod tests {
     use cranelift_codegen::ir::types;
     use cranelift_codegen::ir::StackSlotKind;
     use cranelift_codegen::ir::{ArgumentExtension, ArgumentPurpose};
-    use cranelift_codegen::settings::CallConv;
+    use cranelift_codegen::isa::CallConv;
     use error::ParseError;
     use isaspec::IsaSpec;
     use testfile::{Comment, Details};

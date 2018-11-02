@@ -236,11 +236,11 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 
 #[cfg(test)]
 mod tests {
-    use super::FuncTranslator;
+    use super::{FuncTranslator, ReturnMode};
     use cranelift_codegen::ir::types::I32;
-    use cranelift_codegen::{ir, Context};
-    use environ::{DummyEnvironment, FuncEnvironment};
-    use target_lexicon::Triple;
+    use cranelift_codegen::{ir, isa, settings, Context};
+    use environ::DummyEnvironment;
+    use target_lexicon::PointerWidth;
 
     #[test]
     fn small1() {
@@ -258,7 +258,15 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let runtime = DummyEnvironment::with_triple(Triple::default());
+        let flags = settings::Flags::new(settings::builder());
+        let runtime = DummyEnvironment::new(
+            isa::TargetFrontendConfig {
+                default_call_conv: isa::CallConv::Fast,
+                pointer_width: PointerWidth::U64,
+            },
+            ReturnMode::NormalReturns,
+        );
+
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("small1");
@@ -269,7 +277,7 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
-        ctx.verify(runtime.func_env().flags()).unwrap();
+        ctx.verify(&flags).unwrap();
     }
 
     #[test]
@@ -289,7 +297,14 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let runtime = DummyEnvironment::with_triple(Triple::default());
+        let flags = settings::Flags::new(settings::builder());
+        let runtime = DummyEnvironment::new(
+            isa::TargetFrontendConfig {
+                default_call_conv: isa::CallConv::Fast,
+                pointer_width: PointerWidth::U64,
+            },
+            ReturnMode::NormalReturns,
+        );
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("small2");
@@ -300,7 +315,7 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
-        ctx.verify(runtime.func_env().flags()).unwrap();
+        ctx.verify(&flags).unwrap();
     }
 
     #[test]
@@ -329,7 +344,14 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let runtime = DummyEnvironment::with_triple(Triple::default());
+        let flags = settings::Flags::new(settings::builder());
+        let runtime = DummyEnvironment::new(
+            isa::TargetFrontendConfig {
+                default_call_conv: isa::CallConv::Fast,
+                pointer_width: PointerWidth::U64,
+            },
+            ReturnMode::NormalReturns,
+        );
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("infloop");
@@ -339,6 +361,6 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
-        ctx.verify(runtime.func_env().flags()).unwrap();
+        ctx.verify(&flags).unwrap();
     }
 }

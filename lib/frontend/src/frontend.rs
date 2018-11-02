@@ -9,7 +9,7 @@ use cranelift_codegen::ir::{
     JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Type,
     Value,
 };
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::packed_option::PackedOption;
 use ssa::{Block, SSABuilder, SideEffects};
 use std::vec::Vec;
@@ -550,10 +550,16 @@ impl<'a> FunctionBuilder<'a> {
     /// won't overlap onto `dest`. If `dest` and `src` overlap, the behavior is
     /// undefined. Applications in which `dest` and `src` might overlap should
     /// use `call_memmove` instead.
-    pub fn call_memcpy(&mut self, isa: &TargetIsa, dest: Value, src: Value, size: Value) {
-        let pointer_type = isa.pointer_type();
+    pub fn call_memcpy(
+        &mut self,
+        config: &TargetFrontendConfig,
+        dest: Value,
+        src: Value,
+        size: Value,
+    ) {
+        let pointer_type = config.pointer_type();
         let signature = {
-            let mut s = Signature::new(isa.flags().call_conv());
+            let mut s = Signature::new(config.default_call_conv);
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
@@ -572,7 +578,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Optimised memcpy for small copys.
     pub fn emit_small_memcpy(
         &mut self,
-        isa: &TargetIsa,
+        config: &TargetFrontendConfig,
         dest: Value,
         src: Value,
         size: u64,
@@ -594,8 +600,8 @@ impl<'a> FunctionBuilder<'a> {
         let load_and_store_amount = size / access_size;
 
         if load_and_store_amount > THRESHOLD {
-            let size_value = self.ins().iconst(isa.pointer_type(), size as i64);
-            self.call_memcpy(isa, dest, src, size_value);
+            let size_value = self.ins().iconst(config.pointer_type(), size as i64);
+            self.call_memcpy(config, dest, src, size_value);
             return;
         }
 
@@ -613,10 +619,16 @@ impl<'a> FunctionBuilder<'a> {
     /// Calls libc.memset
     ///
     /// Writes `size` bytes of value `ch` to memory starting at `buffer`.
-    pub fn call_memset(&mut self, isa: &TargetIsa, buffer: Value, ch: Value, size: Value) {
-        let pointer_type = isa.pointer_type();
+    pub fn call_memset(
+        &mut self,
+        config: &TargetFrontendConfig,
+        buffer: Value,
+        ch: Value,
+        size: Value,
+    ) {
+        let pointer_type = config.pointer_type();
         let signature = {
-            let mut s = Signature::new(isa.flags().call_conv());
+            let mut s = Signature::new(config.default_call_conv);
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(types::I32));
             s.params.push(AbiParam::new(pointer_type));
@@ -638,7 +650,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Writes `size` bytes of value `ch` to memory starting at `buffer`.
     pub fn emit_small_memset(
         &mut self,
-        isa: &TargetIsa,
+        config: &TargetFrontendConfig,
         buffer: Value,
         ch: u32,
         size: u64,
@@ -660,8 +672,8 @@ impl<'a> FunctionBuilder<'a> {
 
         if load_and_store_amount > THRESHOLD {
             let ch = self.ins().iconst(types::I32, ch as i64);
-            let size = self.ins().iconst(isa.pointer_type(), size as i64);
-            self.call_memset(isa, buffer, ch, size);
+            let size = self.ins().iconst(config.pointer_type(), size as i64);
+            self.call_memset(config, buffer, ch, size);
         } else {
             let mut flags = MemFlags::new();
             flags.set_aligned();
@@ -691,10 +703,16 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// Copies `size` bytes from memory starting at `source` to memory starting
     /// at `dest`. `source` is always read before writing to `dest`.
-    pub fn call_memmove(&mut self, isa: &TargetIsa, dest: Value, source: Value, size: Value) {
-        let pointer_type = isa.pointer_type();
+    pub fn call_memmove(
+        &mut self,
+        config: &TargetFrontendConfig,
+        dest: Value,
+        source: Value,
+        size: Value,
+    ) {
+        let pointer_type = config.pointer_type();
         let signature = {
-            let mut s = Signature::new(isa.flags().call_conv());
+            let mut s = Signature::new(config.default_call_conv);
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
@@ -713,7 +731,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Optimised memmove for small moves.
     pub fn emit_small_memmove(
         &mut self,
-        isa: &TargetIsa,
+        config: &TargetFrontendConfig,
         dest: Value,
         src: Value,
         size: u64,
@@ -735,8 +753,8 @@ impl<'a> FunctionBuilder<'a> {
         let load_and_store_amount = size / access_size;
 
         if load_and_store_amount > THRESHOLD {
-            let size_value = self.ins().iconst(isa.pointer_type(), size as i64);
-            self.call_memmove(isa, dest, src, size_value);
+            let size_value = self.ins().iconst(config.pointer_type(), size as i64);
+            self.call_memmove(config, dest, src, size_value);
             return;
         }
 
@@ -798,8 +816,8 @@ mod tests {
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::types::*;
     use cranelift_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use cranelift_codegen::isa::CallConv;
     use cranelift_codegen::settings;
-    use cranelift_codegen::settings::CallConv;
     use cranelift_codegen::verifier::verify_function;
     use frontend::{FunctionBuilder, FunctionBuilderContext};
     use std::string::ToString;
@@ -923,7 +941,7 @@ mod tests {
             .map(|b| b.finish(shared_flags))
             .expect("This test requires arm support.");
 
-        let mut sig = Signature::new(target.flags().call_conv());
+        let mut sig = Signature::new(target.default_call_conv());
         sig.returns.push(AbiParam::new(I32));
 
         let mut fn_ctx = FunctionBuilderContext::new();
@@ -944,7 +962,7 @@ mod tests {
             let src = builder.use_var(x);
             let dest = builder.use_var(y);
             let size = builder.use_var(y);
-            builder.call_memcpy(&*target, dest, src, size);
+            builder.call_memcpy(&target.frontend_config(), dest, src, size);
             builder.ins().return_(&[size]);
 
             builder.seal_all_blocks();
@@ -953,8 +971,8 @@ mod tests {
 
         assert_eq!(
             func.display(None).to_string(),
-            "function %sample() -> i32 fast {
-    sig0 = (i32, i32, i32) fast
+            "function %sample() -> i32 system_v {
+    sig0 = (i32, i32, i32) system_v
     fn0 = %Memcpy sig0
 
 ebb0:

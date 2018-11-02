@@ -27,30 +27,6 @@ enable_verifier = BoolSetting(
         """,
         default=True)
 
-call_conv = EnumSetting(
-        """
-        Default calling convention:
-
-        - fast: not-ABI-stable convention for best performance
-        - cold: not-ABI-stable convention for infrequently executed code
-        - system_v: System V-style convention used on many platforms
-        - windows_fastcall: Windows "fastcall" convention, also used for
-                            x64 and ARM
-        - baldrdash: SpiderMonkey WebAssembly convention
-        - probestack: specialized convention for the probestack function
-
-        The default calling convention may be overridden by individual
-        functions.
-        """,
-
-        'fast',
-        'cold',
-        'system_v',
-        'windows_fastcall',
-        'baldrdash',
-        'probestack'
-)
-
 # Note that Cranelift doesn't currently need an is_pie flag, because PIE is
 # just PIC where symbols can't be pre-empted, which can be expressed with the
 # `colocated` flag on external functions and global values.
