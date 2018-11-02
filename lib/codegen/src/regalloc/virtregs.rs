@@ -280,7 +280,7 @@ impl UFEntry {
 /// 2. When done, call `finish_union_find()` to construct the virtual register sets based on the
 ///    `union()` calls.
 ///
-/// The values that were passed to `union(a, b)` mist not belong to any existing virtual registers
+/// The values that were passed to `union(a, b)` must not belong to any existing virtual registers
 /// by the time `finish_union_find()` is called.
 ///
 /// For more information on the algorithm implemented here, see Chapter 21 "Data Structures for
