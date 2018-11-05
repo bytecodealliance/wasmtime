@@ -552,7 +552,7 @@ impl<'a> FunctionBuilder<'a> {
     /// use `call_memmove` instead.
     pub fn call_memcpy(
         &mut self,
-        config: &TargetFrontendConfig,
+        config: TargetFrontendConfig,
         dest: Value,
         src: Value,
         size: Value,
@@ -578,7 +578,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Optimised memcpy for small copys.
     pub fn emit_small_memcpy(
         &mut self,
-        config: &TargetFrontendConfig,
+        config: TargetFrontendConfig,
         dest: Value,
         src: Value,
         size: u64,
@@ -621,7 +621,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Writes `size` bytes of value `ch` to memory starting at `buffer`.
     pub fn call_memset(
         &mut self,
-        config: &TargetFrontendConfig,
+        config: TargetFrontendConfig,
         buffer: Value,
         ch: Value,
         size: Value,
@@ -650,7 +650,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Writes `size` bytes of value `ch` to memory starting at `buffer`.
     pub fn emit_small_memset(
         &mut self,
-        config: &TargetFrontendConfig,
+        config: TargetFrontendConfig,
         buffer: Value,
         ch: u32,
         size: u64,
@@ -705,7 +705,7 @@ impl<'a> FunctionBuilder<'a> {
     /// at `dest`. `source` is always read before writing to `dest`.
     pub fn call_memmove(
         &mut self,
-        config: &TargetFrontendConfig,
+        config: TargetFrontendConfig,
         dest: Value,
         source: Value,
         size: Value,
@@ -731,7 +731,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Optimised memmove for small moves.
     pub fn emit_small_memmove(
         &mut self,
-        config: &TargetFrontendConfig,
+        config: TargetFrontendConfig,
         dest: Value,
         src: Value,
         size: u64,
@@ -962,7 +962,7 @@ mod tests {
             let src = builder.use_var(x);
             let dest = builder.use_var(y);
             let size = builder.use_var(y);
-            builder.call_memcpy(&target.frontend_config(), dest, src, size);
+            builder.call_memcpy(target.frontend_config(), dest, src, size);
             builder.ins().return_(&[size]);
 
             builder.seal_all_blocks();
