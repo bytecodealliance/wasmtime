@@ -92,7 +92,8 @@ class Instruction(object):
     :param is_indirect_branch: This is an indirect branch instruction.
     :param is_call: This is a call instruction.
     :param is_return: This is a return instruction.
-    :param is_ghost: This is a ghost instruction.
+    :param is_ghost: This is a ghost instruction, which has no encoding and no
+                     other register allocation constraints.
     :param can_trap: This instruction can trap.
     :param can_load: This instruction can load from memory.
     :param can_store: This instruction can store to memory.

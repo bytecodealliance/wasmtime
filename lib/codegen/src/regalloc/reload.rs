@@ -126,10 +126,14 @@ impl<'a> Context<'a> {
         // visit_ebb_header() places us at the first interesting instruction in the EBB.
         while let Some(inst) = self.cur.current_inst() {
             if !self.cur.func.dfg[inst].opcode().is_ghost() {
+                // This instruction either has an encoding or has ABI constraints, so visit it to
+                // insert spills and fills as needed.
                 let encoding = self.cur.func.encodings[inst];
                 self.visit_inst(ebb, inst, encoding, tracker);
                 tracker.drop_dead(inst);
             } else {
+                // This is a ghost instruction with no encoding and no extra constraints, so we can
+                // just skip over it.
                 self.cur.next_inst();
             }
         }
