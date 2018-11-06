@@ -166,6 +166,8 @@ impl<'a> Context<'a> {
         while let Some(inst) = self.cur.next_inst() {
             self.cur.use_srcloc(inst);
             if !self.cur.func.dfg[inst].opcode().is_ghost() {
+                // This is an instruction which either has an encoding or carries ABI-related
+                // register allocation constraints.
                 let enc = self.cur.func.encodings[inst];
                 let constraints = self.encinfo.operand_constraints(enc);
                 if self.visit_inst(inst, constraints, tracker, &mut regs) {
@@ -175,7 +177,7 @@ impl<'a> Context<'a> {
                     self.cur.goto_inst(inst);
                 }
             } else {
-                // This is a ghost instruction with no encoding.
+                // This is a ghost instruction with no encoding and no extra constraints.
                 let (_throughs, kills) = tracker.process_ghost(inst);
                 self.process_ghost_kills(kills, &mut regs);
             }
