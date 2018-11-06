@@ -11,3 +11,13 @@ ebb0:
 ; check: v2 = iconst.i64 0
 ; check: v3 = copy v2
 ; check: return v2, v3
+
+; Same thing, now with a fallthrough_return.
+function %multiple_returns() -> i64, i64 {
+ebb0:
+    v2 = iconst.i64 0
+    fallthrough_return v2, v2
+}
+; check: v2 = iconst.i64 0
+; check: v3 = copy v2
+; check: fallthrough_return v2, v3
