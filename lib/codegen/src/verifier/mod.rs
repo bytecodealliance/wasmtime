@@ -1550,6 +1550,15 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
+            if self.func.dfg[inst].opcode().is_ghost() {
+                return nonfatal!(
+                    errors,
+                    inst,
+                    "Ghost instruction has an encoding: {}",
+                    isa.encoding_info().display(encoding)
+                );
+            }
+
             let mut encodings = isa
                 .legal_encodings(
                     &self.func,
