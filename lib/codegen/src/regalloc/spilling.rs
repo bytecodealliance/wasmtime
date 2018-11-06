@@ -348,6 +348,11 @@ impl<'a> Context<'a> {
         // Similarly, for return instructions, collect uses of ABI-defined
         // return values.
         if self.cur.func.dfg[inst].opcode().is_return() {
+            debug_assert_eq!(
+                self.cur.func.dfg.inst_variable_args(inst).len(),
+                self.cur.func.signature.returns.len(),
+                "The non-fixed arguments in a return should follow the function's signature."
+            );
             for (ret_idx, (ret, &arg)) in
                 self.cur.func.signature.returns.iter().zip(args).enumerate()
             {
