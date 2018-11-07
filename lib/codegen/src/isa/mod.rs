@@ -179,17 +179,17 @@ pub struct TargetFrontendConfig {
 
 impl TargetFrontendConfig {
     /// Get the pointer type of this target.
-    pub fn pointer_type(&self) -> ir::Type {
+    pub fn pointer_type(self) -> ir::Type {
         ir::Type::int(u16::from(self.pointer_bits())).unwrap()
     }
 
     /// Get the width of pointers on this target, in units of bits.
-    pub fn pointer_bits(&self) -> u8 {
+    pub fn pointer_bits(self) -> u8 {
         self.pointer_width.bits()
     }
 
     /// Get the width of pointers on this target, in units of bytes.
-    pub fn pointer_bytes(&self) -> u8 {
+    pub fn pointer_bytes(self) -> u8 {
         self.pointer_width.bytes()
     }
 }
