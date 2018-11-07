@@ -21,7 +21,7 @@ log = { version = "0.4.4", default-features = false }
 
 [dev-dependencies]
 wabt = "0.7.0"
-target-lexicon = "0.0.3"
+target-lexicon = "0.2.0"
 
 [features]
 default = ["std"]

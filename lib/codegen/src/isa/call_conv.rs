@@ -1,6 +1,6 @@
 use std::fmt;
 use std::str;
-use target_lexicon::{OperatingSystem, Triple};
+use target_lexicon::{CallingConvention, Triple};
 
 /// Calling convention identifiers.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -22,25 +22,11 @@ pub enum CallConv {
 impl CallConv {
     /// Return the default calling convention for the given target triple.
     pub fn default_for_triple(triple: &Triple) -> Self {
-        match triple.operating_system {
-            OperatingSystem::Unknown
-            | OperatingSystem::Bitrig
-            | OperatingSystem::Cloudabi
-            | OperatingSystem::Darwin
-            | OperatingSystem::Dragonfly
-            | OperatingSystem::Freebsd
-            | OperatingSystem::Fuchsia
-            | OperatingSystem::Haiku
-            | OperatingSystem::Ios
-            | OperatingSystem::L4re
-            | OperatingSystem::Linux
-            | OperatingSystem::Nebulet
-            | OperatingSystem::Netbsd
-            | OperatingSystem::Openbsd
-            | OperatingSystem::Redox
-            | OperatingSystem::Solaris => CallConv::SystemV,
-            OperatingSystem::Windows => CallConv::WindowsFastcall,
-            os => panic!("unsupported operating system: {}", os),
+        match triple.default_calling_convention() {
+            // Default to System V for unknown targets because most everything
+            // uses System V.
+            Ok(CallingConvention::SystemV) | Err(()) => CallConv::SystemV,
+            Ok(CallingConvention::WindowsFastcall) => CallConv::WindowsFastcall,
         }
     }
 }
