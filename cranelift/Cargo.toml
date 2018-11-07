@@ -25,6 +25,7 @@ cranelift-filetests = { path = "lib/filetests", version = "0.22.0" }
 cranelift-module = { path = "lib/module", version = "0.22.0" }
 cranelift-faerie = { path = "lib/faerie", version = "0.22.0" }
 cranelift-simplejit = { path = "lib/simplejit", version = "0.22.0" }
+cranelift-preopt = { path = "lib/preopt", version = "0.22.0" }
 cranelift = { path = "lib/umbrella", version = "0.22.0" }
 filecheck = "0.4.0"
 clap = "2.32.0"

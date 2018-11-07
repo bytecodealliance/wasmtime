@@ -1,4 +1,4 @@
-test preopt
+test simple_preopt
 target i686 baseline
 
 ; Cases where the denominator is created by an iconst
