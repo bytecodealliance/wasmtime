@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.22.0", features = ["testing_hooks"] }
 cranelift-reader = { path = "../reader", version = "0.22.0" }
+cranelift-preopt = { path = "../preopt", version = "0.22.0" }
 file-per-thread-logger = "0.1.1"
 filecheck = "0.4.0"
 num_cpus = "1.8.0"

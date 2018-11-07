@@ -124,7 +124,7 @@ mod details {
     }
 
     /// Accumulated timing information for a single pass.
-    #[derive(Default)]
+    #[derive(Default, Copy, Clone)]
     struct PassTime {
         /// Total time spent running this pass including children.
         total: Duration,
@@ -134,9 +134,16 @@ mod details {
     }
 
     /// Accumulated timing for all passes.
-    #[derive(Default)]
     pub struct PassTimes {
         pass: [PassTime; NUM_PASSES],
+    }
+
+    impl Default for PassTimes {
+        fn default() -> Self {
+            PassTimes {
+                pass: [Default::default(); NUM_PASSES],
+            }
+        }
     }
 
     impl fmt::Display for PassTimes {
@@ -144,7 +151,7 @@ mod details {
             writeln!(f, "======== ========  ==================================")?;
             writeln!(f, "   Total     Self  Pass")?;
             writeln!(f, "-------- --------  ----------------------------------")?;
-            for (time, desc) in self.pass.iter().zip(&DESCRIPTIONS) {
+            for (time, desc) in self.pass.iter().zip(&DESCRIPTIONS[..]) {
                 // Omit passes that haven't run.
                 if time.total == Duration::default() {
                     continue;
@@ -212,7 +219,7 @@ mod details {
     /// Add `timings` to the accumulated timings for the current thread.
     pub fn add_to_current(times: &PassTimes) {
         PASS_TIME.with(|rc| {
-            for (a, b) in rc.borrow_mut().pass.iter_mut().zip(&times.pass) {
+            for (a, b) in rc.borrow_mut().pass.iter_mut().zip(&times.pass[..]) {
                 a.total += b.total;
                 a.child += b.child;
             }

@@ -24,6 +24,7 @@
 )]
 
 extern crate cranelift_codegen;
+extern crate cranelift_preopt;
 extern crate cranelift_reader;
 extern crate file_per_thread_logger;
 extern crate filecheck;
@@ -56,6 +57,7 @@ mod test_print_cfg;
 mod test_regalloc;
 mod test_shrink;
 mod test_simple_gvn;
+mod test_simple_preopt;
 mod test_verifier;
 
 /// The result of running the test in a file.
@@ -127,12 +129,13 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<subtest::SubT
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
         "postopt" => test_postopt::subtest(parsed),
-        "preopt" => test_preopt::subtest(parsed),
+        "simple_preopt" => test_simple_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
+        "preopt" => test_preopt::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }
