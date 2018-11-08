@@ -13,7 +13,7 @@ function banner {
 }
 
 # Test those packages which have no_std support.
-LIBS="codegen frontend wasm native module simplejit umbrella"
+LIBS="codegen frontend wasm native preopt module simplejit umbrella"
 for LIB in $LIBS; do
     banner "Rust unit tests in $LIB"
     pushd "lib/$LIB" >/dev/null
