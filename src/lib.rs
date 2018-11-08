@@ -8,6 +8,8 @@ extern crate wasmparser;
 extern crate failure_derive;
 extern crate dynasmrt;
 
+extern crate wabt;
+
 mod backend;
 mod disassemble;
 mod error;
@@ -15,4 +17,8 @@ mod function_body;
 mod module;
 mod translate_sections;
 
+#[cfg(test)]
+mod tests;
+
 pub use module::translate;
+pub use module::TranslatedModule;

@@ -1,14 +1,37 @@
+use std::mem;
 use error::Error;
 use translate_sections;
+use backend::TranslatedCodeSection;
 use wasmparser::{ModuleReader, SectionCode};
 
+#[derive(Default)]
+pub struct TranslatedModule {
+    translated_code_section: Option<TranslatedCodeSection>,
+}
+
+impl TranslatedModule {
+    // For testing only.
+    // Assume signature is (i32, i32) -> i32 for now.
+    // TODO: Handle generic signatures.
+    pub fn execute_func(&self, func_idx: u32, a: usize, b: usize) -> usize {
+        let code_section = self.translated_code_section.as_ref().expect("no code section");
+        let start_buf = code_section.func_start(func_idx as usize);
+
+        unsafe {
+            let func = mem::transmute::<_, extern "sysv64" fn(usize, usize) -> usize>(start_buf);
+            func(a, b)
+        }
+    }
+}
+
 /// Translate from a slice of bytes holding a wasm module.
-pub fn translate(data: &[u8]) -> Result<(), Error> {
+pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
     let mut reader = ModuleReader::new(data)?;
+    let mut output = TranslatedModule::default();
 
     reader.skip_custom_sections()?;
     if reader.eof() {
-        return Ok(());
+        return Ok(output);
     }
     let mut section = reader.read()?;
 
@@ -18,7 +41,7 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -29,7 +52,7 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -40,7 +63,7 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -51,7 +74,7 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -62,7 +85,7 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -73,7 +96,7 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -84,7 +107,7 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -95,7 +118,7 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -106,18 +129,18 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
 
     if let SectionCode::Code = section.code {
         let code = section.get_code_section_reader()?;
-        translate_sections::code(code)?;
+        output.translated_code_section = Some(translate_sections::code(code)?);
 
         reader.skip_custom_sections()?;
         if reader.eof() {
-            return Ok(());
+            return Ok(output);
         }
         section = reader.read()?;
     }
@@ -127,5 +150,5 @@ pub fn translate(data: &[u8]) -> Result<(), Error> {
         translate_sections::data(data)?;
     }
 
-    Ok(())
+    Ok(output)
 }

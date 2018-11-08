@@ -2,6 +2,7 @@ use capstone::prelude::*;
 use error::Error;
 use std::fmt::Write;
 
+#[allow(dead_code)]
 pub fn disassemble(mem: &[u8]) -> Result<(), Error> {
     let mut cs = Capstone::new()
         .x86()
