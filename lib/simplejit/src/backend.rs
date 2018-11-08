@@ -187,7 +187,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 .open(format!("/tmp/perf-{}.map", ::std::process::id()))
                 .unwrap();
 
-            writeln!(map_file, "{:x} {:x} {}", ptr as usize, code_size, name);
+            let _ = writeln!(map_file, "{:x} {:x} {}", ptr as usize, code_size, name);
         }
 
         let mut reloc_sink = SimpleJITRelocSink::new();
