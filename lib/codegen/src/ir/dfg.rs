@@ -430,26 +430,38 @@ impl DataFlowGraph {
 
     /// Get the fixed value arguments on `inst` as a slice.
     pub fn inst_fixed_args(&self, inst: Inst) -> &[Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
-        &self.inst_args(inst)[..fixed_args]
+        let num_fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .num_fixed_value_arguments();
+        &self.inst_args(inst)[..num_fixed_args]
     }
 
     /// Get the fixed value arguments on `inst` as a mutable slice.
     pub fn inst_fixed_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
-        &mut self.inst_args_mut(inst)[..fixed_args]
+        let num_fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .num_fixed_value_arguments();
+        &mut self.inst_args_mut(inst)[..num_fixed_args]
     }
 
     /// Get the variable value arguments on `inst` as a slice.
     pub fn inst_variable_args(&self, inst: Inst) -> &[Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
-        &self.inst_args(inst)[fixed_args..]
+        let num_fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .num_fixed_value_arguments();
+        &self.inst_args(inst)[num_fixed_args..]
     }
 
     /// Get the variable value arguments on `inst` as a mutable slice.
     pub fn inst_variable_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
-        &mut self.inst_args_mut(inst)[fixed_args..]
+        let num_fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .num_fixed_value_arguments();
+        &mut self.inst_args_mut(inst)[num_fixed_args..]
     }
 
     /// Create result values for an instruction that produces multiple results.
@@ -489,7 +501,10 @@ impl DataFlowGraph {
         // Get the call signature if this is a function call.
         if let Some(sig) = self.call_signature(inst) {
             // Create result values corresponding to the call return types.
-            debug_assert_eq!(self.insts[inst].opcode().constraints().fixed_results(), 0);
+            debug_assert_eq!(
+                self.insts[inst].opcode().constraints().num_fixed_results(),
+                0
+            );
             let num_results = self.signatures[sig].returns.len();
             for res_idx in 0..num_results {
                 let ty = self.signatures[sig].returns[res_idx].value_type;
@@ -504,7 +519,7 @@ impl DataFlowGraph {
         } else {
             // Create result values corresponding to the opcode's constraints.
             let constraints = self.insts[inst].opcode().constraints();
-            let num_results = constraints.fixed_results();
+            let num_results = constraints.num_fixed_results();
             for res_idx in 0..num_results {
                 let ty = constraints.result_type(res_idx, ctrl_typevar);
                 if let Some(Some(v)) = reuse.next() {
@@ -662,9 +677,9 @@ impl DataFlowGraph {
         ctrl_typevar: Type,
     ) -> Option<Type> {
         let constraints = self.insts[inst].opcode().constraints();
-        let fixed_results = constraints.fixed_results();
+        let num_fixed_results = constraints.num_fixed_results();
 
-        if result_idx < fixed_results {
+        if result_idx < num_fixed_results {
             return Some(constraints.result_type(result_idx, ctrl_typevar));
         }
 
@@ -672,7 +687,7 @@ impl DataFlowGraph {
         self.call_signature(inst).and_then(|sigref| {
             self.signatures[sigref]
                 .returns
-                .get(result_idx - fixed_results)
+                .get(result_idx - num_fixed_results)
                 .map(|&arg| arg.value_type)
         })
     }
@@ -934,7 +949,10 @@ impl DataFlowGraph {
     ) -> usize {
         // Get the call signature if this is a function call.
         if let Some(sig) = self.call_signature(inst) {
-            assert_eq!(self.insts[inst].opcode().constraints().fixed_results(), 0);
+            assert_eq!(
+                self.insts[inst].opcode().constraints().num_fixed_results(),
+                0
+            );
             for res_idx in 0..self.signatures[sig].returns.len() {
                 let ty = self.signatures[sig].returns[res_idx].value_type;
                 if let Some(v) = reuse.get(res_idx) {
@@ -943,7 +961,7 @@ impl DataFlowGraph {
             }
         } else {
             let constraints = self.insts[inst].opcode().constraints();
-            for res_idx in 0..constraints.fixed_results() {
+            for res_idx in 0..constraints.num_fixed_results() {
                 let ty = constraints.result_type(res_idx, ctrl_typevar);
                 if let Some(v) = reuse.get(res_idx) {
                     self.set_value_type_for_parser(*v, ty);

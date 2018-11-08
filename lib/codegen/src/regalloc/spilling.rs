@@ -376,10 +376,10 @@ impl<'a> Context<'a> {
 
     // Collect register uses from the ABI input constraints.
     fn collect_abi_reg_uses(&mut self, inst: Inst, sig: SigRef) {
-        let fixed_args = self.cur.func.dfg[inst]
+        let num_fixed_args = self.cur.func.dfg[inst]
             .opcode()
             .constraints()
-            .fixed_value_arguments();
+            .num_fixed_value_arguments();
         let args = self.cur.func.dfg.inst_variable_args(inst);
         for (idx, (abi, &arg)) in self.cur.func.dfg.signatures[sig]
             .params
@@ -396,7 +396,7 @@ impl<'a> Context<'a> {
                     ),
                     Affinity::Unassigned => panic!("Missing affinity for {}", arg),
                 };
-                let mut reguse = RegUse::new(arg, fixed_args + idx, rci);
+                let mut reguse = RegUse::new(arg, num_fixed_args + idx, rci);
                 reguse.fixed = true;
                 reguse.spilled = spilled;
                 self.reg_uses.push(reguse);
