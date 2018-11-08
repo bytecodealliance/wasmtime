@@ -37,6 +37,7 @@ echo git commit -a -m "\"Bump version to $version"\"
 echo git push
 for crate in \
     entity bforest codegen/meta codegen frontend native \
+    preopt \
     reader wasm module \
     faerie umbrella simplejit
 do
