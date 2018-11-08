@@ -133,14 +133,14 @@ fn split_any(
                 "Predecessor not a branch: {}",
                 pos.func.dfg.display_inst(inst, None)
             );
-            let fixed_args = branch_opc.constraints().fixed_value_arguments();
+            let num_fixed_args = branch_opc.constraints().num_fixed_value_arguments();
             let mut args = pos.func.dfg[inst]
                 .take_value_list()
                 .expect("Branches must have value lists.");
             let num_args = args.len(&pos.func.dfg.value_lists);
             // Get the old value passed to the EBB argument we're repairing.
             let old_arg = args
-                .get(fixed_args + repair.num, &pos.func.dfg.value_lists)
+                .get(num_fixed_args + repair.num, &pos.func.dfg.value_lists)
                 .expect("Too few branch arguments");
 
             // It's possible that the CFG's predecessor list has duplicates. Detect them here.
@@ -155,21 +155,23 @@ fn split_any(
 
             // The `lo` part replaces the original argument.
             *args
-                .get_mut(fixed_args + repair.num, &mut pos.func.dfg.value_lists)
+                .get_mut(num_fixed_args + repair.num, &mut pos.func.dfg.value_lists)
                 .unwrap() = lo;
 
             // The `hi` part goes at the end. Since multiple repairs may have been scheduled to the
             // same EBB, there could be multiple arguments missing.
-            if num_args > fixed_args + repair.hi_num {
+            if num_args > num_fixed_args + repair.hi_num {
                 *args
-                    .get_mut(fixed_args + repair.hi_num, &mut pos.func.dfg.value_lists)
-                    .unwrap() = hi;
+                    .get_mut(
+                        num_fixed_args + repair.hi_num,
+                        &mut pos.func.dfg.value_lists,
+                    ).unwrap() = hi;
             } else {
                 // We need to append one or more arguments. If we're adding more than one argument,
                 // there must be pending repairs on the stack that will fill in the correct values
                 // instead of `hi`.
                 args.extend(
-                    iter::repeat(hi).take(1 + fixed_args + repair.hi_num - num_args),
+                    iter::repeat(hi).take(1 + num_fixed_args + repair.hi_num - num_args),
                     &mut pos.func.dfg.value_lists,
                 );
             }

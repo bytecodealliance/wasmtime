@@ -524,12 +524,12 @@ impl<'a> Verifier<'a> {
             );
         }
 
-        let fixed_results = inst_data.opcode().constraints().fixed_results();
+        let num_fixed_results = inst_data.opcode().constraints().num_fixed_results();
         // var_results is 0 if we aren't a call instruction
         let var_results = dfg
             .call_signature(inst)
             .map_or(0, |sig| dfg.signatures[sig].returns.len());
-        let total_results = fixed_results + var_results;
+        let total_results = num_fixed_results + var_results;
 
         // All result values for multi-valued instructions are created
         let got_results = dfg.inst_results(inst).len();

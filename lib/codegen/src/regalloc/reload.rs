@@ -266,7 +266,7 @@ impl<'a> Context<'a> {
         let retvals = &defs[self.cur.func.dfg[inst]
                                 .opcode()
                                 .constraints()
-                                .fixed_results()..];
+                                .num_fixed_results()..];
         if !retvals.is_empty() {
             let sig = self
                 .cur
@@ -367,7 +367,7 @@ impl<'a> Context<'a> {
         let offset = self.cur.func.dfg[inst]
             .opcode()
             .constraints()
-            .fixed_value_arguments();
+            .num_fixed_value_arguments();
         if args.len() == offset {
             return;
         }
