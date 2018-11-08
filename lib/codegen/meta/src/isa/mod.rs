@@ -62,14 +62,10 @@ impl fmt::Display for Isa {
 }
 
 pub fn define_all() -> Vec<TargetIsa> {
-    let isas = vec![
+    vec![
         riscv::define(),
         arm32::define(),
         arm64::define(),
         x86::define(),
-    ];
-    for isa in isas.iter() {
-        isa.check();
-    }
-    isas
+    ]
 }

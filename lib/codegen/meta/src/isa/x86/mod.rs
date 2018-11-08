@@ -1,8 +1,8 @@
+use cdsl::isa::{TargetIsa, TargetIsaBuilder};
 use cdsl::regs::{RegBankBuilder, RegClassBuilder};
-use isa;
 
-pub fn define() -> isa::TargetIsa {
-    let mut isa = isa::TargetIsa::new("x86");
+pub fn define() -> TargetIsa {
+    let mut isa = TargetIsaBuilder::new("x86");
 
     let builder = RegBankBuilder::new("IntRegs", "r")
         .units(16)
@@ -21,23 +21,23 @@ pub fn define() -> isa::TargetIsa {
         .track_pressure(false);
     let flag_reg = isa.add_reg_bank(builder);
 
-    let builder = RegClassBuilder::new_toplevel(&mut isa, "GPR", int_regs);
+    let builder = RegClassBuilder::new_toplevel("GPR", int_regs);
     let gpr = isa.add_reg_class(builder);
 
-    let builder = RegClassBuilder::new_toplevel(&mut isa, "FPR", float_regs);
+    let builder = RegClassBuilder::new_toplevel("FPR", float_regs);
     let fpr = isa.add_reg_class(builder);
 
-    let builder = RegClassBuilder::new_toplevel(&mut isa, "FLAG", flag_reg);
+    let builder = RegClassBuilder::new_toplevel("FLAG", flag_reg);
     isa.add_reg_class(builder);
 
-    let builder = RegClassBuilder::subclass_of(&mut isa, "GPR8", gpr, 0, 8);
+    let builder = RegClassBuilder::subclass_of("GPR8", gpr, 0, 8);
     let gpr8 = isa.add_reg_class(builder);
 
-    let builder = RegClassBuilder::subclass_of(&mut isa, "ABCD", gpr8, 0, 4);
+    let builder = RegClassBuilder::subclass_of("ABCD", gpr8, 0, 4);
     isa.add_reg_class(builder);
 
-    let builder = RegClassBuilder::subclass_of(&mut isa, "FPR8", fpr, 0, 8);
+    let builder = RegClassBuilder::subclass_of("FPR8", fpr, 0, 8);
     isa.add_reg_class(builder);
 
-    isa
+    isa.finish()
 }

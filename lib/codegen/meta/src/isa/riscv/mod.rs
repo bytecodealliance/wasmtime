@@ -1,8 +1,8 @@
+use cdsl::isa::{TargetIsa, TargetIsaBuilder};
 use cdsl::regs::{RegBankBuilder, RegClassBuilder};
-use isa;
 
-pub fn define() -> isa::TargetIsa {
-    let mut isa = isa::TargetIsa::new("riscv");
+pub fn define() -> TargetIsa {
+    let mut isa = TargetIsaBuilder::new("riscv");
 
     let builder = RegBankBuilder::new("IntRegs", "x")
         .units(32)
@@ -14,11 +14,11 @@ pub fn define() -> isa::TargetIsa {
         .track_pressure(true);
     let float_regs = isa.add_reg_bank(builder);
 
-    let builder = RegClassBuilder::new_toplevel(&mut isa, "GPR", int_regs);
+    let builder = RegClassBuilder::new_toplevel("GPR", int_regs);
     isa.add_reg_class(builder);
 
-    let builder = RegClassBuilder::new_toplevel(&mut isa, "FPR", float_regs);
+    let builder = RegClassBuilder::new_toplevel("FPR", float_regs);
     isa.add_reg_class(builder);
 
-    isa
+    isa.finish()
 }
