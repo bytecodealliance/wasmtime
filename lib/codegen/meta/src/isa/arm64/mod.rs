@@ -1,8 +1,8 @@
+use cdsl::isa::{TargetIsa, TargetIsaBuilder};
 use cdsl::regs::{RegBankBuilder, RegClassBuilder};
-use isa;
 
-pub fn define() -> isa::TargetIsa {
-    let mut isa = isa::TargetIsa::new("arm64");
+pub fn define() -> TargetIsa {
+    let mut isa = TargetIsaBuilder::new("arm64");
 
     // The `x31` regunit serves as the stack pointer / zero register depending on context. We
     // reserve it and don't model the difference.
@@ -22,14 +22,14 @@ pub fn define() -> isa::TargetIsa {
         .track_pressure(false);
     let flag_reg = isa.add_reg_bank(builder);
 
-    let builder = RegClassBuilder::new_toplevel(&mut isa, "GPR", int_regs);
+    let builder = RegClassBuilder::new_toplevel("GPR", int_regs);
     isa.add_reg_class(builder);
 
-    let builder = RegClassBuilder::new_toplevel(&mut isa, "FPR", float_regs);
+    let builder = RegClassBuilder::new_toplevel("FPR", float_regs);
     isa.add_reg_class(builder);
 
-    let builder = RegClassBuilder::new_toplevel(&mut isa, "FLAG", flag_reg);
+    let builder = RegClassBuilder::new_toplevel("FLAG", flag_reg);
     isa.add_reg_class(builder);
 
-    isa
+    isa.finish()
 }

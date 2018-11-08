@@ -1,7 +1,5 @@
 use cranelift_entity::EntityRef;
 
-use super::isa::TargetIsa;
-
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RegBankIndex(u32);
 entity_impl!(RegBankIndex);
@@ -97,71 +95,53 @@ impl RegClass {
     }
 }
 
+pub enum RegClassProto {
+    TopLevel(RegBankIndex),
+    SubClass(RegClassIndex),
+}
+
 pub struct RegClassBuilder {
     pub name: &'static str,
-    pub index: RegClassIndex,
     pub width: u8,
-    pub bank: RegBankIndex,
-    pub toprc: RegClassIndex,
     pub count: u8,
     pub start: u8,
+    pub proto: RegClassProto,
 }
 
 impl RegClassBuilder {
-    pub fn new_toplevel(isa: &mut TargetIsa, name: &'static str, bank: RegBankIndex) -> Self {
-        let index = isa.reg_classes.next_key();
-
-        // Add it to the top-level register classes of the register bank.
-        isa.reg_banks.get_mut(bank).unwrap().toprcs.push(index);
-
+    pub fn new_toplevel(name: &'static str, bank: RegBankIndex) -> Self {
         Self {
             name,
-            index,
             width: 1,
-            bank,
-            toprc: index,
             count: 0,
             start: 0,
+            proto: RegClassProto::TopLevel(bank),
         }
     }
-
     pub fn subclass_of(
-        isa: &mut TargetIsa,
         name: &'static str,
         parent_index: RegClassIndex,
         start: u8,
         stop: u8,
     ) -> Self {
         assert!(stop >= start);
-
-        let index = isa.reg_classes.next_key();
-
-        let toprc = isa.reg_classes.get(parent_index).unwrap().toprc;
-        for reg_class in isa.reg_classes.values_mut() {
-            if reg_class.toprc == toprc {
-                reg_class.subclasses.push(index);
-            }
-        }
-
-        let parent = &isa.reg_classes.get(parent_index).unwrap();
         Self {
             name,
+            width: 0,
             count: stop - start,
-            width: parent.width,
-            start: parent.start + start * parent.width,
-            bank: parent.bank,
-            toprc: parent.toprc,
-            index,
+            start: start,
+            proto: RegClassProto::SubClass(parent_index),
         }
     }
-
     pub fn count(mut self, count: u8) -> Self {
         self.count = count;
         self
     }
-
     pub fn width(mut self, width: u8) -> Self {
-        self.width = width;
+        match self.proto {
+            RegClassProto::TopLevel(_) => self.width = width,
+            RegClassProto::SubClass(_) => panic!("Subclasses inherit their parent's width."),
+        }
         self
     }
 }

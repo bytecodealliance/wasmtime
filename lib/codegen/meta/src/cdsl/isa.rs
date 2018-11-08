@@ -1,7 +1,7 @@
 use cranelift_entity::PrimaryMap;
 
 use super::regs::{
-    RegBank, RegBankBuilder, RegBankIndex, RegClass, RegClassBuilder, RegClassIndex,
+    RegBank, RegBankBuilder, RegBankIndex, RegClass, RegClassBuilder, RegClassIndex, RegClassProto,
 };
 
 pub struct TargetIsa {
@@ -18,12 +18,24 @@ impl TargetIsa {
             reg_classes: PrimaryMap::new(),
         }
     }
+}
+
+pub struct TargetIsaBuilder {
+    isa: TargetIsa,
+}
+
+impl TargetIsaBuilder {
+    pub fn new(name: &'static str) -> Self {
+        Self {
+            isa: TargetIsa::new(name),
+        }
+    }
 
     pub fn add_reg_bank(&mut self, builder: RegBankBuilder) -> RegBankIndex {
-        let first_unit = if self.reg_banks.len() == 0 {
+        let first_unit = if self.isa.reg_banks.len() == 0 {
             0
         } else {
-            let last = &self.reg_banks.last().unwrap();
+            let last = &self.isa.reg_banks.last().unwrap();
             let first_available_unit = (last.first_unit + last.units) as i8;
             let units = builder.units;
             let align = if units.is_power_of_two() {
@@ -34,7 +46,7 @@ impl TargetIsa {
             (first_available_unit + align - 1) & -align
         } as u8;
 
-        self.reg_banks.push(RegBank::new(
+        self.isa.reg_banks.push(RegBank::new(
             builder.name,
             first_unit,
             builder.units,
@@ -47,38 +59,51 @@ impl TargetIsa {
     }
 
     pub fn add_reg_class(&mut self, builder: RegClassBuilder) -> RegClassIndex {
-        let reg_bank_units = self.reg_banks.get(builder.bank).unwrap().units;
+        let class_index = self.isa.reg_classes.next_key();
 
-        let start = builder.start;
+        // Finish delayed construction of RegClass.
+        let (bank, toprc, start, width) = match builder.proto {
+            RegClassProto::TopLevel(bank_index) => {
+                self.isa
+                    .reg_banks
+                    .get_mut(bank_index)
+                    .unwrap()
+                    .toprcs
+                    .push(class_index);
+                (bank_index, class_index, builder.start, builder.width)
+            }
+            RegClassProto::SubClass(parent_class_index) => {
+                assert!(builder.width == 0);
+                let (bank, toprc, start, width) = {
+                    let parent = self.isa.reg_classes.get(parent_class_index).unwrap();
+                    (parent.bank, parent.toprc, parent.start, parent.width)
+                };
+                for reg_class in self.isa.reg_classes.values_mut() {
+                    if reg_class.toprc == toprc {
+                        reg_class.subclasses.push(class_index);
+                    }
+                }
+                let subclass_start = start + builder.start * width;
+                (bank, toprc, subclass_start, width)
+            }
+        };
+
+        let reg_bank_units = self.isa.reg_banks.get(bank).unwrap().units;
         assert!(start < reg_bank_units);
 
         let count = if builder.count != 0 {
             builder.count
         } else {
-            reg_bank_units / builder.width
+            reg_bank_units / width
         };
 
-        let reg_class_index = builder.index;
-        assert!(
-            self.reg_classes.next_key() == reg_class_index,
-            "should have inserted RegClass where expected"
-        );
+        let reg_class = RegClass::new(builder.name, class_index, width, bank, toprc, count, start);
+        self.isa.reg_classes.push(reg_class);
 
-        let reg_class = RegClass::new(
-            builder.name,
-            reg_class_index,
-            builder.width,
-            builder.bank,
-            builder.toprc,
-            count,
-            start,
-        );
-        self.reg_classes.push(reg_class);
+        let reg_bank = self.isa.reg_banks.get_mut(bank).unwrap();
+        reg_bank.classes.push(class_index);
 
-        let reg_bank = self.reg_banks.get_mut(builder.bank).unwrap();
-        reg_bank.classes.push(reg_class_index);
-
-        reg_class_index
+        class_index
     }
 
     /// Checks that the set of register classes satisfies:
@@ -89,16 +114,16 @@ impl TargetIsa {
     /// 2. There are no identical classes under different names.
     /// 3. Classes are sorted topologically such that all subclasses have a
     ///    higher index that the superclass.
-    pub fn check(&self) {
-        for reg_bank in self.reg_banks.values() {
+    pub fn finish(self) -> TargetIsa {
+        for reg_bank in self.isa.reg_banks.values() {
             for i1 in reg_bank.classes.iter() {
                 for i2 in reg_bank.classes.iter() {
                     if i1 >= i2 {
                         continue;
                     }
 
-                    let rc1 = self.reg_classes.get(*i1).unwrap();
-                    let rc2 = self.reg_classes.get(*i2).unwrap();
+                    let rc1 = self.isa.reg_classes.get(*i1).unwrap();
+                    let rc2 = self.isa.reg_classes.get(*i2).unwrap();
 
                     let rc1_mask = rc1.mask(0);
                     let rc2_mask = rc2.mask(0);
@@ -126,7 +151,8 @@ impl TargetIsa {
                     // If the intersection is the second one, then it must be a subclass.
                     if intersect == rc2_mask {
                         assert!(
-                            self.reg_classes
+                            self.isa
+                                .reg_classes
                                 .get(*i1)
                                 .unwrap()
                                 .subclasses
@@ -138,5 +164,7 @@ impl TargetIsa {
                 }
             }
         }
+
+        self.isa
     }
 }
