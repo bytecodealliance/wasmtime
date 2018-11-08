@@ -8,7 +8,7 @@ repository = "https://github.com/CraneStation/cranelift"
 readme = "README.md"
 
 [dependencies]
-cranelift-entity = { path = "../../entity", version = "0.23.0", default-features = false }
+cranelift-entity = { path = "../../entity", version = "0.23.0" }
 
 [badges]
 maintenance = { status = "experimental" }
