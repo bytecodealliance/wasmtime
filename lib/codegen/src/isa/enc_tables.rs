@@ -40,7 +40,7 @@ pub type LegalizeCode = u8;
 /// size of the `LEVEL2` table.
 ///
 /// Empty entries are encoded with a `!0` value for `log2len` which will always be out of range.
-/// Entries that have a `legalize` value but no level 2 table have an `offset` field that is out f
+/// Entries that have a `legalize` value but no level 2 table have an `offset` field that is out of
 /// bounds.
 pub struct Level1Entry<OffT: Into<u32> + Copy> {
     pub ty: Type,
