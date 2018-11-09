@@ -110,10 +110,8 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
                 continue;
             }
 
-            let inst_data = func.dfg[inst].clone();
-
             // These are split up to separate concerns.
-            if is_load_and_not_readonly(&inst_data) {
+            if is_load_and_not_readonly(&func.dfg[inst]) {
                 continue;
             }
 
@@ -123,9 +121,8 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
                 ty: ctrl_typevar,
                 pos: &pos,
             };
-            let entry = visible_values.entry(key);
             use scoped_hash_map::Entry::*;
-            match entry {
+            match visible_values.entry(key) {
                 Occupied(entry) => {
                     debug_assert!(domtree.dominates(*entry.get(), inst, &func.layout));
                     // If the redundant instruction is representing the current
