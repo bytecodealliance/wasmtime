@@ -605,12 +605,12 @@ impl<'a> FunctionBuilder<'a> {
             return;
         }
 
+        let int_type = Type::int((access_size * 8) as u16).unwrap();
         let mut flags = MemFlags::new();
         flags.set_aligned();
 
         for i in 0..load_and_store_amount {
             let offset = (access_size * i) as i32;
-            let int_type = Type::int(access_size as u16).unwrap();
             let value = self.ins().load(int_type, flags, src, offset);
             self.ins().store(flags, value, dest, offset);
         }
@@ -679,7 +679,7 @@ impl<'a> FunctionBuilder<'a> {
             flags.set_aligned();
 
             let ch = ch as u64;
-            let int_type = Type::int(access_size as u16).unwrap();
+            let int_type = Type::int((access_size * 8) as u16).unwrap();
             let raw_value = if int_type == types::I64 {
                 (ch << 32) | (ch << 16) | (ch << 8) | ch
             } else if int_type == types::I32 {
@@ -765,7 +765,10 @@ impl<'a> FunctionBuilder<'a> {
         let registers: Vec<_> = (0..load_and_store_amount)
             .map(|i| {
                 let offset = (access_size * i) as i32;
-                (self.ins().load(types::I8, flags, src, offset), offset)
+                (
+                    self.ins().load(config.pointer_type(), flags, src, offset),
+                    offset,
+                )
             }).collect();
 
         for (value, offset) in registers {
@@ -981,6 +984,63 @@ ebb0:
     v2 = iconst.i32 0
     v0 -> v2
     call fn0(v1, v0, v1)
+    return v1
+}
+"
+        );
+    }
+
+    #[test]
+    fn small_memcpy() {
+        use cranelift_codegen::{isa, settings};
+        use std::str::FromStr;
+
+        let shared_builder = settings::builder();
+        let shared_flags = settings::Flags::new(shared_builder);
+
+        let triple = ::target_lexicon::Triple::from_str("arm").expect("Couldn't create arm triple");
+
+        let target = isa::lookup(triple)
+            .ok()
+            .map(|b| b.finish(shared_flags))
+            .expect("This test requires arm support.");
+
+        let mut sig = Signature::new(target.default_call_conv());
+        sig.returns.push(AbiParam::new(I32));
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ExternalName::testcase("sample"), sig);
+        {
+            let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+            let block0 = builder.create_ebb();
+            let x = Variable::new(0);
+            let y = Variable::new(16);
+            builder.declare_var(x, target.pointer_type());
+            builder.declare_var(y, target.pointer_type());
+            builder.append_ebb_params_for_function_params(block0);
+            builder.switch_to_block(block0);
+
+            let src = builder.use_var(x);
+            let dest = builder.use_var(y);
+            let size = 8;
+            builder.emit_small_memcpy(target.frontend_config(), dest, src, size, 8, 8);
+            builder.ins().return_(&[dest]);
+
+            builder.seal_all_blocks();
+            builder.finalize();
+        }
+
+        assert_eq!(
+            func.display(None).to_string(),
+            "function %sample() -> i32 system_v {
+ebb0:
+    v4 = iconst.i32 0
+    v1 -> v4
+    v3 = iconst.i32 0
+    v0 -> v3
+    v2 = load.i64 aligned v0
+    store aligned v2, v1
     return v1
 }
 "
