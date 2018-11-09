@@ -165,6 +165,25 @@ impl TargetIsaBuilder {
             }
         }
 
+        // This limit should be coordinated with the `RegClassMask` and `RegClassIndex` types in
+        // isa/registers.rs of the non-meta code.
+        assert!(
+            self.isa.reg_classes.len() <= 32,
+            "Too many register classes"
+        );
+
+        // The maximum number of top-level register classes which have pressure tracking should be
+        // kept in sync with the MAX_TRACKED_TOPRCS constant in isa/registers.rs of the non-meta
+        // code.
+        let num_toplevel = self
+            .isa
+            .reg_classes
+            .values()
+            .filter(|x| {
+                x.toprc == x.index && self.isa.reg_banks.get(x.bank).unwrap().pressure_tracking
+            }).count();
+        assert!(num_toplevel <= 4, "Too many top-level register classes");
+
         self.isa
     }
 }
