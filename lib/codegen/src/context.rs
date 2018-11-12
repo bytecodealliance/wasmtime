@@ -275,14 +275,15 @@ impl Context {
     }
 
     /// Perform LICM on the function.
-    pub fn licm<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
+    pub fn licm(&mut self, isa: &TargetIsa) -> CodegenResult<()> {
         do_licm(
+            isa,
             &mut self.func,
             &mut self.cfg,
             &mut self.domtree,
             &mut self.loop_analysis,
         );
-        self.verify_if(fisa)
+        self.verify_if(isa)
     }
 
     /// Perform unreachable code elimination.

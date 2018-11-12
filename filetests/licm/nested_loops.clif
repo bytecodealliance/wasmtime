@@ -1,4 +1,5 @@
 test licm
+target riscv32
 
 function %nested_loops(i32) -> i32 {
 
