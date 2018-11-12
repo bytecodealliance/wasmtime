@@ -72,7 +72,7 @@ impl RegisterSet {
         let (idx, bits) = bitmask(rc, reg);
         debug_assert!(
             (self.avail[idx] & bits) == 0,
-            "{}:{} not allocated in {}",
+            "{}:{} is already free in {}",
             rc,
             rc.info.display_regunit(reg),
             self.display(rc.info)
