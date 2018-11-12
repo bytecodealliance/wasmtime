@@ -375,7 +375,7 @@ impl<'a> Context<'a> {
     }
 
     /// Finish the union-find part of the coalescing algorithm.
-    ///     ///
+    ///
     /// This builds the initial set of virtual registers as the transitive/reflexive/symmetric
     /// closure of the relation formed by EBB parameter-argument pairs found by `union_find_ebb()`.
     fn finish_union_find(&mut self) {
