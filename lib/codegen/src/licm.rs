@@ -1,6 +1,6 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use cursor::{Cursor, FuncCursor, EncCursor};
+use cursor::{Cursor, EncCursor, FuncCursor};
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
 use flowgraph::{BasicBlock, ControlFlowGraph};
@@ -111,21 +111,24 @@ fn has_pre_header(
     header: Ebb,
 ) -> Option<(Ebb, Inst)> {
     let mut result = None;
-    let mut found = false;
     for BasicBlock {
         ebb: pred_ebb,
-        inst: last_inst,
+        inst: branch_inst,
     } in cfg.pred_iter(header)
     {
         // We only count normal edges (not the back edges)
-        if !domtree.dominates(header, last_inst, layout) {
-            if found {
+        if !domtree.dominates(header, branch_inst, layout) {
+            if result.is_some() {
                 // We have already found one, there are more than one
                 return None;
-            } else {
-                result = Some((pred_ebb, last_inst));
-                found = true;
             }
+            if branch_inst != layout.last_inst(pred_ebb).unwrap()
+                || cfg.succ_iter(pred_ebb).nth(1).is_some()
+            {
+                // It's along a critical edge, so don't use it.
+                return None;
+            }
+            result = Some((pred_ebb, branch_inst));
         }
     }
     result
