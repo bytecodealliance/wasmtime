@@ -33,12 +33,13 @@ impl SubTest for TestLICM {
     }
 
     fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+        let isa = context.isa.expect("LICM needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx.flowgraph();
         comp_ctx.compute_loop_analysis();
         comp_ctx
-            .licm(context.flags_or_isa())
+            .licm(isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
         let text = comp_ctx.func.display(context.isa).to_string();

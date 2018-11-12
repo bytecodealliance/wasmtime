@@ -1,4 +1,5 @@
 test licm
+target riscv32
 
 function %simple_loop(i32) -> i32 {
 

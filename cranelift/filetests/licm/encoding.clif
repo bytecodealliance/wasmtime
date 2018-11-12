@@ -1,0 +1,36 @@
+test licm
+target riscv32
+
+; Ensure that instructions emitted by LICM get encodings.
+
+function %simple_loop(i32) -> i32 {
+            ebb0(v0: i32):
+[UJ#1b]       jump ebb1(v0)
+
+            ebb1(v1: i32):
+[Iz#04,%x0]   v2 = iconst.i32 1
+[Iz#04,%x1]   v3 = iconst.i32 2
+[R#0c,%x2]    v4 = iadd v2, v3
+[SBzero#18]   brz v1, ebb2(v1)
+[R#200c,%x5]  v5 = isub v1, v2
+[UJ#1b]       jump ebb1(v5)
+
+            ebb2(v6: i32):
+[Iret#19]     return v6
+}
+
+; check: function
+; nextln:                                 ebb0(v0: i32):
+; nextln: [Iz#04,%x0]                         v2 = iconst.i32 1
+; nextln: [Iz#04,%x1]                         v3 = iconst.i32 2
+; nextln: [R#0c,%x2]                          v4 = iadd v2, v3
+; nextln: [UJ#1b]                             jump ebb1(v0)
+; nextln: 
+; nextln:                                 ebb1(v1: i32):
+; nextln: [SBzero#18]                         brz v1, ebb2(v1)
+; nextln: [R#200c,%x5]                        v5 = isub v1, v2
+; nextln: [UJ#1b]                             jump ebb1(v5)
+; nextln: 
+; nextln:                                 ebb2(v6: i32):
+; nextln: [Iret#19]                           return v6
+; nextln: }

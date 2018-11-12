@@ -1,11 +1,12 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use cursor::{Cursor, FuncCursor};
+use cursor::{Cursor, FuncCursor, EncCursor};
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
 use flowgraph::{BasicBlock, ControlFlowGraph};
 use fx::FxHashSet;
 use ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
+use isa::TargetIsa;
 use loop_analysis::{Loop, LoopAnalysis};
 use std::vec::Vec;
 use timing;
@@ -14,6 +15,7 @@ use timing;
 /// loop-invariant instructions out of them.
 /// Changes the CFG and domtree in-place during the operation.
 pub fn do_licm(
+    isa: &TargetIsa,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
     domtree: &mut DominatorTree,
@@ -36,7 +38,7 @@ pub fn do_licm(
             match has_pre_header(&func.layout, cfg, domtree, loop_analysis.loop_header(lp)) {
                 None => {
                     let pre_header =
-                        create_pre_header(loop_analysis.loop_header(lp), func, cfg, domtree);
+                        create_pre_header(isa, loop_analysis.loop_header(lp), func, cfg, domtree);
                     pos = FuncCursor::new(func).at_last_inst(pre_header);
                 }
                 // If there is a natural pre-header we insert new instructions just before the
@@ -60,6 +62,7 @@ pub fn do_licm(
 // Insert a pre-header before the header, modifying the function layout and CFG to reflect it.
 // A jump instruction to the header is placed at the end of the pre-header.
 fn create_pre_header(
+    isa: &TargetIsa,
     header: Ebb,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
@@ -87,7 +90,7 @@ fn create_pre_header(
         }
     }
     {
-        let mut pos = FuncCursor::new(func).at_top(header);
+        let mut pos = EncCursor::new(func, isa).at_top(header);
         // Inserts the pre-header at the right place in the layout.
         pos.insert_ebb(pre_header);
         pos.next_inst();

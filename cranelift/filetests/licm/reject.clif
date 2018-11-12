@@ -1,4 +1,5 @@
 test licm
+target riscv32
 
 function %other_side_effects(i32) -> i32 {
 
@@ -6,9 +7,9 @@ ebb0(v0: i32):
     jump ebb1(v0)
 
 ebb1(v1: i32):
-    regmove.i32 v0, %10 -> %20
+    regmove.i32 v0, %x10 -> %x20
 ; check: ebb1(v1: i32):
-; check: regmove.i32 v0, %10 -> %20
+; check: regmove.i32 v0, %x10 -> %x20
     v2 = iconst.i32 1
     brz v1, ebb2(v1)
     v5 = isub v1, v2
