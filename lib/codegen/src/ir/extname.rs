@@ -13,7 +13,7 @@ const TESTCASE_NAME_LENGTH: usize = 16;
 
 /// The name of an external is either a reference to a user-defined symbol
 /// table, or a short sequence of ascii bytes so that test cases do not have
-/// to keep track of a sy mbol table.
+/// to keep track of a symbol table.
 ///
 /// External names are primarily used as keys by code using Cranelift to map
 /// from a `cranelift_codegen::ir::FuncRef` or similar to additional associated
@@ -68,12 +68,12 @@ impl ExternalName {
         }
     }
 
-    /// Create a new external name from user-provided integer indicies.
+    /// Create a new external name from user-provided integer indices.
     ///
     /// # Examples
     /// ```rust
     /// # use cranelift_codegen::ir::ExternalName;
-    /// // Create `ExternalName` from integer indicies
+    /// // Create `ExternalName` from integer indices
     /// let name = ExternalName::user(123, 456);
     /// assert_eq!(name.to_string(), "u123:456");
     /// ```
