@@ -23,6 +23,9 @@ pub fn needs_sib_byte(reg: RegUnit) -> bool {
 pub fn needs_offset(reg: RegUnit) -> bool {
     reg == RU::r13 as RegUnit || reg == RU::rbp as RegUnit
 }
+pub fn needs_sib_byte_or_offset(reg: RegUnit) -> bool {
+    needs_sib_byte(reg) || needs_offset(reg)
+}
 
 fn additional_size_if(
     op_index: usize,
@@ -70,6 +73,22 @@ fn size_plus_maybe_sib_for_in_reg_1(
     func: &Function,
 ) -> u8 {
     sizing.base_size + additional_size_if(1, inst, divert, func, needs_sib_byte)
+}
+fn size_plus_maybe_sib_or_offset_for_in_reg_0(
+    sizing: &RecipeSizing,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    sizing.base_size + additional_size_if(0, inst, divert, func, needs_sib_byte_or_offset)
+}
+fn size_plus_maybe_sib_or_offset_for_in_reg_1(
+    sizing: &RecipeSizing,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    sizing.base_size + additional_size_if(1, inst, divert, func, needs_sib_byte_or_offset)
 }
 
 /// Expand the `sdiv` and `srem` instructions using `x86_sdivmodx`.
