@@ -123,9 +123,18 @@ pub enum ModuleError {
     /// Indicates an identifier was used before it was declared
     #[fail(display = "Undeclared identifier: {}", _0)]
     Undeclared(String),
-    /// Indicates an identifier was used contrary to the way it was declared
+    /// Indicates an identifier was used as data/function first, but then used as the other
     #[fail(display = "Incompatible declaration of identifier: {}", _0)]
     IncompatibleDeclaration(String),
+    /// Indicates a function identifier was declared with a
+    /// different signature than declared previously
+    #[fail(
+        display = "Function {} signature {:?} is incompatible with previous declaration {:?}",
+        _0,
+        _2,
+        _1
+    )]
+    IncompatibleSignature(String, ir::Signature, ir::Signature),
     /// Indicates an identifier was defined more than once
     #[fail(display = "Duplicate definition of identifier: {}", _0)]
     DuplicateDefinition(String),
@@ -164,7 +173,11 @@ where
     fn merge(&mut self, linkage: Linkage, sig: &ir::Signature) -> Result<(), ModuleError> {
         self.decl.linkage = Linkage::merge(self.decl.linkage, linkage);
         if &self.decl.signature != sig {
-            return Err(ModuleError::IncompatibleDeclaration(self.decl.name.clone()));
+            return Err(ModuleError::IncompatibleSignature(
+                self.decl.name.clone(),
+                self.decl.signature.clone(),
+                sig.clone(),
+            ));
         }
         Ok(())
     }
