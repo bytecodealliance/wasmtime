@@ -24,11 +24,7 @@ use meta::isa::Isa;
 use std::env;
 use std::process;
 
-use std::time::Instant;
-
 fn main() {
-    let start_time = Instant::now();
-
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
     let cranelift_targets = env::var("CRANELIFT_TARGETS").ok();
@@ -96,15 +92,6 @@ fn main() {
             process::exit(1);
         }
     }
-
-    println!(
-        "cargo:warning=Cranelift meta-build step took {:?}",
-        Instant::now() - start_time
-    );
-    println!(
-        "cargo:warning=Meta-build script generated files in {}",
-        out_dir
-    );
 }
 
 fn identify_python() -> &'static str {
