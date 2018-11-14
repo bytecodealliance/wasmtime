@@ -2,7 +2,7 @@
 
 use entity::SecondaryMap;
 use ir;
-use ir::entities::{AnyEntity, Inst, Value};
+use ir::entities::{AnyEntity, Ebb, Inst, Value};
 use ir::function::Function;
 use isa::TargetIsa;
 use result::CodegenError;
@@ -36,6 +36,17 @@ pub fn pretty_verifier_error<'a>(
 struct PrettyVerifierError<'a>(Box<FuncWriter + 'a>, &'a mut Vec<VerifierError>);
 
 impl<'a> FuncWriter for PrettyVerifierError<'a> {
+    fn write_ebb_header(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        isa: Option<&TargetIsa>,
+        ebb: Ebb,
+        indent: usize,
+    ) -> fmt::Result {
+        pretty_ebb_header_error(w, func, isa, ebb, indent, &mut *self.0, self.1)
+    }
+
     fn write_instruction(
         &mut self,
         w: &mut Write,
@@ -59,7 +70,39 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
     }
 }
 
-/// Pretty-print a function verifier error.
+/// Pretty-print a function verifier error for a given EBB.
+fn pretty_ebb_header_error(
+    w: &mut Write,
+    func: &Function,
+    isa: Option<&TargetIsa>,
+    cur_ebb: Ebb,
+    indent: usize,
+    func_w: &mut FuncWriter,
+    errors: &mut Vec<VerifierError>,
+) -> fmt::Result {
+    let mut i = 0;
+    let mut printed_ebb = false;
+
+    while i < errors.len() {
+        match errors[i].location {
+            ir::entities::AnyEntity::Ebb(ebb) if ebb == cur_ebb => {
+                if !printed_ebb {
+                    func_w.write_ebb_header(w, func, isa, cur_ebb, indent)?;
+                    printed_ebb = true;
+                }
+                let err = errors.remove(i);
+                print_error(w, indent, cur_ebb.to_string(), err)?;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Pretty-print a function verifier error for a given instruction.
 fn pretty_instruction_error(
     w: &mut Write,
     func: &Function,
@@ -77,13 +120,11 @@ fn pretty_instruction_error(
     while i != errors.len() {
         match errors[i].location {
             ir::entities::AnyEntity::Inst(inst) if inst == cur_inst => {
-                let err = errors.remove(i);
-
                 if !printed_instr {
                     func_w.write_instruction(w, func, aliases, isa, cur_inst, indent)?;
                     printed_instr = true;
                 }
-
+                let err = errors.remove(i);
                 print_error(w, indent, cur_inst.to_string(), err)?;
             }
             ir::entities::AnyEntity::Inst(_) => i += 1,
