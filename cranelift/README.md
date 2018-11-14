@@ -158,3 +158,10 @@ generator](http://www.sphinx-doc.org/) as well as Python 3::
     $ open _build/html/index.html
 
 </details>
+
+Editor Support
+--------------
+
+Editor support for working with Cranelift IR (clif) files:
+
+ - Vim: https://github.com/CraneStation/cranelift.vim
