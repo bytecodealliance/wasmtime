@@ -1440,3 +1440,131 @@ ebb2:
 ebb3:
     trap user0
 }
+
+function %r12_r13_loads() {
+ebb0:
+    [-,%r12]            v1 = iconst.i64 0x0123_4567_89ab_cdef
+    [-,%r13]            v2 = iconst.i64 0xfedc_ba98_7654_3210
+    [-,%rax]            v3 = iconst.i64 0x1
+
+    ;; Simple GPR load.
+    ; asm: movq (%r12), %rdx
+    [-,%rdx]            v4 = load.i64 notrap v1 ; bin: 49 8b 14 24
+    ; asm: movq (%r13), %rdx
+    [-,%rdx]            v5 = load.i64 notrap v2 ; bin: 49 8b 55 00
+
+    ;; Load with disp8.
+    ; asm: movq 0x1(%r12), %rdx
+    [-,%rdx]            v6 = load.i64 notrap v1+1 ; bin: 49 8b 54 24 01
+    ; asm: movq 0x1(%r13), %rdx
+    [-,%rdx]            v7 = load.i64 notrap v2+1 ; bin: 49 8b 55 01
+
+    ;; Load with disp32.
+    ; asm: movq 0x100(%r12), %rdx
+    [-,%rdx]            v8 = load.i64 notrap v1+256 ; bin: 49 8b 94 24 00000100
+    ; asm: movq 0x100(%r13), %rdx
+    [-,%rdx]            v9 = load.i64 notrap v2+256 ; bin: 49 8b 95 00000100
+
+    ;; Load for base+index.
+    ; asm: movq (%r12, %rax, 1), %rdx
+    [-,%rdx]            v10 = load_complex.i64 notrap v1+v3 ; bin: 49 8b 14 04
+    ; asm: movq (%r13, %rax, 1), %rdx
+    [-,%rdx]            v11 = load_complex.i64 notrap v2+v3 ; bin: 49 8b 54 05 00
+
+    ;; Now for FP values.
+    ; asm: movss (%r12), %xmm0
+    [-,%xmm0]            v12 = load.f32 notrap v1 ; bin: f3 41 0f 10 04 24
+    ; asm: movss (%r13), %xmm0
+    [-,%xmm0]            v13 = load.f32 notrap v2 ; bin: f3 41 0f 10 45 00
+
+    ;; Load with disp8.
+    ; asm: movss 0x1(%r12), %xmm0
+    [-,%xmm0]            v14 = load.f32 notrap v1+1 ; bin: f3 41 0f 10 44 24 01
+    ; asm: movss 0x1(%r13), %xmm0
+    [-,%xmm0]            v15 = load.f32 notrap v2+1 ; bin: f3 41 0f 10 45 01
+
+    ;; Load with disp32.
+    ; asm: movss 0x100(%r12), %xmm0
+    [-,%xmm0]            v16 = load.f32 notrap v1+256 ; bin: f3 41 0f 10 84 24 00000100
+    ; asm: movss 0x100(%r13), %xmm0
+    [-,%xmm0]            v17 = load.f32 notrap v2+256 ; bin: f3 41 0f 10 85 00000100
+
+    ;; Load for base+index.
+    ; asm: movss (%r12, %rax, 1), %xmm0
+    [-,%xmm0]            v18 = load_complex.f32 notrap v1+v3 ; bin: f3 41 0f 10 04 04
+    ; asm: movss (%r13, %rax, 1), %xmm0
+    [-,%xmm0]            v19 = load_complex.f32 notrap v2+v3 ; bin: f3 41 0f 10 44 05 00
+
+    return
+}
+
+function %r12_r13_stores() {
+ebb0:
+    [-,%r12]            v1 = iconst.i64 0x0123_4567_89ab_cdef
+    [-,%r13]            v2 = iconst.i64 0xfedc_ba98_7654_3210
+    [-,%rax]            v3 = iconst.i64 0x1
+    [-,%xmm0]           v4 = f32const 0x1.0
+
+    ;; Simple GPR load.
+    ; asm: movq %rax, (%r12)
+    store notrap v3, v1; bin: 49 89 04 24
+    ; asm: movq (%r13), %rdx
+    store notrap v3, v2; bin: 49 89 45 00
+
+    ; asm: movq %rax, 0x1(%r12)
+    store notrap v3, v1+1; bin: 49 89 44 24 01
+    ; asm: movq %rax, 0x1(%r13)
+    store notrap v3, v2+1; bin: 49 89 45 01
+
+    ; asm: movq %rax, 0x100(%r12)
+    store notrap v3, v1+256; bin: 49 89 84 24 00000100
+    ; asm: movq %rax, 0x100(%r13)
+    store notrap v3, v2+256; bin: 49 89 85 00000100
+
+    ; asm: movq %rax, (%r12, %rax, 1)
+    store_complex notrap v3, v1+v3; bin: 49 89 04 04
+    ; asm: movq %rax, (%r13, %rax, 1)
+    store_complex notrap v3, v2+v3; bin: 49 89 44 05 00
+
+    ; asm: movb %al, (%r12)
+    istore8 notrap v3, v1; bin: 41 88 04 24
+    ; asm: movb %al, (%r13)
+    istore8 notrap v3, v2; bin: 41 88 45 00
+
+    ; asm: movb %al, 0x1(%r12)
+    istore8 notrap v3, v1+1; bin: 41 88 44 24 01
+    ; asm: movb %al, 0x1(%r13)
+    istore8 notrap v3, v2+1; bin: 41 88 45 01
+
+    ; asm: movb %al, 0x100(%r12)
+    istore8 notrap v3, v1+256; bin: 41 88 84 24 00000100
+    ; asm: movb %al, 0x100(%r13)
+    istore8 notrap v3, v2+256; bin: 41 88 85 00000100
+
+    ; asm: movb %al, (%r12, %rax, 1)
+    istore8_complex notrap v3, v1+v3; bin: 41 88 04 04
+    ; asm: movb %al, (%r13, %rax, 1)
+    istore8_complex notrap v3, v2+v3; bin: 41 88 44 05 00
+
+    ; asm: movss %xmm0, (%r12)
+    store notrap v4, v1; bin: f3 41 0f 11 04 24
+    ; asm: movss %xmm0, (%r13)
+    store notrap v4, v2; bin: f3 41 0f 11 45 00
+
+    ; asm: movss %xmm0, 0x1(%r12)
+    store notrap v4, v1+1; bin: f3 41 0f 11 44 24 01
+    ; asm: movss %xmm0, 0x1(%r13)
+    store notrap v4, v2+1; bin: f3 41 0f 11 45 01
+
+    ; asm: movss %xmm0, 0x100(%r12)
+    store notrap v4, v1+256; bin: f3 41 0f 11 84 24 00000100
+    ; asm: movss %xmm0, 0x100(%r13)
+    store notrap v4, v2+256; bin: f3 41 0f 11 85 00000100
+
+    ; asm: movss %xmm0, (%r12, %rax, 1)
+    store_complex notrap v4, v1+v3; bin: f3 41 0f 11 04 04
+    ; asm: movss %xmm0, (%r13, %rax, 1)
+    store_complex notrap v4, v2+v3; bin: f3 41 0f 11 44 05 00
+
+    return
+}
