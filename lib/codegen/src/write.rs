@@ -14,6 +14,16 @@ use std::vec::Vec;
 
 /// A `FuncWriter` used to decorate functions during printing.
 pub trait FuncWriter {
+    /// Write the extended basic block header for the current function.
+    fn write_ebb_header(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        isa: Option<&TargetIsa>,
+        ebb: Ebb,
+        indent: usize,
+    ) -> fmt::Result;
+
     /// Write the given `inst` to `w`.
     fn write_instruction(
         &mut self,
@@ -22,7 +32,7 @@ pub trait FuncWriter {
         aliases: &SecondaryMap<Value, Vec<Value>>,
         isa: Option<&TargetIsa>,
         inst: Inst,
-        ident: usize,
+        indent: usize,
     ) -> fmt::Result;
 
     /// Write the preamble to `w`. By default, this uses `write_entity_definition`.
@@ -107,6 +117,17 @@ impl FuncWriter for PlainWriter {
         indent: usize,
     ) -> fmt::Result {
         write_instruction(w, func, aliases, isa, inst, indent)
+    }
+
+    fn write_ebb_header(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        isa: Option<&TargetIsa>,
+        ebb: Ebb,
+        indent: usize,
+    ) -> fmt::Result {
+        write_ebb_header(w, func, isa, ebb, indent)
     }
 }
 
@@ -227,7 +248,7 @@ fn decorate_ebb<FW: FuncWriter>(
         36
     };
 
-    write_ebb_header(w, func, isa, ebb, indent)?;
+    func_w.write_ebb_header(w, func, isa, ebb, indent)?;
     for a in func.dfg.ebb_params(ebb).iter().cloned() {
         write_value_aliases(w, aliases, a, indent)?;
     }
