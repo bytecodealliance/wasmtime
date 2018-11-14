@@ -854,12 +854,21 @@ st_abcd = TailRecipe(
         instp=IsEqual(Store.offset, 0),
         when_prefixed=st,
         clobbers_flags=False,
+        compute_size="size_plus_maybe_sib_or_offset_for_in_reg_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_rm(in_reg1, in_reg0, sink);
+        if needs_sib_byte(in_reg1) {
+            modrm_sib(in_reg0, sink);
+            sib_noindex(in_reg1, sink);
+        } else if needs_offset(in_reg1) {
+            modrm_disp8(in_reg1, in_reg0, sink);
+            sink.put1(0);
+        } else {
+            modrm_rm(in_reg1, in_reg0, sink);
+        }
         ''')
 
 # XX /r register-indirect store with index and no offset.
@@ -977,12 +986,18 @@ stDisp8_abcd = TailRecipe(
         instp=IsSignedInt(Store.offset, 8),
         when_prefixed=stDisp8,
         clobbers_flags=False,
+        compute_size="size_plus_maybe_sib_for_in_reg_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_disp8(in_reg1, in_reg0, sink);
+        if needs_sib_byte(in_reg1) {
+            modrm_sib_disp8(in_reg0, sink);
+            sib_noindex(in_reg1, sink);
+        } else {
+            modrm_disp8(in_reg1, in_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put1(offset as u8);
         ''')
@@ -1089,12 +1104,18 @@ stDisp32_abcd = TailRecipe(
         'stDisp32_abcd', Store, base_size=5, ins=(ABCD, GPR), outs=(),
         when_prefixed=stDisp32,
         clobbers_flags=False,
+        compute_size="size_plus_maybe_sib_for_in_reg_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_disp32(in_reg1, in_reg0, sink);
+        if needs_sib_byte(in_reg1) {
+            modrm_sib_disp32(in_reg0, sink);
+            sib_noindex(in_reg1, sink);
+        } else {
+            modrm_disp32(in_reg1, in_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
         ''')
