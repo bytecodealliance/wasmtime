@@ -291,20 +291,22 @@ impl UFEntry {
 impl VirtRegs {
     /// Find the leader value and rank of the set containing `v`.
     /// Compress the path if needed.
-    fn find(&mut self, val: Value) -> (Value, u32) {
-        match UFEntry::decode(self.union_find[val]) {
-            UFEntry::Rank(rank) => (val, rank),
-            UFEntry::Link(parent) => {
-                // TODO: This recursion would be more efficient as an iteration that pushes
-                // elements onto a SmallVector.
-                let found = self.find(parent);
-                // Compress the path if needed.
-                if found.0 != parent {
-                    self.union_find[val] = UFEntry::encode_link(found.0);
+    fn find(&mut self, mut val: Value) -> (Value, u32) {
+        let mut val_stack = vec![];
+        let found = loop {
+            match UFEntry::decode(self.union_find[val]) {
+                UFEntry::Rank(rank) => break (val, rank),
+                UFEntry::Link(parent) => {
+                    val_stack.push(val);
+                    val = parent;
                 }
-                found
             }
+        };
+        // Compress the path
+        while let Some(val) = val_stack.pop() {
+            self.union_find[val] = UFEntry::encode_link(found.0);
         }
+        found
     }
 
     /// Union the two sets containing `a` and `b`.
