@@ -1,6 +1,6 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_entity::PrimaryMap;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{DefinedFuncIndex, MemoryIndex};
 use instance::Instance;
 use memory::LinearMemory;
@@ -14,34 +14,48 @@ use wasmtime_environ::{
 
 /// Executes a module that has been translated with the `wasmtime-environ` environment
 /// implementation.
-pub fn compile_and_link_module<'data, 'module>(
+pub fn compile_and_link_module<'data, 'module, F>(
     isa: &TargetIsa,
     translation: &ModuleTranslation<'data, 'module>,
-) -> Result<Compilation, String> {
+    imports: F,
+) -> Result<Compilation, String>
+where
+    F: Fn(&str, &str) -> Option<isize>,
+{
     let (mut compilation, relocations) = compile_module(&translation, isa)?;
 
     // Apply relocations, now that we have virtual addresses for everything.
-    relocate(&mut compilation, &relocations, &translation.module);
+    relocate(&mut compilation, &relocations, &translation.module, imports);
 
     Ok(compilation)
 }
 
 /// Performs the relocations inside the function bytecode, provided the necessary metadata
-fn relocate(
+fn relocate<F>(
     compilation: &mut Compilation,
     relocations: &PrimaryMap<DefinedFuncIndex, Vec<Relocation>>,
     module: &Module,
-) {
+    imports: F,
+) where
+    F: Fn(&str, &str) -> Option<isize>,
+{
     // The relocations are relative to the relocation's address plus four bytes
     // TODO: Support architectures other than x64, and other reloc kinds.
     for (i, function_relocs) in relocations.iter() {
         for r in function_relocs {
             let target_func_address: isize = match r.reloc_target {
-                RelocationTarget::UserFunc(index) => {
-                    compilation.functions[module.defined_func_index(index).expect(
-                        "relocation to imported function not supported yet",
-                    )].as_ptr() as isize
-                }
+                RelocationTarget::UserFunc(index) => match module.defined_func_index(index) {
+                    Some(f) => compilation.functions[f].as_ptr() as isize,
+                    None => {
+                        let func = &module.imported_funcs[index.index()];
+                        match imports(&func.0, &func.1) {
+                            Some(ptr) => ptr,
+                            None => {
+                                panic!("no provided import function for {}/{}", &func.0, &func.1)
+                            }
+                        }
+                    }
+                },
                 RelocationTarget::GrowMemory => grow_memory as isize,
                 RelocationTarget::CurrentMemory => current_memory as isize,
             };

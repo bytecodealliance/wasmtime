@@ -145,8 +145,12 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
     }
     let mut module = Module::new();
     let environ = ModuleEnvironment::new(isa, &mut module);
+
+    let imports_resolver = |_env: &str, _function: &str| None;
+
     let translation = environ.translate(&data).map_err(|e| e.to_string())?;
-    let instance = match compile_and_link_module(isa, &translation) {
+
+    let instance = match compile_and_link_module(isa, &translation, &imports_resolver) {
         Ok(compilation) => {
             let mut instance = Instance::new(
                 translation.module,
