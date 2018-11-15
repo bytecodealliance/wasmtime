@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::divconst_magic_numbers::{magicS32, magicS64, magicU32, magicU64};
+use crate::divconst_magic_numbers::{magic_s32, magic_s64, magic_u32, magic_u64};
 use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
 use crate::ir::dfg::ValueDef;
 use crate::ir::instructions::Opcode;
@@ -183,27 +183,27 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         DivRemByConstInfo::DivU32(n1, d) | DivRemByConstInfo::RemU32(n1, d) => {
             debug_assert!(d >= 3);
             let MU32 {
-                mulBy,
-                doAdd,
-                shiftBy,
-            } = magicU32(d);
+                mul_by,
+                do_add,
+                shift_by,
+            } = magic_u32(d);
             let qf; // final quotient
-            let q0 = pos.ins().iconst(I32, mulBy as i64);
+            let q0 = pos.ins().iconst(I32, mul_by as i64);
             let q1 = pos.ins().umulhi(n1, q0);
-            if doAdd {
-                debug_assert!(shiftBy >= 1 && shiftBy <= 32);
+            if do_add {
+                debug_assert!(shift_by >= 1 && shift_by <= 32);
                 let t1 = pos.ins().isub(n1, q1);
                 let t2 = pos.ins().ushr_imm(t1, 1);
                 let t3 = pos.ins().iadd(t2, q1);
-                // I never found any case where shiftBy == 1 here.
+                // I never found any case where shift_by == 1 here.
                 // So there's no attempt to fold out a zero shift.
-                debug_assert_ne!(shiftBy, 1);
-                qf = pos.ins().ushr_imm(t3, (shiftBy - 1) as i64);
+                debug_assert_ne!(shift_by, 1);
+                qf = pos.ins().ushr_imm(t3, (shift_by - 1) as i64);
             } else {
-                debug_assert!(shiftBy >= 0 && shiftBy <= 31);
-                // Whereas there are known cases here for shiftBy == 0.
-                if shiftBy > 0 {
-                    qf = pos.ins().ushr_imm(q1, shiftBy as i64);
+                debug_assert!(shift_by >= 0 && shift_by <= 31);
+                // Whereas there are known cases here for shift_by == 0.
+                if shift_by > 0 {
+                    qf = pos.ins().ushr_imm(q1, shift_by as i64);
                 } else {
                     qf = q1;
                 }
@@ -253,27 +253,27 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         DivRemByConstInfo::DivU64(n1, d) | DivRemByConstInfo::RemU64(n1, d) => {
             debug_assert!(d >= 3);
             let MU64 {
-                mulBy,
-                doAdd,
-                shiftBy,
-            } = magicU64(d);
+                mul_by,
+                do_add,
+                shift_by,
+            } = magic_u64(d);
             let qf; // final quotient
-            let q0 = pos.ins().iconst(I64, mulBy as i64);
+            let q0 = pos.ins().iconst(I64, mul_by as i64);
             let q1 = pos.ins().umulhi(n1, q0);
-            if doAdd {
-                debug_assert!(shiftBy >= 1 && shiftBy <= 64);
+            if do_add {
+                debug_assert!(shift_by >= 1 && shift_by <= 64);
                 let t1 = pos.ins().isub(n1, q1);
                 let t2 = pos.ins().ushr_imm(t1, 1);
                 let t3 = pos.ins().iadd(t2, q1);
-                // I never found any case where shiftBy == 1 here.
+                // I never found any case where shift_by == 1 here.
                 // So there's no attempt to fold out a zero shift.
-                debug_assert_ne!(shiftBy, 1);
-                qf = pos.ins().ushr_imm(t3, (shiftBy - 1) as i64);
+                debug_assert_ne!(shift_by, 1);
+                qf = pos.ins().ushr_imm(t3, (shift_by - 1) as i64);
             } else {
-                debug_assert!(shiftBy >= 0 && shiftBy <= 63);
-                // Whereas there are known cases here for shiftBy == 0.
-                if shiftBy > 0 {
-                    qf = pos.ins().ushr_imm(q1, shiftBy as i64);
+                debug_assert!(shift_by >= 0 && shift_by <= 63);
+                // Whereas there are known cases here for shift_by == 0.
+                if shift_by > 0 {
+                    qf = pos.ins().ushr_imm(q1, shift_by as i64);
                 } else {
                     qf = q1;
                 }
@@ -334,21 +334,21 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             } else {
                 // S32 div, rem by a non-power-of-2
                 debug_assert!(d < -2 || d > 2);
-                let MS32 { mulBy, shiftBy } = magicS32(d);
-                let q0 = pos.ins().iconst(I32, mulBy as i64);
+                let MS32 { mul_by, shift_by } = magic_s32(d);
+                let q0 = pos.ins().iconst(I32, mul_by as i64);
                 let q1 = pos.ins().smulhi(n1, q0);
-                let q2 = if d > 0 && mulBy < 0 {
+                let q2 = if d > 0 && mul_by < 0 {
                     pos.ins().iadd(q1, n1)
-                } else if d < 0 && mulBy > 0 {
+                } else if d < 0 && mul_by > 0 {
                     pos.ins().isub(q1, n1)
                 } else {
                     q1
                 };
-                debug_assert!(shiftBy >= 0 && shiftBy <= 31);
-                let q3 = if shiftBy == 0 {
+                debug_assert!(shift_by >= 0 && shift_by <= 31);
+                let q3 = if shift_by == 0 {
                     q2
                 } else {
-                    pos.ins().sshr_imm(q2, shiftBy as i64)
+                    pos.ins().sshr_imm(q2, shift_by as i64)
                 };
                 let t1 = pos.ins().ushr_imm(q3, 31);
                 let qf = pos.ins().iadd(q3, t1);
@@ -409,21 +409,21 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             } else {
                 // S64 div, rem by a non-power-of-2
                 debug_assert!(d < -2 || d > 2);
-                let MS64 { mulBy, shiftBy } = magicS64(d);
-                let q0 = pos.ins().iconst(I64, mulBy);
+                let MS64 { mul_by, shift_by } = magic_s64(d);
+                let q0 = pos.ins().iconst(I64, mul_by);
                 let q1 = pos.ins().smulhi(n1, q0);
-                let q2 = if d > 0 && mulBy < 0 {
+                let q2 = if d > 0 && mul_by < 0 {
                     pos.ins().iadd(q1, n1)
-                } else if d < 0 && mulBy > 0 {
+                } else if d < 0 && mul_by > 0 {
                     pos.ins().isub(q1, n1)
                 } else {
                     q1
                 };
-                debug_assert!(shiftBy >= 0 && shiftBy <= 63);
-                let q3 = if shiftBy == 0 {
+                debug_assert!(shift_by >= 0 && shift_by <= 63);
+                let q3 = if shift_by == 0 {
                     q2
                 } else {
-                    pos.ins().sshr_imm(q2, shiftBy as i64)
+                    pos.ins().sshr_imm(q2, shift_by as i64)
                 };
                 let t1 = pos.ins().ushr_imm(q3, 63);
                 let qf = pos.ins().iadd(q3, t1);
