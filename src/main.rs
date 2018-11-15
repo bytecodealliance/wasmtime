@@ -60,7 +60,7 @@ use std::path::PathBuf;
 use std::process::{exit, Command};
 use tempdir::TempDir;
 use wasmtime_environ::{Module, ModuleEnvironment};
-use wasmtime_execute::{compile_and_link_module, execute, Instance};
+use wasmtime_execute::{compile_and_link_module, execute, finish_instantiation, Instance};
 
 const USAGE: &str = "
 Wasm to Cranelift IL translation utility.
@@ -69,11 +69,13 @@ The translation is dependent on the environment chosen.
 
 Usage:
     wasmtime [-mop] <file>...
+    wasmtime [-mop] <file>... --function=<fn>
     wasmtime --help | --version
 
 Options:
     -o, --optimize      runs optimization passes on the translated functions
     -m, --memory        interactive memory inspector after execution
+    --function=<fn>     name of function to run
     -h, --help          print this help message
     --version           print the Cranelift version
 ";
@@ -83,6 +85,7 @@ struct Args {
     arg_file: Vec<String>,
     flag_memory: bool,
     flag_optimize: bool,
+    flag_function: Option<String>,
 }
 
 fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -162,7 +165,14 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
                 &compilation,
                 &translation.lazy.data_initializers,
             );
-            execute(&translation.module, &compilation, &mut instance)?;
+
+            let mut context =
+                finish_instantiation(&translation.module, &compilation, &mut instance)?;
+
+            if let Some(ref f) = args.flag_function {
+                execute(&translation.module, &compilation, &mut context, &f)?;
+            }
+
             instance
         }
         Err(s) => {

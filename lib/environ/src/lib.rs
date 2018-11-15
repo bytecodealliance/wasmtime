@@ -45,4 +45,4 @@ mod vmcontext;
 
 pub use compilation::{compile_module, Compilation, Relocation, RelocationTarget, Relocations};
 pub use environ::{ModuleEnvironment, ModuleTranslation};
-pub use module::{DataInitializer, Module, TableElements};
+pub use module::{DataInitializer, Export, Module, TableElements};
