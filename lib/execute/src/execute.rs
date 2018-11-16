@@ -84,6 +84,7 @@ fn relocate<F>(
 
 extern "C" fn grow_memory(size: u32, memory_index: u32, vmctx: *mut *mut u8) -> u32 {
     unsafe {
+        // FIXME: update the VMMemory's size
         let instance = (*vmctx.offset(4)) as *mut Instance;
         (*instance)
             .memory_mut(memory_index as MemoryIndex)
@@ -94,6 +95,7 @@ extern "C" fn grow_memory(size: u32, memory_index: u32, vmctx: *mut *mut u8) -> 
 
 extern "C" fn current_memory(memory_index: u32, vmctx: *mut *mut u8) -> u32 {
     unsafe {
+        // FIXME: read the VMMemory's size instead
         let instance = (*vmctx.offset(4)) as *mut Instance;
         (*instance)
             .memory_mut(memory_index as MemoryIndex)
@@ -115,9 +117,12 @@ fn make_vmctx(instance: &mut Instance, mem_base_addrs: &mut [*mut u8]) -> Vec<*m
         .map(|table| (table.as_mut_ptr() as *mut u8, table.len()))
         .unwrap_or((ptr::null_mut(), 0));
 
+    // FIXME: Actually use environ's VMContext struct
     let mut vmctx = Vec::new();
     vmctx.push(instance.globals.as_mut_ptr());
+    // FIXME: These need to be VMMemory now
     vmctx.push(mem_base_addrs.as_mut_ptr() as *mut u8);
+    // FIXME: These need to be VMTable now
     vmctx.push(default_table_ptr);
     vmctx.push(default_table_len as *mut u8);
     vmctx.push(instance as *mut Instance as *mut u8);
@@ -134,7 +139,7 @@ pub fn execute(
     let start_index = module
         .start_func
         .ok_or_else(|| String::from("No start function defined, aborting execution"))?;
-    // TODO: Put all the function bodies into a page-aligned memory region, and
+    // FIXME: Put all the function bodies into a page-aligned memory region, and
     // then make them ReadExecute rather than ReadWriteExecute.
     for code_buf in compilation.functions.values() {
         match unsafe {

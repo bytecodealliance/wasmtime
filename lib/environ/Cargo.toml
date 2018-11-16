@@ -10,10 +10,11 @@ license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
 [dependencies]
-cranelift-codegen = "0.20.0"
-cranelift-entity = "0.20.1"
-cranelift-wasm = "0.20.1"
+cranelift-codegen = "0.22.0"
+cranelift-entity = "0.22.0"
+cranelift-wasm = "0.22.0"
 target-lexicon = "0.0.3"
+memoffset = "0.2.1"
 
 [badges]
 maintenance = { status = "experimental" }

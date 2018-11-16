@@ -36,10 +36,13 @@ extern crate cranelift_codegen;
 extern crate cranelift_entity;
 extern crate cranelift_wasm;
 extern crate target_lexicon;
+#[macro_use]
+extern crate memoffset;
 
 mod compilation;
 mod environ;
 mod module;
+mod vmcontext;
 
 pub use compilation::{compile_module, Compilation, Relocation, RelocationTarget, Relocations};
 pub use environ::{ModuleEnvironment, ModuleTranslation};
