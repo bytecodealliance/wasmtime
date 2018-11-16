@@ -34,7 +34,9 @@
 )]
 
 extern crate cranelift_codegen;
+extern crate cranelift_entity;
 extern crate cranelift_native;
+extern crate cranelift_wasm;
 extern crate docopt;
 extern crate wasmtime_environ;
 extern crate wasmtime_execute;
@@ -45,6 +47,8 @@ extern crate tempdir;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
+use cranelift_entity::EntityRef;
+use cranelift_wasm::MemoryIndex;
 use docopt::Docopt;
 use std::error::Error;
 use std::fs::File;
@@ -95,9 +99,10 @@ fn main() {
                 .version(Some(String::from("0.0.0")))
                 .deserialize()
         }).unwrap_or_else(|e| e.exit());
-    let (mut flag_builder, isa_builder) = cranelift_native::builders().unwrap_or_else(|_| {
+    let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
+    let mut flag_builder = settings::builder();
 
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
@@ -183,7 +188,7 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
                         break;
                     }
                     let memory = instance.inspect_memory(
-                        str::parse(split[0]).unwrap(),
+                        MemoryIndex::new(str::parse(split[0]).unwrap()),
                         str::parse(split[1]).unwrap(),
                         str::parse(split[2]).unwrap(),
                     );

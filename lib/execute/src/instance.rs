@@ -2,7 +2,9 @@
 //! module.
 
 use cranelift_codegen::ir;
-use cranelift_wasm::GlobalIndex;
+use cranelift_entity::EntityRef;
+use cranelift_entity::PrimaryMap;
+use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
 use memory::LinearMemory;
 use wasmtime_environ::{Compilation, DataInitializer, Module, TableElements};
 
@@ -10,10 +12,10 @@ use wasmtime_environ::{Compilation, DataInitializer, Module, TableElements};
 #[derive(Debug)]
 pub struct Instance {
     /// WebAssembly table data.
-    pub tables: Vec<Vec<usize>>,
+    pub tables: PrimaryMap<TableIndex, Vec<usize>>,
 
     /// WebAssembly linear memory data.
-    pub memories: Vec<LinearMemory>,
+    pub memories: PrimaryMap<MemoryIndex, LinearMemory>,
 
     /// WebAssembly global variable data.
     pub globals: Vec<u8>,
@@ -27,8 +29,8 @@ impl Instance {
         data_initializers: &[DataInitializer],
     ) -> Self {
         let mut result = Self {
-            tables: Vec::new(),
-            memories: Vec::new(),
+            tables: PrimaryMap::new(),
+            memories: PrimaryMap::new(),
             globals: Vec::new(),
         };
         result.instantiate_tables(module, compilation, &module.table_elements);
@@ -45,8 +47,9 @@ impl Instance {
         table_initializers: &[TableElements],
     ) {
         debug_assert!(self.tables.is_empty());
-        self.tables.reserve_exact(module.tables.len());
-        for table in &module.tables {
+        // TODO: Enable this once PrimaryMap supports this.
+        //self.tables.reserve_exact(module.tables.len());
+        for table in module.tables.values() {
             let len = table.size;
             let mut v = Vec::with_capacity(len);
             v.resize(len, 0);
@@ -69,8 +72,9 @@ impl Instance {
     fn instantiate_memories(&mut self, module: &Module, data_initializers: &[DataInitializer]) {
         debug_assert!(self.memories.is_empty());
         // Allocate the underlying memory and initialize it to all zeros.
-        self.memories.reserve_exact(module.memories.len());
-        for memory in &module.memories {
+        // TODO: Enable this once PrimaryMap supports it.
+        //self.memories.reserve_exact(module.memories.len());
+        for memory in module.memories.values() {
             let v = LinearMemory::new(memory.pages_count as u32, memory.maximum.map(|m| m as u32));
             self.memories.push(v);
         }
@@ -92,24 +96,24 @@ impl Instance {
     }
 
     /// Returns a mutable reference to a linear memory under the specified index.
-    pub fn memory_mut(&mut self, memory_index: usize) -> &mut LinearMemory {
+    pub fn memory_mut(&mut self, memory_index: MemoryIndex) -> &mut LinearMemory {
         self.memories
             .get_mut(memory_index)
-            .unwrap_or_else(|| panic!("no memory for index {}", memory_index))
+            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
     }
 
     /// Returns a slice of the contents of allocated linear memory.
-    pub fn inspect_memory(&self, memory_index: usize, address: usize, len: usize) -> &[u8] {
+    pub fn inspect_memory(&self, memory_index: MemoryIndex, address: usize, len: usize) -> &[u8] {
         &self
             .memories
             .get(memory_index)
-            .unwrap_or_else(|| panic!("no memory for index {}", memory_index))
+            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
             .as_ref()[address..address + len]
     }
 
     /// Shows the value of a global variable.
     pub fn inspect_global(&self, global_index: GlobalIndex, ty: ir::Type) -> &[u8] {
-        let offset = global_index * 8;
+        let offset = global_index.index() * 8;
         let len = ty.bytes() as usize;
         &self.globals[offset..offset + len]
     }
