@@ -1,7 +1,7 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::{DefinedFuncIndex, MemoryIndex};
+use cranelift_wasm::{DefinedFuncIndex, MemoryIndex, TableIndex};
 use instance::Instance;
 use memory::LinearMemory;
 use region::protect;
@@ -87,7 +87,7 @@ extern "C" fn grow_memory(size: u32, memory_index: u32, vmctx: *mut *mut u8) -> 
         // FIXME: update the VMMemory's size
         let instance = (*vmctx.offset(4)) as *mut Instance;
         (*instance)
-            .memory_mut(memory_index as MemoryIndex)
+            .memory_mut(MemoryIndex::new(memory_index as usize))
             .grow(size)
             .unwrap_or(u32::max_value())
     }
@@ -98,7 +98,7 @@ extern "C" fn current_memory(memory_index: u32, vmctx: *mut *mut u8) -> u32 {
         // FIXME: read the VMMemory's size instead
         let instance = (*vmctx.offset(4)) as *mut Instance;
         (*instance)
-            .memory_mut(memory_index as MemoryIndex)
+            .memory_mut(MemoryIndex::new(memory_index as usize))
             .current_size()
     }
 }
@@ -113,7 +113,7 @@ fn make_vmctx(instance: &mut Instance, mem_base_addrs: &mut [*mut u8]) -> Vec<*m
 
     let (default_table_ptr, default_table_len) = instance
         .tables
-        .get_mut(0)
+        .get_mut(TableIndex::new(0))
         .map(|table| (table.as_mut_ptr() as *mut u8, table.len()))
         .unwrap_or((ptr::null_mut(), 0));
 
@@ -167,7 +167,7 @@ pub fn execute(
     // Collect all memory base addresses and Vec.
     let mut mem_base_addrs = instance
         .memories
-        .iter_mut()
+        .values_mut()
         .map(LinearMemory::base_addr)
         .collect::<Vec<_>>();
     let vmctx = make_vmctx(instance, &mut mem_base_addrs);

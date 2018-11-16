@@ -43,7 +43,7 @@ extern crate faerie;
 extern crate target_lexicon;
 
 use cranelift_codegen::isa;
-use cranelift_codegen::settings::{self, Configurable};
+use cranelift_codegen::settings;
 use docopt::Docopt;
 use faerie::Artifact;
 use std::error::Error;
@@ -55,7 +55,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process;
 use std::str::FromStr;
-use target_lexicon::{OperatingSystem, Triple};
+use target_lexicon::Triple;
 use wasmtime_environ::{compile_module, Module, ModuleEnvironment};
 use wasmtime_obj::emit_module;
 
@@ -116,31 +116,21 @@ fn handle_module(path: PathBuf, target: &Option<String>, output: &str) -> Result
         }
     };
 
-    let (flag_builder, isa_builder) = match *target {
+    let isa_builder = match *target {
         Some(ref target) => {
             let target = Triple::from_str(&target).map_err(|_| "could not parse --target")?;
-            let mut flag_builder = settings::builder();
-            match target.operating_system {
-                OperatingSystem::Windows => {
-                    flag_builder.set("call_conv", "windows_fastcall").unwrap();
-                }
-                _ => {
-                    flag_builder.set("call_conv", "system_v").unwrap();
-                }
-            };
-
-            let isa_builder = isa::lookup(target).map_err(|err| match err {
+            isa::lookup(target).map_err(|err| match err {
                 isa::LookupError::SupportDisabled => {
                     "support for architecture disabled at compile time"
                 }
                 isa::LookupError::Unsupported => "unsupported architecture",
-            })?;
-            (flag_builder, isa_builder)
+            })?
         }
-        None => cranelift_native::builders().unwrap_or_else(|_| {
+        None => cranelift_native::builder().unwrap_or_else(|_| {
             panic!("host machine is not a supported target");
         }),
     };
+    let flag_builder = settings::builder();
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));

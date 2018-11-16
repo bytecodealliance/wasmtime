@@ -39,7 +39,7 @@ pub enum Export {
 #[derive(Debug)]
 pub struct Module {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
-    pub signatures: Vec<ir::Signature>,
+    pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
 
     /// Names of imported functions.
     pub imported_funcs: Vec<(String, String)>,
@@ -48,13 +48,13 @@ pub struct Module {
     pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
 
     /// WebAssembly tables.
-    pub tables: Vec<Table>,
+    pub tables: PrimaryMap<TableIndex, Table>,
 
     /// WebAssembly linear memories.
-    pub memories: Vec<Memory>,
+    pub memories: PrimaryMap<MemoryIndex, Memory>,
 
     /// WebAssembly global variables.
-    pub globals: Vec<Global>,
+    pub globals: PrimaryMap<GlobalIndex, Global>,
 
     /// Exported entities.
     pub exports: HashMap<String, Export>,
@@ -70,12 +70,12 @@ impl Module {
     /// Allocates the module data structures.
     pub fn new() -> Self {
         Self {
-            signatures: Vec::new(),
+            signatures: PrimaryMap::new(),
             imported_funcs: Vec::new(),
             functions: PrimaryMap::new(),
-            tables: Vec::new(),
-            memories: Vec::new(),
-            globals: Vec::new(),
+            tables: PrimaryMap::new(),
+            memories: PrimaryMap::new(),
+            globals: PrimaryMap::new(),
             exports: HashMap::new(),
             start_func: None,
             table_elements: Vec::new(),

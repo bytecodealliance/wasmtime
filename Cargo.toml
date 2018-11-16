@@ -18,8 +18,10 @@ name = "wasm2obj"
 path = "src/wasm2obj.rs"
 
 [dependencies]
-cranelift-codegen = "0.22.0"
-cranelift-native = "0.22.0"
+cranelift-codegen = "0.24.0"
+cranelift-native = "0.24.0"
+cranelift-entity = "0.24.0"
+cranelift-wasm = "0.24.0"
 wasmtime-environ = { path = "lib/environ" }
 wasmtime-execute = { path = "lib/execute" }
 wasmtime-obj = { path = "lib/obj" }
@@ -27,7 +29,7 @@ docopt = "1.0.1"
 serde = "1.0.75"
 serde_derive = "1.0.75"
 tempdir = "*"
-faerie = "0.5.0"
-target-lexicon = { version = "0.0.3", default-features = false }
+faerie = "0.6.0"
+target-lexicon = { version = "0.2.0", default-features = false }
 
 [workspace]
