@@ -2,7 +2,7 @@
 
 use error::Error;
 use dynasmrt::x64::Assembler;
-use dynasmrt::{DynasmApi, AssemblyOffset, ExecutableBuffer};
+use dynasmrt::{DynasmApi, DynasmLabelApi, AssemblyOffset, ExecutableBuffer, DynamicLabel};
 
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
@@ -81,6 +81,10 @@ impl Registers {
         self.scratch_gprs.release(gpr);
     }
 }
+
+/// Label in code.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Label(DynamicLabel);
 
 /// Describes location of a argument.
 enum ArgLocation {
@@ -173,6 +177,19 @@ impl<'a> Context<'a> {
     fn start(&self) -> AssemblyOffset {
         self.start
     }
+}
+
+/// Create a new undefined label.
+pub fn create_label(ctx: &mut Context) -> Label {
+    Label(ctx.asm.new_dynamic_label())
+}
+
+/// Define the given label at the current position.
+/// 
+/// Multiple labels can be defined at the same position. However, a label 
+/// can be defined only once.
+pub fn define_label(ctx: &mut Context, label: Label) {
+    ctx.asm.dynamic_label(label.0);
 }
 
 fn push_i32(ctx: &mut Context, gpr: GPR) {
@@ -284,7 +301,7 @@ pub fn epilogue(ctx: &mut Context) {
     );
 }
 
-pub fn unsupported_opcode(ctx: &mut Context) {
+pub fn trap(ctx: &mut Context) {
     dynasm!(ctx.asm
         ; ud2
     );
