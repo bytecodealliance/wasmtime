@@ -111,6 +111,16 @@ where
     pub fn last(&self) -> Option<&V> {
         self.elems.last()
     }
+
+    /// Reserves capacity for at least `additional` more elements to be inserted.
+    pub fn reserve(&mut self, additional: usize) {
+        self.elems.reserve(additional)
+    }
+
+    /// Reserves the minimum capacity for exactly `additional` more elements to be inserted.
+    pub fn reserve_exact(&mut self, additional: usize) {
+        self.elems.reserve_exact(additional)
+    }
 }
 
 /// Immutable indexing into an `PrimaryMap`.
