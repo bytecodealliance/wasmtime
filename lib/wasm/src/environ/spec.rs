@@ -237,7 +237,7 @@ pub trait FuncEnvironment {
 /// by the user, they are only for `cranelift-wasm` internal use.
 pub trait ModuleEnvironment<'data> {
     /// Get the information needed to produce Cranelift IR for the current target.
-    fn target_config(&self) -> &TargetFrontendConfig;
+    fn target_config(&self) -> TargetFrontendConfig;
 
     /// Return the name for the given function index.
     fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName;
