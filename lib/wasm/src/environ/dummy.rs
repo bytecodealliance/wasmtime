@@ -338,8 +338,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn target_config(&self) -> &TargetFrontendConfig {
-        &self.info.config
+    fn target_config(&self) -> TargetFrontendConfig {
+        self.info.config
     }
 
     fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName {
