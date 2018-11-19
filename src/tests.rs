@@ -31,4 +31,26 @@ fn adds() {
     }
 }
 
+#[test]
+fn relop_eq() {
+    const CASES: &[(usize, usize, usize)] = &[
+        (0, 0, 1),
+        (0, 1, 0),
+        (1, 0, 0),
+        (1, 1, 1),
+        (1312, 1, 0),
+        (1312, 1312, 1),
+    ];
+
+    let code = r#"
+(module
+  (func (param i32) (param i32) (result i32) (i32.eq (get_local 0) (get_local 1)))
+)
+    "#;
+
+    for (a, b, expected) in CASES {
+        assert_eq!(execute_wat(code, *a, *b), *expected);
+    }
+}
+
 // TODO: Add a test that checks argument passing via the stack.

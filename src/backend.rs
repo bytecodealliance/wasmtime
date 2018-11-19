@@ -243,6 +243,20 @@ pub fn store_i32(ctx: &mut Context, local_idx: u32) {
     ctx.regs.release_scratch_gpr(gpr);
 }
 
+pub fn relop_eq_i32(ctx: &mut Context) {
+    let right = pop_i32(ctx);
+    let left = pop_i32(ctx);
+    let result = ctx.regs.take_scratch_gpr();
+    dynasm!(ctx.asm
+        ; xor Rq(result), Rq(result)
+        ; cmp Rd(left), Rd(right)
+        ; sete Rb(result)
+    );
+    push_i32(ctx, result);
+    ctx.regs.release_scratch_gpr(left);
+    ctx.regs.release_scratch_gpr(right);
+}
+
 pub fn prepare_return_value(ctx: &mut Context) {
     let ret_gpr = pop_i32(ctx);
     if ret_gpr != RAX {

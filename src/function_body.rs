@@ -133,6 +133,9 @@ pub fn translate(session: &mut CodeGenSession, body: &FunctionBody) -> Result<()
                     define_label(&mut ctx, control_frame.kind.br_destination());
                 }
             }
+            Operator::I32Eq => {
+                relop_eq_i32(&mut ctx);
+            }
             Operator::I32Add => {
                 add_i32(&mut ctx);
             }
