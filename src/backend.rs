@@ -82,10 +82,6 @@ impl Registers {
     }
 }
 
-/// Label in code.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Label(DynamicLabel);
-
 /// Describes location of a argument.
 enum ArgLocation {
     /// Argument is passed via some register.
@@ -139,7 +135,7 @@ impl CodeGenSession {
             asm: &mut self.assembler,
             start: start_offset,
             regs: Registers::new(),
-            sp_depth: 0,
+            sp_depth: StackDepth(0),
         }
     }
 
@@ -167,9 +163,8 @@ pub struct Context<'a> {
     asm: &'a mut Assembler,
     start: AssemblyOffset,
     regs: Registers,
-    /// Offset from starting value of SP counted in words. Each push and pop 
-    /// on the value stack increments or decrements this value by 1 respectively.
-    sp_depth: u32,
+    /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
+    sp_depth: StackDepth,
 }
 
 impl<'a> Context<'a> {
@@ -178,6 +173,10 @@ impl<'a> Context<'a> {
         self.start
     }
 }
+
+/// Label in code.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Label(DynamicLabel);
 
 /// Create a new undefined label.
 pub fn create_label(ctx: &mut Context) -> Label {
@@ -192,10 +191,32 @@ pub fn define_label(ctx: &mut Context, label: Label) {
     ctx.asm.dynamic_label(label.0);
 }
 
+/// Offset from starting value of SP counted in words.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct StackDepth(u32);
+
+impl StackDepth {
+    pub fn increment(&mut self) {
+        self.0 += 1;
+    }
+
+    pub fn decrement(&mut self) {
+        self.0 -= 1;
+    }
+}
+
+pub fn current_stack_depth(ctx: &Context) -> StackDepth {
+    ctx.sp_depth
+}
+
+pub fn restore_stack_depth(ctx: &mut Context, stack_depth: StackDepth) {
+    ctx.sp_depth = stack_depth;
+}
+
 fn push_i32(ctx: &mut Context, gpr: GPR) {
     // For now, do an actual push (and pop below). In the future, we could
     // do on-the-fly register allocation here.
-    ctx.sp_depth += 1;
+    ctx.sp_depth.increment();
     dynasm!(ctx.asm
         ; push Rq(gpr)
     );
@@ -203,7 +224,7 @@ fn push_i32(ctx: &mut Context, gpr: GPR) {
 }
 
 fn pop_i32(ctx: &mut Context) -> GPR {
-    ctx.sp_depth -= 1;
+    ctx.sp_depth.decrement();
     let gpr = ctx.regs.take_scratch_gpr();
     dynasm!(ctx.asm
         ; pop Rq(gpr)
@@ -222,7 +243,7 @@ pub fn add_i32(ctx: &mut Context) {
 }
 
 fn sp_relative_offset(ctx: &mut Context, slot_idx: u32) -> i32 {
-    ((ctx.sp_depth as i32) + slot_idx as i32) * WORD_SIZE as i32
+    ((ctx.sp_depth.0 as i32) + slot_idx as i32) * WORD_SIZE as i32
 }
 
 pub fn get_local_i32(ctx: &mut Context, local_idx: u32) {
@@ -255,6 +276,24 @@ pub fn relop_eq_i32(ctx: &mut Context) {
     push_i32(ctx, result);
     ctx.regs.release_scratch_gpr(left);
     ctx.regs.release_scratch_gpr(right);
+}
+
+/// Pops i32 predicate and branches to the specified label
+/// if the predicate is equal to zero.
+pub fn pop_and_breq(ctx: &mut Context, label: Label) {
+    let predicate = pop_i32(ctx);
+    dynasm!(ctx.asm
+        ; test Rd(predicate), Rd(predicate)
+        ; je =>label.0
+    );
+    ctx.regs.release_scratch_gpr(predicate);
+}
+
+/// Branch unconditionally to the specified label.
+pub fn br(ctx: &mut Context, label: Label) {
+    dynasm!(ctx.asm
+        ; jmp =>label.0
+    );
 }
 
 pub fn prepare_return_value(ctx: &mut Context) {
@@ -303,11 +342,11 @@ pub fn prologue(ctx: &mut Context, stack_slots: u32) {
         ; mov rbp, rsp
         ; sub rsp, framesize
     );
-    ctx.sp_depth += aligned_stack_slots - stack_slots;
+    ctx.sp_depth.0 += aligned_stack_slots - stack_slots;
 }
 
 pub fn epilogue(ctx: &mut Context) {
-    assert_eq!(ctx.sp_depth, 0, "imbalanced pushes and pops detected");
+    assert_eq!(ctx.sp_depth, StackDepth(0), "imbalanced pushes and pops detected");
     dynasm!(ctx.asm
         ; mov rsp, rbp
         ; pop rbp

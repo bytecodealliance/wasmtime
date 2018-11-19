@@ -53,4 +53,56 @@ fn relop_eq() {
     }
 }
 
+#[test]
+fn if_then_else() {
+    const CASES: &[(usize, usize, usize)] = &[
+        (0, 1, 1),
+        (0, 0, 0),
+        (1, 0, 0),
+        (1, 1, 1),
+        (1312, 1, 1),
+        (1312, 1312, 1312),
+    ];
+
+    let code = r#"
+(module
+  (func (param i32) (param i32) (result i32)
+    (if (result i32)
+      (i32.eq
+        (get_local 0)
+        (get_local 1)
+      )
+      (then (get_local 0))
+      (else (get_local 1))
+    )
+  )
+)
+    "#;
+
+    for (a, b, expected) in CASES {
+        assert_eq!(execute_wat(code, *a, *b), *expected, "{}, {}", a, b);
+    }
+}
+
+#[test]
+fn if_without_result() {
+    let code = r#"
+(module
+  (func (param i32) (param i32) (result i32)
+    (if
+      (i32.eq
+        (get_local 0)
+        (get_local 1)
+      )
+      (then (unreachable))
+    )
+
+    (get_local 0)
+  )
+)
+    "#;
+
+    assert_eq!(execute_wat(code, 2, 3), 2);
+}
+
 // TODO: Add a test that checks argument passing via the stack.
