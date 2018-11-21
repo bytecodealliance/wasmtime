@@ -82,18 +82,10 @@ fn main() {
     // Now that the Python build process is complete, generate files that are
     // emitted by the `meta` crate.
     // ------------------------------------------------------------------------
-    let isas = meta::isa::define_all();
 
-    if let Err(err) = meta::gen_types::generate("types.rs", &out_dir) {
+    if let Err(err) = generate_meta(&out_dir) {
         eprintln!("Error: {}", err);
         process::exit(1);
-    }
-
-    for isa in isas {
-        if let Err(err) = meta::gen_registers::generate(isa, "registers", &out_dir) {
-            eprintln!("Error: {}", err);
-            process::exit(1);
-        }
     }
 
     if let Ok(_) = env::var("CRANELIFT_VERBOSE") {
@@ -103,6 +95,20 @@ fn main() {
         );
         println!("cargo:warning=Generated files are in {}", out_dir);
     }
+}
+
+fn generate_meta(out_dir: &str) -> Result<(), meta::error::Error> {
+    let shared_settings = meta::gen_settings::generate_common("new_settings.rs", &out_dir)?;
+    let isas = meta::isa::define_all(&shared_settings);
+
+    meta::gen_types::generate("types.rs", &out_dir)?;
+
+    for isa in &isas {
+        meta::gen_registers::generate(&isa, "registers", &out_dir)?;
+        meta::gen_settings::generate(&isa, "new_settings", &out_dir)?;
+    }
+
+    Ok(())
 }
 
 fn identify_python() -> &'static str {

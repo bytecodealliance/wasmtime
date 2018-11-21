@@ -5,10 +5,38 @@
 
 pub mod isa;
 pub mod regs;
+pub mod settings;
 pub mod types;
 
+/// A macro that converts boolean settings into predicates to look more natural.
+#[macro_export]
+macro_rules! predicate {
+    ($a:ident && $($b:tt)*) => {
+        PredicateNode::And(Box::new($a.into()), Box::new(predicate!($($b)*)))
+    };
+    ($a:ident) => {
+        $a.into()
+    };
+}
+
+#[macro_export]
+macro_rules! preset {
+    () => {
+        vec![]
+    };
+    ($($x:ident)&&*) => {
+        {
+            let mut v = Vec::new();
+            $(
+                v.push($x.into());
+            )*
+            v
+        }
+    };
+}
+
 /// Convert the string `s` to CamelCase.
-fn _camel_case(s: &str) -> String {
+pub fn camel_case(s: &str) -> String {
     let mut output_chars = String::with_capacity(s.len());
 
     let mut capitalize = true;
@@ -30,7 +58,7 @@ fn _camel_case(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::_camel_case as camel_case;
+    use super::camel_case;
 
     #[test]
     fn camel_case_works() {

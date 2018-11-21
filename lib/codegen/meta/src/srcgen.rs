@@ -99,7 +99,7 @@ impl Formatter {
     }
 
     /// Add a comment line.
-    pub fn _comment(&mut self, s: &str) {
+    pub fn comment(&mut self, s: &str) {
         let commented_line = format!("// {}", s);
         self.line(&commented_line);
     }
@@ -302,7 +302,7 @@ match x {
         let mut fmt = Formatter::new();
         fmt.line("Hello line 1");
         fmt.indent_push();
-        fmt._comment("Nested comment");
+        fmt.comment("Nested comment");
         fmt.indent_pop();
         fmt.line("Back home again");
         let expected_lines = vec![

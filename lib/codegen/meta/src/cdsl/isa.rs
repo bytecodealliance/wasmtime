@@ -3,19 +3,22 @@ use cranelift_entity::PrimaryMap;
 use super::regs::{
     RegBank, RegBankBuilder, RegBankIndex, RegClass, RegClassBuilder, RegClassIndex, RegClassProto,
 };
+use super::settings::SettingGroup;
 
 pub struct TargetIsa {
     pub name: &'static str,
     pub reg_banks: PrimaryMap<RegBankIndex, RegBank>,
     pub reg_classes: PrimaryMap<RegClassIndex, RegClass>,
+    pub settings: SettingGroup,
 }
 
 impl TargetIsa {
-    pub fn new(name: &'static str) -> Self {
+    pub fn new(name: &'static str, settings: SettingGroup) -> Self {
         Self {
             name,
             reg_banks: PrimaryMap::new(),
             reg_classes: PrimaryMap::new(),
+            settings,
         }
     }
 }
@@ -25,9 +28,9 @@ pub struct TargetIsaBuilder {
 }
 
 impl TargetIsaBuilder {
-    pub fn new(name: &'static str) -> Self {
+    pub fn new(name: &'static str, settings: SettingGroup) -> Self {
         Self {
-            isa: TargetIsa::new(name),
+            isa: TargetIsa::new(name, settings),
         }
     }
 

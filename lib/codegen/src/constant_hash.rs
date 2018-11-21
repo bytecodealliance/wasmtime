@@ -56,7 +56,7 @@ pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(
 }
 
 /// A primitive hash function for matching opcodes.
-/// Must match `lib/codegen/meta-python/constant_hash.py`.
+/// Must match `lib/codegen/meta-python/constant_hash.py` and `lib/codegen/meta/constant_hash.rs`.
 pub fn simple_hash(s: &str) -> usize {
     let mut h: u32 = 5381;
     for c in s.chars() {
