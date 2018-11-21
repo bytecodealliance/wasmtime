@@ -3,6 +3,7 @@
 //! The `srcgen` module contains generic helper routines and classes for
 //! generating source code.
 
+use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
@@ -107,8 +108,13 @@ impl Formatter {
     pub fn doc_comment(&mut self, contents: &str) {
         parse_multiline(contents)
             .iter()
-            .map(|l| format!("/// {}", l))
-            .for_each(|s| self.line(s.as_str()));
+            .map(|l| {
+                if l.len() == 0 {
+                    "///".into()
+                } else {
+                    format!("/// {}", l)
+                }
+            }).for_each(|s| self.line(s.as_str()));
     }
 
     /// Add a match expression.
@@ -156,10 +162,11 @@ fn parse_multiline(s: &str) -> Vec<String> {
     let expanded_tab = format!("{:-1$}", " ", SHIFTWIDTH);
     let lines: Vec<String> = s.lines().map(|l| l.replace("\t", &expanded_tab)).collect();
 
-    // Determine minimum indentation, ignoring the first line.
+    // Determine minimum indentation, ignoring the first line and empty lines.
     let indent = lines
         .iter()
         .skip(1)
+        .filter(|l| !l.trim().is_empty())
         .map(|l| l.len() - l.trim_left().len())
         .min();
 
@@ -174,8 +181,9 @@ fn parse_multiline(s: &str) -> Vec<String> {
 
     // Remove trailing whitespace from other lines.
     let mut other_lines = if let Some(indent) = indent {
+        // Note that empty lines may have fewer than `indent` chars.
         lines_iter
-            .map(|l| &l[indent..])
+            .map(|l| &l[cmp::min(indent, l.len())..])
             .map(|l| l.trim_right())
             .map(|l| l.to_string())
             .collect::<Vec<_>>()
@@ -347,6 +355,26 @@ match x {
         let mut fmt = Formatter::new();
         fmt.doc_comment("documentation\nis\ngood");
         let expected_lines = vec!["/// documentation\n", "/// is\n", "/// good\n"];
+        assert_eq!(fmt.lines, expected_lines);
+    }
+
+    #[test]
+    fn fmt_can_add_doc_comments_with_empty_lines() {
+        let mut fmt = Formatter::new();
+        fmt.doc_comment(
+            r#"documentation
+        can be really good.
+
+        If you stick to writing it.
+"#,
+        );
+        let expected_lines = from_raw_string(
+            r#"
+/// documentation
+/// can be really good.
+///
+/// If you stick to writing it."#,
+        );
         assert_eq!(fmt.lines, expected_lines);
     }
 }
