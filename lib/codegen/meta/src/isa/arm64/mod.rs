@@ -1,8 +1,14 @@
 use cdsl::isa::{TargetIsa, TargetIsaBuilder};
 use cdsl::regs::{RegBankBuilder, RegClassBuilder};
+use cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
-pub fn define() -> TargetIsa {
-    let mut isa = TargetIsaBuilder::new("arm64");
+fn define_settings(_shared: &SettingGroup) -> SettingGroup {
+    let setting = SettingGroupBuilder::new("arm64");
+    setting.finish()
+}
+
+pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
+    let mut isa = TargetIsaBuilder::new("arm64", define_settings(shared_settings));
 
     // The `x31` regunit serves as the stack pointer / zero register depending on context. We
     // reserve it and don't model the difference.

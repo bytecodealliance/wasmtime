@@ -340,7 +340,7 @@ class SettingGroup(object):
         precomputed predicates.
 
         This is the size of the byte-sized settings plus all the numbered
-        predcate bits rounded up to a whole number of bytes.
+        predicate bits rounded up to a whole number of bytes.
         """
         return self.boolean_offset + (len(self.predicate_number) + 7) // 8
 

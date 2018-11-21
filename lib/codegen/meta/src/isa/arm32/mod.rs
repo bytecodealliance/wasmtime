@@ -1,8 +1,14 @@
 use cdsl::isa::{TargetIsa, TargetIsaBuilder};
 use cdsl::regs::{RegBankBuilder, RegClassBuilder};
+use cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
-pub fn define() -> TargetIsa {
-    let mut isa = TargetIsaBuilder::new("arm32");
+fn define_settings(_shared: &SettingGroup) -> SettingGroup {
+    let setting = SettingGroupBuilder::new("arm32");
+    setting.finish()
+}
+
+pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
+    let mut isa = TargetIsaBuilder::new("arm32", define_settings(shared_settings));
 
     let builder = RegBankBuilder::new("FloatRegs", "s")
         .units(64)

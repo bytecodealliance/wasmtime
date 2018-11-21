@@ -1,4 +1,5 @@
 use cdsl::isa::TargetIsa;
+use cdsl::settings::SettingGroup;
 use std::fmt;
 
 mod arm32;
@@ -61,11 +62,11 @@ impl fmt::Display for Isa {
     }
 }
 
-pub fn define_all() -> Vec<TargetIsa> {
+pub fn define_all(shared_settings: &SettingGroup) -> Vec<TargetIsa> {
     vec![
-        riscv::define(),
-        arm32::define(),
-        arm64::define(),
-        x86::define(),
+        riscv::define(shared_settings),
+        arm32::define(shared_settings),
+        arm64::define(shared_settings),
+        x86::define(shared_settings),
     ]
 }
