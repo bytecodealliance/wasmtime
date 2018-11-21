@@ -3,7 +3,7 @@
 //! The `srcgen` module contains generic helper routines and classes for
 //! generating source code.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path;
@@ -112,8 +112,29 @@ impl Formatter {
     }
 
     /// Add a match expression.
-    fn _add_match(&mut self, _m: &_Match) {
-        unimplemented!();
+    pub fn add_match(&mut self, m: Match) {
+        self.line(&format!("match {} {{", m.expr));
+        self.indent(|fmt| {
+            for ((fields, body), names) in m.arms.iter() {
+                // name { fields } | name { fields } => { body }
+                let conditions: Vec<String> = names
+                    .iter()
+                    .map(|name| {
+                        if fields.len() > 0 {
+                            format!("{} {{ {} }}", name, fields.join(", "))
+                        } else {
+                            name.clone()
+                        }
+                    }).collect();
+                let lhs = conditions.join(" | ");
+                fmt.line(&format!("{} => {{", lhs));
+                fmt.indent(|fmt| {
+                    fmt.line(body);
+                });
+                fmt.line("}");
+            }
+        });
+        self.line("}");
     }
 }
 
@@ -186,44 +207,78 @@ fn parse_multiline(s: &str) -> Vec<String> {
 /// expression, automatically deduplicating overlapping identical arms.
 ///
 /// Note that this class is ignorant of Rust types, and considers two fields
-/// with the same name to be equivalent. A BTreeMap is used to represent the
-/// arms in order to make the order deterministic.
-struct _Match<'a> {
-    _expr: &'a str,
-    arms: BTreeMap<(Vec<&'a str>, &'a str), HashSet<&'a str>>,
+/// with the same name to be equivalent. BTreeMap/BTreeSet are used to
+/// represent the arms in order to make the order deterministic.
+pub struct Match {
+    expr: String,
+    arms: BTreeMap<(Vec<String>, String), BTreeSet<String>>,
 }
 
-impl<'a> _Match<'a> {
+impl Match {
     /// Create a new match statement on `expr`.
-    fn _new(expr: &'a str) -> Self {
+    pub fn new<T: Into<String>>(expr: T) -> Self {
         Self {
-            _expr: expr,
+            expr: expr.into(),
             arms: BTreeMap::new(),
         }
     }
 
     /// Add an arm to the Match statement.
-    fn _arm(&mut self, name: &'a str, fields: Vec<&'a str>, body: &'a str) {
+    pub fn arm<T: Into<String>>(&mut self, name: T, fields: Vec<T>, body: T) {
         // let key = (fields, body);
-        let match_arm = self.arms.entry((fields, body)).or_insert_with(HashSet::new);
-        match_arm.insert(name);
+        let body = body.into();
+        let fields = fields.into_iter().map(|x| x.into()).collect();
+        let match_arm = self
+            .arms
+            .entry((fields, body))
+            .or_insert_with(BTreeSet::new);
+        match_arm.insert(name.into());
     }
 }
 
 #[cfg(test)]
 mod srcgen_tests {
-    use super::_Match;
     use super::parse_multiline;
     use super::Formatter;
+    use super::Match;
+
+    fn from_raw_string(s: impl Into<String>) -> Vec<String> {
+        s.into()
+            .trim()
+            .split("\n")
+            .into_iter()
+            .map(|x| format!("{}\n", x))
+            .collect()
+    }
 
     #[test]
     fn adding_arms_works() {
-        let mut m = _Match::_new("x");
-        m._arm("Orange", vec!["a", "b"], "some body");
-        m._arm("Yellow", vec!["a", "b"], "some body");
-        m._arm("Green", vec!["a", "b"], "different body");
-        m._arm("Blue", vec!["x", "y"], "some body");
+        let mut m = Match::new("x");
+        m.arm("Orange", vec!["a", "b"], "some body");
+        m.arm("Yellow", vec!["a", "b"], "some body");
+        m.arm("Green", vec!["a", "b"], "different body");
+        m.arm("Blue", vec!["x", "y"], "some body");
         assert_eq!(m.arms.len(), 3);
+
+        let mut fmt = Formatter::new();
+        fmt.add_match(m);
+
+        let expected_lines = from_raw_string(
+            r#"
+match x {
+    Green { a, b } => {
+        different body
+    }
+    Orange { a, b } | Yellow { a, b } => {
+        some body
+    }
+    Blue { x, y } => {
+        some body
+    }
+}
+        "#,
+        );
+        assert_eq!(fmt.lines, expected_lines);
     }
 
     #[test]
