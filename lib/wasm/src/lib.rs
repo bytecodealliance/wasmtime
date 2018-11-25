@@ -66,8 +66,8 @@ pub use environ::{
 pub use func_translator::FuncTranslator;
 pub use module_translator::translate_module;
 pub use translation_utils::{
-    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
-    SignatureIndex, Table, TableIndex,
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
+    GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 
 #[cfg(not(feature = "std"))]
