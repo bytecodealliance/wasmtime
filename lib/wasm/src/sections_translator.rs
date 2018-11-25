@@ -60,58 +60,61 @@ pub fn parse_import_section<'data>(
     environ: &mut ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
     for entry in imports {
-        match entry? {
-            Import {
-                module,
-                field,
-                ty: ImportSectionEntryType::Function(sig),
-            } => {
-                // The input has already been validated, so we should be able to
-                // assume valid UTF-8 and use `from_utf8_unchecked` if performance
-                // becomes a concern here.
-                let module_name = from_utf8(module).unwrap();
-                let field_name = from_utf8(field).unwrap();
+        let import = entry?;
+
+        // The input has already been validated, so we should be able to
+        // assume valid UTF-8 and use `from_utf8_unchecked` if performance
+        // becomes a concern here.
+        let module_name = from_utf8(import.module).unwrap();
+        let field_name = from_utf8(import.field).unwrap();
+
+        match import.ty {
+            ImportSectionEntryType::Function(sig) => {
                 environ.declare_func_import(
                     SignatureIndex::new(sig as usize),
                     module_name,
                     field_name,
                 );
             }
-            Import {
-                ty:
-                    ImportSectionEntryType::Memory(MemoryType {
-                        limits: ref memlimits,
+            ImportSectionEntryType::Memory(MemoryType {
+                limits: ref memlimits,
+                shared,
+            }) => {
+                environ.declare_memory_import(
+                    Memory {
+                        pages_count: memlimits.initial as usize,
+                        maximum: memlimits.maximum.map(|x| x as usize),
                         shared,
-                    }),
-                ..
-            } => {
-                environ.declare_memory(Memory {
-                    pages_count: memlimits.initial as usize,
-                    maximum: memlimits.maximum.map(|x| x as usize),
-                    shared,
-                });
+                    },
+                    module_name,
+                    field_name,
+                );
             }
-            Import {
-                ty: ImportSectionEntryType::Global(ref ty),
-                ..
-            } => {
-                environ.declare_global(Global {
-                    ty: type_to_type(ty.content_type).unwrap(),
-                    mutability: ty.mutable,
-                    initializer: GlobalInit::Import(),
-                });
+            ImportSectionEntryType::Global(ref ty) => {
+                environ.declare_global_import(
+                    Global {
+                        ty: type_to_type(ty.content_type).unwrap(),
+                        mutability: ty.mutable,
+                        initializer: GlobalInit::Import(),
+                    },
+                    module_name,
+                    field_name,
+                );
             }
-            Import {
-                ty: ImportSectionEntryType::Table(ref tab),
-                ..
-            } => environ.declare_table(Table {
-                ty: match type_to_type(tab.element_type) {
-                    Ok(t) => TableElementType::Val(t),
-                    Err(()) => TableElementType::Func(),
-                },
-                size: tab.limits.initial as usize,
-                maximum: tab.limits.maximum.map(|x| x as usize),
-            }),
+            ImportSectionEntryType::Table(ref tab) => {
+                environ.declare_table_import(
+                    Table {
+                        ty: match type_to_type(tab.element_type) {
+                            Ok(t) => TableElementType::Val(t),
+                            Err(()) => TableElementType::Func(),
+                        },
+                        size: tab.limits.initial as usize,
+                        maximum: tab.limits.maximum.map(|x| x as usize),
+                    },
+                    module_name,
+                    field_name,
+                );
+            }
         }
     }
     Ok(())
