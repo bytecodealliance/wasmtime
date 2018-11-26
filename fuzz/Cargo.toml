@@ -14,7 +14,10 @@ cranelift-codegen = "0.24.0"
 cranelift-wasm = "0.24.0"
 cranelift-native = "0.24.0"
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
-wasmparser = { version = "0.17.2", default-features = false }
+wasmparser = { version = "0.22.0", default-features = false }
+
+[features]
+default = ["wasmparser/core"]
 
 # Prevent this from interfering with workspaces
 [workspace]
