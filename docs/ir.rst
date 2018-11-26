@@ -460,6 +460,7 @@ preamble`:
 
 .. autoinst:: call
 .. autoinst:: x_return
+.. autoinst:: fallthrough_return
 
 This simple example illustrates direct function calls and signatures:
 
