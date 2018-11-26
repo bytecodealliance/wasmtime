@@ -6,10 +6,12 @@ use instance::Instance;
 use memory::LinearMemory;
 use region::protect;
 use region::Protection;
+use signalhandlers::{ensure_eager_signal_handlers, ensure_full_signal_handlers, TrapContext};
 use std::mem::transmute;
 use std::ptr::{self, write_unaligned};
 use std::string::String;
 use std::vec::Vec;
+use traphandlers::call_wasm;
 use wasmtime_environ::{
     compile_module, Compilation, Export, Module, ModuleTranslation, Relocation, RelocationTarget,
 };
@@ -173,13 +175,25 @@ pub fn finish_instantiation(
                                        .defined_func_index(start_index)
                                        .expect("imported start functions not supported yet")];
 
+        let mut traps = TrapContext {
+            triedToInstallSignalHandlers: false,
+            haveSignalHandlers: false,
+        };
+
         // Rather than writing inline assembly to jump to the code region, we use the fact that
         // the Rust ABI for calling a function with no arguments and no return matches the one of
         // the generated code. Thanks to this, we can transmute the code region into a first-class
         // Rust function and call it.
         unsafe {
+            // Ensure that our signal handlers are ready for action.
+            ensure_eager_signal_handlers();
+            ensure_full_signal_handlers(&mut traps);
+            if !traps.haveSignalHandlers {
+                return Err("failed to install signal handlers".to_string());
+            }
+
             let start_func = transmute::<_, fn(*const *mut u8)>(code_buf.as_ptr());
-            start_func(vmctx.as_ptr());
+            call_wasm(|| start_func(vmctx.as_ptr()))?;
         }
     }
 
@@ -204,13 +218,25 @@ pub fn execute(
                                    .defined_func_index(fn_index)
                                    .expect("imported start functions not supported yet")];
 
+    let mut traps = TrapContext {
+        triedToInstallSignalHandlers: false,
+        haveSignalHandlers: false,
+    };
+
     // Rather than writing inline assembly to jump to the code region, we use the fact that
     // the Rust ABI for calling a function with no arguments and no return matches the one of
     // the generated code. Thanks to this, we can transmute the code region into a first-class
     // Rust function and call it.
     unsafe {
+        // Ensure that our signal handlers are ready for action.
+        ensure_eager_signal_handlers();
+        ensure_full_signal_handlers(&mut traps);
+        if !traps.haveSignalHandlers {
+            return Err("failed to install signal handlers".to_string());
+        }
+
         let func = transmute::<_, fn(*const *mut u8)>(code_buf.as_ptr());
-        func(vmctx.as_ptr());
+        call_wasm(|| func(vmctx.as_ptr()))?;
     }
     Ok(())
 }
