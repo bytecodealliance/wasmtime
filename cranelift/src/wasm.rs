@@ -1,7 +1,7 @@
 //! CLI tool to use the functions provided by the [cranelift-wasm](../cranelift_wasm/index.html)
 //! crate.
 //!
-//! Reads Wasm binary files, translates the functions' code to Cranelift IR.
+//! Reads Wasm binary/text files, translates the functions' code to Cranelift IR.
 #![cfg_attr(
     feature = "cargo-clippy",
     allow(too_many_arguments, cyclomatic_complexity)
