@@ -15,6 +15,11 @@ cranelift-entity = "0.24.0"
 cranelift-wasm = "0.24.0"
 memoffset = "0.2.1"
 
+[features]
+default = ["std"]
+std = ["cranelift-codegen/std", "cranelift-wasm/std"]
+core = ["cranelift-codegen/core", "cranelift-wasm/core"]
+
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/wasmtime" }

@@ -7,6 +7,7 @@ description = "JIT-style execution for WebAsssembly code in Cranelift"
 categories = ["wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
 
 [dependencies]
 cranelift-codegen = "0.24.0"
@@ -15,3 +16,12 @@ cranelift-wasm = "0.24.0"
 region = "1.0.0"
 wasmtime-environ = { path = "../environ" }
 memmap = "0.7.0"
+
+[features]
+default = ["std"]
+std = ["cranelift-codegen/std", "cranelift-wasm/std"]
+core = ["cranelift-codegen/core", "cranelift-wasm/core", "wasmtime-environ/core"]
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "CraneStation/wasmtime" }

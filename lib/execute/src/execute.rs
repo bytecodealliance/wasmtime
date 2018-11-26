@@ -8,6 +8,8 @@ use region::protect;
 use region::Protection;
 use std::mem::transmute;
 use std::ptr::{self, write_unaligned};
+use std::string::String;
+use std::vec::Vec;
 use wasmtime_environ::{
     compile_module, Compilation, Module, ModuleTranslation, Relocation, RelocationTarget,
 };

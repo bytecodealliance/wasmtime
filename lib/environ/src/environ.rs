@@ -13,6 +13,8 @@ use cranelift_wasm::{
 };
 use module::{DataInitializer, Export, LazyContents, Module, TableElements};
 use std::mem;
+use std::string::String;
+use std::vec::Vec;
 use vmcontext;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
