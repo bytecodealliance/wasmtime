@@ -128,7 +128,7 @@ fn get_vec(argument_vec: Option<clap::Values>) -> Vec<String> {
 
 fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
     let about_str = match cmd {
-        "wasm" => "Compiles Cranelift IR into target language",
+        "wasm" => "Compiles Wasm binary/text into Cranelift IR and then into target language",
         "compile" => "Compiles Cranelift IR into target language",
         _ => panic!("Invalid command"),
     };
