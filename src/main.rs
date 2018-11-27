@@ -44,6 +44,9 @@ extern crate wasmtime_execute;
 extern crate serde_derive;
 extern crate tempdir;
 
+#[cfg(test)]
+extern crate wabt;
+
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
@@ -214,4 +217,40 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use cranelift_codegen::settings;
+    use cranelift_codegen::settings::Configurable;
+    use std::path::PathBuf;
+    use wabt;
+    use wasmtime_environ::{Module, ModuleEnvironment};
+
+    const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
+
+    /// Simple test reading a wasm-file and translating to binary representation.
+    #[test]
+    fn test_environ_translate() {
+        let path = PathBuf::from(PATH_MODULE_RS2WASM_ADD_FUNC);
+        let wat_data = super::read_to_end(path).unwrap();
+        assert!(wat_data.len() > 0);
+
+        let data = wabt::wat2wasm(wat_data).expect("expecting valid wat-file");
+        assert!(data.len() > 0);
+
+        let mut flag_builder = settings::builder();
+        flag_builder.enable("enable_verifier").unwrap();
+
+        let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
+            panic!("host machine is not a supported target");
+        });
+        let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+
+        let mut module = Module::new();
+        let environ = ModuleEnvironment::new(&*isa, &mut module);
+
+        let translation = environ.translate(&data);
+        assert!(translation.is_ok());
+    }
 }
