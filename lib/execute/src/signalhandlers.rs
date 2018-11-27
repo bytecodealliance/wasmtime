@@ -14,15 +14,18 @@ struct InstallState {
     success: bool,
 }
 
+impl InstallState {
+    fn new() -> Self {
+        Self {
+            tried: false,
+            success: false,
+        }
+    }
+}
+
 lazy_static! {
-    static ref EAGER_INSTALL_STATE: RwLock<InstallState> = RwLock::new(InstallState {
-        tried: false,
-        success: false
-    });
-    static ref LAZY_INSTALL_STATE: RwLock<InstallState> = RwLock::new(InstallState {
-        tried: false,
-        success: false
-    });
+    static ref EAGER_INSTALL_STATE: RwLock<InstallState> = RwLock::new(InstallState::new());
+    static ref LAZY_INSTALL_STATE: RwLock<InstallState> = RwLock::new(InstallState::new());
 }
 
 /// This function performs the low-overhead signal handler initialization that we
