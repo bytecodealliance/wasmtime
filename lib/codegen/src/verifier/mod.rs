@@ -861,18 +861,13 @@ impl<'a> Verifier<'a> {
                         return fatal!(
                             errors,
                             loc_inst,
-                            "uses value from non-dominating {}",
+                            "uses value {} from non-dominating {}",
+                            v,
                             def_inst
                         );
                     }
                     if def_inst == loc_inst {
-                        return fatal!(
-                            errors,
-                            loc_inst,
-                            "uses value from itself {},  {}",
-                            def_inst,
-                            loc_inst
-                        );
+                        return fatal!(errors, loc_inst, "uses value {} from itself", v);
                     }
                 }
             }
