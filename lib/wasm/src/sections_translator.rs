@@ -19,8 +19,8 @@ use translation_utils::{
 use wasmparser::{
     self, CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
     ExportSectionReader, ExternalKind, FuncType, FunctionSectionReader, GlobalSectionReader,
-    GlobalType, Import, ImportSectionEntryType, ImportSectionReader, MemorySectionReader,
-    MemoryType, Operator, TableSectionReader, TypeSectionReader,
+    GlobalType, ImportSectionEntryType, ImportSectionReader, MemorySectionReader, MemoryType,
+    Operator, TableSectionReader, TypeSectionReader,
 };
 
 /// Parses the Type section of the wasm module.

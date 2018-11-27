@@ -253,7 +253,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::BrIf { relative_depth } => translate_br_if(relative_depth, builder, state),
         Operator::BrTable { table } => {
-            let (depths, default) = table.read_table();
+            let (depths, default) = table.read_table()?;
             let mut min_depth = default;
             for depth in &*depths {
                 if *depth < min_depth {
