@@ -592,22 +592,17 @@ MachExceptionHandlerThread(void *arg)
 
 #else  // If not Windows or Mac, assume Unix
 
-#ifdef __mips__
-static const uint32_t kWasmTrapSignal = SIGFPE;
-#else
-static const uint32_t kWasmTrapSignal = SIGILL;
-#endif
-
-static struct sigaction sPrevSEGVHandler;
+static struct sigaction sPrevSIGSEGVHandler;
 static struct sigaction sPrevSIGBUSHandler;
-static struct sigaction sPrevWasmTrapHandler;
+static struct sigaction sPrevSIGILLHandler;
+static struct sigaction sPrevSIGFPEHandler;
 
 static void
 WasmTrapHandler(int signum, siginfo_t* info, void* context)
 {
     if (!sAlreadyHandlingTrap) {
         AutoHandlingTrap aht;
-        assert(signum == SIGSEGV || signum == SIGBUS || signum == kWasmTrapSignal);
+        assert(signum == SIGSEGV || signum == SIGBUS || signum == SIGFPE || signum == SIGILL);
         if (HandleTrap(static_cast<CONTEXT*>(context))) {
             return;
         }
@@ -615,9 +610,10 @@ WasmTrapHandler(int signum, siginfo_t* info, void* context)
 
     struct sigaction* previousSignal = nullptr;
     switch (signum) {
-      case SIGSEGV: previousSignal = &sPrevSEGVHandler; break;
+      case SIGSEGV: previousSignal = &sPrevSIGSEGVHandler; break;
       case SIGBUS: previousSignal = &sPrevSIGBUSHandler; break;
-      case kWasmTrapSignal: previousSignal = &sPrevWasmTrapHandler; break;
+      case SIGFPE: previousSignal = &sPrevSIGFPEHandler; break;
+      case SIGILL: previousSignal = &sPrevSIGILLHandler; break;
     }
     assert(previousSignal);
 
@@ -696,8 +692,8 @@ EnsureEagerSignalHandlers()
     faultHandler.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
     faultHandler.sa_sigaction = WasmTrapHandler;
     sigemptyset(&faultHandler.sa_mask);
-    if (sigaction(SIGSEGV, &faultHandler, &sPrevSEGVHandler)) {
-        perror("unable to install segv handler");
+    if (sigaction(SIGSEGV, &faultHandler, &sPrevSIGSEGVHandler)) {
+        perror("unable to install SIGSEGV handler");
         abort();
     }
 
@@ -708,21 +704,36 @@ EnsureEagerSignalHandlers()
     busHandler.sa_sigaction = WasmTrapHandler;
     sigemptyset(&busHandler.sa_mask);
     if (sigaction(SIGBUS, &busHandler, &sPrevSIGBUSHandler)) {
-        perror("unable to install sigbus handler");
+        perror("unable to install SIGBUS handler");
         abort();
     }
 # endif
 
-    // Install a handler to handle the instructions that are emitted to implement
-    // wasm traps.
-    struct sigaction trapHandler;
-    trapHandler.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
-    trapHandler.sa_sigaction = WasmTrapHandler;
-    sigemptyset(&trapHandler.sa_mask);
-    if (sigaction(kWasmTrapSignal, &trapHandler, &sPrevWasmTrapHandler)) {
-        perror("unable to install wasm trap handler");
+# if !defined(__mips__)
+    // Wasm traps for MIPS currently only raise integer overflow fp exception.
+    struct sigaction illHandler;
+    illHandler.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
+    illHandler.sa_sigaction = WasmTrapHandler;
+    sigemptyset(&illHandler.sa_mask);
+    if (sigaction(SIGILL, &illHandler, &sPrevSIGILLHandler)) {
+        perror("unable to install wasm SIGILL handler");
         abort();
     }
+# endif
+
+# if defined(__i386__) || defined(__x86_64__) || defined(__mips__)
+    // x86 uses SIGFPE to report division by zero, and wasm traps for MIPS
+    // currently raise integer overflow fp exception.
+    struct sigaction fpeHandler;
+    fpeHandler.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
+    fpeHandler.sa_sigaction = WasmTrapHandler;
+    sigemptyset(&fpeHandler.sa_mask);
+    if (sigaction(SIGFPE, &fpeHandler, &sPrevSIGFPEHandler)) {
+        perror("unable to install wasm SIGFPE handler");
+        abort();
+    }
+# endif
+
 #endif
 
     return true;
