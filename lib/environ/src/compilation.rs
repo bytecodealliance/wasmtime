@@ -9,6 +9,8 @@ use cranelift_codegen::Context;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
 use environ::{get_func_name, ModuleTranslation};
+use std::string::{String, ToString};
+use std::vec::Vec;
 
 /// The result of compiling a WebAssemby module's functions.
 #[derive(Debug)]

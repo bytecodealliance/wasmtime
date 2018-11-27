@@ -7,6 +7,8 @@ use cranelift_wasm::{
     TableIndex,
 };
 use std::collections::HashMap;
+use std::string::String;
+use std::vec::Vec;
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug)]

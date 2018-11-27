@@ -6,6 +6,7 @@ use cranelift_entity::EntityRef;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
 use memory::LinearMemory;
+use std::vec::Vec;
 use wasmtime_environ::{Compilation, DataInitializer, Module, TableElements};
 
 /// An Instance of a WebAssemby module.

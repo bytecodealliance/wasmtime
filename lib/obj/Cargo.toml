@@ -8,7 +8,7 @@ categories = ["wasm"]
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
-cranelift-codegen = "0.24.0"
-cranelift-entity = "0.24.0"
+cranelift-codegen = "0.25.0"
+cranelift-entity = "0.25.0"
 wasmtime-environ = { path = "../environ" }
 faerie = "0.6.0"
