@@ -209,8 +209,8 @@ fn execute_by_index(
     };
 
     // Rather than writing inline assembly to jump to the code region, we use the fact that
-    // the Rust ABI for calling a function with no arguments and no return matches the one of
-    // the generated code. Thanks to this, we can transmute the code region into a first-class
+    // the Rust ABI for calling a function with no arguments and no return values matches the one
+    // of the generated code. Thanks to this, we can transmute the code region into a first-class
     // Rust function and call it.
     unsafe {
         // Ensure that our signal handlers are ready for action.
