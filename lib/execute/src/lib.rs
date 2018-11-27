@@ -41,7 +41,7 @@ mod execute;
 mod instance;
 mod memory;
 
-pub use execute::{compile_and_link_module, execute};
+pub use execute::{compile_and_link_module, execute, finish_instantiation};
 pub use instance::Instance;
 
 #[cfg(not(feature = "std"))]
