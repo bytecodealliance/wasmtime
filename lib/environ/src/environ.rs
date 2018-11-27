@@ -34,9 +34,6 @@ pub struct ModuleEnvironment<'data, 'module> {
 
     /// References to information to be decoded later.
     pub lazy: LazyContents<'data>,
-
-    /// The ISA's target front-end configuration.
-    frontend_config: isa::TargetFrontendConfig,
 }
 
 impl<'data, 'module> ModuleEnvironment<'data, 'module> {
@@ -46,7 +43,6 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
             isa,
             module,
             lazy: LazyContents::new(),
-            frontend_config: isa.frontend_config(),
         }
     }
 
@@ -148,8 +144,8 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         get_func_name(func_index)
     }
 
-    fn target_config(&self) -> &isa::TargetFrontendConfig {
-        &self.frontend_config
+    fn target_config(&self) -> isa::TargetFrontendConfig {
+        self.isa.frontend_config()
     }
 
     fn declare_signature(&mut self, sig: &ir::Signature) {
@@ -191,12 +187,20 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         self.module.functions[func_index]
     }
 
+    fn declare_global_import(&mut self, _global: Global, _module: &str, _field: &str) {
+        unimplemented!("imported globals");
+    }
+
     fn declare_global(&mut self, global: Global) {
         self.module.globals.push(global);
     }
 
     fn get_global(&self, global_index: GlobalIndex) -> &Global {
         &self.module.globals[global_index]
+    }
+
+    fn declare_table_import(&mut self, _table: Table, _module: &str, _field: &str) {
+        unimplemented!("imported tables");
     }
 
     fn declare_table(&mut self, table: Table) {
@@ -217,6 +221,10 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
             offset,
             elements,
         });
+    }
+
+    fn declare_memory_import(&mut self, _memory: Memory, _module: &str, _field: &str) {
+        unimplemented!("imported memories");
     }
 
     fn declare_memory(&mut self, memory: Memory) {

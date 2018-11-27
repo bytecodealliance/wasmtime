@@ -10,9 +10,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
 [dependencies]
-cranelift-codegen = "0.24.0"
-cranelift-entity = "0.24.0"
-cranelift-wasm = "0.24.0"
+cranelift-codegen = "0.25.0"
+cranelift-entity = "0.25.0"
+cranelift-wasm = "0.25.0"
 region = "1.0.0"
 wasmtime-environ = { path = "../environ" }
 memmap = "0.7.0"
