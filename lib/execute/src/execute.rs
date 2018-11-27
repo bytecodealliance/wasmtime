@@ -1,15 +1,17 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::{DefinedFuncIndex, MemoryIndex, TableIndex};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, MemoryIndex, TableIndex};
 use instance::Instance;
 use memory::LinearMemory;
 use region::protect;
 use region::Protection;
+use signalhandlers::{ensure_eager_signal_handlers, ensure_full_signal_handlers, TrapContext};
 use std::mem::transmute;
 use std::ptr::{self, write_unaligned};
 use std::string::String;
 use std::vec::Vec;
+use traphandlers::call_wasm;
 use wasmtime_environ::{
     compile_module, Compilation, Export, Module, ModuleTranslation, Relocation, RelocationTarget,
 };
@@ -165,22 +167,10 @@ pub fn finish_instantiation(
         .map(LinearMemory::base_addr)
         .collect::<Vec<_>>();
 
-    let vmctx = make_vmctx(instance, &mut mem_base_addrs);
+    let mut vmctx = make_vmctx(instance, &mut mem_base_addrs);
 
     if let Some(start_index) = module.start_func {
-        let code_buf =
-            &compilation.functions[module
-                                       .defined_func_index(start_index)
-                                       .expect("imported start functions not supported yet")];
-
-        // Rather than writing inline assembly to jump to the code region, we use the fact that
-        // the Rust ABI for calling a function with no arguments and no return matches the one of
-        // the generated code. Thanks to this, we can transmute the code region into a first-class
-        // Rust function and call it.
-        unsafe {
-            let start_func = transmute::<_, fn(*const *mut u8)>(code_buf.as_ptr());
-            start_func(vmctx.as_ptr());
-        }
+        execute_by_index(module, compilation, &mut vmctx, start_index)?;
     }
 
     Ok(vmctx)
@@ -199,18 +189,39 @@ pub fn execute(
         None => return Err(format!("no export named \"{}\"", function)),
     };
 
+    execute_by_index(module, compilation, vmctx, fn_index)
+}
+
+fn execute_by_index(
+    module: &Module,
+    compilation: &Compilation,
+    vmctx: &mut Vec<*mut u8>,
+    fn_index: FuncIndex,
+) -> Result<(), String> {
     let code_buf =
         &compilation.functions[module
                                    .defined_func_index(fn_index)
                                    .expect("imported start functions not supported yet")];
 
+    let mut traps = TrapContext {
+        triedToInstallSignalHandlers: false,
+        haveSignalHandlers: false,
+    };
+
     // Rather than writing inline assembly to jump to the code region, we use the fact that
-    // the Rust ABI for calling a function with no arguments and no return matches the one of
-    // the generated code. Thanks to this, we can transmute the code region into a first-class
+    // the Rust ABI for calling a function with no arguments and no return values matches the one
+    // of the generated code. Thanks to this, we can transmute the code region into a first-class
     // Rust function and call it.
     unsafe {
+        // Ensure that our signal handlers are ready for action.
+        ensure_eager_signal_handlers();
+        ensure_full_signal_handlers(&mut traps);
+        if !traps.haveSignalHandlers {
+            return Err("failed to install signal handlers".to_string());
+        }
+
         let func = transmute::<_, fn(*const *mut u8)>(code_buf.as_ptr());
-        func(vmctx.as_ptr());
+        call_wasm(|| func(vmctx.as_mut_ptr()))?;
     }
     Ok(())
 }

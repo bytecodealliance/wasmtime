@@ -36,13 +36,19 @@ extern crate wasmtime_environ;
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
+#[macro_use]
+extern crate lazy_static;
+extern crate libc;
 
 mod execute;
 mod instance;
 mod memory;
+mod signalhandlers;
+mod traphandlers;
 
 pub use execute::{compile_and_link_module, execute, finish_instantiation};
 pub use instance::Instance;
+pub use traphandlers::{call_wasm, LookupCodeSegment, RecordTrap, Unwind};
 
 #[cfg(not(feature = "std"))]
 mod std {
