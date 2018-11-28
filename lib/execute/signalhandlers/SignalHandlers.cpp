@@ -329,7 +329,7 @@ static void
 SetContextPC(CONTEXT* context, const uint8_t* pc)
 {
 #ifdef PC_sig
-    PC_sig(context) = reinterpret_cast<greg_t>(pc);
+    PC_sig(context) = reinterpret_cast<uintptr_t>(pc);
 #else
     abort();
 #endif
@@ -339,7 +339,7 @@ static const uint8_t*
 ContextToPC(CONTEXT* context)
 {
 #ifdef PC_sig
-    return reinterpret_cast<const uint8_t*>(PC_sig(context));
+    return reinterpret_cast<const uint8_t*>(static_cast<uintptr_t>(PC_sig(context)));
 #else
     abort();
 #endif
