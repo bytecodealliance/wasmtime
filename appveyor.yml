@@ -19,8 +19,10 @@ install:
   - cargo -V
 build: false
 test_script:
-  - cargo build --verbose --all
-  - cargo test --verbose --all
+  # Add --no-default-features because wabt and disass don't currently build
+  # on appveyor.
+  - cargo build --verbose --all --no-default-features
+  - cargo test --verbose --all --no-default-features
 branches:
   only:
     - master
