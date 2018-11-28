@@ -21,18 +21,7 @@ highlighting some of the differences and similarities. Both projects:
 - Can target multiple ISAs.
 - Can cross-compile by default without rebuilding the code generator.
 
-Cranelift's scope is much smaller than that of LLVM. The classical three main
-parts of a compiler are:
-
-1. The language-dependent front end parses and type-checks the input program.
-2. Common optimizations that are independent of both the input language and the
-   target ISA.
-3. The code generator which depends strongly on the target ISA.
-
-LLVM provides both common optimizations *and* a code generator. Cranelift only
-provides the last part, the code generator. LLVM additionally provides
-infrastructure for building assemblers and disassemblers. Cranelift does not
-handle assembly at all---it only generates binary machine code.
+However, there are also some major differences, described in the following sections.
 
 Intermediate representations
 ============================
@@ -103,7 +92,24 @@ smaller scope.
   is annotated with an assigned ISA register or stack slot.
 
 The Cranelift intermediate representation is similar to LLVM IR, but at a slightly
-lower level of abstraction.
+lower level of abstraction, to allow it to be used all the way through the
+codegen process.
+
+This design tradeoff does mean that Cranelift IR is less friendly for mid-level
+optimizations. Cranelift doesn't currently perform mid-level optimizations,
+however if it should grow to where this becomes important, the vision is that
+Cranelift would add a separate IR layer, or possibly an separate IR, to support
+this. Instead of frontends producing optimizer IR which is then translated to
+codegen IR, Cranelift would have frontends producing codegen IR, which can be
+translated to optimizer IR and back.
+
+This biases the overall system towards fast compilation when mid-level
+optimization is not needed, such as when emitting unoptimized code for or when
+low-level optimizations are sufficient.
+
+And, it removes some constraints in the mid-level optimize IR design space,
+making it more feasible to consider ideas such as using a
+[VSDG-based IR](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-705.pdf).
 
 Program structure
 -----------------
@@ -112,10 +118,15 @@ In LLVM IR, the largest representable unit is the *module* which corresponds
 more or less to a C translation unit. It is a collection of functions and
 global variables that may contain references to external symbols too.
 
-In Cranelift IR, the largest representable unit is the *function*. This is so
-that functions can easily be compiled in parallel without worrying about
-references to shared data structures. Cranelift does not have any
-inter-procedural optimizations like inlining.
+In `Cranelift's IR` <https://cranelift.readthedocs.io/en/latest/ir.html>`_,
+used by the `cranelift-codegen <https://docs.rs/cranelift-codegen/>`_ crate,
+functions are self-contained, allowing them to be compiled independently. At
+this level, there is no explicit module that contains the functions.
+
+Module functionality in Cranelift is provided as an optional library layer, in
+the `cranelift-module <https://docs.rs/cranelift-module/>`_ crate. It provides
+facilities for working with modules, which can contain multiple functions as
+well as data objects, and it links them together.
 
 An LLVM IR function is a graph of *basic blocks*. A Cranelift IR function is a
 graph of *extended basic blocks* that may contain internal branch instructions.
