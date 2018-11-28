@@ -7,7 +7,8 @@ representation](https://cranelift.readthedocs.io/en/latest/ir.html)
 into executable machine code.
 
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
-[![Build Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
+[![Travis Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
+[![Appveyor Status](https://ci.appveyor.com/api/projects/status/oub7wrrb59utuv8x?svg=true)](https://ci.appveyor.com/project/CraneStation/cranelift)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
 ![Minimum rustc 1.30](https://img.shields.io/badge/rustc-1.30+-red.svg)
 
