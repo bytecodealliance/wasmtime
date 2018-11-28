@@ -88,7 +88,7 @@ where
 {
     // In case wasm code calls Rust that panics and unwinds past this point,
     // ensure that JMP_BUFS is unwound to its incoming state.
-    let _ = ScopeGuard::new();
+    let _guard = ScopeGuard::new();
 
     JMP_BUFS.with(|bufs| {
         let mut buf = unsafe { mem::uninitialized() };
