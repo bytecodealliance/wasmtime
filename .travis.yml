@@ -1,5 +1,8 @@
 # Travis CI script. See https://travis-ci.org/ for more info.
 
+os:
+    - linux
+    - osx
 language: rust
 rust:
     # The oldest version we currently support. See
