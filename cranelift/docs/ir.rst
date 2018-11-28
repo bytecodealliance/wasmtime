@@ -352,12 +352,9 @@ condition is satisfied, otherwise execution continues at the following
 instruction in the EBB.
 
 .. autoinst:: jump
-.. autoinst:: fallthrough
 .. autoinst:: brz
 .. autoinst:: brnz
 .. autoinst:: br_icmp
-.. autoinst:: brif
-.. autoinst:: brff
 .. autoinst:: br_table
 
 .. inst:: JT = jump_table [EBB0, EBB1, ..., EBBn]
@@ -384,8 +381,6 @@ is zero.
 .. autoinst:: trap
 .. autoinst:: trapz
 .. autoinst:: trapnz
-.. autoinst:: trapif
-.. autoinst:: trapff
 
 
 Function calls
@@ -803,34 +798,6 @@ load a constant into an SSA value.
 .. autoinst:: f64const
 .. autoinst:: bconst
 
-Live range splitting
---------------------
-
-Cranelift's register allocator assigns each SSA value to a register or a spill
-slot on the stack for its entire live range. Since the live range of an SSA
-value can be quite large, it is sometimes beneficial to split the live range
-into smaller parts.
-
-A live range is split by creating new SSA values that are copies or the
-original value or each other. The copies are created by inserting :inst:`copy`,
-:inst:`spill`, or :inst:`fill` instructions, depending on whether the values
-are assigned to registers or stack slots.
-
-This approach permits SSA form to be preserved throughout the register
-allocation pass and beyond.
-
-.. autoinst:: copy
-.. autoinst:: spill
-.. autoinst:: fill
-
-Register values can be temporarily diverted to other registers by the
-:inst:`regmove` instruction, and to and from stack slots by :inst:`regspill`
-and :inst:`regfill`.
-
-.. autoinst:: regmove
-.. autoinst:: regspill
-.. autoinst:: regfill
-
 Vector operations
 -----------------
 
@@ -988,12 +955,6 @@ represented as a floating point number.
 .. autoinst:: trunc
 .. autoinst:: nearest
 
-CPU flag operations
--------------------
-
-.. autoinst:: trueif
-.. autoinst:: trueff
-
 Conversion operations
 ---------------------
 
@@ -1013,27 +974,6 @@ Conversion operations
 .. autoinst:: fcvt_to_sint_sat
 .. autoinst:: fcvt_from_uint
 .. autoinst:: fcvt_from_sint
-
-Legalization operations
------------------------
-
-These instructions are used as helpers when legalizing types and operations for
-the target ISA.
-
-.. autoinst:: isplit
-.. autoinst:: iconcat
-
-Special register operations
----------------------------
-
-The prologue and epilogue of a function needs to manipulate special registers like the stack
-pointer and the frame pointer. These instructions should not be used in regular code.
-
-.. autoinst:: adjust_sp_down
-.. autoinst:: adjust_sp_up_imm
-.. autoinst:: adjust_sp_down_imm
-.. autoinst:: ifcmp_sp
-.. autoinst:: copy_special
 
 .. _extload-truncstore:
 
@@ -1081,6 +1021,80 @@ Instructions that can only be used by the x86 target ISA.
 .. autoinst:: isa.x86.instructions.bsr
 .. autoinst:: isa.x86.instructions.push
 .. autoinst:: isa.x86.instructions.pop
+
+Codegen implementation instructions
+===================================
+
+Frontends don't need to emit the instructions in this section themselves;
+Cranelift will generate them automatically as needed.
+
+Legalization operations
+-----------------------
+
+These instructions are used as helpers when legalizing types and operations for
+the target ISA.
+
+.. autoinst:: isplit
+.. autoinst:: iconcat
+
+Special register operations
+---------------------------
+
+The prologue and epilogue of a function needs to manipulate special registers like the stack
+pointer and the frame pointer. These instructions should not be used in regular code.
+
+.. autoinst:: adjust_sp_down
+.. autoinst:: adjust_sp_up_imm
+.. autoinst:: adjust_sp_down_imm
+.. autoinst:: ifcmp_sp
+.. autoinst:: copy_special
+
+Low-level control flow operations
+---------------------------------
+
+.. autoinst:: fallthrough
+
+CPU flag operations
+-------------------
+
+These operations are for working with the "flags" registers of some CPU
+architectures.
+
+.. autoinst:: trueif
+.. autoinst:: trueff
+.. autoinst:: trapif
+.. autoinst:: trapff
+.. autoinst:: brif
+.. autoinst:: brff
+
+Live range splitting
+--------------------
+
+Cranelift's register allocator assigns each SSA value to a register or a spill
+slot on the stack for its entire live range. Since the live range of an SSA
+value can be quite large, it is sometimes beneficial to split the live range
+into smaller parts.
+
+A live range is split by creating new SSA values that are copies or the
+original value or each other. The copies are created by inserting :inst:`copy`,
+:inst:`spill`, or :inst:`fill` instructions, depending on whether the values
+are assigned to registers or stack slots.
+
+This approach permits SSA form to be preserved throughout the register
+allocation pass and beyond.
+
+.. autoinst:: copy
+.. autoinst:: spill
+.. autoinst:: fill
+
+Register values can be temporarily diverted to other registers by the
+:inst:`regmove` instruction, and to and from stack slots by :inst:`regspill`
+and :inst:`regfill`.
+
+.. autoinst:: regmove
+.. autoinst:: regspill
+.. autoinst:: regfill
+
 
 Instruction groups
 ==================
