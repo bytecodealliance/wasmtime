@@ -28,11 +28,8 @@ wasmtime-obj = { path = "lib/obj" }
 docopt = "1.0.1"
 serde = "1.0.75"
 serde_derive = "1.0.75"
-tempdir = "*"
 faerie = "0.6.0"
 target-lexicon = { version = "0.2.0", default-features = false }
-
-[dev-dependencies]
 wabt = "0.7"
 
 [workspace]
