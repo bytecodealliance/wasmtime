@@ -196,12 +196,12 @@ pub fn define_label(ctx: &mut Context, label: Label) {
 pub struct StackDepth(u32);
 
 impl StackDepth {
-    pub fn increment(&mut self) {
-        self.0 += 1;
+    pub fn reserve(&mut self, slots: u32) {
+        self.0 += slots;
     }
 
-    pub fn decrement(&mut self) {
-        self.0 -= 1;
+    pub fn free(&mut self, slots: u32) {
+        self.0 -= slots;
     }
 }
 
@@ -216,7 +216,7 @@ pub fn restore_stack_depth(ctx: &mut Context, stack_depth: StackDepth) {
 fn push_i32(ctx: &mut Context, gpr: GPR) {
     // For now, do an actual push (and pop below). In the future, we could
     // do on-the-fly register allocation here.
-    ctx.sp_depth.increment();
+    ctx.sp_depth.reserve(1);
     dynasm!(ctx.asm
         ; push Rq(gpr)
     );
@@ -224,7 +224,7 @@ fn push_i32(ctx: &mut Context, gpr: GPR) {
 }
 
 fn pop_i32(ctx: &mut Context) -> GPR {
-    ctx.sp_depth.decrement();
+    ctx.sp_depth.free(1);
     let gpr = ctx.regs.take_scratch_gpr();
     dynasm!(ctx.asm
         ; pop Rq(gpr)
@@ -342,7 +342,7 @@ pub fn prologue(ctx: &mut Context, stack_slots: u32) {
         ; mov rbp, rsp
         ; sub rsp, framesize
     );
-    ctx.sp_depth.0 += aligned_stack_slots - stack_slots;
+    ctx.sp_depth.reserve(aligned_stack_slots - stack_slots);
 }
 
 pub fn epilogue(ctx: &mut Context) {

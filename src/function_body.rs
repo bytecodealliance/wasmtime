@@ -73,9 +73,9 @@ impl ControlFrame {
     pub fn outgoing_stack_depth(&self) -> StackDepth {
         let mut outgoing_stack_depth = self.stack_depth;
         if self.ty != Type::EmptyBlockType {
-            // If there a return value then increment expected outgoing stack depth value
+            // If there a return value then reserve expected outgoing stack depth value
             // to account for the result value.
-            outgoing_stack_depth.increment();
+            outgoing_stack_depth.reserve(1);
         }
         outgoing_stack_depth
     }
