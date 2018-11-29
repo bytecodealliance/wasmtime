@@ -6,9 +6,11 @@ use cranelift_wasm::{
     DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex,
 };
+use std::cmp;
 use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;
+use tunables::Tunables;
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug)]
@@ -36,6 +38,59 @@ pub enum Export {
     Global(GlobalIndex),
 }
 
+/// Implemenation styles for WebAssembly linear memory.
+#[derive(Debug, Clone)]
+pub enum MemoryStyle {
+    /// The actual memory can be resized and moved.
+    Dynamic,
+    /// Addresss space is allocated up front.
+    Static {
+        /// The number of mapped and unmapped pages.
+        bound: u32,
+    },
+}
+
+impl MemoryStyle {
+    /// Decide on an implementation style for the given `Memory`.
+    pub fn for_memory(memory: Memory, tunables: &Tunables) -> Self {
+        if let Some(maximum) = memory.maximum {
+            // A heap with a declared maximum is prepared to be used with
+            // threads and therefore be immovable, so make it static.
+            MemoryStyle::Static {
+                bound: cmp::max(tunables.static_memory_bound, maximum),
+            }
+        } else {
+            // A heap without a declared maximum is likely to want to be small
+            // at least some of the time, so make it dynamic.
+            MemoryStyle::Dynamic
+        }
+    }
+}
+
+/// A WebAssembly linear memory description along with our chosen style for
+/// implementing it.
+#[derive(Debug)]
+pub struct MemoryPlan {
+    /// The WebAssembly linear memory description.
+    pub memory: Memory,
+    /// Our chosen implementation style.
+    pub style: MemoryStyle,
+    /// Our chosen offset-guard size.
+    pub offset_guard_size: u64,
+}
+
+impl MemoryPlan {
+    /// Draw up a plan for implementing `Memory`.
+    pub fn for_memory(memory: Memory, tunables: &Tunables) -> Self {
+        Self {
+            memory,
+            style: MemoryStyle::for_memory(memory, tunables),
+            // fixme: saturate this
+            offset_guard_size: tunables.offset_guard_size,
+        }
+    }
+}
+
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
 #[derive(Debug)]
@@ -52,8 +107,8 @@ pub struct Module {
     /// WebAssembly tables.
     pub tables: PrimaryMap<TableIndex, Table>,
 
-    /// WebAssembly linear memories.
-    pub memories: PrimaryMap<MemoryIndex, Memory>,
+    /// WebAssembly linear memory plans.
+    pub memory_plans: PrimaryMap<MemoryIndex, MemoryPlan>,
 
     /// WebAssembly global variables.
     pub globals: PrimaryMap<GlobalIndex, Global>,
@@ -76,7 +131,7 @@ impl Module {
             imported_funcs: Vec::new(),
             functions: PrimaryMap::new(),
             tables: PrimaryMap::new(),
-            memories: PrimaryMap::new(),
+            memory_plans: PrimaryMap::new(),
             globals: PrimaryMap::new(),
             exports: HashMap::new(),
             start_func: None,

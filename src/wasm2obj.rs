@@ -56,7 +56,7 @@ use std::path::PathBuf;
 use std::process;
 use std::str::FromStr;
 use target_lexicon::Triple;
-use wasmtime_environ::{compile_module, Module, ModuleEnvironment};
+use wasmtime_environ::{compile_module, Module, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
 
 const USAGE: &str = "
@@ -136,7 +136,9 @@ fn handle_module(path: PathBuf, target: &Option<String>, output: &str) -> Result
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));
 
     let mut module = Module::new();
-    let environ = ModuleEnvironment::new(&*isa, &mut module);
+    // TODO: Expose the tunables as command-line flags.
+    let tunables = Tunables::default();
+    let environ = ModuleEnvironment::new(&*isa, &mut module, tunables);
     let translation = environ.translate(&data).map_err(|e| e.to_string())?;
 
     // FIXME: We need to initialize memory in a way that supports alternate

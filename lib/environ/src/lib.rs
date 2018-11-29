@@ -42,11 +42,19 @@ extern crate alloc;
 mod compilation;
 mod environ;
 mod module;
+mod tunables;
 mod vmcontext;
 
 pub use compilation::{compile_module, Compilation, Relocation, RelocationTarget, Relocations};
 pub use environ::{ModuleEnvironment, ModuleTranslation};
-pub use module::{DataInitializer, Export, Module, TableElements};
+pub use module::{DataInitializer, Export, MemoryPlan, MemoryStyle, Module, TableElements};
+pub use tunables::Tunables;
+
+/// WebAssembly page sizes are defined to be 64KiB.
+pub const WASM_PAGE_SIZE: u32 = 0x10000;
+
+/// The number of pages we can have before we run out of byte index space.
+pub const WASM_MAX_PAGES: u32 = 0x10000;
 
 #[cfg(not(feature = "std"))]
 mod std {
