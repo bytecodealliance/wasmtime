@@ -400,12 +400,17 @@ HandleTrap(CONTEXT* context)
 
     RecordTrap(pc, codeSegment);
 
+#if defined(__APPLE__)
+    // Reroute the PC to run the Unwind function on the main stack after the
+    // handler exits. This doesn't yet work for stack overflow traps, because
+    // in that case the main thread doesn't have any space left to run.
+    SetContextPC(context, reinterpret_cast<const uint8_t*>(&Unwind));
+#else
     // For now, just call Unwind directly, rather than redirecting the PC there,
     // so that it runs on the alternate signal handler stack. To run on the main
     // stack, reroute the context PC like this:
-    // SetContextPC(context, reinterpret_cast<const uint8_t*>(&Unwind));
-
     Unwind();
+#endif
 
     return true;
 }
