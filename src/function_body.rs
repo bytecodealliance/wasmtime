@@ -1,6 +1,6 @@
 use backend::*;
 use error::Error;
-use wasmparser::{FunctionBody, Operator, Type};
+use wasmparser::{FuncType, FunctionBody, Operator, Type};
 
 // TODO: Use own declared `Type` enum.
 
@@ -86,15 +86,21 @@ impl ControlFrame {
     }
 }
 
-pub fn translate(session: &mut CodeGenSession, body: &FunctionBody) -> Result<(), Error> {
+pub fn translate(
+    session: &mut CodeGenSession,
+    func_type: &FuncType,
+    body: &FunctionBody,
+) -> Result<(), Error> {
     let locals = body.get_locals_reader()?;
 
-    // Assume signature is (i32, i32) -> i32 for now.
-    // TODO: Use a real signature
-    const ARG_COUNT: u32 = 2;
-    let return_ty = Type::I32;
+    let arg_count = func_type.params.len() as u32;
+    let return_ty = if func_type.returns.len() > 0 {
+        func_type.returns[0]
+    } else {
+        Type::EmptyBlockType
+    };
 
-    let mut framesize = ARG_COUNT;
+    let mut framesize = arg_count;
     for local in locals {
         let (count, _ty) = local?;
         framesize += count;
@@ -105,7 +111,7 @@ pub fn translate(session: &mut CodeGenSession, body: &FunctionBody) -> Result<()
 
     prologue(&mut ctx, framesize);
 
-    for arg_pos in 0..ARG_COUNT {
+    for arg_pos in 0..arg_count {
         copy_incoming_arg(&mut ctx, arg_pos);
     }
 
@@ -191,6 +197,13 @@ pub fn translate(session: &mut CodeGenSession, body: &FunctionBody) -> Result<()
                 }
 
                 restore_stack_depth(&mut ctx, control_frame.outgoing_stack_depth());
+
+                if control_frames.len() == 0 {
+                    // This is the last control frame. Perform the implicit return here.
+                    if return_ty != Type::EmptyBlockType {
+                        prepare_return_value(&mut ctx);
+                    }
+                }
             }
             Operator::I32Eq => {
                 relop_eq_i32(&mut ctx);
@@ -201,12 +214,26 @@ pub fn translate(session: &mut CodeGenSession, body: &FunctionBody) -> Result<()
             Operator::GetLocal { local_index } => {
                 get_local_i32(&mut ctx, local_index);
             }
+            Operator::Call { function_index } => {
+                // TODO: find out the signature of this function
+                // this requires to generalize the function types infrasturcture
+
+                // TODO: ensure that this function is locally defined
+                // We would like to support imported functions at some point
+
+                // TODO: pop arguments and move them in appropriate positions.
+                // only 6 for now.
+
+                // TODO: jump to the specified position
+                // this requires us saving function start locations in codegensession.
+
+                panic!()
+            }
             _ => {
                 trap(&mut ctx);
             }
         }
     }
-    prepare_return_value(&mut ctx);
     epilogue(&mut ctx);
 
     Ok(())

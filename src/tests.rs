@@ -14,6 +14,11 @@ fn execute_wat(wat: &str, a: usize, b: usize) -> usize {
 }
 
 #[test]
+fn empty() {
+    let _ = translate_wat("(module (func))");
+}
+
+#[test]
 fn adds() {
     const CASES: &[(usize, usize, usize)] = &[
         (5, 3, 8),

@@ -1,7 +1,7 @@
-use std::mem;
-use error::Error;
-use translate_sections;
 use backend::TranslatedCodeSection;
+use error::Error;
+use std::mem;
+use translate_sections;
 use wasmparser::{ModuleReader, SectionCode};
 
 #[derive(Default)]
@@ -14,7 +14,10 @@ impl TranslatedModule {
     // Assume signature is (i32, i32) -> i32 for now.
     // TODO: Handle generic signatures.
     pub fn execute_func(&self, func_idx: u32, a: usize, b: usize) -> usize {
-        let code_section = self.translated_code_section.as_ref().expect("no code section");
+        let code_section = self
+            .translated_code_section
+            .as_ref()
+            .expect("no code section");
         let start_buf = code_section.func_start(func_idx as usize);
 
         unsafe {
@@ -34,10 +37,12 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
         return Ok(output);
     }
     let mut section = reader.read()?;
+    let mut types = vec![];
+    let mut func_ty_indicies = vec![];
 
     if let SectionCode::Type = section.code {
-        let types = section.get_type_section_reader()?;
-        translate_sections::type_(types)?;
+        let types_reader = section.get_type_section_reader()?;
+        types = translate_sections::type_(types_reader)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -59,7 +64,7 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Function = section.code {
         let functions = section.get_function_section_reader()?;
-        translate_sections::function(functions)?;
+        func_ty_indicies = translate_sections::function(functions)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -136,7 +141,8 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Code = section.code {
         let code = section.get_code_section_reader()?;
-        output.translated_code_section = Some(translate_sections::code(code)?);
+        output.translated_code_section =
+            Some(translate_sections::code(code, &types, &func_ty_indicies)?);
 
         reader.skip_custom_sections()?;
         if reader.eof() {
