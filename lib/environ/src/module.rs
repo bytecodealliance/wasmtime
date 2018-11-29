@@ -80,12 +80,11 @@ pub struct MemoryPlan {
 }
 
 impl MemoryPlan {
-    /// Draw up a plan for implementing `Memory`.
+    /// Draw up a plan for implementing a `Memory`.
     pub fn for_memory(memory: Memory, tunables: &Tunables) -> Self {
         Self {
             memory,
             style: MemoryStyle::for_memory(memory, tunables),
-            // fixme: saturate this
             offset_guard_size: tunables.offset_guard_size,
         }
     }

@@ -77,7 +77,8 @@ impl binemit::RelocSink for RelocSink {
 }
 
 impl RelocSink {
-    fn new() -> Self {
+    /// Return a new `RelocSink` instance.
+    pub fn new() -> Self {
         Self {
             func_relocs: Vec::new(),
         }

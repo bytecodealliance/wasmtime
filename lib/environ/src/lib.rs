@@ -45,7 +45,9 @@ mod module;
 mod tunables;
 mod vmcontext;
 
-pub use compilation::{compile_module, Compilation, Relocation, RelocationTarget, Relocations};
+pub use compilation::{
+    compile_module, Compilation, RelocSink, Relocation, RelocationTarget, Relocations,
+};
 pub use environ::{ModuleEnvironment, ModuleTranslation};
 pub use module::{DataInitializer, Export, MemoryPlan, MemoryStyle, Module, TableElements};
 pub use tunables::Tunables;

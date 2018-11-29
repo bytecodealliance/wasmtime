@@ -29,6 +29,7 @@
 
 extern crate cranelift_codegen;
 extern crate cranelift_entity;
+extern crate cranelift_frontend;
 extern crate cranelift_wasm;
 extern crate errno;
 extern crate region;
@@ -40,14 +41,19 @@ extern crate alloc;
 extern crate lazy_static;
 extern crate libc;
 
+mod code;
 mod execute;
 mod instance;
+mod invoke;
 mod memory;
+mod mmap;
 mod signalhandlers;
 mod traphandlers;
 
-pub use execute::{compile_and_link_module, execute, finish_instantiation};
+pub use code::Code;
+pub use execute::{compile_and_link_module, finish_instantiation};
 pub use instance::Instance;
+pub use invoke::{invoke, InvokeOutcome, Value};
 pub use traphandlers::{call_wasm, LookupCodeSegment, RecordTrap, Unwind};
 
 #[cfg(not(feature = "std"))]

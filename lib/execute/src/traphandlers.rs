@@ -6,6 +6,7 @@ use signalhandlers::{jmp_buf, CodeSegment};
 use std::cell::{Cell, RefCell};
 use std::mem;
 use std::ptr;
+use std::string::String;
 
 // Currently we uset setjmp/longjmp to unwind out of a signal handler
 // and back to the point where WebAssembly was called (via `call_wasm`).

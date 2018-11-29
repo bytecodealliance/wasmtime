@@ -400,6 +400,11 @@ HandleTrap(CONTEXT* context)
 
     RecordTrap(pc, codeSegment);
 
+    // Unwind calls longjmp, so it doesn't run the automatic
+    // sAlreadhHanldingTrap cleanups, so reset it manually before doing
+    // a longjmp.
+    sAlreadyHandlingTrap = false;
+
 #if defined(__APPLE__)
     // Reroute the PC to run the Unwind function on the main stack after the
     // handler exits. This doesn't yet work for stack overflow traps, because
