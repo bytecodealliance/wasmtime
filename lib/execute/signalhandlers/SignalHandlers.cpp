@@ -15,6 +15,7 @@
 #elif defined(__APPLE__)
 # include <mach/exc.h>
 # include <mach/mach.h>
+# include <pthread.h>
 #else
 # include <signal.h>
 #endif
@@ -520,7 +521,6 @@ HandleMachException(const ExceptionRequest& request)
     }
 
     {
-        AutoNoteSingleThreadedRegion anstr;
         AutoHandlingTrap aht;
         if (!HandleTrap(&context)) {
             return false;
@@ -542,8 +542,8 @@ HandleMachException(const ExceptionRequest& request)
 
 static mach_port_t sMachDebugPort = MACH_PORT_NULL;
 
-static void
-MachExceptionHandlerThread(void *arg)
+static void*
+MachExceptionHandlerThread(void* arg)
 {
     // Taken from mach_exc in /usr/include/mach/mach_exc.defs.
     static const unsigned EXCEPTION_MSG_ID = 2405;
@@ -588,6 +588,8 @@ MachExceptionHandlerThread(void *arg)
         mach_msg(&reply.Head, MACH_SEND_MSG, sizeof(reply), 0, MACH_PORT_NULL,
                  MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
     }
+
+    return nullptr;
 }
 
 #else  // If not Windows or Mac, assume Unix
@@ -769,7 +771,7 @@ EnsureDarwinMachPorts()
     if (r != 0) {
         return false;
     }
-    r = pthread_detach(&handlerThread);
+    r = pthread_detach(handlerThread);
     assert(r != 0);
 
     // In addition to the process-wide signal handler setup, OSX needs each
@@ -781,7 +783,7 @@ EnsureDarwinMachPorts()
     // uses of thread-level exception ports.
     assert(sMachDebugPort != MACH_PORT_NULL);
     thread_port_t thisThread = mach_thread_self();
-    kern_return_t kret = thread_set_exception_ports(thisThread,
+    kret = thread_set_exception_ports(thisThread,
                                                     EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
                                                     sMachDebugPort,
                                                     EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,

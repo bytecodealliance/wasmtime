@@ -46,7 +46,7 @@ EnsureEagerSignalHandlers(void);
 // be performed per-thread. This operation may incur some overhead and
 // so should be done only when needed to use wasm.
 bool
-EnsureDarwinMachPorts(struct TrapContext* cx);
+EnsureDarwinMachPorts(void);
 
 #ifdef __cplusplus
 } // extern "C"

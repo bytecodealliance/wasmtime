@@ -41,9 +41,9 @@ pub extern "C" fn RecordTrap(pc: *const u8, _codeSegment: *const CodeSegment) {
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "C" fn Unwind() {
-    JMP_BUFS.with(|bufs| unsafe {
+    JMP_BUFS.with(|bufs| {
         let buf = bufs.borrow_mut().pop().unwrap();
-        longjmp(&buf, 1);
+        unsafe { longjmp(&buf, 1) };
     })
 }
 
