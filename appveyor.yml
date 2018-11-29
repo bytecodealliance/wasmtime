@@ -19,8 +19,8 @@ install:
   - cargo -V
 build: false
 test_script:
-  # Add --no-default-features because wabt and disass don't currently build
-  # on appveyor.
+  # TODO: Remove --no-default-features here. wabt and disass currently
+  # don't build on appveyor due to cmake issues.
   - cargo build --verbose --all --no-default-features
   - cargo test --verbose --all --no-default-features
 branches:
