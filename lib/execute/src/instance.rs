@@ -28,16 +28,16 @@ impl Instance {
         module: &Module,
         compilation: &Compilation,
         data_initializers: &[DataInitializer],
-    ) -> Self {
+    ) -> Result<Self, String> {
         let mut result = Self {
             tables: PrimaryMap::new(),
             memories: PrimaryMap::new(),
             globals: Vec::new(),
         };
         result.instantiate_tables(module, compilation, &module.table_elements);
-        result.instantiate_memories(module, data_initializers);
+        result.instantiate_memories(module, data_initializers)?;
         result.instantiate_globals(module);
-        result
+        Ok(result)
     }
 
     /// Allocate memory in `self` for just the tables of the current module.
@@ -48,10 +48,9 @@ impl Instance {
         table_initializers: &[TableElements],
     ) {
         debug_assert!(self.tables.is_empty());
-        // TODO: Enable this once PrimaryMap supports this.
-        //self.tables.reserve_exact(module.tables.len());
+        self.tables.reserve_exact(module.tables.len());
         for table in module.tables.values() {
-            let len = table.size;
+            let len = table.minimum as usize;
             let mut v = Vec::with_capacity(len);
             v.resize(len, 0);
             self.tables.push(v);
@@ -70,13 +69,16 @@ impl Instance {
     }
 
     /// Allocate memory in `instance` for just the memories of the current module.
-    fn instantiate_memories(&mut self, module: &Module, data_initializers: &[DataInitializer]) {
+    fn instantiate_memories(
+        &mut self,
+        module: &Module,
+        data_initializers: &[DataInitializer],
+    ) -> Result<(), String> {
         debug_assert!(self.memories.is_empty());
         // Allocate the underlying memory and initialize it to all zeros.
-        // TODO: Enable this once PrimaryMap supports it.
-        //self.memories.reserve_exact(module.memories.len());
-        for memory in module.memories.values() {
-            let v = LinearMemory::new(memory.pages_count as u32, memory.maximum.map(|m| m as u32));
+        self.memories.reserve_exact(module.memory_plans.len());
+        for plan in module.memory_plans.values() {
+            let v = LinearMemory::new(&plan)?;
             self.memories.push(v);
         }
         for init in data_initializers {
@@ -85,6 +87,7 @@ impl Instance {
             let to_init = &mut mem_mut[init.offset..init.offset + init.data.len()];
             to_init.copy_from_slice(init.data);
         }
+        Ok(())
     }
 
     /// Allocate memory in `instance` for just the globals of the current module,

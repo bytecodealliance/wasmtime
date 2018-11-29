@@ -1,6 +1,6 @@
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::immediates::{Imm64, Offset32};
+use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, InstBuilder, Signature,
@@ -11,11 +11,16 @@ use cranelift_wasm::{
     self, translate_module, FuncIndex, Global, GlobalIndex, GlobalVariable, Memory, MemoryIndex,
     SignatureIndex, Table, TableIndex, WasmResult,
 };
-use module::{DataInitializer, Export, LazyContents, Module, TableElements};
+use module::{
+    DataInitializer, Export, LazyContents, MemoryPlan, MemoryStyle, Module, TableElements,
+};
+use std::clone::Clone;
 use std::mem;
 use std::string::String;
 use std::vec::Vec;
+use tunables::Tunables;
 use vmcontext;
+use WASM_PAGE_SIZE;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
@@ -34,20 +39,28 @@ pub struct ModuleEnvironment<'data, 'module> {
 
     /// References to information to be decoded later.
     pub lazy: LazyContents<'data>,
+
+    /// Tunable parameters.
+    pub tunables: Tunables,
 }
 
 impl<'data, 'module> ModuleEnvironment<'data, 'module> {
     /// Allocates the enironment data structures with the given isa.
-    pub fn new(isa: &'module isa::TargetIsa, module: &'module mut Module) -> Self {
+    pub fn new(
+        isa: &'module isa::TargetIsa,
+        module: &'module mut Module,
+        tunables: Tunables,
+    ) -> Self {
         Self {
             isa,
             module,
             lazy: LazyContents::new(),
+            tunables,
         }
     }
 
     fn func_env(&self) -> FuncEnvironment {
-        FuncEnvironment::new(self.isa, &self.module)
+        FuncEnvironment::new(self.isa, &self.module, self.tunables.clone())
     }
 
     fn pointer_type(&self) -> ir::Type {
@@ -66,6 +79,7 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
             isa: self.isa,
             module: self.module,
             lazy: self.lazy,
+            tunables: self.tunables,
         })
     }
 }
@@ -95,12 +109,16 @@ pub struct FuncEnvironment<'module_environment> {
 
     /// The external function declaration for implementing wasm's `grow_memory`.
     pub grow_memory_extfunc: Option<FuncRef>,
+
+    /// Tunable parameters.
+    pub tunables: Tunables,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         isa: &'module_environment isa::TargetIsa,
         module: &'module_environment Module,
+        tunables: Tunables,
     ) -> Self {
         Self {
             isa,
@@ -111,6 +129,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             globals_base: None,
             current_memory_extfunc: None,
             grow_memory_extfunc: None,
+            tunables,
         }
     }
 
@@ -228,7 +247,8 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     }
 
     fn declare_memory(&mut self, memory: Memory) {
-        self.module.memories.push(memory);
+        let plan = MemoryPlan::for_memory(memory, &self.tunables);
+        self.module.memory_plans.push(plan);
     }
 
     fn declare_data_initialization(
@@ -330,16 +350,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         debug_assert_eq!(offset32 as usize, offset);
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
-        let (guard_size, heap_style, readonly_base) =
-            if self.module.memories[index].maximum.is_some() {
-                (
-                    0x8000_0000.into(),
-                    ir::HeapStyle::Static {
-                        bound: 0x1_0000_0000.into(),
-                    },
-                    true,
-                )
-            } else {
+        let (offset_guard_size, heap_style, readonly_base) = match self.module.memory_plans[index] {
+            MemoryPlan {
+                memory: _,
+                style: MemoryStyle::Dynamic,
+                offset_guard_size,
+            } => {
                 let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
                     base: memories_base,
                     offset: Offset32::new(
@@ -349,13 +365,26 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     readonly: false,
                 });
                 (
-                    0.into(),
+                    Uimm64::new(offset_guard_size),
                     ir::HeapStyle::Dynamic {
                         bound_gv: heap_bound,
                     },
                     false,
                 )
-            };
+            }
+            MemoryPlan {
+                memory: _,
+                style: MemoryStyle::Static { bound },
+                offset_guard_size,
+            } => (
+                Uimm64::new(offset_guard_size),
+                ir::HeapStyle::Static {
+                    bound: Uimm64::new(u64::from(bound) * u64::from(WASM_PAGE_SIZE)),
+                },
+                true,
+            ),
+        };
+
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: memories_base,
             offset: Offset32::new(offset32 + offset_of!(vmcontext::VMMemory, base) as i32),
@@ -365,7 +394,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func.create_heap(ir::HeapData {
             base: heap_base,
             min_size: 0.into(),
-            guard_size,
+            offset_guard_size,
             style: heap_style,
             index_type: I32,
         })
@@ -403,9 +432,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         func.create_table(ir::TableData {
             base_gv,
-            min_size: Imm64::new(0),
+            min_size: Uimm64::new(0),
             bound_gv,
-            element_size: Imm64::new(i64::from(self.pointer_bytes())),
+            element_size: Uimm64::new(u64::from(self.pointer_bytes())),
             index_type: I32,
         })
     }
@@ -548,12 +577,14 @@ pub struct ModuleTranslation<'data, 'module> {
 
     /// Pointers into the raw data buffer.
     pub lazy: LazyContents<'data>,
+
+    /// Tunable parameters.
+    pub tunables: Tunables,
 }
 
-/// Convenience functions for the user to be called after execution for debug purposes.
 impl<'data, 'module> ModuleTranslation<'data, 'module> {
     /// Return a new `FuncEnvironment` for translation a function.
     pub fn func_env(&self) -> FuncEnvironment {
-        FuncEnvironment::new(self.isa, &self.module)
+        FuncEnvironment::new(self.isa, &self.module, self.tunables.clone())
     }
 }

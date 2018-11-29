@@ -59,8 +59,8 @@ use std::io::prelude::*;
 use std::io::stdout;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::exit;
-use wasmtime_environ::{Module, ModuleEnvironment};
+use std::process::{exit, Command};
+use wasmtime_environ::{Module, ModuleEnvironment, Tunables};
 use wasmtime_execute::{compile_and_link_module, execute, finish_instantiation, Instance};
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
@@ -149,7 +149,9 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
         data = wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?;
     }
     let mut module = Module::new();
-    let environ = ModuleEnvironment::new(isa, &mut module);
+    // TODO: Expose the tunables as command-line flags.
+    let tunables = Tunables::default();
+    let environ = ModuleEnvironment::new(isa, &mut module, tunables);
 
     let imports_resolver = |_env: &str, _function: &str| None;
 
@@ -161,7 +163,7 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
                 translation.module,
                 &compilation,
                 &translation.lazy.data_initializers,
-            );
+            )?;
 
             let mut context =
                 finish_instantiation(&translation.module, &compilation, &mut instance)?;
@@ -219,7 +221,7 @@ mod tests {
     use cranelift_codegen::settings::Configurable;
     use std::path::PathBuf;
     use wabt;
-    use wasmtime_environ::{Module, ModuleEnvironment};
+    use wasmtime_environ::{Module, ModuleEnvironment, Tunables};
 
     const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
 
@@ -242,7 +244,8 @@ mod tests {
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
         let mut module = Module::new();
-        let environ = ModuleEnvironment::new(&*isa, &mut module);
+        let tunables = Tunables::default();
+        let environ = ModuleEnvironment::new(&*isa, &mut module, tunables);
 
         let translation = environ.translate(&data);
         assert!(translation.is_ok());

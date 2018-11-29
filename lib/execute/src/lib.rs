@@ -30,7 +30,7 @@
 extern crate cranelift_codegen;
 extern crate cranelift_entity;
 extern crate cranelift_wasm;
-extern crate memmap;
+extern crate errno;
 extern crate region;
 extern crate wasmtime_environ;
 #[cfg(not(feature = "std"))]
