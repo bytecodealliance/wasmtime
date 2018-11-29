@@ -82,9 +82,9 @@ pub struct Table {
     /// The type of data stored in elements of the table.
     pub ty: TableElementType,
     /// The minimum number of elements in the table.
-    pub size: usize,
+    pub minimum: u32,
     /// The maximum number of elements in the table.
-    pub maximum: Option<usize>,
+    pub maximum: Option<u32>,
 }
 
 /// WebAssembly table element. Can be a function or a scalar type.
@@ -98,9 +98,9 @@ pub enum TableElementType {
 #[derive(Debug, Clone, Copy)]
 pub struct Memory {
     /// The minimum number of pages in the memory.
-    pub pages_count: usize,
+    pub minimum: u32,
     /// The maximum number of pages in the memory.
-    pub maximum: Option<usize>,
+    pub maximum: Option<u32>,
     /// Whether the memory may be shared between multiple threads.
     pub shared: bool,
 }
