@@ -1,6 +1,6 @@
 //! Tables.
 
-use ir::immediates::Imm64;
+use ir::immediates::Uimm64;
 use ir::{GlobalValue, Type};
 use std::fmt;
 
@@ -12,13 +12,13 @@ pub struct TableData {
 
     /// Guaranteed minimum table size in elements. Table accesses before `min_size` don't need
     /// bounds checking.
-    pub min_size: Imm64,
+    pub min_size: Uimm64,
 
     /// Global value giving the current bound of the table, in elements.
     pub bound_gv: GlobalValue,
 
     /// The size of a table element, in bytes.
-    pub element_size: Imm64,
+    pub element_size: Uimm64,
 
     /// The index type for the table.
     pub index_type: Type,

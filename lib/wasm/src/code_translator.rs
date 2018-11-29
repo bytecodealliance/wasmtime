@@ -992,20 +992,20 @@ fn get_heap_addr(
 ) -> (ir::Value, i32) {
     use std::cmp::min;
 
-    let guard_size: i64 = builder.func.heaps[heap].guard_size.into();
-    debug_assert!(guard_size > 0, "Heap guard pages currently required");
+    let mut adjusted_offset = u64::from(offset);
+    let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
 
     // Generate `heap_addr` instructions that are friendly to CSE by checking offsets that are
-    // multiples of the guard size. Add one to make sure that we check the pointer itself is in
-    // bounds.
-    //
-    // For accesses on the outer skirts of the guard pages, we expect that we get a trap
-    // even if the access goes beyond the guard pages. This is because the first byte pointed to is
-    // inside the guard pages.
-    let check_size = min(
-        i64::from(u32::MAX),
-        1 + (i64::from(offset) / guard_size) * guard_size,
-    ) as u32;
+    // multiples of the offset-guard size. Add one to make sure that we check the pointer itself
+    // is in bounds.
+    if offset_guard_size != 0 {
+        adjusted_offset = adjusted_offset / offset_guard_size * offset_guard_size;
+    }
+
+    // For accesses on the outer skirts of the offset-guard pages, we expect that we get a trap
+    // even if the access goes beyond the offset-guard pages. This is because the first byte
+    // pointed to is inside the offset-guard pages.
+    let check_size = min(u64::from(u32::MAX), 1 + adjusted_offset) as u32;
     let base = builder.ins().heap_addr(addr_ty, heap, addr32, check_size);
 
     // Native load/store instructions take a signed `Offset32` immediate, so adjust the base

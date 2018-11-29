@@ -3,7 +3,7 @@ target x86_64 haswell
 
 function %value_aliases(i32, f32, i64 vmctx) baldrdash {
     gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000
+    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 ebb0(v0: i32, v1: f32, v2: i64):
     v3 = iconst.i32 0

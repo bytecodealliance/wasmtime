@@ -92,17 +92,15 @@ fn compute_addr(
 
     let element_size = pos.func.tables[table].element_size;
     let mut offset;
-    let element_size_i64: i64 = element_size.into();
-    debug_assert!(element_size_i64 >= 0);
-    let element_size_u64 = element_size_i64 as u64;
-    if element_size_u64 == 1 {
+    let element_size: u64 = element_size.into();
+    if element_size == 1 {
         offset = index;
-    } else if element_size_u64.is_power_of_two() {
+    } else if element_size.is_power_of_two() {
         offset = pos
             .ins()
-            .ishl_imm(index, i64::from(element_size_u64.trailing_zeros()));
+            .ishl_imm(index, i64::from(element_size.trailing_zeros()));
     } else {
-        offset = pos.ins().imul_imm(index, element_size);
+        offset = pos.ins().imul_imm(index, element_size as i64);
     }
 
     if element_offset == Offset32::new(0) {

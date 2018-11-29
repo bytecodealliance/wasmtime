@@ -651,7 +651,7 @@ architecture.
         fontsize=10,
         fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans"
     ]
-    "static" [label="mapped\npages|unmapped\npages|guard\npages"]
+    "static" [label="mapped\npages|unmapped\npages|offset_guard\npages"]
 
 A heap appears as three consecutive ranges of address space:
 
@@ -661,9 +661,9 @@ A heap appears as three consecutive ranges of address space:
 2. The *unmapped pages* is a possibly empty range of address space that may be
    mapped in the future when the heap is grown. They are :term:`addressable` but
    not :term:`accessible`.
-3. The *guard pages* is a range of address space that is guaranteed to cause a
-   trap when accessed. It is used to optimize bounds checking for heap accesses
-   with a shared base pointer. They are :term:`addressable` but
+3. The *offset-guard pages* is a range of address space that is guaranteed to
+   always cause a trap when accessed. It is used to optimize bounds checking for
+   heap accesses with a shared base pointer. They are :term:`addressable` but
    not :term:`accessible`.
 
 The *heap bound* is the total size of the mapped and unmapped pages. This is
@@ -683,10 +683,10 @@ A *static heap* starts out with all the address space it will ever need, so it
 never moves to a different address. At the base address is a number of mapped
 pages corresponding to the heap's current size. Then follows a number of
 unmapped pages where the heap can grow up to its maximum size. After the
-unmapped pages follow the guard pages which are also guaranteed to generate a
-trap when accessed.
+unmapped pages follow the offset-guard pages which are also guaranteed to
+generate a trap when accessed.
 
-.. inst:: H = static Base, min MinBytes, bound BoundBytes, guard GuardBytes
+.. inst:: H = static Base, min MinBytes, bound BoundBytes, offset_guard OffsetGuardBytes
 
     Declare a static heap in the preamble.
 
@@ -694,17 +694,18 @@ trap when accessed.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
     :arg BoundBytes: Fixed heap bound in bytes. This defines the amount of
-            address space reserved for the heap, not including the guard pages.
-    :arg GuardBytes: Size of the guard pages in bytes.
+            address space reserved for the heap, not including the offset-guard
+            pages.
+    :arg OffsetGuardBytes: Size of the offset-guard pages in bytes.
 
 Dynamic heaps
 ~~~~~~~~~~~~~
 
 A *dynamic heap* can be relocated to a different base address when it is
-resized, and its bound can move dynamically. The guard pages move when the heap
-is resized. The bound of a dynamic heap is stored in a global value.
+resized, and its bound can move dynamically. The offset-guard pages move when
+the heap is resized. The bound of a dynamic heap is stored in a global value.
 
-.. inst:: H = dynamic Base, min MinBytes, bound BoundGV, guard GuardBytes
+.. inst:: H = dynamic Base, min MinBytes, bound BoundGV, offset_guard OffsetGuardBytes
 
     Declare a dynamic heap in the preamble.
 
@@ -712,14 +713,14 @@ is resized. The bound of a dynamic heap is stored in a global value.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
     :arg BoundGV: Global value containing the current heap bound in bytes.
-    :arg GuardBytes: Size of the guard pages in bytes.
+    :arg OffsetGuardBytes: Size of the offset-guard pages in bytes.
 
 Heap examples
 ~~~~~~~~~~~~~
 
 The SpiderMonkey VM prefers to use fixed heaps with a 4 GB bound and 2 GB of
-guard pages when running WebAssembly code on 64-bit CPUs. The combination of a
-4 GB fixed bound and 1-byte bounds checks means that no code needs to be
+offset-guard pages when running WebAssembly code on 64-bit CPUs. The combination
+of a 4 GB fixed bound and 1-byte bounds checks means that no code needs to be
 generated for bounds checks at all:
 
 .. literalinclude:: heapex-sm64.clif
@@ -728,7 +729,7 @@ generated for bounds checks at all:
 
 A static heap can also be used for 32-bit code when the WebAssembly module
 declares a small upper bound on its memory. A 1 MB static bound with a single 4
-KB guard page still has opportunities for sharing bounds checking code:
+KB offset-guard page still has opportunities for sharing bounds checking code:
 
 .. literalinclude:: heapex-sm32.clif
     :language: clif
@@ -738,8 +739,8 @@ If the upper bound on the heap size is too large, a dynamic heap is required
 instead.
 
 Finally, a runtime environment that simply allocates a heap with
-:c:func:`malloc()` may not have any guard pages at all. In that case, full
-bounds checking is required for each access:
+:c:func:`malloc()` may not have any offset-guard pages at all. In that case,
+full bounds checking is required for each access:
 
 .. literalinclude:: heapex-dyn.clif
     :language: clif

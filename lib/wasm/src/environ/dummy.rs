@@ -2,7 +2,7 @@
 //! wasm translation.
 
 use cranelift_codegen::cursor::FuncCursor;
-use cranelift_codegen::ir::immediates::{Imm64, Offset32};
+use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
@@ -195,7 +195,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         func.create_heap(ir::HeapData {
             base: gv,
             min_size: 0.into(),
-            guard_size: 0x8000_0000.into(),
+            offset_guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static {
                 bound: 0x1_0000_0000.into(),
             },
@@ -221,9 +221,9 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
         func.create_table(ir::TableData {
             base_gv,
-            min_size: Imm64::new(0),
+            min_size: Uimm64::new(0),
             bound_gv,
-            element_size: Imm64::new(i64::from(self.pointer_bytes()) * 2),
+            element_size: Uimm64::from(u64::from(self.pointer_bytes()) * 2),
             index_type: I32,
         })
     }

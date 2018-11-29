@@ -10,23 +10,23 @@ function %heap_addrs(i32, i64, i64 vmctx) {
     gv2 = iadd_imm.i64 gv4, 80
     gv3 = load.i32 notrap aligned gv4+88
 
-    heap0 = static gv0, min 0x1_0000, bound 0x1_0000_0000, guard 0x8000_0000, index_type i32
-    heap1 = static gv0, guard 0x1000, bound 0x1_0000, index_type i32
-    heap2 = static gv0, min 0x1_0000, bound 0x1_0000_0000, guard 0x8000_0000, index_type i64
-    heap3 = static gv0, guard 0x1000, bound 0x1_0000, index_type i64
-    heap4 = dynamic gv1, min 0x1_0000, bound gv3, guard 0x8000_0000, index_type i32
-    heap5 = dynamic gv1, bound gv3, guard 0x1000, index_type i32
-    heap6 = dynamic gv1, min 0x1_0000, bound gv2, guard 0x8000_0000, index_type i64
-    heap7 = dynamic gv1, bound gv2, guard 0x1000, index_type i64
+    heap0 = static gv0, min 0x1_0000, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+    heap1 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i32
+    heap2 = static gv0, min 0x1_0000, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i64
+    heap3 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i64
+    heap4 = dynamic gv1, min 0x1_0000, bound gv3, offset_guard 0x8000_0000, index_type i32
+    heap5 = dynamic gv1, bound gv3, offset_guard 0x1000, index_type i32
+    heap6 = dynamic gv1, min 0x1_0000, bound gv2, offset_guard 0x8000_0000, index_type i64
+    heap7 = dynamic gv1, bound gv2, offset_guard 0x1000, index_type i64
 
-    ; check: heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000, index_type i32
-    ; check: heap1 = static gv0, min 0, bound 0x0001_0000, guard 4096, index_type i32
-    ; check: heap2 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000, index_type i64
-    ; check: heap3 = static gv0, min 0, bound 0x0001_0000, guard 4096, index_type i64
-    ; check: heap4 = dynamic gv1, min 0x0001_0000, bound gv3, guard 0x8000_0000, index_type i32
-    ; check: heap5 = dynamic gv1, min 0, bound gv3, guard 4096, index_type i32
-    ; check: heap6 = dynamic gv1, min 0x0001_0000, bound gv2, guard 0x8000_0000, index_type i64
-    ; check: heap7 = dynamic gv1, min 0, bound gv2, guard 4096, index_type i64
+    ; check: heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
+    ; check: heap1 = static gv0, min 0, bound 0x0001_0000, offset_guard 4096, index_type i32
+    ; check: heap2 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i64
+    ; check: heap3 = static gv0, min 0, bound 0x0001_0000, offset_guard 4096, index_type i64
+    ; check: heap4 = dynamic gv1, min 0x0001_0000, bound gv3, offset_guard 0x8000_0000, index_type i32
+    ; check: heap5 = dynamic gv1, min 0, bound gv3, offset_guard 4096, index_type i32
+    ; check: heap6 = dynamic gv1, min 0x0001_0000, bound gv2, offset_guard 0x8000_0000, index_type i64
+    ; check: heap7 = dynamic gv1, min 0, bound gv2, offset_guard 4096, index_type i64
 
 ebb0(v0: i32, v1: i64, v3: i64):
     ; The fast-path; 32-bit index, static heap with a sufficient bound, no bounds check needed!
