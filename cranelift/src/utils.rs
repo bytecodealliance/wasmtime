@@ -25,6 +25,7 @@ pub fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
 }
 
 /// Read an entire file into a vector of bytes.
+#[cfg(feature = "wasm")]
 pub fn read_to_end<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     let mut buffer = Vec::new();
     if path.as_ref() == Path::new("-") {
