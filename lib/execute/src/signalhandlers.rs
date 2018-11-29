@@ -45,7 +45,7 @@ pub fn ensure_eager_signal_handlers() {
     }
 
     state.tried = true;
-    assert!(state.success == false);
+    assert!(!state.success);
 
     if !unsafe { EnsureEagerSignalHandlers() } {
         return;
@@ -64,7 +64,7 @@ fn ensure_darwin_mach_ports() {
     }
 
     state.tried = true;
-    assert!(state.success == false);
+    assert!(!state.success);
 
     if !unsafe { EnsureDarwinMachPorts() } {
         return;

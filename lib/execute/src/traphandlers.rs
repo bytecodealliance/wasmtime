@@ -54,7 +54,7 @@ pub extern "C" fn Unwind() {
 #[no_mangle]
 pub extern "C" fn LookupCodeSegment(_pc: *const ::std::os::raw::c_void) -> *const CodeSegment {
     // TODO: Implement this.
-    unsafe { mem::transmute(-1isize) }
+    -1isize as *const CodeSegment
 }
 
 /// A simple guard to ensure that `JMP_BUFS` is reset when we're done.
