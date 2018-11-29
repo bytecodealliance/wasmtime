@@ -1,4 +1,5 @@
 use backend::*;
+use module::TranslationContext;
 use error::Error;
 use wasmparser::{FuncType, FunctionBody, Operator, Type};
 
@@ -88,6 +89,7 @@ impl ControlFrame {
 
 pub fn translate(
     session: &mut CodeGenSession,
+    translation_ctx: &TranslationContext,
     func_type: &FuncType,
     body: &FunctionBody,
 ) -> Result<(), Error> {

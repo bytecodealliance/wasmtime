@@ -2,7 +2,7 @@ use backend::TranslatedCodeSection;
 use error::Error;
 use std::mem;
 use translate_sections;
-use wasmparser::{ModuleReader, SectionCode};
+use wasmparser::{FuncType, ModuleReader, SectionCode};
 
 #[derive(Default)]
 pub struct TranslatedModule {
@@ -27,6 +27,20 @@ impl TranslatedModule {
     }
 }
 
+#[derive(Default)]
+pub struct TranslationContext {
+    types: Vec<FuncType>,
+    func_ty_indicies: Vec<u32>,
+}
+
+impl TranslationContext {
+    pub fn func_type(&self, func_idx: u32) -> &FuncType {
+        // TODO: This assumes that there is no imported functions.
+        let func_ty_idx = self.func_ty_indicies[func_idx as usize];
+        &self.types[func_ty_idx as usize]
+    }
+}
+
 /// Translate from a slice of bytes holding a wasm module.
 pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
     let mut reader = ModuleReader::new(data)?;
@@ -37,12 +51,12 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
         return Ok(output);
     }
     let mut section = reader.read()?;
-    let mut types = vec![];
-    let mut func_ty_indicies = vec![];
+
+    let mut ctx = TranslationContext::default();
 
     if let SectionCode::Type = section.code {
         let types_reader = section.get_type_section_reader()?;
-        types = translate_sections::type_(types_reader)?;
+        ctx.types = translate_sections::type_(types_reader)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -64,7 +78,7 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Function = section.code {
         let functions = section.get_function_section_reader()?;
-        func_ty_indicies = translate_sections::function(functions)?;
+        ctx.func_ty_indicies = translate_sections::function(functions)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -142,7 +156,7 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
     if let SectionCode::Code = section.code {
         let code = section.get_code_section_reader()?;
         output.translated_code_section =
-            Some(translate_sections::code(code, &types, &func_ty_indicies)?);
+            Some(translate_sections::code(code, &ctx)?);
 
         reader.skip_custom_sections()?;
         if reader.eof() {
