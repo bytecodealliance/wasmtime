@@ -772,7 +772,7 @@ EnsureDarwinMachPorts()
         return false;
     }
     r = pthread_detach(handlerThread);
-    assert(r != 0);
+    assert(r == 0);
 
     // In addition to the process-wide signal handler setup, OSX needs each
     // thread configured to send its exceptions to sMachDebugPort. While there
