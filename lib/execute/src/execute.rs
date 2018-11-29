@@ -1,19 +1,21 @@
+//! TODO: Move the contents of this file to other files, as "execute.rs" is
+//! no longer a descriptive filename.
+
+use code::Code;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, MemoryIndex, TableIndex};
+use cranelift_wasm::{DefinedFuncIndex, MemoryIndex, TableIndex};
 use instance::Instance;
+use invoke::{invoke_by_index, InvokeOutcome};
 use memory::LinearMemory;
 use region::protect;
 use region::Protection;
-use signalhandlers::{ensure_eager_signal_handlers, ensure_full_signal_handlers, TrapContext};
-use std::mem::transmute;
 use std::ptr::{self, write_unaligned};
 use std::string::String;
 use std::vec::Vec;
-use traphandlers::call_wasm;
 use wasmtime_environ::{
-    compile_module, Compilation, Export, Module, ModuleTranslation, Relocation, RelocationTarget,
+    compile_module, Compilation, Module, ModuleTranslation, Relocation, RelocationTarget,
 };
 
 /// Executes a module that has been translated with the `wasmtime-environ` environment
@@ -112,7 +114,7 @@ extern "C" fn current_memory(memory_index: u32, vmctx: *mut *mut u8) -> u32 {
 
 /// Create the VmCtx data structure for the JIT'd code to use. This must
 /// match the VmCtx layout in the environment.
-fn make_vmctx(instance: &mut Instance, mem_base_addrs: &mut [*mut u8]) -> Vec<*mut u8> {
+fn make_vmctx(instance: &mut Instance) -> Vec<*mut u8> {
     debug_assert!(
         instance.tables.len() <= 1,
         "non-default tables is not supported"
@@ -128,7 +130,7 @@ fn make_vmctx(instance: &mut Instance, mem_base_addrs: &mut [*mut u8]) -> Vec<*m
     let mut vmctx = Vec::new();
     vmctx.push(instance.globals.as_mut_ptr());
     // FIXME: These need to be VMMemory now
-    vmctx.push(mem_base_addrs.as_mut_ptr() as *mut u8);
+    vmctx.push(instance.mem_base_addrs.as_mut_ptr() as *mut u8);
     // FIXME: These need to be VMTable now
     vmctx.push(default_table_ptr);
     vmctx.push(default_table_len as *mut u8);
@@ -139,6 +141,8 @@ fn make_vmctx(instance: &mut Instance, mem_base_addrs: &mut [*mut u8]) -> Vec<*m
 
 /// prepares the execution context
 pub fn finish_instantiation(
+    code: &mut Code,
+    isa: &TargetIsa,
     module: &Module,
     compilation: &Compilation,
     instance: &mut Instance,
@@ -164,67 +168,25 @@ pub fn finish_instantiation(
     }
 
     // Collect all memory base addresses and Vec.
-    let mut mem_base_addrs = instance
+    instance.mem_base_addrs = instance
         .memories
         .values_mut()
         .map(LinearMemory::base_addr)
         .collect::<Vec<_>>();
 
-    let mut vmctx = make_vmctx(instance, &mut mem_base_addrs);
+    let mut vmctx = make_vmctx(instance);
 
     if let Some(start_index) = module.start_func {
-        execute_by_index(module, compilation, &mut vmctx, start_index)?;
+        let result = invoke_by_index(code, isa, module, compilation, &mut vmctx, start_index, &[])?;
+        match result {
+            InvokeOutcome::Returned { values } => {
+                assert!(values.is_empty());
+            }
+            InvokeOutcome::Trapped { message } => {
+                return Err(format!("start function trapped: {}", message));
+            }
+        }
     }
 
     Ok(vmctx)
-}
-
-/// Jumps to the code region of memory and execute the exported function
-pub fn execute(
-    module: &Module,
-    compilation: &Compilation,
-    vmctx: &mut Vec<*mut u8>,
-    function: &str,
-) -> Result<(), String> {
-    let fn_index = match module.exports.get(function) {
-        Some(Export::Function(index)) => *index,
-        Some(_) => return Err(format!("exported item \"{}\" is not a function", function)),
-        None => return Err(format!("no export named \"{}\"", function)),
-    };
-
-    execute_by_index(module, compilation, vmctx, fn_index)
-}
-
-fn execute_by_index(
-    module: &Module,
-    compilation: &Compilation,
-    vmctx: &mut Vec<*mut u8>,
-    fn_index: FuncIndex,
-) -> Result<(), String> {
-    let code_buf =
-        &compilation.functions[module
-                                   .defined_func_index(fn_index)
-                                   .expect("imported start functions not supported yet")];
-
-    let mut traps = TrapContext {
-        triedToInstallSignalHandlers: false,
-        haveSignalHandlers: false,
-    };
-
-    // Rather than writing inline assembly to jump to the code region, we use the fact that
-    // the Rust ABI for calling a function with no arguments and no return values matches the one
-    // of the generated code. Thanks to this, we can transmute the code region into a first-class
-    // Rust function and call it.
-    unsafe {
-        // Ensure that our signal handlers are ready for action.
-        ensure_eager_signal_handlers();
-        ensure_full_signal_handlers(&mut traps);
-        if !traps.haveSignalHandlers {
-            return Err("failed to install signal handlers".to_string());
-        }
-
-        let func = transmute::<_, fn(*const *mut u8)>(code_buf.as_ptr());
-        call_wasm(|| func(vmctx.as_mut_ptr()))?;
-    }
-    Ok(())
 }

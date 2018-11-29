@@ -59,9 +59,9 @@ use std::io::prelude::*;
 use std::io::stdout;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::{exit, Command};
+use std::process::exit;
 use wasmtime_environ::{Module, ModuleEnvironment, Tunables};
-use wasmtime_execute::{compile_and_link_module, execute, finish_instantiation, Instance};
+use wasmtime_execute::{compile_and_link_module, finish_instantiation, invoke, Code, Instance};
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
@@ -157,6 +157,8 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
 
     let translation = environ.translate(&data).map_err(|e| e.to_string())?;
 
+    let mut code = Code::new();
+
     let instance = match compile_and_link_module(isa, &translation, &imports_resolver) {
         Ok(compilation) => {
             let mut instance = Instance::new(
@@ -165,11 +167,24 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
                 &translation.lazy.data_initializers,
             )?;
 
-            let mut context =
-                finish_instantiation(&translation.module, &compilation, &mut instance)?;
+            let mut context = finish_instantiation(
+                &mut code,
+                isa,
+                &translation.module,
+                &compilation,
+                &mut instance,
+            )?;
 
             if let Some(ref f) = args.flag_function {
-                execute(&translation.module, &compilation, &mut context, &f)?;
+                invoke(
+                    &mut code,
+                    isa,
+                    &translation.module,
+                    &compilation,
+                    &mut context,
+                    &f,
+                    &[],
+                )?;
             }
 
             instance

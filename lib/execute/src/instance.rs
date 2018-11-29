@@ -6,6 +6,7 @@ use cranelift_entity::EntityRef;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
 use memory::LinearMemory;
+use std::string::String;
 use std::vec::Vec;
 use wasmtime_environ::{Compilation, DataInitializer, Module, TableElements};
 
@@ -20,6 +21,9 @@ pub struct Instance {
 
     /// WebAssembly global variable data.
     pub globals: Vec<u8>,
+
+    /// Memory base address vector pointed to by vmctx.
+    pub mem_base_addrs: Vec<*mut u8>,
 }
 
 impl Instance {
@@ -33,6 +37,7 @@ impl Instance {
             tables: PrimaryMap::new(),
             memories: PrimaryMap::new(),
             globals: Vec::new(),
+            mem_base_addrs: Vec::new(),
         };
         result.instantiate_tables(module, compilation, &module.table_elements);
         result.instantiate_memories(module, data_initializers)?;
