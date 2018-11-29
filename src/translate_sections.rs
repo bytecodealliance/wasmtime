@@ -1,3 +1,4 @@
+use backend::{CodeGenSession, TranslatedCodeSection};
 use error::Error;
 use function_body;
 #[allow(unused_imports)] // for now
@@ -7,14 +8,14 @@ use wasmparser::{
     GlobalSectionReader, GlobalType, Import, ImportSectionEntryType, ImportSectionReader,
     MemorySectionReader, MemoryType, Operator, TableSectionReader, Type, TypeSectionReader,
 };
-use backend::{CodeGenSession, TranslatedCodeSection};
 
 /// Parses the Type section of the wasm module.
-pub fn type_(types: TypeSectionReader) -> Result<(), Error> {
-    for entry in types {
-        entry?; // TODO
+pub fn type_(types_reader: TypeSectionReader) -> Result<Vec<FuncType>, Error> {
+    let mut types = vec![];
+    for entry in types_reader {
+        types.push(entry?);
     }
-    Ok(())
+    Ok(types)
 }
 
 /// Parses the Import section of the wasm module.
@@ -26,11 +27,12 @@ pub fn import(imports: ImportSectionReader) -> Result<(), Error> {
 }
 
 /// Parses the Function section of the wasm module.
-pub fn function(functions: FunctionSectionReader) -> Result<(), Error> {
+pub fn function(functions: FunctionSectionReader) -> Result<Vec<u32>, Error> {
+    let mut func_ty_indicies = vec![];
     for entry in functions {
-        entry?; // TODO
+        func_ty_indicies.push(entry?);
     }
-    Ok(())
+    Ok(func_ty_indicies)
 }
 
 /// Parses the Table section of the wasm module.
@@ -80,10 +82,17 @@ pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
 }
 
 /// Parses the Code section of the wasm module.
-pub fn code(code: CodeSectionReader) -> Result<TranslatedCodeSection, Error> {
+pub fn code(
+    code: CodeSectionReader,
+    types: &[FuncType],
+    func_ty_indicies: &[u32],
+) -> Result<TranslatedCodeSection, Error> {
     let mut session = CodeGenSession::new();
-    for body in code {
-        function_body::translate(&mut session, &body?)?;
+    for (idx, body) in code.into_iter().enumerate() {
+        let func_ty_idx = func_ty_indicies[idx];
+        let func_ty = &types[func_ty_idx as usize];
+
+        function_body::translate(&mut session, &func_ty, &body?)?;
     }
     Ok(session.into_translated_code_section()?)
 }
