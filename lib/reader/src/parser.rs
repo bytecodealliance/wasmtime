@@ -3,7 +3,7 @@
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::{
@@ -188,10 +188,10 @@ impl<'a> Context<'a> {
         while self.function.heaps.next_key().index() <= heap.index() {
             self.function.create_heap(HeapData {
                 base: GlobalValue::reserved_value(),
-                min_size: Imm64::new(0),
-                guard_size: Imm64::new(0),
+                min_size: Uimm64::new(0),
+                offset_guard_size: Uimm64::new(0),
                 style: HeapStyle::Static {
-                    bound: Imm64::new(0),
+                    bound: Uimm64::new(0),
                 },
                 index_type: INVALID,
             });
@@ -214,9 +214,9 @@ impl<'a> Context<'a> {
         while self.function.tables.next_key().index() <= table.index() {
             self.function.create_table(TableData {
                 base_gv: GlobalValue::reserved_value(),
-                min_size: Imm64::new(0),
+                min_size: Uimm64::new(0),
                 bound_gv: GlobalValue::reserved_value(),
-                element_size: Imm64::new(0),
+                element_size: Uimm64::new(0),
                 index_type: INVALID,
             });
         }
@@ -539,6 +539,19 @@ impl<'a> Parser<'a> {
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as an Imm64 to check for overflow and other issues.
             text.parse().map_err(|e| self.error(e))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a Uimm64 immediate.
+    fn match_uimm64(&mut self, err_msg: &str) -> ParseResult<Uimm64> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like an integer.
+            // Parse it as an Uimm64 to check for overflow and other issues.
+            text.parse()
+                .map_err(|_| self.error("expected u64 decimal immediate"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -1279,7 +1292,7 @@ impl<'a> Parser<'a> {
     // heap-base ::= GlobalValue(base)
     // heap-attr ::= "min" Imm64(bytes)
     //             | "bound" Imm64(bytes)
-    //             | "guard" Imm64(bytes)
+    //             | "offset_guard" Imm64(bytes)
     //             | "index_type" type
     //
     fn parse_heap_decl(&mut self) -> ParseResult<(Heap, HeapData)> {
@@ -1302,7 +1315,7 @@ impl<'a> Parser<'a> {
         let mut data = HeapData {
             base,
             min_size: 0.into(),
-            guard_size: 0.into(),
+            offset_guard_size: 0.into(),
             style: HeapStyle::Static { bound: 0.into() },
             index_type: ir::types::I32,
         };
@@ -1311,7 +1324,7 @@ impl<'a> Parser<'a> {
         while self.optional(Token::Comma) {
             match self.match_any_identifier("expected heap attribute name")? {
                 "min" => {
-                    data.min_size = self.match_imm64("expected integer min size")?;
+                    data.min_size = self.match_uimm64("expected integer min size")?;
                 }
                 "bound" => {
                     data.style = match style_name {
@@ -1319,13 +1332,14 @@ impl<'a> Parser<'a> {
                             bound_gv: self.match_gv("expected gv bound")?,
                         },
                         "static" => HeapStyle::Static {
-                            bound: self.match_imm64("expected integer bound")?,
+                            bound: self.match_uimm64("expected integer bound")?,
                         },
                         t => return err!(self.loc, "unknown heap style '{}'", t),
                     };
                 }
-                "guard" => {
-                    data.guard_size = self.match_imm64("expected integer guard size")?;
+                "offset_guard" => {
+                    data.offset_guard_size =
+                        self.match_uimm64("expected integer offset-guard size")?;
                 }
                 "index_type" => {
                     data.index_type = self.match_type("expected index type")?;
@@ -1381,7 +1395,7 @@ impl<'a> Parser<'a> {
         while self.optional(Token::Comma) {
             match self.match_any_identifier("expected table attribute name")? {
                 "min" => {
-                    data.min_size = self.match_imm64("expected integer min size")?;
+                    data.min_size = self.match_uimm64("expected integer min size")?;
                 }
                 "bound" => {
                     data.bound_gv = match style_name {
@@ -1390,7 +1404,7 @@ impl<'a> Parser<'a> {
                     };
                 }
                 "element_size" => {
-                    data.element_size = self.match_imm64("expected integer element size")?;
+                    data.element_size = self.match_uimm64("expected integer element size")?;
                 }
                 "index_type" => {
                     data.index_type = self.match_type("expected index type")?;
@@ -2780,8 +2794,8 @@ mod tests {
     fn duplicate_heap() {
         let ParseError { location, message } = Parser::new(
             "function %ebbs() system_v {
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000",
+                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000
+                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000",
         )
         .parse_function(None)
         .unwrap_err();

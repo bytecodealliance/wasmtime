@@ -17,7 +17,8 @@ pub enum TrapCode {
     /// A `heap_addr` instruction detected an out-of-bounds error.
     ///
     /// Note that not all out-of-bounds heap accesses are reported this way;
-    /// some are detected by a segmentation fault on the heap guard pages.
+    /// some are detected by a segmentation fault on the heap unmapped or
+    /// offset-guard pages.
     HeapOutOfBounds,
 
     /// A `table_addr` instruction detected an out-of-bounds error.

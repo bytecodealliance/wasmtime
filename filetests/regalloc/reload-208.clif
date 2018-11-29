@@ -13,7 +13,7 @@ target x86_64 haswell
 function %pr208(i64 vmctx [%rdi]) system_v {
     gv1 = vmctx
     gv0 = iadd_imm.i64 gv1, -8
-    heap0 = static gv0, min 0, bound 0x5000, guard 0x0040_0000
+    heap0 = static gv0, min 0, bound 0x5000, offset_guard 0x0040_0000
     sig0 = (i64 vmctx [%rdi]) -> i32 [%rax] system_v
     sig1 = (i64 vmctx [%rdi], i32 [%rsi]) system_v
     fn0 = u0:1 sig0

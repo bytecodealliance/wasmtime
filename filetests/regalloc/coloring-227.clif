@@ -3,7 +3,7 @@ target x86_64 haswell
 
 function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8]) system_v {
     gv0 = vmctx
-    heap0 = static gv0, min 0, bound 0x0001_0000_0000, guard 0x8000_0000
+    heap0 = static gv0, min 0, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
                           ebb0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i64):
 [RexOp1pu_id#b8]              v5 = iconst.i32 0

@@ -7,7 +7,7 @@ target x86_64 haswell
 function %pr207(i64 vmctx, i32, i32) -> i32 system_v {
     gv1 = vmctx
     gv0 = iadd_imm.i64 gv1, -8
-    heap0 = static gv0, min 0, bound 0x5000, guard 0x0040_0000
+    heap0 = static gv0, min 0, bound 0x5000, offset_guard 0x0040_0000
     sig0 = (i64 vmctx, i32, i32) -> i32 system_v
     sig1 = (i64 vmctx, i32, i32, i32) -> i32 system_v
     sig2 = (i64 vmctx, i32, i32, i32) -> i32 system_v
@@ -1036,7 +1036,7 @@ ebb92(v767: i32):
 ; Same problem from musl.wasm.
 function %musl(f64 [%xmm0], i64 vmctx [%rdi]) -> f64 [%xmm0] system_v {
     gv0 = vmctx
-    heap0 = static gv0, min 0, bound 0x0001_0000_0000, guard 0x8000_0000
+    heap0 = static gv0, min 0, bound 0x0001_0000_0000, offset_guard 0x8000_0000
     sig0 = (f64 [%xmm0], i32 [%rdi], i64 vmctx [%rsi]) -> f64 [%xmm0] system_v
     fn0 = u0:517 sig0
 

@@ -1,6 +1,6 @@
 //! Heaps.
 
-use ir::immediates::Imm64;
+use ir::immediates::Uimm64;
 use ir::{GlobalValue, Type};
 use std::fmt;
 
@@ -12,10 +12,10 @@ pub struct HeapData {
 
     /// Guaranteed minimum heap size in bytes. Heap accesses before `min_size` don't need bounds
     /// checking.
-    pub min_size: Imm64,
+    pub min_size: Uimm64,
 
-    /// Size in bytes of the guard pages following the heap.
-    pub guard_size: Imm64,
+    /// Size in bytes of the offset-guard pages following the heap.
+    pub offset_guard_size: Uimm64,
 
     /// Heap style, with additional style-specific info.
     pub style: HeapStyle,
@@ -34,10 +34,10 @@ pub enum HeapStyle {
     },
 
     /// A static heap has a fixed base address and a number of not-yet-allocated pages before the
-    /// guard pages.
+    /// offset-guard pages.
     Static {
-        /// Heap bound in bytes. The guard pages are allocated after the bound.
-        bound: Imm64,
+        /// Heap bound in bytes. The offset-guard pages are allocated after the bound.
+        bound: Uimm64,
     },
 }
 
@@ -55,8 +55,8 @@ impl fmt::Display for HeapData {
         }
         write!(
             f,
-            ", guard {}, index_type {}",
-            self.guard_size, self.index_type
+            ", offset_guard {}, index_type {}",
+            self.offset_guard_size, self.index_type
         )
     }
 }
