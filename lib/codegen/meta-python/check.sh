@@ -17,7 +17,11 @@ function runif {
 runif flake8 .
 
 # Type checking.
-runif mypy --py2 build.py
+# Disable mypy checking on osx on travis for now, since pip installs mypy into
+# a directory which is not in the PATH.
+if [ "$TRAVIS_OS_NAME" != "osx" ]; then
+    runif mypy --py2 build.py
+fi
 
 # Python unit tests.
 runif python2.7 -m unittest discover
