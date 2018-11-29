@@ -24,6 +24,7 @@ extern crate cfg_if;
 extern crate capstone;
 extern crate clap;
 extern crate cranelift_codegen;
+#[cfg(feature = "wasm")]
 extern crate cranelift_entity;
 extern crate cranelift_filetests;
 extern crate cranelift_reader;
@@ -245,23 +246,25 @@ fn main() {
         ("wasm", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
 
-            let mut target_val: &str = "";
-            if let Some(clap_target) = rest_cmd.value_of("target") {
-                target_val = clap_target;
-            }
-
             #[cfg(feature = "wasm")]
-            let result = wasm::run(
-                get_vec(rest_cmd.values_of("file")),
-                rest_cmd.is_present("verbose"),
-                rest_cmd.is_present("just-decode"),
-                rest_cmd.is_present("check-translation"),
-                rest_cmd.is_present("print"),
-                &get_vec(rest_cmd.values_of("set")),
-                target_val,
-                rest_cmd.is_present("print-size"),
-                rest_cmd.is_present("time-passes"),
-            );
+            let result = {
+                let mut target_val: &str = "";
+                if let Some(clap_target) = rest_cmd.value_of("target") {
+                    target_val = clap_target;
+                }
+
+                wasm::run(
+                    get_vec(rest_cmd.values_of("file")),
+                    rest_cmd.is_present("verbose"),
+                    rest_cmd.is_present("just-decode"),
+                    rest_cmd.is_present("check-translation"),
+                    rest_cmd.is_present("print"),
+                    &get_vec(rest_cmd.values_of("set")),
+                    target_val,
+                    rest_cmd.is_present("print-size"),
+                    rest_cmd.is_present("time-passes"),
+                )
+            };
 
             #[cfg(not(feature = "wasm"))]
             let result = Err("Error: clif-util was compiled without wasm support.".to_owned());
