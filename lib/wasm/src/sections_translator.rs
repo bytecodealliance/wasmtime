@@ -82,8 +82,8 @@ pub fn parse_import_section<'data>(
             }) => {
                 environ.declare_memory_import(
                     Memory {
-                        pages_count: memlimits.initial as usize,
-                        maximum: memlimits.maximum.map(|x| x as usize),
+                        minimum: memlimits.initial,
+                        maximum: memlimits.maximum,
                         shared,
                     },
                     module_name,
@@ -108,8 +108,8 @@ pub fn parse_import_section<'data>(
                             Ok(t) => TableElementType::Val(t),
                             Err(()) => TableElementType::Func(),
                         },
-                        size: tab.limits.initial as usize,
-                        maximum: tab.limits.maximum.map(|x| x as usize),
+                        minimum: tab.limits.initial,
+                        maximum: tab.limits.maximum,
                     },
                     module_name,
                     field_name,
@@ -144,8 +144,8 @@ pub fn parse_table_section(
                 Ok(t) => TableElementType::Val(t),
                 Err(()) => TableElementType::Func(),
             },
-            size: table.limits.initial as usize,
-            maximum: table.limits.maximum.map(|x| x as usize),
+            minimum: table.limits.initial,
+            maximum: table.limits.maximum,
         });
     }
     Ok(())
@@ -159,8 +159,8 @@ pub fn parse_memory_section(
     for entry in memories {
         let memory = entry?;
         environ.declare_memory(Memory {
-            pages_count: memory.limits.initial as usize,
-            maximum: memory.limits.maximum.map(|x| x as usize),
+            minimum: memory.limits.initial,
+            maximum: memory.limits.maximum,
             shared: memory.shared,
         });
     }
