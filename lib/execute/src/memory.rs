@@ -31,7 +31,7 @@ impl PtrLen {
                 ptr::null_mut(),
                 alloc_size,
                 libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                libc::MAP_PRIVATE | libc::MAP_ANON,
                 -1,
                 0,
             );
