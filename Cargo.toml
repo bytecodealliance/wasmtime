@@ -11,7 +11,7 @@ publish = false
 
 [[bin]]
 name = "wasmtime"
-path = "src/main.rs"
+path = "src/wasmtime.rs"
 
 [[bin]]
 name = "wasm2obj"
