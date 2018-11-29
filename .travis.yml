@@ -26,8 +26,7 @@ addons:
         packages:
             - python3-pip
 install:
-    - pip3 install --user --upgrade mypy flake8
-    - mypy --version
+    - pip3 install --verbose --user --upgrade mypy flake8
 before_script:
     # If an old version of rustfmt from cargo is already installed, uninstall
     # it, since it can prevent the installation of the new version from rustup.
