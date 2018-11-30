@@ -44,9 +44,6 @@ extern crate wasmtime_execute;
 extern crate serde_derive;
 extern crate file_per_thread_logger;
 extern crate pretty_env_logger;
-extern crate tempdir;
-
-#[cfg(test)]
 extern crate wabt;
 
 use cranelift_codegen::isa::TargetIsa;
@@ -62,8 +59,7 @@ use std::io::prelude::*;
 use std::io::stdout;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::{exit, Command};
-use tempdir::TempDir;
+use std::process::exit;
 use wasmtime_environ::{Module, ModuleEnvironment};
 use wasmtime_execute::{compile_and_link_module, execute, finish_instantiation, Instance};
 
@@ -148,23 +144,9 @@ fn main() {
 
 fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), String> {
     let mut data = read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
+    // if data is using wat-format, first convert data to wasm
     if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
-        let tmp_dir = TempDir::new("cranelift-wasm").unwrap();
-        let file_path = tmp_dir.path().join("module.wasm");
-        File::create(file_path.clone()).unwrap();
-        Command::new("wat2wasm")
-            .arg(path.clone())
-            .arg("-o")
-            .arg(file_path.to_str().unwrap())
-            .output()
-            .or_else(|e| {
-                if let io::ErrorKind::NotFound = e.kind() {
-                    return Err(String::from("wat2wasm not found"));
-                } else {
-                    return Err(String::from(e.description()));
-                }
-            })?;
-        data = read_to_end(file_path).map_err(|err| String::from(err.description()))?;
+        data = wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?;
     }
     let mut module = Module::new();
     let environ = ModuleEnvironment::new(isa, &mut module);
