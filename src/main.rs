@@ -267,28 +267,34 @@ mod tests {
         }};
     }
 
-    macro_rules! data_to_instance {
+    macro_rules! create_module {
         ( $data:expr, $module:expr, $isa:expr) => {{
             let environ = ModuleEnvironment::new(&*$isa, &mut $module);
 
-            let imports_resolver = |_env: &str, _function: &str| None;
-
             let translation = environ.translate(&$data).expect("translating code");
+
+            let imports_resolver = |_env: &str, _function: &str| None;
 
             let compilation = compile_and_link_module(&*$isa, &translation, &imports_resolver)
                 .expect("resolving imports");
 
+            (translation, compilation)
+        }};
+    }
+
+    macro_rules! create_instance {
+        ( $translation:expr, $compilation:expr) => {{
             let mut instance = Instance::new(
-                translation.module,
-                &compilation,
-                &translation.lazy.data_initializers,
+                &$translation.module,
+                &$compilation,
+                &$translation.lazy.data_initializers,
             );
 
             let mut context =
-                finish_instantiation(&translation.module, &compilation, &mut instance)
+                finish_instantiation(&$translation.module, &$compilation, &mut instance)
                     .expect("finishing instanciation");
 
-            (translation, compilation, context)
+            context
         }};
     }
 
@@ -323,7 +329,9 @@ mod tests {
         let mut module = Module::new();
         let data = read_watfile!(PATH_MODULE_CALL);
         let isa = build_isa!();
-        let (translation, compilation, mut context) = data_to_instance!(data, module, isa);
+        let (translation, compilation) = create_module!(data, module, isa);
+        let mut context = create_instance!(translation, compilation);
+
         // verify execution of a function invoking a function of the module
         assert!(execute(&translation.module, &compilation, &mut context, "main").is_ok());
     }
@@ -334,7 +342,9 @@ mod tests {
         let mut module = Module::new();
         let data = read_watfile!(PATH_MODULE_CALL);
         let isa = build_isa!();
-        let (translation, compilation, mut context) = data_to_instance!(data, module, isa);
+        let (translation, compilation) = create_module!(data, module, isa);
+        let mut context = create_instance!(translation, compilation);
+
         // verify execution of a function invoking a function of the module
         assert!(execute(&translation.module, &compilation, &mut context, "badfunc").is_err());
     }
