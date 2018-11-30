@@ -238,10 +238,61 @@ mod tests {
     use std::path::PathBuf;
     use wabt;
     use wasmtime_environ::{Module, ModuleEnvironment};
+    use wasmtime_execute::{compile_and_link_module, execute, finish_instantiation, Instance};
 
+    const PATH_MODULE_CALL: &str = r"filetests/call.wat";
     const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
 
-    /// Simple test reading a wasm-file and translating to binary representation.
+    macro_rules! read_watfile {
+        ( $watfile:expr) => {{
+            let path = PathBuf::from($watfile);
+            let wat_data = super::read_to_end(path).expect("reading file");
+            let data = wabt::wat2wasm(wat_data).expect("expecting valid wat-format");
+            assert!(data.len() > 0);
+            data
+        }};
+    }
+
+    macro_rules! build_isa {
+        () => {{
+            let mut flag_builder = settings::builder();
+            flag_builder.enable("enable_verifier").unwrap();
+
+            let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
+                panic!("host machine is not a supported target");
+            });
+            let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+
+            isa
+        }};
+    }
+
+    macro_rules! data_to_instance {
+        ( $data:expr, $module:expr, $isa:expr) => {{
+            let environ = ModuleEnvironment::new(&*$isa, &mut $module);
+
+            let imports_resolver = |_env: &str, _function: &str| None;
+
+            let translation = environ.translate(&$data).expect("translating code");
+
+            let compilation = compile_and_link_module(&*$isa, &translation, &imports_resolver)
+                .expect("resolving imports");
+
+            let mut instance = Instance::new(
+                translation.module,
+                &compilation,
+                &translation.lazy.data_initializers,
+            );
+
+            let mut context =
+                finish_instantiation(&translation.module, &compilation, &mut instance)
+                    .expect("finishing instanciation");
+
+            (translation, compilation, context)
+        }};
+    }
+
+    /// Simple test reading a wat-file and translating to binary representation.
     #[test]
     fn test_environ_translate() {
         let path = PathBuf::from(PATH_MODULE_RS2WASM_ADD_FUNC);
@@ -264,5 +315,27 @@ mod tests {
 
         let translation = environ.translate(&data);
         assert!(translation.is_ok());
+    }
+
+    /// Simple test translating a wat-file and calling a valid function
+    #[test]
+    fn test_compile_execute_succeed() {
+        let mut module = Module::new();
+        let data = read_watfile!(PATH_MODULE_CALL);
+        let isa = build_isa!();
+        let (translation, compilation, mut context) = data_to_instance!(data, module, isa);
+        // verify execution of a function invoking a function of the module
+        assert!(execute(&translation.module, &compilation, &mut context, "main").is_ok());
+    }
+
+    /// Simple test translating a wat-file and calling a bad function (unknown function)
+    #[test]
+    fn test_compile_execute_fail_badfunc() {
+        let mut module = Module::new();
+        let data = read_watfile!(PATH_MODULE_CALL);
+        let isa = build_isa!();
+        let (translation, compilation, mut context) = data_to_instance!(data, module, isa);
+        // verify execution of a function invoking a function of the module
+        assert!(execute(&translation.module, &compilation, &mut context, "badfunc").is_err());
     }
 }
