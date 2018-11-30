@@ -24,7 +24,7 @@ pub fn compile_and_link_module<'data, 'module, F>(
     imports: F,
 ) -> Result<Compilation, String>
 where
-    F: Fn(&str, &str) -> Option<isize>,
+    F: Fn(&str, &str) -> Option<usize>,
 {
     let (mut compilation, relocations) = compile_module(&translation, isa)?;
 
@@ -41,15 +41,15 @@ fn relocate<F>(
     module: &Module,
     imports: F,
 ) where
-    F: Fn(&str, &str) -> Option<isize>,
+    F: Fn(&str, &str) -> Option<usize>,
 {
     // The relocations are relative to the relocation's address plus four bytes
     // TODO: Support architectures other than x64, and other reloc kinds.
     for (i, function_relocs) in relocations.iter() {
         for r in function_relocs {
-            let target_func_address: isize = match r.reloc_target {
+            let target_func_address: usize = match r.reloc_target {
                 RelocationTarget::UserFunc(index) => match module.defined_func_index(index) {
-                    Some(f) => compilation.functions[f].as_ptr() as isize,
+                    Some(f) => compilation.functions[f].as_ptr() as usize,
                     None => {
                         let func = &module.imported_funcs[index.index()];
                         match imports(&func.0, &func.1) {
@@ -60,25 +60,28 @@ fn relocate<F>(
                         }
                     }
                 },
-                RelocationTarget::GrowMemory => grow_memory as isize,
-                RelocationTarget::CurrentMemory => current_memory as isize,
+                RelocationTarget::GrowMemory => grow_memory as usize,
+                RelocationTarget::CurrentMemory => current_memory as usize,
             };
 
             let body = &mut compilation.functions[i];
             match r.reloc {
                 Reloc::Abs8 => unsafe {
-                    let reloc_address = body.as_mut_ptr().offset(r.offset as isize) as i64;
-                    let reloc_addend = r.addend;
-                    let reloc_abs = target_func_address as i64 + reloc_addend;
-                    write_unaligned(reloc_address as *mut i64, reloc_abs);
+                    let reloc_address = body.as_mut_ptr().add(r.offset as usize) as usize;
+                    let reloc_addend = r.addend as isize;
+                    let reloc_abs = (target_func_address as u64)
+                        .checked_add(reloc_addend as u64)
+                        .unwrap();
+                    write_unaligned(reloc_address as *mut u64, reloc_abs);
                 },
                 Reloc::X86PCRel4 => unsafe {
-                    let reloc_address = body.as_mut_ptr().offset(r.offset as isize) as isize;
+                    let reloc_address = body.as_mut_ptr().add(r.offset as usize) as usize;
                     let reloc_addend = r.addend as isize;
-                    // TODO: Handle overflow.
-                    let reloc_delta_i32 =
-                        (target_func_address - reloc_address + reloc_addend) as i32;
-                    write_unaligned(reloc_address as *mut i32, reloc_delta_i32);
+                    let reloc_delta_u32 = (target_func_address as u32)
+                        .wrapping_sub(reloc_address as u32)
+                        .checked_add(reloc_addend as u32)
+                        .unwrap();
+                    write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
                 },
                 _ => panic!("unsupported reloc kind"),
             }

@@ -122,8 +122,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         real_call_args
     }
 
-    fn pointer_bytes(&self) -> usize {
-        usize::from(self.isa.pointer_bytes())
+    fn pointer_bytes(&self) -> u8 {
+        self.isa.pointer_bytes()
     }
 
     fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
@@ -345,7 +345,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     offset: Offset32::new(
                         offset32 + offset_of!(vmcontext::VMMemory, current_length) as i32,
                     ),
-                    global_type: self.pointer_type(),
+                    global_type: I32,
                     readonly: false,
                 });
                 (
@@ -405,7 +405,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             base_gv,
             min_size: Imm64::new(0),
             bound_gv,
-            element_size: Imm64::new(i64::from(self.pointer_bytes() as i64)),
+            element_size: Imm64::new(i64::from(self.pointer_bytes())),
             index_type: I32,
         })
     }

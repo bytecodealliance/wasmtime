@@ -41,9 +41,9 @@ pub extern "C" fn RecordTrap(pc: *const u8, _codeSegment: *const CodeSegment) {
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "C" fn Unwind() {
-    JMP_BUFS.with(|bufs| unsafe {
+    JMP_BUFS.with(|bufs| {
         let buf = bufs.borrow_mut().pop().unwrap();
-        longjmp(&buf, 1);
+        unsafe { longjmp(&buf, 1) };
     })
 }
 
@@ -54,7 +54,7 @@ pub extern "C" fn Unwind() {
 #[no_mangle]
 pub extern "C" fn LookupCodeSegment(_pc: *const ::std::os::raw::c_void) -> *const CodeSegment {
     // TODO: Implement this.
-    unsafe { mem::transmute(-1isize) }
+    -1isize as *const CodeSegment
 }
 
 /// A simple guard to ensure that `JMP_BUFS` is reset when we're done.
@@ -88,7 +88,7 @@ where
 {
     // In case wasm code calls Rust that panics and unwinds past this point,
     // ensure that JMP_BUFS is unwound to its incoming state.
-    let _ = ScopeGuard::new();
+    let _guard = ScopeGuard::new();
 
     JMP_BUFS.with(|bufs| {
         let mut buf = unsafe { mem::uninitialized() };

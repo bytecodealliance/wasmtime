@@ -1,5 +1,8 @@
 # Travis CI script. See https://travis-ci.org/ for more info.
 
+os:
+    - linux
+    - osx
 language: rust
 rust:
     - 1.30.1
