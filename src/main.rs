@@ -348,4 +348,22 @@ mod tests {
         // verify execution of a function invoking a function of the module
         assert!(execute(&translation.module, &compilation, &mut context, "badfunc").is_err());
     }
+
+    /// Simple test translating a wat-file and in two different instances calling a valid function
+    #[test]
+    fn test_compile_execute_succeed_two_instances() {
+        let mut module = Module::new();
+        let data = read_watfile!(PATH_MODULE_CALL);
+        let isa = build_isa!();
+        let (translation, compilation) = create_module!(data, module, isa);
+        let mut context1 = create_instance!(translation, compilation);
+        let mut context2 = create_instance!(translation, compilation);
+
+        // In instance 1: verify execution of a function invoking a function of the module
+        assert!(execute(&translation.module, &compilation, &mut context1, "main").is_ok());
+
+        // In instance 2: verify execution of a function invoking a function of the module
+        assert!(execute(&translation.module, &compilation, &mut context2, "main").is_ok());
+    }
+
 }
