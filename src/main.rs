@@ -42,6 +42,8 @@ extern crate wasmtime_environ;
 extern crate wasmtime_execute;
 #[macro_use]
 extern crate serde_derive;
+extern crate file_per_thread_logger;
+extern crate pretty_env_logger;
 extern crate tempdir;
 
 #[cfg(test)]
@@ -65,14 +67,16 @@ use tempdir::TempDir;
 use wasmtime_environ::{Module, ModuleEnvironment};
 use wasmtime_execute::{compile_and_link_module, execute, finish_instantiation, Instance};
 
+static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
+
 const USAGE: &str = "
 Wasm to Cranelift IL translation utility.
 Takes a binary WebAssembly module and returns its functions in Cranelift IL format.
 The translation is dependent on the environment chosen.
 
 Usage:
-    wasmtime [-mop] <file>...
-    wasmtime [-mop] <file>... --function=<fn>
+    wasmtime [-mopd] <file>...
+    wasmtime [-mopd] <file>... --function=<fn>
     wasmtime --help | --version
 
 Options:
@@ -81,6 +85,7 @@ Options:
     --function=<fn>     name of function to run
     -h, --help          print this help message
     --version           print the Cranelift version
+    -d, --debug         enable debug output on stderr/stdout
 ";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -88,6 +93,7 @@ struct Args {
     arg_file: Vec<String>,
     flag_memory: bool,
     flag_optimize: bool,
+    flag_debug: bool,
     flag_function: Option<String>,
 }
 
@@ -113,6 +119,12 @@ fn main() {
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
         flag_builder.enable("enable_verifier").unwrap();
+    }
+
+    if args.flag_debug {
+        pretty_env_logger::init();
+    } else {
+        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
     }
 
     // Enable optimization if requested.
