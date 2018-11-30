@@ -32,16 +32,16 @@ pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
 /// argument to `compile_module`.
 pub struct ModuleEnvironment<'data, 'module> {
     /// Compilation setting flags.
-    pub isa: &'module isa::TargetIsa,
+    isa: &'module isa::TargetIsa,
 
     /// Module information.
-    pub module: &'module mut Module,
+    module: &'module mut Module,
 
     /// References to information to be decoded later.
-    pub lazy: LazyContents<'data>,
+    lazy: LazyContents<'data>,
 
     /// Tunable parameters.
-    pub tunables: Tunables,
+    tunables: Tunables,
 }
 
 impl<'data, 'module> ModuleEnvironment<'data, 'module> {
@@ -59,13 +59,8 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
         }
     }
 
-    fn func_env(&self) -> FuncEnvironment {
-        FuncEnvironment::new(self.isa, &self.module, self.tunables.clone())
-    }
-
     fn pointer_type(&self) -> ir::Type {
-        use cranelift_wasm::FuncEnvironment;
-        self.func_env().pointer_type()
+        self.isa.frontend_config().pointer_type()
     }
 
     /// Translate the given wasm module data using this environment. This consumes the
@@ -90,35 +85,31 @@ pub struct FuncEnvironment<'module_environment> {
     isa: &'module_environment isa::TargetIsa,
 
     /// The module-level environment which this function-level environment belongs to.
-    pub module: &'module_environment Module,
+    module: &'module_environment Module,
 
     /// The Cranelift global holding the vmctx address.
-    pub vmctx: Option<ir::GlobalValue>,
+    vmctx: Option<ir::GlobalValue>,
 
     /// The Cranelift global holding the base address of the memories vector.
-    pub memories_base: Option<ir::GlobalValue>,
+    memories_base: Option<ir::GlobalValue>,
 
     /// The Cranelift global holding the base address of the tables vector.
-    pub tables_base: Option<ir::GlobalValue>,
+    tables_base: Option<ir::GlobalValue>,
 
     /// The Cranelift global holding the base address of the globals vector.
-    pub globals_base: Option<ir::GlobalValue>,
+    globals_base: Option<ir::GlobalValue>,
 
     /// The external function declaration for implementing wasm's `current_memory`.
-    pub current_memory_extfunc: Option<FuncRef>,
+    current_memory_extfunc: Option<FuncRef>,
 
     /// The external function declaration for implementing wasm's `grow_memory`.
-    pub grow_memory_extfunc: Option<FuncRef>,
-
-    /// Tunable parameters.
-    pub tunables: Tunables,
+    grow_memory_extfunc: Option<FuncRef>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         isa: &'module_environment isa::TargetIsa,
         module: &'module_environment Module,
-        tunables: Tunables,
     ) -> Self {
         Self {
             isa,
@@ -129,7 +120,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             globals_base: None,
             current_memory_extfunc: None,
             grow_memory_extfunc: None,
-            tunables,
         }
     }
 
@@ -583,8 +573,8 @@ pub struct ModuleTranslation<'data, 'module> {
 }
 
 impl<'data, 'module> ModuleTranslation<'data, 'module> {
-    /// Return a new `FuncEnvironment` for translation a function.
+    /// Return a new `FuncEnvironment` for translating a function.
     pub fn func_env(&self) -> FuncEnvironment {
-        FuncEnvironment::new(self.isa, &self.module, self.tunables.clone())
+        FuncEnvironment::new(self.isa, &self.module)
     }
 }
