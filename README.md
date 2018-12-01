@@ -1,6 +1,6 @@
 # Wasmtime: a WebAssembly Runtime.
 
-A standalone wasm-only runtime for [WebAsssembly], using [Cranelift].
+A standalone wasm-only runtime for [WebAssembly], using [Cranelift].
 
 [![Travis Status](https://travis-ci.org/CraneStation/wasmtime.svg?branch=master)](https://travis-ci.org/CraneStation/wasmtime)
 [![Appveyor Status](https://ci.appveyor.com/api/projects/status/vxvpt2plriy5s0mc?svg=true)](https://ci.appveyor.com/project/CraneStation/cranelift)
