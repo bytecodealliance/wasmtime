@@ -266,7 +266,7 @@ impl UFEntry {
 
     /// Encode a link entry.
     fn encode_link(v: Value) -> i32 {
-        !(v.index() as i32)
+        !(v.as_u32() as i32)
     }
 }
 
