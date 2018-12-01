@@ -342,10 +342,6 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.config
     }
 
-    fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName {
-        get_func_name(func_index)
-    }
-
     fn declare_signature(&mut self, sig: &ir::Signature) {
         self.info.signatures.push(sig.clone());
     }

@@ -235,9 +235,6 @@ pub trait ModuleEnvironment<'data> {
     /// Get the information needed to produce Cranelift IR for the current target.
     fn target_config(&self) -> TargetFrontendConfig;
 
-    /// Return the name for the given function index.
-    fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName;
-
     /// Declares a function signature to the environment.
     fn declare_signature(&mut self, sig: &ir::Signature);
 
