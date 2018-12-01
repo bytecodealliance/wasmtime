@@ -90,7 +90,9 @@ pub struct Table {
 /// WebAssembly table element. Can be a function or a scalar type.
 #[derive(Debug, Clone, Copy)]
 pub enum TableElementType {
+    /// A scalar type.
     Val(ir::Type),
+    /// A function.
     Func,
 }
 
