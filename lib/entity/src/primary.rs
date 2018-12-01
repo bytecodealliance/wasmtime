@@ -41,6 +41,14 @@ where
         }
     }
 
+    /// Create a new empty map with the given capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            elems: Vec::with_capacity(capacity),
+            unused: PhantomData,
+        }
+    }
+
     /// Check if `k` is a valid key in the map.
     pub fn is_valid(&self, k: K) -> bool {
         k.index() < self.elems.len()
