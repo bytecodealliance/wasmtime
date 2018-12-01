@@ -101,6 +101,7 @@ macro_rules! entity_impl {
 
         impl $entity {
             /// Return the underlying index value as a `u32`.
+            #[allow(dead_code)]
             pub fn as_u32(self) -> u32 {
                 self.0
             }
