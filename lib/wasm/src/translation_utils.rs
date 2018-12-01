@@ -91,7 +91,7 @@ pub struct Table {
 #[derive(Debug, Clone, Copy)]
 pub enum TableElementType {
     Val(ir::Type),
-    Func(),
+    Func,
 }
 
 /// WebAssembly linear memory.

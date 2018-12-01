@@ -106,7 +106,7 @@ pub fn parse_import_section<'data>(
                     Table {
                         ty: match type_to_type(tab.element_type) {
                             Ok(t) => TableElementType::Val(t),
-                            Err(()) => TableElementType::Func(),
+                            Err(()) => TableElementType::Func,
                         },
                         minimum: tab.limits.initial,
                         maximum: tab.limits.maximum,
@@ -142,7 +142,7 @@ pub fn parse_table_section(
         environ.declare_table(Table {
             ty: match type_to_type(table.element_type) {
                 Ok(t) => TableElementType::Val(t),
-                Err(()) => TableElementType::Func(),
+                Err(()) => TableElementType::Func,
             },
             minimum: table.limits.initial,
             maximum: table.limits.maximum,
