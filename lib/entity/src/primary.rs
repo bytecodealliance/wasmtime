@@ -1,4 +1,5 @@
 //! Densely numbered entity references as mapping keys.
+use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
@@ -167,6 +168,21 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         IterMut::new(self.elems.iter_mut())
+    }
+}
+
+impl<K, V> FromIterator<V> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = V>,
+    {
+        Self {
+            elems: Vec::from_iter(iter),
+            unused: PhantomData,
+        }
     }
 }
 
@@ -344,6 +360,17 @@ mod tests {
                 1 => assert_eq!(*value_mut, 33),
                 _ => panic!(),
             }
+        }
+    }
+
+    fn from_iter() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        m.push(12);
+        m.push(33);
+        let n = m.values().collect::<PrimaryMap<E, _>>();
+        assert!(m.len() == n.len());
+        for (me, ne) in m.values().zip(n.values()) {
+            assert!(*me == **ne);
         }
     }
 }
