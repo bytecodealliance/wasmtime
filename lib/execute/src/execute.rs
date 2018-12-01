@@ -68,6 +68,7 @@ fn relocate<F>(
 
             let body = &mut compilation.functions[i];
             match r.reloc {
+                #[cfg(target_pointer_width = "64")]
                 Reloc::Abs8 => unsafe {
                     let reloc_address = body.as_mut_ptr().add(r.offset as usize) as usize;
                     let reloc_addend = r.addend as isize;
@@ -76,6 +77,7 @@ fn relocate<F>(
                         .unwrap();
                     write_unaligned(reloc_address as *mut u64, reloc_abs);
                 },
+                #[cfg(target_pointer_width = "32")]
                 Reloc::X86PCRel4 => unsafe {
                     let reloc_address = body.as_mut_ptr().add(r.offset as usize) as usize;
                     let reloc_addend = r.addend as isize;
