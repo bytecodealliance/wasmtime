@@ -15,17 +15,15 @@ use module::{
     DataInitializer, Export, LazyContents, MemoryPlan, MemoryStyle, Module, TableElements,
 };
 use std::clone::Clone;
-use std::mem;
 use std::string::String;
 use std::vec::Vec;
 use tunables::Tunables;
-use vmcontext;
+use vmoffsets::VMOffsets;
 use WASM_PAGE_SIZE;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
-    debug_assert!(FuncIndex::new(func_index.index() as u32 as usize) == func_index);
-    ir::ExternalName::user(0, func_index.index() as u32)
+    ir::ExternalName::user(0, func_index.as_u32())
 }
 
 /// Object containing the standalone environment information. To be passed after creation as
@@ -104,6 +102,9 @@ pub struct FuncEnvironment<'module_environment> {
 
     /// The external function declaration for implementing wasm's `grow_memory`.
     grow_memory_extfunc: Option<FuncRef>,
+
+    /// Offsets to struct fields accessed by JIT code.
+    offsets: VMOffsets,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -120,6 +121,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             globals_base: None,
             current_memory_extfunc: None,
             grow_memory_extfunc: None,
+            offsets: VMOffsets::new(isa.frontend_config().pointer_bytes()),
         }
     }
 
@@ -149,10 +151,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     for ModuleEnvironment<'data, 'module>
 {
-    fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName {
-        get_func_name(func_index)
-    }
-
     fn target_config(&self) -> isa::TargetFrontendConfig {
         self.isa.frontend_config()
     }
@@ -302,19 +300,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let globals_base = self.globals_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
-                offset: Offset32::new(offset_of!(vmcontext::VMContext, globals) as i32),
+                offset: Offset32::new(i32::from(self.offsets.vmctx_globals())),
                 global_type: self.pointer_type(),
                 readonly: true,
             });
             self.globals_base = Some(new_base);
             new_base
         });
-        // For now, give each global gets a pointer-sized region of
-        // storage, regardless of its type.
-        let offset = index.index() * mem::size_of::<*mut u8>();
         let gv = func.create_global_value(ir::GlobalValueData::IAddImm {
             base: globals_base,
-            offset: Imm64::new(offset as i64),
+            offset: Imm64::new(i64::from(self.offsets.index_vmglobal(index.as_u32()))),
             global_type: self.pointer_type(),
         });
         GlobalVariable::Memory {
@@ -328,16 +323,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let memories_base = self.memories_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
-                offset: Offset32::new(offset_of!(vmcontext::VMContext, memories) as i32),
+                offset: Offset32::new(i32::from(self.offsets.vmctx_memories())),
                 global_type: self.pointer_type(),
                 readonly: true,
             });
             self.memories_base = Some(new_base);
             new_base
         });
-        let offset = index.index() * mem::size_of::<vmcontext::VMMemory>();
-        let offset32 = offset as i32;
-        debug_assert_eq!(offset32 as usize, offset);
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
         let (offset_guard_size, heap_style, readonly_base) = match self.module.memory_plans[index] {
@@ -349,7 +341,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
                     base: memories_base,
                     offset: Offset32::new(
-                        offset32 + offset_of!(vmcontext::VMMemory, current_length) as i32,
+                        self.offsets.index_vmmemory_current_length(index.as_u32()),
                     ),
                     global_type: I32,
                     readonly: false,
@@ -377,7 +369,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: memories_base,
-            offset: Offset32::new(offset32 + offset_of!(vmcontext::VMMemory, base) as i32),
+            offset: Offset32::new(self.offsets.index_vmmemory_base(index.as_u32())),
             global_type: self.pointer_type(),
             readonly: readonly_base,
         });
@@ -395,27 +387,22 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let tables_base = self.tables_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
-                offset: Offset32::new(offset_of!(vmcontext::VMContext, tables) as i32),
+                offset: Offset32::new(i32::from(self.offsets.vmctx_tables())),
                 global_type: self.pointer_type(),
                 readonly: true,
             });
             self.tables_base = Some(new_base);
             new_base
         });
-        let offset = index.index() * mem::size_of::<vmcontext::VMTable>();
-        let offset32 = offset as i32;
-        debug_assert_eq!(offset32 as usize, offset);
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: tables_base,
-            offset: Offset32::new(offset32 + offset_of!(vmcontext::VMTable, base) as i32),
+            offset: Offset32::new(self.offsets.index_vmtable_base(index.as_u32())),
             global_type: self.pointer_type(),
             readonly: false,
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: tables_base,
-            offset: Offset32::new(
-                offset32 + offset_of!(vmcontext::VMTable, current_num_elements) as i32,
-            ),
+            offset: Offset32::new(self.offsets.index_vmtable_current_elements(index.as_u32())),
             global_type: I32,
             readonly: false,
         });

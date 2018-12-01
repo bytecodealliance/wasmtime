@@ -33,8 +33,6 @@
 extern crate cranelift_codegen;
 extern crate cranelift_entity;
 extern crate cranelift_wasm;
-#[macro_use]
-extern crate memoffset;
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
@@ -43,7 +41,7 @@ mod compilation;
 mod environ;
 mod module;
 mod tunables;
-mod vmcontext;
+mod vmoffsets;
 
 pub use compilation::{
     compile_module, Compilation, RelocSink, Relocation, RelocationTarget, Relocations,

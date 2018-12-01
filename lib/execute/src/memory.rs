@@ -1,5 +1,6 @@
 //! Memory management for linear memory.
 
+use cast;
 use mmap::Mmap;
 use region;
 use std::fmt;
@@ -69,8 +70,7 @@ impl LinearMemory {
     pub fn current_size(&self) -> u32 {
         assert_eq!(self.mmap.len() % WASM_PAGE_SIZE as usize, 0);
         let num_pages = self.mmap.len() / WASM_PAGE_SIZE as usize;
-        assert_eq!(num_pages as u32 as usize, num_pages);
-        num_pages as u32
+        cast::u32(num_pages).unwrap()
     }
 
     /// Grow memory by the specified amount of pages.
