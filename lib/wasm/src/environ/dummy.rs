@@ -18,7 +18,7 @@ use translation_utils::{
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
-    ir::ExternalName::user(0, func_index.index() as u32)
+    ir::ExternalName::user(0, func_index.as_u32())
 }
 
 /// A collection of names under which a given entity is exported.

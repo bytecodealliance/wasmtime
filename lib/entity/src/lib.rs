@@ -98,6 +98,13 @@ macro_rules! entity_impl {
                 $entity($crate::__core::u32::MAX)
             }
         }
+
+        impl $entity {
+            /// Return the underlying index value as a `u32`.
+            pub fn as_u32(self) -> u32 {
+                self.0
+            }
+        }
     };
 
     // Include basic `Display` impl using the given display prefix.

@@ -473,7 +473,7 @@ where
         let signature = in_func.import_signature(decl.signature.clone());
         let colocated = decl.linkage.is_final();
         in_func.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(0, func.index() as u32),
+            name: ir::ExternalName::user(0, func.as_u32()),
             signature,
             colocated,
         })
@@ -486,7 +486,7 @@ where
         let decl = &self.contents.data_objects[data].decl;
         let colocated = decl.linkage.is_final();
         func.create_global_value(ir::GlobalValueData::Symbol {
-            name: ir::ExternalName::user(1, data.index() as u32),
+            name: ir::ExternalName::user(1, data.as_u32()),
             offset: ir::immediates::Imm64::new(0),
             colocated,
         })
@@ -494,12 +494,12 @@ where
 
     /// TODO: Same as above.
     pub fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
-        ctx.import_function(ir::ExternalName::user(0, func.index() as u32))
+        ctx.import_function(ir::ExternalName::user(0, func.as_u32()))
     }
 
     /// TODO: Same as above.
     pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
-        ctx.import_global_value(ir::ExternalName::user(1, data.index() as u32))
+        ctx.import_global_value(ir::ExternalName::user(1, data.as_u32()))
     }
 
     /// Define a function, producing the function body from the given `Context`.
