@@ -1,29 +1,35 @@
 //! An `Instance` contains all the runtime state used by execution of a wasm
 //! module.
 
-use cranelift_codegen::ir;
 use cranelift_entity::EntityRef;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
 use memory::LinearMemory;
 use std::string::String;
-use std::vec::Vec;
-use wasmtime_environ::{Compilation, DataInitializer, Module, TableElements};
+use table::{AnyFunc, Table};
+use vmcontext::{VMContext, VMGlobal, VMMemory, VMTable};
+use wasmtime_environ::{Compilation, DataInitializer, Module};
 
 /// An Instance of a WebAssemby module.
 #[derive(Debug)]
 pub struct Instance {
-    /// WebAssembly table data.
-    pub tables: PrimaryMap<TableIndex, Vec<usize>>,
-
     /// WebAssembly linear memory data.
-    pub memories: PrimaryMap<MemoryIndex, LinearMemory>,
+    memories: PrimaryMap<MemoryIndex, LinearMemory>,
 
-    /// WebAssembly global variable data.
-    pub globals: Vec<u8>,
+    /// WebAssembly table data.
+    tables: PrimaryMap<TableIndex, Table>,
 
     /// Memory base address vector pointed to by vmctx.
-    pub mem_base_addrs: Vec<*mut u8>,
+    vmctx_memories: PrimaryMap<MemoryIndex, VMMemory>,
+
+    /// WebAssembly global variable data.
+    vmctx_globals: PrimaryMap<GlobalIndex, VMGlobal>,
+
+    /// Table storage base address vector pointed to by vmctx.
+    vmctx_tables: PrimaryMap<TableIndex, VMTable>,
+
+    /// Context pointer used by JIT code.
+    vmctx: VMContext,
 }
 
 impl Instance {
@@ -33,82 +39,68 @@ impl Instance {
         compilation: &Compilation,
         data_initializers: &[DataInitializer],
     ) -> Result<Self, String> {
-        let mut result = Self {
-            tables: PrimaryMap::new(),
-            memories: PrimaryMap::new(),
-            globals: Vec::new(),
-            mem_base_addrs: Vec::new(),
-        };
-        result.instantiate_tables(module, compilation, &module.table_elements);
-        result.instantiate_memories(module, data_initializers)?;
-        result.instantiate_globals(module);
-        Ok(result)
+        let mut memories = instantiate_memories(module, data_initializers)?;
+        let mut tables = instantiate_tables(module, compilation);
+
+        let mut vmctx_memories = memories
+            .values_mut()
+            .map(LinearMemory::vmmemory)
+            .collect::<PrimaryMap<MemoryIndex, _>>();
+
+        let mut vmctx_globals = instantiate_globals(module);
+
+        let mut vmctx_tables = tables
+            .values_mut()
+            .map(Table::vmtable)
+            .collect::<PrimaryMap<TableIndex, _>>();
+
+        let vmctx_memories_ptr = vmctx_memories.values_mut().into_slice().as_mut_ptr();
+        let vmctx_globals_ptr = vmctx_globals.values_mut().into_slice().as_mut_ptr();
+        let vmctx_tables_ptr = vmctx_tables.values_mut().into_slice().as_mut_ptr();
+
+        Ok(Self {
+            memories,
+            tables,
+            vmctx_memories,
+            vmctx_globals,
+            vmctx_tables,
+            vmctx: VMContext::new(vmctx_memories_ptr, vmctx_globals_ptr, vmctx_tables_ptr),
+        })
     }
 
-    /// Allocate memory in `self` for just the tables of the current module.
-    fn instantiate_tables(
-        &mut self,
-        module: &Module,
-        compilation: &Compilation,
-        table_initializers: &[TableElements],
-    ) {
-        debug_assert!(self.tables.is_empty());
-        self.tables.reserve_exact(module.tables.len());
-        for table in module.tables.values() {
-            let len = table.minimum as usize;
-            let mut v = Vec::with_capacity(len);
-            v.resize(len, 0);
-            self.tables.push(v);
-        }
-        for init in table_initializers {
-            debug_assert!(init.base.is_none(), "globalvar base not supported yet");
-            let to_init =
-                &mut self.tables[init.table_index][init.offset..init.offset + init.elements.len()];
-            for (i, func_idx) in init.elements.iter().enumerate() {
-                let code_buf = &compilation.functions[module.defined_func_index(*func_idx).expect(
-                    "table element initializer with imported function not supported yet",
-                )];
-                to_init[i] = code_buf.as_ptr() as usize;
-            }
-        }
+    /// Return the vmctx pointer to be passed into JIT code.
+    pub fn vmctx(&mut self) -> *mut VMContext {
+        &mut self.vmctx as *mut VMContext
     }
 
-    /// Allocate memory in `instance` for just the memories of the current module.
-    fn instantiate_memories(
-        &mut self,
-        module: &Module,
-        data_initializers: &[DataInitializer],
-    ) -> Result<(), String> {
-        debug_assert!(self.memories.is_empty());
-        // Allocate the underlying memory and initialize it to all zeros.
-        self.memories.reserve_exact(module.memory_plans.len());
-        for plan in module.memory_plans.values() {
-            let v = LinearMemory::new(&plan)?;
-            self.memories.push(v);
-        }
-        for init in data_initializers {
-            debug_assert!(init.base.is_none(), "globalvar base not supported yet");
-            let mem_mut = self.memories[init.memory_index].as_mut();
-            let to_init = &mut mem_mut[init.offset..init.offset + init.data.len()];
-            to_init.copy_from_slice(init.data);
-        }
-        Ok(())
+    /// Return the offset from the vmctx pointer to its containing Instance.
+    pub fn vmctx_offset() -> isize {
+        offset_of!(Instance, vmctx) as isize
     }
 
-    /// Allocate memory in `instance` for just the globals of the current module,
-    /// without any initializers applied yet.
-    fn instantiate_globals(&mut self, module: &Module) {
-        debug_assert!(self.globals.is_empty());
-        // Allocate the underlying memory and initialize it to all zeros.
-        let globals_data_size = module.globals.len() * 8;
-        self.globals.resize(globals_data_size, 0);
-    }
-
-    /// Returns a mutable reference to a linear memory under the specified index.
-    pub fn memory_mut(&mut self, memory_index: MemoryIndex) -> &mut LinearMemory {
-        self.memories
+    /// Grow memory by the specified amount of pages.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount
+    /// of pages.
+    pub fn memory_grow(&mut self, memory_index: MemoryIndex, delta: u32) -> Option<u32> {
+        let result = self
+            .memories
             .get_mut(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
+            .grow(delta);
+
+        // Keep current the VMContext pointers used by JIT code.
+        self.vmctx_memories[memory_index] = self.memories[memory_index].vmmemory();
+
+        result
+    }
+
+    /// Returns the number of allocated wasm pages.
+    pub fn memory_size(&mut self, memory_index: MemoryIndex) -> u32 {
+        self.memories
+            .get(memory_index)
+            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
+            .size()
     }
 
     /// Returns a slice of the contents of allocated linear memory.
@@ -121,9 +113,64 @@ impl Instance {
     }
 
     /// Shows the value of a global variable.
-    pub fn inspect_global(&self, global_index: GlobalIndex, ty: ir::Type) -> &[u8] {
-        let offset = global_index.index() * 8;
-        let len = ty.bytes() as usize;
-        &self.globals[offset..offset + len]
+    pub fn inspect_global(&self, global_index: GlobalIndex) -> &VMGlobal {
+        &self.vmctx_globals[global_index]
     }
+}
+
+/// Allocate memory for just the memories of the current module.
+fn instantiate_memories(
+    module: &Module,
+    data_initializers: &[DataInitializer],
+) -> Result<PrimaryMap<MemoryIndex, LinearMemory>, String> {
+    let mut memories = PrimaryMap::with_capacity(module.memory_plans.len());
+    for plan in module.memory_plans.values() {
+        memories.push(LinearMemory::new(&plan)?);
+    }
+
+    for init in data_initializers {
+        debug_assert!(init.base.is_none(), "globalvar base not supported yet");
+        let mem_mut = memories[init.memory_index].as_mut();
+        let to_init = &mut mem_mut[init.offset..init.offset + init.data.len()];
+        to_init.copy_from_slice(init.data);
+    }
+
+    Ok(memories)
+}
+
+/// Allocate memory for just the tables of the current module.
+fn instantiate_tables(module: &Module, compilation: &Compilation) -> PrimaryMap<TableIndex, Table> {
+    let mut tables = PrimaryMap::with_capacity(module.tables.len());
+    for table in module.tables.values() {
+        tables.push(Table::new(table));
+    }
+
+    for init in &module.table_elements {
+        debug_assert!(init.base.is_none(), "globalvar base not supported yet");
+        let slice = &mut tables[init.table_index].as_mut();
+        let subslice = &mut slice[init.offset..init.offset + init.elements.len()];
+        for (i, func_idx) in init.elements.iter().enumerate() {
+            let code_buf = &compilation.functions[module.defined_func_index(*func_idx).expect(
+                "table element initializer with imported function not supported yet",
+            )];
+            subslice[i] = AnyFunc {
+                func_ptr: code_buf.as_ptr(),
+                type_id: 0, // TODO: Implement signature checking.
+            };
+        }
+    }
+
+    tables
+}
+
+/// Allocate memory for just the globals of the current module,
+/// without any initializers applied yet.
+fn instantiate_globals(module: &Module) -> PrimaryMap<GlobalIndex, VMGlobal> {
+    let mut vmctx_globals = PrimaryMap::with_capacity(module.globals.len());
+
+    for _ in 0..module.globals.len() {
+        vmctx_globals.push(VMGlobal::default());
+    }
+
+    vmctx_globals
 }

@@ -98,7 +98,7 @@ pub struct Module {
     pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
 
     /// Names of imported functions.
-    pub imported_funcs: Vec<(String, String)>,
+    pub imported_funcs: PrimaryMap<FuncIndex, (String, String)>,
 
     /// Types of functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
@@ -127,7 +127,7 @@ impl Module {
     pub fn new() -> Self {
         Self {
             signatures: PrimaryMap::new(),
-            imported_funcs: Vec::new(),
+            imported_funcs: PrimaryMap::new(),
             functions: PrimaryMap::new(),
             tables: PrimaryMap::new(),
             memory_plans: PrimaryMap::new(),

@@ -40,7 +40,6 @@ extern crate alloc;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
-#[cfg(test)]
 #[macro_use]
 extern crate memoffset;
 extern crate cast;
@@ -52,13 +51,16 @@ mod invoke;
 mod memory;
 mod mmap;
 mod signalhandlers;
+mod table;
 mod traphandlers;
+mod vmcontext;
 
 pub use code::Code;
 pub use execute::{compile_and_link_module, finish_instantiation};
 pub use instance::Instance;
 pub use invoke::{invoke, InvokeOutcome, Value};
 pub use traphandlers::{call_wasm, LookupCodeSegment, RecordTrap, Unwind};
+pub use vmcontext::VMContext;
 
 #[cfg(not(feature = "std"))]
 mod std {

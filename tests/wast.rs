@@ -19,9 +19,6 @@ use wasmtime_execute::{
 
 struct InstanceWorld {
     module: Module,
-    context: Vec<*mut u8>,
-    // FIXME
-    #[allow(dead_code)]
     instance: Instance,
     compilation: Compilation,
 }
@@ -30,7 +27,7 @@ impl InstanceWorld {
     fn new(code: &mut Code, isa: &isa::TargetIsa, data: &[u8]) -> Result<Self, String> {
         let mut module = Module::new();
         let tunables = Tunables::default();
-        let (context, instance, compilation) = {
+        let (instance, compilation) = {
             let translation = {
                 let environ = ModuleEnvironment::new(isa, &mut module, tunables);
 
@@ -46,16 +43,13 @@ impl InstanceWorld {
                 &translation.lazy.data_initializers,
             )?;
 
-            (
-                finish_instantiation(code, isa, &translation.module, &compilation, &mut instance)?,
-                instance,
-                compilation,
-            )
+            finish_instantiation(code, isa, &translation.module, &compilation, &mut instance)?;
+
+            (instance, compilation)
         };
 
         Ok(Self {
             module,
-            context,
             instance,
             compilation,
         })
@@ -73,7 +67,7 @@ impl InstanceWorld {
             isa,
             &self.module,
             &self.compilation,
-            &mut self.context,
+            self.instance.vmctx(),
             &f,
             args,
         ).map_err(|e| e.to_string())

@@ -1,16 +1,16 @@
-//! Memory management for linear memory.
+//! Memory management for linear memories.
+//!
+//! `LinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
 
 use cast;
 use mmap::Mmap;
 use region;
-use std::fmt;
 use std::string::String;
+use vmcontext::VMMemory;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A linear memory instance.
-///
-/// This linear memory has a stable base address and at the same time allows
-/// for dynamical growing.
+#[derive(Debug)]
 pub struct LinearMemory {
     mmap: Mmap,
     current: u32,
@@ -61,13 +61,8 @@ impl LinearMemory {
         })
     }
 
-    /// Returns an base address of this linear memory.
-    pub fn base_addr(&mut self) -> *mut u8 {
-        self.mmap.as_mut_ptr()
-    }
-
-    /// Returns a number of allocated wasm pages.
-    pub fn current_size(&self) -> u32 {
+    /// Returns the number of allocated wasm pages.
+    pub fn size(&self) -> u32 {
         assert_eq!(self.mmap.len() % WASM_PAGE_SIZE as usize, 0);
         let num_pages = self.mmap.len() / WASM_PAGE_SIZE as usize;
         cast::u32(num_pages).unwrap()
@@ -131,14 +126,9 @@ impl LinearMemory {
 
         Some(prev_pages)
     }
-}
 
-impl fmt::Debug for LinearMemory {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("LinearMemory")
-            .field("current", &self.current)
-            .field("maximum", &self.maximum)
-            .finish()
+    pub fn vmmemory(&mut self) -> VMMemory {
+        VMMemory::new(self.mmap.as_mut_ptr(), self.mmap.len())
     }
 }
 

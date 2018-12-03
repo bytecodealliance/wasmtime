@@ -52,10 +52,10 @@ impl binemit::RelocSink for RelocSink {
         let reloc_target = if let ExternalName::User { namespace, index } = *name {
             debug_assert!(namespace == 0);
             RelocationTarget::UserFunc(FuncIndex::new(index as usize))
-        } else if *name == ExternalName::testcase("grow_memory") {
-            RelocationTarget::GrowMemory
-        } else if *name == ExternalName::testcase("current_memory") {
-            RelocationTarget::CurrentMemory
+        } else if *name == ExternalName::testcase("wasmtime_memory_grow") {
+            RelocationTarget::MemoryGrow
+        } else if *name == ExternalName::testcase("wasmtime_memory_size") {
+            RelocationTarget::MemorySize
         } else {
             panic!("unrecognized external name")
         };
@@ -104,9 +104,9 @@ pub enum RelocationTarget {
     /// The user function index.
     UserFunc(FuncIndex),
     /// Function for growing the default memory by the specified amount of pages.
-    GrowMemory,
+    MemoryGrow,
     /// Function for query current size of the default linear memory.
-    CurrentMemory,
+    MemorySize,
 }
 
 /// Relocations to apply to function bodies.

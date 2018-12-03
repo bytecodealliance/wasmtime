@@ -11,6 +11,7 @@ use std::ptr;
 use std::string::String;
 use std::vec::Vec;
 use traphandlers::call_wasm;
+use vmcontext::VMContext;
 use wasmtime_environ::{Compilation, Export, Module, RelocSink};
 
 /// A runtime value.
@@ -91,7 +92,7 @@ pub fn invoke(
     isa: &isa::TargetIsa,
     module: &Module,
     compilation: &Compilation,
-    vmctx: &mut Vec<*mut u8>,
+    vmctx: *mut VMContext,
     function: &str,
     args: &[Value],
 ) -> Result<InvokeOutcome, String> {
@@ -109,7 +110,7 @@ pub fn invoke_by_index(
     isa: &isa::TargetIsa,
     module: &Module,
     compilation: &Compilation,
-    vmctx: &mut Vec<*mut u8>,
+    vmctx: *mut VMContext,
     fn_index: FuncIndex,
     args: &[Value],
 ) -> Result<InvokeOutcome, String> {
@@ -138,21 +139,14 @@ pub fn invoke_by_index(
         return Err("failed to install signal handlers".to_string());
     }
 
-    call_through_wrapper(
-        code,
-        isa,
-        exec_code_buf as usize,
-        vmctx.as_ptr() as usize,
-        args,
-        &sig,
-    )
+    call_through_wrapper(code, isa, exec_code_buf as usize, vmctx, args, &sig)
 }
 
 fn call_through_wrapper(
     code: &mut Code,
     isa: &isa::TargetIsa,
     callee: usize,
-    vmctx: usize,
+    vmctx: *mut VMContext,
     args: &[Value],
     sig: &ir::Signature,
 ) -> Result<InvokeOutcome, String> {
