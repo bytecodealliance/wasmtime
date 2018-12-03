@@ -8,7 +8,7 @@ use cranelift_codegen::isa;
 use cranelift_codegen::Context;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
-use environ::{get_func_name, ModuleTranslation};
+use environ::{get_func_name, get_memory_grow_name, get_memory_size_name, ModuleTranslation};
 use std::string::{String, ToString};
 use std::vec::Vec;
 
@@ -49,13 +49,13 @@ impl binemit::RelocSink for RelocSink {
         name: &ExternalName,
         addend: binemit::Addend,
     ) {
-        let reloc_target = if let ExternalName::User { namespace, index } = *name {
+        let reloc_target = if *name == get_memory_grow_name() {
+            RelocationTarget::MemoryGrow
+        } else if *name == get_memory_size_name() {
+            RelocationTarget::MemorySize
+        } else if let ExternalName::User { namespace, index } = *name {
             debug_assert!(namespace == 0);
             RelocationTarget::UserFunc(FuncIndex::new(index as usize))
-        } else if *name == ExternalName::testcase("wasmtime_memory_grow") {
-            RelocationTarget::MemoryGrow
-        } else if *name == ExternalName::testcase("wasmtime_memory_size") {
-            RelocationTarget::MemorySize
         } else if let ExternalName::LibCall(libcall) = *name {
             RelocationTarget::LibCall(libcall)
         } else {

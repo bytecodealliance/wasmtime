@@ -72,16 +72,10 @@ impl VMOffsets {
         2 * self.pointer_size
     }
 
-    /// The offset of the `instance` field.
-    #[allow(dead_code)]
-    pub fn vmctx_instance(&self) -> u8 {
-        3 * self.pointer_size
-    }
-
     /// Return the size of `VMContext`.
     #[allow(dead_code)]
     pub fn size_of_vmctx(&self) -> u8 {
-        4 * self.pointer_size
+        3 * self.pointer_size
     }
 
     /// Return the offset from the `memories` pointer to `VMMemory` index `index`.

@@ -49,6 +49,7 @@ pub use compilation::{
 pub use environ::{ModuleEnvironment, ModuleTranslation};
 pub use module::{DataInitializer, Export, MemoryPlan, MemoryStyle, Module, TableElements};
 pub use tunables::Tunables;
+pub use vmoffsets::VMOffsets;
 
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;
