@@ -48,6 +48,7 @@ mod code;
 mod execute;
 mod instance;
 mod invoke;
+mod libcalls;
 mod memory;
 mod mmap;
 mod signalhandlers;

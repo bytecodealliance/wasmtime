@@ -64,6 +64,21 @@ fn relocate<F>(
                 },
                 RelocationTarget::MemoryGrow => wasmtime_memory_grow as usize,
                 RelocationTarget::MemorySize => wasmtime_memory_size as usize,
+                RelocationTarget::LibCall(libcall) => {
+                    use cranelift_codegen::ir::LibCall::*;
+                    use libcalls::*;
+                    match libcall {
+                        CeilF32 => wasmtime_f32_ceil as usize,
+                        FloorF32 => wasmtime_f32_floor as usize,
+                        TruncF32 => wasmtime_f32_trunc as usize,
+                        NearestF32 => wasmtime_f32_nearest as usize,
+                        CeilF64 => wasmtime_f64_ceil as usize,
+                        FloorF64 => wasmtime_f64_floor as usize,
+                        TruncF64 => wasmtime_f64_trunc as usize,
+                        NearestF64 => wasmtime_f64_nearest as usize,
+                        other => panic!("unexpected libcall: {}", other),
+                    }
+                }
             };
 
             let body = &mut compilation.functions[i];
