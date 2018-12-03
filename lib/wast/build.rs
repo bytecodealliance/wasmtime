@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::{read_dir, File};
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::PathBuf;
 
 fn main() {
@@ -9,11 +9,11 @@ fn main() {
     let mut out =
         File::create(out_dir.join("run_wast_files.rs")).expect("error creating run_wast_files.rs");
 
-    test_directory(&mut out, "misc_testsuite");
-    test_directory(&mut out, "spec_testsuite");
+    test_directory(&mut out, "misc_testsuite").unwrap();
+    test_directory(&mut out, "spec_testsuite").unwrap();
 }
 
-fn test_directory(out: &mut File, testsuite: &str) {
+fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
     let mut dir_entries: Vec<_> = read_dir(testsuite)
         .unwrap()
         .map(|r| r.unwrap())
@@ -37,8 +37,8 @@ fn test_directory(out: &mut File, testsuite: &str) {
 
     dir_entries.sort_by_key(|dir| dir.path());
 
-    writeln!(out, "mod {} {{", testsuite);
-    writeln!(out, "    use super::{{native_isa, wast_file, Path}};");
+    writeln!(out, "mod {} {{", testsuite)?;
+    writeln!(out, "    use super::{{native_isa, wast_file, Path}};")?;
     for dir_entry in dir_entries {
         let path = dir_entry.path();
         let stemstr = path
@@ -47,25 +47,26 @@ fn test_directory(out: &mut File, testsuite: &str) {
             .to_str()
             .expect("to_str");
 
-        writeln!(out, "    #[test]");
+        writeln!(out, "    #[test]")?;
         if ignore(testsuite, stemstr) {
-            writeln!(out, "    #[ignore]");
+            writeln!(out, "    #[ignore]")?;
         }
         writeln!(
             out,
             "    fn {}() {{",
             avoid_keywords(&stemstr.replace("-", "_"))
-        );
+        )?;
         writeln!(
             out,
             "        wast_file(Path::new(\"{}\"), &*native_isa()).expect(\"error loading wast file {}\");",
             path.display(),
             path.display()
-        );
-        writeln!(out, "    }}");
-        writeln!(out);
+        )?;
+        writeln!(out, "    }}")?;
+        writeln!(out)?;
     }
-    writeln!(out, "}}");
+    writeln!(out, "}}")?;
+    Ok(())
 }
 
 fn avoid_keywords(name: &str) -> &str {
