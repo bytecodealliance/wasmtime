@@ -29,10 +29,14 @@ fn main() {
         writeln!(
             out,
             "fn {}() {{",
-            path.file_stem()
-                .expect("file_stem")
-                .to_str()
-                .expect("to_str")
+            avoid_keywords(
+                &path
+                    .file_stem()
+                    .expect("file_stem")
+                    .to_str()
+                    .expect("to_str")
+                    .replace("-", "_")
+            )
         );
         writeln!(
             out,
@@ -42,5 +46,16 @@ fn main() {
         );
         writeln!(out, "}}");
         writeln!(out);
+    }
+}
+
+fn avoid_keywords(name: &str) -> &str {
+    match name {
+        "if" => "if_",
+        "loop" => "loop_",
+        "type" => "type_",
+        "const" => "const_",
+        "return" => "return_",
+        other => other,
     }
 }

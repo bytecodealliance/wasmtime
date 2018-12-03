@@ -3,7 +3,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, InstBuilder, Signature,
+    AbiParam, ArgumentPurpose, ExtFuncData, FuncRef, Function, InstBuilder, Signature,
 };
 use cranelift_codegen::isa;
 use cranelift_entity::EntityRef;
@@ -24,6 +24,16 @@ use WASM_PAGE_SIZE;
 /// Compute a `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
     ir::ExternalName::user(0, func_index.as_u32())
+}
+
+/// Compute a `ir::ExternalName` for the `memory.grow` libcall.
+pub fn get_memory_grow_name() -> ir::ExternalName {
+    ir::ExternalName::user(1, 0)
+}
+
+/// Compute a `ir::ExternalName` for the `memory.size` libcall.
+pub fn get_memory_size_name() -> ir::ExternalName {
+    ir::ExternalName::user(1, 1)
 }
 
 /// Object containing the standalone environment information. To be passed after creation as
@@ -97,11 +107,11 @@ pub struct FuncEnvironment<'module_environment> {
     /// The Cranelift global holding the base address of the globals vector.
     globals_base: Option<ir::GlobalValue>,
 
-    /// The external function declaration for implementing wasm's `current_memory`.
-    current_memory_extfunc: Option<FuncRef>,
+    /// The external function declaration for implementing wasm's `memory.size`.
+    memory_size_extfunc: Option<FuncRef>,
 
-    /// The external function declaration for implementing wasm's `grow_memory`.
-    grow_memory_extfunc: Option<FuncRef>,
+    /// The external function declaration for implementing wasm's `memory.grow`.
+    memory_grow_extfunc: Option<FuncRef>,
 
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
@@ -119,8 +129,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             memories_base: None,
             tables_base: None,
             globals_base: None,
-            current_memory_extfunc: None,
-            grow_memory_extfunc: None,
+            memory_size_extfunc: None,
+            memory_grow_extfunc: None,
             offsets: VMOffsets::new(isa.frontend_config().pointer_bytes()),
         }
     }
@@ -484,7 +494,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _heap: ir::Heap,
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let grow_mem_func = self.grow_memory_extfunc.unwrap_or_else(|| {
+        let memory_grow_func = self.memory_grow_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.frontend_config().default_call_conv,
                 params: vec![
@@ -497,17 +507,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // We currently allocate all code segments independently, so nothing
             // is colocated.
             let colocated = false;
-            // FIXME: Use a real ExternalName system.
             pos.func.import_function(ExtFuncData {
-                name: ExternalName::testcase("grow_memory"),
+                name: get_memory_grow_name(),
                 signature: sig_ref,
                 colocated,
             })
         });
-        self.grow_memory_extfunc = Some(grow_mem_func);
+        self.memory_grow_extfunc = Some(memory_grow_func);
         let memory_index = pos.ins().iconst(I32, index.index() as i64);
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-        let call_inst = pos.ins().call(grow_mem_func, &[val, memory_index, vmctx]);
+        let call_inst = pos
+            .ins()
+            .call(memory_grow_func, &[val, memory_index, vmctx]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
@@ -517,7 +528,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: MemoryIndex,
         _heap: ir::Heap,
     ) -> WasmResult<ir::Value> {
-        let cur_mem_func = self.current_memory_extfunc.unwrap_or_else(|| {
+        let memory_size_func = self.memory_size_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: self.isa.frontend_config().default_call_conv,
                 params: vec![
@@ -529,17 +540,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             // We currently allocate all code segments independently, so nothing
             // is colocated.
             let colocated = false;
-            // FIXME: Use a real ExternalName system.
             pos.func.import_function(ExtFuncData {
-                name: ExternalName::testcase("current_memory"),
+                name: get_memory_size_name(),
                 signature: sig_ref,
                 colocated,
             })
         });
-        self.current_memory_extfunc = Some(cur_mem_func);
+        self.memory_size_extfunc = Some(memory_size_func);
         let memory_index = pos.ins().iconst(I32, index.index() as i64);
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-        let call_inst = pos.ins().call(cur_mem_func, &[memory_index, vmctx]);
+        let call_inst = pos.ins().call(memory_size_func, &[memory_index, vmctx]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 }

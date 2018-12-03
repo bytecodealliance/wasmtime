@@ -18,17 +18,25 @@ pub struct VMMemory {
 }
 
 #[cfg(test)]
-mod test {
+mod test_vmmemory {
+    use super::VMMemory;
+    use std::mem::size_of;
     use wasmtime_environ::VMOffsets;
 
     #[test]
     fn check_vmmemory_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>());
-        assert_eq!(size_of::<VMMemory>(), offsets.size_of_vmmemory());
-        assert_eq!(offset_of!(VMMemory, base), offsets.vmmemory_base());
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMMemory>(),
+            usize::from(offsets.size_of_vmmemory())
+        );
+        assert_eq!(
+            offset_of!(VMMemory, base),
+            usize::from(offsets.vmmemory_base())
+        );
         assert_eq!(
             offset_of!(VMMemory, current_length),
-            offsets.vmmemory_current_length()
+            usize::from(offsets.vmmemory_current_length())
         );
     }
 }
@@ -74,13 +82,14 @@ pub struct VMGlobal {
 }
 
 #[cfg(test)]
-mod test {
-    use std::mem::align_of;
+mod test_vmglobal {
+    use super::VMGlobal;
+    use std::mem::{align_of, size_of};
     use wasmtime_environ::VMOffsets;
 
     #[test]
     fn check_vmglobal_alignment() {
-        assert!(align_of::<VMGlobal>() <= align_of::<i32>());
+        assert!(align_of::<VMGlobal>() >= align_of::<i32>());
         assert!(align_of::<VMGlobal>() >= align_of::<i64>());
         assert!(align_of::<VMGlobal>() >= align_of::<f32>());
         assert!(align_of::<VMGlobal>() >= align_of::<f64>());
@@ -88,8 +97,11 @@ mod test {
 
     #[test]
     fn check_vmglobal_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>());
-        assert_eq!(size_of::<VMGlobal>(), offsets.size_of_vmglobal());
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMGlobal>(),
+            usize::from(offsets.size_of_vmglobal())
+        );
     }
 }
 
@@ -110,17 +122,22 @@ pub struct VMTable {
 }
 
 #[cfg(test)]
-mod test {
+mod test_vmtable {
+    use super::VMTable;
+    use std::mem::size_of;
     use wasmtime_environ::VMOffsets;
 
     #[test]
     fn check_vmtable_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>());
-        assert_eq!(size_of::<VMTable>(), offsets.size_of_vmtable());
-        assert_eq!(offset_of!(VMTable, base), offsets.vmtable_base());
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(size_of::<VMTable>(), usize::from(offsets.size_of_vmtable()));
+        assert_eq!(
+            offset_of!(VMTable, base),
+            usize::from(offsets.vmtable_base())
+        );
         assert_eq!(
             offset_of!(VMTable, current_elements),
-            offsets.vmtable_current_elements()
+            usize::from(offsets.vmtable_current_elements())
         );
     }
 }
@@ -173,16 +190,26 @@ pub struct VMContext {
 
 #[cfg(test)]
 mod test {
+    use super::VMContext;
+    use std::mem::size_of;
     use wasmtime_environ::VMOffsets;
 
     #[test]
     fn check_vmctx_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>());
-        assert_eq!(size_of::<VMContext>(), offsets.size_of_vmctx());
-        assert_eq!(offset_of!(VMContext, memories), offsets.vmctx_memories());
-        assert_eq!(offset_of!(VMContext, globals), offsets.vmctx_globals());
-        assert_eq!(offset_of!(VMContext, tables), offsets.vmctx_tables());
-        assert_eq!(offset_of!(VMContext, instance), offsets.vmctx_instance());
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(size_of::<VMContext>(), usize::from(offsets.size_of_vmctx()));
+        assert_eq!(
+            offset_of!(VMContext, memories),
+            usize::from(offsets.vmctx_memories())
+        );
+        assert_eq!(
+            offset_of!(VMContext, globals),
+            usize::from(offsets.vmctx_globals())
+        );
+        assert_eq!(
+            offset_of!(VMContext, tables),
+            usize::from(offsets.vmctx_tables())
+        );
     }
 }
 

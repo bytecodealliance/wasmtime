@@ -155,6 +155,72 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                     }
                 }
             }
+            CommandKind::AssertReturnCanonicalNan { action } => {
+                match instances.perform_action(&*isa, action) {
+                    InvokeOutcome::Returned { values } => {
+                        for v in values.iter() {
+                            match v {
+                                Value::I32(_) | Value::I64(_) => {
+                                    panic!("unexpected integer type in NaN test");
+                                }
+                                Value::F32(x) => assert_eq!(
+                                    x & 0x7fffffff,
+                                    0x7fc00000,
+                                    "expected canonical NaN at {}:{}",
+                                    name,
+                                    line
+                                ),
+                                Value::F64(x) => assert_eq!(
+                                    x & 0x7fffffffffffffff,
+                                    0x7ff8000000000000,
+                                    "expected canonical NaN at {}:{}",
+                                    name,
+                                    line
+                                ),
+                            };
+                        }
+                    }
+                    InvokeOutcome::Trapped { message } => {
+                        panic!(
+                            "{}:{}: expected canonical NaN return, but a trap occurred: {}",
+                            name, line, message
+                        );
+                    }
+                }
+            }
+            CommandKind::AssertReturnArithmeticNan { action } => {
+                match instances.perform_action(&*isa, action) {
+                    InvokeOutcome::Returned { values } => {
+                        for v in values.iter() {
+                            match v {
+                                Value::I32(_) | Value::I64(_) => {
+                                    panic!("unexpected integer type in NaN test");
+                                }
+                                Value::F32(x) => assert_eq!(
+                                    x & 0x00400000,
+                                    0x00400000,
+                                    "expected arithmetic NaN at {}:{}",
+                                    name,
+                                    line
+                                ),
+                                Value::F64(x) => assert_eq!(
+                                    x & 0x0008000000000000,
+                                    0x0008000000000000,
+                                    "expected arithmetic NaN at {}:{}",
+                                    name,
+                                    line
+                                ),
+                            };
+                        }
+                    }
+                    InvokeOutcome::Trapped { message } => {
+                        panic!(
+                            "{}:{}: expected canonical NaN return, but a trap occurred: {}",
+                            name, line, message
+                        );
+                    }
+                }
+            }
             command => {
                 println!("{}:{}: TODO: implement {:?}", name, line, command);
             }

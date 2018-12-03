@@ -2,7 +2,6 @@
 //!
 //! `LinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
 
-use cast;
 use mmap::Mmap;
 use region;
 use std::string::String;
@@ -63,9 +62,7 @@ impl LinearMemory {
 
     /// Returns the number of allocated wasm pages.
     pub fn size(&self) -> u32 {
-        assert_eq!(self.mmap.len() % WASM_PAGE_SIZE as usize, 0);
-        let num_pages = self.mmap.len() / WASM_PAGE_SIZE as usize;
-        cast::u32(num_pages).unwrap()
+        self.current
     }
 
     /// Grow memory by the specified amount of pages.
@@ -97,27 +94,25 @@ impl LinearMemory {
 
         let new_bytes = new_pages as usize * WASM_PAGE_SIZE as usize;
 
-        if new_bytes > self.mmap.len() {
+        if new_bytes > self.mmap.len() - self.offset_guard_size {
             // If we have no maximum, this is a "dynamic" heap, and it's allowed to move.
             assert!(self.maximum.is_none());
-            let mapped_pages = self.current as usize;
-            let mapped_bytes = mapped_pages * WASM_PAGE_SIZE as usize;
             let guard_bytes = self.offset_guard_size;
+            let request_bytes = new_bytes.checked_add(guard_bytes)?;
 
-            let mut new_mmap = Mmap::with_size(new_bytes).ok()?;
+            let mut new_mmap = Mmap::with_size(request_bytes).ok()?;
 
             // Make the offset-guard pages inaccessible.
             unsafe {
                 region::protect(
-                    new_mmap.as_ptr().add(mapped_bytes),
+                    new_mmap.as_ptr().add(new_bytes),
                     guard_bytes,
-                    region::Protection::Read,
-                ).expect("unable to make memory readonly");
+                    region::Protection::None,
+                ).expect("unable to make memory inaccessible");
             }
 
-            new_mmap
-                .as_mut_slice()
-                .copy_from_slice(self.mmap.as_slice());
+            let copy_len = self.mmap.len() - self.offset_guard_size;
+            new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&self.mmap.as_slice()[..copy_len]);
 
             self.mmap = new_mmap;
         }

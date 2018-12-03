@@ -36,6 +36,10 @@ where
     Ok(compilation)
 }
 
+extern "C" {
+    pub fn __rust_probestack();
+}
+
 /// Performs the relocations inside the function bytecode, provided the necessary metadata
 fn relocate<F>(
     compilation: &mut Compilation,
@@ -76,6 +80,7 @@ fn relocate<F>(
                         FloorF64 => wasmtime_f64_floor as usize,
                         TruncF64 => wasmtime_f64_trunc as usize,
                         NearestF64 => wasmtime_f64_nearest as usize,
+                        Probestack => __rust_probestack as usize,
                         other => panic!("unexpected libcall: {}", other),
                     }
                 }
