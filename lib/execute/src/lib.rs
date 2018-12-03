@@ -55,6 +55,7 @@ mod signalhandlers;
 mod table;
 mod traphandlers;
 mod vmcontext;
+mod world;
 
 pub use code::Code;
 pub use execute::{compile_and_link_module, finish_instantiation};
@@ -62,6 +63,7 @@ pub use instance::Instance;
 pub use invoke::{invoke, InvokeOutcome, Value};
 pub use traphandlers::{call_wasm, LookupCodeSegment, RecordTrap, Unwind};
 pub use vmcontext::VMContext;
+pub use world::InstanceWorld;
 
 #[cfg(not(feature = "std"))]
 mod std {

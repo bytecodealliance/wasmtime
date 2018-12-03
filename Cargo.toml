@@ -25,6 +25,7 @@ cranelift-wasm = { git = "https://github.com/sunfishcode/cranelift.git", branch 
 wasmtime-environ = { path = "lib/environ" }
 wasmtime-execute = { path = "lib/execute" }
 wasmtime-obj = { path = "lib/obj" }
+wasmtime-wast = { path = "lib/wast" }
 docopt = "1.0.1"
 serde = "1.0.75"
 serde_derive = "1.0.75"
