@@ -8,3 +8,5 @@ Cargo.lock
 .*.rustfmt
 cranelift.dbg*
 rusty-tags.*
+*~
+\#*\#
