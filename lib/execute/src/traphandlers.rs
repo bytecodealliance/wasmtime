@@ -74,10 +74,9 @@ impl ScopeGuard {
 impl Drop for ScopeGuard {
     fn drop(&mut self) {
         let orig_num_bufs = self.orig_num_bufs;
-        // TODO: Use `shrink_to` once it stablizes.
         JMP_BUFS.with(|bufs| {
             bufs.borrow_mut()
-                .resize(orig_num_bufs, unsafe { mem::uninitialized() })
+                .resize(orig_num_bufs, unsafe { mem::zeroed() })
         });
     }
 }

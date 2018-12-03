@@ -20,14 +20,12 @@ lazy_static = "1.2.0"
 libc = { version = "0.2.44", default-features = false }
 errno = "0.2.4"
 cast = { version = "0.2.2", default-features = false }
+memoffset = "0.2.1"
 
 [build-dependencies]
 cmake = "0.1.35"
 bindgen = "0.44.0"
 regex = "1.0.6"
-
-[dev-dependencies]
-memoffset = "0.2.1"
 
 [features]
 default = ["std"]

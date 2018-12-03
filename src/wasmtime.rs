@@ -167,7 +167,7 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
                 &translation.lazy.data_initializers,
             )?;
 
-            let mut context = finish_instantiation(
+            finish_instantiation(
                 &mut code,
                 isa,
                 &translation.module,
@@ -181,7 +181,7 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
                     isa,
                     &translation.module,
                     &compilation,
-                    &mut context,
+                    instance.vmctx(),
                     &f,
                     &[],
                 )?;
