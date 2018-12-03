@@ -66,9 +66,10 @@ use wasmtime_execute::{compile_and_link_module, finish_instantiation, invoke, Co
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
 const USAGE: &str = "
-Wasm to Cranelift IL translation utility.
-Takes a binary WebAssembly module and returns its functions in Cranelift IL format.
-The translation is dependent on the environment chosen.
+Wasm runner.
+
+Takes a binary or text WebAssembly module and instantiates it, optionally
+allowing selected functions in it to be invoked.
 
 Usage:
     wasmtime [-mopd] <file>...
