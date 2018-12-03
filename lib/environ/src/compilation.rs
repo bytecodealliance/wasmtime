@@ -56,6 +56,8 @@ impl binemit::RelocSink for RelocSink {
             RelocationTarget::MemoryGrow
         } else if *name == ExternalName::testcase("wasmtime_memory_size") {
             RelocationTarget::MemorySize
+        } else if let ExternalName::LibCall(libcall) = *name {
+            RelocationTarget::LibCall(libcall)
         } else {
             panic!("unrecognized external name")
         };
@@ -103,6 +105,8 @@ pub struct Relocation {
 pub enum RelocationTarget {
     /// The user function index.
     UserFunc(FuncIndex),
+    /// A compiler-generated libcall.
+    LibCall(ir::LibCall),
     /// Function for growing the default memory by the specified amount of pages.
     MemoryGrow,
     /// Function for query current size of the default linear memory.
