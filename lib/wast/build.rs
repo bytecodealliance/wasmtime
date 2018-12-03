@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::{read_dir, File};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     let out_dir =
@@ -37,7 +37,16 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
 
     dir_entries.sort_by_key(|dir| dir.path());
 
-    writeln!(out, "mod {} {{", testsuite)?;
+    writeln!(
+        out,
+        "mod {} {{",
+        Path::new(testsuite)
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .replace("-", "_")
+    )?;
     writeln!(out, "    use super::{{native_isa, wast_file, Path}};")?;
     for dir_entry in dir_entries {
         let path = dir_entry.path();
