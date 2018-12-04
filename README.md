@@ -10,7 +10,8 @@ A standalone wasm-only runtime for [WebAssembly], using [Cranelift].
 *This is a work in progress that is not currently functional, but under active development.*
 
 Goals include:
- - Be a general-purpose engine for running WebAssembly code [outside of browsers].
+ - Be a general-purpose engine for running WebAssembly code [outside of browsers],
+   usable both standalone or as a library embedded in a larger application.
  - Support a variety of host APIs with fast calling sequences.
  - Prototype syscall APIs that can be proposed for use in the WebAssembly
    [Reference Sysroot](https://github.com/WebAssembly/reference-sysroot).
