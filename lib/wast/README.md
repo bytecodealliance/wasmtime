@@ -1,4 +1,5 @@
-This is the `wasmtime-wast` crate, which contains support for running
-"wast" tests, such as the spec testsuite.
+This is the `wasmtime-wast` crate, which contains an implementation of WebAssembly's
+"wast" test scripting language, which is used in the
+[WebAssembly spec testsuite], using wasmtime for execution.
 
-[`wasmtime-wast`]: https://crates.io/crates/wasmtime-wast
+[WebAssembly spec testsuite]: https://github.com/WebAssembly/testsuite
