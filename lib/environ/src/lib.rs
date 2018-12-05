@@ -36,6 +36,7 @@ extern crate cranelift_wasm;
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
+extern crate cast;
 
 mod compilation;
 mod environ;

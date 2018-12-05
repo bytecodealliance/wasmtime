@@ -42,6 +42,7 @@ extern crate lazy_static;
 extern crate libc;
 #[macro_use]
 extern crate memoffset;
+extern crate cast;
 
 mod code;
 mod execute;
@@ -50,6 +51,7 @@ mod invoke;
 mod libcalls;
 mod memory;
 mod mmap;
+mod sig_registry;
 mod signalhandlers;
 mod table;
 mod traphandlers;

@@ -55,6 +55,32 @@ impl VMOffsets {
     }
 }
 
+/// Offsets for `wasmtime_execute::VMSignatureId`.
+impl VMOffsets {
+    /// Return the size of `VMSignatureId`.
+    pub fn size_of_vmsignature_id(&self) -> u8 {
+        4
+    }
+}
+
+/// Offsets for `wasmtime_execute::VMCallerCheckedAnyfunc`.
+impl VMOffsets {
+    /// The offset of the `func_ptr` field.
+    pub fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
+        0 * self.pointer_size
+    }
+
+    /// The offset of the `type_id` field.
+    pub fn vmcaller_checked_anyfunc_type_id(&self) -> u8 {
+        1 * self.pointer_size
+    }
+
+    /// Return the size of `VMTable`.
+    pub fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
+        2 * self.pointer_size
+    }
+}
+
 /// Offsets for `wasmtime_execute::VMContext`.
 impl VMOffsets {
     /// The offset of the `memories` field.
@@ -72,10 +98,15 @@ impl VMOffsets {
         2 * self.pointer_size
     }
 
+    /// The offset of the `signature_ids` field.
+    pub fn vmctx_signature_ids(&self) -> u8 {
+        3 * self.pointer_size
+    }
+
     /// Return the size of `VMContext`.
     #[allow(dead_code)]
     pub fn size_of_vmctx(&self) -> u8 {
-        3 * self.pointer_size
+        4 * self.pointer_size
     }
 
     /// Return the offset from the `memories` pointer to `VMMemory` index `index`.

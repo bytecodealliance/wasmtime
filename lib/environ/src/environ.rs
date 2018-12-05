@@ -1,3 +1,4 @@
+use cast;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
@@ -109,6 +110,9 @@ pub struct FuncEnvironment<'module_environment> {
     /// The Cranelift global holding the base address of the globals vector.
     globals_base: Option<ir::GlobalValue>,
 
+    /// The Cranelift global holding the base address of the signature IDs vector.
+    signature_ids_base: Option<ir::GlobalValue>,
+
     /// The external function declaration for implementing wasm's `memory.size`.
     memory_size_extfunc: Option<FuncRef>,
 
@@ -131,9 +135,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             memories_base: None,
             tables_base: None,
             globals_base: None,
+            signature_ids_base: None,
             memory_size_extfunc: None,
             memory_grow_extfunc: None,
-            offsets: VMOffsets::new(isa.frontend_config().pointer_bytes()),
+            offsets: VMOffsets::new(isa.pointer_bytes()),
         }
     }
 
@@ -143,10 +148,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         real_call_args.extend_from_slice(call_args);
         real_call_args.push(func.special_param(ArgumentPurpose::VMContext).unwrap());
         real_call_args
-    }
-
-    fn pointer_bytes(&self) -> u8 {
-        self.isa.pointer_bytes()
     }
 
     fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
@@ -309,12 +310,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
+        let pointer_type = self.pointer_type();
+
         let vmctx = self.vmctx(func);
         let globals_base = self.globals_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::from(self.offsets.vmctx_globals())),
-                global_type: self.pointer_type(),
+                global_type: pointer_type,
                 readonly: true,
             });
             self.globals_base = Some(new_base);
@@ -323,7 +326,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let gv = func.create_global_value(ir::GlobalValueData::IAddImm {
             base: globals_base,
             offset: Imm64::new(i64::from(self.offsets.index_vmglobal(index.as_u32()))),
-            global_type: self.pointer_type(),
+            global_type: pointer_type,
         });
         GlobalVariable::Memory {
             gv,
@@ -332,12 +335,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap {
+        let pointer_type = self.pointer_type();
+
         let vmctx = self.vmctx(func);
         let memories_base = self.memories_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::from(self.offsets.vmctx_memories())),
-                global_type: self.pointer_type(),
+                global_type: pointer_type,
                 readonly: true,
             });
             self.memories_base = Some(new_base);
@@ -383,7 +388,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: memories_base,
             offset: Offset32::new(self.offsets.index_vmmemory_base(index.as_u32())),
-            global_type: self.pointer_type(),
+            global_type: pointer_type,
             readonly: readonly_base,
         });
         func.create_heap(ir::HeapData {
@@ -396,12 +401,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> ir::Table {
+        let pointer_type = self.pointer_type();
+
         let vmctx = self.vmctx(func);
         let tables_base = self.tables_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::from(self.offsets.vmctx_tables())),
-                global_type: self.pointer_type(),
+                global_type: pointer_type,
                 readonly: true,
             });
             self.tables_base = Some(new_base);
@@ -410,7 +417,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: tables_base,
             offset: Offset32::new(self.offsets.index_vmtable_base(index.as_u32())),
-            global_type: self.pointer_type(),
+            global_type: pointer_type,
             readonly: false,
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
@@ -421,7 +428,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         });
 
         let element_size = match self.module.table_plans[index].style {
-            TableStyle::CallerChecksSignature => 2 * u64::from(self.pointer_bytes()),
+            TableStyle::CallerChecksSignature => {
+                u64::from(self.offsets.size_of_vmcaller_checked_anyfunc())
+            }
         };
 
         func.create_table(ir::TableData {
@@ -461,40 +470,70 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        // FIXME: Cranelift's call_indirect doesn't implement signature checking,
-        // so we need to implement it ourselves.
-        debug_assert_eq!(
-            table_index.index(),
-            0,
-            "non-default tables not supported yet"
-        );
+        let pointer_type = self.pointer_type();
 
-        let table_entry_addr = pos.ins().table_addr(self.pointer_type(), table, callee, 0);
+        let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
 
         // Dereference table_entry_addr to get the function address.
         let mut mem_flags = ir::MemFlags::new();
         mem_flags.set_notrap();
         mem_flags.set_aligned();
-        let func_addr = pos
-            .ins()
-            .load(self.pointer_type(), mem_flags, table_entry_addr, 0);
+        let func_addr = pos.ins().load(
+            pointer_type,
+            mem_flags,
+            table_entry_addr,
+            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
+        );
 
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
-                // Dereference table_type_addr to get the function signature id.
+                let sig_id_size = self.offsets.size_of_vmsignature_id();
+                let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
+
+                let vmctx = self.vmctx(pos.func);
+                let signature_ids_base = self.globals_base.unwrap_or_else(|| {
+                    let new_base = pos.func.create_global_value(ir::GlobalValueData::Load {
+                        base: vmctx,
+                        offset: Offset32::new(i32::from(self.offsets.vmctx_signature_ids())),
+                        global_type: pointer_type,
+                        readonly: true,
+                    });
+                    self.signature_ids_base = Some(new_base);
+                    new_base
+                });
+                let sig_ids = pos.ins().global_value(pointer_type, signature_ids_base);
+
+                // Load the caller ID.
+                // TODO: Factor this out into a MemFlags constructor, as it's used a lot.
                 let mut mem_flags = ir::MemFlags::new();
                 mem_flags.set_notrap();
                 mem_flags.set_aligned();
-                let callee_sig = pos.ins().load(
-                    self.pointer_type(),
+                let caller_sig_id = pos.ins().load(
+                    sig_id_type,
+                    mem_flags,
+                    sig_ids,
+                    cast::i32(
+                        sig_index
+                            .as_u32()
+                            .checked_mul(u32::from(sig_id_size))
+                            .unwrap(),
+                    ).unwrap(),
+                );
+
+                // Load the callee ID.
+                let mut mem_flags = ir::MemFlags::new();
+                mem_flags.set_notrap();
+                mem_flags.set_aligned();
+                let callee_sig_id = pos.ins().load(
+                    sig_id_type,
                     mem_flags,
                     table_entry_addr,
-                    i32::from(self.pointer_bytes()),
+                    i32::from(self.offsets.vmcaller_checked_anyfunc_type_id()),
                 );
-                let cmp =
-                    pos.ins()
-                        .icmp_imm(IntCC::Equal, callee_sig, i64::from(sig_index.as_u32()));
+
+                // Check that they match.
+                let cmp = pos.ins().icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
                 pos.ins().trapz(cmp, ir::TrapCode::BadSignature);
             }
         }

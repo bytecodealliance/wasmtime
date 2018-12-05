@@ -5,9 +5,10 @@ use cranelift_entity::EntityRef;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
 use memory::LinearMemory;
+use sig_registry::SignatureRegistry;
 use std::string::String;
-use table::{AnyFunc, Table};
-use vmcontext::{VMContext, VMGlobal, VMMemory, VMTable};
+use table::Table;
+use vmcontext::{VMCallerCheckedAnyfunc, VMContext, VMGlobal, VMMemory, VMTable};
 use wasmtime_environ::{Compilation, DataInitializer, Module};
 
 /// An Instance of a WebAssemby module.
@@ -18,6 +19,10 @@ pub struct Instance {
 
     /// WebAssembly table data.
     tables: PrimaryMap<TableIndex, Table>,
+
+    /// Function Signature IDs.
+    /// FIXME: This should be shared across instances rather than per-Instance.
+    sig_registry: SignatureRegistry,
 
     /// Memory base address vector pointed to by vmctx.
     vmctx_memories: PrimaryMap<MemoryIndex, VMMemory>,
@@ -39,8 +44,9 @@ impl Instance {
         compilation: &Compilation,
         data_initializers: &[DataInitializer],
     ) -> Result<Self, String> {
+        let mut sig_registry = SignatureRegistry::new();
         let mut memories = instantiate_memories(module, data_initializers)?;
-        let mut tables = instantiate_tables(module, compilation);
+        let mut tables = instantiate_tables(module, compilation, &mut sig_registry);
 
         let mut vmctx_memories = memories
             .values_mut()
@@ -57,14 +63,21 @@ impl Instance {
         let vmctx_memories_ptr = vmctx_memories.values_mut().into_slice().as_mut_ptr();
         let vmctx_globals_ptr = vmctx_globals.values_mut().into_slice().as_mut_ptr();
         let vmctx_tables_ptr = vmctx_tables.values_mut().into_slice().as_mut_ptr();
+        let signature_ids_ptr = sig_registry.vmsignature_ids();
 
         Ok(Self {
             memories,
             tables,
+            sig_registry,
             vmctx_memories,
             vmctx_globals,
             vmctx_tables,
-            vmctx: VMContext::new(vmctx_memories_ptr, vmctx_globals_ptr, vmctx_tables_ptr),
+            vmctx: VMContext::new(
+                vmctx_memories_ptr,
+                vmctx_globals_ptr,
+                vmctx_tables_ptr,
+                signature_ids_ptr,
+            ),
         })
     }
 
@@ -139,7 +152,11 @@ fn instantiate_memories(
 }
 
 /// Allocate memory for just the tables of the current module.
-fn instantiate_tables(module: &Module, compilation: &Compilation) -> PrimaryMap<TableIndex, Table> {
+fn instantiate_tables(
+    module: &Module,
+    compilation: &Compilation,
+    sig_registry: &mut SignatureRegistry,
+) -> PrimaryMap<TableIndex, Table> {
     let mut tables = PrimaryMap::with_capacity(module.table_plans.len());
     for table in module.table_plans.values() {
         tables.push(Table::new(table));
@@ -150,14 +167,14 @@ fn instantiate_tables(module: &Module, compilation: &Compilation) -> PrimaryMap<
         let slice = &mut tables[init.table_index].as_mut();
         let subslice = &mut slice[init.offset..init.offset + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
-            // FIXME: Implement cross-module signature checking.
-            let type_id = module.functions[*func_idx];
+            let callee_sig = module.functions[*func_idx];
             let code_buf = &compilation.functions[module.defined_func_index(*func_idx).expect(
                 "table element initializer with imported function not supported yet",
             )];
-            subslice[i] = AnyFunc {
+            let type_id = sig_registry.register(callee_sig, &module.signatures[callee_sig]);
+            subslice[i] = VMCallerCheckedAnyfunc {
                 func_ptr: code_buf.as_ptr(),
-                type_id: type_id.index(),
+                type_id,
             };
         }
     }

@@ -93,8 +93,8 @@ fn ignore(testsuite: &str, name: &str) -> bool {
     match testsuite {
         "spec_testsuite" => match name {
             // These are the remaining spec testsuite failures.
-            "call_indirect" | "data" | "elem" | "exports" | "func" | "func_ptrs" | "globals"
-            | "imports" | "linking" | "names" | "start" => true,
+            "data" | "elem" | "exports" | "func" | "func_ptrs" | "globals" | "imports"
+            | "linking" | "names" | "start" => true,
             _ => false,
         },
         _ => false,

@@ -3,30 +3,13 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use cranelift_wasm::TableElementType;
-use std::ptr;
-use vmcontext::VMTable;
+use vmcontext::{VMCallerCheckedAnyfunc, VMTable};
 use wasmtime_environ::{TablePlan, TableStyle};
-
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct AnyFunc {
-    pub func_ptr: *const u8,
-    pub type_id: usize,
-}
-
-impl Default for AnyFunc {
-    fn default() -> Self {
-        Self {
-            func_ptr: ptr::null(),
-            type_id: 0,
-        }
-    }
-}
 
 /// A table instance.
 #[derive(Debug)]
 pub struct Table {
-    vec: Vec<AnyFunc>,
+    vec: Vec<VMCallerCheckedAnyfunc>,
     maximum: Option<u32>,
 }
 
@@ -43,7 +26,10 @@ impl Table {
         match plan.style {
             TableStyle::CallerChecksSignature => {
                 let mut vec = Vec::new();
-                vec.resize(plan.table.minimum as usize, AnyFunc::default());
+                vec.resize(
+                    plan.table.minimum as usize,
+                    VMCallerCheckedAnyfunc::default(),
+                );
 
                 Self {
                     vec,
@@ -58,14 +44,14 @@ impl Table {
     }
 }
 
-impl AsRef<[AnyFunc]> for Table {
-    fn as_ref(&self) -> &[AnyFunc] {
+impl AsRef<[VMCallerCheckedAnyfunc]> for Table {
+    fn as_ref(&self) -> &[VMCallerCheckedAnyfunc] {
         self.vec.as_slice()
     }
 }
 
-impl AsMut<[AnyFunc]> for Table {
-    fn as_mut(&mut self) -> &mut [AnyFunc] {
+impl AsMut<[VMCallerCheckedAnyfunc]> for Table {
+    fn as_mut(&mut self) -> &mut [VMCallerCheckedAnyfunc] {
         self.vec.as_mut_slice()
     }
 }

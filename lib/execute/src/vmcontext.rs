@@ -5,6 +5,7 @@ use cranelift_entity::EntityRef;
 use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
 use instance::Instance;
 use std::mem::size_of;
+use std::ptr;
 use std::slice;
 
 /// The main fields a JIT needs to access to utilize a WebAssembly linear,
@@ -171,6 +172,69 @@ impl VMTable {
     }
 }
 
+/// The type of the `type_id` field in `VMCallerCheckedAnyfunc`.
+pub type VMSignatureId = u32;
+
+#[cfg(test)]
+mod test_vmsignature_id {
+    use super::VMSignatureId;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
+
+    #[test]
+    fn check_vmcaller_checked_anyfunc_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMSignatureId>(),
+            usize::from(offsets.size_of_vmsignature_id())
+        );
+    }
+}
+
+/// The VM caller-checked "anyfunc" record, for caller-side signature checking.
+/// It consists of the actual function pointer and a signature id to be checked
+/// by the caller.
+#[derive(Debug, Clone)]
+#[repr(C)]
+pub struct VMCallerCheckedAnyfunc {
+    pub func_ptr: *const u8,
+    pub type_id: VMSignatureId,
+    // If more elements are added here, remember to add offset_of tests below!
+}
+
+#[cfg(test)]
+mod test_vmcaller_checked_anyfunc {
+    use super::VMCallerCheckedAnyfunc;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
+
+    #[test]
+    fn check_vmcaller_checked_anyfunc_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMCallerCheckedAnyfunc>(),
+            usize::from(offsets.size_of_vmcaller_checked_anyfunc())
+        );
+        assert_eq!(
+            offset_of!(VMCallerCheckedAnyfunc, func_ptr),
+            usize::from(offsets.vmcaller_checked_anyfunc_func_ptr())
+        );
+        assert_eq!(
+            offset_of!(VMCallerCheckedAnyfunc, type_id),
+            usize::from(offsets.vmcaller_checked_anyfunc_type_id())
+        );
+    }
+}
+
+impl Default for VMCallerCheckedAnyfunc {
+    fn default() -> Self {
+        Self {
+            func_ptr: ptr::null_mut(),
+            type_id: 0,
+        }
+    }
+}
+
 /// The VM "context", which is pointed to by the `vmctx` arg in Cranelift.
 /// This has pointers to the globals, memories, tables, and other runtime
 /// state associated with the current instance.
@@ -185,6 +249,8 @@ pub struct VMContext {
     /// A pointer to an array of `VMTable` instances, indexed by
     /// WebAssembly table index.
     tables: *mut VMTable,
+    /// Signature identifiers for signature-checking indirect calls.
+    signature_ids: *mut u32,
     // If more elements are added here, remember to add offset_of tests below!
 }
 
@@ -210,16 +276,26 @@ mod test {
             offset_of!(VMContext, tables),
             usize::from(offsets.vmctx_tables())
         );
+        assert_eq!(
+            offset_of!(VMContext, signature_ids),
+            usize::from(offsets.vmctx_signature_ids())
+        );
     }
 }
 
 impl VMContext {
     /// Create a new `VMContext` instance.
-    pub fn new(memories: *mut VMMemory, globals: *mut VMGlobal, tables: *mut VMTable) -> Self {
+    pub fn new(
+        memories: *mut VMMemory,
+        globals: *mut VMGlobal,
+        tables: *mut VMTable,
+        signature_ids: *mut u32,
+    ) -> Self {
         Self {
             memories,
             globals,
             tables,
+            signature_ids,
         }
     }
 

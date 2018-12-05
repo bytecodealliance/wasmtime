@@ -20,6 +20,7 @@ lazy_static = "1.2.0"
 libc = { version = "0.2.44", default-features = false }
 errno = "0.2.4"
 memoffset = "0.2.1"
+cast = { version = "0.2.2", default-features = false }
 
 [build-dependencies]
 cmake = "0.1.35"
