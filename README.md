@@ -10,7 +10,7 @@ into executable machine code.
 [![Travis Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
 [![Appveyor Status](https://ci.appveyor.com/api/projects/status/oub7wrrb59utuv8x?svg=true)](https://ci.appveyor.com/project/CraneStation/cranelift)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
-![Minimum rustc 1.30](https://img.shields.io/badge/rustc-1.30+-red.svg)
+![Minimum rustc 1.30](https://img.shields.io/badge/rustc-1.30+-green.svg)
 
 For more information, see [the
 documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
