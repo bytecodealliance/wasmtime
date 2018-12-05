@@ -295,6 +295,11 @@ def valid_scale(iform):
 # copies and no-op conversions.
 null = EncRecipe('null', Unary, base_size=0, ins=GPR, outs=0, emit='')
 
+debugtrap = EncRecipe('debugtrap', NullAry, base_size=1, ins=(), outs=(),
+                      emit='''
+                      sink.put1(0xcc);
+                      ''')
+
 # XX opcode, no ModR/M.
 trap = TailRecipe(
         'trap', Trap, base_size=0, ins=(), outs=(),
