@@ -140,8 +140,8 @@ fn instantiate_memories(
 
 /// Allocate memory for just the tables of the current module.
 fn instantiate_tables(module: &Module, compilation: &Compilation) -> PrimaryMap<TableIndex, Table> {
-    let mut tables = PrimaryMap::with_capacity(module.tables.len());
-    for table in module.tables.values() {
+    let mut tables = PrimaryMap::with_capacity(module.table_plans.len());
+    for table in module.table_plans.values() {
         tables.push(Table::new(table));
     }
 
@@ -150,12 +150,14 @@ fn instantiate_tables(module: &Module, compilation: &Compilation) -> PrimaryMap<
         let slice = &mut tables[init.table_index].as_mut();
         let subslice = &mut slice[init.offset..init.offset + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
+            // FIXME: Implement cross-module signature checking.
+            let type_id = module.functions[*func_idx];
             let code_buf = &compilation.functions[module.defined_func_index(*func_idx).expect(
                 "table element initializer with imported function not supported yet",
             )];
             subslice[i] = AnyFunc {
                 func_ptr: code_buf.as_ptr(),
-                type_id: 0, // TODO: Implement signature checking.
+                type_id: type_id.index(),
             };
         }
     }

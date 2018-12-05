@@ -97,6 +97,38 @@ impl MemoryPlan {
     }
 }
 
+/// Implemenation styles for WebAssembly tables.
+#[derive(Debug, Clone)]
+pub enum TableStyle {
+    /// Signatures are stored in the table and checked in the caller.
+    CallerChecksSignature,
+}
+
+impl TableStyle {
+    /// Decide on an implementation style for the given `Table`.
+    pub fn for_table(_table: Table, _tunables: &Tunables) -> Self {
+        TableStyle::CallerChecksSignature
+    }
+}
+
+/// A WebAssembly table description along with our chosen style for
+/// implementing it.
+#[derive(Debug)]
+pub struct TablePlan {
+    /// The WebAssembly table description.
+    pub table: cranelift_wasm::Table,
+    /// Our chosen implementation style.
+    pub style: TableStyle,
+}
+
+impl TablePlan {
+    /// Draw up a plan for implementing a `Table`.
+    pub fn for_table(table: Table, tunables: &Tunables) -> Self {
+        let style = TableStyle::for_table(table, tunables);
+        Self { table, style }
+    }
+}
+
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
 #[derive(Debug)]
@@ -111,7 +143,7 @@ pub struct Module {
     pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
 
     /// WebAssembly tables.
-    pub tables: PrimaryMap<TableIndex, Table>,
+    pub table_plans: PrimaryMap<TableIndex, TablePlan>,
 
     /// WebAssembly linear memory plans.
     pub memory_plans: PrimaryMap<MemoryIndex, MemoryPlan>,
@@ -136,7 +168,7 @@ impl Module {
             signatures: PrimaryMap::new(),
             imported_funcs: PrimaryMap::new(),
             functions: PrimaryMap::new(),
-            tables: PrimaryMap::new(),
+            table_plans: PrimaryMap::new(),
             memory_plans: PrimaryMap::new(),
             globals: PrimaryMap::new(),
             exports: HashMap::new(),

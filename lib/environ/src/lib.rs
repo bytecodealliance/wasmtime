@@ -47,7 +47,9 @@ pub use compilation::{
     compile_module, Compilation, RelocSink, Relocation, RelocationTarget, Relocations,
 };
 pub use environ::{ModuleEnvironment, ModuleTranslation};
-pub use module::{DataInitializer, Export, MemoryPlan, MemoryStyle, Module, TableElements};
+pub use module::{
+    DataInitializer, Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
+};
 pub use tunables::Tunables;
 pub use vmoffsets::VMOffsets;
 

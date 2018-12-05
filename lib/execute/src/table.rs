@@ -2,11 +2,13 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
-use cranelift_wasm::{self, TableElementType};
+use cranelift_wasm::TableElementType;
 use std::ptr;
 use vmcontext::VMTable;
+use wasmtime_environ::{TablePlan, TableStyle};
 
 #[derive(Debug, Clone)]
+#[repr(C)]
 pub struct AnyFunc {
     pub func_ptr: *const u8,
     pub type_id: usize,
@@ -29,21 +31,25 @@ pub struct Table {
 }
 
 impl Table {
-    /// Create a new table instance with specified minimum and maximum number of pages.
-    pub fn new(table: &cranelift_wasm::Table) -> Self {
-        match table.ty {
+    /// Create a new table instance with specified minimum and maximum number of elements.
+    pub fn new(plan: &TablePlan) -> Self {
+        match plan.table.ty {
             TableElementType::Func => (),
             TableElementType::Val(ty) => {
                 unimplemented!("tables of types other than anyfunc ({})", ty)
             }
         };
 
-        let mut vec = Vec::new();
-        vec.resize(table.minimum as usize, AnyFunc::default());
+        match plan.style {
+            TableStyle::CallerChecksSignature => {
+                let mut vec = Vec::new();
+                vec.resize(plan.table.minimum as usize, AnyFunc::default());
 
-        Self {
-            vec,
-            maximum: table.maximum,
+                Self {
+                    vec,
+                    maximum: plan.table.maximum,
+                }
+            }
         }
     }
 

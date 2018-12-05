@@ -1,5 +1,6 @@
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
+use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
@@ -13,6 +14,7 @@ use cranelift_wasm::{
 };
 use module::{
     DataInitializer, Export, LazyContents, MemoryPlan, MemoryStyle, Module, TableElements,
+    TablePlan, TableStyle,
 };
 use std::clone::Clone;
 use std::string::String;
@@ -221,7 +223,8 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     }
 
     fn declare_table(&mut self, table: Table) {
-        self.module.tables.push(table);
+        let plan = TablePlan::for_table(table, &self.tunables);
+        self.module.table_plans.push(plan);
     }
 
     fn declare_table_elements(
@@ -417,11 +420,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             readonly: false,
         });
 
+        let element_size = match self.module.table_plans[index].style {
+            TableStyle::CallerChecksSignature => 2 * u64::from(self.pointer_bytes()),
+        };
+
         func.create_table(ir::TableData {
             base_gv,
             min_size: Uimm64::new(0),
             bound_gv,
-            element_size: Uimm64::new(u64::from(self.pointer_bytes())),
+            element_size: Uimm64::new(element_size),
             index_type: I32,
         })
     }
@@ -449,12 +456,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: FuncCursor,
         table_index: TableIndex,
         table: ir::Table,
-        _sig_index: SignatureIndex,
+        sig_index: SignatureIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        // TODO: Cranelift's call_indirect doesn't implement signature checking,
+        // FIXME: Cranelift's call_indirect doesn't implement signature checking,
         // so we need to implement it ourselves.
         debug_assert_eq!(
             table_index.index(),
@@ -462,7 +469,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             "non-default tables not supported yet"
         );
 
-        let table_entry_addr = pos.ins().table_addr(I64, table, callee, 0);
+        let table_entry_addr = pos.ins().table_addr(self.pointer_type(), table, callee, 0);
 
         // Dereference table_entry_addr to get the function address.
         let mut mem_flags = ir::MemFlags::new();
@@ -471,6 +478,26 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let func_addr = pos
             .ins()
             .load(self.pointer_type(), mem_flags, table_entry_addr, 0);
+
+        // If necessary, check the signature.
+        match self.module.table_plans[table_index].style {
+            TableStyle::CallerChecksSignature => {
+                // Dereference table_type_addr to get the function signature id.
+                let mut mem_flags = ir::MemFlags::new();
+                mem_flags.set_notrap();
+                mem_flags.set_aligned();
+                let callee_sig = pos.ins().load(
+                    self.pointer_type(),
+                    mem_flags,
+                    table_entry_addr,
+                    i32::from(self.pointer_bytes()),
+                );
+                let cmp =
+                    pos.ins()
+                        .icmp_imm(IntCC::Equal, callee_sig, i64::from(sig_index.as_u32()));
+                pos.ins().trapz(cmp, ir::TrapCode::BadSignature);
+            }
+        }
 
         let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
         Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
