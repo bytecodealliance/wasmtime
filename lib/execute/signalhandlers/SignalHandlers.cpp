@@ -723,8 +723,9 @@ EnsureEagerSignalHandlers()
         abort();
     }
 
-# if defined(__arm__)
-    // On Arm Handle Unaligned Accesses
+# if defined(__arm__) || defined(__APPLE__)
+    // On ARM, handle Unaligned Accesses.
+    // On Darwin, guard page accesses are raised as SIGBUS.
     struct sigaction busHandler;
     busHandler.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
     busHandler.sa_sigaction = WasmTrapHandler;
