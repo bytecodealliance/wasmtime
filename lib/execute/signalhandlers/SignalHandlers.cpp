@@ -1,6 +1,9 @@
 //! This file is largely derived from the code in WasmSignalHandlers.cpp in SpiderMonkey:
 //!
 //! https://dxr.mozilla.org/mozilla-central/source/js/src/wasm/WasmSignalHandlers.cpp
+//!
+//! Use of Mach ports on Darwin platforms (the USE_APPLE_MACH_PORTS code below) is
+//! currently disabled.
 
 #include "SignalHandlers.h"
 
@@ -12,7 +15,7 @@
 #if defined(_WIN32)
 # include <winternl.h>  // must include before util/Windows.h's `#undef`s
 # include "util/Windows.h"
-#elif defined(__APPLE__)
+#elif defined(USE_APPLE_MACH_PORTS)
 # include <mach/exc.h>
 # include <mach/mach.h>
 # include <pthread.h>
@@ -176,7 +179,7 @@
 #  define EPC_sig(p) ((p)->uc_mcontext.mc_pc)
 #  define RFP_sig(p) ((p)->uc_mcontext.mc_regs[30])
 # endif
-#elif defined(__APPLE__)
+#elif defined(USE_APPLE_MACH_PORTS)
 # define EIP_sig(p) ((p)->thread.uts.ts32.__eip)
 # define EBP_sig(p) ((p)->thread.uts.ts32.__ebp)
 # define ESP_sig(p) ((p)->thread.uts.ts32.__esp)
@@ -187,6 +190,17 @@
 # define R13_sig(p) ((p)->thread.__sp)
 # define R14_sig(p) ((p)->thread.__lr)
 # define R15_sig(p) ((p)->thread.__pc)
+#elif defined(__APPLE__)
+# define EIP_sig(p) ((p)->uc_mcontext->__ss.__eip)
+# define EBP_sig(p) ((p)->uc_mcontext->__ss.__ebp)
+# define ESP_sig(p) ((p)->uc_mcontext->__ss.__esp)
+# define RIP_sig(p) ((p)->uc_mcontext->__ss.__rip)
+# define RBP_sig(p) ((p)->uc_mcontext->__ss.__rbp)
+# define RSP_sig(p) ((p)->uc_mcontext->__ss.__rsp)
+# define R11_sig(p) ((p)->uc_mcontext->__ss.__r11)
+# define R13_sig(p) ((p)->uc_mcontext->__ss.__sp)
+# define R14_sig(p) ((p)->uc_mcontext->__ss.__lr)
+# define R15_sig(p) ((p)->uc_mcontext->__ss.__pc)
 #else
 # error "Don't know how to read/write to the thread state via the mcontext_t."
 #endif
@@ -271,7 +285,7 @@ enum { REG_EIP = 14 };
 # endif  // !defined(__BIONIC_HAVE_UCONTEXT_T)
 #endif // defined(ANDROID)
 
-#if defined(__APPLE__)
+#if defined(USE_APPLE_MACH_PORTS)
 # if defined(__x86_64__)
 struct macos_x64_context {
     x86_thread_state64_t thread;
@@ -405,7 +419,7 @@ HandleTrap(CONTEXT* context)
     // a longjmp.
     sAlreadyHandlingTrap = false;
 
-#if defined(__APPLE__)
+#if defined(USE_APPLE_MACH_PORTS)
     // Reroute the PC to run the Unwind function on the main stack after the
     // handler exits. This doesn't yet work for stack overflow traps, because
     // in that case the main thread doesn't have any space left to run.
@@ -457,7 +471,7 @@ WasmTrapHandler(LPEXCEPTION_POINTERS exception)
     return EXCEPTION_CONTINUE_EXECUTION;
 }
 
-#elif defined(__APPLE__)
+#elif defined(USE_APPLE_MACH_PORTS)
 // On OSX we are forced to use the lower-level Mach exception mechanism instead
 // of Unix signals because breakpad uses Mach exceptions and would otherwise
 // report a crash before wasm gets a chance to handle the exception.
@@ -687,7 +701,7 @@ EnsureEagerSignalHandlers()
         return false;
     }
 
-#elif defined(__APPLE__)
+#elif defined(USE_APPLE_MACH_PORTS)
     // All the Mach setup in EnsureLazyProcessSignalHandlers.
 #else
     // SA_ONSTACK allows us to handle signals on an alternate stack, so that
@@ -751,10 +765,10 @@ EnsureEagerSignalHandlers()
     return true;
 }
 
-#ifdef __APPLE__
 bool
 EnsureDarwinMachPorts()
 {
+#ifdef USE_APPLE_MACH_PORTS
     pthread_attr_t handlerThreadAttr;
     int r = pthread_attr_init(&handlerThreadAttr);
     if (r != 0) {
@@ -803,6 +817,6 @@ EnsureDarwinMachPorts()
         return false;
     }
 
+#endif
     return true;
 }
-#endif
