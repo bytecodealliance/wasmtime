@@ -784,6 +784,9 @@ ebb1:
     ; asm: jnbe .+4; ud2
     trapif ule v11, user0                          ; bin: 77 02 user0 0f 0b
 
+    ; Debug trap.
+    debugtrap ; bin: cc
+
     ; Stack check.
     ; asm: cmpq %rsp, %rcx
     [-,%rflags]         v40 = ifcmp_sp v1       ; bin: 48 39 e1

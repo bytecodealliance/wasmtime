@@ -181,6 +181,10 @@ indirect_jump_table_br = Instruction(
     ins=(addr, JT),
     is_branch=True, is_indirect_branch=True, is_terminator=True)
 
+debugtrap = Instruction('debugtrap', r"""
+    Encodes an assembly debug trap.
+    """, can_load=True, can_store=True, other_side_effects=True)
+
 code = Operand('code', trapcode)
 trap = Instruction(
         'trap', r"""

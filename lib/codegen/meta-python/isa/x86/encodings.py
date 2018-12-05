@@ -521,11 +521,16 @@ X86_32.enc(base.jump_table_base.i32, *r.jt_base(0x8d))
 
 enc_x86_64(base.indirect_jump_table_br.i64, r.indirect_jmp, 0xff, rrr=4)
 X86_32.enc(base.indirect_jump_table_br.i32, *r.indirect_jmp(0xff, rrr=4))
+
 #
 # Trap as ud2
 #
 X86_32.enc(base.trap, *r.trap(0x0f, 0x0b))
 X86_64.enc(base.trap, *r.trap(0x0f, 0x0b))
+
+# Debug trap as int3
+X86_32.enc(base.debugtrap, r.debugtrap, 0)
+X86_64.enc(base.debugtrap, r.debugtrap, 0)
 
 # Using a standard EncRecipe, not the TailRecipe.
 X86_32.enc(base.trapif, r.trapif, 0)
