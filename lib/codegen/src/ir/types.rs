@@ -2,6 +2,7 @@
 
 use std::default::Default;
 use std::fmt::{self, Debug, Display, Formatter};
+use target_lexicon::{PointerWidth, Triple};
 
 /// The type of an SSA value.
 ///
@@ -270,6 +271,16 @@ impl Type {
     /// 2. `self.lane_bits() >= other.lane_bits()`
     pub fn wider_or_equal(self, other: Self) -> bool {
         self.lane_count() == other.lane_count() && self.lane_bits() >= other.lane_bits()
+    }
+
+    /// Return the pointer type for the given target triple.
+    pub fn triple_pointer_type(triple: &Triple) -> Self {
+        match triple.pointer_width() {
+            Ok(PointerWidth::U16) => I16,
+            Ok(PointerWidth::U32) => I32,
+            Ok(PointerWidth::U64) => I64,
+            Err(()) => panic!("unable to determine architecture pointer width"),
+        }
     }
 }
 

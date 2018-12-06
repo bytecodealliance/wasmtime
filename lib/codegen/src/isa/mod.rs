@@ -208,7 +208,7 @@ pub trait TargetIsa: fmt::Display + Sync {
 
     /// Get the default calling convention of this target.
     fn default_call_conv(&self) -> CallConv {
-        CallConv::default_for_triple(self.triple())
+        CallConv::triple_default(self.triple())
     }
 
     /// Get the pointer type of this ISA.
