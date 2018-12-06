@@ -95,7 +95,7 @@ pub fn parse_import_section<'data>(
                     Global {
                         ty: type_to_type(ty.content_type).unwrap(),
                         mutability: ty.mutable,
-                        initializer: GlobalInit::Import(),
+                        initializer: GlobalInit::Import,
                     },
                     module_name,
                     field_name,
@@ -253,7 +253,7 @@ pub fn parse_element_section<'data>(
                 .initializer
             {
                 GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
+                GlobalInit::Import => (Some(GlobalIndex::new(global_index as usize)), 0),
                 _ => panic!("should not happen"),
             },
             ref s => panic!("unsupported init expr in element section: {:?}", s),
@@ -301,7 +301,7 @@ pub fn parse_data_section<'data>(
                 .initializer
             {
                 GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
+                GlobalInit::Import => (Some(GlobalIndex::new(global_index as usize)), 0),
                 _ => panic!("should not happen"),
             },
             ref s => panic!("unsupported init expr in data section: {:?}", s),

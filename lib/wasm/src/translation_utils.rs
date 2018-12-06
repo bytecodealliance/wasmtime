@@ -73,7 +73,7 @@ pub enum GlobalInit {
     /// A `get_global` of another global.
     GlobalRef(GlobalIndex),
     ///< The global is imported from, and thus initialized by, a different module.
-    Import(),
+    Import,
 }
 
 /// WebAssembly table.
