@@ -75,12 +75,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::GetGlobal { global_index } => {
             let val = match state.get_global(builder.func, global_index, environ) {
                 GlobalVariable::Const(val) => val,
-                GlobalVariable::Memory { gv, ty } => {
+                GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
-                    builder.ins().load(ty, flags, addr, 0)
+                    builder.ins().load(ty, flags, addr, offset)
                 }
             };
             state.push1(val);
@@ -88,13 +88,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::SetGlobal { global_index } => {
             match state.get_global(builder.func, global_index, environ) {
                 GlobalVariable::Const(_) => panic!("global #{} is a constant", global_index),
-                GlobalVariable::Memory { gv, .. } => {
+                GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
                     let val = state.pop1();
-                    builder.ins().store(flags, val, addr, 0);
+                    debug_assert_eq!(ty, builder.func.dfg.value_type(val));
+                    builder.ins().store(flags, val, addr, offset);
                 }
             }
         }
