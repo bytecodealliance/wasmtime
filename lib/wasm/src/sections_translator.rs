@@ -187,7 +187,7 @@ pub fn parse_global_section(
             Operator::F32Const { value } => GlobalInit::F32Const(value.bits()),
             Operator::F64Const { value } => GlobalInit::F64Const(value.bits()),
             Operator::GetGlobal { global_index } => {
-                GlobalInit::GlobalRef(GlobalIndex::new(global_index as usize))
+                GlobalInit::GetGlobal(GlobalIndex::new(global_index as usize))
             }
             ref s => panic!("unsupported init expr in global section: {:?}", s),
         };

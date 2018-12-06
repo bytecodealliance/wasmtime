@@ -71,7 +71,7 @@ pub enum GlobalInit {
     /// An `f64.const`.
     F64Const(u64),
     /// A `get_global` of another global.
-    GlobalRef(GlobalIndex),
+    GetGlobal(GlobalIndex),
     ///< The global is imported from, and thus initialized by, a different module.
     Import,
 }
