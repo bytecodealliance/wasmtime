@@ -7,7 +7,9 @@ use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::isa;
 use cranelift_codegen::Context;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
+use cranelift_wasm::{
+    DefinedFuncIndex, FuncIndex, FuncTranslator, GlobalIndex, MemoryIndex, TableIndex,
+};
 use environ::{get_func_name, get_memory_grow_name, get_memory_size_name, ModuleTranslation};
 use std::string::{String, ToString};
 use std::vec::Vec;
@@ -17,12 +19,30 @@ use std::vec::Vec;
 pub struct Compilation {
     /// Compiled machine code for the function bodies.
     pub functions: PrimaryMap<DefinedFuncIndex, Vec<u8>>,
+
+    /// Resolved function addresses for imported functions.
+    pub resolved_func_imports: PrimaryMap<FuncIndex, usize>,
+
+    /// Resolved function addresses for imported tables.
+    pub resolved_table_imports: PrimaryMap<TableIndex, usize>,
+
+    /// Resolved function addresses for imported globals.
+    pub resolved_global_imports: PrimaryMap<GlobalIndex, usize>,
+
+    /// Resolved function addresses for imported memories.
+    pub resolved_memory_imports: PrimaryMap<MemoryIndex, usize>,
 }
 
 impl Compilation {
     /// Allocates the compilation result with the given function bodies.
     pub fn new(functions: PrimaryMap<DefinedFuncIndex, Vec<u8>>) -> Self {
-        Self { functions }
+        Self {
+            functions,
+            resolved_func_imports: PrimaryMap::new(),
+            resolved_table_imports: PrimaryMap::new(),
+            resolved_memory_imports: PrimaryMap::new(),
+            resolved_global_imports: PrimaryMap::new(),
+        }
     }
 }
 
@@ -145,5 +165,6 @@ pub fn compile_module<'data, 'module>(
         functions.push(code_buf);
         relocations.push(reloc_sink.func_relocs);
     }
+    // TODO: Reorganize where we create the Vec for the resolved imports.
     Ok((Compilation::new(functions), relocations))
 }

@@ -44,7 +44,7 @@ mod vmoffsets;
 pub use compilation::{
     compile_module, Compilation, RelocSink, Relocation, RelocationTarget, Relocations,
 };
-pub use environ::{ModuleEnvironment, ModuleTranslation};
+pub use environ::{translate_signature, ModuleEnvironment, ModuleTranslation};
 pub use module::{
     DataInitializer, Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
 };

@@ -2,20 +2,86 @@
 //! fields that JIT code accesses directly.
 
 use cranelift_entity::EntityRef;
-use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
+use cranelift_wasm::{Global, GlobalIndex, GlobalInit, MemoryIndex, TableIndex};
 use instance::Instance;
-use std::mem::size_of;
+use std::fmt;
 use std::ptr;
-use std::slice;
 
-/// The main fields a JIT needs to access to utilize a WebAssembly linear,
-/// memory, namely the start address and the size in bytes.
-#[derive(Debug)]
+/// The fields a JIT needs to access to utilize a WebAssembly linear
+/// memory defined within the instance, namely the start address and the
+/// size in bytes.
+#[derive(Debug, Copy, Clone)]
 #[repr(C)]
-pub struct VMMemory {
+pub struct VMMemoryDefinition {
+    /// The start address.
     base: *mut u8,
+    /// The current size of linear memory in bytes.
     current_length: usize,
-    // If more elements are added here, remember to add offset_of tests below!
+}
+
+#[cfg(test)]
+mod test_vmmemory_definition {
+    use super::VMMemoryDefinition;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
+
+    #[test]
+    fn check_vmmemory_definition_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMMemoryDefinition>(),
+            usize::from(offsets.size_of_vmmemory_definition())
+        );
+        assert_eq!(
+            offset_of!(VMMemoryDefinition, base),
+            usize::from(offsets.vmmemory_definition_base())
+        );
+        assert_eq!(
+            offset_of!(VMMemoryDefinition, current_length),
+            usize::from(offsets.vmmemory_definition_current_length())
+        );
+    }
+}
+
+/// The fields a JIT needs to access to utilize a WebAssembly linear
+/// memory imported from another instance.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMMemoryImport {
+    /// A pointer to the imported memory description.
+    from: *mut VMMemoryDefinition,
+}
+
+#[cfg(test)]
+mod test_vmmemory_import {
+    use super::VMMemoryImport;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
+
+    #[test]
+    fn check_vmmemory_import_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMMemoryImport>(),
+            usize::from(offsets.size_of_vmmemory_import())
+        );
+        assert_eq!(
+            offset_of!(VMMemoryImport, from),
+            usize::from(offsets.vmmemory_import_from())
+        );
+    }
+}
+
+/// The main fields a JIT needs to access to utilize a WebAssembly linear
+/// memory. It must know whether the memory is defined within the instance
+/// or imported.
+#[repr(C)]
+pub union VMMemory {
+    /// A linear memory defined within the instance.
+    definition: VMMemoryDefinition,
+
+    /// An imported linear memory.
+    import: VMMemoryImport,
 }
 
 #[cfg(test)]
@@ -31,70 +97,154 @@ mod test_vmmemory {
             size_of::<VMMemory>(),
             usize::from(offsets.size_of_vmmemory())
         );
-        assert_eq!(
-            offset_of!(VMMemory, base),
-            usize::from(offsets.vmmemory_base())
-        );
-        assert_eq!(
-            offset_of!(VMMemory, current_length),
-            usize::from(offsets.vmmemory_current_length())
-        );
     }
 }
 
 impl VMMemory {
-    pub fn new(base: *mut u8, current_length: usize) -> Self {
+    /// Construct a `VMMemoryDefinition` variant of `VMMemory`.
+    pub fn definition(base: *mut u8, current_length: usize) -> Self {
         Self {
-            base,
-            current_length,
+            definition: VMMemoryDefinition {
+                base,
+                current_length,
+            },
         }
     }
 
-    pub fn as_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.base, self.current_length) }
+    /// Construct a `VMMemoryImmport` variant of `VMMemory`.
+    pub fn import(from: *mut VMMemoryDefinition) -> Self {
+        Self {
+            import: VMMemoryImport { from },
+        }
     }
 
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.base, self.current_length) }
-    }
-
-    pub fn as_ptr(&self) -> *const u8 {
-        self.base
-    }
-
-    pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.base
-    }
-
-    pub fn len(&self) -> usize {
-        self.current_length
+    /// Get the underlying `VMMemoryDefinition`.
+    pub unsafe fn get_definition(&mut self, is_import: bool) -> &mut VMMemoryDefinition {
+        if is_import {
+            &mut *self.import.from
+        } else {
+            &mut self.definition
+        }
     }
 }
 
-/// The storage for a WebAssembly global.
+impl fmt::Debug for VMMemory {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "VMMemory {{")?;
+        write!(f, "    definition: {:?},", unsafe { self.definition })?;
+        write!(f, "    import: {:?},", unsafe { self.import })?;
+        write!(f, "}}")?;
+        Ok(())
+    }
+}
+
+/// The storage for a WebAssembly global defined within the instance.
 ///
 /// TODO: Pack the globals more densely, rather than using the same size
 /// for every type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 #[repr(C, align(8))]
-pub struct VMGlobal {
+pub struct VMGlobalDefinition {
     storage: [u8; 8],
     // If more elements are added here, remember to add offset_of tests below!
 }
 
 #[cfg(test)]
-mod test_vmglobal {
-    use super::VMGlobal;
+mod test_vmglobal_definition {
+    use super::VMGlobalDefinition;
     use std::mem::{align_of, size_of};
     use wasmtime_environ::VMOffsets;
 
     #[test]
-    fn check_vmglobal_alignment() {
-        assert!(align_of::<VMGlobal>() >= align_of::<i32>());
-        assert!(align_of::<VMGlobal>() >= align_of::<i64>());
-        assert!(align_of::<VMGlobal>() >= align_of::<f32>());
-        assert!(align_of::<VMGlobal>() >= align_of::<f64>());
+    fn check_vmglobal_definition_alignment() {
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<i32>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<i64>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<f64>());
     }
+
+    #[test]
+    fn check_vmglobal_definition_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMGlobalDefinition>(),
+            usize::from(offsets.size_of_vmglobal_definition())
+        );
+    }
+}
+
+impl VMGlobalDefinition {
+    pub unsafe fn as_i32(&mut self) -> &mut i32 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut i32)
+    }
+
+    pub unsafe fn as_i64(&mut self) -> &mut i64 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut i64)
+    }
+
+    pub unsafe fn as_f32(&mut self) -> &mut f32 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut f32)
+    }
+
+    pub unsafe fn as_f32_bits(&mut self) -> &mut u32 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut u32)
+    }
+
+    pub unsafe fn as_f64(&mut self) -> &mut f64 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut f64)
+    }
+
+    pub unsafe fn as_f64_bits(&mut self) -> &mut u64 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut u64)
+    }
+}
+
+/// The fields a JIT needs to access to utilize a WebAssembly global
+/// variable imported from another instance.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMGlobalImport {
+    /// A pointer to the imported global variable description.
+    from: *mut VMGlobalDefinition,
+}
+
+#[cfg(test)]
+mod test_vmglobal_import {
+    use super::VMGlobalImport;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
+
+    #[test]
+    fn check_vmglobal_import_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMGlobalImport>(),
+            usize::from(offsets.size_of_vmglobal_import())
+        );
+        assert_eq!(
+            offset_of!(VMGlobalImport, from),
+            usize::from(offsets.vmglobal_import_from())
+        );
+    }
+}
+
+/// The main fields a JIT needs to access to utilize a WebAssembly global
+/// variable. It must know whether the global variable is defined within the
+/// instance or imported.
+#[repr(C)]
+pub union VMGlobal {
+    /// A global variable defined within the instance.
+    definition: VMGlobalDefinition,
+
+    /// An imported global variable.
+    import: VMGlobalImport,
+}
+
+#[cfg(test)]
+mod test_vmglobal {
+    use super::VMGlobal;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
 
     #[test]
     fn check_vmglobal_offsets() {
@@ -106,20 +256,122 @@ mod test_vmglobal {
     }
 }
 
-impl Default for VMGlobal {
-    fn default() -> Self {
-        VMGlobal { storage: [0; 8] }
+impl VMGlobal {
+    /// Construct a `VMGlobalDefinition` variant of `VMGlobal`.
+    pub fn definition(global: &Global) -> Self {
+        let mut result = VMGlobalDefinition { storage: [0; 8] };
+        unsafe {
+            match global.initializer {
+                GlobalInit::I32Const(x) => *result.as_i32() = x,
+                GlobalInit::I64Const(x) => *result.as_i64() = x,
+                GlobalInit::F32Const(x) => *result.as_f32_bits() = x,
+                GlobalInit::F64Const(x) => *result.as_f64_bits() = x,
+                GlobalInit::GetGlobal(_x) => unimplemented!("globals init with get_global"),
+                GlobalInit::Import => panic!("attempting to initialize imported global"),
+            }
+        }
+        Self { definition: result }
+    }
+
+    /// Construct a `VMGlobalImmport` variant of `VMGlobal`.
+    pub fn import(from: *mut VMGlobalDefinition) -> Self {
+        Self {
+            import: VMGlobalImport { from },
+        }
+    }
+
+    /// Get the underlying `VMGlobalDefinition`.
+    pub unsafe fn get_definition(&mut self, is_import: bool) -> &mut VMGlobalDefinition {
+        if is_import {
+            &mut *self.import.from
+        } else {
+            &mut self.definition
+        }
     }
 }
 
-#[derive(Debug)]
-/// The main fields a JIT needs to access to utilize a WebAssembly table,
-/// namely the start address and the number of elements.
+impl fmt::Debug for VMGlobal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "VMGlobal {{")?;
+        write!(f, "    definition: {:?},", unsafe { self.definition })?;
+        write!(f, "    import: {:?},", unsafe { self.import })?;
+        write!(f, "}}")?;
+        Ok(())
+    }
+}
+
+/// The fields a JIT needs to access to utilize a WebAssembly table
+/// defined within the instance.
+#[derive(Debug, Copy, Clone)]
 #[repr(C)]
-pub struct VMTable {
+pub struct VMTableDefinition {
     base: *mut u8,
     current_elements: usize,
-    // If more elements are added here, remember to add offset_of tests below!
+}
+
+#[cfg(test)]
+mod test_vmtable_definition {
+    use super::VMTableDefinition;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
+
+    #[test]
+    fn check_vmtable_definition_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMTableDefinition>(),
+            usize::from(offsets.size_of_vmtable_definition())
+        );
+        assert_eq!(
+            offset_of!(VMTableDefinition, base),
+            usize::from(offsets.vmtable_definition_base())
+        );
+        assert_eq!(
+            offset_of!(VMTableDefinition, current_elements),
+            usize::from(offsets.vmtable_definition_current_elements())
+        );
+    }
+}
+
+/// The fields a JIT needs to access to utilize a WebAssembly table
+/// imported from another instance.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMTableImport {
+    /// A pointer to the imported table description.
+    from: *mut VMTableDefinition,
+}
+
+#[cfg(test)]
+mod test_vmtable_import {
+    use super::VMTableImport;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
+
+    #[test]
+    fn check_vmtable_import_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMTableImport>(),
+            usize::from(offsets.size_of_vmtable_import())
+        );
+        assert_eq!(
+            offset_of!(VMTableImport, from),
+            usize::from(offsets.vmtable_import_from())
+        );
+    }
+}
+
+/// The main fields a JIT needs to access to utilize a WebAssembly table.
+/// It must know whether the table is defined within the instance
+/// or imported.
+#[repr(C)]
+pub union VMTable {
+    /// A table defined within the instance.
+    definition: VMTableDefinition,
+
+    /// An imported table.
+    import: VMTableImport,
 }
 
 #[cfg(test)]
@@ -132,43 +384,44 @@ mod test_vmtable {
     fn check_vmtable_offsets() {
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
         assert_eq!(size_of::<VMTable>(), usize::from(offsets.size_of_vmtable()));
-        assert_eq!(
-            offset_of!(VMTable, base),
-            usize::from(offsets.vmtable_base())
-        );
-        assert_eq!(
-            offset_of!(VMTable, current_elements),
-            usize::from(offsets.vmtable_current_elements())
-        );
     }
 }
 
 impl VMTable {
-    pub fn new(base: *mut u8, current_elements: usize) -> Self {
+    /// Construct a `VMTableDefinition` variant of `VMTable`.
+    pub fn definition(base: *mut u8, current_elements: usize) -> Self {
         Self {
-            base,
-            current_elements,
+            definition: VMTableDefinition {
+                base,
+                current_elements,
+            },
         }
     }
 
-    pub fn as_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.base, self.current_elements) }
+    /// Construct a `VMTableImmport` variant of `VMTable`.
+    pub fn import(from: *mut VMTableDefinition) -> Self {
+        Self {
+            import: VMTableImport { from },
+        }
     }
 
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.base, self.current_elements) }
+    /// Get the underlying `VMTableDefinition`.
+    pub unsafe fn get_definition(&mut self, is_import: bool) -> &mut VMTableDefinition {
+        if is_import {
+            &mut *self.import.from
+        } else {
+            &mut self.definition
+        }
     }
+}
 
-    pub fn as_ptr(&self) -> *const u8 {
-        self.base
-    }
-
-    pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.base
-    }
-
-    pub fn len(&self) -> usize {
-        self.current_elements
+impl fmt::Debug for VMTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "VMTable {{")?;
+        write!(f, "    definition: {:?},", unsafe { self.definition })?;
+        write!(f, "    import: {:?},", unsafe { self.import })?;
+        write!(f, "}}")?;
+        Ok(())
     }
 }
 
@@ -238,6 +491,10 @@ impl Default for VMCallerCheckedAnyfunc {
 /// The VM "context", which is pointed to by the `vmctx` arg in Cranelift.
 /// This has pointers to the globals, memories, tables, and other runtime
 /// state associated with the current instance.
+///
+/// TODO: The number of memories, globals, tables, and signature IDs does
+/// not change dynamically, and pointer arrays are not indexed dynamically,
+/// so these fields could all be contiguously allocated.
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMContext {
@@ -300,28 +557,8 @@ impl VMContext {
     }
 
     /// Return the base pointer of the globals array.
-    pub unsafe fn global_storage(&mut self, index: GlobalIndex) -> *mut VMGlobal {
-        self.globals.add(index.index() * size_of::<VMGlobal>())
-    }
-
-    /// Return a mutable reference to global `index` which has type i32.
-    pub unsafe fn global_i32(&mut self, index: GlobalIndex) -> &mut i32 {
-        &mut *(self.global_storage(index) as *mut i32)
-    }
-
-    /// Return a mutable reference to global `index` which has type i64.
-    pub unsafe fn global_i64(&mut self, index: GlobalIndex) -> &mut i64 {
-        &mut *(self.global_storage(index) as *mut i64)
-    }
-
-    /// Return a mutable reference to global `index` which has type f32.
-    pub unsafe fn global_f32(&mut self, index: GlobalIndex) -> &mut f32 {
-        &mut *(self.global_storage(index) as *mut f32)
-    }
-
-    /// Return a mutable reference to global `index` which has type f64.
-    pub unsafe fn global_f64(&mut self, index: GlobalIndex) -> &mut f64 {
-        &mut *(self.global_storage(index) as *mut f64)
+    pub unsafe fn global(&mut self, index: GlobalIndex) -> &mut VMGlobal {
+        &mut *self.globals.add(index.index())
     }
 
     /// Return a mutable reference to linear memory `index`.

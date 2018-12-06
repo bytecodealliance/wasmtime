@@ -114,12 +114,16 @@ pub fn invoke_by_index(
     fn_index: FuncIndex,
     args: &[Value],
 ) -> Result<InvokeOutcome, String> {
-    let code_buf = &compilation.functions[module
-        .defined_func_index(fn_index)
-        .expect("imported start functions not supported yet")];
-    let sig = &module.signatures[module.functions[fn_index]];
+    // TODO: Return Err if fn_index is out of bounds.
+    let exec_code_buf = match module.defined_func_index(fn_index) {
+        Some(def_fn_index) => {
+            let code_buf = &compilation.functions[def_fn_index];
+            code.allocate_copy_of_slice(&code_buf)?.as_ptr() as usize
+        }
+        None => compilation.resolved_func_imports[fn_index],
+    };
 
-    let exec_code_buf = code.allocate_copy_of_slice(&code_buf)?.as_ptr();
+    let sig = &module.signatures[module.functions[fn_index]];
 
     // TODO: Move this out to be done once per thread rather than per call.
     let mut traps = TrapContext {
@@ -138,7 +142,7 @@ pub fn invoke_by_index(
         return Err("failed to install signal handlers".to_string());
     }
 
-    call_through_wrapper(code, isa, exec_code_buf as usize, vmctx, args, &sig)
+    call_through_wrapper(code, isa, exec_code_buf, vmctx, args, &sig)
 }
 
 fn call_through_wrapper(

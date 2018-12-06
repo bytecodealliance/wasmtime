@@ -2,7 +2,7 @@ use cast;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
-use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
+use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentPurpose, ExtFuncData, FuncRef, Function, InstBuilder, Signature,
@@ -169,11 +169,7 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
     }
 
     fn declare_signature(&mut self, sig: &ir::Signature) {
-        let mut sig = sig.clone();
-        sig.params.push(AbiParam::special(
-            self.pointer_type(),
-            ArgumentPurpose::VMContext,
-        ));
+        let sig = translate_signature(sig.clone(), self.pointer_type());
         // TODO: Deduplicate signatures.
         self.module.signatures.push(sig);
     }
@@ -207,8 +203,17 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         self.module.functions[func_index]
     }
 
-    fn declare_global_import(&mut self, _global: Global, _module: &str, _field: &str) {
-        unimplemented!("imported globals");
+    fn declare_global_import(&mut self, global: Global, module: &str, field: &str) {
+        debug_assert_eq!(
+            self.module.globals.len(),
+            self.module.imported_globals.len(),
+            "Imported globals must be declared first"
+        );
+        self.module.globals.push(global);
+
+        self.module
+            .imported_globals
+            .push((String::from(module), String::from(field)));
     }
 
     fn declare_global(&mut self, global: Global) {
@@ -219,8 +224,18 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         &self.module.globals[global_index]
     }
 
-    fn declare_table_import(&mut self, _table: Table, _module: &str, _field: &str) {
-        unimplemented!("imported tables");
+    fn declare_table_import(&mut self, table: Table, module: &str, field: &str) {
+        debug_assert_eq!(
+            self.module.table_plans.len(),
+            self.module.imported_tables.len(),
+            "Imported tables must be declared first"
+        );
+        let plan = TablePlan::for_table(table, &self.tunables);
+        self.module.table_plans.push(plan);
+
+        self.module
+            .imported_tables
+            .push((String::from(module), String::from(field)));
     }
 
     fn declare_table(&mut self, table: Table) {
@@ -235,7 +250,6 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         offset: usize,
         elements: Vec<FuncIndex>,
     ) {
-        debug_assert!(base.is_none(), "global-value offsets not supported yet");
         self.module.table_elements.push(TableElements {
             table_index,
             base,
@@ -244,8 +258,18 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         });
     }
 
-    fn declare_memory_import(&mut self, _memory: Memory, _module: &str, _field: &str) {
-        unimplemented!("imported memories");
+    fn declare_memory_import(&mut self, memory: Memory, module: &str, field: &str) {
+        debug_assert_eq!(
+            self.module.memory_plans.len(),
+            self.module.imported_memories.len(),
+            "Imported memories must be declared first"
+        );
+        let plan = MemoryPlan::for_memory(memory, &self.tunables);
+        self.module.memory_plans.push(plan);
+
+        self.module
+            .imported_memories
+            .push((String::from(module), String::from(field)));
     }
 
     fn declare_memory(&mut self, memory: Memory) {
@@ -260,7 +284,6 @@ impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
         offset: usize,
         data: &'data [u8],
     ) {
-        debug_assert!(base.is_none(), "global-value offsets not supported yet");
         self.lazy.data_initializers.push(DataInitializer {
             memory_index,
             base,
@@ -313,7 +336,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let pointer_type = self.pointer_type();
 
         let vmctx = self.vmctx(func);
-        let globals_base = self.globals_base.unwrap_or_else(|| {
+        let mut globals_base = self.globals_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::from(self.offsets.vmctx_globals())),
@@ -323,13 +346,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.globals_base = Some(new_base);
             new_base
         });
-        let gv = func.create_global_value(ir::GlobalValueData::IAddImm {
-            base: globals_base,
-            offset: Imm64::new(i64::from(self.offsets.index_vmglobal(index.as_u32()))),
-            global_type: pointer_type,
-        });
+        let mut offset = self.offsets.index_vmglobal(index.as_u32());
+
+        // For imported memories, the `VMGlobal` array contains a pointer to
+        // the `VMGlobalDefinition` rather than containing the `VMGlobalDefinition`
+        // inline, so we do an extra indirection.
+        if self.module.is_imported_global(index) {
+            globals_base = func.create_global_value(ir::GlobalValueData::Load {
+                base: globals_base,
+                offset: Offset32::new(self.offsets.index_vmglobal_import_from(index.as_u32())),
+                global_type: pointer_type,
+                readonly: true,
+            });
+            offset = self.offsets.index_vmglobal(0);
+        }
+
         GlobalVariable::Memory {
-            gv,
+            gv: globals_base,
+            offset: offset.into(),
             ty: self.module.globals[index].ty,
         }
     }
@@ -338,7 +372,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let pointer_type = self.pointer_type();
 
         let vmctx = self.vmctx(func);
-        let memories_base = self.memories_base.unwrap_or_else(|| {
+        let mut memories_base = self.memories_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::from(self.offsets.vmctx_memories())),
@@ -348,6 +382,25 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.memories_base = Some(new_base);
             new_base
         });
+        let mut base_offset = self.offsets.index_vmmemory_definition_base(index.as_u32());
+        let mut current_length_offset = self
+            .offsets
+            .index_vmmemory_definition_current_length(index.as_u32());
+
+        // For imported memories, the `VMMemory` array contains a pointer to
+        // the `VMMemoryDefinition` rather than containing the `VMMemoryDefinition`
+        // inline, so we do an extra indirection.
+        if self.module.is_imported_memory(index) {
+            memories_base = func.create_global_value(ir::GlobalValueData::Load {
+                base: memories_base,
+                offset: Offset32::new(self.offsets.index_vmmemory_import_from(index.as_u32())),
+                global_type: pointer_type,
+                readonly: true,
+            });
+            base_offset = self.offsets.index_vmmemory_definition_base(0);
+            current_length_offset = self.offsets.index_vmmemory_definition_current_length(0);
+        }
+
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
         let (offset_guard_size, heap_style, readonly_base) = match self.module.memory_plans[index] {
@@ -358,9 +411,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             } => {
                 let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
                     base: memories_base,
-                    offset: Offset32::new(
-                        self.offsets.index_vmmemory_current_length(index.as_u32()),
-                    ),
+                    offset: Offset32::new(current_length_offset),
                     global_type: I32,
                     readonly: false,
                 });
@@ -387,7 +438,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: memories_base,
-            offset: Offset32::new(self.offsets.index_vmmemory_base(index.as_u32())),
+            offset: Offset32::new(base_offset),
             global_type: pointer_type,
             readonly: readonly_base,
         });
@@ -404,7 +455,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let pointer_type = self.pointer_type();
 
         let vmctx = self.vmctx(func);
-        let tables_base = self.tables_base.unwrap_or_else(|| {
+        let mut tables_base = self.tables_base.unwrap_or_else(|| {
             let new_base = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::from(self.offsets.vmctx_tables())),
@@ -414,15 +465,34 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.tables_base = Some(new_base);
             new_base
         });
+        let mut base_offset = self.offsets.index_vmtable_definition_base(index.as_u32());
+        let mut current_elements_offset = self
+            .offsets
+            .index_vmtable_definition_current_elements(index.as_u32());
+
+        // For imported tables, the `VMTable` array contains a pointer to
+        // the `VMTableDefinition` rather than containing the `VMTableDefinition`
+        // inline, so we do an extra indirection.
+        if self.module.is_imported_table(index) {
+            tables_base = func.create_global_value(ir::GlobalValueData::Load {
+                base: tables_base,
+                offset: Offset32::new(self.offsets.index_vmtable_import_from(index.as_u32())),
+                global_type: pointer_type,
+                readonly: true,
+            });
+            base_offset = self.offsets.index_vmtable_definition_base(0);
+            current_elements_offset = self.offsets.index_vmtable_definition_current_elements(0);
+        }
+
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: tables_base,
-            offset: Offset32::new(self.offsets.index_vmtable_base(index.as_u32())),
+            offset: Offset32::new(base_offset),
             global_type: pointer_type,
             readonly: false,
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: tables_base,
-            offset: Offset32::new(self.offsets.index_vmtable_current_elements(index.as_u32())),
+            offset: Offset32::new(current_elements_offset),
             global_type: I32,
             readonly: false,
         });
@@ -492,7 +562,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
 
                 let vmctx = self.vmctx(pos.func);
-                let signature_ids_base = self.globals_base.unwrap_or_else(|| {
+                let signature_ids_base = self.signature_ids_base.unwrap_or_else(|| {
                     let new_base = pos.func.create_global_value(ir::GlobalValueData::Load {
                         base: vmctx,
                         offset: Offset32::new(i32::from(self.offsets.vmctx_signature_ids())),
@@ -563,13 +633,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         let memory_grow_func = self.memory_grow_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
-                call_conv: self.isa.frontend_config().default_call_conv,
                 params: vec![
                     AbiParam::new(I32),
                     AbiParam::new(I32),
                     AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
                 ],
                 returns: vec![AbiParam::new(I32)],
+                call_conv: self.isa.frontend_config().default_call_conv,
             });
             // We currently allocate all code segments independently, so nothing
             // is colocated.
@@ -597,12 +667,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         let memory_size_func = self.memory_size_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
-                call_conv: self.isa.frontend_config().default_call_conv,
                 params: vec![
                     AbiParam::new(I32),
                     AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
                 ],
                 returns: vec![AbiParam::new(I32)],
+                call_conv: self.isa.frontend_config().default_call_conv,
             });
             // We currently allocate all code segments independently, so nothing
             // is colocated.
@@ -641,4 +711,11 @@ impl<'data, 'module> ModuleTranslation<'data, 'module> {
     pub fn func_env(&self) -> FuncEnvironment {
         FuncEnvironment::new(self.isa, &self.module)
     }
+}
+
+/// Add environment-specific function parameters.
+pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir::Signature {
+    sig.params
+        .push(AbiParam::special(pointer_type, ArgumentPurpose::VMContext));
+    sig
 }

@@ -5,66 +5,282 @@ use code::Code;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::{DefinedFuncIndex, MemoryIndex};
+use cranelift_wasm::{
+    DefinedFuncIndex, Global, GlobalInit, Memory, MemoryIndex, Table, TableElementType,
+};
+use export::{ExportValue, Resolver};
 use instance::Instance;
 use invoke::{invoke_by_index, InvokeOutcome};
-use region::protect;
-use region::Protection;
+use region::{protect, Protection};
 use std::ptr::write_unaligned;
 use std::string::String;
 use std::vec::Vec;
 use vmcontext::VMContext;
 use wasmtime_environ::{
-    compile_module, Compilation, Module, ModuleTranslation, Relocation, RelocationTarget,
+    compile_module, Compilation, MemoryPlan, MemoryStyle, Module, ModuleTranslation, Relocation,
+    RelocationTarget, TablePlan, TableStyle,
 };
 
 /// Executes a module that has been translated with the `wasmtime-environ` environment
 /// implementation.
-pub fn compile_and_link_module<'data, 'module, F>(
+pub fn compile_and_link_module<'data, 'module>(
     isa: &TargetIsa,
     translation: &ModuleTranslation<'data, 'module>,
-    imports: F,
-) -> Result<Compilation, String>
-where
-    F: Fn(&str, &str) -> Option<usize>,
-{
+    resolver: &mut Resolver,
+) -> Result<Compilation, String> {
     let (mut compilation, relocations) = compile_module(&translation, isa)?;
 
+    for (index, (ref module, ref field)) in translation.module.imported_funcs.iter() {
+        match resolver.resolve(module, field) {
+            Some(export_value) => match export_value {
+                ExportValue::Function { address, signature } => {
+                    let import_signature =
+                        &translation.module.signatures[translation.module.functions[index]];
+                    if signature != *import_signature {
+                        return Err(format!(
+                            "{}/{}: exported function with signature {} incompatible with function import with signature {}",
+                            module, field,
+                            signature, import_signature,
+                        ));
+                    }
+                    compilation.resolved_func_imports.push(address);
+                }
+                ExportValue::Table { .. }
+                | ExportValue::Memory { .. }
+                | ExportValue::Global { .. } => {
+                    return Err(format!(
+                        "{}/{}: export not compatible with function import",
+                        module, field
+                    ));
+                }
+            },
+            None => return Err(format!("{}/{}: no provided import function", module, field)),
+        }
+    }
+    for (index, (ref module, ref field)) in translation.module.imported_globals.iter() {
+        match resolver.resolve(module, field) {
+            Some(export_value) => match export_value {
+                ExportValue::Global { address, global } => {
+                    let imported_global = translation.module.globals[index];
+                    if !is_global_compatible(&global, &imported_global) {
+                        return Err(format!(
+                            "{}/{}: exported global incompatible with global import",
+                            module, field,
+                        ));
+                    }
+                    compilation.resolved_global_imports.push(address as usize);
+                }
+                ExportValue::Table { .. }
+                | ExportValue::Memory { .. }
+                | ExportValue::Function { .. } => {
+                    return Err(format!(
+                        "{}/{}: exported global incompatible with global import",
+                        module, field
+                    ));
+                }
+            },
+            None => {
+                return Err(format!(
+                    "no provided import global for {}/{}",
+                    module, field
+                ))
+            }
+        }
+    }
+    for (index, (ref module, ref field)) in translation.module.imported_tables.iter() {
+        match resolver.resolve(module, field) {
+            Some(export_value) => match export_value {
+                ExportValue::Table { address, table } => {
+                    let import_table = &translation.module.table_plans[index];
+                    if !is_table_compatible(&table, import_table) {
+                        return Err(format!(
+                            "{}/{}: exported table incompatible with table import",
+                            module, field,
+                        ));
+                    }
+                    compilation.resolved_table_imports.push(address as usize);
+                }
+                ExportValue::Global { .. }
+                | ExportValue::Memory { .. }
+                | ExportValue::Function { .. } => {
+                    return Err(format!(
+                        "{}/{}: export not compatible with table import",
+                        module, field
+                    ));
+                }
+            },
+            None => return Err(format!("no provided import table for {}/{}", module, field)),
+        }
+    }
+    for (index, (ref module, ref field)) in translation.module.imported_memories.iter() {
+        match resolver.resolve(module, field) {
+            Some(export_value) => match export_value {
+                ExportValue::Memory { address, memory } => {
+                    let import_memory = &translation.module.memory_plans[index];
+                    if is_memory_compatible(&memory, import_memory) {
+                        return Err(format!(
+                            "{}/{}: exported memory incompatible with memory import",
+                            module, field
+                        ));
+                    }
+                    compilation.resolved_memory_imports.push(address as usize);
+                }
+                ExportValue::Table { .. }
+                | ExportValue::Global { .. }
+                | ExportValue::Function { .. } => {
+                    return Err(format!(
+                        "{}/{}: export not compatible with memory import",
+                        module, field
+                    ));
+                }
+            },
+            None => {
+                return Err(format!(
+                    "no provided import memory for {}/{}",
+                    module, field
+                ))
+            }
+        }
+    }
+
     // Apply relocations, now that we have virtual addresses for everything.
-    relocate(&mut compilation, &relocations, &translation.module, imports);
+    relocate(&mut compilation, &relocations, &translation.module)?;
 
     Ok(compilation)
+}
+
+fn is_global_compatible(exported: &Global, imported: &Global) -> bool {
+    match imported.initializer {
+        GlobalInit::Import => (),
+        _ => panic!("imported Global should have an Imported initializer"),
+    }
+
+    let Global {
+        ty: exported_ty,
+        mutability: exported_mutability,
+        initializer: _exported_initializer,
+    } = exported;
+    let Global {
+        ty: imported_ty,
+        mutability: imported_mutability,
+        initializer: _imported_initializer,
+    } = imported;
+    exported_ty == imported_ty && imported_mutability == exported_mutability
+}
+
+fn is_table_style_compatible(exported_style: &TableStyle, imported_style: &TableStyle) -> bool {
+    match exported_style {
+        TableStyle::CallerChecksSignature => match imported_style {
+            TableStyle::CallerChecksSignature => true,
+        },
+    }
+}
+
+fn is_table_element_type_compatible(
+    exported_type: TableElementType,
+    imported_type: TableElementType,
+) -> bool {
+    match exported_type {
+        TableElementType::Func => match imported_type {
+            TableElementType::Func => true,
+            _ => false,
+        },
+        TableElementType::Val(exported_val_ty) => match imported_type {
+            TableElementType::Val(imported_val_ty) => exported_val_ty == imported_val_ty,
+            _ => false,
+        },
+    }
+}
+
+fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
+    let TablePlan {
+        table:
+            Table {
+                ty: exported_ty,
+                minimum: exported_minimum,
+                maximum: exported_maximum,
+            },
+        style: exported_style,
+    } = exported;
+    let TablePlan {
+        table:
+            Table {
+                ty: imported_ty,
+                minimum: imported_minimum,
+                maximum: imported_maximum,
+            },
+        style: imported_style,
+    } = imported;
+
+    is_table_element_type_compatible(*exported_ty, *imported_ty)
+        && imported_minimum >= exported_minimum
+        && imported_maximum <= exported_maximum
+        && is_table_style_compatible(imported_style, exported_style)
+}
+
+fn is_memory_style_compatible(exported_style: &MemoryStyle, imported_style: &MemoryStyle) -> bool {
+    match exported_style {
+        MemoryStyle::Dynamic => match imported_style {
+            MemoryStyle::Dynamic => true,
+            _ => false,
+        },
+        MemoryStyle::Static {
+            bound: imported_bound,
+        } => match imported_style {
+            MemoryStyle::Static {
+                bound: exported_bound,
+            } => exported_bound >= imported_bound,
+            _ => false,
+        },
+    }
+}
+
+fn is_memory_compatible(exported: &MemoryPlan, imported: &MemoryPlan) -> bool {
+    let MemoryPlan {
+        memory:
+            Memory {
+                minimum: exported_minimum,
+                maximum: exported_maximum,
+                shared: exported_shared,
+            },
+        style: exported_style,
+        offset_guard_size: exported_offset_guard_size,
+    } = exported;
+    let MemoryPlan {
+        memory:
+            Memory {
+                minimum: imported_minimum,
+                maximum: imported_maximum,
+                shared: imported_shared,
+            },
+        style: imported_style,
+        offset_guard_size: imported_offset_guard_size,
+    } = imported;
+
+    imported_minimum >= exported_minimum
+        && imported_maximum <= exported_maximum
+        && exported_shared == imported_shared
+        && is_memory_style_compatible(exported_style, imported_style)
+        && exported_offset_guard_size >= imported_offset_guard_size
 }
 
 extern "C" {
     pub fn __rust_probestack();
 }
 
-/// Performs the relocations inside the function bytecode, provided the necessary metadata
-fn relocate<F>(
+/// Performs the relocations inside the function bytecode, provided the necessary metadata.
+fn relocate(
     compilation: &mut Compilation,
     relocations: &PrimaryMap<DefinedFuncIndex, Vec<Relocation>>,
     module: &Module,
-    imports: F,
-) where
-    F: Fn(&str, &str) -> Option<usize>,
-{
-    // The relocations are relative to the relocation's address plus four bytes
-    // TODO: Support architectures other than x64, and other reloc kinds.
+) -> Result<(), String> {
+    // The relocations are relative to the relocation's address plus four bytes.
     for (i, function_relocs) in relocations.iter() {
         for r in function_relocs {
             let target_func_address: usize = match r.reloc_target {
                 RelocationTarget::UserFunc(index) => match module.defined_func_index(index) {
                     Some(f) => compilation.functions[f].as_ptr() as usize,
-                    None => {
-                        let func = &module.imported_funcs[index];
-                        match imports(&func.0, &func.1) {
-                            Some(ptr) => ptr,
-                            None => {
-                                panic!("no provided import function for {}/{}", &func.0, &func.1)
-                            }
-                        }
-                    }
+                    None => compilation.resolved_func_imports[index],
                 },
                 RelocationTarget::MemoryGrow => wasmtime_memory_grow as usize,
                 RelocationTarget::MemorySize => wasmtime_memory_size as usize,
@@ -111,6 +327,7 @@ fn relocate<F>(
             }
         }
     }
+    Ok(())
 }
 
 extern "C" fn wasmtime_memory_grow(size: u32, memory_index: u32, vmctx: *mut VMContext) -> u32 {

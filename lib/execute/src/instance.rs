@@ -6,6 +6,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
 use memory::LinearMemory;
 use sig_registry::SignatureRegistry;
+use std::ptr;
 use std::string::String;
 use table::Table;
 use vmcontext::{VMCallerCheckedAnyfunc, VMContext, VMGlobal, VMMemory, VMTable};
@@ -44,7 +45,7 @@ impl Instance {
         compilation: &Compilation,
         data_initializers: &[DataInitializer],
     ) -> Result<Self, String> {
-        let mut sig_registry = SignatureRegistry::new();
+        let mut sig_registry = instantiate_signatures(module);
         let mut memories = instantiate_memories(module, data_initializers)?;
         let mut tables = instantiate_tables(module, compilation, &mut sig_registry);
 
@@ -131,6 +132,14 @@ impl Instance {
     }
 }
 
+fn instantiate_signatures(module: &Module) -> SignatureRegistry {
+    let mut sig_registry = SignatureRegistry::new();
+    for (sig_index, sig) in module.signatures.iter() {
+        sig_registry.register(sig_index, sig);
+    }
+    sig_registry
+}
+
 /// Allocate memory for just the memories of the current module.
 fn instantiate_memories(
     module: &Module,
@@ -171,7 +180,7 @@ fn instantiate_tables(
             let code_buf = &compilation.functions[module
                 .defined_func_index(*func_idx)
                 .expect("table element initializer with imported function not supported yet")];
-            let type_id = sig_registry.register(callee_sig, &module.signatures[callee_sig]);
+            let type_id = sig_registry.lookup(callee_sig);
             subslice[i] = VMCallerCheckedAnyfunc {
                 func_ptr: code_buf.as_ptr(),
                 type_id,
@@ -187,8 +196,13 @@ fn instantiate_tables(
 fn instantiate_globals(module: &Module) -> PrimaryMap<GlobalIndex, VMGlobal> {
     let mut vmctx_globals = PrimaryMap::with_capacity(module.globals.len());
 
-    for _ in 0..module.globals.len() {
-        vmctx_globals.push(VMGlobal::default());
+    for (index, global) in module.globals.iter() {
+        if module.is_imported_global(index) {
+            // FIXME: get the actual import
+            vmctx_globals.push(VMGlobal::import(ptr::null_mut()));
+        } else {
+            vmctx_globals.push(VMGlobal::definition(global));
+        }
     }
 
     vmctx_globals

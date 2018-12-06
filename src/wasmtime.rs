@@ -35,7 +35,6 @@ extern crate cranelift_entity;
 extern crate cranelift_native;
 extern crate cranelift_wasm;
 extern crate docopt;
-extern crate wasmtime_environ;
 extern crate wasmtime_execute;
 #[macro_use]
 extern crate serde_derive;
@@ -57,8 +56,7 @@ use std::io::stdout;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
-use wasmtime_environ::{Module, ModuleEnvironment, Tunables};
-use wasmtime_execute::{compile_and_link_module, finish_instantiation, invoke, Code, Instance};
+use wasmtime_execute::{Code, InstanceWorld, NullResolver};
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
@@ -147,51 +145,14 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
     if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
         data = wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?;
     }
-    let mut module = Module::new();
-    // TODO: Expose the tunables as command-line flags.
-    let tunables = Tunables::default();
-    let environ = ModuleEnvironment::new(isa, &mut module, tunables);
-
-    let imports_resolver = |_env: &str, _function: &str| None;
-
-    let translation = environ.translate(&data).map_err(|e| e.to_string())?;
-
+    let mut resolver = NullResolver {};
     let mut code = Code::new();
+    let mut world = InstanceWorld::new(&mut code, isa, &data, &mut resolver)?;
 
-    let instance = match compile_and_link_module(isa, &translation, &imports_resolver) {
-        Ok(compilation) => {
-            let mut instance = Instance::new(
-                translation.module,
-                &compilation,
-                &translation.lazy.data_initializers,
-            )?;
+    if let Some(ref f) = args.flag_function {
+        world.invoke(&mut code, isa, &f, &[])?;
+    }
 
-            finish_instantiation(
-                &mut code,
-                isa,
-                &translation.module,
-                &compilation,
-                &mut instance,
-            )?;
-
-            if let Some(ref f) = args.flag_function {
-                invoke(
-                    &mut code,
-                    isa,
-                    &translation.module,
-                    &compilation,
-                    instance.vmctx(),
-                    &f,
-                    &[],
-                )?;
-            }
-
-            instance
-        }
-        Err(s) => {
-            return Err(s);
-        }
-    };
     if args.flag_memory {
         let mut input = String::new();
         println!("Inspecting memory");
@@ -210,7 +171,7 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
                     if split.len() != 3 {
                         break;
                     }
-                    let memory = instance.inspect_memory(
+                    let memory = world.inspect_memory(
                         MemoryIndex::new(str::parse(split[0]).unwrap()),
                         str::parse(split[1]).unwrap(),
                         str::parse(split[2]).unwrap(),
@@ -235,7 +196,7 @@ mod tests {
     use cranelift_codegen::settings::Configurable;
     use std::path::PathBuf;
     use wabt;
-    use wasmtime_environ::{Module, ModuleEnvironment, Tunables};
+    use wasmtime_execute::{Code, InstanceWorld, NullResolver};
 
     const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
 
@@ -257,11 +218,9 @@ mod tests {
         });
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
-        let mut module = Module::new();
-        let tunables = Tunables::default();
-        let environ = ModuleEnvironment::new(&*isa, &mut module, tunables);
-
-        let translation = environ.translate(&data);
-        assert!(translation.is_ok());
+        let mut resolver = NullResolver {};
+        let mut code = Code::new();
+        let world = InstanceWorld::new(&mut code, &*isa, &data, &mut resolver);
+        assert!(world.is_ok());
     }
 }

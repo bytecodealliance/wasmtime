@@ -124,8 +124,9 @@ impl LinearMemory {
         Some(prev_pages)
     }
 
+    /// Return a `VMMemory` for exposing the memory to JIT code.
     pub fn vmmemory(&mut self) -> VMMemory {
-        VMMemory::new(self.mmap.as_mut_ptr(), self.mmap.len())
+        VMMemory::definition(self.mmap.as_mut_ptr(), self.mmap.len())
     }
 }
 

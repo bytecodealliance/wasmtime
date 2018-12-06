@@ -1,3 +1,6 @@
+//! Offsets and sizes of various structs in wasmtime-execute's vmcontext
+//! module.
+
 /// This class computes offsets to fields within `VMContext` and other
 /// related structs that JIT code accesses directly.
 pub struct VMOffsets {
@@ -11,21 +14,63 @@ impl VMOffsets {
     }
 }
 
-/// Offsets for `wasmtime_execute::VMMemory`.
+/// Offsets for `wasmtime_execute::VMMemoryDefinition`.
 impl VMOffsets {
     /// The offset of the `base` field.
-    pub fn vmmemory_base(&self) -> u8 {
+    pub fn vmmemory_definition_base(&self) -> u8 {
         0 * self.pointer_size
     }
 
     /// The offset of the `current_length` field.
-    pub fn vmmemory_current_length(&self) -> u8 {
+    pub fn vmmemory_definition_current_length(&self) -> u8 {
         1 * self.pointer_size
     }
 
+    /// Return the size of `VMMemoryDefinition`.
+    pub fn size_of_vmmemory_definition(&self) -> u8 {
+        2 * self.pointer_size
+    }
+}
+
+/// Offsets for `wasmtime_execute::VMMemoryImport`.
+impl VMOffsets {
+    /// The offset of the `from` field.
+    pub fn vmmemory_import_from(&self) -> u8 {
+        0 * self.pointer_size
+    }
+
+    /// Return the size of `VMMemoryImport`.
+    pub fn size_of_vmmemory_import(&self) -> u8 {
+        1 * self.pointer_size
+    }
+}
+
+/// Offsets for `wasmtime_execute::VMMemory`.
+impl VMOffsets {
     /// Return the size of `VMMemory`.
     pub fn size_of_vmmemory(&self) -> u8 {
         2 * self.pointer_size
+    }
+}
+
+/// Offsets for `wasmtime_execute::VMGlobalDefinition`.
+impl VMOffsets {
+    /// Return the size of `VMGlobalDefinition`.
+    pub fn size_of_vmglobal_definition(&self) -> u8 {
+        8
+    }
+}
+
+/// Offsets for `wasmtime_execute::VMGlobalImport`.
+impl VMOffsets {
+    /// The offset of the `from` field.
+    pub fn vmglobal_import_from(&self) -> u8 {
+        0 * self.pointer_size
+    }
+
+    /// Return the size of `VMGlobalImport`.
+    pub fn size_of_vmglobal_import(&self) -> u8 {
+        1 * self.pointer_size
     }
 }
 
@@ -33,22 +78,44 @@ impl VMOffsets {
 impl VMOffsets {
     /// Return the size of `VMGlobal`.
     pub fn size_of_vmglobal(&self) -> u8 {
-        8
+        assert!(self.size_of_vmglobal_import() <= self.size_of_vmglobal_definition());
+        self.size_of_vmglobal_definition()
+    }
+}
+
+/// Offsets for `wasmtime_execute::VMTableDefinition`.
+impl VMOffsets {
+    /// The offset of the `base` field.
+    pub fn vmtable_definition_base(&self) -> u8 {
+        0 * self.pointer_size
+    }
+
+    /// The offset of the `current_elements` field.
+    pub fn vmtable_definition_current_elements(&self) -> u8 {
+        1 * self.pointer_size
+    }
+
+    /// Return the size of `VMTableDefinition`.
+    pub fn size_of_vmtable_definition(&self) -> u8 {
+        2 * self.pointer_size
+    }
+}
+
+/// Offsets for `wasmtime_execute::VMTableImport`.
+impl VMOffsets {
+    /// The offset of the `from` field.
+    pub fn vmtable_import_from(&self) -> u8 {
+        0 * self.pointer_size
+    }
+
+    /// Return the size of `VMTableImport`.
+    pub fn size_of_vmtable_import(&self) -> u8 {
+        1 * self.pointer_size
     }
 }
 
 /// Offsets for `wasmtime_execute::VMTable`.
 impl VMOffsets {
-    /// The offset of the `base` field.
-    pub fn vmtable_base(&self) -> u8 {
-        0 * self.pointer_size
-    }
-
-    /// The offset of the `current_elements` field.
-    pub fn vmtable_current_elements(&self) -> u8 {
-        1 * self.pointer_size
-    }
-
     /// Return the size of `VMTable`.
     pub fn size_of_vmtable(&self) -> u8 {
         2 * self.pointer_size
@@ -141,33 +208,57 @@ impl VMOffsets {
 
     /// Return the offset from the `memories` pointer to the `base` field in
     /// `VMMemory` index `index`.
-    pub fn index_vmmemory_base(&self, index: u32) -> i32 {
+    pub fn index_vmmemory_definition_base(&self, index: u32) -> i32 {
         self.index_vmmemory(index)
-            .checked_add(i32::from(self.vmmemory_base()))
+            .checked_add(i32::from(self.vmmemory_definition_base()))
             .unwrap()
     }
 
     /// Return the offset from the `memories` pointer to the `current_length` field in
-    /// `VMMemory` index `index`.
-    pub fn index_vmmemory_current_length(&self, index: u32) -> i32 {
+    /// `VMMemoryDefinition` index `index`.
+    pub fn index_vmmemory_definition_current_length(&self, index: u32) -> i32 {
         self.index_vmmemory(index)
-            .checked_add(i32::from(self.vmmemory_current_length()))
+            .checked_add(i32::from(self.vmmemory_definition_current_length()))
+            .unwrap()
+    }
+
+    /// Return the offset from the `memories` pointer to the `from` field in
+    /// `VMMemoryImport` index `index`.
+    pub fn index_vmmemory_import_from(&self, index: u32) -> i32 {
+        self.index_vmmemory(index)
+            .checked_add(i32::from(self.vmmemory_import_from()))
+            .unwrap()
+    }
+
+    /// Return the offset from the `globals` pointer to the `from` field in
+    /// `VMGlobal` index `index`.
+    pub fn index_vmglobal_import_from(&self, index: u32) -> i32 {
+        self.index_vmglobal(index)
+            .checked_add(i32::from(self.vmglobal_import_from()))
             .unwrap()
     }
 
     /// Return the offset from the `tables` pointer to the `base` field in
     /// `VMTable` index `index`.
-    pub fn index_vmtable_base(&self, index: u32) -> i32 {
+    pub fn index_vmtable_definition_base(&self, index: u32) -> i32 {
         self.index_vmtable(index)
-            .checked_add(i32::from(self.vmtable_base()))
+            .checked_add(i32::from(self.vmtable_definition_base()))
             .unwrap()
     }
 
     /// Return the offset from the `tables` pointer to the `current_elements` field in
     /// `VMTable` index `index`.
-    pub fn index_vmtable_current_elements(&self, index: u32) -> i32 {
+    pub fn index_vmtable_definition_current_elements(&self, index: u32) -> i32 {
         self.index_vmtable(index)
-            .checked_add(i32::from(self.vmtable_current_elements()))
+            .checked_add(i32::from(self.vmtable_definition_current_elements()))
+            .unwrap()
+    }
+
+    /// Return the offset from the `tables` pointer to the `from` field in
+    /// `VMTableImport` index `index`.
+    pub fn index_vmtable_import_from(&self, index: u32) -> i32 {
+        self.index_vmtable(index)
+            .checked_add(i32::from(self.vmtable_import_from()))
             .unwrap()
     }
 }

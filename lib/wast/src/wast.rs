@@ -1,4 +1,5 @@
 use cranelift_codegen::isa;
+use spectest::SpecTest;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
@@ -12,6 +13,7 @@ struct Instances {
     current: Option<InstanceWorld>,
     namespace: HashMap<String, InstanceWorld>,
     code: Code,
+    spectest: SpecTest,
 }
 
 impl Instances {
@@ -20,11 +22,12 @@ impl Instances {
             current: None,
             namespace: HashMap::new(),
             code: Code::new(),
+            spectest: SpecTest::new(),
         }
     }
 
     fn instantiate(&mut self, isa: &isa::TargetIsa, module: ModuleBinary) -> InstanceWorld {
-        InstanceWorld::new(&mut self.code, isa, &module.into_vec()).unwrap()
+        InstanceWorld::new(&mut self.code, isa, &module.into_vec(), &mut self.spectest).unwrap()
     }
 
     pub fn define_unnamed_module(&mut self, isa: &isa::TargetIsa, module: ModuleBinary) {
@@ -41,6 +44,7 @@ impl Instances {
         self.namespace.insert(name, world);
     }
 
+    // fixme: Rename InvokeOutcome to ActionOutcome.
     pub fn perform_action(&mut self, isa: &isa::TargetIsa, action: Action) -> InvokeOutcome {
         match action {
             Action::Invoke {
@@ -72,7 +76,25 @@ impl Instances {
                         .expect(&format!("error invoking {} in module {}", field, name)),
                 }
             }
-            _ => panic!("unsupported action {:?}", action),
+            Action::Get { module, field } => {
+                let value = match module {
+                    None => match self.current {
+                        None => panic!("get performed with no module present"),
+                        Some(ref mut instance_world) => instance_world
+                            .get(&field)
+                            .expect(&format!("error getting {} in current module", field)),
+                    },
+                    Some(name) => self
+                        .namespace
+                        .get_mut(&name)
+                        .expect(&format!("module {} not declared", name))
+                        .get(&field)
+                        .expect(&format!("error getting {} in module {}", field, name)),
+                };
+                InvokeOutcome::Returned {
+                    values: vec![value],
+                }
+            }
         }
     }
 }

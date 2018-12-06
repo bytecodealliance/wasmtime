@@ -23,9 +23,13 @@
 )]
 
 extern crate cranelift_codegen;
+extern crate cranelift_wasm;
+extern crate target_lexicon;
 extern crate wabt;
+extern crate wasmtime_environ;
 extern crate wasmtime_execute;
 
+mod spectest;
 mod wast;
 
 pub use wast::{wast_buffer, wast_file};

@@ -139,6 +139,15 @@ pub struct Module {
     /// Names of imported functions.
     pub imported_funcs: PrimaryMap<FuncIndex, (String, String)>,
 
+    /// Names of imported tables.
+    pub imported_tables: PrimaryMap<TableIndex, (String, String)>,
+
+    /// Names of imported globals.
+    pub imported_globals: PrimaryMap<GlobalIndex, (String, String)>,
+
+    /// Names of imported memories.
+    pub imported_memories: PrimaryMap<MemoryIndex, (String, String)>,
+
     /// Types of functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
 
@@ -167,6 +176,9 @@ impl Module {
         Self {
             signatures: PrimaryMap::new(),
             imported_funcs: PrimaryMap::new(),
+            imported_memories: PrimaryMap::new(),
+            imported_globals: PrimaryMap::new(),
+            imported_tables: PrimaryMap::new(),
             functions: PrimaryMap::new(),
             table_plans: PrimaryMap::new(),
             memory_plans: PrimaryMap::new(),
@@ -192,6 +204,26 @@ impl Module {
                 func.index() - self.imported_funcs.len(),
             ))
         }
+    }
+
+    /// Test whether the given function index is for an imported function.
+    pub fn is_imported_function(&self, index: FuncIndex) -> bool {
+        index.index() < self.imported_funcs.len()
+    }
+
+    /// Test whether the given table index is for an imported table.
+    pub fn is_imported_table(&self, index: TableIndex) -> bool {
+        index.index() < self.imported_tables.len()
+    }
+
+    /// Test whether the given global index is for an imported global.
+    pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
+        index.index() < self.imported_globals.len()
+    }
+
+    /// Test whether the given memory index is for an imported memory.
+    pub fn is_imported_memory(&self, index: MemoryIndex) -> bool {
+        index.index() < self.imported_memories.len()
     }
 }
 

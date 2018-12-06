@@ -39,8 +39,9 @@ impl Table {
         }
     }
 
+    /// Return a `VMTable` for exposing the table to JIT code.
     pub fn vmtable(&mut self) -> VMTable {
-        VMTable::new(self.vec.as_mut_ptr() as *mut u8, self.vec.len())
+        VMTable::definition(self.vec.as_mut_ptr() as *mut u8, self.vec.len())
     }
 }
 
