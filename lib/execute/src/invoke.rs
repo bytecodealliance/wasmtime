@@ -114,10 +114,9 @@ pub fn invoke_by_index(
     fn_index: FuncIndex,
     args: &[Value],
 ) -> Result<InvokeOutcome, String> {
-    let code_buf =
-        &compilation.functions[module
-                                   .defined_func_index(fn_index)
-                                   .expect("imported start functions not supported yet")];
+    let code_buf = &compilation.functions[module
+        .defined_func_index(fn_index)
+        .expect("imported start functions not supported yet")];
     let sig = &module.signatures[module.functions[fn_index]];
 
     let exec_code_buf = code.allocate_copy_of_slice(&code_buf)?.as_ptr();

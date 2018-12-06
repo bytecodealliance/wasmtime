@@ -12,10 +12,7 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(
-    feature = "clippy",
-    plugin(clippy(conf_file = "../../clippy.toml"))
-)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
     allow(new_without_default, new_without_default_derive)
@@ -107,7 +104,8 @@ fn main() {
             d.help(true)
                 .version(Some(String::from("0.0.0")))
                 .deserialize()
-        }).unwrap_or_else(|e| e.exit());
+        })
+        .unwrap_or_else(|e| e.exit());
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });

@@ -518,7 +518,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                             .as_u32()
                             .checked_mul(u32::from(sig_id_size))
                             .unwrap(),
-                    ).unwrap(),
+                    )
+                    .unwrap(),
                 );
 
                 // Load the callee ID.

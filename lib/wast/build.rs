@@ -33,7 +33,8 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
                 }
             }
             false
-        }).collect();
+        })
+        .collect();
 
     dir_entries.sort_by_key(|dir| dir.path());
 

@@ -168,9 +168,9 @@ fn instantiate_tables(
         let subslice = &mut slice[init.offset..init.offset + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
             let callee_sig = module.functions[*func_idx];
-            let code_buf = &compilation.functions[module.defined_func_index(*func_idx).expect(
-                "table element initializer with imported function not supported yet",
-            )];
+            let code_buf = &compilation.functions[module
+                .defined_func_index(*func_idx)
+                .expect("table element initializer with imported function not supported yet")];
             let type_id = sig_registry.register(callee_sig, &module.signatures[callee_sig]);
             subslice[i] = VMCallerCheckedAnyfunc {
                 func_ptr: code_buf.as_ptr(),

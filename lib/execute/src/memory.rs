@@ -49,7 +49,8 @@ impl LinearMemory {
                 mmap.as_ptr().add(mapped_bytes),
                 inaccessible_bytes,
                 region::Protection::None,
-            ).expect("unable to make memory inaccessible");
+            )
+            .expect("unable to make memory inaccessible");
         }
 
         Ok(Self {
@@ -108,7 +109,8 @@ impl LinearMemory {
                     new_mmap.as_ptr().add(new_bytes),
                     guard_bytes,
                     region::Protection::None,
-                ).expect("unable to make memory inaccessible");
+                )
+                .expect("unable to make memory inaccessible");
             }
 
             let copy_len = self.mmap.len() - self.offset_guard_size;

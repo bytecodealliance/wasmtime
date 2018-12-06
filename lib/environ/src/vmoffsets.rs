@@ -115,7 +115,8 @@ impl VMOffsets {
             index
                 .checked_mul(u32::from(self.size_of_vmmemory()))
                 .unwrap(),
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     /// Return the offset from the `globals` pointer to `VMGlobal` index `index`.
@@ -124,7 +125,8 @@ impl VMOffsets {
             index
                 .checked_mul(u32::from(self.size_of_vmglobal()))
                 .unwrap(),
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     /// Return the offset from the `tables` pointer to `VMTable` index `index`.
@@ -133,7 +135,8 @@ impl VMOffsets {
             index
                 .checked_mul(u32::from(self.size_of_vmtable()))
                 .unwrap(),
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     /// Return the offset from the `memories` pointer to the `base` field in

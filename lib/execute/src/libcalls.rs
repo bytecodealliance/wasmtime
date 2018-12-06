@@ -29,7 +29,8 @@ pub extern "C" fn wasmtime_f32_nearest(x: f32) -> f32 {
             || (um == dm && {
                 let h = u / 2.;
                 h.floor() == h
-            }) {
+            })
+        {
             u
         } else {
             d
@@ -64,7 +65,8 @@ pub extern "C" fn wasmtime_f64_nearest(x: f64) -> f64 {
             || (um == dm && {
                 let h = u / 2.;
                 h.floor() == h
-            }) {
+            })
+        {
             u
         } else {
             d
