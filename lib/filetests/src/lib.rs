@@ -14,12 +14,12 @@
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        mut_mut,
-        nonminimal_bool,
-        option_map_unwrap_or,
-        option_map_unwrap_or_else,
-        unicode_not_nfc,
-        use_self
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::unicode_not_nfc,
+        clippy::use_self
     )
 )]
 
