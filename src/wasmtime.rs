@@ -15,7 +15,7 @@
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
-    allow(new_without_default, new_without_default_derive)
+    allow(clippy::new_without_default, clippy::new_without_default_derive)
 )]
 #![cfg_attr(
     feature = "cargo-clippy",
@@ -128,7 +128,7 @@ fn main() {
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     for filename in &args.arg_file {
         let path = Path::new(&filename);
-        match handle_module(&args, path.to_path_buf(), &*isa) {
+        match handle_module(&args, path, &*isa) {
             Ok(()) => {}
             Err(message) => {
                 let name = path.as_os_str().to_string_lossy();
@@ -139,8 +139,9 @@ fn main() {
     }
 }
 
-fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), String> {
-    let mut data = read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
+fn handle_module(args: &Args, path: &Path, isa: &TargetIsa) -> Result<(), String> {
+    let mut data =
+        read_to_end(path.to_path_buf()).map_err(|err| String::from(err.description()))?;
     // if data is using wat-format, first convert data to wasm
     if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
         data = wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?;

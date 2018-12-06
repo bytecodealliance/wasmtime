@@ -174,32 +174,32 @@ mod test_vmglobal_definition {
 }
 
 impl VMGlobalDefinition {
-    #[allow(cast_ptr_alignment)]
+    #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_i32(&mut self) -> &mut i32 {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut i32)
     }
 
-    #[allow(cast_ptr_alignment)]
+    #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_i64(&mut self) -> &mut i64 {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut i64)
     }
 
-    #[allow(cast_ptr_alignment)]
+    #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f32(&mut self) -> &mut f32 {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut f32)
     }
 
-    #[allow(cast_ptr_alignment)]
+    #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f32_bits(&mut self) -> &mut u32 {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut u32)
     }
 
-    #[allow(cast_ptr_alignment)]
+    #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f64(&mut self) -> &mut f64 {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut f64)
     }
 
-    #[allow(cast_ptr_alignment)]
+    #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_f64_bits(&mut self) -> &mut u64 {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut u64)
     }
@@ -578,7 +578,7 @@ impl VMContext {
     }
 
     /// Return a mutable reference to the associated `Instance`.
-    #[allow(cast_ptr_alignment)]
+    #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn instance(&mut self) -> &mut Instance {
         &mut *((self as *mut Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
     }

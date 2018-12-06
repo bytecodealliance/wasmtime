@@ -10,7 +10,7 @@
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
-    allow(new_without_default, new_without_default_derive)
+    allow(clippy::new_without_default, clippy::new_without_default_derive)
 )]
 #![cfg_attr(
     feature = "cargo-clippy",
@@ -96,6 +96,7 @@ fn main() {
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     for filename in &args.arg_file {
         let path = Path::new(&filename);
-        wast_file(path, &*isa).expect(&format!("error reading file {}", path.display()));
+        wast_file(path, &*isa)
+            .unwrap_or_else(|e| panic!("error reading file {}: {}", path.display(), e));
     }
 }

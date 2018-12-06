@@ -44,7 +44,11 @@ impl Instances {
         self.namespace.insert(name, world);
     }
 
-    pub fn perform_action(&mut self, isa: &isa::TargetIsa, action: Action) -> ActionOutcome {
+    pub fn perform_action(
+        &mut self,
+        isa: &isa::TargetIsa,
+        action: Action,
+    ) -> Result<ActionOutcome, String> {
         match action {
             Action::Invoke {
                 module,
@@ -62,44 +66,50 @@ impl Instances {
                 }
                 match module {
                     None => match self.current {
-                        None => panic!("invoke performed with no module present"),
+                        None => Err("invoke performed with no module present".to_string()),
                         Some(ref mut instance_world) => instance_world
                             .invoke(&mut self.code, isa, &field, &value_args)
-                            .expect(&format!("error invoking {} in current module", field)),
+                            .map_err(|e| {
+                                format!("error invoking {} in current module: {}", field, e)
+                            }),
                     },
                     Some(name) => self
                         .namespace
                         .get_mut(&name)
-                        .expect(&format!("module {} not declared", name))
+                        .ok_or_else(|| format!("module {} not declared", name))?
                         .invoke(&mut self.code, isa, &field, &value_args)
-                        .expect(&format!("error invoking {} in module {}", field, name)),
+                        .map_err(|e| format!("error invoking {} in module {}: {}", field, name, e)),
                 }
             }
             Action::Get { module, field } => {
                 let value = match module {
                     None => match self.current {
-                        None => panic!("get performed with no module present"),
-                        Some(ref mut instance_world) => instance_world
-                            .get(&field)
-                            .expect(&format!("error getting {} in current module", field)),
+                        None => return Err("get performed with no module present".to_string()),
+                        Some(ref mut instance_world) => {
+                            instance_world.get(&field).map_err(|e| {
+                                format!("error getting {} in current module: {}", field, e)
+                            })?
+                        }
                     },
                     Some(name) => self
                         .namespace
                         .get_mut(&name)
-                        .expect(&format!("module {} not declared", name))
+                        .ok_or_else(|| format!("module {} not declared", name))?
                         .get(&field)
-                        .expect(&format!("error getting {} in module {}", field, name)),
+                        .map_err(|e| {
+                            format!("error getting {} in module {}: {}", field, name, e)
+                        })?,
                 };
-                ActionOutcome::Returned {
+                Ok(ActionOutcome::Returned {
                     values: vec![value],
-                }
+                })
             }
         }
     }
 }
 
 /// Run a wast script from a byte buffer.
-pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
+pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) -> Result<(), String> {
     let mut parser = ScriptParser::from_str(str::from_utf8(wast).unwrap()).unwrap();
     let mut instances = Instances::new();
 
@@ -107,19 +117,19 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
         match kind {
             CommandKind::Module { module, name } => {
                 if let Some(name) = name {
-                    instances.define_named_module(&*isa, name, module.clone());
+                    instances.define_named_module(isa, name, module.clone());
                 }
 
-                instances.define_unnamed_module(&*isa, module)
+                instances.define_unnamed_module(isa, module)
             }
-            CommandKind::PerformAction(action) => match instances.perform_action(&*isa, action) {
+            CommandKind::PerformAction(action) => match instances.perform_action(isa, action)? {
                 ActionOutcome::Returned { .. } => {}
                 ActionOutcome::Trapped { message } => {
                     panic!("{}:{}: a trap occurred: {}", name, line, message);
                 }
             },
             CommandKind::AssertReturn { action, expected } => {
-                match instances.perform_action(&*isa, action) {
+                match instances.perform_action(isa, action)? {
                     ActionOutcome::Returned { values } => {
                         for (v, e) in values.iter().zip(expected.iter()) {
                             match *e {
@@ -147,7 +157,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                 }
             }
             CommandKind::AssertTrap { action, message } => {
-                match instances.perform_action(&*isa, action) {
+                match instances.perform_action(isa, action)? {
                     ActionOutcome::Returned { values } => panic!(
                         "{}:{}: expected trap, but invoke returned with {:?}",
                         name, line, values
@@ -163,7 +173,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                 }
             }
             CommandKind::AssertExhaustion { action } => {
-                match instances.perform_action(&*isa, action) {
+                match instances.perform_action(isa, action)? {
                     ActionOutcome::Returned { values } => panic!(
                         "{}:{}: expected exhaustion, but invoke returned with {:?}",
                         name, line, values
@@ -177,7 +187,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                 }
             }
             CommandKind::AssertReturnCanonicalNan { action } => {
-                match instances.perform_action(&*isa, action) {
+                match instances.perform_action(isa, action)? {
                     ActionOutcome::Returned { values } => {
                         for v in values.iter() {
                             match v {
@@ -210,7 +220,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                 }
             }
             CommandKind::AssertReturnArithmeticNan { action } => {
-                match instances.perform_action(&*isa, action) {
+                match instances.perform_action(isa, action)? {
                     ActionOutcome::Returned { values } => {
                         for v in values.iter() {
                             match v {
@@ -247,13 +257,14 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
             }
         }
     }
+
+    Ok(())
 }
 
 /// Run a wast script from a file.
 pub fn wast_file(path: &Path, isa: &isa::TargetIsa) -> Result<(), String> {
     let wast = read_to_end(path).map_err(|e| e.to_string())?;
-    wast_buffer(&path.display().to_string(), isa, &wast);
-    Ok(())
+    wast_buffer(&path.display().to_string(), isa, &wast)
 }
 
 fn read_to_end(path: &Path) -> Result<Vec<u8>, io::Error> {

@@ -6,29 +6,36 @@ use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, MemoryPlan, MemoryStyle, TablePlan, TableStyle};
 use wasmtime_execute::{ExportValue, Resolver, VMGlobal, VMMemory, VMTable};
 
+#[allow(clippy::print_stdout)]
 extern "C" fn spectest_print() {}
 
+#[allow(clippy::print_stdout)]
 extern "C" fn spectest_print_i32(x: i32) {
     println!("{}: i32", x);
 }
 
+#[allow(clippy::print_stdout)]
 extern "C" fn spectest_print_i64(x: i64) {
     println!("{}: i64", x);
 }
 
+#[allow(clippy::print_stdout)]
 extern "C" fn spectest_print_f32(x: f32) {
     println!("{}: f32", x);
 }
 
+#[allow(clippy::print_stdout)]
 extern "C" fn spectest_print_f64(x: f64) {
     println!("{}: f64", x);
 }
 
+#[allow(clippy::print_stdout)]
 extern "C" fn spectest_print_i32_f32(x: i32, y: f32) {
     println!("{}: i32", x);
     println!("{}: f32", y);
 }
 
+#[allow(clippy::print_stdout)]
 extern "C" fn spectest_print_f64_f64(x: f64, y: f64) {
     println!("{}: f64", x);
     println!("{}: f64", y);
