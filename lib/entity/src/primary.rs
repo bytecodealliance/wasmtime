@@ -371,6 +371,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn from_iter() {
         let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
         m.push(12);
