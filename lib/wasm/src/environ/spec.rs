@@ -1,6 +1,7 @@
 //! All the runtime support necessary for the wasm to cranelift translation is formalized by the
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
 use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use std::convert::From;
@@ -20,6 +21,8 @@ pub enum GlobalVariable {
     Memory {
         /// The address of the global variable storage.
         gv: ir::GlobalValue,
+        /// An offset to add to the address.
+        offset: Offset32,
         /// The global variable's type.
         ty: ir::Type,
     },

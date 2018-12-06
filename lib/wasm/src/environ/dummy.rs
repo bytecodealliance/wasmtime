@@ -1,6 +1,7 @@
 //! "Dummy" implementations of `ModuleEnvironment` and `FuncEnvironment` for testing
 //! wasm translation.
 
+use cast;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
@@ -169,15 +170,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         // Just create a dummy `vmctx` global.
-        let offset = ((index.index() * 8) as i64 + 8).into();
+        let offset = cast::i32((index.index() * 8) + 8).unwrap().into();
         let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
-        let iadd = func.create_global_value(ir::GlobalValueData::IAddImm {
-            base: vmctx,
-            offset,
-            global_type: self.pointer_type(),
-        });
         GlobalVariable::Memory {
-            gv: iadd,
+            gv: vmctx,
+            offset: offset,
             ty: self.mod_info.globals[index].entity.ty,
         }
     }
