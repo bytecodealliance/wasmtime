@@ -21,7 +21,7 @@ pub enum CallConv {
 
 impl CallConv {
     /// Return the default calling convention for the given target triple.
-    pub fn default_for_triple(triple: &Triple) -> Self {
+    pub fn triple_default(triple: &Triple) -> Self {
         match triple.default_calling_convention() {
             // Default to System V for unknown targets because most everything
             // uses System V.
