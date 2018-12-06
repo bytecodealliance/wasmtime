@@ -132,8 +132,8 @@ impl DataContext {
 
 #[cfg(test)]
 mod tests {
+    use super::{DataContext, Init};
     use cranelift_codegen::ir;
-    use {DataContext, Init};
 
     #[test]
     fn basic_data_context() {
