@@ -1,13 +1,15 @@
+use action::{ActionOutcome, Value};
+use code::Code;
 use cranelift_codegen::isa;
 use cranelift_wasm::{GlobalIndex, MemoryIndex};
+use execute::{compile_and_link_module, finish_instantiation};
 use export::Resolver;
+use get::get;
+use instance::Instance;
+use invoke::invoke;
 use std::str;
 use vmcontext::VMGlobal;
 use wasmtime_environ::{Compilation, Module, ModuleEnvironment, Tunables};
-use {
-    compile_and_link_module, finish_instantiation, get, invoke, Code, Instance, InvokeOutcome,
-    Value,
-};
 
 /// A module, an instance of that module, and accompanying compilation artifacts.
 ///
@@ -62,7 +64,7 @@ impl InstanceWorld {
         isa: &isa::TargetIsa,
         function_name: &str,
         args: &[Value],
-    ) -> Result<InvokeOutcome, String> {
+    ) -> Result<ActionOutcome, String> {
         invoke(
             code,
             isa,

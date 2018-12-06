@@ -1,6 +1,7 @@
 //! TODO: Move the contents of this file to other files, as "execute.rs" is
 //! no longer a descriptive filename.
 
+use action::ActionOutcome;
 use code::Code;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::TargetIsa;
@@ -10,7 +11,7 @@ use cranelift_wasm::{
 };
 use export::{ExportValue, Resolver};
 use instance::Instance;
-use invoke::{invoke_by_index, InvokeOutcome};
+use invoke::invoke_by_index;
 use region::{protect, Protection};
 use std::ptr::write_unaligned;
 use std::string::String;
@@ -378,10 +379,10 @@ pub fn finish_instantiation(
         let vmctx = instance.vmctx();
         let result = invoke_by_index(code, isa, module, compilation, vmctx, start_index, &[])?;
         match result {
-            InvokeOutcome::Returned { values } => {
+            ActionOutcome::Returned { values } => {
                 assert!(values.is_empty());
             }
-            InvokeOutcome::Trapped { message } => {
+            ActionOutcome::Trapped { message } => {
                 return Err(format!("start function trapped: {}", message));
             }
         }

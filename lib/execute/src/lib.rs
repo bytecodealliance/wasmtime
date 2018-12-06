@@ -41,6 +41,7 @@ extern crate libc;
 extern crate memoffset;
 extern crate cast;
 
+mod action;
 mod code;
 mod execute;
 mod export;
@@ -57,12 +58,13 @@ mod traphandlers;
 mod vmcontext;
 mod world;
 
+pub use action::{ActionOutcome, Value};
 pub use code::Code;
 pub use execute::{compile_and_link_module, finish_instantiation};
 pub use export::{ExportValue, NullResolver, Resolver};
 pub use get::get;
 pub use instance::Instance;
-pub use invoke::{invoke, InvokeOutcome, Value};
+pub use invoke::invoke;
 pub use traphandlers::{call_wasm, LookupCodeSegment, RecordTrap, Unwind};
 pub use vmcontext::{VMContext, VMGlobal, VMMemory, VMTable};
 pub use world::InstanceWorld;

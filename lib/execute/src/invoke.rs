@@ -1,5 +1,6 @@
 //! Support for invoking wasm functions from outside a wasm module.
 
+use action::{ActionOutcome, Value};
 use code::Code;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::{binemit, ir, isa, Context};
@@ -14,78 +15,6 @@ use traphandlers::call_wasm;
 use vmcontext::VMContext;
 use wasmtime_environ::{Compilation, Export, Module, RelocSink};
 
-/// A runtime value.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Value {
-    /// A runtime value with type i32.
-    I32(i32),
-    /// A runtime value with type i64.
-    I64(i64),
-    /// A runtime value with type f32.
-    F32(u32),
-    /// A runtime value with type f64.
-    F64(u64),
-}
-
-impl Value {
-    /// Return the type of this `Value`.
-    pub fn value_type(self) -> ir::Type {
-        match self {
-            Value::I32(_) => ir::types::I32,
-            Value::I64(_) => ir::types::I64,
-            Value::F32(_) => ir::types::F32,
-            Value::F64(_) => ir::types::F64,
-        }
-    }
-
-    /// Assuming this `Value` holds an `i32`, return that value.
-    pub fn unwrap_i32(self) -> i32 {
-        match self {
-            Value::I32(x) => x,
-            _ => panic!("unwrapping value of type {} as i32", self.value_type()),
-        }
-    }
-
-    /// Assuming this `Value` holds an `i64`, return that value.
-    pub fn unwrap_i64(self) -> i64 {
-        match self {
-            Value::I64(x) => x,
-            _ => panic!("unwrapping value of type {} as i64", self.value_type()),
-        }
-    }
-
-    /// Assuming this `Value` holds an `f32`, return that value.
-    pub fn unwrap_f32(self) -> u32 {
-        match self {
-            Value::F32(x) => x,
-            _ => panic!("unwrapping value of type {} as f32", self.value_type()),
-        }
-    }
-
-    /// Assuming this `Value` holds an `f64`, return that value.
-    pub fn unwrap_f64(self) -> u64 {
-        match self {
-            Value::F64(x) => x,
-            _ => panic!("unwrapping value of type {} as f64", self.value_type()),
-        }
-    }
-}
-
-/// The result of invoking a wasm function.
-#[derive(Debug)]
-pub enum InvokeOutcome {
-    /// The function returned normally. Its return values are provided.
-    Returned {
-        /// The return values.
-        values: Vec<Value>,
-    },
-    /// A trap occurred while the function was executing.
-    Trapped {
-        /// The trap message.
-        message: String,
-    },
-}
-
 /// Jumps to the code region of memory and invoke the exported function
 pub fn invoke(
     code: &mut Code,
@@ -95,7 +24,7 @@ pub fn invoke(
     vmctx: *mut VMContext,
     function: &str,
     args: &[Value],
-) -> Result<InvokeOutcome, String> {
+) -> Result<ActionOutcome, String> {
     let fn_index = match module.exports.get(function) {
         Some(Export::Function(index)) => *index,
         Some(_) => return Err(format!("exported item \"{}\" is not a function", function)),
@@ -113,7 +42,7 @@ pub fn invoke_by_index(
     vmctx: *mut VMContext,
     fn_index: FuncIndex,
     args: &[Value],
-) -> Result<InvokeOutcome, String> {
+) -> Result<ActionOutcome, String> {
     // TODO: Return Err if fn_index is out of bounds.
     let exec_code_buf = match module.defined_func_index(fn_index) {
         Some(def_fn_index) => {
@@ -152,7 +81,7 @@ fn call_through_wrapper(
     vmctx: *mut VMContext,
     args: &[Value],
     sig: &ir::Signature,
-) -> Result<InvokeOutcome, String> {
+) -> Result<ActionOutcome, String> {
     for (index, value) in args.iter().enumerate() {
         assert_eq!(value.value_type(), sig.params[index].value_type);
     }
@@ -261,8 +190,8 @@ fn call_through_wrapper(
                 values.push(v);
             }
 
-            InvokeOutcome::Returned { values }
+            ActionOutcome::Returned { values }
         }
-        Err(message) => InvokeOutcome::Trapped { message },
+        Err(message) => ActionOutcome::Trapped { message },
     })
 }

@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::Path;
 use std::str;
 use wabt::script::{self, Action, Command, CommandKind, ModuleBinary, ScriptParser};
-use wasmtime_execute::{Code, InstanceWorld, InvokeOutcome, Value};
+use wasmtime_execute::{ActionOutcome, Code, InstanceWorld, Value};
 
 struct Instances {
     current: Option<InstanceWorld>,
@@ -44,8 +44,7 @@ impl Instances {
         self.namespace.insert(name, world);
     }
 
-    // fixme: Rename InvokeOutcome to ActionOutcome.
-    pub fn perform_action(&mut self, isa: &isa::TargetIsa, action: Action) -> InvokeOutcome {
+    pub fn perform_action(&mut self, isa: &isa::TargetIsa, action: Action) -> ActionOutcome {
         match action {
             Action::Invoke {
                 module,
@@ -91,7 +90,7 @@ impl Instances {
                         .get(&field)
                         .expect(&format!("error getting {} in module {}", field, name)),
                 };
-                InvokeOutcome::Returned {
+                ActionOutcome::Returned {
                     values: vec![value],
                 }
             }
@@ -114,14 +113,14 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                 instances.define_unnamed_module(&*isa, module)
             }
             CommandKind::PerformAction(action) => match instances.perform_action(&*isa, action) {
-                InvokeOutcome::Returned { .. } => {}
-                InvokeOutcome::Trapped { message } => {
+                ActionOutcome::Returned { .. } => {}
+                ActionOutcome::Trapped { message } => {
                     panic!("{}:{}: a trap occurred: {}", name, line, message);
                 }
             },
             CommandKind::AssertReturn { action, expected } => {
                 match instances.perform_action(&*isa, action) {
-                    InvokeOutcome::Returned { values } => {
+                    ActionOutcome::Returned { values } => {
                         for (v, e) in values.iter().zip(expected.iter()) {
                             match *e {
                                 script::Value::I32(x) => {
@@ -139,7 +138,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                             };
                         }
                     }
-                    InvokeOutcome::Trapped { message } => {
+                    ActionOutcome::Trapped { message } => {
                         panic!(
                             "{}:{}: expected normal return, but a trap occurred: {}",
                             name, line, message
@@ -149,11 +148,11 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
             }
             CommandKind::AssertTrap { action, message } => {
                 match instances.perform_action(&*isa, action) {
-                    InvokeOutcome::Returned { values } => panic!(
+                    ActionOutcome::Returned { values } => panic!(
                         "{}:{}: expected trap, but invoke returned with {:?}",
                         name, line, values
                     ),
-                    InvokeOutcome::Trapped {
+                    ActionOutcome::Trapped {
                         message: trap_message,
                     } => {
                         println!(
@@ -165,11 +164,11 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
             }
             CommandKind::AssertExhaustion { action } => {
                 match instances.perform_action(&*isa, action) {
-                    InvokeOutcome::Returned { values } => panic!(
+                    ActionOutcome::Returned { values } => panic!(
                         "{}:{}: expected exhaustion, but invoke returned with {:?}",
                         name, line, values
                     ),
-                    InvokeOutcome::Trapped { message } => {
+                    ActionOutcome::Trapped { message } => {
                         println!(
                             "{}:{}: TODO: Check the exhaustion message: {}",
                             name, line, message
@@ -179,7 +178,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
             }
             CommandKind::AssertReturnCanonicalNan { action } => {
                 match instances.perform_action(&*isa, action) {
-                    InvokeOutcome::Returned { values } => {
+                    ActionOutcome::Returned { values } => {
                         for v in values.iter() {
                             match v {
                                 Value::I32(_) | Value::I64(_) => {
@@ -202,7 +201,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                             };
                         }
                     }
-                    InvokeOutcome::Trapped { message } => {
+                    ActionOutcome::Trapped { message } => {
                         panic!(
                             "{}:{}: expected canonical NaN return, but a trap occurred: {}",
                             name, line, message
@@ -212,7 +211,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
             }
             CommandKind::AssertReturnArithmeticNan { action } => {
                 match instances.perform_action(&*isa, action) {
-                    InvokeOutcome::Returned { values } => {
+                    ActionOutcome::Returned { values } => {
                         for v in values.iter() {
                             match v {
                                 Value::I32(_) | Value::I64(_) => {
@@ -235,7 +234,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) {
                             };
                         }
                     }
-                    InvokeOutcome::Trapped { message } => {
+                    ActionOutcome::Trapped { message } => {
                         panic!(
                             "{}:{}: expected canonical NaN return, but a trap occurred: {}",
                             name, line, message

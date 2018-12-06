@@ -1,8 +1,8 @@
 //! Support for reading the value of a wasm global from outside the module.
 
+use action::Value;
 use cranelift_codegen::ir;
 use cranelift_wasm::GlobalIndex;
-use invoke::Value;
 use std::string::String;
 use vmcontext::VMContext;
 use wasmtime_environ::{Export, Module};
