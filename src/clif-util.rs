@@ -1,9 +1,5 @@
 #![deny(trivial_numeric_casts)]
-#![warn(
-    unused_import_braces,
-    unstable_features,
-    unused_extern_crates
-)]
+#![warn(unused_import_braces, unstable_features, unused_extern_crates)]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
@@ -163,26 +159,31 @@ fn main() {
                 .arg(add_time_flag())
                 .arg(add_input_file_arg())
                 .arg(add_debug_flag()),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("cat")
                 .about("Outputs .clif file")
                 .arg(add_input_file_arg())
                 .arg(add_debug_flag()),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("print-cfg")
                 .about("Prints out cfg in dot format")
                 .arg(add_input_file_arg())
                 .arg(add_debug_flag()),
-        ).subcommand(
+        )
+        .subcommand(
             add_wasm_or_compile("compile")
                 .arg(
                     Arg::with_name("just-decode")
                         .short("t")
                         .help("Just decode WebAssembly to Cranelift IR"),
-                ).arg(Arg::with_name("check-translation").short("c").help(
+                )
+                .arg(Arg::with_name("check-translation").short("c").help(
                     "Just checks the correctness of Cranelift IR translated from WebAssembly",
                 )),
-        ).subcommand(add_wasm_or_compile("wasm"))
+        )
+        .subcommand(add_wasm_or_compile("wasm"))
         .subcommand(
             SubCommand::with_name("pass")
                 .about("Run specified pass(s) on an input file.")
@@ -204,7 +205,8 @@ fn main() {
                 rest_cmd.is_present("verbose"),
                 rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("file")),
-            ).map(|_time| ())
+            )
+            .map(|_time| ())
         }
         ("pass", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
@@ -221,7 +223,8 @@ fn main() {
                 &get_vec(rest_cmd.values_of("pass")),
                 target_val,
                 rest_cmd.value_of("single-file").unwrap(),
-            ).map(|_time| ())
+            )
+            .map(|_time| ())
         }
         ("print-cfg", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));

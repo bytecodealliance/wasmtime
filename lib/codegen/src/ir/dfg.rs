@@ -802,9 +802,9 @@ impl DataFlowGraph {
             .remove(num as usize, &mut self.value_lists);
         for index in num..(self.num_ebb_params(ebb) as u16) {
             match self.values[self.ebbs[ebb]
-                                  .params
-                                  .get(index as usize, &self.value_lists)
-                                  .unwrap()]
+                .params
+                .get(index as usize, &self.value_lists)
+                .unwrap()]
             {
                 ValueData::Param { ref mut num, .. } => {
                     *num -= 1;

@@ -504,7 +504,8 @@ impl<'a> Context<'a> {
                     }
                 }
                 None
-            }).min_by(|&a, &b| {
+            })
+            .min_by(|&a, &b| {
                 // Find the minimum candidate according to the RPO of their defs.
                 self.domtree.rpo_cmp(
                     self.cur.func.dfg.value_def(a),

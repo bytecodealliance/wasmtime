@@ -190,19 +190,20 @@ impl LaneType {
 
     /// Find the unique number associated with this lane type.
     pub fn number(self) -> u8 {
-        LANE_BASE + match self {
-            LaneType::BoolType(base_types::Bool::B1) => 0,
-            LaneType::BoolType(base_types::Bool::B8) => 1,
-            LaneType::BoolType(base_types::Bool::B16) => 2,
-            LaneType::BoolType(base_types::Bool::B32) => 3,
-            LaneType::BoolType(base_types::Bool::B64) => 4,
-            LaneType::IntType(base_types::Int::I8) => 5,
-            LaneType::IntType(base_types::Int::I16) => 6,
-            LaneType::IntType(base_types::Int::I32) => 7,
-            LaneType::IntType(base_types::Int::I64) => 8,
-            LaneType::FloatType(base_types::Float::F32) => 9,
-            LaneType::FloatType(base_types::Float::F64) => 10,
-        }
+        LANE_BASE
+            + match self {
+                LaneType::BoolType(base_types::Bool::B1) => 0,
+                LaneType::BoolType(base_types::Bool::B8) => 1,
+                LaneType::BoolType(base_types::Bool::B16) => 2,
+                LaneType::BoolType(base_types::Bool::B32) => 3,
+                LaneType::BoolType(base_types::Bool::B64) => 4,
+                LaneType::IntType(base_types::Int::I8) => 5,
+                LaneType::IntType(base_types::Int::I16) => 6,
+                LaneType::IntType(base_types::Int::I32) => 7,
+                LaneType::IntType(base_types::Int::I64) => 8,
+                LaneType::FloatType(base_types::Float::F32) => 9,
+                LaneType::FloatType(base_types::Float::F64) => 10,
+            }
     }
 }
 

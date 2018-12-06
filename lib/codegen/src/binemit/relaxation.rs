@@ -186,7 +186,8 @@ fn relax_branch(
                 debug!("  trying [{}]: OK", encinfo.display(enc));
                 true
             }
-        }) {
+        })
+    {
         cur.func.encodings[inst] = enc;
         return encinfo.byte_size(enc, inst, &divert, &cur.func);
     }

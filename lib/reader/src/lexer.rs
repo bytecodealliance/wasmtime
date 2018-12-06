@@ -322,7 +322,8 @@ impl<'a> Lexer<'a> {
                 .and_then(|(prefix, number)| {
                     Self::numbered_entity(prefix, number)
                         .or_else(|| Self::value_type(text, prefix, number))
-                }).unwrap_or_else(|| match text {
+                })
+                .unwrap_or_else(|| match text {
                     "iflags" => Token::Type(types::IFLAGS),
                     "fflags" => Token::Type(types::FFLAGS),
                     _ => Token::Identifier(text),

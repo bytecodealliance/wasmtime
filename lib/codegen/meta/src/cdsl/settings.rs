@@ -128,7 +128,8 @@ impl SettingGroup {
                 } else {
                     false
                 }
-            }).count() as u8
+            })
+            .count() as u8
     }
 
     pub fn byte_size(&self) -> u8 {

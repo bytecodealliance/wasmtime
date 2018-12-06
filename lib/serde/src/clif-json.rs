@@ -7,10 +7,7 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(
-    feature = "clippy",
-    plugin(clippy(conf_file = "../../clippy.toml"))
-)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
     allow(new_without_default, new_without_default_derive)
@@ -83,7 +80,8 @@ fn main() {
                         .value_name("FILE")
                         .help("Input file for serialization"),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("deserialize")
                 .about("Deserializes Cranelift IR into JSON.")
                 .arg(
@@ -92,7 +90,8 @@ fn main() {
                         .value_name("FILE")
                         .help("Input file for deserialization"),
                 ),
-        ).get_matches();
+        )
+        .get_matches();
 
     let res_serde = match matches.subcommand() {
         ("serialize", Some(m)) => {

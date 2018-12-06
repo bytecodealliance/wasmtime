@@ -89,7 +89,8 @@ impl RegBank {
                     None
                 }
             }
-        }.and_then(|offset| {
+        }
+        .and_then(|offset| {
             if offset < self.units {
                 Some(offset + self.first_unit)
             } else {

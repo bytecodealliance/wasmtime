@@ -165,7 +165,8 @@ fn split_any(
                     .get_mut(
                         num_fixed_args + repair.hi_num,
                         &mut pos.func.dfg.value_lists,
-                    ).unwrap() = hi;
+                    )
+                    .unwrap() = hi;
             } else {
                 // We need to append one or more arguments. If we're adding more than one argument,
                 // there must be pending repairs on the stack that will fill in the correct values
