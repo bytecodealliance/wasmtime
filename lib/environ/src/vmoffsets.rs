@@ -17,11 +17,13 @@ impl VMOffsets {
 /// Offsets for `wasmtime_execute::VMMemoryDefinition`.
 impl VMOffsets {
     /// The offset of the `base` field.
+    #[allow(clippy::erasing_op)]
     pub fn vmmemory_definition_base(&self) -> u8 {
         0 * self.pointer_size
     }
 
     /// The offset of the `current_length` field.
+    #[allow(clippy::identity_op)]
     pub fn vmmemory_definition_current_length(&self) -> u8 {
         1 * self.pointer_size
     }
@@ -35,11 +37,13 @@ impl VMOffsets {
 /// Offsets for `wasmtime_execute::VMMemoryImport`.
 impl VMOffsets {
     /// The offset of the `from` field.
+    #[allow(clippy::erasing_op)]
     pub fn vmmemory_import_from(&self) -> u8 {
         0 * self.pointer_size
     }
 
     /// Return the size of `VMMemoryImport`.
+    #[allow(clippy::identity_op)]
     pub fn size_of_vmmemory_import(&self) -> u8 {
         1 * self.pointer_size
     }
@@ -64,11 +68,13 @@ impl VMOffsets {
 /// Offsets for `wasmtime_execute::VMGlobalImport`.
 impl VMOffsets {
     /// The offset of the `from` field.
+    #[allow(clippy::erasing_op)]
     pub fn vmglobal_import_from(&self) -> u8 {
         0 * self.pointer_size
     }
 
     /// Return the size of `VMGlobalImport`.
+    #[allow(clippy::identity_op)]
     pub fn size_of_vmglobal_import(&self) -> u8 {
         1 * self.pointer_size
     }
@@ -86,11 +92,13 @@ impl VMOffsets {
 /// Offsets for `wasmtime_execute::VMTableDefinition`.
 impl VMOffsets {
     /// The offset of the `base` field.
+    #[allow(clippy::erasing_op)]
     pub fn vmtable_definition_base(&self) -> u8 {
         0 * self.pointer_size
     }
 
     /// The offset of the `current_elements` field.
+    #[allow(clippy::identity_op)]
     pub fn vmtable_definition_current_elements(&self) -> u8 {
         1 * self.pointer_size
     }
@@ -104,11 +112,13 @@ impl VMOffsets {
 /// Offsets for `wasmtime_execute::VMTableImport`.
 impl VMOffsets {
     /// The offset of the `from` field.
+    #[allow(clippy::erasing_op)]
     pub fn vmtable_import_from(&self) -> u8 {
         0 * self.pointer_size
     }
 
     /// Return the size of `VMTableImport`.
+    #[allow(clippy::identity_op)]
     pub fn size_of_vmtable_import(&self) -> u8 {
         1 * self.pointer_size
     }
@@ -133,11 +143,13 @@ impl VMOffsets {
 /// Offsets for `wasmtime_execute::VMCallerCheckedAnyfunc`.
 impl VMOffsets {
     /// The offset of the `func_ptr` field.
+    #[allow(clippy::erasing_op)]
     pub fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
         0 * self.pointer_size
     }
 
     /// The offset of the `type_id` field.
+    #[allow(clippy::identity_op)]
     pub fn vmcaller_checked_anyfunc_type_id(&self) -> u8 {
         1 * self.pointer_size
     }
@@ -151,11 +163,13 @@ impl VMOffsets {
 /// Offsets for `wasmtime_execute::VMContext`.
 impl VMOffsets {
     /// The offset of the `memories` field.
+    #[allow(clippy::erasing_op)]
     pub fn vmctx_memories(&self) -> u8 {
         0 * self.pointer_size
     }
 
     /// The offset of the `globals` field.
+    #[allow(clippy::identity_op)]
     pub fn vmctx_globals(&self) -> u8 {
         1 * self.pointer_size
     }

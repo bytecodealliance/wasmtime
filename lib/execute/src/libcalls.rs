@@ -14,6 +14,7 @@ pub extern "C" fn wasmtime_f32_trunc(x: f32) -> f32 {
     x.trunc()
 }
 
+#[allow(clippy::float_arithmetic, clippy::float_cmp)]
 pub extern "C" fn wasmtime_f32_nearest(x: f32) -> f32 {
     // Rust doesn't have a nearest function, so do it manually.
     if x == 0.0 {
@@ -50,6 +51,7 @@ pub extern "C" fn wasmtime_f64_trunc(x: f64) -> f64 {
     x.trunc()
 }
 
+#[allow(clippy::float_arithmetic, clippy::float_cmp)]
 pub extern "C" fn wasmtime_f64_nearest(x: f64) -> f64 {
     // Rust doesn't have a nearest function, so do it manually.
     if x == 0.0 {

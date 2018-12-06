@@ -89,7 +89,7 @@ impl Instance {
 
     /// Return the offset from the vmctx pointer to its containing Instance.
     pub fn vmctx_offset() -> isize {
-        offset_of!(Instance, vmctx) as isize
+        offset_of!(Self, vmctx) as isize
     }
 
     /// Grow memory by the specified amount of pages.
@@ -173,7 +173,7 @@ fn instantiate_tables(
 
     for init in &module.table_elements {
         debug_assert!(init.base.is_none(), "globalvar base not supported yet");
-        let slice = &mut tables[init.table_index].as_mut();
+        let slice = tables[init.table_index].as_mut();
         let subslice = &mut slice[init.offset..init.offset + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
             let callee_sig = module.functions[*func_idx];
