@@ -26,12 +26,21 @@ impl Instances {
         }
     }
 
-    fn instantiate(&mut self, isa: &isa::TargetIsa, module: ModuleBinary) -> InstanceWorld {
-        InstanceWorld::new(&mut self.code, isa, &module.into_vec(), &mut self.spectest).unwrap()
+    fn instantiate(
+        &mut self,
+        isa: &isa::TargetIsa,
+        module: ModuleBinary,
+    ) -> Result<InstanceWorld, String> {
+        InstanceWorld::new(&mut self.code, isa, &module.into_vec(), &mut self.spectest)
     }
 
-    pub fn define_unnamed_module(&mut self, isa: &isa::TargetIsa, module: ModuleBinary) {
-        self.current = Some(self.instantiate(isa, module));
+    pub fn define_unnamed_module(
+        &mut self,
+        isa: &isa::TargetIsa,
+        module: ModuleBinary,
+    ) -> Result<(), String> {
+        self.current = Some(self.instantiate(isa, module)?);
+        Ok(())
     }
 
     pub fn define_named_module(
@@ -39,9 +48,10 @@ impl Instances {
         isa: &isa::TargetIsa,
         name: String,
         module: ModuleBinary,
-    ) {
-        let world = self.instantiate(isa, module);
+    ) -> Result<(), String> {
+        let world = self.instantiate(isa, module)?;
         self.namespace.insert(name, world);
+        Ok(())
     }
 
     pub fn perform_action(
@@ -117,10 +127,16 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) -> Result<(), 
         match kind {
             CommandKind::Module { module, name } => {
                 if let Some(name) = name {
-                    instances.define_named_module(isa, name, module.clone());
+                    instances.define_named_module(isa, name, module.clone())?;
                 }
 
-                instances.define_unnamed_module(isa, module)
+                instances.define_unnamed_module(isa, module)?;
+            }
+            CommandKind::Register {
+                name: _name,
+                as_name: _as_name,
+            } => {
+                println!("{}:{}: TODO: Implement register", name, line);
             }
             CommandKind::PerformAction(action) => match instances.perform_action(isa, action)? {
                 ActionOutcome::Returned { .. } => {}
@@ -166,7 +182,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) -> Result<(), 
                         message: trap_message,
                     } => {
                         println!(
-                            "{}:{}: TODO: Check the trap message: expected {}, got {}",
+                            "{}:{}: TODO: Check the assert_trap message: expected {}, got {}",
                             name, line, message, trap_message
                         );
                     }
@@ -180,7 +196,7 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) -> Result<(), 
                     ),
                     ActionOutcome::Trapped { message } => {
                         println!(
-                            "{}:{}: TODO: Check the exhaustion message: {}",
+                            "{}:{}: TODO: Check the assert_exhaustion message: {}",
                             name, line, message
                         );
                     }
@@ -252,8 +268,41 @@ pub fn wast_buffer(name: &str, isa: &isa::TargetIsa, wast: &[u8]) -> Result<(), 
                     }
                 }
             }
-            command => {
-                println!("{}:{}: TODO: implement {:?}", name, line, command);
+            CommandKind::AssertInvalid {
+                module: _module,
+                message: _message,
+            } => {
+                println!("{}:{}: TODO: Implement assert_invalid", name, line);
+            }
+            CommandKind::AssertMalformed {
+                module: _module,
+                message: _message,
+            } => {
+                println!("{}:{}: TODO: Implement assert_malformed", name, line);
+            }
+            CommandKind::AssertUninstantiable { module, message } => {
+                let _err = instances
+                    .define_unnamed_module(isa, module)
+                    .expect_err(&format!(
+                        "{}:{}: uninstantiable module was successfully instantiated",
+                        name, line
+                    ));
+                println!(
+                    "{}:{}: TODO: Check the assert_uninstantiable message: {}",
+                    name, line, message
+                );
+            }
+            CommandKind::AssertUnlinkable { module, message } => {
+                let _err = instances
+                    .define_unnamed_module(isa, module)
+                    .expect_err(&format!(
+                        "{}:{}: unlinkable module was successfully linked",
+                        name, line
+                    ));
+                println!(
+                    "{}:{}: TODO: Check the assert_unlinkable message: {}",
+                    name, line, message
+                );
             }
         }
     }

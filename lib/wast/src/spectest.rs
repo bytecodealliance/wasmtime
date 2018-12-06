@@ -6,7 +6,6 @@ use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, MemoryPlan, MemoryStyle, TablePlan, TableStyle};
 use wasmtime_execute::{ExportValue, Resolver, VMGlobal, VMMemory, VMTable};
 
-#[allow(clippy::print_stdout)]
 extern "C" fn spectest_print() {}
 
 #[allow(clippy::print_stdout)]
