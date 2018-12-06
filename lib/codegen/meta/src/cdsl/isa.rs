@@ -153,16 +153,15 @@ impl TargetIsaBuilder {
 
                     // If the intersection is the second one, then it must be a subclass.
                     if intersect == rc2_mask {
-                        assert!(
-                            self.isa
-                                .reg_classes
-                                .get(*i1)
-                                .unwrap()
-                                .subclasses
-                                .iter()
-                                .find(|x| **x == *i2)
-                                .is_some()
-                        );
+                        assert!(self
+                            .isa
+                            .reg_classes
+                            .get(*i1)
+                            .unwrap()
+                            .subclasses
+                            .iter()
+                            .find(|x| **x == *i2)
+                            .is_some());
                     }
                 }
             }
@@ -184,7 +183,8 @@ impl TargetIsaBuilder {
             .values()
             .filter(|x| {
                 x.toprc == x.index && self.isa.reg_banks.get(x.bank).unwrap().pressure_tracking
-            }).count();
+            })
+            .count();
         assert!(num_toplevel <= 4, "Too many top-level register classes");
 
         self.isa

@@ -30,7 +30,8 @@ fn testsuite() {
                 }
             }
             false
-        }).collect();
+        })
+        .collect();
     paths.sort_by_key(|dir| dir.path());
     let flags = Flags::new(settings::builder());
     for path in paths {

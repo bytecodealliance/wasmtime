@@ -116,7 +116,8 @@ impl Context {
                     &self.liveness,
                     &self.virtregs,
                     &mut errors,
-                ).is_ok();
+                )
+                .is_ok();
 
             if !ok {
                 return Err(errors.into());
@@ -144,7 +145,8 @@ impl Context {
                     &self.liveness,
                     &self.virtregs,
                     &mut errors,
-                ).is_ok();
+                )
+                .is_ok();
 
             if !ok {
                 return Err(errors.into());
@@ -171,7 +173,8 @@ impl Context {
                     &self.liveness,
                     &self.virtregs,
                     &mut errors,
-                ).is_ok();
+                )
+                .is_ok();
 
             if !ok {
                 return Err(errors.into());
@@ -193,7 +196,8 @@ impl Context {
                     &self.liveness,
                     &self.virtregs,
                     &mut errors,
-                ).is_ok();
+                )
+                .is_ok();
 
             if !ok {
                 return Err(errors.into());

@@ -35,11 +35,7 @@ pub enum WasmError {
     ///
     /// This error code is used by a WebAssembly translator when it encounters invalid WebAssembly
     /// code. This should never happen for validated WebAssembly code.
-    #[fail(
-        display = "Invalid input WebAssembly code at offset {}: {}",
-        _1,
-        _0
-    )]
+    #[fail(display = "Invalid input WebAssembly code at offset {}: {}", _1, _0)]
     InvalidWebAssembly {
         /// A string describing the validation error.
         message: &'static str,

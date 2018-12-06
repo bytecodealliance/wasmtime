@@ -130,19 +130,14 @@ pub enum ModuleError {
     /// different signature than declared previously
     #[fail(
         display = "Function {} signature {:?} is incompatible with previous declaration {:?}",
-        _0,
-        _2,
-        _1
+        _0, _2, _1
     )]
     IncompatibleSignature(String, ir::Signature, ir::Signature),
     /// Indicates an identifier was defined more than once
     #[fail(display = "Duplicate definition of identifier: {}", _0)]
     DuplicateDefinition(String),
     /// Indicates an identifier was defined, but was declared as an import
-    #[fail(
-        display = "Invalid to define identifier declared as an import: {}",
-        _0
-    )]
+    #[fail(display = "Invalid to define identifier declared as an import: {}", _0)]
     InvalidImportDefinition(String),
     /// Wraps a `cranelift-codegen` error
     #[fail(display = "Compilation error: {}", _0)]

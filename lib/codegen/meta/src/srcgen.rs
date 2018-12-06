@@ -114,7 +114,8 @@ impl Formatter {
                 } else {
                     format!("/// {}", l)
                 }
-            }).for_each(|s| self.line(s.as_str()));
+            })
+            .for_each(|s| self.line(s.as_str()));
     }
 
     /// Add a match expression.
@@ -131,7 +132,8 @@ impl Formatter {
                         } else {
                             name.clone()
                         }
-                    }).collect();
+                    })
+                    .collect();
                 let lhs = conditions.join(" | ");
                 fmt.line(&format!("{} => {{", lhs));
                 fmt.indent(|fmt| {

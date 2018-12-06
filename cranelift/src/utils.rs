@@ -65,7 +65,8 @@ pub fn parse_sets_and_triple(
         flag_set.iter().map(|x| x.as_str()),
         &mut flag_builder,
         Location { line_number: 0 },
-    ).map_err(|err| err.to_string())?;
+    )
+    .map_err(|err| err.to_string())?;
 
     let mut words = flag_triple.trim().split_whitespace();
     // Look for `target foo`.

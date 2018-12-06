@@ -30,14 +30,16 @@ pub fn pretty_verifier_error<'a>(
         &mut w,
         func,
         isa,
-    ).unwrap();
+    )
+    .unwrap();
 
     writeln!(
         w,
         "\n; {} verifier error{} detected (see above). Compilation aborted.",
         num_errors,
         if num_errors == 1 { "" } else { "s" }
-    ).unwrap();
+    )
+    .unwrap();
 
     w
 }

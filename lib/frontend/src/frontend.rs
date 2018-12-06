@@ -514,10 +514,12 @@ impl<'a> FunctionBuilder<'a> {
             None => false,
             Some(entry) => self.position.ebb.unwrap() == entry,
         };
-        !is_entry && self.func_ctx.ssa.is_sealed(self.position.ebb.unwrap()) && !self
-            .func_ctx
-            .ssa
-            .has_any_predecessors(self.position.ebb.unwrap())
+        !is_entry
+            && self.func_ctx.ssa.is_sealed(self.position.ebb.unwrap())
+            && !self
+                .func_ctx
+                .ssa
+                .has_any_predecessors(self.position.ebb.unwrap())
     }
 
     /// Returns `true` if and only if no instructions have been added since the last call to
@@ -769,7 +771,8 @@ impl<'a> FunctionBuilder<'a> {
                     self.ins().load(config.pointer_type(), flags, src, offset),
                     offset,
                 )
-            }).collect();
+            })
+            .collect();
 
         for (value, offset) in registers {
             self.ins().store(flags, value, dest, offset);

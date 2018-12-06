@@ -2587,7 +2587,8 @@ mod tests {
                                              v3 -> v4
                                              v1 = iadd_imm v3, 17
                                            }",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap();
         assert_eq!(func.name.to_string(), "%qux");
         let v4 = details.map.lookup_str("v4").unwrap();
@@ -2663,7 +2664,8 @@ mod tests {
                                        ss3 = incoming_arg 13
                                        ss1 = spill_slot 1
                                      }",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap();
         assert_eq!(func.name.to_string(), "%foo");
         let mut iter = func.stack_slots.keys();
@@ -2686,7 +2688,8 @@ mod tests {
                                     ss1  = spill_slot 13
                                     ss1  = spill_slot 1
                                 }",
-            ).parse_function(None)
+            )
+            .parse_function(None)
             .unwrap_err()
             .to_string(),
             "3: duplicate entity: ss1"
@@ -2700,7 +2703,8 @@ mod tests {
                                      ebb0:
                                      ebb4(v3: i32):
                                      }",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap();
         assert_eq!(func.name.to_string(), "%ebbs");
 
@@ -2722,7 +2726,8 @@ mod tests {
                 ebb0:
                 ebb0:
                     return 2",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2735,7 +2740,8 @@ mod tests {
             "function %ebbs() system_v {
                 jt0 = jump_table []
                 jt0 = jump_table []",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2748,7 +2754,8 @@ mod tests {
             "function %ebbs() system_v {
                 ss0 = explicit_slot 8
                 ss0 = explicit_slot 8",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2761,7 +2768,8 @@ mod tests {
             "function %ebbs() system_v {
                 gv0 = vmctx
                 gv0 = vmctx",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2774,7 +2782,8 @@ mod tests {
             "function %ebbs() system_v {
                 heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000
                 heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2787,7 +2796,8 @@ mod tests {
             "function %ebbs() system_v {
                 sig0 = ()
                 sig0 = ()",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2801,7 +2811,8 @@ mod tests {
                 sig0 = ()
                 fn0 = %foo sig0
                 fn0 = %foo sig0",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 4);
@@ -2821,7 +2832,8 @@ mod tests {
                          trap user42; Instruction
                          } ; Trailing.
                          ; More trailing.",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap();
         assert_eq!(func.name.to_string(), "%comment");
         assert_eq!(comments.len(), 8); // no 'before' comment.
@@ -2858,7 +2870,8 @@ mod tests {
                              function %comment() system_v {}",
             None,
             None,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");
         assert_eq!(tf.commands[1].command, "verify");
@@ -2879,26 +2892,25 @@ mod tests {
     #[test]
     #[cfg(build_riscv)]
     fn isa_spec() {
-        assert!(
-            parse_test(
-                "target
+        assert!(parse_test(
+            "target
                             function %foo() system_v {}",
-            ).is_err()
-        );
+        )
+        .is_err());
 
-        assert!(
-            parse_test(
-                "target riscv32
+        assert!(parse_test(
+            "target riscv32
                             set enable_float=false
                             function %foo() system_v {}",
-            ).is_err()
-        );
+        )
+        .is_err());
 
         match parse_test(
             "set enable_float=false
                           isa riscv
                           function %foo() system_v {}",
-        ).unwrap()
+        )
+        .unwrap()
         .isa_spec
         {
             IsaSpec::None(_) => panic!("Expected some ISA"),
@@ -2917,7 +2929,8 @@ mod tests {
                                            ebb0:
                                              trap int_divz
                                            }",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap()
         .0;
         assert_eq!(func.name.to_string(), "u1:2");

@@ -224,7 +224,8 @@ mod tests {
                              }",
             None,
             None,
-        ).unwrap();
+        )
+        .unwrap();
         let map = &tf.functions[0].1.map;
 
         assert_eq!(map.lookup_str("v0"), None);

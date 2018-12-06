@@ -220,7 +220,8 @@ fn get_or_create<'a>(
                         func.dfg
                             .call_signature(inst)
                             .map(|sig| Affinity::abi(&func.dfg.signatures[sig].returns[rnum], isa))
-                    }).unwrap_or_default();
+                    })
+                    .unwrap_or_default();
             }
             ValueDef::Param(ebb, num) => {
                 def = ebb.into();

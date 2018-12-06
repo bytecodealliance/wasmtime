@@ -264,9 +264,9 @@ impl<'a> Context<'a> {
 
         // Same thing for spilled call return values.
         let retvals = &defs[self.cur.func.dfg[inst]
-                                .opcode()
-                                .constraints()
-                                .num_fixed_results()..];
+            .opcode()
+            .constraints()
+            .num_fixed_results()..];
         if !retvals.is_empty() {
             let sig = self
                 .cur
