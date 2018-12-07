@@ -38,7 +38,7 @@ use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use docopt::Docopt;
 use std::path::Path;
-use wasmtime_wast::wast_file;
+use wasmtime_wast::WastContext;
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
@@ -94,9 +94,10 @@ fn main() {
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let mut wast_context = WastContext::new();
     for filename in &args.arg_file {
-        let path = Path::new(&filename);
-        wast_file(path, &*isa)
-            .unwrap_or_else(|e| panic!("error reading file {}: {}", path.display(), e));
+        wast_context
+            .run_file(&*isa, Path::new(&filename))
+            .unwrap_or_else(|e| panic!("{}", e));
     }
 }

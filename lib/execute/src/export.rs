@@ -8,7 +8,7 @@ pub enum ExportValue {
     /// A function export value.
     Function {
         /// The address of the native-code function.
-        address: usize,
+        address: *const u8,
         /// The function signature declaration, used for compatibilty checking.
         signature: ir::Signature,
     },
@@ -40,7 +40,7 @@ pub enum ExportValue {
 
 impl ExportValue {
     /// Construct a function export value.
-    pub fn function(address: usize, signature: ir::Signature) -> Self {
+    pub fn function(address: *const u8, signature: ir::Signature) -> Self {
         ExportValue::Function { address, signature }
     }
 

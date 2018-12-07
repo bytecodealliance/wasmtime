@@ -48,7 +48,7 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
             .unwrap()
             .replace("-", "_")
     )?;
-    writeln!(out, "    use super::{{native_isa, wast_file, Path}};")?;
+    writeln!(out, "    use super::{{native_isa, WastContext, Path}};")?;
     for dir_entry in dir_entries {
         let path = dir_entry.path();
         let stemstr = path
@@ -66,9 +66,10 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
             "    fn {}() {{",
             avoid_keywords(&stemstr.replace("-", "_"))
         )?;
+        writeln!(out, "        let mut wast_context = WastContext::new();")?;
         writeln!(
             out,
-            "        wast_file(Path::new(\"{}\"), &*native_isa()).expect(\"error loading wast file {}\");",
+            "        wast_context.run_file(&*native_isa(), Path::new(\"{}\")).expect(\"error running wast file: {}\");",
             path.display(),
             path.display()
         )?;

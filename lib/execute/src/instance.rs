@@ -3,14 +3,16 @@
 
 use cranelift_entity::EntityRef;
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{GlobalIndex, MemoryIndex, TableIndex};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
+use imports::Imports;
 use memory::LinearMemory;
 use sig_registry::SignatureRegistry;
 use std::ptr;
+use std::slice;
 use std::string::String;
 use table::Table;
 use vmcontext::{VMCallerCheckedAnyfunc, VMContext, VMGlobal, VMMemory, VMTable};
-use wasmtime_environ::{Compilation, DataInitializer, Module};
+use wasmtime_environ::{DataInitializer, Module};
 
 /// An Instance of a WebAssemby module.
 #[derive(Debug)]
@@ -34,20 +36,29 @@ pub struct Instance {
     /// Table storage base address vector pointed to by vmctx.
     vmctx_tables: PrimaryMap<TableIndex, VMTable>,
 
+    /// Pointer values for resolved imports.
+    imports: Imports,
+
+    /// Pointers to functions in executable memory.
+    allocated_functions: PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
+
     /// Context pointer used by JIT code.
     vmctx: VMContext,
 }
 
 impl Instance {
-    /// Create a new `Instance`.
+    /// Create a new `Instance`. In order to complete instantiation, call
+    /// `invoke_start_function`. `allocated_functions` holds the function bodies
+    /// which have been placed in executable memory.
     pub fn new(
         module: &Module,
-        compilation: &Compilation,
+        allocated_functions: PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
         data_initializers: &[DataInitializer],
+        imports: Imports,
     ) -> Result<Self, String> {
         let mut sig_registry = instantiate_signatures(module);
         let mut memories = instantiate_memories(module, data_initializers)?;
-        let mut tables = instantiate_tables(module, compilation, &mut sig_registry);
+        let mut tables = instantiate_tables(module, &allocated_functions, &mut sig_registry);
 
         let mut vmctx_memories = memories
             .values_mut()
@@ -73,6 +84,8 @@ impl Instance {
             vmctx_memories,
             vmctx_globals,
             vmctx_tables,
+            imports,
+            allocated_functions,
             vmctx: VMContext::new(
                 vmctx_memories_ptr,
                 vmctx_globals_ptr,
@@ -83,13 +96,25 @@ impl Instance {
     }
 
     /// Return the vmctx pointer to be passed into JIT code.
-    pub fn vmctx(&mut self) -> *mut VMContext {
-        &mut self.vmctx as *mut VMContext
+    pub fn vmctx(&mut self) -> &mut VMContext {
+        &mut self.vmctx
     }
 
     /// Return the offset from the vmctx pointer to its containing Instance.
-    pub fn vmctx_offset() -> isize {
+    pub(crate) fn vmctx_offset() -> isize {
         offset_of!(Self, vmctx) as isize
+    }
+
+    /// Return the pointer to executable memory for the given function index.
+    pub(crate) fn get_allocated_function(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
+        self.allocated_functions
+            .get(index)
+            .map(|(ptr, len)| unsafe { slice::from_raw_parts(*ptr, *len) })
+    }
+
+    /// Return the pointer to executable memory for the given function index.
+    pub(crate) fn get_imported_function(&self, index: FuncIndex) -> Option<*const u8> {
+        self.imports.functions.get(index).cloned()
     }
 
     /// Grow memory by the specified amount of pages.
@@ -163,7 +188,7 @@ fn instantiate_memories(
 /// Allocate memory for just the tables of the current module.
 fn instantiate_tables(
     module: &Module,
-    compilation: &Compilation,
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
     sig_registry: &mut SignatureRegistry,
 ) -> PrimaryMap<TableIndex, Table> {
     let mut tables = PrimaryMap::with_capacity(module.table_plans.len());
@@ -177,14 +202,12 @@ fn instantiate_tables(
         let subslice = &mut slice[init.offset..init.offset + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
             let callee_sig = module.functions[*func_idx];
-            let code_buf = &compilation.functions[module
+            let func_ptr = allocated_functions[module
                 .defined_func_index(*func_idx)
-                .expect("table element initializer with imported function not supported yet")];
+                .expect("table element initializer with imported function not supported yet")]
+            .0;
             let type_id = sig_registry.lookup(callee_sig);
-            subslice[i] = VMCallerCheckedAnyfunc {
-                func_ptr: code_buf.as_ptr(),
-                type_id,
-            };
+            subslice[i] = VMCallerCheckedAnyfunc { func_ptr, type_id };
         }
     }
 

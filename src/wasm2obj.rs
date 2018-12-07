@@ -146,7 +146,12 @@ fn handle_module(path: PathBuf, target: &Option<String>, output: &str) -> Result
             .map_err(|err| format!("{}", err))?;
     }
 
-    let (compilation, relocations) = compile_module(&translation, &*isa)?;
+    let (compilation, relocations) = compile_module(
+        &translation.module,
+        &translation.lazy.function_body_inputs,
+        &*isa,
+    )
+    .map_err(|e| e.to_string())?;
 
     emit_module(&mut obj, &translation.module, &compilation, &relocations)?;
 

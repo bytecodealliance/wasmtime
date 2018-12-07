@@ -28,9 +28,12 @@ impl Code {
     }
 
     /// Allocate `size` bytes of memory which can be made executable later by
-    /// calling `publish()`.
-    /// TODO: alignment
-    pub fn allocate(&mut self, size: usize) -> Result<*mut u8, String> {
+    /// calling `publish()`. Note that we allocate the memory as writeable so
+    /// that it can be written to and patched, though we make it readonly before
+    /// actually executing from it.
+    ///
+    /// TODO: Add an alignment flag.
+    fn allocate(&mut self, size: usize) -> Result<*mut u8, String> {
         if self.current.len() - self.position < size {
             self.mmaps.push(mem::replace(
                 &mut self.current,
@@ -63,8 +66,8 @@ impl Code {
             if !m.as_ptr().is_null() {
                 unsafe {
                     region::protect(m.as_mut_ptr(), m.len(), region::Protection::ReadExecute)
-                        .expect("unable to make memory readonly");
                 }
+                .expect("unable to make memory readonly and executable");
             }
         }
         self.published = self.mmaps.len();

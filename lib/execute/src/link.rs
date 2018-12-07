@@ -1,153 +1,162 @@
-//! TODO: Move the contents of this file to other files, as "execute.rs" is
-//! no longer a descriptive filename.
-
-use action::ActionOutcome;
-use code::Code;
 use cranelift_codegen::binemit::Reloc;
-use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, Global, GlobalInit, Memory, MemoryIndex, Table, TableElementType,
 };
 use export::{ExportValue, Resolver};
-use instance::Instance;
-use invoke::invoke_by_index;
-use region::{protect, Protection};
+use imports::Imports;
 use std::ptr::write_unaligned;
-use std::string::String;
 use std::vec::Vec;
 use vmcontext::VMContext;
+use vmcontext::{VMGlobal, VMMemory, VMTable};
 use wasmtime_environ::{
-    compile_module, Compilation, MemoryPlan, MemoryStyle, Module, ModuleTranslation, Relocation,
-    RelocationTarget, TablePlan, TableStyle,
+    MemoryPlan, MemoryStyle, Module, Relocation, RelocationTarget, Relocations, TablePlan,
+    TableStyle,
 };
 
-/// Executes a module that has been translated with the `wasmtime-environ` environment
-/// implementation.
-pub fn compile_and_link_module<'data, 'module>(
-    isa: &TargetIsa,
-    translation: &ModuleTranslation<'data, 'module>,
-    resolver: &mut Resolver,
-) -> Result<Compilation, String> {
-    let (mut compilation, relocations) = compile_module(&translation, isa)?;
+/// A link error, such as incompatible or unmatched imports/exports.
+#[derive(Fail, Debug)]
+#[fail(display = "Link error: {}", _0)]
+pub struct LinkError(String);
 
-    for (index, (ref module, ref field)) in translation.module.imported_funcs.iter() {
-        match resolver.resolve(module, field) {
+/// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
+pub fn link_module(
+    module: &Module,
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
+    relocations: Relocations,
+    resolver: &mut Resolver,
+) -> Result<Imports, LinkError> {
+    let mut imports = Imports::new();
+
+    for (index, (ref module_name, ref field)) in module.imported_funcs.iter() {
+        match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
                 ExportValue::Function { address, signature } => {
-                    let import_signature =
-                        &translation.module.signatures[translation.module.functions[index]];
+                    let import_signature = &module.signatures[module.functions[index]];
                     if signature != *import_signature {
-                        return Err(format!(
-                            "{}/{}: exported function with signature {} incompatible with function import with signature {}",
-                            module, field,
-                            signature, import_signature,
+                        return Err(LinkError(
+                            format!("{}/{}: exported function with signature {} incompatible with function import with signature {}",
+                            module_name, field,
+                            signature, import_signature)
                         ));
                     }
-                    compilation.resolved_func_imports.push(address);
+                    imports.functions.push(address);
                 }
                 ExportValue::Table { .. }
                 | ExportValue::Memory { .. }
                 | ExportValue::Global { .. } => {
-                    return Err(format!(
+                    return Err(LinkError(format!(
                         "{}/{}: export not compatible with function import",
-                        module, field
-                    ));
+                        module_name, field
+                    )));
                 }
             },
-            None => return Err(format!("{}/{}: no provided import function", module, field)),
+            None => {
+                return Err(LinkError(format!(
+                    "{}/{}: no provided import function",
+                    module_name, field
+                )))
+            }
         }
     }
-    for (index, (ref module, ref field)) in translation.module.imported_globals.iter() {
-        match resolver.resolve(module, field) {
+
+    for (index, (ref module_name, ref field)) in module.imported_globals.iter() {
+        match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
                 ExportValue::Global { address, global } => {
-                    let imported_global = translation.module.globals[index];
+                    let imported_global = module.globals[index];
                     if !is_global_compatible(&global, &imported_global) {
-                        return Err(format!(
+                        return Err(LinkError(format!(
                             "{}/{}: exported global incompatible with global import",
-                            module, field,
-                        ));
+                            module_name, field
+                        )));
                     }
-                    compilation.resolved_global_imports.push(address as usize);
+                    imports.globals.push(address as *mut VMGlobal);
                 }
                 ExportValue::Table { .. }
                 | ExportValue::Memory { .. }
                 | ExportValue::Function { .. } => {
-                    return Err(format!(
+                    return Err(LinkError(format!(
                         "{}/{}: exported global incompatible with global import",
-                        module, field
-                    ));
+                        module_name, field
+                    )));
                 }
             },
             None => {
-                return Err(format!(
+                return Err(LinkError(format!(
                     "no provided import global for {}/{}",
-                    module, field
-                ))
+                    module_name, field
+                )))
             }
         }
     }
-    for (index, (ref module, ref field)) in translation.module.imported_tables.iter() {
-        match resolver.resolve(module, field) {
+
+    for (index, (ref module_name, ref field)) in module.imported_tables.iter() {
+        match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
                 ExportValue::Table { address, table } => {
-                    let import_table = &translation.module.table_plans[index];
+                    let import_table = &module.table_plans[index];
                     if !is_table_compatible(&table, import_table) {
-                        return Err(format!(
+                        return Err(LinkError(format!(
                             "{}/{}: exported table incompatible with table import",
-                            module, field,
-                        ));
+                            module_name, field,
+                        )));
                     }
-                    compilation.resolved_table_imports.push(address as usize);
+                    imports.tables.push(address as *mut VMTable);
                 }
                 ExportValue::Global { .. }
                 | ExportValue::Memory { .. }
                 | ExportValue::Function { .. } => {
-                    return Err(format!(
+                    return Err(LinkError(format!(
                         "{}/{}: export not compatible with table import",
-                        module, field
-                    ));
+                        module_name, field
+                    )));
                 }
             },
-            None => return Err(format!("no provided import table for {}/{}", module, field)),
+            None => {
+                return Err(LinkError(format!(
+                    "no provided import table for {}/{}",
+                    module_name, field
+                )))
+            }
         }
     }
-    for (index, (ref module, ref field)) in translation.module.imported_memories.iter() {
-        match resolver.resolve(module, field) {
+
+    for (index, (ref module_name, ref field)) in module.imported_memories.iter() {
+        match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
                 ExportValue::Memory { address, memory } => {
-                    let import_memory = &translation.module.memory_plans[index];
+                    let import_memory = &module.memory_plans[index];
                     if is_memory_compatible(&memory, import_memory) {
-                        return Err(format!(
+                        return Err(LinkError(format!(
                             "{}/{}: exported memory incompatible with memory import",
-                            module, field
-                        ));
+                            module_name, field
+                        )));
                     }
-                    compilation.resolved_memory_imports.push(address as usize);
+                    imports.memories.push(address as *mut VMMemory);
                 }
                 ExportValue::Table { .. }
                 | ExportValue::Global { .. }
                 | ExportValue::Function { .. } => {
-                    return Err(format!(
+                    return Err(LinkError(format!(
                         "{}/{}: export not compatible with memory import",
-                        module, field
-                    ));
+                        module_name, field
+                    )));
                 }
             },
             None => {
-                return Err(format!(
+                return Err(LinkError(format!(
                     "no provided import memory for {}/{}",
-                    module, field
-                ))
+                    module_name, field
+                )))
             }
         }
     }
 
     // Apply relocations, now that we have virtual addresses for everything.
-    relocate(&mut compilation, &relocations, &translation.module)?;
+    relocate(&imports, allocated_functions, relocations, &module);
 
-    Ok(compilation)
+    Ok(imports)
 }
 
 fn is_global_compatible(exported: &Global, imported: &Global) -> bool {
@@ -265,23 +274,19 @@ fn is_memory_compatible(exported: &MemoryPlan, imported: &MemoryPlan) -> bool {
         && exported_offset_guard_size >= imported_offset_guard_size
 }
 
-extern "C" {
-    pub fn __rust_probestack();
-}
-
 /// Performs the relocations inside the function bytecode, provided the necessary metadata.
 fn relocate(
-    compilation: &mut Compilation,
-    relocations: &PrimaryMap<DefinedFuncIndex, Vec<Relocation>>,
+    imports: &Imports,
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
+    relocations: PrimaryMap<DefinedFuncIndex, Vec<Relocation>>,
     module: &Module,
-) -> Result<(), String> {
-    // The relocations are relative to the relocation's address plus four bytes.
-    for (i, function_relocs) in relocations.iter() {
+) {
+    for (i, function_relocs) in relocations.into_iter() {
         for r in function_relocs {
             let target_func_address: usize = match r.reloc_target {
                 RelocationTarget::UserFunc(index) => match module.defined_func_index(index) {
-                    Some(f) => compilation.functions[f].as_ptr() as usize,
-                    None => compilation.resolved_func_imports[index],
+                    Some(f) => allocated_functions[f].0 as usize,
+                    None => imports.functions[index] as usize,
                 },
                 RelocationTarget::MemoryGrow => wasmtime_memory_grow as usize,
                 RelocationTarget::MemorySize => wasmtime_memory_size as usize,
@@ -303,11 +308,11 @@ fn relocate(
                 }
             };
 
-            let body = &mut compilation.functions[i];
+            let body = allocated_functions[i].0;
             match r.reloc {
                 #[cfg(target_pointer_width = "64")]
                 Reloc::Abs8 => unsafe {
-                    let reloc_address = body.as_mut_ptr().add(r.offset as usize) as usize;
+                    let reloc_address = body.add(r.offset as usize) as usize;
                     let reloc_addend = r.addend as isize;
                     let reloc_abs = (target_func_address as u64)
                         .checked_add(reloc_addend as u64)
@@ -316,7 +321,7 @@ fn relocate(
                 },
                 #[cfg(target_pointer_width = "32")]
                 Reloc::X86PCRel4 => unsafe {
-                    let reloc_address = body.as_mut_ptr().add(r.offset as usize) as usize;
+                    let reloc_address = body.add(r.offset as usize) as usize;
                     let reloc_addend = r.addend as isize;
                     let reloc_delta_u32 = (target_func_address as u32)
                         .wrapping_sub(reloc_address as u32)
@@ -328,9 +333,15 @@ fn relocate(
             }
         }
     }
-    Ok(())
 }
 
+/// A declaration for the stack probe function in Rust's standard library, for
+/// catching callstack overflow.
+extern "C" {
+    pub fn __rust_probestack();
+}
+
+/// The implementation of memory.grow.
 extern "C" fn wasmtime_memory_grow(size: u32, memory_index: u32, vmctx: *mut VMContext) -> u32 {
     let instance = unsafe { (&mut *vmctx).instance() };
     let memory_index = MemoryIndex::new(memory_index as usize);
@@ -340,53 +351,10 @@ extern "C" fn wasmtime_memory_grow(size: u32, memory_index: u32, vmctx: *mut VMC
         .unwrap_or(u32::max_value())
 }
 
+/// The implementation of memory.size.
 extern "C" fn wasmtime_memory_size(memory_index: u32, vmctx: *mut VMContext) -> u32 {
     let instance = unsafe { (&mut *vmctx).instance() };
     let memory_index = MemoryIndex::new(memory_index as usize);
 
     instance.memory_size(memory_index)
-}
-
-/// prepares the execution context
-pub fn finish_instantiation(
-    code: &mut Code,
-    isa: &TargetIsa,
-    module: &Module,
-    compilation: &Compilation,
-    instance: &mut Instance,
-) -> Result<(), String> {
-    // TODO: Put all the function bodies into a page-aligned memory region, and
-    // then make them ReadExecute rather than ReadWriteExecute.
-    for code_buf in compilation.functions.values() {
-        match unsafe {
-            protect(
-                code_buf.as_ptr(),
-                code_buf.len(),
-                Protection::ReadWriteExecute,
-            )
-        } {
-            Ok(()) => (),
-            Err(err) => {
-                return Err(format!(
-                    "failed to give executable permission to code: {}",
-                    err
-                ))
-            }
-        }
-    }
-
-    if let Some(start_index) = module.start_func {
-        let vmctx = instance.vmctx();
-        let result = invoke_by_index(code, isa, module, compilation, vmctx, start_index, &[])?;
-        match result {
-            ActionOutcome::Returned { values } => {
-                assert!(values.is_empty());
-            }
-            ActionOutcome::Trapped { message } => {
-                return Err(format!("start function trapped: {}", message));
-            }
-        }
-    }
-
-    Ok(())
 }

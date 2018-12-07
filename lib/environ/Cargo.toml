@@ -14,6 +14,8 @@ cranelift-codegen = { git = "https://github.com/sunfishcode/cranelift.git", bran
 cranelift-entity = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
 cranelift-wasm = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
 cast = { version = "0.2.2", default-features = false }
+failure = "0.1.3"
+failure_derive = "0.1.3"
 
 [features]
 default = ["std"]

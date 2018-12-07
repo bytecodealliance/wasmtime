@@ -105,6 +105,13 @@ fn main() {
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
+
+    if args.flag_debug {
+        pretty_env_logger::init();
+    } else {
+        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+    }
+
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
@@ -115,18 +122,13 @@ fn main() {
         flag_builder.enable("enable_verifier").unwrap();
     }
 
-    if args.flag_debug {
-        pretty_env_logger::init();
-    } else {
-        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
-    }
-
     // Enable optimization if requested.
     if args.flag_optimize {
         flag_builder.set("opt_level", "best").unwrap();
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+
     for filename in &args.arg_file {
         let path = Path::new(&filename);
         match handle_module(&args, path, &*isa) {
@@ -149,10 +151,14 @@ fn handle_module(args: &Args, path: &Path, isa: &TargetIsa) -> Result<(), String
     }
     let mut resolver = NullResolver {};
     let mut code = Code::new();
-    let mut world = InstanceWorld::new(&mut code, isa, &data, &mut resolver)?;
+    let mut world =
+        InstanceWorld::new(&mut code, isa, &data, &mut resolver).map_err(|e| e.to_string())?;
 
     if let Some(ref f) = args.flag_invoke {
-        match world.invoke(&mut code, isa, &f, &[])? {
+        match world
+            .invoke(&mut code, isa, &f, &[])
+            .map_err(|e| e.to_string())?
+        {
             ActionOutcome::Returned { .. } => {}
             ActionOutcome::Trapped { message } => {
                 return Err(format!("Trap from within function {}: {}", f, message));

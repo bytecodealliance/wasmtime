@@ -34,6 +34,9 @@ extern crate cranelift_wasm;
 #[macro_use]
 extern crate alloc;
 extern crate cast;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
 
 mod compilation;
 mod environ;
@@ -42,7 +45,7 @@ mod tunables;
 mod vmoffsets;
 
 pub use compilation::{
-    compile_module, Compilation, RelocSink, Relocation, RelocationTarget, Relocations,
+    compile_module, Compilation, CompileError, RelocSink, Relocation, RelocationTarget, Relocations,
 };
 pub use environ::{translate_signature, ModuleEnvironment, ModuleTranslation};
 pub use module::{

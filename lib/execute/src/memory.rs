@@ -50,8 +50,8 @@ impl LinearMemory {
                 inaccessible_bytes,
                 region::Protection::None,
             )
-            .expect("unable to make memory inaccessible");
         }
+        .expect("unable to make memory inaccessible");
 
         Ok(Self {
             mmap,

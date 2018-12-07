@@ -6,7 +6,7 @@ use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use std::path::Path;
-use wasmtime_wast::wast_file;
+use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/run_wast_files.rs"));
 

@@ -1,55 +1,87 @@
 //! Support for invoking wasm functions from outside a wasm module.
 
-use action::{ActionOutcome, Value};
+use action::{ActionError, ActionOutcome, RuntimeValue};
 use code::Code;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::{binemit, ir, isa, Context};
+use cranelift_entity::EntityRef;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::FuncIndex;
+use instance::Instance;
 use signalhandlers::{ensure_eager_signal_handlers, ensure_full_signal_handlers, TrapContext};
 use std::mem;
 use std::ptr;
-use std::string::String;
 use std::vec::Vec;
 use traphandlers::call_wasm;
 use vmcontext::VMContext;
-use wasmtime_environ::{Compilation, Export, Module, RelocSink};
+use wasmtime_environ::{CompileError, Export, Module, RelocSink};
 
-/// Jumps to the code region of memory and invoke the exported function
+/// Calls the given named function, passing its return values and returning
+/// its results.
 pub fn invoke(
     code: &mut Code,
     isa: &isa::TargetIsa,
     module: &Module,
-    compilation: &Compilation,
-    vmctx: *mut VMContext,
+    instance: &mut Instance,
     function: &str,
-    args: &[Value],
-) -> Result<ActionOutcome, String> {
+    args: &[RuntimeValue],
+) -> Result<ActionOutcome, ActionError> {
     let fn_index = match module.exports.get(function) {
         Some(Export::Function(index)) => *index,
-        Some(_) => return Err(format!("exported item \"{}\" is not a function", function)),
-        None => return Err(format!("no export named \"{}\"", function)),
+        Some(_) => {
+            return Err(ActionError::Kind(format!(
+                "exported item \"{}\" is not a function",
+                function
+            )))
+        }
+        None => {
+            return Err(ActionError::Field(format!(
+                "no export named \"{}\"",
+                function
+            )))
+        }
     };
 
-    invoke_by_index(code, isa, module, compilation, vmctx, fn_index, args)
+    invoke_by_index(code, isa, module, instance, fn_index, args)
 }
 
+/// Invoke the WebAssembly start function of the instance, if one is present.
+pub fn invoke_start_function(
+    code: &mut Code,
+    isa: &isa::TargetIsa,
+    module: &Module,
+    instance: &mut Instance,
+) -> Result<ActionOutcome, ActionError> {
+    if let Some(start_index) = module.start_func {
+        invoke_by_index(code, isa, module, instance, start_index, &[])
+    } else {
+        // No start function, just return nothing.
+        Ok(ActionOutcome::Returned { values: vec![] })
+    }
+}
+
+/// Calls the given indexed function, passing its return values and returning
+/// its results.
 pub fn invoke_by_index(
     code: &mut Code,
     isa: &isa::TargetIsa,
     module: &Module,
-    compilation: &Compilation,
-    vmctx: *mut VMContext,
+    instance: &mut Instance,
     fn_index: FuncIndex,
-    args: &[Value],
-) -> Result<ActionOutcome, String> {
-    // TODO: Return Err if fn_index is out of bounds.
+    args: &[RuntimeValue],
+) -> Result<ActionOutcome, ActionError> {
     let exec_code_buf = match module.defined_func_index(fn_index) {
         Some(def_fn_index) => {
-            let code_buf = &compilation.functions[def_fn_index];
-            code.allocate_copy_of_slice(&code_buf)?.as_ptr() as usize
+            let slice = instance
+                .get_allocated_function(def_fn_index)
+                .ok_or_else(|| ActionError::Index(def_fn_index.index() as u64))?;
+            code.allocate_copy_of_slice(slice)
+                .map_err(ActionError::Resource)?
+                .as_ptr()
         }
-        None => compilation.resolved_func_imports[fn_index],
+        None => instance
+            .get_imported_function(fn_index)
+            .ok_or_else(|| ActionError::Index(fn_index.index() as u64))?,
     };
 
     let sig = &module.signatures[module.functions[fn_index]];
@@ -68,20 +100,24 @@ pub fn invoke_by_index(
     ensure_eager_signal_handlers();
     ensure_full_signal_handlers(&mut traps);
     if !traps.haveSignalHandlers {
-        return Err("failed to install signal handlers".to_string());
+        return Err(ActionError::Resource(
+            "failed to install signal handlers".to_string(),
+        ));
     }
 
-    call_through_wrapper(code, isa, exec_code_buf, vmctx, args, &sig)
+    call_through_wrapper(code, isa, exec_code_buf, instance, args, &sig)
 }
 
 fn call_through_wrapper(
     code: &mut Code,
     isa: &isa::TargetIsa,
-    callee: usize,
-    vmctx: *mut VMContext,
-    args: &[Value],
+    callee: *const u8,
+    instance: &mut Instance,
+    args: &[RuntimeValue],
     sig: &ir::Signature,
-) -> Result<ActionOutcome, String> {
+) -> Result<ActionOutcome, ActionError> {
+    let vmctx = instance.vmctx() as *mut VMContext;
+
     for (index, value) in args.iter().enumerate() {
         assert_eq!(value.value_type(), sig.params[index].value_type);
     }
@@ -111,16 +147,16 @@ fn call_through_wrapper(
 
         for value in args {
             match value {
-                Value::I32(i) => {
+                RuntimeValue::I32(i) => {
                     callee_args.push(builder.ins().iconst(ir::types::I32, i64::from(*i)))
                 }
-                Value::I64(i) => callee_args.push(builder.ins().iconst(ir::types::I64, *i)),
-                Value::F32(i) => callee_args.push(
+                RuntimeValue::I64(i) => callee_args.push(builder.ins().iconst(ir::types::I64, *i)),
+                RuntimeValue::F32(i) => callee_args.push(
                     builder
                         .ins()
                         .f32const(ir::immediates::Ieee32::with_bits(*i)),
                 ),
-                Value::F64(i) => callee_args.push(
+                RuntimeValue::F64(i) => callee_args.push(
                     builder
                         .ins()
                         .f64const(ir::immediates::Ieee64::with_bits(*i)),
@@ -162,10 +198,13 @@ fn call_through_wrapper(
     let mut trap_sink = binemit::NullTrapSink {};
     context
         .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| ActionError::Compile(CompileError::Codegen(error)))?;
     assert!(reloc_sink.func_relocs.is_empty());
 
-    let exec_code_buf = code.allocate_copy_of_slice(&code_buf)?.as_ptr();
+    let exec_code_buf = code
+        .allocate_copy_of_slice(&code_buf)
+        .map_err(ActionError::Resource)?
+        .as_ptr();
     code.publish();
 
     let func = unsafe { mem::transmute::<_, fn()>(exec_code_buf) };
@@ -179,10 +218,10 @@ fn call_through_wrapper(
                     let ptr = results_vec.as_ptr().add(index * value_size);
 
                     match abi_param.value_type {
-                        ir::types::I32 => Value::I32(ptr::read(ptr as *const i32)),
-                        ir::types::I64 => Value::I64(ptr::read(ptr as *const i64)),
-                        ir::types::F32 => Value::F32(ptr::read(ptr as *const u32)),
-                        ir::types::F64 => Value::F64(ptr::read(ptr as *const u64)),
+                        ir::types::I32 => RuntimeValue::I32(ptr::read(ptr as *const i32)),
+                        ir::types::I64 => RuntimeValue::I64(ptr::read(ptr as *const i64)),
+                        ir::types::F32 => RuntimeValue::F32(ptr::read(ptr as *const u32)),
+                        ir::types::F64 => RuntimeValue::F64(ptr::read(ptr as *const u64)),
                         other => panic!("unsupported value type {:?}", other),
                     }
                 };

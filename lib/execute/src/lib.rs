@@ -40,15 +40,19 @@ extern crate libc;
 #[macro_use]
 extern crate memoffset;
 extern crate cast;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
 
 mod action;
 mod code;
-mod execute;
 mod export;
 mod get;
+mod imports;
 mod instance;
 mod invoke;
 mod libcalls;
+mod link;
 mod memory;
 mod mmap;
 mod sig_registry;
@@ -58,13 +62,13 @@ mod traphandlers;
 mod vmcontext;
 mod world;
 
-pub use action::{ActionOutcome, Value};
+pub use action::{ActionError, ActionOutcome, RuntimeValue};
 pub use code::Code;
-pub use execute::{compile_and_link_module, finish_instantiation};
 pub use export::{ExportValue, NullResolver, Resolver};
-pub use get::get;
+pub use get::{get, get_by_index};
 pub use instance::Instance;
-pub use invoke::invoke;
+pub use invoke::{invoke, invoke_by_index, invoke_start_function};
+pub use link::link_module;
 pub use traphandlers::{call_wasm, LookupCodeSegment, RecordTrap, Unwind};
 pub use vmcontext::{VMContext, VMGlobal, VMMemory, VMTable};
 pub use world::InstanceWorld;

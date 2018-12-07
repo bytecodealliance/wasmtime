@@ -53,17 +53,17 @@ impl SpecTest {
         Self {
             spectest_global_i32: VMGlobal::definition(&Global {
                 ty: types::I32,
-                mutability: false,
+                mutability: true,
                 initializer: GlobalInit::I32Const(0),
             }),
             spectest_global_f32: VMGlobal::definition(&Global {
                 ty: types::I32,
-                mutability: false,
+                mutability: true,
                 initializer: GlobalInit::F32Const(0),
             }),
             spectest_global_f64: VMGlobal::definition(&Global {
                 ty: types::I32,
-                mutability: false,
+                mutability: true,
                 initializer: GlobalInit::F64Const(0),
             }),
             spectest_table: VMTable::definition(ptr::null_mut(), 0),
@@ -79,7 +79,7 @@ impl Resolver for SpecTest {
         match module {
             "spectest" => match field {
                 "print" => Some(ExportValue::function(
-                    spectest_print as usize,
+                    spectest_print as *const u8,
                     translate_signature(
                         ir::Signature {
                             params: vec![],
@@ -90,7 +90,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_i32" => Some(ExportValue::function(
-                    spectest_print_i32 as usize,
+                    spectest_print_i32 as *const u8,
                     translate_signature(
                         ir::Signature {
                             params: vec![ir::AbiParam::new(types::I32)],
@@ -101,7 +101,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_i64" => Some(ExportValue::function(
-                    spectest_print_i64 as usize,
+                    spectest_print_i64 as *const u8,
                     translate_signature(
                         ir::Signature {
                             params: vec![ir::AbiParam::new(types::I64)],
@@ -112,7 +112,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_f32" => Some(ExportValue::function(
-                    spectest_print_f32 as usize,
+                    spectest_print_f32 as *const u8,
                     translate_signature(
                         ir::Signature {
                             params: vec![ir::AbiParam::new(types::F32)],
@@ -123,7 +123,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_f64" => Some(ExportValue::function(
-                    spectest_print_f64 as usize,
+                    spectest_print_f64 as *const u8,
                     translate_signature(
                         ir::Signature {
                             params: vec![ir::AbiParam::new(types::F64)],
@@ -134,7 +134,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_i32_f32" => Some(ExportValue::function(
-                    spectest_print_i32_f32 as usize,
+                    spectest_print_i32_f32 as *const u8,
                     translate_signature(
                         ir::Signature {
                             params: vec![
@@ -148,7 +148,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_f64_f64" => Some(ExportValue::function(
-                    spectest_print_f64_f64 as usize,
+                    spectest_print_f64_f64 as *const u8,
                     translate_signature(
                         ir::Signature {
                             params: vec![

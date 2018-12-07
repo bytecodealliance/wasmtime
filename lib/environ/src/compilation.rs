@@ -5,13 +5,11 @@ use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::isa;
-use cranelift_codegen::Context;
+use cranelift_codegen::{CodegenError, Context};
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::{
-    DefinedFuncIndex, FuncIndex, FuncTranslator, GlobalIndex, MemoryIndex, TableIndex,
-};
-use environ::{get_func_name, get_memory_grow_name, get_memory_size_name, ModuleTranslation};
-use std::string::{String, ToString};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, WasmError};
+use environ::{get_func_name, get_memory_grow_name, get_memory_size_name, FuncEnvironment};
+use module::Module;
 use std::vec::Vec;
 
 /// The result of compiling a WebAssemby module's functions.
@@ -19,30 +17,12 @@ use std::vec::Vec;
 pub struct Compilation {
     /// Compiled machine code for the function bodies.
     pub functions: PrimaryMap<DefinedFuncIndex, Vec<u8>>,
-
-    /// Resolved function addresses for imported functions.
-    pub resolved_func_imports: PrimaryMap<FuncIndex, usize>,
-
-    /// Resolved function addresses for imported tables.
-    pub resolved_table_imports: PrimaryMap<TableIndex, usize>,
-
-    /// Resolved function addresses for imported globals.
-    pub resolved_global_imports: PrimaryMap<GlobalIndex, usize>,
-
-    /// Resolved function addresses for imported memories.
-    pub resolved_memory_imports: PrimaryMap<MemoryIndex, usize>,
 }
 
 impl Compilation {
     /// Allocates the compilation result with the given function bodies.
     pub fn new(functions: PrimaryMap<DefinedFuncIndex, Vec<u8>>) -> Self {
-        Self {
-            functions,
-            resolved_func_imports: PrimaryMap::new(),
-            resolved_table_imports: PrimaryMap::new(),
-            resolved_memory_imports: PrimaryMap::new(),
-            resolved_global_imports: PrimaryMap::new(),
-        }
+        Self { functions }
     }
 }
 
@@ -139,32 +119,49 @@ pub type Relocations = PrimaryMap<DefinedFuncIndex, Vec<Relocation>>;
 /// Compile the module, producing a compilation result with associated
 /// relocations.
 pub fn compile_module<'data, 'module>(
-    translation: &ModuleTranslation<'data, 'module>,
+    module: &'module Module,
+    function_body_inputs: &PrimaryMap<DefinedFuncIndex, &'data [u8]>,
     isa: &isa::TargetIsa,
-) -> Result<(Compilation, Relocations), String> {
+) -> Result<(Compilation, Relocations), CompileError> {
     let mut functions = PrimaryMap::new();
     let mut relocations = PrimaryMap::new();
-    for (i, input) in translation.lazy.function_body_inputs.iter() {
-        let func_index = translation.module.func_index(i);
+    for (i, input) in function_body_inputs.iter() {
+        let func_index = module.func_index(i);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
-        context.func.signature =
-            translation.module.signatures[translation.module.functions[func_index]].clone();
+        context.func.signature = module.signatures[module.functions[func_index]].clone();
 
         let mut trans = FuncTranslator::new();
         trans
-            .translate(input, &mut context.func, &mut translation.func_env())
-            .map_err(|e| e.to_string())?;
+            .translate(
+                input,
+                &mut context.func,
+                &mut FuncEnvironment::new(isa, module),
+            )
+            .map_err(CompileError::Wasm)?;
 
         let mut code_buf: Vec<u8> = Vec::new();
         let mut reloc_sink = RelocSink::new();
         let mut trap_sink = binemit::NullTrapSink {};
         context
             .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
-            .map_err(|e| e.to_string())?;
+            .map_err(CompileError::Codegen)?;
         functions.push(code_buf);
         relocations.push(reloc_sink.func_relocs);
     }
+
     // TODO: Reorganize where we create the Vec for the resolved imports.
     Ok((Compilation::new(functions), relocations))
+}
+
+/// An error while compiling WebAssembly to machine code.
+#[derive(Fail, Debug)]
+pub enum CompileError {
+    /// A wasm translation error occured.
+    #[fail(display = "WebAssembly translation error: {}", _0)]
+    Wasm(WasmError),
+
+    /// A compilation error occured.
+    #[fail(display = "Compilation error: {}", _0)]
+    Codegen(CodegenError),
 }

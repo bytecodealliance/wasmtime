@@ -24,6 +24,11 @@
 
 extern crate cranelift_codegen;
 extern crate cranelift_wasm;
+#[macro_use]
+extern crate cranelift_entity;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
 extern crate target_lexicon;
 extern crate wabt;
 extern crate wasmtime_environ;
@@ -32,4 +37,4 @@ extern crate wasmtime_execute;
 mod spectest;
 mod wast;
 
-pub use wast::{wast_buffer, wast_file};
+pub use wast::{WastContext, WastError};
