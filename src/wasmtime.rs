@@ -56,7 +56,7 @@ use std::io::stdout;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
-use wasmtime_execute::{Code, InstanceWorld, NullResolver};
+use wasmtime_execute::{ActionOutcome, Code, InstanceWorld, NullResolver};
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
@@ -151,7 +151,12 @@ fn handle_module(args: &Args, path: &Path, isa: &TargetIsa) -> Result<(), String
     let mut world = InstanceWorld::new(&mut code, isa, &data, &mut resolver)?;
 
     if let Some(ref f) = args.flag_function {
-        world.invoke(&mut code, isa, &f, &[])?;
+        match world.invoke(&mut code, isa, &f, &[])? {
+            ActionOutcome::Returned { .. } => {}
+            ActionOutcome::Trapped { message } => {
+                return Err(format!("Trap from within function {}: {}", f, message));
+            }
+        }
     }
 
     if args.flag_memory {
