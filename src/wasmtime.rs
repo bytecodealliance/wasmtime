@@ -63,21 +63,22 @@ static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 const USAGE: &str = "
 Wasm runner.
 
-Takes a binary or text WebAssembly module and instantiates it, optionally
-allowing selected functions in it to be invoked.
+Takes a binary (wasm) or text (wat) WebAssembly module and instantiates it,
+including calling the start function if one is present. Additional functions
+given with --invoke are then called.
 
 Usage:
-    wasmtime [-mopd] <file>...
-    wasmtime [-mopd] <file>... --function=<fn>
+    wasmtime [-omd] <file>...
+    wasmtime [-omd] <file>... --invoke=<fn>
     wasmtime --help | --version
 
 Options:
+    --invoke=<fn>       name of function to run
     -o, --optimize      runs optimization passes on the translated functions
     -m, --memory        interactive memory inspector after execution
-    --function=<fn>     name of function to run
+    -d, --debug         enable debug output on stderr/stdout
     -h, --help          print this help message
     --version           print the Cranelift version
-    -d, --debug         enable debug output on stderr/stdout
 ";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -86,7 +87,7 @@ struct Args {
     flag_memory: bool,
     flag_optimize: bool,
     flag_debug: bool,
-    flag_function: Option<String>,
+    flag_invoke: Option<String>,
 }
 
 fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -150,7 +151,7 @@ fn handle_module(args: &Args, path: &Path, isa: &TargetIsa) -> Result<(), String
     let mut code = Code::new();
     let mut world = InstanceWorld::new(&mut code, isa, &data, &mut resolver)?;
 
-    if let Some(ref f) = args.flag_function {
+    if let Some(ref f) = args.flag_invoke {
         match world.invoke(&mut code, isa, &f, &[])? {
             ActionOutcome::Returned { .. } => {}
             ActionOutcome::Trapped { message } => {
