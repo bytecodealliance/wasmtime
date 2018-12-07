@@ -85,12 +85,12 @@ pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
 /// Parses the Code section of the wasm module.
 pub fn code(
     code: CodeSectionReader,
-    translation_ctx: &TranslationContext
+    translation_ctx: &TranslationContext,
 ) -> Result<TranslatedCodeSection, Error> {
-    let mut session = CodeGenSession::new();
+    let func_count = code.get_count();
+    let mut session = CodeGenSession::new(func_count);
     for (idx, body) in code.into_iter().enumerate() {
-        let func_ty = translation_ctx.func_type(idx as u32);
-        function_body::translate(&mut session, translation_ctx, &func_ty, &body?)?;
+        function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
     }
     Ok(session.into_translated_code_section()?)
 }

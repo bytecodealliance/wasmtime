@@ -20,11 +20,7 @@ fn empty() {
 
 #[test]
 fn adds() {
-    const CASES: &[(usize, usize, usize)] = &[
-        (5, 3, 8),
-        (0, 228, 228),
-        (usize::max_value(), 1, 0),
-    ];
+    const CASES: &[(usize, usize, usize)] = &[(5, 3, 8), (0, 228, 228), (usize::max_value(), 1, 0)];
 
     let code = r#"
 (module
@@ -103,6 +99,23 @@ fn if_without_result() {
     )
 
     (get_local 0)
+  )
+)
+    "#;
+
+    assert_eq!(execute_wat(code, 2, 3), 2);
+}
+
+#[test]
+fn function_call() {
+    let code = r#"
+(module
+  (func (param i32) (param i32) (result i32)
+    (call 1)
+    (get_local 0)
+  )
+
+  (func
   )
 )
     "#;

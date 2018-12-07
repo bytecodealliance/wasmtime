@@ -39,6 +39,8 @@ impl TranslationContext {
         let func_ty_idx = self.func_ty_indicies[func_idx as usize];
         &self.types[func_ty_idx as usize]
     }
+
+    // TODO: type of a global
 }
 
 /// Translate from a slice of bytes holding a wasm module.
@@ -155,8 +157,7 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Code = section.code {
         let code = section.get_code_section_reader()?;
-        output.translated_code_section =
-            Some(translate_sections::code(code, &ctx)?);
+        output.translated_code_section = Some(translate_sections::code(code, &ctx)?);
 
         reader.skip_custom_sections()?;
         if reader.eof() {
