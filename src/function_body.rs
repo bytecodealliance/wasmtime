@@ -1,7 +1,7 @@
 use backend::*;
-use module::TranslationContext;
 use error::Error;
-use wasmparser::{FuncType, FunctionBody, Operator, Type};
+use module::TranslationContext;
+use wasmparser::{FunctionBody, Operator, Type};
 
 // TODO: Use own declared `Type` enum.
 
@@ -90,11 +90,12 @@ impl ControlFrame {
 pub fn translate(
     session: &mut CodeGenSession,
     translation_ctx: &TranslationContext,
-    func_type: &FuncType,
+    func_idx: u32,
     body: &FunctionBody,
 ) -> Result<(), Error> {
     let locals = body.get_locals_reader()?;
 
+    let func_type = translation_ctx.func_type(func_idx);
     let arg_count = func_type.params.len() as u32;
     let return_ty = if func_type.returns.len() > 0 {
         func_type.returns[0]
@@ -108,7 +109,7 @@ pub fn translate(
         framesize += count;
     }
 
-    let mut ctx = session.new_context();
+    let mut ctx = session.new_context(func_idx);
     let operators = body.get_operators_reader()?;
 
     prologue(&mut ctx, framesize);
@@ -217,8 +218,9 @@ pub fn translate(
                 get_local_i32(&mut ctx, local_index);
             }
             Operator::Call { function_index } => {
-                // TODO: find out the signature of this function
-                // this requires to generalize the function types infrasturcture
+                let callee_ty = translation_ctx.func_type(function_index);
+                assert!(callee_ty.params.len() == 0, "is not supported");
+                assert!(callee_ty.returns.len() == 0, "is not supported");
 
                 // TODO: ensure that this function is locally defined
                 // We would like to support imported functions at some point
@@ -226,10 +228,7 @@ pub fn translate(
                 // TODO: pop arguments and move them in appropriate positions.
                 // only 6 for now.
 
-                // TODO: jump to the specified position
-                // this requires us saving function start locations in codegensession.
-
-                panic!()
+                call_direct(&mut ctx, function_index);
             }
             _ => {
                 trap(&mut ctx);

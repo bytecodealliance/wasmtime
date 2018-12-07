@@ -1,8 +1,9 @@
 #![allow(dead_code)] // for now
 
-use error::Error;
 use dynasmrt::x64::Assembler;
-use dynasmrt::{DynasmApi, DynasmLabelApi, AssemblyOffset, ExecutableBuffer, DynamicLabel};
+use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
+use error::Error;
+use std::iter;
 
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
@@ -45,10 +46,7 @@ impl GPRs {
     }
 
     fn release(&mut self, gpr: GPR) {
-        assert!(
-            !self.is_free(gpr),
-            "released register was already free",
-        );
+        assert!(!self.is_free(gpr), "released register was already free",);
         self.bits |= 1 << gpr;
     }
 
@@ -93,22 +91,15 @@ enum ArgLocation {
 /// Get a location for an argument at the given position.
 fn abi_loc_for_arg(pos: u32) -> ArgLocation {
     // TODO: This assumes only system-v calling convention.
-    // In system-v calling convention the first 6 arguments are passed via registers. 
+    // In system-v calling convention the first 6 arguments are passed via registers.
     // All rest arguments are passed on the stack.
-    const ARGS_IN_GPRS: &'static [GPR] = &[
-        RDI,
-        RSI,
-        RDX,
-        RCX,
-        R8,
-        R9,
-    ];
+    const ARGS_IN_GPRS: &'static [GPR] = &[RDI, RSI, RDX, RCX, R8, R9];
 
     if let Some(&reg) = ARGS_IN_GPRS.get(pos as usize) {
         ArgLocation::Reg(reg)
     } else {
         let stack_pos = pos - ARGS_IN_GPRS.len() as u32;
-        // +2 is because the first argument is located right after the saved frame pointer slot 
+        // +2 is because the first argument is located right after the saved frame pointer slot
         // and the incoming return address.
         let stack_offset = ((stack_pos + 2) * WORD_SIZE) as i32;
         ArgLocation::Stack(stack_offset)
@@ -117,33 +108,54 @@ fn abi_loc_for_arg(pos: u32) -> ArgLocation {
 
 pub struct CodeGenSession {
     assembler: Assembler,
-    func_starts: Vec<AssemblyOffset>,
+    func_starts: Vec<(Option<AssemblyOffset>, DynamicLabel)>,
 }
 
 impl CodeGenSession {
-    pub fn new() -> Self {
+    pub fn new(func_count: u32) -> Self {
+        let mut assembler = Assembler::new().unwrap();
+        let func_starts = iter::repeat_with(|| (None, assembler.new_dynamic_label()))
+            .take(func_count as usize)
+            .collect::<Vec<_>>();
+
         CodeGenSession {
-            assembler: Assembler::new().unwrap(),
-            func_starts: Vec::new(),
+            assembler,
+            func_starts,
         }
     }
 
-    pub fn new_context(&mut self) -> Context {
-        let start_offset = self.assembler.offset();
-        self.func_starts.push(start_offset);
+    pub fn new_context(&mut self, func_idx: u32) -> Context {
+        {
+            let func_start = &mut self.func_starts[func_idx as usize];
+
+            // At this point we now the exact start address of this function. Save it
+            // and define dynamic label at this location.
+            func_start.0 = Some(self.assembler.offset());
+            self.assembler.dynamic_label(func_start.1);
+        }
+
         Context {
             asm: &mut self.assembler,
-            start: start_offset,
+            func_starts: &self.func_starts,
             regs: Registers::new(),
             sp_depth: StackDepth(0),
         }
     }
 
-    pub fn into_translated_code_section(self) -> Result<TranslatedCodeSection, Error>  {
-        let exec_buf = self.assembler
+    pub fn into_translated_code_section(self) -> Result<TranslatedCodeSection, Error> {
+        let exec_buf = self
+            .assembler
             .finalize()
             .map_err(|_asm| Error::Assembler("assembler error".to_owned()))?;
-        Ok(TranslatedCodeSection { exec_buf, func_starts: self.func_starts })
+        let func_starts = self
+            .func_starts
+            .iter()
+            .map(|(offset, _)| offset.unwrap())
+            .collect::<Vec<_>>();
+        Ok(TranslatedCodeSection {
+            exec_buf,
+            func_starts,
+        })
     }
 }
 
@@ -161,17 +173,10 @@ impl TranslatedCodeSection {
 
 pub struct Context<'a> {
     asm: &'a mut Assembler,
-    start: AssemblyOffset,
+    func_starts: &'a Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     regs: Registers,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     sp_depth: StackDepth,
-}
-
-impl<'a> Context<'a> {
-    /// Returns the offset of the first instruction.
-    fn start(&self) -> AssemblyOffset {
-        self.start
-    }
 }
 
 /// Label in code.
@@ -184,8 +189,8 @@ pub fn create_label(ctx: &mut Context) -> Label {
 }
 
 /// Define the given label at the current position.
-/// 
-/// Multiple labels can be defined at the same position. However, a label 
+///
+/// Multiple labels can be defined at the same position. However, a label
 /// can be defined only once.
 pub fn define_label(ctx: &mut Context, label: Label) {
     ctx.asm.dynamic_label(label.0);
@@ -327,7 +332,14 @@ pub fn copy_incoming_arg(ctx: &mut Context, arg_pos: u32) {
     // And then move a value from a register into local variable area on the stack.
     let offset = sp_relative_offset(ctx, arg_pos);
     dynasm!(ctx.asm
-        ; mov [rsp + offset], Rq(reg) 
+        ; mov [rsp + offset], Rq(reg)
+    );
+}
+
+pub fn call_direct(ctx: &mut Context, index: u32) {
+    let label = &ctx.func_starts[index as usize].1;
+    dynasm!(ctx.asm
+        ; call =>*label
     );
 }
 
@@ -346,7 +358,11 @@ pub fn prologue(ctx: &mut Context, stack_slots: u32) {
 }
 
 pub fn epilogue(ctx: &mut Context) {
-    assert_eq!(ctx.sp_depth, StackDepth(0), "imbalanced pushes and pops detected");
+    assert_eq!(
+        ctx.sp_depth,
+        StackDepth(0),
+        "imbalanced pushes and pops detected"
+    );
     dynasm!(ctx.asm
         ; mov rsp, rbp
         ; pop rbp
