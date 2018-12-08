@@ -6,9 +6,12 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::isa;
 use cranelift_codegen::{CodegenError, Context};
-use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, WasmError};
-use environ::{get_func_name, get_memory_grow_name, get_memory_size_name, FuncEnvironment};
+use func_environ::{
+    get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
+    get_memory32_grow_name, get_memory32_size_name, FuncEnvironment,
+};
 use module::Module;
 use std::vec::Vec;
 
@@ -49,13 +52,17 @@ impl binemit::RelocSink for RelocSink {
         name: &ExternalName,
         addend: binemit::Addend,
     ) {
-        let reloc_target = if *name == get_memory_grow_name() {
-            RelocationTarget::MemoryGrow
-        } else if *name == get_memory_size_name() {
-            RelocationTarget::MemorySize
+        let reloc_target = if *name == get_memory32_grow_name() {
+            RelocationTarget::Memory32Grow
+        } else if *name == get_imported_memory32_grow_name() {
+            RelocationTarget::ImportedMemory32Grow
+        } else if *name == get_memory32_size_name() {
+            RelocationTarget::Memory32Size
+        } else if *name == get_imported_memory32_size_name() {
+            RelocationTarget::ImportedMemory32Size
         } else if let ExternalName::User { namespace, index } = *name {
             debug_assert!(namespace == 0);
-            RelocationTarget::UserFunc(FuncIndex::new(index as usize))
+            RelocationTarget::UserFunc(FuncIndex::from_u32(index))
         } else if let ExternalName::LibCall(libcall) = *name {
             RelocationTarget::LibCall(libcall)
         } else {
@@ -107,10 +114,14 @@ pub enum RelocationTarget {
     UserFunc(FuncIndex),
     /// A compiler-generated libcall.
     LibCall(ir::LibCall),
-    /// Function for growing the default memory by the specified amount of pages.
-    MemoryGrow,
-    /// Function for query current size of the default linear memory.
-    MemorySize,
+    /// Function for growing a locally-defined 32-bit memory by the specified amount of pages.
+    Memory32Grow,
+    /// Function for growing an imported 32-bit memory by the specified amount of pages.
+    ImportedMemory32Grow,
+    /// Function for query current size of a locally-defined 32-bit linear memory.
+    Memory32Size,
+    /// Function for query current size of an imported 32-bit linear memory.
+    ImportedMemory32Size,
 }
 
 /// Relocations to apply to function bodies.

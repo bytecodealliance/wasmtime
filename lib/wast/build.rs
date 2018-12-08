@@ -66,7 +66,7 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
             "    fn {}() {{",
             avoid_keywords(&stemstr.replace("-", "_"))
         )?;
-        writeln!(out, "        let mut wast_context = WastContext::new();")?;
+        writeln!(out, "        let mut wast_context = WastContext::new().expect(\"error constructing WastContext\");")?;
         writeln!(
             out,
             "        wast_context.run_file(&*native_isa(), Path::new(\"{}\")).expect(\"error running wast file: {}\");",

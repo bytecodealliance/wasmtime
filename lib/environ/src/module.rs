@@ -3,8 +3,8 @@
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
-    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
-    TableIndex,
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
+    GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use std::cmp;
 use std::collections::HashMap;
@@ -142,11 +142,11 @@ pub struct Module {
     /// Names of imported tables.
     pub imported_tables: PrimaryMap<TableIndex, (String, String)>,
 
-    /// Names of imported globals.
-    pub imported_globals: PrimaryMap<GlobalIndex, (String, String)>,
-
     /// Names of imported memories.
     pub imported_memories: PrimaryMap<MemoryIndex, (String, String)>,
+
+    /// Names of imported globals.
+    pub imported_globals: PrimaryMap<GlobalIndex, (String, String)>,
 
     /// Types of functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
@@ -176,9 +176,9 @@ impl Module {
         Self {
             signatures: PrimaryMap::new(),
             imported_funcs: PrimaryMap::new(),
+            imported_tables: PrimaryMap::new(),
             imported_memories: PrimaryMap::new(),
             imported_globals: PrimaryMap::new(),
-            imported_tables: PrimaryMap::new(),
             functions: PrimaryMap::new(),
             table_plans: PrimaryMap::new(),
             memory_plans: PrimaryMap::new(),
@@ -211,19 +211,70 @@ impl Module {
         index.index() < self.imported_funcs.len()
     }
 
+    /// Convert a `DefinedTableIndex` into a `TableIndex`.
+    pub fn table_index(&self, defined_table: DefinedTableIndex) -> TableIndex {
+        TableIndex::new(self.imported_tables.len() + defined_table.index())
+    }
+
+    /// Convert a `TableIndex` into a `DefinedTableIndex`. Returns None if the
+    /// index is an imported table.
+    pub fn defined_table_index(&self, table: TableIndex) -> Option<DefinedTableIndex> {
+        if table.index() < self.imported_tables.len() {
+            None
+        } else {
+            Some(DefinedTableIndex::new(
+                table.index() - self.imported_tables.len(),
+            ))
+        }
+    }
+
     /// Test whether the given table index is for an imported table.
     pub fn is_imported_table(&self, index: TableIndex) -> bool {
         index.index() < self.imported_tables.len()
     }
 
-    /// Test whether the given global index is for an imported global.
-    pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
-        index.index() < self.imported_globals.len()
+    /// Convert a `DefinedMemoryIndex` into a `MemoryIndex`.
+    pub fn memory_index(&self, defined_memory: DefinedMemoryIndex) -> MemoryIndex {
+        MemoryIndex::new(self.imported_memories.len() + defined_memory.index())
+    }
+
+    /// Convert a `MemoryIndex` into a `DefinedMemoryIndex`. Returns None if the
+    /// index is an imported memory.
+    pub fn defined_memory_index(&self, memory: MemoryIndex) -> Option<DefinedMemoryIndex> {
+        if memory.index() < self.imported_memories.len() {
+            None
+        } else {
+            Some(DefinedMemoryIndex::new(
+                memory.index() - self.imported_memories.len(),
+            ))
+        }
     }
 
     /// Test whether the given memory index is for an imported memory.
     pub fn is_imported_memory(&self, index: MemoryIndex) -> bool {
         index.index() < self.imported_memories.len()
+    }
+
+    /// Convert a `DefinedGlobalIndex` into a `GlobalIndex`.
+    pub fn global_index(&self, defined_global: DefinedGlobalIndex) -> GlobalIndex {
+        GlobalIndex::new(self.imported_globals.len() + defined_global.index())
+    }
+
+    /// Convert a `GlobalIndex` into a `DefinedGlobalIndex`. Returns None if the
+    /// index is an imported global.
+    pub fn defined_global_index(&self, global: GlobalIndex) -> Option<DefinedGlobalIndex> {
+        if global.index() < self.imported_globals.len() {
+            None
+        } else {
+            Some(DefinedGlobalIndex::new(
+                global.index() - self.imported_globals.len(),
+            ))
+        }
+    }
+
+    /// Test whether the given global index is for an imported global.
+    pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
+        index.index() < self.imported_globals.len()
     }
 }
 

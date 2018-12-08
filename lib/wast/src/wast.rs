@@ -90,14 +90,14 @@ pub struct WastContext {
 
 impl WastContext {
     /// Construct a new instance of `WastContext`.
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self, String> {
+        Ok(Self {
             worlds: PrimaryMap::new(),
             current: None,
             namespace: HashMap::new(),
             code: Code::new(),
-            spectest: SpecTest::new(),
-        }
+            spectest: SpecTest::new()?,
+        })
     }
 
     fn instantiate(

@@ -1,4 +1,4 @@
-//! JIT-style runtime for WebAssembly using Cranelift.
+//! Runtime library support for Wasmtime.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
@@ -26,29 +26,41 @@
 
 extern crate cranelift_codegen;
 extern crate cranelift_entity;
-extern crate cranelift_frontend;
 extern crate cranelift_wasm;
+extern crate errno;
 extern crate region;
 extern crate wasmtime_environ;
-extern crate wasmtime_runtime;
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
-extern crate failure;
 #[macro_use]
-extern crate failure_derive;
+extern crate lazy_static;
+extern crate libc;
+#[macro_use]
+extern crate memoffset;
+extern crate cast;
 
-mod action;
-mod code;
-mod export;
-mod link;
-mod world;
+mod imports;
+mod instance;
+mod memory;
+mod mmap;
+mod sig_registry;
+mod signalhandlers;
+mod table;
+mod traphandlers;
+mod vmcontext;
 
-pub use action::{ActionError, ActionOutcome, RuntimeValue};
-pub use code::Code;
-pub use export::{Export, NullResolver, Resolver};
-pub use link::link_module;
-pub use world::InstanceWorld;
+pub mod libcalls;
+
+pub use imports::Imports;
+pub use instance::Instance;
+pub use mmap::Mmap;
+pub use signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
+pub use traphandlers::wasmtime_call_trampoline;
+pub use vmcontext::{
+    VMContext, VMFunctionBody, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition,
+    VMMemoryImport, VMTableDefinition, VMTableImport,
+};
 
 #[cfg(not(feature = "std"))]
 mod std {

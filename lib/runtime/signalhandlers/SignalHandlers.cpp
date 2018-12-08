@@ -702,7 +702,7 @@ EnsureEagerSignalHandlers()
     }
 
 #elif defined(USE_APPLE_MACH_PORTS)
-    // All the Mach setup in EnsureLazyProcessSignalHandlers.
+    // All the Mach setup in EnsureDarwinMachPorts.
 #else
     // SA_ONSTACK allows us to handle signals on an alternate stack, so that
     // the handler can run in response to running out of stack space on the

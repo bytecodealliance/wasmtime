@@ -39,18 +39,19 @@ extern crate failure;
 extern crate failure_derive;
 
 mod compilation;
-mod environ;
+mod func_environ;
 mod module;
+mod module_environ;
 mod tunables;
 mod vmoffsets;
 
 pub use compilation::{
     compile_module, Compilation, CompileError, RelocSink, Relocation, RelocationTarget, Relocations,
 };
-pub use environ::{translate_signature, ModuleEnvironment, ModuleTranslation};
 pub use module::{
     DataInitializer, Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
 };
+pub use module_environ::{translate_signature, ModuleEnvironment, ModuleTranslation};
 pub use tunables::Tunables;
 pub use vmoffsets::VMOffsets;
 

@@ -184,11 +184,13 @@ fn handle_module(args: &Args, path: &Path, isa: &TargetIsa) -> Result<(), String
                     if split.len() != 3 {
                         break;
                     }
-                    let memory = world.inspect_memory(
-                        MemoryIndex::new(str::parse(split[0]).unwrap()),
-                        str::parse(split[1]).unwrap(),
-                        str::parse(split[2]).unwrap(),
-                    );
+                    let memory = world
+                        .inspect_memory(
+                            MemoryIndex::new(str::parse(split[0]).unwrap()),
+                            str::parse(split[1]).unwrap(),
+                            str::parse(split[2]).unwrap(),
+                        )
+                        .map_err(|e| e.to_string())?;
                     let mut s = memory.iter().fold(String::from("#"), |mut acc, byte| {
                         acc.push_str(format!("{:02x}_", byte).as_str());
                         acc

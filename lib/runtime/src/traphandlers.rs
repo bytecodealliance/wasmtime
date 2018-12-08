@@ -7,6 +7,7 @@ use std::cell::{Cell, RefCell};
 use std::mem;
 use std::ptr;
 use std::string::String;
+use vmcontext::{VMContext, VMFunctionBody};
 
 // Currently we uset setjmp/longjmp to unwind out of a signal handler
 // and back to the point where WebAssembly was called (via `call_wasm`).
@@ -81,22 +82,28 @@ impl Drop for ScopeGuard {
     }
 }
 
-/// Call the wasm function poined to by `f`.
-pub fn call_wasm<F>(f: F) -> Result<(), String>
-where
-    F: FnOnce(),
-{
+/// Call the wasm function pointed to by `callee`. `values_vec` points to
+/// a buffer which holds the incoming arguments, and to which the outgoing
+/// return values will be written.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_call_trampoline(
+    callee: *const VMFunctionBody,
+    values_vec: *mut u8,
+    vmctx: *mut VMContext,
+) -> Result<(), String> {
     // In case wasm code calls Rust that panics and unwinds past this point,
     // ensure that JMP_BUFS is unwound to its incoming state.
     let _guard = ScopeGuard::new();
 
+    let func: fn(*mut u8, *mut VMContext) = mem::transmute(callee);
+
     JMP_BUFS.with(|bufs| {
-        let mut buf = unsafe { mem::uninitialized() };
-        if unsafe { setjmp(&mut buf) } != 0 {
+        let mut buf = mem::uninitialized();
+        if setjmp(&mut buf) != 0 {
             return TRAP_DATA.with(|data| Err(format!("wasm trap at {:?}", data.get().pc)));
         }
         bufs.borrow_mut().push(buf);
-        f();
+        func(values_vec, vmctx);
         Ok(())
     })
 }

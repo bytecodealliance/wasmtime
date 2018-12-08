@@ -5,7 +5,9 @@
 #![allow(non_snake_case)]
 
 use std::borrow::{Borrow, BorrowMut};
+use std::cell::RefCell;
 use std::sync::RwLock;
+use vmcontext::VMContext;
 
 include!(concat!(env!("OUT_DIR"), "/signalhandlers.rs"));
 
@@ -36,7 +38,8 @@ lazy_static! {
 /// called at the end of the startup process, after other handlers have been
 /// installed. This function can thus be called multiple times, having no effect
 /// after the first call.
-pub fn ensure_eager_signal_handlers() {
+#[no_mangle]
+pub extern "C" fn wasmtime_init_eager() {
     let mut locked = EAGER_INSTALL_STATE.write().unwrap();
     let state = locked.borrow_mut();
 
@@ -52,6 +55,49 @@ pub fn ensure_eager_signal_handlers() {
     }
 
     state.success = true;
+}
+
+thread_local! {
+    static TRAP_CONTEXT: RefCell<TrapContext> = RefCell::new(TrapContext { triedToInstallSignalHandlers: false, haveSignalHandlers: false });
+}
+
+/// Assuming `EnsureEagerProcessSignalHandlers` has already been called,
+/// this function performs the full installation of signal handlers which must
+/// be performed per-thread. This operation may incur some overhead and
+/// so should be done only when needed to use wasm.
+#[no_mangle]
+pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {
+    if !TRAP_CONTEXT.with(|cx| cx.borrow().triedToInstallSignalHandlers) {
+        TRAP_CONTEXT.with(|cx| {
+            cx.borrow_mut().triedToInstallSignalHandlers = true;
+            assert!(!cx.borrow().haveSignalHandlers);
+        });
+
+        {
+            let locked = EAGER_INSTALL_STATE.read().unwrap();
+            let state = locked.borrow();
+            assert!(
+                state.tried,
+                "call wasmtime_init_eager before calling wasmtime_init_finish"
+            );
+            if !state.success {
+                return;
+            }
+        }
+
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        ensure_darwin_mach_ports();
+
+        TRAP_CONTEXT.with(|cx| {
+            cx.borrow_mut().haveSignalHandlers = true;
+        })
+    }
+
+    let instance = unsafe { vmctx.instance() };
+    let have_signal_handlers = TRAP_CONTEXT.with(|cx| cx.borrow().haveSignalHandlers);
+    if !have_signal_handlers && instance.needs_signal_handlers() {
+        panic!("failed to install signal handlers");
+    }
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -71,31 +117,4 @@ fn ensure_darwin_mach_ports() {
     }
 
     state.success = true;
-}
-
-/// Assuming `EnsureEagerProcessSignalHandlers` has already been called,
-/// this function performs the full installation of signal handlers which must
-/// be performed per-thread. This operation may incur some overhead and
-/// so should be done only when needed to use wasm.
-pub fn ensure_full_signal_handlers(cx: &mut TrapContext) {
-    if cx.triedToInstallSignalHandlers {
-        return;
-    }
-
-    cx.triedToInstallSignalHandlers = true;
-    assert!(!cx.haveSignalHandlers);
-
-    {
-        let locked = EAGER_INSTALL_STATE.read().unwrap();
-        let state = locked.borrow();
-        assert!(state.tried);
-        if !state.success {
-            return;
-        }
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    ensure_darwin_mach_ports();
-
-    cx.haveSignalHandlers = true;
 }

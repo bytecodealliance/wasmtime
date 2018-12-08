@@ -1,12 +1,10 @@
 //! Memory management for executable code.
 
-use mmap::Mmap;
 use region;
-use std::cmp;
-use std::mem;
 use std::string::String;
 use std::vec::Vec;
-use vmcontext::VMFunctionBody;
+use std::{cmp, mem};
+use wasmtime_runtime::{Mmap, VMFunctionBody};
 
 /// Memory manager for executable code.
 pub struct Code {
@@ -47,7 +45,7 @@ impl Code {
     }
 
     /// Convert mut a slice from u8 to VMFunctionBody.
-    fn as_mut_vmfunc_slice(slice: &mut [u8]) -> &mut [VMFunctionBody] {
+    fn view_as_mut_vmfunc_slice(slice: &mut [u8]) -> &mut [VMFunctionBody] {
         let byte_ptr: *mut [u8] = slice;
         let body_ptr = byte_ptr as *mut [VMFunctionBody];
         unsafe { &mut *body_ptr }
@@ -62,7 +60,7 @@ impl Code {
     ) -> Result<&mut [VMFunctionBody], String> {
         let new = self.allocate(slice.len())?;
         new.copy_from_slice(slice);
-        Ok(Self::as_mut_vmfunc_slice(new))
+        Ok(Self::view_as_mut_vmfunc_slice(new))
     }
 
     /// Make all allocated memory executable.

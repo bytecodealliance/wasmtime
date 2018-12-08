@@ -22,6 +22,7 @@ pub struct Mmap {
 }
 
 impl Mmap {
+    /// Construct a new empty instance of `Mmap`.
     pub fn new() -> Self {
         Self {
             ptr: ptr::null_mut(),
@@ -55,6 +56,8 @@ impl Mmap {
         }
     }
 
+    /// Create a new `Mmap` pointing to at least `size` bytes of memory,
+    /// suitably sized and aligned for memory protection.
     #[cfg(target_os = "windows")]
     pub fn with_size(size: usize) -> Result<Self, String> {
         use winapi::um::memoryapi::VirtualAlloc;
@@ -81,22 +84,27 @@ impl Mmap {
         }
     }
 
+    /// Return the allocated memory as a slice of u8.
     pub fn as_slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr, self.len) }
     }
 
+    /// Return the allocated memory as a mutable slice of u8.
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.ptr, self.len) }
     }
 
+    /// Return the allocated memory as a pointer to u8.
     pub fn as_ptr(&self) -> *const u8 {
         self.ptr
     }
 
+    /// Return the allocated memory as a mutable pointer to u8.
     pub fn as_mut_ptr(&mut self) -> *mut u8 {
         self.ptr
     }
 
+    /// Return the lengthof the allocated memory.
     pub fn len(&self) -> usize {
         self.len
     }

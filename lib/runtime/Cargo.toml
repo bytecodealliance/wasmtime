@@ -1,9 +1,9 @@
 [package]
-name = "wasmtime-execute"
+name = "wasmtime-runtime"
 version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 publish = false
-description = "JIT-style execution for WebAsssembly code in Cranelift"
+description = "Runtime library support for Wasmtime"
 categories = ["wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -13,10 +13,13 @@ readme = "README.md"
 cranelift-codegen = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
 cranelift-entity = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
 cranelift-wasm = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
-cranelift-frontend = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
 wasmtime-environ = { path = "../environ" }
-wasmtime-runtime = { path = "../runtime" }
 region = "1.0.0"
+lazy_static = "1.2.0"
+libc = { version = "0.2.44", default-features = false }
+errno = "0.2.4"
+memoffset = "0.2.1"
+cast = { version = "0.2.2", default-features = false }
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
 

@@ -3,7 +3,7 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use cranelift_wasm::TableElementType;
-use vmcontext::{VMCallerCheckedAnyfunc, VMTable};
+use vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use wasmtime_environ::{TablePlan, TableStyle};
 
 /// A table instance.
@@ -39,9 +39,12 @@ impl Table {
         }
     }
 
-    /// Return a `VMTable` for exposing the table to JIT code.
-    pub fn vmtable(&mut self) -> VMTable {
-        VMTable::definition(self.vec.as_mut_ptr() as *mut u8, self.vec.len())
+    /// Return a `VMTableDefinition` for exposing the table to JIT code.
+    pub fn vmtable(&mut self) -> VMTableDefinition {
+        VMTableDefinition {
+            base: self.vec.as_mut_ptr() as *mut u8,
+            current_elements: self.vec.len(),
+        }
     }
 }
 
