@@ -207,7 +207,7 @@ fn call_through_wrapper(
         .as_ptr();
     code.publish();
 
-    let func = unsafe { mem::transmute::<_, fn()>(exec_code_buf) };
+    let func: fn() = unsafe { mem::transmute(exec_code_buf) };
 
     Ok(match call_wasm(func) {
         Ok(()) => {

@@ -266,15 +266,13 @@ impl VMGlobal {
     /// Construct a `VMGlobalDefinition` variant of `VMGlobal`.
     pub fn definition(global: &Global) -> Self {
         let mut result = VMGlobalDefinition { storage: [0; 8] };
-        unsafe {
-            match global.initializer {
-                GlobalInit::I32Const(x) => *result.as_i32() = x,
-                GlobalInit::I64Const(x) => *result.as_i64() = x,
-                GlobalInit::F32Const(x) => *result.as_f32_bits() = x,
-                GlobalInit::F64Const(x) => *result.as_f64_bits() = x,
-                GlobalInit::GetGlobal(_x) => unimplemented!("globals init with get_global"),
-                GlobalInit::Import => panic!("attempting to initialize imported global"),
-            }
+        match global.initializer {
+            GlobalInit::I32Const(x) => *unsafe { result.as_i32() } = x,
+            GlobalInit::I64Const(x) => *unsafe { result.as_i64() } = x,
+            GlobalInit::F32Const(x) => *unsafe { result.as_f32_bits() } = x,
+            GlobalInit::F64Const(x) => *unsafe { result.as_f64_bits() } = x,
+            GlobalInit::GetGlobal(_x) => unimplemented!("globals init with get_global"),
+            GlobalInit::Import => panic!("attempting to initialize imported global"),
         }
         Self { definition: result }
     }

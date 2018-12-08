@@ -110,8 +110,8 @@ impl LinearMemory {
                     guard_bytes,
                     region::Protection::None,
                 )
-                .expect("unable to make memory inaccessible");
             }
+            .expect("unable to make memory inaccessible");
 
             let copy_len = self.mmap.len() - self.offset_guard_size;
             new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&self.mmap.as_slice()[..copy_len]);

@@ -4,7 +4,6 @@
 use errno;
 use libc;
 use region;
-use std::mem;
 use std::ptr;
 use std::slice;
 use std::string::String;
@@ -36,23 +35,23 @@ impl Mmap {
     pub fn with_size(size: usize) -> Result<Self, String> {
         let page_size = region::page::size();
         let alloc_size = round_up_to_page_size(size, page_size);
-        unsafe {
-            let ptr = libc::mmap(
+        let ptr = unsafe {
+            libc::mmap(
                 ptr::null_mut(),
                 alloc_size,
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_PRIVATE | libc::MAP_ANON,
                 -1,
                 0,
-            );
-            if mem::transmute::<_, isize>(ptr) != -1isize {
-                Ok(Self {
-                    ptr: ptr as *mut u8,
-                    len: alloc_size,
-                })
-            } else {
-                Err(errno::errno().to_string())
-            }
+            )
+        };
+        if ptr as isize == -1isize {
+            Err(errno::errno().to_string())
+        } else {
+            Ok(Self {
+                ptr: ptr as *mut u8,
+                len: alloc_size,
+            })
         }
     }
 
