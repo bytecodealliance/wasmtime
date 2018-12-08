@@ -1,6 +1,6 @@
 use cranelift_codegen::ir;
 use cranelift_wasm::Global;
-use vmcontext::{VMGlobal, VMMemory, VMTable};
+use vmcontext::{VMFunctionBody, VMGlobal, VMMemory, VMTable};
 use wasmtime_environ::{MemoryPlan, TablePlan};
 
 /// The value of an export passed from one instance to another.
@@ -8,7 +8,7 @@ pub enum ExportValue {
     /// A function export value.
     Function {
         /// The address of the native-code function.
-        address: *const u8,
+        address: *const VMFunctionBody,
         /// The function signature declaration, used for compatibilty checking.
         signature: ir::Signature,
     },
@@ -40,7 +40,7 @@ pub enum ExportValue {
 
 impl ExportValue {
     /// Construct a function export value.
-    pub fn function(address: *const u8, signature: ir::Signature) -> Self {
+    pub fn function(address: *const VMFunctionBody, signature: ir::Signature) -> Self {
         ExportValue::Function { address, signature }
     }
 

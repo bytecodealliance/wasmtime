@@ -4,7 +4,7 @@ use cranelift_wasm::{Global, GlobalInit, Memory, Table, TableElementType};
 use std::ptr;
 use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, MemoryPlan, MemoryStyle, TablePlan, TableStyle};
-use wasmtime_execute::{ExportValue, Resolver, VMGlobal, VMMemory, VMTable};
+use wasmtime_execute::{ExportValue, Resolver, VMFunctionBody, VMGlobal, VMMemory, VMTable};
 
 extern "C" fn spectest_print() {}
 
@@ -79,7 +79,7 @@ impl Resolver for SpecTest {
         match module {
             "spectest" => match field {
                 "print" => Some(ExportValue::function(
-                    spectest_print as *const u8,
+                    spectest_print as *const VMFunctionBody,
                     translate_signature(
                         ir::Signature {
                             params: vec![],
@@ -90,7 +90,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_i32" => Some(ExportValue::function(
-                    spectest_print_i32 as *const u8,
+                    spectest_print_i32 as *const VMFunctionBody,
                     translate_signature(
                         ir::Signature {
                             params: vec![ir::AbiParam::new(types::I32)],
@@ -101,7 +101,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_i64" => Some(ExportValue::function(
-                    spectest_print_i64 as *const u8,
+                    spectest_print_i64 as *const VMFunctionBody,
                     translate_signature(
                         ir::Signature {
                             params: vec![ir::AbiParam::new(types::I64)],
@@ -112,7 +112,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_f32" => Some(ExportValue::function(
-                    spectest_print_f32 as *const u8,
+                    spectest_print_f32 as *const VMFunctionBody,
                     translate_signature(
                         ir::Signature {
                             params: vec![ir::AbiParam::new(types::F32)],
@@ -123,7 +123,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_f64" => Some(ExportValue::function(
-                    spectest_print_f64 as *const u8,
+                    spectest_print_f64 as *const VMFunctionBody,
                     translate_signature(
                         ir::Signature {
                             params: vec![ir::AbiParam::new(types::F64)],
@@ -134,7 +134,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_i32_f32" => Some(ExportValue::function(
-                    spectest_print_i32_f32 as *const u8,
+                    spectest_print_i32_f32 as *const VMFunctionBody,
                     translate_signature(
                         ir::Signature {
                             params: vec![
@@ -148,7 +148,7 @@ impl Resolver for SpecTest {
                     ),
                 )),
                 "print_f64_f64" => Some(ExportValue::function(
-                    spectest_print_f64_f64 as *const u8,
+                    spectest_print_f64_f64 as *const VMFunctionBody,
                     translate_signature(
                         ir::Signature {
                             params: vec![

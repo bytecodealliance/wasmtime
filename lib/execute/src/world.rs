@@ -9,7 +9,7 @@ use instance::Instance;
 use invoke::{invoke, invoke_start_function};
 use link::link_module;
 use std::str;
-use vmcontext::VMGlobal;
+use vmcontext::{VMFunctionBody, VMGlobal};
 use wasmtime_environ::{
     compile_module, Compilation, CompileError, Module, ModuleEnvironment, Tunables,
 };
@@ -123,10 +123,10 @@ impl InstanceWorld {
 fn allocate_functions(
     code: &mut Code,
     compilation: Compilation,
-) -> Result<PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>, String> {
+) -> Result<PrimaryMap<DefinedFuncIndex, (*mut VMFunctionBody, usize)>, String> {
     let mut result = PrimaryMap::with_capacity(compilation.functions.len());
     for (_, body) in compilation.functions.into_iter() {
-        let slice = code.allocate_copy_of_slice(&body)?;
+        let slice = code.allocate_copy_of_byte_slice(body)?;
         result.push((slice.as_mut_ptr(), slice.len()));
     }
     Ok(result)

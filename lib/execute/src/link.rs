@@ -8,7 +8,7 @@ use imports::Imports;
 use std::ptr::write_unaligned;
 use std::vec::Vec;
 use vmcontext::VMContext;
-use vmcontext::{VMGlobal, VMMemory, VMTable};
+use vmcontext::{VMFunctionBody, VMGlobal, VMMemory, VMTable};
 use wasmtime_environ::{
     MemoryPlan, MemoryStyle, Module, Relocation, RelocationTarget, Relocations, TablePlan,
     TableStyle,
@@ -22,7 +22,7 @@ pub struct LinkError(String);
 /// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
 pub fn link_module(
     module: &Module,
-    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut VMFunctionBody, usize)>,
     relocations: Relocations,
     resolver: &mut Resolver,
 ) -> Result<Imports, LinkError> {
@@ -277,7 +277,7 @@ fn is_memory_compatible(exported: &MemoryPlan, imported: &MemoryPlan) -> bool {
 /// Performs the relocations inside the function bytecode, provided the necessary metadata.
 fn relocate(
     imports: &Imports,
-    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut VMFunctionBody, usize)>,
     relocations: PrimaryMap<DefinedFuncIndex, Vec<Relocation>>,
     module: &Module,
 ) {

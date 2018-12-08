@@ -1,12 +1,12 @@
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
-use vmcontext::{VMGlobal, VMMemory, VMTable};
+use vmcontext::{VMFunctionBody, VMGlobal, VMMemory, VMTable};
 
 /// Resolved import pointers.
 #[derive(Debug)]
 pub struct Imports {
     /// Resolved addresses for imported functions.
-    pub functions: PrimaryMap<FuncIndex, *const u8>,
+    pub functions: PrimaryMap<FuncIndex, *const VMFunctionBody>,
 
     /// Resolved addresses for imported tables.
     pub tables: PrimaryMap<TableIndex, *mut VMTable>,

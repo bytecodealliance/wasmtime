@@ -13,7 +13,7 @@ use std::mem;
 use std::ptr;
 use std::vec::Vec;
 use traphandlers::call_wasm;
-use vmcontext::VMContext;
+use vmcontext::{VMContext, VMFunctionBody};
 use wasmtime_environ::{CompileError, Export, Module, RelocSink};
 
 /// Calls the given named function, passing its return values and returning
@@ -71,14 +71,10 @@ pub fn invoke_by_index(
     args: &[RuntimeValue],
 ) -> Result<ActionOutcome, ActionError> {
     let exec_code_buf = match module.defined_func_index(fn_index) {
-        Some(def_fn_index) => {
-            let slice = instance
-                .get_allocated_function(def_fn_index)
-                .ok_or_else(|| ActionError::Index(def_fn_index.index() as u64))?;
-            code.allocate_copy_of_slice(slice)
-                .map_err(ActionError::Resource)?
-                .as_ptr()
-        }
+        Some(def_fn_index) => instance
+            .get_allocated_function(def_fn_index)
+            .ok_or_else(|| ActionError::Index(def_fn_index.index() as u64))?
+            .as_ptr(),
         None => instance
             .get_imported_function(fn_index)
             .ok_or_else(|| ActionError::Index(fn_index.index() as u64))?,
@@ -111,7 +107,7 @@ pub fn invoke_by_index(
 fn call_through_wrapper(
     code: &mut Code,
     isa: &isa::TargetIsa,
-    callee: *const u8,
+    callee: *const VMFunctionBody,
     instance: &mut Instance,
     args: &[RuntimeValue],
     sig: &ir::Signature,
@@ -202,7 +198,7 @@ fn call_through_wrapper(
     assert!(reloc_sink.func_relocs.is_empty());
 
     let exec_code_buf = code
-        .allocate_copy_of_slice(&code_buf)
+        .allocate_copy_of_byte_slice(&code_buf)
         .map_err(ActionError::Resource)?
         .as_ptr();
     code.publish();

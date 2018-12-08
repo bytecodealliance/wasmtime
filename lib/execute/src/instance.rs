@@ -11,7 +11,7 @@ use std::ptr;
 use std::slice;
 use std::string::String;
 use table::Table;
-use vmcontext::{VMCallerCheckedAnyfunc, VMContext, VMGlobal, VMMemory, VMTable};
+use vmcontext::{VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMGlobal, VMMemory, VMTable};
 use wasmtime_environ::{DataInitializer, Module};
 
 /// An Instance of a WebAssemby module.
@@ -40,7 +40,7 @@ pub struct Instance {
     imports: Imports,
 
     /// Pointers to functions in executable memory.
-    allocated_functions: PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
+    allocated_functions: PrimaryMap<DefinedFuncIndex, (*mut VMFunctionBody, usize)>,
 
     /// Context pointer used by JIT code.
     vmctx: VMContext,
@@ -52,7 +52,7 @@ impl Instance {
     /// which have been placed in executable memory.
     pub fn new(
         module: &Module,
-        allocated_functions: PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
+        allocated_functions: PrimaryMap<DefinedFuncIndex, (*mut VMFunctionBody, usize)>,
         data_initializers: &[DataInitializer],
         imports: Imports,
     ) -> Result<Self, String> {
@@ -106,14 +106,17 @@ impl Instance {
     }
 
     /// Return the pointer to executable memory for the given function index.
-    pub(crate) fn get_allocated_function(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
+    pub(crate) fn get_allocated_function(
+        &self,
+        index: DefinedFuncIndex,
+    ) -> Option<&[VMFunctionBody]> {
         self.allocated_functions
             .get(index)
             .map(|(ptr, len)| unsafe { slice::from_raw_parts(*ptr, *len) })
     }
 
     /// Return the pointer to executable memory for the given function index.
-    pub(crate) fn get_imported_function(&self, index: FuncIndex) -> Option<*const u8> {
+    pub(crate) fn get_imported_function(&self, index: FuncIndex) -> Option<*const VMFunctionBody> {
         self.imports.functions.get(index).cloned()
     }
 
@@ -188,7 +191,7 @@ fn instantiate_memories(
 /// Allocate memory for just the tables of the current module.
 fn instantiate_tables(
     module: &Module,
-    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut u8, usize)>,
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, (*mut VMFunctionBody, usize)>,
     sig_registry: &mut SignatureRegistry,
 ) -> PrimaryMap<TableIndex, Table> {
     let mut tables = PrimaryMap::with_capacity(module.table_plans.len());

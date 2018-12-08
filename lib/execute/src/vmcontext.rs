@@ -7,6 +7,24 @@ use instance::Instance;
 use std::fmt;
 use std::ptr;
 
+/// A placeholder byte-sized type which is just used to provide some amount of type
+/// safety when dealing with pointers to JIT-compiled function bodies. Note that it's
+/// deliberately not Copy, as we shouldn't be carelessly copying function body bytes
+/// around.
+#[repr(C)]
+pub struct VMFunctionBody(u8);
+
+#[cfg(test)]
+mod test_vmfunction_body {
+    use super::VMFunctionBody;
+    use std::mem::size_of;
+
+    #[test]
+    fn check_vmfunction_body_offsets() {
+        assert_eq!(size_of::<VMFunctionBody>(), 1);
+    }
+}
+
 /// The fields a JIT needs to access to utilize a WebAssembly linear
 /// memory defined within the instance, namely the start address and the
 /// size in bytes.
@@ -454,7 +472,7 @@ mod test_vmsignature_id {
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct VMCallerCheckedAnyfunc {
-    pub func_ptr: *const u8,
+    pub func_ptr: *const VMFunctionBody,
     pub type_id: VMSignatureId,
     // If more elements are added here, remember to add offset_of tests below!
 }

@@ -70,7 +70,7 @@ pub use instance::Instance;
 pub use invoke::{invoke, invoke_by_index, invoke_start_function};
 pub use link::link_module;
 pub use traphandlers::{call_wasm, LookupCodeSegment, RecordTrap, Unwind};
-pub use vmcontext::{VMContext, VMGlobal, VMMemory, VMTable};
+pub use vmcontext::{VMContext, VMFunctionBody, VMGlobal, VMMemory, VMTable};
 pub use world::InstanceWorld;
 
 #[cfg(not(feature = "std"))]

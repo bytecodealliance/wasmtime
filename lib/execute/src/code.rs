@@ -4,9 +4,9 @@ use mmap::Mmap;
 use region;
 use std::cmp;
 use std::mem;
-use std::slice;
 use std::string::String;
 use std::vec::Vec;
+use vmcontext::VMFunctionBody;
 
 /// Memory manager for executable code.
 pub struct Code {
@@ -33,7 +33,7 @@ impl Code {
     /// actually executing from it.
     ///
     /// TODO: Add an alignment flag.
-    fn allocate(&mut self, size: usize) -> Result<*mut u8, String> {
+    fn allocate(&mut self, size: usize) -> Result<&mut [u8], String> {
         if self.current.len() - self.position < size {
             self.mmaps.push(mem::replace(
                 &mut self.current,
@@ -43,17 +43,26 @@ impl Code {
         }
         let old_position = self.position;
         self.position += size;
-        Ok(self.current.as_mut_slice()[old_position..self.position].as_mut_ptr())
+        Ok(&mut self.current.as_mut_slice()[old_position..self.position])
+    }
+
+    /// Convert mut a slice from u8 to VMFunctionBody.
+    fn as_mut_vmfunc_slice(slice: &mut [u8]) -> &mut [VMFunctionBody] {
+        let byte_ptr: *mut [u8] = slice;
+        let body_ptr = byte_ptr as *mut [VMFunctionBody];
+        unsafe { &mut *body_ptr }
     }
 
     /// Allocate enough memory to hold a copy of `slice` and copy the data into it.
     /// TODO: Reorganize the code that calls this to emit code directly into the
     /// mmap region rather than into a Vec that we need to copy in.
-    pub fn allocate_copy_of_slice(&mut self, slice: &[u8]) -> Result<&mut [u8], String> {
-        let ptr = self.allocate(slice.len())?;
-        let new = unsafe { slice::from_raw_parts_mut(ptr, slice.len()) };
+    pub fn allocate_copy_of_byte_slice(
+        &mut self,
+        slice: &[u8],
+    ) -> Result<&mut [VMFunctionBody], String> {
+        let new = self.allocate(slice.len())?;
         new.copy_from_slice(slice);
-        Ok(new)
+        Ok(Self::as_mut_vmfunc_slice(new))
     }
 
     /// Make all allocated memory executable.
