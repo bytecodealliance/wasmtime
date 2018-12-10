@@ -1,54 +1,34 @@
-//! Densely numbered entity references as mapping keys.
-use boxed_slice::BoxedSlice;
+//! Boxed slices for `PrimaryMap`.
+
 use iter::{Iter, IterMut};
 use keys::Keys;
-use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
-use std::vec::Vec;
 use EntityRef;
 
-/// A primary mapping `K -> V` allocating dense entity references.
+/// A slice mapping `K -> V` allocating dense entity references.
 ///
-/// The `PrimaryMap` data structure uses the dense index space to implement a map with a vector.
-///
-/// A primary map contains the main definition of an entity, and it can be used to allocate new
-/// entity references with the `push` method.
-///
-/// There should only be a single `PrimaryMap` instance for a given `EntityRef` type, otherwise
-/// conflicting references will be created. Using unknown keys for indexing will cause a panic.
-///
-/// Note that `PrimaryMap` doesn't implement `Deref` or `DerefMut`, which would allow
-/// `&PrimaryMap<K, V>` to convert to `&[V]`. One of the main advantages of `PrimaryMap` is
-/// that it only allows indexing with the distinct `EntityRef` key type, so converting to a
-/// plain slice would make it easier to use incorrectly. To make a slice of a `PrimaryMap`, use
-/// `into_boxed_slice`.
+/// The `BoxedSlice` data structure uses the dense index space to implement a map with a boxed
+/// slice.
 #[derive(Debug, Clone)]
-pub struct PrimaryMap<K, V>
+pub struct BoxedSlice<K, V>
 where
     K: EntityRef,
 {
-    elems: Vec<V>,
+    elems: Box<[V]>,
     unused: PhantomData<K>,
 }
 
-impl<K, V> PrimaryMap<K, V>
+impl<K, V> BoxedSlice<K, V>
 where
     K: EntityRef,
 {
-    /// Create a new empty map.
-    pub fn new() -> Self {
+    /// Create a new slice from a raw pointer. A safer way to create slices is
+    /// to use `PrimaryMap::into_boxed_slice()`.
+    pub unsafe fn from_raw(raw: *mut [V]) -> Self {
         Self {
-            elems: Vec::new(),
-            unused: PhantomData,
-        }
-    }
-
-    /// Create a new empty map with the given capacity.
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            elems: Vec::with_capacity(capacity),
+            elems: Box::from_raw(raw),
             unused: PhantomData,
         }
     }
@@ -103,47 +83,20 @@ where
         IterMut::new(self.elems.iter_mut())
     }
 
-    /// Remove all entries from this map.
-    pub fn clear(&mut self) {
-        self.elems.clear()
-    }
-
     /// Get the key that will be assigned to the next pushed value.
     pub fn next_key(&self) -> K {
         K::new(self.elems.len())
-    }
-
-    /// Append `v` to the mapping, assigning a new key which is returned.
-    pub fn push(&mut self, v: V) -> K {
-        let k = self.next_key();
-        self.elems.push(v);
-        k
     }
 
     /// Returns the last element that was inserted in the map.
     pub fn last(&self) -> Option<&V> {
         self.elems.last()
     }
-
-    /// Reserves capacity for at least `additional` more elements to be inserted.
-    pub fn reserve(&mut self, additional: usize) {
-        self.elems.reserve(additional)
-    }
-
-    /// Reserves the minimum capacity for exactly `additional` more elements to be inserted.
-    pub fn reserve_exact(&mut self, additional: usize) {
-        self.elems.reserve_exact(additional)
-    }
-
-    /// Consumes this `PrimaryMap` and produces a `BoxedSlice`.
-    pub fn into_boxed_slice(self) -> BoxedSlice<K, V> {
-        unsafe { BoxedSlice::<K, V>::from_raw(Box::<[V]>::into_raw(self.elems.into_boxed_slice())) }
-    }
 }
 
-/// Immutable indexing into an `PrimaryMap`.
+/// Immutable indexing into a `BoxedSlice`.
 /// The indexed value must be in the map.
-impl<K, V> Index<K> for PrimaryMap<K, V>
+impl<K, V> Index<K> for BoxedSlice<K, V>
 where
     K: EntityRef,
 {
@@ -154,8 +107,8 @@ where
     }
 }
 
-/// Mutable indexing into an `PrimaryMap`.
-impl<K, V> IndexMut<K> for PrimaryMap<K, V>
+/// Mutable indexing into a `BoxedSlice`.
+impl<K, V> IndexMut<K> for BoxedSlice<K, V>
 where
     K: EntityRef,
 {
@@ -164,7 +117,7 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a PrimaryMap<K, V>
+impl<'a, K, V> IntoIterator for &'a BoxedSlice<K, V>
 where
     K: EntityRef,
 {
@@ -176,7 +129,7 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a mut PrimaryMap<K, V>
+impl<'a, K, V> IntoIterator for &'a mut BoxedSlice<K, V>
 where
     K: EntityRef,
 {
@@ -188,24 +141,10 @@ where
     }
 }
 
-impl<K, V> FromIterator<V> for PrimaryMap<K, V>
-where
-    K: EntityRef,
-{
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = V>,
-    {
-        Self {
-            elems: Vec::from_iter(iter),
-            unused: PhantomData,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use primary::PrimaryMap;
 
     // `EntityRef` impl for testing.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -224,7 +163,8 @@ mod tests {
     fn basic() {
         let r0 = E(0);
         let r1 = E(1);
-        let m = PrimaryMap::<E, isize>::new();
+        let p = PrimaryMap::<E, isize>::new();
+        let m = p.into_boxed_slice();
 
         let v: Vec<E> = m.keys().collect();
         assert_eq!(v, []);
@@ -234,23 +174,11 @@ mod tests {
     }
 
     #[test]
-    fn push() {
-        let mut m = PrimaryMap::new();
-        let k0: E = m.push(12);
-        let k1 = m.push(33);
-
-        assert_eq!(m[k0], 12);
-        assert_eq!(m[k1], 33);
-
-        let v: Vec<E> = m.keys().collect();
-        assert_eq!(v, [k0, k1]);
-    }
-
-    #[test]
     fn iter() {
-        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
-        m.push(12);
-        m.push(33);
+        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
+        p.push(12);
+        p.push(33);
+        let mut m = p.into_boxed_slice();
 
         let mut i = 0;
         for (key, value) in &m {
@@ -276,9 +204,10 @@ mod tests {
 
     #[test]
     fn iter_rev() {
-        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
-        m.push(12);
-        m.push(33);
+        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
+        p.push(12);
+        p.push(33);
+        let mut m = p.into_boxed_slice();
 
         let mut i = 2;
         for (key, value) in m.iter().rev() {
@@ -304,9 +233,10 @@ mod tests {
     }
     #[test]
     fn keys() {
-        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
-        m.push(12);
-        m.push(33);
+        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
+        p.push(12);
+        p.push(33);
+        let m = p.into_boxed_slice();
 
         let mut i = 0;
         for key in m.keys() {
@@ -317,9 +247,10 @@ mod tests {
 
     #[test]
     fn keys_rev() {
-        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
-        m.push(12);
-        m.push(33);
+        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
+        p.push(12);
+        p.push(33);
+        let m = p.into_boxed_slice();
 
         let mut i = 2;
         for key in m.keys().rev() {
@@ -330,9 +261,10 @@ mod tests {
 
     #[test]
     fn values() {
-        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
-        m.push(12);
-        m.push(33);
+        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
+        p.push(12);
+        p.push(33);
+        let mut m = p.into_boxed_slice();
 
         let mut i = 0;
         for value in m.values() {
@@ -356,9 +288,10 @@ mod tests {
 
     #[test]
     fn values_rev() {
-        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
-        m.push(12);
-        m.push(33);
+        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
+        p.push(12);
+        p.push(33);
+        let mut m = p.into_boxed_slice();
 
         let mut i = 2;
         for value in m.values().rev() {
@@ -377,19 +310,6 @@ mod tests {
                 1 => assert_eq!(*value_mut, 33),
                 _ => panic!(),
             }
-        }
-    }
-
-    #[test]
-    fn from_iter() {
-        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
-        m.push(12);
-        m.push(33);
-
-        let n = m.values().collect::<PrimaryMap<E, _>>();
-        assert!(m.len() == n.len());
-        for (me, ne) in m.values().zip(n.values()) {
-            assert!(*me == **ne);
         }
     }
 }
