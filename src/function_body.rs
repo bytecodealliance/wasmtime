@@ -222,13 +222,11 @@ pub fn translate(
             }
             Operator::Call { function_index } => {
                 let callee_ty = translation_ctx.func_type(function_index);
-                assert!(callee_ty.returns.len() == 0, "is not supported");
 
-                // TODO: ensure that this function is locally defined
-                // We would like to support imported functions at some point
+                // TODO: this implementation assumes that this function is locally defined.
 
                 pass_outgoing_args(&mut ctx, callee_ty.params.len() as u32);
-                call_direct(&mut ctx, function_index);
+                call_direct(&mut ctx, function_index, callee_ty.returns.len() as u32);
             }
             _ => {
                 trap(&mut ctx);
