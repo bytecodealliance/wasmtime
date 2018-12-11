@@ -101,7 +101,8 @@ impl Preset {
             let mask = setting.byte_mask();
             let val = setting.byte_for_value(true);
             assert!((val & !mask) == 0);
-            let (l_mask, l_val) = layout.get_mut(setting.byte_offset as usize).unwrap();
+            let (ref mut l_mask, ref mut l_val) =
+                *layout.get_mut(setting.byte_offset as usize).unwrap();
             *l_mask |= mask;
             *l_val = (*l_val & !mask) | val;
         }
@@ -186,15 +187,15 @@ impl<'a> Into<PredicateNode> for (BoolSettingIndex, &'a SettingGroup) {
 
 impl PredicateNode {
     fn render(&self, group: &SettingGroup) -> String {
-        match self {
+        match *self {
             PredicateNode::OwnedBool(bool_setting_index) => format!(
                 "{}.{}()",
                 group.name, group.settings[bool_setting_index.0].name
             ),
-            PredicateNode::SharedBool(group_name, bool_name) => {
+            PredicateNode::SharedBool(ref group_name, ref bool_name) => {
                 format!("{}.{}()", group_name, bool_name)
             }
-            PredicateNode::And(lhs, rhs) => {
+            PredicateNode::And(ref lhs, ref rhs) => {
                 format!("{} && {}", lhs.render(group), rhs.render(group))
             }
         }

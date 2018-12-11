@@ -122,7 +122,7 @@ impl Formatter {
     pub fn add_match(&mut self, m: Match) {
         self.line(&format!("match {} {{", m.expr));
         self.indent(|fmt| {
-            for ((fields, body), names) in m.arms.iter() {
+            for (&(ref fields, ref body), ref names) in m.arms.iter() {
                 // name { fields } | name { fields } => { body }
                 let conditions: Vec<String> = names
                     .iter()
@@ -252,7 +252,7 @@ mod srcgen_tests {
     use super::Formatter;
     use super::Match;
 
-    fn from_raw_string(s: impl Into<String>) -> Vec<String> {
+    fn from_raw_string<S: Into<String>>(s: S) -> Vec<String> {
         s.into()
             .trim()
             .split("\n")
