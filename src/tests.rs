@@ -111,16 +111,22 @@ fn function_call() {
     let code = r#"
 (module
   (func (param i32) (param i32) (result i32)
-    (call 1)
+    (call $assert_zero
+      (get_local 1)
+    )
     (get_local 0)
   )
 
-  (func
+  (func $assert_zero (param $v i32)
+    (local i32)
+    (if (get_local $v)
+      (unreachable)
+    )
   )
 )
     "#;
 
-    assert_eq!(execute_wat(code, 2, 3), 2);
+    assert_eq!(execute_wat(code, 2, 0), 2);
 }
 
 // TODO: Add a test that checks argument passing via the stack.
