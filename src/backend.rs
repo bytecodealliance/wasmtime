@@ -361,11 +361,20 @@ pub fn pass_outgoing_args(ctx: &mut Context, arity: u32) {
     }
 }
 
-pub fn call_direct(ctx: &mut Context, index: u32) {
+pub fn call_direct(ctx: &mut Context, index: u32, return_arity: u32) {
+    assert!(return_arity == 0 || return_arity == 1);
+
     let label = &ctx.func_starts[index as usize].1;
     dynasm!(ctx.asm
         ; call =>*label
     );
+
+    if return_arity == 1 {
+        dynasm!(ctx.asm
+            ; push rax
+        );
+        ctx.sp_depth.reserve(1);
+    }
 }
 
 pub fn prologue(ctx: &mut Context, stack_slots: u32) {
