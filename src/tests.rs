@@ -129,4 +129,18 @@ fn function_call() {
     assert_eq!(execute_wat(code, 2, 0), 2);
 }
 
+#[test]
+fn literals() {
+    let code = r#"
+(module
+  (func (param i32) (param i32) (result i32)
+    (i32.const 228)
+  )
+)
+    "#;
+
+    assert_eq!(execute_wat(code, 0, 0), 228);
+}
+
+
 // TODO: Add a test that checks argument passing via the stack.

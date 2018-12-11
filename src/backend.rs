@@ -261,13 +261,21 @@ pub fn get_local_i32(ctx: &mut Context, local_idx: u32) {
     push_i32(ctx, gpr);
 }
 
-pub fn store_i32(ctx: &mut Context, local_idx: u32) {
+pub fn set_local_i32(ctx: &mut Context, local_idx: u32) {
     let gpr = pop_i32(ctx);
     let offset = sp_relative_offset(ctx, local_idx);
     dynasm!(ctx.asm
         ; mov [rsp + offset], Rq(gpr)
     );
     ctx.regs.release_scratch_gpr(gpr);
+}
+
+pub fn literal_i32(ctx: &mut Context, imm: i32) {
+    let gpr = ctx.regs.take_scratch_gpr();
+    dynasm!(ctx.asm
+        ; mov Rd(gpr), imm
+    );
+    push_i32(ctx, gpr);
 }
 
 pub fn relop_eq_i32(ctx: &mut Context) {

@@ -217,6 +217,9 @@ pub fn translate(
             Operator::GetLocal { local_index } => {
                 get_local_i32(&mut ctx, local_index);
             }
+            Operator::I32Const { value } => {
+                literal_i32(&mut ctx, value);
+            }
             Operator::Call { function_index } => {
                 let callee_ty = translation_ctx.func_type(function_index);
                 assert!(callee_ty.returns.len() == 0, "is not supported");
