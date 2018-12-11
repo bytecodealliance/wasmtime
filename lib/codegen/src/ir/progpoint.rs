@@ -85,9 +85,9 @@ impl From<ValueDef> for ExpandedProgramPoint {
 impl From<ProgramPoint> for ExpandedProgramPoint {
     fn from(pp: ProgramPoint) -> Self {
         if pp.0 & 1 == 0 {
-            ExpandedProgramPoint::Inst(Inst::new((pp.0 / 2) as usize))
+            ExpandedProgramPoint::Inst(Inst::from_u32(pp.0 / 2))
         } else {
-            ExpandedProgramPoint::Ebb(Ebb::new((pp.0 / 2) as usize))
+            ExpandedProgramPoint::Ebb(Ebb::from_u32(pp.0 / 2))
         }
     }
 }

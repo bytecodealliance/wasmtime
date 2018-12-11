@@ -26,7 +26,6 @@ use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cranelift_codegen::packed_option::ReservedValue;
-use cranelift_entity::EntityRef;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
 use state::{ControlStackFrame, TranslationState};
@@ -355,7 +354,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ);
             let call = environ.translate_call(
                 builder.cursor(),
-                FuncIndex::new(function_index as usize),
+                FuncIndex::from_u32(function_index),
                 fref,
                 state.peekn(num_args),
             )?;
@@ -378,9 +377,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let callee = state.pop1();
             let call = environ.translate_call_indirect(
                 builder.cursor(),
-                TableIndex::new(table_index as usize),
+                TableIndex::from_u32(table_index),
                 table,
-                SignatureIndex::new(index as usize),
+                SignatureIndex::from_u32(index),
                 sigref,
                 callee,
                 state.peekn(num_args),
@@ -401,13 +400,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::MemoryGrow { reserved } => {
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
-            let heap_index = MemoryIndex::new(reserved as usize);
+            let heap_index = MemoryIndex::from_u32(reserved);
             let heap = state.get_heap(builder.func, reserved, environ);
             let val = state.pop1();
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::MemorySize { reserved } => {
-            let heap_index = MemoryIndex::new(reserved as usize);
+            let heap_index = MemoryIndex::from_u32(reserved);
             let heap = state.get_heap(builder.func, reserved, environ);
             state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);
         }

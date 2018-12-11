@@ -13,7 +13,6 @@
 
 use dbg::DisplayList;
 use dominator_tree::DominatorTreePreorder;
-use entity::EntityRef;
 use entity::{EntityList, ListPool};
 use entity::{Keys, PrimaryMap, SecondaryMap};
 use ir::{Function, Value};
@@ -258,7 +257,7 @@ impl UFEntry {
     /// Decode a table entry.
     fn decode(x: i32) -> Self {
         if x < 0 {
-            UFEntry::Link(Value::new((!x) as usize))
+            UFEntry::Link(Value::from_u32((!x) as u32))
         } else {
             UFEntry::Rank(x as u32)
         }
