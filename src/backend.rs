@@ -81,6 +81,7 @@ impl Registers {
 }
 
 /// Describes location of a argument.
+#[derive(Debug)]
 enum ArgLocation {
     /// Argument is passed via some register.
     Reg(GPR),
@@ -336,6 +337,22 @@ pub fn copy_incoming_arg(ctx: &mut Context, arg_pos: u32) {
     );
 }
 
+pub fn pass_outgoing_args(ctx: &mut Context, arity: u32) {
+    for arg_pos in (0..arity).rev() {
+        ctx.sp_depth.free(1);
+
+        let loc = abi_loc_for_arg(arg_pos);
+        match loc {
+            ArgLocation::Reg(gpr) => {
+                dynasm!(ctx.asm
+                    ; pop Rq(gpr)
+                );
+            }
+            _ => unimplemented!("don't know how to pass argument {} via {:?}", arg_pos, loc),
+        }
+    }
+}
+
 pub fn call_direct(ctx: &mut Context, index: u32) {
     let label = &ctx.func_starts[index as usize].1;
     dynasm!(ctx.asm
@@ -358,11 +375,12 @@ pub fn prologue(ctx: &mut Context, stack_slots: u32) {
 }
 
 pub fn epilogue(ctx: &mut Context) {
-    assert_eq!(
-        ctx.sp_depth,
-        StackDepth(0),
-        "imbalanced pushes and pops detected"
-    );
+    // TODO: This doesn't work with stack alignment.
+    // assert_eq!(
+    //     ctx.sp_depth,
+    //     StackDepth(0),
+    //     "imbalanced pushes and pops detected"
+    // );
     dynasm!(ctx.asm
         ; mov rsp, rbp
         ; pop rbp
