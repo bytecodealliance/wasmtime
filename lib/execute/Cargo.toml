@@ -10,10 +10,10 @@ license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
 [dependencies]
-cranelift-codegen = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
-cranelift-entity = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
-cranelift-wasm = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
-cranelift-frontend = { git = "https://github.com/sunfishcode/cranelift.git", branch = "guard-offset" }
+cranelift-codegen = "0.26.0"
+cranelift-entity = "0.26.0"
+cranelift-wasm = "0.26.0"
+cranelift-frontend = "0.26.0"
 wasmtime-environ = { path = "../environ" }
 wasmtime-runtime = { path = "../runtime" }
 region = "1.0.0"
