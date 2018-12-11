@@ -400,10 +400,8 @@ fn expand_stack_load(
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
 
-    let mut mflags = MemFlags::new();
     // Stack slots are required to be accessible and aligned.
-    mflags.set_notrap();
-    mflags.set_aligned();
+    let mflags = MemFlags::trusted();
     pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
 }
 
