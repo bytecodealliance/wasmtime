@@ -110,9 +110,7 @@ fn load_addr(
     };
 
     // Global-value loads are always notrap and aligned. They may be readonly.
-    let mut mflags = ir::MemFlags::new();
-    mflags.set_notrap();
-    mflags.set_aligned();
+    let mut mflags = ir::MemFlags::trusted();
     if readonly {
         mflags.set_readonly();
     }

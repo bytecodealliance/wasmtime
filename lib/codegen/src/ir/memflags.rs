@@ -26,6 +26,15 @@ impl MemFlags {
         Self { bits: 0 }
     }
 
+    /// Create a set of flags representing an access from a "trusted" address, meaning it's
+    /// known to be aligned and non-trapping.
+    pub fn trusted() -> Self {
+        let mut result = Self::new();
+        result.set_notrap();
+        result.set_aligned();
+        result
+    }
+
     /// Read a flag bit.
     fn read(self, bit: FlagBit) -> bool {
         self.bits & (1 << bit as usize) != 0
