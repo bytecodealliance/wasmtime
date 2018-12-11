@@ -142,5 +142,61 @@ fn literals() {
     assert_eq!(execute_wat(code, 0, 0), 228);
 }
 
+#[test]
+fn fib() {
+    let code = r#"
+(module
+  (func $fib (param $n i32) (param $_unused i32) (result i32)
+    (if (result i32)
+      (i32.eq
+        (i32.const 0)
+        (get_local $n)
+      )
+      (then
+        (i32.const 1)
+      )
+      (else
+        (if (result i32)
+          (i32.eq
+            (i32.const 1)
+            (get_local $n)
+          )
+          (then
+            (i32.const 1)
+          )
+          (else
+            (i32.add
+              ;; fib(n - 1)
+              (call $fib
+                (i32.add
+                  (get_local $n)
+                  (i32.const -1)
+                )
+                (i32.const 0)
+              )
+              ;; fib(n - 2)
+              (call $fib
+                (i32.add
+                  (get_local $n)
+                  (i32.const -2)
+                )
+                (i32.const 0)
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+)
+    "#;
+
+    // fac(x) = y <=> (x, y)
+    const FIB_SEQ: &[usize] = &[1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+
+    for x in 0..10 {
+        assert_eq!(execute_wat(code, x, 0), FIB_SEQ[x]);
+    }
+}
 
 // TODO: Add a test that checks argument passing via the stack.
