@@ -4,7 +4,6 @@
 //! value and control stacks during the translation of a single function.
 
 use cranelift_codegen::ir::{self, Ebb, Inst, Value};
-use cranelift_entity::EntityRef;
 use environ::{FuncEnvironment, GlobalVariable};
 use std::collections::HashMap;
 use std::vec::Vec;
@@ -287,7 +286,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> GlobalVariable {
-        let index = GlobalIndex::new(index as usize);
+        let index = GlobalIndex::from_u32(index);
         *self
             .globals
             .entry(index)
@@ -302,7 +301,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> ir::Heap {
-        let index = MemoryIndex::new(index as usize);
+        let index = MemoryIndex::from_u32(index);
         *self
             .heaps
             .entry(index)
@@ -317,7 +316,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> ir::Table {
-        let index = TableIndex::new(index as usize);
+        let index = TableIndex::from_u32(index);
         *self
             .tables
             .entry(index)
@@ -334,7 +333,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> (ir::SigRef, usize) {
-        let index = SignatureIndex::new(index as usize);
+        let index = SignatureIndex::from_u32(index);
         *self.signatures.entry(index).or_insert_with(|| {
             let sig = environ.make_indirect_sig(func, index);
             (sig, normal_args(&func.dfg.signatures[sig]))
@@ -351,7 +350,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> (ir::FuncRef, usize) {
-        let index = FuncIndex::new(index as usize);
+        let index = FuncIndex::from_u32(index);
         *self.functions.entry(index).or_insert_with(|| {
             let fref = environ.make_direct_func(func, index);
             let sig = func.dfg.ext_funcs[fref].signature;

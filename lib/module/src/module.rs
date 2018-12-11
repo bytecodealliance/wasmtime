@@ -5,7 +5,7 @@
 // TODO: Factor out `ir::Function`'s `ext_funcs` and `global_values` into a struct
 // shared with `DataContext`?
 
-use cranelift_codegen::entity::{EntityRef, PrimaryMap};
+use cranelift_codegen::entity::PrimaryMap;
 use cranelift_codegen::{binemit, ir, isa, CodegenError, Context};
 use data_context::DataContext;
 use std::borrow::ToOwned;
@@ -222,7 +222,7 @@ where
     fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 0);
-            let func = FuncId::new(index as usize);
+            let func = FuncId::from_u32(index);
             &self.functions[func]
         } else {
             panic!("unexpected ExternalName kind {}", name)
@@ -233,7 +233,7 @@ where
     fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 1);
-            let data = DataId::new(index as usize);
+            let data = DataId::from_u32(index);
             &self.data_objects[data]
         } else {
             panic!("unexpected ExternalName kind {}", name)
