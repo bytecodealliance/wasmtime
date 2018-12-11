@@ -224,7 +224,7 @@ enum SettingOrPreset<'a> {
 
 impl<'a> SettingOrPreset<'a> {
     fn name(&self) -> &str {
-        match self {
+        match *self {
             SettingOrPreset::Setting(s) => s.name,
             SettingOrPreset::Preset(p) => p.name,
         }
@@ -248,14 +248,14 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             fmt.indent(|fmt| {
                 fmt.line(&format!("name: \"{}\",", setting.name));
                 fmt.line(&format!("offset: {},", setting.byte_offset));
-                match &setting.specific {
+                match setting.specific {
                     SpecificSetting::Bool(BoolSetting { bit_offset, .. }) => {
                         fmt.line(&format!(
                             "detail: detail::Detail::Bool {{ bit: {} }},",
                             bit_offset
                         ));
                     }
-                    SpecificSetting::Enum(values) => {
+                    SpecificSetting::Enum(ref values) => {
                         let offset = enum_table.add(values);
                         fmt.line(&format!(
                             "detail: detail::Detail::Enum {{ last: {}, enumerators: {} }},",
@@ -322,7 +322,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     ));
     fmt.indent(|fmt| {
         for h in &hash_table {
-            match h {
+            match *h {
                 Some(setting_or_preset) => fmt.line(&format!(
                     "{},",
                     &descriptor_index_map
