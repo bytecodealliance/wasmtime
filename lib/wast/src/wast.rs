@@ -6,6 +6,7 @@ use std::io::Read;
 use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
+use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_execute::{ActionError, ActionOutcome, InstancePlus, JITCode, Resolver, RuntimeValue};
 use wasmtime_runtime::Export;
 
@@ -121,17 +122,35 @@ impl WastContext {
         }
     }
 
+    fn validate(&mut self, data: &[u8]) -> Result<(), ActionError> {
+        let config = ValidatingParserConfig {
+            operator_config: OperatorValidatorConfig {
+                enable_threads: false,
+                enable_reference_types: false,
+            },
+            mutable_global_imports: true,
+        };
+
+        // TODO: Fix Cranelift to be able to perform validation itself, rather
+        // than calling into wasmparser ourselves here.
+        if validate(data, Some(config)) {
+            Ok(())
+        } else {
+            // TODO: Work with wasmparser to get better error messages.
+            Err(ActionError::Validate("module did not validate".to_owned()))
+        }
+    }
+
     fn instantiate(
         &mut self,
         isa: &isa::TargetIsa,
         module: ModuleBinary,
     ) -> Result<InstancePlus, ActionError> {
-        InstancePlus::new(
-            &mut self.jit_code,
-            isa,
-            &module.into_vec(),
-            &mut self.namespace,
-        )
+        let data = module.into_vec();
+
+        self.validate(&data)?;
+
+        InstancePlus::new(&mut self.jit_code, isa, &data, &mut self.namespace)
     }
 
     fn get_instance(&mut self, module: &Option<String>) -> Result<InstancePlusIndex, WastError> {
@@ -465,17 +484,25 @@ impl WastContext {
                         }
                     }
                 }
-                CommandKind::AssertInvalid {
-                    module: _module,
-                    message: _message,
-                } => {
-                    println!("{}:{}: TODO: Implement assert_invalid", filename, line);
+                CommandKind::AssertInvalid { module, message } => {
+                    self.module(isa, None, module).expect_err(&format!(
+                        "{}:{}: invalid module was successfully instantiated",
+                        filename, line
+                    ));
+                    println!(
+                        "{}:{}: TODO: Check the assert_invalid message: {}",
+                        filename, line, message
+                    );
                 }
-                CommandKind::AssertMalformed {
-                    module: _module,
-                    message: _message,
-                } => {
-                    println!("{}:{}: TODO: Implement assert_malformed", filename, line);
+                CommandKind::AssertMalformed { module, message } => {
+                    self.module(isa, None, module).expect_err(&format!(
+                        "{}:{}: malformed module was successfully instantiated",
+                        filename, line
+                    ));
+                    println!(
+                        "{}:{}: TODO: Check the assert_malformed message: {}",
+                        filename, line, message
+                    );
                 }
                 CommandKind::AssertUninstantiable { module, message } => {
                     let _err = self.module(isa, None, module).expect_err(&format!(

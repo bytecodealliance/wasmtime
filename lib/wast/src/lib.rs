@@ -31,6 +31,7 @@ extern crate failure;
 extern crate failure_derive;
 extern crate target_lexicon;
 extern crate wabt;
+extern crate wasmparser;
 extern crate wasmtime_environ;
 extern crate wasmtime_execute;
 extern crate wasmtime_runtime;

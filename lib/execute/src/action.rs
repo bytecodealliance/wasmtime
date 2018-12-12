@@ -119,6 +119,10 @@ pub enum ActionError {
     #[fail(display = "Type error: {}", _0)]
     Type(String),
 
+    /// The module did not pass validation.
+    #[fail(display = "Validation error: {}", _0)]
+    Validate(String),
+
     /// A wasm translation error occured.
     #[fail(display = "WebAssembly compilation error: {}", _0)]
     Compile(CompileError),
