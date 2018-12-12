@@ -1,5 +1,7 @@
-#![feature(plugin)]
+#![feature(plugin, test)]
 #![plugin(dynasm)]
+
+extern crate test;
 
 extern crate capstone;
 extern crate failure;

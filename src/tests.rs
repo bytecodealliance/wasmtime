@@ -270,9 +270,7 @@ fn literals() {
     assert_eq!(execute_wat(code, 0, 0), 228);
 }
 
-#[test]
-fn fib() {
-    let code = r#"
+const FIBONACCI: &str = r#"
 (module
   (func $fib (param $n i32) (param $_unused i32) (result i32)
     (if (result i32)
@@ -319,12 +317,34 @@ fn fib() {
 )
     "#;
 
+#[test]
+fn fib() {
     // fac(x) = y <=> (x, y)
     const FIB_SEQ: &[u32] = &[1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
 
+    let translated = translate_wat(FIBONACCI);
+
     for x in 0..10 {
-        assert_eq!(execute_wat(code, x, 0), FIB_SEQ[x as usize]);
+        unsafe {
+            assert_eq!(
+                translated.execute_func::<_, u32>(0, (x, 0u32)),
+                FIB_SEQ[x as usize]
+            );
+        }
     }
 }
 
-// TODO: Add a test that checks argument passing via the stack.
+#[bench]
+fn bench_compile(b: &mut test::Bencher) {
+    let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
+
+    b.iter(|| test::black_box(translate(&wasm).unwrap()));
+}
+
+#[bench]
+fn bench_run(b: &mut test::Bencher) {
+    let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
+    let module = translate(&wasm).unwrap();
+
+    b.iter(|| unsafe { module.execute_func::<_, u32>(0, (20, 0u32)) });
+}
