@@ -53,7 +53,7 @@ pub use resolver::{NullResolver, Resolver};
 
 #[cfg(not(feature = "std"))]
 mod std {
-    pub use alloc::{string, vec};
+    pub use alloc::{boxed, rc, string, vec};
     pub use core::*;
     pub use core::{i32, str, u32};
 }

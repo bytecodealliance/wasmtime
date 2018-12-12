@@ -5,6 +5,7 @@ use cranelift_wasm::DefinedFuncIndex;
 use jit_code::JITCode;
 use link::link_module;
 use resolver::Resolver;
+use std::boxed::Box;
 use std::cmp::max;
 use std::rc::Rc;
 use std::slice;

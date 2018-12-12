@@ -6,6 +6,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use jit_code::JITCode;
 use std::collections::HashMap;
 use std::fmt;
+use std::vec::Vec;
 use wasmtime_environ::{CompileError, RelocSink};
 use wasmtime_runtime::{InstantiationError, VMFunctionBody};
 
