@@ -14,7 +14,8 @@ utility or as a library embedded in a larger application.
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
 ![Minimum rustc 1.30](https://img.shields.io/badge/rustc-1.30+-green.svg)
 
-*This is a work in progress that is not currently functional, but under active development.*
+*Wasmtime is complete enough to pass the WebAssemlbly spec testsuite.* Support for
+system APIs is coming soon!
 
 One goal for this project is to implement [CloudABI](https://cloudabi.org/) using
 WebAssembly as the code format, provide [CloudABI system calls] as WebAssembly
