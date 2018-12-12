@@ -4,6 +4,37 @@ use std::mem;
 use translate_sections;
 use wasmparser::{FuncType, ModuleReader, SectionCode};
 
+pub trait FunctionArgs {
+    unsafe fn call<T>(self, start: *const u8) -> T;
+}
+
+macro_rules! impl_function_args {
+    ($first:ident $(, $rest:ident)*) => {
+        impl<$first, $($rest),*> FunctionArgs for ($first, $($rest),*) {
+            #[allow(non_snake_case)]
+            unsafe fn call<T>(self, start: *const u8) -> T {
+                let func = mem::transmute::<_, extern "sysv64" fn($first, $($rest),*) -> T>(start);
+                {
+                    let ($first, $($rest),*) = self;
+                    func($first, $($rest),*)
+                }
+            }
+        }
+
+        impl_function_args!($($rest),*);
+    };
+    () => {
+        impl FunctionArgs for () {
+            unsafe fn call<T>(self, start: *const u8) -> T {
+                let func = mem::transmute::<_, extern "sysv64" fn() -> T>(start);
+                func()
+            }
+        }
+    };
+}
+
+impl_function_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
+
 #[derive(Default)]
 pub struct TranslatedModule {
     translated_code_section: Option<TranslatedCodeSection>,
@@ -11,19 +42,15 @@ pub struct TranslatedModule {
 
 impl TranslatedModule {
     // For testing only.
-    // Assume signature is (i32, i32) -> i32 for now.
     // TODO: Handle generic signatures.
-    pub fn execute_func(&self, func_idx: u32, a: usize, b: usize) -> usize {
+    pub unsafe fn execute_func<Args: FunctionArgs, T>(&self, func_idx: u32, args: Args) -> T {
         let code_section = self
             .translated_code_section
             .as_ref()
             .expect("no code section");
         let start_buf = code_section.func_start(func_idx as usize);
 
-        unsafe {
-            let func = mem::transmute::<_, extern "sysv64" fn(usize, usize) -> usize>(start_buf);
-            func(a, b)
-        }
+        args.call(start_buf)
     }
 }
 
