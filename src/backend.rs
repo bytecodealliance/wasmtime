@@ -160,6 +160,7 @@ impl CodeGenSession {
     }
 }
 
+#[derive(Debug)]
 pub struct TranslatedCodeSection {
     exec_buf: ExecutableBuffer,
     func_starts: Vec<AssemblyOffset>,
@@ -169,6 +170,10 @@ impl TranslatedCodeSection {
     pub fn func_start(&self, idx: usize) -> *const u8 {
         let offset = self.func_starts[idx];
         self.exec_buf.ptr(offset)
+    }
+
+    pub fn disassemble(&self) {
+        ::disassemble::disassemble(&*self.exec_buf).unwrap();
     }
 }
 
@@ -238,14 +243,64 @@ fn pop_i32(ctx: &mut Context) -> GPR {
     gpr
 }
 
-pub fn add_i32(ctx: &mut Context) {
+pub fn i32_add(ctx: &mut Context) {
     let op0 = pop_i32(ctx);
     let op1 = pop_i32(ctx);
     dynasm!(ctx.asm
-        ; add Rd(op0), Rd(op1)
+        ; add Rd(op1), Rd(op0)
     );
-    push_i32(ctx, op0);
-    ctx.regs.release_scratch_gpr(op1);
+    push_i32(ctx, op1);
+    ctx.regs.release_scratch_gpr(op0);
+}
+
+pub fn i32_sub(ctx: &mut Context) {
+    let op0 = pop_i32(ctx);
+    let op1 = pop_i32(ctx);
+    dynasm!(ctx.asm
+        ; sub Rd(op1), Rd(op0)
+    );
+    push_i32(ctx, op1);
+    ctx.regs.release_scratch_gpr(op0);
+}
+
+pub fn i32_and(ctx: &mut Context) {
+    let op0 = pop_i32(ctx);
+    let op1 = pop_i32(ctx);
+    dynasm!(ctx.asm
+        ; and Rd(op1), Rd(op0)
+    );
+    push_i32(ctx, op1);
+    ctx.regs.release_scratch_gpr(op0);
+}
+
+pub fn i32_or(ctx: &mut Context) {
+    let op0 = pop_i32(ctx);
+    let op1 = pop_i32(ctx);
+    dynasm!(ctx.asm
+        ; or Rd(op1), Rd(op0)
+    );
+    push_i32(ctx, op1);
+    ctx.regs.release_scratch_gpr(op0);
+}
+
+pub fn i32_xor(ctx: &mut Context) {
+    let op0 = pop_i32(ctx);
+    let op1 = pop_i32(ctx);
+    dynasm!(ctx.asm
+        ; xor Rd(op1), Rd(op0)
+    );
+    push_i32(ctx, op1);
+    ctx.regs.release_scratch_gpr(op0);
+}
+
+pub fn i32_mul(ctx: &mut Context) {
+    let op0 = pop_i32(ctx);
+    let op1 = pop_i32(ctx);
+    dynasm!(ctx.asm
+        ; imul Rd(op1), Rd(op0)
+    );
+    push_i32(ctx, op1);
+    ctx.regs.release_scratch_gpr(op0);
 }
 
 fn sp_relative_offset(ctx: &mut Context, slot_idx: u32) -> i32 {
@@ -411,6 +466,7 @@ pub fn call_direct(ctx: &mut Context, index: u32, arg_arity: u32, return_arity: 
 }
 
 pub fn prologue(ctx: &mut Context, stack_slots: u32) {
+    let stack_slots = stack_slots;
     // Align stack slots to the nearest even number. This is required
     // by x86-64 ABI.
     let aligned_stack_slots = (stack_slots + 1) & !1;

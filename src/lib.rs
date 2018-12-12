@@ -7,7 +7,10 @@ extern crate wasmparser;
 #[macro_use]
 extern crate failure_derive;
 extern crate dynasmrt;
-
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate quickcheck;
 extern crate wabt;
 
 mod backend;

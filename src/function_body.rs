@@ -208,18 +208,15 @@ pub fn translate(
                     }
                 }
             }
-            Operator::I32Eq => {
-                relop_eq_i32(&mut ctx);
-            }
-            Operator::I32Add => {
-                add_i32(&mut ctx);
-            }
-            Operator::GetLocal { local_index } => {
-                get_local_i32(&mut ctx, local_index);
-            }
-            Operator::I32Const { value } => {
-                literal_i32(&mut ctx, value);
-            }
+            Operator::I32Eq => relop_eq_i32(&mut ctx),
+            Operator::I32Add => i32_add(&mut ctx),
+            Operator::I32Sub => i32_sub(&mut ctx),
+            Operator::I32And => i32_and(&mut ctx),
+            Operator::I32Or => i32_or(&mut ctx),
+            Operator::I32Xor => i32_xor(&mut ctx),
+            Operator::I32Mul => i32_mul(&mut ctx),
+            Operator::GetLocal { local_index } => get_local_i32(&mut ctx, local_index),
+            Operator::I32Const { value } => literal_i32(&mut ctx, value),
             Operator::Call { function_index } => {
                 let callee_ty = translation_ctx.func_type(function_index);
 

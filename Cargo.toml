@@ -16,6 +16,8 @@ capstone = "0.5.0"
 failure = "0.1.3"
 failure_derive = "0.1.3"
 wabt = "0.7"
+lazy_static = "1.2"
+quickcheck = "0.7"
 
 [badges]
 maintenance = { status = "experimental" }

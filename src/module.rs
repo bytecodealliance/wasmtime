@@ -52,6 +52,13 @@ impl TranslatedModule {
 
         args.call(start_buf)
     }
+
+    pub fn disassemble(&self) {
+        self.translated_code_section
+            .as_ref()
+            .expect("no code section")
+            .disassemble();
+    }
 }
 
 #[derive(Default)]

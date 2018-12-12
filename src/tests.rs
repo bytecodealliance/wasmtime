@@ -18,19 +18,32 @@ fn empty() {
     let _ = translate_wat("(module (func))");
 }
 
-#[test]
-fn adds() {
-    const CASES: &[(u32, u32, u32)] = &[(5, 3, 8), (0, 228, 228), (u32::max_value(), 1, 0)];
+macro_rules! binop_test {
+    ($op:ident, $func:path) => {
+        quickcheck! {
+            fn $op(a: u32, b: u32) -> bool {
+                static CODE: &str = concat!(
+                    "(module (func (param i32) (param i32) (result i32) (i32.",
+                    stringify!($op),
+                    " (get_local 0) (get_local 1))))"
+                );
 
-    let code = r#"
-(module
-  (func (param i32) (param i32) (result i32) (i32.add (get_local 0) (get_local 1)))
-)
-    "#;
-    for (a, b, expected) in CASES {
-        assert_eq!(execute_wat(code, *a, *b), *expected);
-    }
+                lazy_static! {
+                    static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+                }
+
+                unsafe { TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)) == $func(a, b) }
+            }
+        }
+    };
 }
+
+binop_test!(add, u32::wrapping_add);
+binop_test!(sub, u32::wrapping_sub);
+binop_test!(and, std::ops::BitAnd::bitand);
+binop_test!(or, std::ops::BitOr::bitor);
+binop_test!(xor, std::ops::BitXor::bitxor);
+binop_test!(mul, u32::wrapping_mul);
 
 #[test]
 fn relop_eq() {
