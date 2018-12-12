@@ -20,6 +20,26 @@ impl VMOffsets {
     }
 }
 
+/// Offsets for `VMFunctionImport`.
+impl VMOffsets {
+    /// The offset of the `body` field.
+    #[allow(clippy::erasing_op)]
+    pub fn vmfunction_import_body(&self) -> u8 {
+        0 * self.pointer_size
+    }
+
+    /// The offset of the `vmctx` field.
+    #[allow(clippy::identity_op)]
+    pub fn vmfunction_import_vmctx(&self) -> u8 {
+        1 * self.pointer_size
+    }
+
+    /// Return the size of `VMFunctionImport`.
+    pub fn size_of_vmfunction_import(&self) -> u8 {
+        2 * self.pointer_size
+    }
+}
+
 /// Offsets for `*const VMFunctionBody`.
 impl VMOffsets {
     /// The size of the `current_elements` field.
@@ -174,9 +194,14 @@ impl VMOffsets {
         1 * self.pointer_size
     }
 
+    /// The offset of the `vmctx` field.
+    pub fn vmcaller_checked_anyfunc_vmctx(&self) -> u8 {
+        2 * self.pointer_size
+    }
+
     /// Return the size of `VMCallerCheckedAnyfunc`.
     pub fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
-        2 * self.pointer_size
+        3 * self.pointer_size
     }
 }
 
@@ -228,6 +253,17 @@ impl VMOffsets {
     #[allow(dead_code)]
     pub fn size_of_vmctx(&self) -> u8 {
         8 * self.pointer_size
+    }
+
+    /// Return the offset from the `imported_functions` pointer to `VMFunctionImport` index `index`.
+    fn index_vmfunction_import(&self, index: FuncIndex) -> i32 {
+        cast::i32(
+            index
+                .as_u32()
+                .checked_mul(u32::from(self.size_of_vmfunction_import()))
+                .unwrap(),
+        )
+        .unwrap()
     }
 
     /// Return the offset from the `imported_tables` pointer to `VMTableImport` index `index`.
@@ -286,15 +322,19 @@ impl VMOffsets {
     }
 
     /// Return the offset from the `imported_functions` pointer to the
-    /// `*const VMFunctionBody` index `index`.
-    pub fn index_vmfunction_body_import(&self, index: FuncIndex) -> i32 {
-        cast::i32(
-            index
-                .as_u32()
-                .checked_mul(u32::from(self.size_of_vmfunction_body_ptr()))
-                .unwrap(),
-        )
-        .unwrap()
+    /// `body` field in `*const VMFunctionBody` index `index`.
+    pub fn index_vmfunction_import_body(&self, index: FuncIndex) -> i32 {
+        self.index_vmfunction_import(index)
+            .checked_add(i32::from(self.vmfunction_import_body()))
+            .unwrap()
+    }
+
+    /// Return the offset from the `imported_functions` pointer to the
+    /// `vmctx` field in `*const VMFunctionBody` index `index`.
+    pub fn index_vmfunction_import_vmctx(&self, index: FuncIndex) -> i32 {
+        self.index_vmfunction_import(index)
+            .checked_add(i32::from(self.vmfunction_import_vmctx()))
+            .unwrap()
     }
 
     /// Return the offset from the `tables` pointer to the `from` field in

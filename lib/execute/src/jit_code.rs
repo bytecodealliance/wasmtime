@@ -7,15 +7,15 @@ use std::{cmp, mem};
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
 /// Memory manager for executable code.
-pub struct Code {
+pub struct JITCode {
     current: Mmap,
     mmaps: Vec<Mmap>,
     position: usize,
     published: usize,
 }
 
-impl Code {
-    /// Create a new `Code` instance.
+impl JITCode {
+    /// Create a new `JITCode` instance.
     pub fn new() -> Self {
         Self {
             current: Mmap::new(),

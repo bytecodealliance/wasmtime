@@ -31,9 +31,7 @@
 )]
 
 extern crate cranelift_codegen;
-extern crate cranelift_entity;
 extern crate cranelift_native;
-extern crate cranelift_wasm;
 extern crate docopt;
 extern crate wasmtime_execute;
 #[macro_use]
@@ -45,18 +43,15 @@ extern crate wabt;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
-use cranelift_entity::EntityRef;
-use cranelift_wasm::MemoryIndex;
 use docopt::Docopt;
 use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::io::stdout;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
-use wasmtime_execute::{ActionOutcome, Code, InstanceWorld, NullResolver};
+use wasmtime_execute::{ActionOutcome, InstancePlus, JITCode, NullResolver};
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
@@ -68,14 +63,13 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-omd] <file>...
-    wasmtime [-omd] <file>... --invoke=<fn>
+    wasmtime [-od] <file>...
+    wasmtime [-od] <file>... --invoke=<fn>
     wasmtime --help | --version
 
 Options:
     --invoke=<fn>       name of function to run
     -o, --optimize      runs optimization passes on the translated functions
-    -m, --memory        interactive memory inspector after execution
     -d, --debug         enable debug output on stderr/stdout
     -h, --help          print this help message
     --version           print the Cranelift version
@@ -84,7 +78,6 @@ Options:
 #[derive(Deserialize, Debug, Clone)]
 struct Args {
     arg_file: Vec<String>,
-    flag_memory: bool,
     flag_optimize: bool,
     flag_debug: bool,
     flag_invoke: Option<String>,
@@ -150,13 +143,13 @@ fn handle_module(args: &Args, path: &Path, isa: &TargetIsa) -> Result<(), String
         data = wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?;
     }
     let mut resolver = NullResolver {};
-    let mut code = Code::new();
-    let mut world =
-        InstanceWorld::new(&mut code, isa, &data, &mut resolver).map_err(|e| e.to_string())?;
+    let mut jit_code = JITCode::new();
+    let mut instance_plus =
+        InstancePlus::new(&mut jit_code, isa, &data, &mut resolver).map_err(|e| e.to_string())?;
 
     if let Some(ref f) = args.flag_invoke {
-        match world
-            .invoke(&mut code, isa, &f, &[])
+        match instance_plus
+            .invoke(&mut jit_code, isa, &f, &[])
             .map_err(|e| e.to_string())?
         {
             ActionOutcome::Returned { .. } => {}
@@ -166,42 +159,6 @@ fn handle_module(args: &Args, path: &Path, isa: &TargetIsa) -> Result<(), String
         }
     }
 
-    if args.flag_memory {
-        let mut input = String::new();
-        println!("Inspecting memory");
-        println!("Type 'quit' to exit.");
-        loop {
-            input.clear();
-            print!("Memory index, offset, length (e.g. 0,0,4): ");
-            let _ = stdout().flush();
-            match io::stdin().read_line(&mut input) {
-                Ok(_) => {
-                    input.pop();
-                    if input == "quit" {
-                        break;
-                    }
-                    let split: Vec<&str> = input.split(',').collect();
-                    if split.len() != 3 {
-                        break;
-                    }
-                    let memory = world
-                        .inspect_memory(
-                            MemoryIndex::new(str::parse(split[0]).unwrap()),
-                            str::parse(split[1]).unwrap(),
-                            str::parse(split[2]).unwrap(),
-                        )
-                        .map_err(|e| e.to_string())?;
-                    let mut s = memory.iter().fold(String::from("#"), |mut acc, byte| {
-                        acc.push_str(format!("{:02x}_", byte).as_str());
-                        acc
-                    });
-                    s.pop();
-                    println!("{}", s);
-                }
-                Err(error) => return Err(String::from(error.description())),
-            }
-        }
-    }
     Ok(())
 }
 
@@ -211,7 +168,7 @@ mod tests {
     use cranelift_codegen::settings::Configurable;
     use std::path::PathBuf;
     use wabt;
-    use wasmtime_execute::{Code, InstanceWorld, NullResolver};
+    use wasmtime_execute::{InstancePlus, JITCode, NullResolver};
 
     const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
 
@@ -234,8 +191,8 @@ mod tests {
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
         let mut resolver = NullResolver {};
-        let mut code = Code::new();
-        let world = InstanceWorld::new(&mut code, &*isa, &data, &mut resolver);
-        assert!(world.is_ok());
+        let mut code = JITCode::new();
+        let instance = InstancePlus::new(&mut code, &*isa, &data, &mut resolver);
+        assert!(instance.is_ok());
     }
 }

@@ -6,6 +6,7 @@ use std::fmt;
 use std::string::String;
 use std::vec::Vec;
 use wasmtime_environ::CompileError;
+use wasmtime_runtime::InstantiationError;
 
 /// A runtime value.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -110,10 +111,6 @@ pub enum ActionError {
     #[fail(display = "Unknown field: {}", _0)]
     Field(String),
 
-    /// An index was out of bounds.
-    #[fail(display = "Index out of bounds: {}", _0)]
-    Index(u64),
-
     /// The field was present but was the wrong kind (eg. function, table, global, or memory).
     #[fail(display = "Kind error: {}", _0)]
     Kind(String),
@@ -126,9 +123,10 @@ pub enum ActionError {
     #[fail(display = "WebAssembly compilation error: {}", _0)]
     Compile(CompileError),
 
-    /// Some runtime resource was unavailable or insufficient.
-    #[fail(display = "Runtime resource error: {}", _0)]
-    Resource(String),
+    /// Some runtime resource was unavailable or insufficient, or the start function
+    /// trapped.
+    #[fail(display = "Instantiation error: {}", _0)]
+    Instantiate(InstantiationError),
 
     /// Link error.
     #[fail(display = "Link error: {}", _0)]

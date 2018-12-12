@@ -39,7 +39,11 @@ extern crate libc;
 #[macro_use]
 extern crate memoffset;
 extern crate cast;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
 
+mod export;
 mod imports;
 mod instance;
 mod memory;
@@ -52,14 +56,15 @@ mod vmcontext;
 
 pub mod libcalls;
 
+pub use export::Export;
 pub use imports::Imports;
-pub use instance::Instance;
+pub use instance::{Instance, InstantiationError};
 pub use mmap::Mmap;
 pub use signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
-pub use traphandlers::wasmtime_call_trampoline;
+pub use traphandlers::{wasmtime_call, wasmtime_call_trampoline};
 pub use vmcontext::{
-    VMContext, VMFunctionBody, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition,
-    VMMemoryImport, VMTableDefinition, VMTableImport,
+    VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
+    VMMemoryDefinition, VMMemoryImport, VMTableDefinition, VMTableImport,
 };
 
 #[cfg(not(feature = "std"))]

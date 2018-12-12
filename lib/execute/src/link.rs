@@ -1,16 +1,18 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
-use export::{Export, FunctionExport, Resolver};
+use resolver::Resolver;
 use std::ptr::write_unaligned;
 use std::string::String;
 use std::vec::Vec;
 use wasmtime_environ::{
     MemoryPlan, MemoryStyle, Module, Relocation, RelocationTarget, Relocations, TablePlan,
-    TableStyle,
 };
 use wasmtime_runtime::libcalls;
-use wasmtime_runtime::{Imports, VMFunctionBody, VMGlobalImport, VMMemoryImport, VMTableImport};
+use wasmtime_runtime::{
+    Export, Imports, VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport,
+    VMTableImport,
+};
 
 /// A link error, such as incompatible or unmatched imports/exports.
 #[derive(Fail, Debug)]
@@ -28,7 +30,11 @@ pub fn link_module(
     for (index, (ref module_name, ref field)) in module.imported_funcs.iter() {
         match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
-                Export::Function(FunctionExport { address, signature }) => {
+                Export::Function {
+                    address,
+                    signature,
+                    vmctx,
+                } => {
                     let import_signature = &module.signatures[module.functions[index]];
                     if signature != *import_signature {
                         // TODO: If the difference is in the calling convention,
@@ -39,7 +45,10 @@ pub fn link_module(
                             signature, import_signature)
                         ));
                     }
-                    function_imports.push(address);
+                    function_imports.push(VMFunctionImport {
+                        body: address,
+                        vmctx,
+                    });
                 }
                 Export::Table { .. } | Export::Memory { .. } | Export::Global { .. } => {
                     return Err(LinkError(format!(
@@ -104,12 +113,28 @@ pub fn link_module(
                     memory,
                 } => {
                     let import_memory = &module.memory_plans[index];
-                    if is_memory_compatible(&memory, import_memory) {
+                    if !is_memory_compatible(&memory, import_memory) {
                         return Err(LinkError(format!(
                             "{}/{}: exported memory incompatible with memory import",
                             module_name, field
                         )));
                     }
+
+                    // Sanity-check: Ensure that the imported memory has at least
+                    // guard-page protections the importing module expects it to have.
+                    match (memory.style, &import_memory.style) {
+                        (
+                            MemoryStyle::Static { bound },
+                            MemoryStyle::Static {
+                                bound: import_bound,
+                            },
+                        ) => {
+                            assert!(bound >= *import_bound);
+                        }
+                        _ => (),
+                    }
+                    assert!(memory.offset_guard_size >= import_memory.offset_guard_size);
+
                     memory_imports.push(VMMemoryImport {
                         from: address,
                         vmctx,
@@ -161,17 +186,15 @@ pub fn link_module(
         }
     }
 
-    let imports = Imports::new(
+    // Apply relocations, now that we have virtual addresses for everything.
+    relocate(allocated_functions, relocations, &module);
+
+    Ok(Imports::new(
         function_imports,
         table_imports,
         memory_imports,
         global_imports,
-    );
-
-    // Apply relocations, now that we have virtual addresses for everything.
-    relocate(&imports, allocated_functions, relocations, &module);
-
-    Ok(imports)
+    ))
 }
 
 fn is_global_compatible(exported: &Global, imported: &Global) -> bool {
@@ -191,14 +214,6 @@ fn is_global_compatible(exported: &Global, imported: &Global) -> bool {
         initializer: _imported_initializer,
     } = imported;
     exported_ty == imported_ty && imported_mutability == exported_mutability
-}
-
-fn is_table_style_compatible(exported_style: &TableStyle, imported_style: &TableStyle) -> bool {
-    match exported_style {
-        TableStyle::CallerChecksSignature => match imported_style {
-            TableStyle::CallerChecksSignature => true,
-        },
-    }
 }
 
 fn is_table_element_type_compatible(
@@ -225,7 +240,7 @@ fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
                 minimum: exported_minimum,
                 maximum: exported_maximum,
             },
-        style: exported_style,
+        style: _exported_style,
     } = exported;
     let TablePlan {
         table:
@@ -234,30 +249,14 @@ fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
                 minimum: imported_minimum,
                 maximum: imported_maximum,
             },
-        style: imported_style,
+        style: _imported_style,
     } = imported;
 
     is_table_element_type_compatible(*exported_ty, *imported_ty)
-        && imported_minimum >= exported_minimum
-        && imported_maximum <= exported_maximum
-        && is_table_style_compatible(imported_style, exported_style)
-}
-
-fn is_memory_style_compatible(exported_style: &MemoryStyle, imported_style: &MemoryStyle) -> bool {
-    match exported_style {
-        MemoryStyle::Dynamic => match imported_style {
-            MemoryStyle::Dynamic => true,
-            _ => false,
-        },
-        MemoryStyle::Static {
-            bound: imported_bound,
-        } => match imported_style {
-            MemoryStyle::Static {
-                bound: exported_bound,
-            } => exported_bound >= imported_bound,
-            _ => false,
-        },
-    }
+        && imported_minimum <= exported_minimum
+        && (imported_maximum.is_none()
+            || (!exported_maximum.is_none()
+                && imported_maximum.unwrap() >= exported_maximum.unwrap()))
 }
 
 fn is_memory_compatible(exported: &MemoryPlan, imported: &MemoryPlan) -> bool {
@@ -268,8 +267,8 @@ fn is_memory_compatible(exported: &MemoryPlan, imported: &MemoryPlan) -> bool {
                 maximum: exported_maximum,
                 shared: exported_shared,
             },
-        style: exported_style,
-        offset_guard_size: exported_offset_guard_size,
+        style: _exported_style,
+        offset_guard_size: _exported_offset_guard_size,
     } = exported;
     let MemoryPlan {
         memory:
@@ -278,20 +277,19 @@ fn is_memory_compatible(exported: &MemoryPlan, imported: &MemoryPlan) -> bool {
                 maximum: imported_maximum,
                 shared: imported_shared,
             },
-        style: imported_style,
-        offset_guard_size: imported_offset_guard_size,
+        style: _imported_style,
+        offset_guard_size: _imported_offset_guard_size,
     } = imported;
 
-    imported_minimum >= exported_minimum
-        && imported_maximum <= exported_maximum
+    imported_minimum <= exported_minimum
+        && (imported_maximum.is_none()
+            || (!exported_maximum.is_none()
+                && imported_maximum.unwrap() >= exported_maximum.unwrap()))
         && exported_shared == imported_shared
-        && is_memory_style_compatible(exported_style, imported_style)
-        && exported_offset_guard_size >= imported_offset_guard_size
 }
 
 /// Performs the relocations inside the function bytecode, provided the necessary metadata.
 fn relocate(
-    imports: &Imports,
     allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     relocations: PrimaryMap<DefinedFuncIndex, Vec<Relocation>>,
     module: &Module,
@@ -305,7 +303,7 @@ fn relocate(
                         let fatptr: *const [VMFunctionBody] = allocated_functions[f];
                         fatptr as *const VMFunctionBody as usize
                     }
-                    None => imports.functions[index] as usize,
+                    None => panic!("direct call to import"),
                 },
                 RelocationTarget::Memory32Grow => wasmtime_memory32_grow as usize,
                 RelocationTarget::Memory32Size => wasmtime_memory32_size as usize,

@@ -116,7 +116,7 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_grow(
     );
 
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let import = instance.vmctx_mut().imported_memory_mut(memory_index);
+    let import = instance.vmctx().imported_memory(memory_index);
     let foreign_instance = (&mut *import.vmctx).instance();
     let foreign_memory = &mut *import.from;
     let foreign_index = foreign_instance.vmctx().memory_index(foreign_memory);
@@ -148,7 +148,7 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
     );
 
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let import = instance.vmctx_mut().imported_memory_mut(memory_index);
+    let import = instance.vmctx().imported_memory(memory_index);
     let foreign_instance = (&mut *import.vmctx).instance();
     let foreign_memory = &mut *import.from;
     let foreign_index = foreign_instance.vmctx().memory_index(foreign_memory);

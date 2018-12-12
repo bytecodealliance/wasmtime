@@ -3,11 +3,46 @@
 
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global, GlobalIndex,
-    GlobalInit, MemoryIndex, TableIndex,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
+    TableIndex,
 };
 use instance::Instance;
 use std::{mem, ptr, u32};
+
+/// An imported function.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMFunctionImport {
+    /// A pointer to the imported function body.
+    pub body: *const VMFunctionBody,
+
+    /// A pointer to the VMContext that owns the function.
+    pub vmctx: *mut VMContext,
+}
+
+#[cfg(test)]
+mod test_vmfunction_import {
+    use super::VMFunctionImport;
+    use std::mem::size_of;
+    use wasmtime_environ::VMOffsets;
+
+    #[test]
+    fn check_vmfunction_import_offsets() {
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        assert_eq!(
+            size_of::<VMFunctionImport>(),
+            usize::from(offsets.size_of_vmfunction_import())
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, body),
+            usize::from(offsets.vmfunction_import_body())
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, vmctx),
+            usize::from(offsets.vmfunction_import_vmctx())
+        );
+    }
+}
 
 /// A placeholder byte-sized type which is just used to provide some amount of type
 /// safety when dealing with pointers to JIT-compiled function bodies. Note that it's
@@ -244,17 +279,8 @@ mod test_vmglobal_definition {
 
 impl VMGlobalDefinition {
     /// Construct a `VMGlobalDefinition`.
-    pub fn new(global: &Global) -> Self {
-        let mut result = Self { storage: [0; 8] };
-        match global.initializer {
-            GlobalInit::I32Const(x) => *unsafe { result.as_i32_mut() } = x,
-            GlobalInit::I64Const(x) => *unsafe { result.as_i64_mut() } = x,
-            GlobalInit::F32Const(x) => *unsafe { result.as_f32_bits_mut() } = x,
-            GlobalInit::F64Const(x) => *unsafe { result.as_f64_bits_mut() } = x,
-            GlobalInit::GetGlobal(_x) => unimplemented!("globals init with get_global"),
-            GlobalInit::Import => panic!("attempting to initialize imported global"),
-        }
-        result
+    pub fn new() -> Self {
+        Self { storage: [0; 8] }
     }
 
     /// Return a reference to the value as an i32.
@@ -366,6 +392,7 @@ impl VMSharedSignatureIndex {
 pub struct VMCallerCheckedAnyfunc {
     pub func_ptr: *const VMFunctionBody,
     pub type_index: VMSharedSignatureIndex,
+    pub vmctx: *mut VMContext,
     // If more elements are added here, remember to add offset_of tests below!
 }
 
@@ -390,6 +417,10 @@ mod test_vmcaller_checked_anyfunc {
             offset_of!(VMCallerCheckedAnyfunc, type_index),
             usize::from(offsets.vmcaller_checked_anyfunc_type_index())
         );
+        assert_eq!(
+            offset_of!(VMCallerCheckedAnyfunc, vmctx),
+            usize::from(offsets.vmcaller_checked_anyfunc_vmctx())
+        );
     }
 }
 
@@ -398,6 +429,7 @@ impl Default for VMCallerCheckedAnyfunc {
         Self {
             func_ptr: ptr::null_mut(),
             type_index: VMSharedSignatureIndex::new(u32::MAX),
+            vmctx: ptr::null_mut(),
         }
     }
 }
@@ -413,16 +445,16 @@ impl Default for VMCallerCheckedAnyfunc {
 #[repr(C)]
 pub struct VMContext {
     /// A pointer to an array of `*const VMFunctionBody` instances, indexed by `FuncIndex`.
-    imported_functions: *const *const VMFunctionBody,
+    imported_functions: *const VMFunctionImport,
 
     /// A pointer to an array of `VMTableImport` instances, indexed by `TableIndex`.
-    imported_tables: *mut VMTableImport,
+    imported_tables: *const VMTableImport,
 
     /// A pointer to an array of `VMMemoryImport` instances, indexed by `MemoryIndex`.
-    imported_memories: *mut VMMemoryImport,
+    imported_memories: *const VMMemoryImport,
 
     /// A pointer to an array of `VMGlobalImport` instances, indexed by `GlobalIndex`.
-    imported_globals: *mut VMGlobalImport,
+    imported_globals: *const VMGlobalImport,
 
     /// A pointer to an array of locally-defined `VMTableDefinition` instances,
     /// indexed by `DefinedTableIndex`.
@@ -473,10 +505,10 @@ mod test {
 impl VMContext {
     /// Create a new `VMContext` instance.
     pub fn new(
-        imported_functions: *const *const VMFunctionBody,
-        imported_tables: *mut VMTableImport,
-        imported_memories: *mut VMMemoryImport,
-        imported_globals: *mut VMGlobalImport,
+        imported_functions: *const VMFunctionImport,
+        imported_tables: *const VMTableImport,
+        imported_memories: *const VMMemoryImport,
+        imported_globals: *const VMGlobalImport,
         tables: *mut VMTableDefinition,
         memories: *mut VMMemoryDefinition,
         globals: *mut VMGlobalDefinition,
@@ -495,8 +527,8 @@ impl VMContext {
     }
 
     /// Return a reference to imported function `index`.
-    pub unsafe fn imported_function(&self, index: FuncIndex) -> *const VMFunctionBody {
-        *self.imported_functions.add(index.index())
+    pub unsafe fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
+        &*self.imported_functions.add(index.index())
     }
 
     /// Return a reference to imported table `index`.
@@ -504,29 +536,14 @@ impl VMContext {
         &*self.imported_tables.add(index.index())
     }
 
-    /// Return a mutable reference to imported table `index`.
-    pub unsafe fn imported_table_mut(&mut self, index: TableIndex) -> &mut VMTableImport {
-        &mut *self.imported_tables.add(index.index())
-    }
-
     /// Return a reference to imported memory `index`.
     pub unsafe fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
         &*self.imported_memories.add(index.index())
     }
 
-    /// Return a mutable reference to imported memory `index`.
-    pub unsafe fn imported_memory_mut(&mut self, index: MemoryIndex) -> &mut VMMemoryImport {
-        &mut *self.imported_memories.add(index.index())
-    }
-
     /// Return a reference to imported global `index`.
     pub unsafe fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
         &*self.imported_globals.add(index.index())
-    }
-
-    /// Return a mutable reference to imported global `index`.
-    pub unsafe fn imported_global_mut(&mut self, index: GlobalIndex) -> &mut VMGlobalImport {
-        &mut *self.imported_globals.add(index.index())
     }
 
     /// Return a reference to locally-defined table `index`.
@@ -563,6 +580,16 @@ impl VMContext {
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn instance(&mut self) -> &mut Instance {
         &mut *((self as *mut Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
+    }
+
+    /// Return the table index for the given `VMTableDefinition`.
+    pub fn table_index(&self, table: &mut VMTableDefinition) -> DefinedTableIndex {
+        // TODO: Use `offset_from` once it stablizes.
+        let begin = self.tables;
+        let end: *mut VMTableDefinition = table;
+        DefinedTableIndex::new(
+            (end as usize - begin as usize) / mem::size_of::<VMTableDefinition>(),
+        )
     }
 
     /// Return the memory index for the given `VMMemoryDefinition`.

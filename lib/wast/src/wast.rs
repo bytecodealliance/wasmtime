@@ -1,12 +1,13 @@
 use cranelift_codegen::isa;
 use cranelift_entity::PrimaryMap;
-use spectest::SpecTest;
+use spectest::instantiate_spectest;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
-use wasmtime_execute::{ActionError, ActionOutcome, Code, InstanceWorld, RuntimeValue};
+use wasmtime_execute::{ActionError, ActionOutcome, InstancePlus, JITCode, Resolver, RuntimeValue};
+use wasmtime_runtime::Export;
 
 /// Translate from a script::Value to a RuntimeValue.
 fn runtime_value(v: Value) -> RuntimeValue {
@@ -72,45 +73,70 @@ pub struct WastFileError {
     error: WastError,
 }
 
-/// An opaque reference to an `InstanceWorld`.
+/// An opaque reference to an `InstancePlus`.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct WorldIndex(u32);
-entity_impl!(WorldIndex, "world");
+pub struct InstancePlusIndex(u32);
+entity_impl!(InstancePlusIndex, "instance");
+
+struct WasmNamespace {
+    names: HashMap<String, InstancePlusIndex>,
+    instances: PrimaryMap<InstancePlusIndex, InstancePlus>,
+}
+
+impl WasmNamespace {
+    fn new() -> Self {
+        Self {
+            names: HashMap::new(),
+            instances: PrimaryMap::new(),
+        }
+    }
+}
+
+impl Resolver for WasmNamespace {
+    fn resolve(&mut self, module: &str, field: &str) -> Option<Export> {
+        if let Some(index) = self.names.get(module) {
+            self.instances[*index].instance.lookup(field)
+        } else {
+            None
+        }
+    }
+}
 
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
 pub struct WastContext {
     /// A namespace of wasm modules, keyed by an optional name.
-    worlds: PrimaryMap<WorldIndex, InstanceWorld>,
-    current: Option<WorldIndex>,
-    namespace: HashMap<String, WorldIndex>,
-    code: Code,
-    spectest: SpecTest,
+    current: Option<InstancePlusIndex>,
+    namespace: WasmNamespace,
+    jit_code: JITCode,
 }
 
 impl WastContext {
     /// Construct a new instance of `WastContext`.
-    pub fn new() -> Result<Self, String> {
-        Ok(Self {
-            worlds: PrimaryMap::new(),
+    pub fn new() -> Self {
+        Self {
             current: None,
-            namespace: HashMap::new(),
-            code: Code::new(),
-            spectest: SpecTest::new()?,
-        })
+            namespace: WasmNamespace::new(),
+            jit_code: JITCode::new(),
+        }
     }
 
     fn instantiate(
         &mut self,
         isa: &isa::TargetIsa,
         module: ModuleBinary,
-    ) -> Result<InstanceWorld, ActionError> {
-        InstanceWorld::new(&mut self.code, isa, &module.into_vec(), &mut self.spectest)
+    ) -> Result<InstancePlus, ActionError> {
+        InstancePlus::new(
+            &mut self.jit_code,
+            isa,
+            &module.into_vec(),
+            &mut self.namespace,
+        )
     }
 
-    fn get_world(&mut self, module: &Option<String>) -> Result<WorldIndex, WastError> {
+    fn get_instance(&mut self, module: &Option<String>) -> Result<InstancePlusIndex, WastError> {
         let index = *if let Some(name) = module {
-            self.namespace.get_mut(name).ok_or_else(|| {
+            self.namespace.names.get_mut(name).ok_or_else(|| {
                 WastError::Module(UnknownModule {
                     module: Some(name.to_owned()),
                 })
@@ -124,6 +150,14 @@ impl WastContext {
         Ok(index)
     }
 
+    /// Register "spectest" which is used by the spec testsuite.
+    pub fn register_spectest(&mut self) -> Result<(), ActionError> {
+        let instance = instantiate_spectest()?;
+        let index = self.namespace.instances.push(instance);
+        self.register("spectest".to_owned(), index);
+        Ok(())
+    }
+
     /// Define a module and register it.
     pub fn module(
         &mut self,
@@ -131,21 +165,18 @@ impl WastContext {
         name: Option<String>,
         module: ModuleBinary,
     ) -> Result<(), ActionError> {
-        let world = self.instantiate(isa, module)?;
-        let index = if let Some(name) = name {
-            self.register(name, world)
-        } else {
-            self.worlds.push(world)
-        };
+        let instance = self.instantiate(isa, module)?;
+        let index = self.namespace.instances.push(instance);
+        if let Some(name) = name {
+            self.register(name, index);
+        }
         self.current = Some(index);
         Ok(())
     }
 
     /// Register a module to make it available for performing actions.
-    pub fn register(&mut self, name: String, world: InstanceWorld) -> WorldIndex {
-        let index = self.worlds.push(world);
-        self.namespace.insert(name, index);
-        index
+    pub fn register(&mut self, name: String, index: InstancePlusIndex) {
+        self.namespace.names.insert(name, index);
     }
 
     /// Invoke an exported function from a defined module.
@@ -160,16 +191,18 @@ impl WastContext {
         for arg in args {
             value_args.push(runtime_value(*arg));
         }
-        let index = self.get_world(&module)?;
-        self.worlds[index]
-            .invoke(&mut self.code, isa, &field, &value_args)
+        let index = self.get_instance(&module)?;
+        self.namespace.instances[index]
+            .invoke(&mut self.jit_code, isa, &field, &value_args)
             .map_err(WastError::Action)
     }
 
     /// Get the value of an exported global from a defined module.
     pub fn get(&mut self, module: Option<String>, field: &str) -> Result<RuntimeValue, WastError> {
-        let index = self.get_world(&module)?;
-        self.worlds[index].get(&field).map_err(WastError::Action)
+        let index = self.get_instance(&module)?;
+        self.namespace.instances[index]
+            .get(&field)
+            .map_err(WastError::Action)
     }
 
     fn perform_action(
@@ -211,11 +244,13 @@ impl WastContext {
                             error: WastError::Action(error),
                         })?;
                 }
-                CommandKind::Register {
-                    name: _name,
-                    as_name: _as_name,
-                } => {
-                    println!("{}:{}: TODO: Implement register", filename, line);
+                CommandKind::Register { name, as_name } => {
+                    let index = self.get_instance(&name).map_err(|error| WastFileError {
+                        filename: filename.to_string(),
+                        line,
+                        error,
+                    })?;
+                    self.register(as_name, index);
                 }
                 CommandKind::PerformAction(action) => match self
                     .perform_action(isa, action)

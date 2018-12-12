@@ -14,8 +14,8 @@ name = "wasmtime"
 path = "src/wasmtime.rs"
 
 [[bin]]
-name = "run_wast"
-path = "src/run_wast.rs"
+name = "wast"
+path = "src/wast.rs"
 
 [[bin]]
 name = "wasm2obj"

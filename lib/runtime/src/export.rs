@@ -1,22 +1,21 @@
 use cranelift_codegen::ir;
 use cranelift_wasm::Global;
-use wasmtime_environ::{MemoryPlan, TablePlan};
-use wasmtime_runtime::{
+use vmcontext::{
     VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
 };
-
-/// An exported function.
-pub struct FunctionExport {
-    /// The address of the native-code function.
-    pub address: *const VMFunctionBody,
-    /// The function signature declaration, used for compatibilty checking.
-    pub signature: ir::Signature,
-}
+use wasmtime_environ::{MemoryPlan, TablePlan};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {
     /// A function export value.
-    Function(FunctionExport),
+    Function {
+        /// The address of the native-code function.
+        address: *const VMFunctionBody,
+        /// The function signature declaration, used for compatibilty checking.
+        signature: ir::Signature,
+        /// Pointer to the containing VMContext.
+        vmctx: *mut VMContext,
+    },
 
     /// A table export value.
     Table {
@@ -49,8 +48,16 @@ pub enum Export {
 
 impl Export {
     /// Construct a function export value.
-    pub fn function(address: *const VMFunctionBody, signature: ir::Signature) -> Self {
-        Export::Function(FunctionExport { address, signature })
+    pub fn function(
+        address: *const VMFunctionBody,
+        signature: ir::Signature,
+        vmctx: *mut VMContext,
+    ) -> Self {
+        Export::Function {
+            address,
+            signature,
+            vmctx,
+        }
     }
 
     /// Construct a table export value.
@@ -78,20 +85,5 @@ impl Export {
     /// Construct a global export value.
     pub fn global(address: *mut VMGlobalDefinition, global: Global) -> Self {
         Export::Global { address, global }
-    }
-}
-
-/// Import resolver connects imports with available exported values.
-pub trait Resolver {
-    /// Resolve the given module/field combo.
-    fn resolve(&mut self, module: &str, field: &str) -> Option<Export>;
-}
-
-/// `Resolver` implementation that always resolves to `None`.
-pub struct NullResolver {}
-
-impl Resolver for NullResolver {
-    fn resolve(&mut self, _module: &str, _field: &str) -> Option<Export> {
-        None
     }
 }

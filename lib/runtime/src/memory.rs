@@ -65,14 +65,16 @@ impl LinearMemory {
         let mmap = Mmap::with_size(request_bytes)?;
 
         // Make the unmapped and offset-guard pages inaccessible.
-        unsafe {
-            region::protect(
-                mmap.as_ptr().add(mapped_bytes),
-                inaccessible_bytes,
-                region::Protection::None,
-            )
+        if request_bytes != 0 {
+            unsafe {
+                region::protect(
+                    mmap.as_ptr().add(mapped_bytes),
+                    inaccessible_bytes,
+                    region::Protection::None,
+                )
+            }
+            .expect("unable to make memory inaccessible");
         }
-        .expect("unable to make memory inaccessible");
 
         Ok(Self {
             mmap,
@@ -150,19 +152,7 @@ impl LinearMemory {
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.mmap.as_mut_ptr(),
-            current_length: self.mmap.len(),
+            current_length: self.current as usize * WASM_PAGE_SIZE as usize,
         }
-    }
-}
-
-impl AsRef<[u8]> for LinearMemory {
-    fn as_ref(&self) -> &[u8] {
-        self.mmap.as_slice()
-    }
-}
-
-impl AsMut<[u8]> for LinearMemory {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.mmap.as_mut_slice()
     }
 }

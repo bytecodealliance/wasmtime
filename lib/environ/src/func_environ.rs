@@ -132,14 +132,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.isa.frontend_config().pointer_type()
     }
 
-    /// Transform the call argument list in preparation for making a call.
-    fn get_real_call_args(func: &Function, call_args: &[ir::Value]) -> Vec<ir::Value> {
-        let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
-        real_call_args.extend_from_slice(call_args);
-        real_call_args.push(func.special_param(ArgumentPurpose::VMContext).unwrap());
-        real_call_args
-    }
-
     fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
@@ -539,15 +531,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
 
-        // Dereference table_entry_addr to get the function address.
-        let mem_flags = ir::MemFlags::trusted();
-        let func_addr = pos.ins().load(
-            pointer_type,
-            mem_flags,
-            table_entry_addr,
-            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
-        );
-
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
@@ -597,7 +580,27 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
         }
 
-        let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
+        // Dereference table_entry_addr to get the function address.
+        let mem_flags = ir::MemFlags::trusted();
+        let func_addr = pos.ins().load(
+            pointer_type,
+            mem_flags,
+            table_entry_addr,
+            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
+        );
+
+        let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
+        real_call_args.extend_from_slice(call_args);
+
+        // Append the callee vmctx address.
+        let vmctx = pos.ins().load(
+            pointer_type,
+            mem_flags,
+            table_entry_addr,
+            i32::from(self.offsets.vmcaller_checked_anyfunc_vmctx()),
+        );
+        real_call_args.push(vmctx);
+
         Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
@@ -608,10 +611,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         callee: ir::FuncRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
+        let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
+        real_call_args.extend_from_slice(call_args);
 
         // Handle direct calls to locally-defined functions.
         if !self.module.is_imported_function(callee_index) {
+            real_call_args.push(pos.func.special_param(ArgumentPurpose::VMContext).unwrap());
             return Ok(pos.ins().call(callee, &real_call_args));
         }
 
@@ -623,9 +628,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let base = pos
             .ins()
             .global_value(pointer_type, imported_functions_base);
-        let offset = self.offsets.index_vmfunction_body_import(callee_index);
+
         let mem_flags = ir::MemFlags::trusted();
-        let func_addr = pos.ins().load(pointer_type, mem_flags, base, offset);
+
+        // Load the callee address.
+        let body_offset = self.offsets.index_vmfunction_import_body(callee_index);
+        let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
+
+        // Append the callee vmctx address.
+        let vmctx_offset = self.offsets.index_vmfunction_import_vmctx(callee_index);
+        let vmctx = pos.ins().load(pointer_type, mem_flags, base, vmctx_offset);
+        real_call_args.push(vmctx);
+
         Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
     }
 

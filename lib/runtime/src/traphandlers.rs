@@ -107,3 +107,27 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
         Ok(())
     })
 }
+
+/// Call the wasm function pointed to by `callee`, which has no arguments or
+/// return values.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_call(
+    callee: *const VMFunctionBody,
+    vmctx: *mut VMContext,
+) -> Result<(), String> {
+    // In case wasm code calls Rust that panics and unwinds past this point,
+    // ensure that JMP_BUFS is unwound to its incoming state.
+    let _guard = ScopeGuard::new();
+
+    let func: fn(*mut VMContext) = mem::transmute(callee);
+
+    JMP_BUFS.with(|bufs| {
+        let mut buf = mem::uninitialized();
+        if setjmp(&mut buf) != 0 {
+            return TRAP_DATA.with(|data| Err(format!("wasm trap at {:?}", data.get().pc)));
+        }
+        bufs.borrow_mut().push(buf);
+        func(vmctx);
+        Ok(())
+    })
+}

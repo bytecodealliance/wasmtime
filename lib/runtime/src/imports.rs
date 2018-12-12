@@ -1,12 +1,12 @@
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
-use vmcontext::{VMFunctionBody, VMGlobalImport, VMMemoryImport, VMTableImport};
+use vmcontext::{VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport};
 
 /// Resolved import pointers.
 #[derive(Debug)]
 pub struct Imports {
     /// Resolved addresses for imported functions.
-    pub functions: BoxedSlice<FuncIndex, *const VMFunctionBody>,
+    pub functions: BoxedSlice<FuncIndex, VMFunctionImport>,
 
     /// Resolved addresses for imported tables.
     pub tables: BoxedSlice<TableIndex, VMTableImport>,
@@ -21,7 +21,7 @@ pub struct Imports {
 impl Imports {
     /// Construct a new `Imports` instance.
     pub fn new(
-        function_imports: PrimaryMap<FuncIndex, *const VMFunctionBody>,
+        function_imports: PrimaryMap<FuncIndex, VMFunctionImport>,
         table_imports: PrimaryMap<TableIndex, VMTableImport>,
         memory_imports: PrimaryMap<MemoryIndex, VMMemoryImport>,
         global_imports: PrimaryMap<GlobalIndex, VMGlobalImport>,

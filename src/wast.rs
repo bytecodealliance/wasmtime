@@ -94,7 +94,12 @@ fn main() {
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut wast_context = WastContext::new().expect("Error creating WastContext");
+    let mut wast_context = WastContext::new();
+
+    wast_context
+        .register_spectest()
+        .expect("error instantiating \"spectest\"");
+
     for filename in &args.arg_file {
         wast_context
             .run_file(&*isa, Path::new(&filename))

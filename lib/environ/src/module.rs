@@ -75,7 +75,7 @@ impl MemoryStyle {
 
 /// A WebAssembly linear memory description along with our chosen style for
 /// implementing it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemoryPlan {
     /// The WebAssembly linear memory description.
     pub memory: Memory,
@@ -113,7 +113,7 @@ impl TableStyle {
 
 /// A WebAssembly table description along with our chosen style for
 /// implementing it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TablePlan {
     /// The WebAssembly table description.
     pub table: cranelift_wasm::Table,
@@ -275,36 +275,5 @@ impl Module {
     /// Test whether the given global index is for an imported global.
     pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
         index.index() < self.imported_globals.len()
-    }
-}
-
-/// A data initializer for linear memory.
-pub struct DataInitializer<'data> {
-    /// The index of the memory to initialize.
-    pub memory_index: MemoryIndex,
-    /// Optionally a globalvar base to initialize at.
-    pub base: Option<GlobalIndex>,
-    /// A constant offset to initialize at.
-    pub offset: usize,
-    /// The initialization data.
-    pub data: &'data [u8],
-}
-
-/// References to the input wasm data buffer to be decoded and processed later,
-/// separately from the main module translation.
-pub struct LazyContents<'data> {
-    /// References to the function bodies.
-    pub function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
-
-    /// References to the data initializers.
-    pub data_initializers: Vec<DataInitializer<'data>>,
-}
-
-impl<'data> LazyContents<'data> {
-    pub fn new() -> Self {
-        Self {
-            function_body_inputs: PrimaryMap::new(),
-            data_initializers: Vec::new(),
-        }
     }
 }

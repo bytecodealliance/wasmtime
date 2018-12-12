@@ -34,6 +34,12 @@ impl Mmap {
     /// suitably sized and aligned for memory protection.
     #[cfg(not(target_os = "windows"))]
     pub fn with_size(size: usize) -> Result<Self, String> {
+        // Mmap may return EINVAL if the size is zero, so just
+        // special-case that.
+        if size == 0 {
+            return Ok(Self::new());
+        }
+
         let page_size = region::page::size();
         let alloc_size = round_up_to_page_size(size, page_size);
         let ptr = unsafe {

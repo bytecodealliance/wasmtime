@@ -39,16 +39,17 @@ extern crate failure;
 extern crate failure_derive;
 
 mod action;
-mod code;
-mod export;
+mod instance_plus;
+mod jit_code;
 mod link;
-mod world;
+mod resolver;
+mod trampoline_park;
 
 pub use action::{ActionError, ActionOutcome, RuntimeValue};
-pub use code::Code;
-pub use export::{Export, NullResolver, Resolver};
+pub use instance_plus::InstancePlus;
+pub use jit_code::JITCode;
 pub use link::link_module;
-pub use world::InstanceWorld;
+pub use resolver::{NullResolver, Resolver};
 
 #[cfg(not(feature = "std"))]
 mod std {
