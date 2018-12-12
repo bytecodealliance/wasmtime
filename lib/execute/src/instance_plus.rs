@@ -147,7 +147,8 @@ impl InstancePlus {
             assert_eq!(value.value_type(), signature.params[index].value_type);
         }
 
-        // TODO: Support values larger than u64.
+        // TODO: Support values larger than u64. And pack the values into memory
+        // instead of just using fixed-sized slots.
         let mut values_vec: Vec<u64> = Vec::new();
         let value_size = mem::size_of::<u64>();
         values_vec.resize(max(signature.params.len(), signature.returns.len()), 0u64);
