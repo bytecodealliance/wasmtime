@@ -216,11 +216,10 @@ impl Instance {
         if let Some(start_index) = self.module.start_func {
             let (callee_address, callee_vmctx) = match self.module.defined_func_index(start_index) {
                 Some(defined_start_index) => {
-                    let body = self
+                    let body = *self
                         .finished_functions
                         .get(defined_start_index)
-                        .expect("start function index is out of bounds")
-                        .clone();
+                        .expect("start function index is out of bounds");
                     (body, self.vmctx_mut() as *mut VMContext)
                 }
                 None => {
@@ -302,7 +301,7 @@ impl Instance {
                     } else {
                         unsafe { self.vmctx.imported_global(*index).from }
                     },
-                    global: self.module.globals[*index].clone(),
+                    global: self.module.globals[*index],
                 },
             })
         } else {
