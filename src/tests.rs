@@ -8,9 +8,9 @@ fn translate_wat(wat: &str) -> TranslatedModule {
 }
 
 /// Execute the first function in the module.
-fn execute_wat(wat: &str, a: usize, b: usize) -> usize {
+fn execute_wat(wat: &str, a: u32, b: u32) -> u32 {
     let translated = translate_wat(wat);
-    translated.execute_func(0, a, b)
+    unsafe { translated.execute_func(0, (a, b)) }
 }
 
 #[test]
@@ -20,7 +20,7 @@ fn empty() {
 
 #[test]
 fn adds() {
-    const CASES: &[(usize, usize, usize)] = &[(5, 3, 8), (0, 228, 228), (usize::max_value(), 1, 0)];
+    const CASES: &[(u32, u32, u32)] = &[(5, 3, 8), (0, 228, 228), (u32::max_value(), 1, 0)];
 
     let code = r#"
 (module
@@ -34,7 +34,7 @@ fn adds() {
 
 #[test]
 fn relop_eq() {
-    const CASES: &[(usize, usize, usize)] = &[
+    const CASES: &[(u32, u32, u32)] = &[
         (0, 0, 1),
         (0, 1, 0),
         (1, 0, 0),
@@ -56,7 +56,7 @@ fn relop_eq() {
 
 #[test]
 fn if_then_else() {
-    const CASES: &[(usize, usize, usize)] = &[
+    const CASES: &[(u32, u32, u32)] = &[
         (0, 1, 1),
         (0, 0, 0),
         (1, 0, 0),
@@ -130,6 +130,39 @@ fn function_call() {
 }
 
 #[test]
+fn large_function_call() {
+    let code = r#"
+(module
+  (func (param i32) (param i32) (param i32) (param i32)
+        (param i32) (param i32)
+        (result i32)
+
+    (call $assert_zero
+      (get_local 5)
+    )
+    (get_local 0)
+  )
+
+  (func $assert_zero (param $v i32)
+    (local i32)
+    (if (get_local $v)
+      (unreachable)
+    )
+  )
+)
+    "#;
+
+    assert_eq!(
+        {
+            let translated = translate_wat(code);
+            let out: u32 = unsafe { translated.execute_func(0, (5, 4, 3, 2, 1, 0)) };
+            out
+        },
+        5
+    );
+}
+
+#[test]
 fn literals() {
     let code = r#"
 (module
@@ -192,10 +225,10 @@ fn fib() {
     "#;
 
     // fac(x) = y <=> (x, y)
-    const FIB_SEQ: &[usize] = &[1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+    const FIB_SEQ: &[u32] = &[1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
 
     for x in 0..10 {
-        assert_eq!(execute_wat(code, x, 0), FIB_SEQ[x]);
+        assert_eq!(execute_wat(code, x, 0), FIB_SEQ[x as usize]);
     }
 }
 
