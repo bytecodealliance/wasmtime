@@ -115,7 +115,7 @@ pub fn translate(
     prologue(&mut ctx, framesize);
 
     for arg_pos in 0..arg_count {
-        copy_incoming_arg(&mut ctx, arg_pos);
+        copy_incoming_arg(&mut ctx, framesize, arg_pos);
     }
 
     let mut control_frames = Vec::new();

@@ -89,13 +89,13 @@ enum ArgLocation {
     Stack(i32),
 }
 
+// TODO: This assumes only system-v calling convention.
+// In system-v calling convention the first 6 arguments are passed via registers.
+// All rest arguments are passed on the stack.
+const ARGS_IN_GPRS: &'static [GPR] = &[RDI, RSI, RDX, RCX, R8, R9];
+
 /// Get a location for an argument at the given position.
 fn abi_loc_for_arg(pos: u32) -> ArgLocation {
-    // TODO: This assumes only system-v calling convention.
-    // In system-v calling convention the first 6 arguments are passed via registers.
-    // All rest arguments are passed on the stack.
-    const ARGS_IN_GPRS: &'static [GPR] = &[RDI, RSI, RDX, RCX, R8, R9];
-
     if let Some(&reg) = ARGS_IN_GPRS.get(pos as usize) {
         ArgLocation::Reg(reg)
     } else {
@@ -320,7 +320,7 @@ pub fn prepare_return_value(ctx: &mut Context) {
     }
 }
 
-pub fn copy_incoming_arg(ctx: &mut Context, arg_pos: u32) {
+pub fn copy_incoming_arg(ctx: &mut Context, frame_size: u32, arg_pos: u32) {
     let loc = abi_loc_for_arg(arg_pos);
 
     // First, ensure the argument is in a register.
@@ -331,6 +331,7 @@ pub fn copy_incoming_arg(ctx: &mut Context, arg_pos: u32) {
                 ctx.regs.scratch_gprs.is_free(RAX),
                 "we assume that RAX can be used as a scratch register for now",
             );
+            let offset = offset + (frame_size * WORD_SIZE) as i32;
             dynasm!(ctx.asm
                 ; mov Rq(RAX), [rsp + offset]
             );
@@ -346,6 +347,7 @@ pub fn copy_incoming_arg(ctx: &mut Context, arg_pos: u32) {
 }
 
 pub fn pass_outgoing_args(ctx: &mut Context, arity: u32) {
+    let mut stack_args = vec![];
     for arg_pos in (0..arity).rev() {
         ctx.sp_depth.free(1);
 
@@ -356,8 +358,21 @@ pub fn pass_outgoing_args(ctx: &mut Context, arity: u32) {
                     ; pop Rq(gpr)
                 );
             }
-            _ => unimplemented!("don't know how to pass argument {} via {:?}", arg_pos, loc),
+            ArgLocation::Stack(_) => {
+                let gpr = ctx.regs.take_scratch_gpr();
+                dynasm!(ctx.asm
+                    ; pop Rq(gpr)
+                );
+                stack_args.push(gpr);
+            }
         }
+    }
+
+    for gpr in stack_args {
+        dynasm!(ctx.asm
+            ; push Rq(gpr)
+        );
+        ctx.regs.release_scratch_gpr(gpr);
     }
 }
 

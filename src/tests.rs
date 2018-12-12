@@ -130,7 +130,7 @@ fn function_call() {
 }
 
 #[test]
-fn large_function_call() {
+fn large_function() {
     let code = r#"
 (module
   (func (param i32) (param i32) (param i32) (param i32)
@@ -162,6 +162,88 @@ fn large_function_call() {
     );
 }
 
+#[test]
+fn function_read_args_spill_to_stack() {
+    let code = r#"
+(module
+  (func (param i32) (param i32) (param i32) (param i32)
+        (param i32) (param i32) (param i32) (param i32)
+        (result i32)
+
+    (call $assert_zero
+      (get_local 7)
+    )
+    (get_local 0)
+  )
+
+  (func $assert_zero (param $v i32)
+    (local i32)
+    (if (get_local $v)
+      (unreachable)
+    )
+  )
+)
+    "#;
+
+    assert_eq!(
+        {
+            let translated = translate_wat(code);
+            let out: u32 = unsafe { translated.execute_func(0, (7, 6, 5, 4, 3, 2, 1, 0)) };
+            out
+        },
+        7
+    );
+}
+
+#[test]
+fn function_write_args_spill_to_stack() {
+    let code = r#"
+(module
+  (func (param i32) (param i32) (param i32) (param i32)
+        (param i32) (param i32) (param i32) (param i32)
+        (result i32)
+
+    (call $called
+      (get_local 0)
+      (get_local 1)
+      (get_local 2)
+      (get_local 3)
+      (get_local 4)
+      (get_local 5)
+      (get_local 6)
+      (get_local 7)
+    )
+  )
+
+  (func $called
+        (param i32) (param i32) (param i32) (param i32)
+        (param i32) (param i32) (param i32) (param i32)
+        (result i32)
+
+    (call $assert_zero
+      (get_local 7)
+    )
+    (get_local 0)
+  )
+
+  (func $assert_zero (param $v i32)
+    (local i32)
+    (if (get_local $v)
+      (unreachable)
+    )
+  )
+)
+    "#;
+
+    assert_eq!(
+        {
+            let translated = translate_wat(code);
+            let out: u32 = unsafe { translated.execute_func(0, (7, 6, 5, 4, 3, 2, 1, 0)) };
+            out
+        },
+        7
+    );
+}
 #[test]
 fn literals() {
     let code = r#"
