@@ -107,37 +107,59 @@ fn abi_loc_for_arg(pos: u32) -> ArgLocation {
     }
 }
 
+/// Records data about the function.
+struct FuncDef {
+    /// Offset to the start of the function. None, until the exact offset is known.
+    ///
+    /// Used to calculate the address for calling this function.
+    /// TODO: This field will not be needed if dynasm gain ability to return `AssemblyOffset` for the
+    /// defined labels.
+    offset: Option<AssemblyOffset>,
+    /// Dynamic label can be used to designate target of calls
+    /// before knowning the actual address of the function.
+    label: DynamicLabel,
+}
+
+impl FuncDef {
+    fn new(asm: &mut Assembler) -> FuncDef {
+        FuncDef {
+            offset: None,
+            label: asm.new_dynamic_label(),
+        }
+    }
+}
+
 pub struct CodeGenSession {
     assembler: Assembler,
-    func_starts: Vec<(Option<AssemblyOffset>, DynamicLabel)>,
+    func_defs: Vec<FuncDef>,
 }
 
 impl CodeGenSession {
     pub fn new(func_count: u32) -> Self {
         let mut assembler = Assembler::new().unwrap();
-        let func_starts = iter::repeat_with(|| (None, assembler.new_dynamic_label()))
+        let func_defs = iter::repeat_with(|| FuncDef::new(&mut assembler))
             .take(func_count as usize)
             .collect::<Vec<_>>();
 
         CodeGenSession {
             assembler,
-            func_starts,
+            func_defs,
         }
     }
 
     pub fn new_context(&mut self, func_idx: u32) -> Context {
         {
-            let func_start = &mut self.func_starts[func_idx as usize];
+            let func_start = &mut self.func_defs[func_idx as usize];
 
             // At this point we now the exact start address of this function. Save it
             // and define dynamic label at this location.
-            func_start.0 = Some(self.assembler.offset());
-            self.assembler.dynamic_label(func_start.1);
+            func_start.offset = Some(self.assembler.offset());
+            self.assembler.dynamic_label(func_start.label);
         }
 
         Context {
             asm: &mut self.assembler,
-            func_starts: &self.func_starts,
+            func_defs: &self.func_defs,
             regs: Registers::new(),
             sp_depth: StackDepth(0),
         }
@@ -148,33 +170,33 @@ impl CodeGenSession {
             .assembler
             .finalize()
             .map_err(|_asm| Error::Assembler("assembler error".to_owned()))?;
-        let func_starts = self
-            .func_starts
+        let func_defs = self
+            .func_defs
             .iter()
-            .map(|(offset, _)| offset.unwrap())
+            .map(|FuncDef { offset, .. }| offset.unwrap())
             .collect::<Vec<_>>();
         Ok(TranslatedCodeSection {
             exec_buf,
-            func_starts,
+            func_defs,
         })
     }
 }
 
 pub struct TranslatedCodeSection {
     exec_buf: ExecutableBuffer,
-    func_starts: Vec<AssemblyOffset>,
+    func_defs: Vec<AssemblyOffset>,
 }
 
 impl TranslatedCodeSection {
     pub fn func_start(&self, idx: usize) -> *const u8 {
-        let offset = self.func_starts[idx];
+        let offset = self.func_defs[idx];
         self.exec_buf.ptr(offset)
     }
 }
 
 pub struct Context<'a> {
     asm: &'a mut Assembler,
-    func_starts: &'a Vec<(Option<AssemblyOffset>, DynamicLabel)>,
+    func_defs: &'a Vec<FuncDef>,
     regs: Registers,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     sp_depth: StackDepth,
@@ -364,7 +386,7 @@ pub fn pass_outgoing_args(ctx: &mut Context, arity: u32) {
 pub fn call_direct(ctx: &mut Context, index: u32, return_arity: u32) {
     assert!(return_arity == 0 || return_arity == 1);
 
-    let label = &ctx.func_starts[index as usize].1;
+    let label = &ctx.func_defs[index as usize].label;
     dynasm!(ctx.asm
         ; call =>*label
     );
