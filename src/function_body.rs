@@ -224,6 +224,7 @@ pub fn translate(
                 let callee_ty = translation_ctx.func_type(function_index);
 
                 // TODO: this implementation assumes that this function is locally defined.
+                // TODO: guarantee 16-byte alignment for calls as required by x86-64 ABI
 
                 pass_outgoing_args(&mut ctx, callee_ty.params.len() as u32);
                 call_direct(&mut ctx, function_index, callee_ty.returns.len() as u32);
