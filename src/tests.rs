@@ -201,7 +201,9 @@ fn function_read_args_spill_to_stack() {
     assert_eq!(
         {
             let translated = translate_wat(code);
-            let out: u32 = unsafe { translated.execute_func(0, (7, 6, 5, 4, 3, 2, 1, 0)) };
+            let out: u32 = unsafe {
+                translated.execute_func(0, (7u32, 6u32, 5u32, 4u32, 3u32, 2u32, 1u32, 0u32))
+            };
             out
         },
         7
@@ -214,6 +216,7 @@ fn function_write_args_spill_to_stack() {
 (module
   (func (param i32) (param i32) (param i32) (param i32)
         (param i32) (param i32) (param i32) (param i32)
+        (param i32) (param i32) (param i32) (param i32)
         (result i32)
 
     (call $called
@@ -225,16 +228,21 @@ fn function_write_args_spill_to_stack() {
       (get_local 5)
       (get_local 6)
       (get_local 7)
+      (get_local 8)
+      (get_local 9)
+      (get_local 10)
+      (get_local 11)
     )
   )
 
   (func $called
         (param i32) (param i32) (param i32) (param i32)
         (param i32) (param i32) (param i32) (param i32)
+        (param i32) (param i32) (param i32) (param i32)
         (result i32)
 
     (call $assert_zero
-      (get_local 7)
+      (get_local 11)
     )
     (get_local 0)
   )
@@ -251,10 +259,10 @@ fn function_write_args_spill_to_stack() {
     assert_eq!(
         {
             let translated = translate_wat(code);
-            let out: u32 = unsafe { translated.execute_func(0, (7, 6, 5, 4, 3, 2, 1, 0)) };
+            let out: u32 = unsafe { translated.execute_func(0, (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)) };
             out
         },
-        7
+        11
     );
 }
 #[test]

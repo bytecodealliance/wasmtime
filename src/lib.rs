@@ -9,8 +9,10 @@ extern crate wasmparser;
 #[macro_use]
 extern crate failure_derive;
 extern crate dynasmrt;
+#[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
+#[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
 extern crate wabt;

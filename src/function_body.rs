@@ -56,29 +56,20 @@ struct ControlFrame {
     /// becomes polymorphic only after an instruction that never passes control further is executed,
     /// i.e. `unreachable`, `br` (but not `br_if`!), etc.
     stack_polymorphic: bool,
-    /// Relative stack depth at the beginning of the frame.
-    stack_depth: StackDepth,
+    /// State specific to the block (free temp registers, stack etc) which should be replaced
+    /// at the end of the block
+    block_state: BlockState,
     ty: Type,
 }
 
 impl ControlFrame {
-    pub fn new(kind: ControlFrameKind, stack_depth: StackDepth, ty: Type) -> ControlFrame {
+    pub fn new(kind: ControlFrameKind, block_state: BlockState, ty: Type) -> ControlFrame {
         ControlFrame {
             kind,
-            stack_depth,
+            block_state,
             ty,
             stack_polymorphic: false,
         }
-    }
-
-    pub fn outgoing_stack_depth(&self) -> StackDepth {
-        let mut outgoing_stack_depth = self.stack_depth;
-        if self.ty != Type::EmptyBlockType {
-            // If there a return value then reserve expected outgoing stack depth value
-            // to account for the result value.
-            outgoing_stack_depth.reserve(1);
-        }
-        outgoing_stack_depth
     }
 
     /// Marks this control frame as reached stack-polymorphic state.
@@ -103,20 +94,16 @@ pub fn translate(
         Type::EmptyBlockType
     };
 
-    let mut framesize = arg_count;
+    let mut num_locals = 0;
     for local in locals {
         let (count, _ty) = local?;
-        framesize += count;
+        num_locals += count;
     }
 
     let mut ctx = session.new_context(func_idx);
     let operators = body.get_operators_reader()?;
 
-    prologue(&mut ctx, framesize);
-
-    for arg_pos in 0..arg_count {
-        copy_incoming_arg(&mut ctx, framesize, arg_pos);
-    }
+    start_function(&mut ctx, arg_count, num_locals);
 
     let mut control_frames = Vec::new();
 
@@ -127,7 +114,7 @@ pub fn translate(
         ControlFrameKind::Block {
             end_label: epilogue_label,
         },
-        current_stack_depth(&ctx),
+        current_block_state(&ctx),
         return_ty,
     ));
 
@@ -148,7 +135,7 @@ pub fn translate(
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::IfTrue { end_label, if_not },
-                    current_stack_depth(&ctx),
+                    current_block_state(&ctx),
                     ty,
                 ));
             }
@@ -157,7 +144,7 @@ pub fn translate(
                     Some(ControlFrame {
                         kind: ControlFrameKind::IfTrue { if_not, end_label },
                         ty,
-                        stack_depth,
+                        block_state,
                         ..
                     }) => {
                         // Finalize if..else block by jumping to the `end_label`.
@@ -167,7 +154,7 @@ pub fn translate(
                         // 0 it will branch here.
                         // After that reset stack depth to the value before entering `if` block.
                         define_label(&mut ctx, if_not);
-                        restore_stack_depth(&mut ctx, stack_depth);
+                        restore_block_state(&mut ctx, block_state.clone());
 
                         // Carry over the `end_label`, so it will be resolved when the corresponding `end`
                         // is encountered.
@@ -175,7 +162,7 @@ pub fn translate(
                         // Also note that we reset `stack_depth` to the value before entering `if` block.
                         let mut frame = ControlFrame::new(
                             ControlFrameKind::IfFalse { end_label },
-                            stack_depth,
+                            block_state,
                             ty,
                         );
                         control_frames.push(frame);
@@ -199,14 +186,12 @@ pub fn translate(
                     define_label(&mut ctx, if_not);
                 }
 
-                restore_stack_depth(&mut ctx, control_frame.outgoing_stack_depth());
-
-                if control_frames.len() == 0 {
-                    // This is the last control frame. Perform the implicit return here.
-                    if return_ty != Type::EmptyBlockType {
-                        prepare_return_value(&mut ctx);
-                    }
+                // This is the last control frame. Perform the implicit return here.
+                if control_frames.len() == 0 && return_ty != Type::EmptyBlockType {
+                    prepare_return_value(&mut ctx);
                 }
+
+                // restore_block_state(&mut ctx, control_frame.block_state);
             }
             Operator::I32Eq => relop_eq_i32(&mut ctx),
             Operator::I32Add => i32_add(&mut ctx),
@@ -228,6 +213,7 @@ pub fn translate(
                     callee_ty.params.len() as u32,
                     callee_ty.returns.len() as u32,
                 );
+                push_return_value(&mut ctx);
             }
             _ => {
                 trap(&mut ctx);
