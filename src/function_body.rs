@@ -225,8 +225,12 @@ pub fn translate(
 
                 // TODO: this implementation assumes that this function is locally defined.
 
-                pass_outgoing_args(&mut ctx, callee_ty.params.len() as u32);
-                call_direct(&mut ctx, function_index, callee_ty.returns.len() as u32);
+                call_direct(
+                    &mut ctx,
+                    function_index,
+                    callee_ty.params.len() as u32,
+                    callee_ty.returns.len() as u32,
+                );
             }
             _ => {
                 trap(&mut ctx);

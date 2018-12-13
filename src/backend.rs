@@ -346,8 +346,9 @@ pub fn copy_incoming_arg(ctx: &mut Context, frame_size: u32, arg_pos: u32) {
     );
 }
 
-pub fn pass_outgoing_args(ctx: &mut Context, arity: u32) {
-    let mut stack_args = vec![];
+#[must_use]
+fn pass_outgoing_args(ctx: &mut Context, arity: u32) -> i32 {
+    let mut stack_args = Vec::with_capacity((arity as usize).saturating_sub(ARGS_IN_GPRS.len()));
     for arg_pos in (0..arity).rev() {
         ctx.sp_depth.free(1);
 
@@ -368,21 +369,38 @@ pub fn pass_outgoing_args(ctx: &mut Context, arity: u32) {
         }
     }
 
-    for gpr in stack_args {
+    let num_stack_args = stack_args.len() as i32;
+    dynasm!(ctx.asm
+        ; sub rsp, num_stack_args
+    );
+    for (stack_slot, gpr) in stack_args.into_iter().rev().enumerate() {
+        let offset = (stack_slot * WORD_SIZE as usize) as i32;
         dynasm!(ctx.asm
-            ; push Rq(gpr)
+            ; mov [rsp + offset], Rq(gpr)
         );
         ctx.regs.release_scratch_gpr(gpr);
     }
+
+    num_stack_args
 }
 
-pub fn call_direct(ctx: &mut Context, index: u32, return_arity: u32) {
+fn post_call_cleanup(ctx: &mut Context, num_stack_args: i32) {
+    dynasm!(ctx.asm
+        ; add rsp, num_stack_args
+    );
+}
+
+pub fn call_direct(ctx: &mut Context, index: u32, arg_arity: u32, return_arity: u32) {
     assert!(return_arity == 0 || return_arity == 1);
+
+    let num_stack_args = pass_outgoing_args(ctx, arg_arity);
 
     let label = &ctx.func_starts[index as usize].1;
     dynasm!(ctx.asm
         ; call =>*label
     );
+
+    post_call_cleanup(ctx, num_stack_args);
 
     if return_arity == 1 {
         dynasm!(ctx.asm
