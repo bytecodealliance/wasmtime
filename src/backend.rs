@@ -481,12 +481,9 @@ pub fn prologue(ctx: &mut Context, stack_slots: u32) {
 }
 
 pub fn epilogue(ctx: &mut Context) {
-    // TODO: This doesn't work with stack alignment.
-    // assert_eq!(
-    //     ctx.sp_depth,
-    //     StackDepth(0),
-    //     "imbalanced pushes and pops detected"
-    // );
+    // We don't need to clean up the stack - `rsp` is restored and
+    // the calling function has its own register stack and will
+    // stomp on the registers from our stack if necessary.
     dynasm!(ctx.asm
         ; mov rsp, rbp
         ; pop rbp

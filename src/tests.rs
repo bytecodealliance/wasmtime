@@ -272,7 +272,7 @@ fn literals() {
 
 const FIBONACCI: &str = r#"
 (module
-  (func $fib (param $n i32) (param $_unused i32) (result i32)
+  (func $fib (param $n i32) (result i32)
     (if (result i32)
       (i32.eq
         (i32.const 0)
@@ -298,7 +298,6 @@ const FIBONACCI: &str = r#"
                   (get_local $n)
                   (i32.const -1)
                 )
-                (i32.const 0)
               )
               ;; fib(n - 2)
               (call $fib
@@ -306,7 +305,6 @@ const FIBONACCI: &str = r#"
                   (get_local $n)
                   (i32.const -2)
                 )
-                (i32.const 0)
               )
             )
           )
@@ -327,7 +325,7 @@ fn fib() {
     for x in 0..10 {
         unsafe {
             assert_eq!(
-                translated.execute_func::<_, u32>(0, (x, 0u32)),
+                translated.execute_func::<_, u32>(0, (x,)),
                 FIB_SEQ[x as usize]
             );
         }
@@ -346,5 +344,5 @@ fn bench_run(b: &mut test::Bencher) {
     let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
     let module = translate(&wasm).unwrap();
 
-    b.iter(|| unsafe { module.execute_func::<_, u32>(0, (20, 0u32)) });
+    b.iter(|| unsafe { module.execute_func::<_, u32>(0, (20,)) });
 }
