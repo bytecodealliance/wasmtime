@@ -318,14 +318,14 @@ impl<'a> LocationVerifier<'a> {
                 dfg.display_inst(inst, self.isa)
             ),
             SingleDest(ebb, _) => {
-                for d in divert.all() {
-                    let lr = &liveness[d.value];
+                for (&value, d) in divert.iter() {
+                    let lr = &liveness[value];
                     if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
                         return fatal!(
                             errors,
                             inst,
                             "{} is diverted to {} and live in to {}",
-                            d.value,
+                            value,
                             d.to.display(&self.reginfo),
                             ebb
                         );
@@ -333,15 +333,15 @@ impl<'a> LocationVerifier<'a> {
                 }
             }
             Table(jt, ebb) => {
-                for d in divert.all() {
-                    let lr = &liveness[d.value];
+                for (&value, d) in divert.iter() {
+                    let lr = &liveness[value];
                     if let Some(ebb) = ebb {
                         if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
                             return fatal!(
                                 errors,
                                 inst,
                                 "{} is diverted to {} and live in to {}",
-                                d.value,
+                                value,
                                 d.to.display(&self.reginfo),
                                 ebb
                             );
@@ -353,7 +353,7 @@ impl<'a> LocationVerifier<'a> {
                                 errors,
                                 inst,
                                 "{} is diverted to {} and live in to {}",
-                                d.value,
+                                value,
                                 d.to.display(&self.reginfo),
                                 ebb
                             );

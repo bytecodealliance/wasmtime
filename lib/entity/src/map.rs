@@ -97,6 +97,7 @@ where
     }
 
     /// Resize the map to have `n` entries by adding default entries as needed.
+    #[inline]
     pub fn resize(&mut self, n: usize) {
         self.elems.resize(n, self.default.clone());
     }
@@ -125,6 +126,7 @@ where
     K: EntityRef,
     V: Clone,
 {
+    #[inline]
     fn index_mut(&mut self, k: K) -> &mut V {
         let i = k.index();
         if i >= self.elems.len() {
