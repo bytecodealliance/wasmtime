@@ -295,6 +295,18 @@ impl VMGlobalDefinition {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut i32)
     }
 
+    /// Return a reference to the value as a u32.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_u32(&self) -> &u32 {
+        &*(self.storage.as_ref().as_ptr() as *const u8 as *const u32)
+    }
+
+    /// Return a mutable reference to the value as an u32.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_u32_mut(&mut self) -> &mut u32 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut u32)
+    }
+
     /// Return a reference to the value as an i64.
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_i64(&self) -> &i64 {
@@ -305,6 +317,18 @@ impl VMGlobalDefinition {
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_i64_mut(&mut self) -> &mut i64 {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut i64)
+    }
+
+    /// Return a reference to the value as an u64.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_u64(&self) -> &u64 {
+        &*(self.storage.as_ref().as_ptr() as *const u8 as *const u64)
+    }
+
+    /// Return a mutable reference to the value as an u64.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_u64_mut(&mut self) -> &mut u64 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u8 as *mut u64)
     }
 
     /// Return a reference to the value as an f32.

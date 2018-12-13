@@ -329,7 +329,7 @@ fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationE
             } else {
                 unsafe { instance.vmctx.imported_global(base).from }
             };
-            start += unsafe { *(&*global).as_i32() } as u32 as usize;
+            start += unsafe { *(&*global).as_u32() } as usize;
         }
 
         // TODO: Refactor this.
@@ -368,7 +368,7 @@ fn check_memory_init_bounds(
             } else {
                 unsafe { instance.vmctx.imported_global(base).from }
             };
-            start += unsafe { *(&*global).as_i32() } as u32 as usize;
+            start += unsafe { *(&*global).as_u32() } as usize;
         }
 
         // TODO: Refactor this.
