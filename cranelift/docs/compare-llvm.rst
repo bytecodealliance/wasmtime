@@ -109,7 +109,7 @@ low-level optimizations are sufficient.
 
 And, it removes some constraints in the mid-level optimize IR design space,
 making it more feasible to consider ideas such as using a
-[VSDG-based IR](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-705.pdf).
+`VSDG-based IR <https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-705.pdf>`_.
 
 Program structure
 -----------------
@@ -118,7 +118,7 @@ In LLVM IR, the largest representable unit is the *module* which corresponds
 more or less to a C translation unit. It is a collection of functions and
 global variables that may contain references to external symbols too.
 
-In `Cranelift's IR` <https://cranelift.readthedocs.io/en/latest/ir.html>`_,
+In `Cranelift's IR <https://cranelift.readthedocs.io/en/latest/ir.html>`_,
 used by the `cranelift-codegen <https://docs.rs/cranelift-codegen/>`_ crate,
 functions are self-contained, allowing them to be compiled independently. At
 this level, there is no explicit module that contains the functions.
