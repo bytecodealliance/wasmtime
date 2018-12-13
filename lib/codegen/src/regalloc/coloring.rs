@@ -654,10 +654,10 @@ impl<'a> Context<'a> {
     where
         Pred: FnMut(&LiveRange, LiveRangeContext<Layout>) -> bool,
     {
-        for rdiv in self.divert.all() {
+        for (&value, rdiv) in self.divert.iter() {
             let lr = self
                 .liveness
-                .get(rdiv.value)
+                .get(value)
                 .expect("Missing live range for diverted register");
             if pred(lr, self.liveness.context(&self.cur.func.layout)) {
                 if let Affinity::Reg(rci) = lr.affinity {
@@ -665,7 +665,7 @@ impl<'a> Context<'a> {
                     // Stack diversions should not be possible here. The only live transiently
                     // during `shuffle_inputs()`.
                     self.solver.reassign_in(
-                        rdiv.value,
+                        value,
                         rc,
                         rdiv.to.unwrap_reg(),
                         rdiv.from.unwrap_reg(),
@@ -673,7 +673,7 @@ impl<'a> Context<'a> {
                 } else {
                     panic!(
                         "Diverted register {} with {} affinity",
-                        rdiv.value,
+                        value,
                         lr.affinity.display(&self.reginfo)
                     );
                 }
