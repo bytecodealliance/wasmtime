@@ -406,13 +406,7 @@ HandleTrap(CONTEXT* context)
 {
     assert(sAlreadyHandlingTrap);
 
-    const uint8_t* pc = ContextToPC(context);
-    const CodeSegment* codeSegment = LookupCodeSegment(pc);
-    if (!codeSegment) {
-        return false;
-    }
-
-    RecordTrap(pc, codeSegment);
+    RecordTrap(ContextToPC(context));
 
     // Unwind calls longjmp, so it doesn't run the automatic
     // sAlreadhHanldingTrap cleanups, so reset it manually before doing

@@ -15,7 +15,6 @@ fn main() {
 
     let mut bindings_builder = bindgen::Builder::default()
         .header("signalhandlers/SignalHandlers.h")
-        .whitelist_type("CodeSegment")
         .whitelist_type("TrapContext")
         .whitelist_type("jmp_buf")
         .whitelist_function("EnsureEagerSignalHandlers");

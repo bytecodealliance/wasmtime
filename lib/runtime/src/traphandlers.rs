@@ -2,7 +2,7 @@
 //! signalhandling mechanisms.
 
 use libc::c_int;
-use signalhandlers::{jmp_buf, CodeSegment};
+use signalhandlers::jmp_buf;
 use std::cell::{Cell, RefCell};
 use std::mem;
 use std::ptr;
@@ -19,13 +19,8 @@ extern "C" {
     fn longjmp(env: *const jmp_buf, val: c_int) -> !;
 }
 
-#[derive(Copy, Clone, Debug)]
-struct TrapData {
-    pc: *const u8,
-}
-
 thread_local! {
-    static TRAP_DATA: Cell<TrapData> = Cell::new(TrapData { pc: ptr::null() });
+    static TRAP_PC: Cell<*const u8> = Cell::new(ptr::null());
     static JMP_BUFS: RefCell<Vec<jmp_buf>> = RefCell::new(Vec::new());
 }
 
@@ -33,9 +28,9 @@ thread_local! {
 #[doc(hidden)]
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "C" fn RecordTrap(pc: *const u8, _codeSegment: *const CodeSegment) {
+pub extern "C" fn RecordTrap(pc: *const u8) {
     // TODO: Look up the wasm bytecode offset and trap code and record them instead.
-    TRAP_DATA.with(|data| data.set(TrapData { pc }));
+    TRAP_PC.with(|data| data.set(pc));
 }
 
 /// Initiate an unwind.
@@ -49,16 +44,6 @@ pub extern "C" fn Unwind() {
     })
 }
 
-/// Return the CodeSegment containing the given pc, if any exist in the process.
-/// This method does not take a lock.
-#[doc(hidden)]
-#[allow(non_snake_case)]
-#[no_mangle]
-pub extern "C" fn LookupCodeSegment(_pc: *const ::std::os::raw::c_void) -> *const CodeSegment {
-    // TODO: Implement this.
-    -1isize as *const CodeSegment
-}
-
 /// A simple guard to ensure that `JMP_BUFS` is reset when we're done.
 struct ScopeGuard {
     orig_num_bufs: usize,
@@ -66,6 +51,11 @@ struct ScopeGuard {
 
 impl ScopeGuard {
     fn new() -> Self {
+        assert_eq!(
+            TRAP_PC.with(|data| data.get()),
+            ptr::null(),
+            "unfinished trap detected"
+        );
         Self {
             orig_num_bufs: JMP_BUFS.with(|bufs| bufs.borrow().len()),
         }
@@ -82,6 +72,19 @@ impl Drop for ScopeGuard {
     }
 }
 
+fn trap_message(_vmctx: *mut VMContext) -> String {
+    let pc = TRAP_PC.with(|data| data.replace(ptr::null()));
+
+    // TODO: Record trap metadata in the VMContext, and look up the
+    // pc to obtain the TrapCode and SourceLoc.
+
+    format!("wasm trap at {:?}", pc)
+}
+
+fn push_jmp_buf(buf: jmp_buf) {
+    JMP_BUFS.with(|bufs| bufs.borrow_mut().push(buf));
+}
+
 /// Call the wasm function pointed to by `callee`. `values_vec` points to
 /// a buffer which holds the incoming arguments, and to which the outgoing
 /// return values will be written.
@@ -91,21 +94,21 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
     values_vec: *mut u8,
     vmctx: *mut VMContext,
 ) -> Result<(), String> {
-    // In case wasm code calls Rust that panics and unwinds past this point,
-    // ensure that JMP_BUFS is unwound to its incoming state.
+    // Reset JMP_BUFS if the stack is unwound through this point.
     let _guard = ScopeGuard::new();
 
-    let func: fn(*mut u8, *mut VMContext) = mem::transmute(callee);
+    // Set a setjmp catch point.
+    let mut buf = mem::uninitialized();
+    if setjmp(&mut buf) != 0 {
+        return Err(trap_message(vmctx));
+    }
+    push_jmp_buf(buf);
 
-    JMP_BUFS.with(|bufs| {
-        let mut buf = mem::uninitialized();
-        if setjmp(&mut buf) != 0 {
-            return TRAP_DATA.with(|data| Err(format!("wasm trap at {:?}", data.get().pc)));
-        }
-        bufs.borrow_mut().push(buf);
-        func(values_vec, vmctx);
-        Ok(())
-    })
+    // Call the function!
+    let func: fn(*mut u8, *mut VMContext) = mem::transmute(callee);
+    func(values_vec, vmctx);
+
+    Ok(())
 }
 
 /// Call the wasm function pointed to by `callee`, which has no arguments or
@@ -115,19 +118,19 @@ pub unsafe extern "C" fn wasmtime_call(
     callee: *const VMFunctionBody,
     vmctx: *mut VMContext,
 ) -> Result<(), String> {
-    // In case wasm code calls Rust that panics and unwinds past this point,
-    // ensure that JMP_BUFS is unwound to its incoming state.
+    // Reset JMP_BUFS if the stack is unwound through this point.
     let _guard = ScopeGuard::new();
 
-    let func: fn(*mut VMContext) = mem::transmute(callee);
+    // Set a setjmp catch point.
+    let mut buf = mem::uninitialized();
+    if setjmp(&mut buf) != 0 {
+        return Err(trap_message(vmctx));
+    }
+    push_jmp_buf(buf);
 
-    JMP_BUFS.with(|bufs| {
-        let mut buf = mem::uninitialized();
-        if setjmp(&mut buf) != 0 {
-            return TRAP_DATA.with(|data| Err(format!("wasm trap at {:?}", data.get().pc)));
-        }
-        bufs.borrow_mut().push(buf);
-        func(vmctx);
-        Ok(())
-    })
+    // Call the function!
+    let func: fn(*mut VMContext) = mem::transmute(callee);
+    func(vmctx);
+
+    Ok(())
 }

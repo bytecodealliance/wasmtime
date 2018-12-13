@@ -11,18 +11,11 @@
 extern "C" {
 #endif
 
-struct CodeSegment;
-
 // Record the Trap code and wasm bytecode offset in TLS somewhere
-void RecordTrap(const uint8_t* pc, const struct CodeSegment* codeSegment);
+void RecordTrap(const uint8_t* pc);
 
 // Initiate an unwind.
 void Unwind(void);
-
-// Return the CodeSegment containing the given pc, if any exist in the process.
-// This method does not take a lock.
-const struct CodeSegment*
-LookupCodeSegment(const void* pc);
 
 // Trap initialization state.
 struct TrapContext {
