@@ -151,7 +151,7 @@ impl CodeGenSession {
         {
             let func_start = &mut self.func_defs[func_idx as usize];
 
-            // At this point we now the exact start address of this function. Save it
+            // At this point we know the exact start address of this function. Save it
             // and define dynamic label at this location.
             func_start.offset = Some(self.assembler.offset());
             self.assembler.dynamic_label(func_start.label);
