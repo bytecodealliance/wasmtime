@@ -148,7 +148,7 @@ pub fn translate(
                         ..
                     }) => {
                         if ty != Type::EmptyBlockType {
-                            return_from_block(&mut ctx, block_state.depth);
+                            return_from_block(&mut ctx);
                         }
 
                         // Finalize if..else block by jumping to the `end_label`.
@@ -179,7 +179,7 @@ pub fn translate(
                 let control_frame = control_frames.pop().expect("control stack is never empty");
 
                 if control_frame.ty != Type::EmptyBlockType && !control_frames.is_empty() {
-                    return_from_block(&mut ctx, control_frame.block_state.depth);
+                    return_from_block(&mut ctx);
                 }
 
                 if !control_frame.kind.is_loop() {

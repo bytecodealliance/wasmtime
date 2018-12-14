@@ -19,7 +19,7 @@ fn empty() {
 }
 
 macro_rules! binop_test {
-    ($op:ident, $func:path) => {
+    ($op:ident, $func:expr) => {
         quickcheck! {
             fn $op(a: u32, b: u32) -> bool {
                 static CODE: &str = concat!(
@@ -45,40 +45,27 @@ binop_test!(or, std::ops::BitOr::bitor);
 binop_test!(xor, std::ops::BitXor::bitxor);
 binop_test!(mul, u32::wrapping_mul);
 
-#[test]
-fn relop_eq() {
-    const CASES: &[(u32, u32, u32)] = &[
-        (0, 0, 1),
-        (0, 1, 0),
-        (1, 0, 0),
-        (1, 1, 1),
-        (1312, 1, 0),
-        (1312, 1312, 1),
-    ];
+quickcheck! {
+    fn relop_eq(a: u32, b: u32) -> bool{
+        static CODE: &str = r#"
+            (module
+              (func (param i32) (param i32) (result i32) (i32.eq (get_local 0) (get_local 1)))
+            )
+        "#;
 
-    let code = r#"
-(module
-  (func (param i32) (param i32) (result i32) (i32.eq (get_local 0) (get_local 1)))
-)
-    "#;
+        lazy_static! {
+            static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+        }
 
-    for (a, b, expected) in CASES {
-        assert_eq!(execute_wat(code, *a, *b), *expected);
+        let out = unsafe { TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)) };
+
+        (a == b) == (out == 1)
     }
 }
 
-#[test]
-fn if_then_else() {
-    const CASES: &[(u32, u32, u32)] = &[
-        (0, 1, 1),
-        (0, 0, 0),
-        (1, 0, 0),
-        (1, 1, 1),
-        (1312, 1, 1),
-        (1312, 1312, 1312),
-    ];
-
-    let code = r#"
+quickcheck! {
+    fn if_then_else(a: u32, b: u32) -> bool {
+        const CODE: &str = r#"
 (module
   (func (param i32) (param i32) (result i32)
     (if (result i32)
@@ -91,13 +78,17 @@ fn if_then_else() {
     )
   )
 )
-    "#;
+        "#;
 
-    for (a, b, expected) in CASES {
-        assert_eq!(execute_wat(code, *a, *b), *expected, "{}, {}", a, b);
+        lazy_static! {
+            static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+        }
+
+        let out = unsafe { TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)) };
+
+        out == (if a == b { a } else { b })
     }
 }
-
 #[test]
 fn if_without_result() {
     let code = r#"

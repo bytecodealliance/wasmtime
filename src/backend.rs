@@ -322,9 +322,7 @@ pub fn current_block_state(ctx: &Context) -> BlockState {
     ctx.block_state.clone()
 }
 
-pub fn return_from_block(ctx: &mut Context, new_depth: StackDepth) {
-    let diff = ((ctx.block_state.depth.0 - new_depth.0) * WORD_SIZE) as i32;
-
+pub fn return_from_block(ctx: &mut Context) {
     if let Some(loc) = ctx.block_state.stack.last().unwrap().location(&ctx.locals) {
         match loc {
             ValueLocation::Reg(r) => {
