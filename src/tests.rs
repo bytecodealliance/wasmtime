@@ -259,7 +259,8 @@ fn function_write_args_spill_to_stack() {
     assert_eq!(
         {
             let translated = translate_wat(code);
-            let out: u32 = unsafe { translated.execute_func(0, (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)) };
+            let out: u32 =
+                unsafe { translated.execute_func(0, (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)) };
             out
         },
         11

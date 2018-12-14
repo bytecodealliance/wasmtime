@@ -118,6 +118,8 @@ enum ValueLocation {
     /// first local, and so will have to be adjusted with `adjusted_offset`
     /// before reading (as RSP may have been changed by `push`/`pop`).
     Stack(i32),
+    /// Value is a literal (TODO: Support more than just `i32`)
+    Immediate(i32),
 }
 
 // TODO: This assumes only system-v calling convention.
@@ -207,13 +209,22 @@ impl TranslatedCodeSection {
 enum Value {
     Local(u32),
     Temp(GPR),
+    Immediate(i32),
 }
 
 impl Value {
+    fn immediate(&self) -> Option<i32> {
+        match *self {
+            Value::Immediate(i) => Some(i),
+            _ => None,
+        }
+    }
+
     fn location(&self, locals: &Locals) -> ValueLocation {
         match *self {
             Value::Local(loc) => local_location(locals, loc),
             Value::Temp(reg) => ValueLocation::Reg(reg),
+            Value::Immediate(reg) => ValueLocation::Immediate(reg),
         }
     }
 }
@@ -222,6 +233,7 @@ impl Value {
 enum StackValue {
     Local(u32),
     Temp(GPR),
+    Immediate(i32),
     Pop,
 }
 
@@ -229,6 +241,7 @@ impl StackValue {
     fn location(&self, locals: &Locals) -> Option<ValueLocation> {
         match *self {
             StackValue::Local(loc) => Some(local_location(locals, loc)),
+            StackValue::Immediate(i) => Some(ValueLocation::Immediate(i)),
             StackValue::Temp(reg) => Some(ValueLocation::Reg(reg)),
             StackValue::Pop => None,
         }
@@ -244,7 +257,7 @@ struct Locals {
 #[derive(Default, Clone)]
 pub struct BlockState {
     stack: Stack,
-    depth: StackDepth,
+    pub depth: StackDepth,
     regs: Registers,
 }
 
@@ -309,6 +322,37 @@ pub fn current_block_state(ctx: &Context) -> BlockState {
     ctx.block_state.clone()
 }
 
+pub fn return_from_block(ctx: &mut Context, new_depth: StackDepth) {
+    let diff = ((ctx.block_state.depth.0 - new_depth.0) * WORD_SIZE) as i32;
+
+    if let Some(loc) = ctx.block_state.stack.last().unwrap().location(&ctx.locals) {
+        match loc {
+            ValueLocation::Reg(r) => {
+                dynasm!(ctx.asm
+                    ; push Rq(r)
+                );
+            }
+            ValueLocation::Stack(offset) => {
+                let offset = adjusted_offset(ctx, offset);
+                dynasm!(ctx.asm
+                    ; push QWORD [rsp + offset]
+                );
+            }
+            ValueLocation::Immediate(imm) => {
+                dynasm!(ctx.asm
+                    ; push imm
+                );
+            }
+        }
+    }
+    // If `location` is `None` then we don't need to do anything.
+}
+
+pub fn push_block_return_value(ctx: &mut Context) {
+    ctx.block_state.depth.reserve(1);
+    ctx.block_state.stack.push(StackValue::Pop);
+}
+
 pub fn restore_block_state(ctx: &mut Context, block_state: BlockState) {
     ctx.block_state = block_state;
 }
@@ -320,6 +364,7 @@ pub fn push_return_value(ctx: &mut Context) {
 fn push_i32(ctx: &mut Context, value: Value) {
     let stack_loc = match value {
         Value::Local(loc) => StackValue::Local(loc),
+        Value::Immediate(i) => StackValue::Immediate(i),
         Value::Temp(gpr) => {
             if ctx.block_state.regs.free_scratch() >= 1 {
                 StackValue::Temp(gpr)
@@ -340,6 +385,7 @@ fn push_i32(ctx: &mut Context, value: Value) {
 fn pop_i32(ctx: &mut Context) -> Value {
     match ctx.block_state.stack.pop().expect("Stack is empty") {
         StackValue::Local(loc) => Value::Local(loc),
+        StackValue::Immediate(i) => Value::Immediate(i),
         StackValue::Temp(reg) => Value::Temp(reg),
         StackValue::Pop => {
             ctx.block_state.depth.free(1);
@@ -362,7 +408,7 @@ fn pop_i32_into(ctx: &mut Context, dst: ValueLocation) {
 fn free_val(ctx: &mut Context, val: Value) {
     match val {
         Value::Temp(reg) => ctx.block_state.regs.release_scratch_gpr(reg),
-        Value::Local(_) => {}
+        Value::Local(_) | Value::Immediate(_) => {}
     }
 }
 
@@ -374,6 +420,13 @@ fn into_reg(ctx: &mut Context, val: Value) -> GPR {
             let scratch = ctx.block_state.regs.take_scratch_gpr();
             dynasm!(ctx.asm
                 ; mov Rq(scratch), [rsp + offset]
+            );
+            scratch
+        }
+        ValueLocation::Immediate(i) => {
+            let scratch = ctx.block_state.regs.take_scratch_gpr();
+            dynasm!(ctx.asm
+                ; mov Rq(scratch), i
             );
             scratch
         }
@@ -400,7 +453,19 @@ fn into_temp_reg(ctx: &mut Context, val: Value) -> GPR {
                         ; mov Rq(scratch), Rq(reg)
                     );
                 }
+                ValueLocation::Immediate(_) => {
+                    panic!("We shouldn't be storing immediates in locals for now")
+                }
             }
+
+            scratch
+        }
+        Value::Immediate(i) => {
+            let scratch = ctx.block_state.regs.take_scratch_gpr();
+
+            dynasm!(ctx.asm
+                ; mov Rq(scratch), i
+            );
 
             scratch
         }
@@ -408,34 +473,68 @@ fn into_temp_reg(ctx: &mut Context, val: Value) -> GPR {
     }
 }
 
-// TODO: For the commutative instructions we can do operands in either
-//       order, so we can choose the operand order that creates the
-//       least unnecessary temps.
-pub fn i32_add(ctx: &mut Context) {
-    let op0 = pop_i32(ctx);
-    let tmp = pop_i32(ctx);
-    let op1 = into_temp_reg(ctx, tmp);
-    match op0.location(&ctx.locals) {
-        ValueLocation::Reg(reg) => {
-            dynasm!(ctx.asm
-                ; add Rd(op1), Rd(reg)
-            );
-        }
-        ValueLocation::Stack(offset) => {
-            let offset = adjusted_offset(ctx, offset);
-            dynasm!(ctx.asm
-                ; add Rd(op1), [rsp + offset]
-            );
+macro_rules! commutative_binop {
+    ($name:ident, $instr:ident, $const_fallback:expr) => {
+        pub fn $name(ctx: &mut Context) {
+            let op0 = pop_i32(ctx);
+            let op1 = pop_i32(ctx);
+
+            if let Some(i1) = op1.immediate() {
+                if let Some(i0) = op0.immediate() {
+                    ctx.block_state.stack.push(StackValue::Immediate($const_fallback(i1, i0)));
+                    return;
+                }
+            }
+
+            let (op1, op0) = match op1 {
+                Value::Temp(reg) => (reg, op0),
+                _ => (into_temp_reg(ctx, op0), op1),
+            };
+
+            match op0.location(&ctx.locals) {
+                ValueLocation::Reg(reg) => {
+                    dynasm!(ctx.asm
+                        ; $instr Rd(op1), Rd(reg)
+                    );
+                }
+                ValueLocation::Stack(offset) => {
+                    let offset = adjusted_offset(ctx, offset);
+                    dynasm!(ctx.asm
+                        ; $instr Rd(op1), [rsp + offset]
+                    );
+                }
+                ValueLocation::Immediate(offset) => {
+                    let offset = adjusted_offset(ctx, offset);
+                    dynasm!(ctx.asm
+                        ; $instr Rd(op1), [rsp + offset]
+                    );
+                }
+            }
+
+            ctx.block_state.stack.push(StackValue::Temp(op1));
+            free_val(ctx, op0);
         }
     }
-    ctx.block_state.stack.push(StackValue::Temp(op1));
-    free_val(ctx, op0);
 }
+
+commutative_binop!(i32_add, add, |a, b| a + b);
+commutative_binop!(i32_and, and, |a, b| a & b);
+commutative_binop!(i32_or, or, |a, b| a | b);
+commutative_binop!(i32_xor, xor, |a, b| a ^ b);
+commutative_binop!(i32_mul, imul, |a, b| a * b);
 
 pub fn i32_sub(ctx: &mut Context) {
     let op0 = pop_i32(ctx);
-    let tmp = pop_i32(ctx);
-    let op1 = into_temp_reg(ctx, tmp);
+    let op1 = pop_i32(ctx);
+
+    if let Some(i1) = op1.immediate() {
+        if let Some(i0) = op0.immediate() {
+            ctx.block_state.stack.push(StackValue::Immediate(i1 - i0));
+            return;
+        }
+    }
+
+    let op1 = into_temp_reg(ctx, op1);
     match op0.location(&ctx.locals) {
         ValueLocation::Reg(reg) => {
             dynasm!(ctx.asm
@@ -448,91 +547,14 @@ pub fn i32_sub(ctx: &mut Context) {
                 ; sub Rd(op1), [rsp + offset]
             );
         }
-    }
-    ctx.block_state.stack.push(StackValue::Temp(op1));
-    free_val(ctx, op0);
-}
-
-pub fn i32_and(ctx: &mut Context) {
-    let op0 = pop_i32(ctx);
-    let tmp = pop_i32(ctx);
-    let op1 = into_temp_reg(ctx, tmp);
-    match op0.location(&ctx.locals) {
-        ValueLocation::Reg(reg) => {
-            dynasm!(ctx.asm
-                ; and Rd(op1), Rd(reg)
-            );
-        }
-        ValueLocation::Stack(offset) => {
+        ValueLocation::Immediate(offset) => {
             let offset = adjusted_offset(ctx, offset);
             dynasm!(ctx.asm
-                ; and Rd(op1), [rsp + offset]
+                ; sub Rd(op1), [rsp + offset]
             );
         }
     }
-    ctx.block_state.stack.push(StackValue::Temp(op1));
-    free_val(ctx, op0);
-}
 
-pub fn i32_or(ctx: &mut Context) {
-    let op0 = pop_i32(ctx);
-    let tmp = pop_i32(ctx);
-    let op1 = into_temp_reg(ctx, tmp);
-    match op0.location(&ctx.locals) {
-        ValueLocation::Reg(reg) => {
-            dynasm!(ctx.asm
-                ; or Rd(op1), Rd(reg)
-            );
-        }
-        ValueLocation::Stack(offset) => {
-            let offset = adjusted_offset(ctx, offset);
-            dynasm!(ctx.asm
-                ; or Rd(op1), [rsp + offset]
-            );
-        }
-    }
-    ctx.block_state.stack.push(StackValue::Temp(op1));
-    free_val(ctx, op0);
-}
-
-pub fn i32_xor(ctx: &mut Context) {
-    let op0 = pop_i32(ctx);
-    let tmp = pop_i32(ctx);
-    let op1 = into_temp_reg(ctx, tmp);
-    match op0.location(&ctx.locals) {
-        ValueLocation::Reg(reg) => {
-            dynasm!(ctx.asm
-                ; xor Rd(op1), Rd(reg)
-            );
-        }
-        ValueLocation::Stack(offset) => {
-            let offset = adjusted_offset(ctx, offset);
-            dynasm!(ctx.asm
-                ; xor Rd(op1), [rsp + offset]
-            );
-        }
-    }
-    ctx.block_state.stack.push(StackValue::Temp(op1));
-    free_val(ctx, op0);
-}
-
-pub fn i32_mul(ctx: &mut Context) {
-    let op0 = pop_i32(ctx);
-    let tmp = pop_i32(ctx);
-    let op1 = into_temp_reg(ctx, tmp);
-    match op0.location(&ctx.locals) {
-        ValueLocation::Reg(reg) => {
-            dynasm!(ctx.asm
-                ; imul Rd(op1), Rd(reg)
-            );
-        }
-        ValueLocation::Stack(offset) => {
-            let offset = adjusted_offset(ctx, offset);
-            dynasm!(ctx.asm
-                ; imul Rd(op1), [rsp + offset]
-            );
-        }
-    }
     ctx.block_state.stack.push(StackValue::Temp(op1));
     free_val(ctx, op0);
 }
@@ -551,37 +573,67 @@ pub fn set_local_i32(ctx: &mut Context, local_idx: u32) {
     free_val(ctx, val);
 }
 
-// TODO: Don't store literals at all, roll them into `Value`
 pub fn literal_i32(ctx: &mut Context, imm: i32) {
-    let gpr = ctx.block_state.regs.take_scratch_gpr();
-    dynasm!(ctx.asm
-        ; mov Rd(gpr), imm
-    );
-    push_i32(ctx, Value::Temp(gpr));
+    push_i32(ctx, Value::Immediate(imm));
 }
 
 pub fn relop_eq_i32(ctx: &mut Context) {
     let right = pop_i32(ctx);
     let left = pop_i32(ctx);
     let result = ctx.block_state.regs.take_scratch_gpr();
-    let lreg = into_reg(ctx, left);
-    match right.location(&ctx.locals) {
-        ValueLocation::Stack(offset) => {
-            let offset = adjusted_offset(ctx, offset);
-            dynasm!(ctx.asm
-                ; xor Rq(result), Rq(result)
-                ; cmp Rd(lreg), [rsp + offset]
-                ; sete Rb(result)
-            );
+
+    if let Some(i) = left.immediate() {
+        match right.location(&ctx.locals) {
+            ValueLocation::Stack(offset) => {
+                let offset = adjusted_offset(ctx, offset);
+                dynasm!(ctx.asm
+                    ; xor Rq(result), Rq(result)
+                    ; cmp DWORD [rsp + offset], i
+                    ; sete Rb(result)
+                );
+            }
+            ValueLocation::Reg(rreg) => {
+                dynasm!(ctx.asm
+                    ; xor Rq(result), Rq(result)
+                    ; cmp Rd(rreg), i
+                    ; sete Rb(result)
+                );
+            }
+            ValueLocation::Immediate(right) => {
+                let is_equal = if i == right { 1i8 } else { 0 };
+                dynasm!(ctx.asm
+                    ; mov Rb(result), is_equal
+                );
+            }
         }
-        ValueLocation::Reg(rreg) => {
-            dynasm!(ctx.asm
-                ; xor Rq(result), Rq(result)
-                ; cmp Rd(lreg), Rd(rreg)
-                ; sete Rb(result)
-            );
+    } else {
+        let lreg = into_reg(ctx, left);
+        match right.location(&ctx.locals) {
+            ValueLocation::Stack(offset) => {
+                let offset = adjusted_offset(ctx, offset);
+                dynasm!(ctx.asm
+                    ; xor Rq(result), Rq(result)
+                    ; cmp Rd(lreg), [rsp + offset]
+                    ; sete Rb(result)
+                );
+            }
+            ValueLocation::Reg(rreg) => {
+                dynasm!(ctx.asm
+                    ; xor Rq(result), Rq(result)
+                    ; cmp Rd(lreg), Rd(rreg)
+                    ; sete Rb(result)
+                );
+            }
+            ValueLocation::Immediate(i) => {
+                dynasm!(ctx.asm
+                    ; xor Rq(result), Rq(result)
+                    ; cmp Rd(lreg), i
+                    ; sete Rb(result)
+                );
+            }
         }
     }
+
     push_i32(ctx, Value::Temp(result));
     free_val(ctx, left);
     free_val(ctx, right);
@@ -630,6 +682,12 @@ fn copy_value(ctx: &mut Context, src: ValueLocation, dst: ValueLocation) {
                 ; mov [rsp + out_offset], Rq(in_reg)
             );
         }
+        (ValueLocation::Immediate(i), ValueLocation::Stack(out_offset)) => {
+            let out_offset = adjusted_offset(ctx, out_offset);
+            dynasm!(ctx.asm
+                ; mov DWORD [rsp + out_offset], i
+            );
+        }
         (ValueLocation::Stack(in_offset), ValueLocation::Reg(out_reg)) => {
             let in_offset = adjusted_offset(ctx, in_offset);
             dynasm!(ctx.asm
@@ -643,6 +701,12 @@ fn copy_value(ctx: &mut Context, src: ValueLocation, dst: ValueLocation) {
                 );
             }
         }
+        (ValueLocation::Immediate(i), ValueLocation::Reg(out_reg)) => {
+            dynasm!(ctx.asm
+                ; mov Rq(out_reg), i
+            );
+        }
+        (_, ValueLocation::Immediate(_)) => panic!("Tried to copy to an immediate value!"),
     }
 }
 

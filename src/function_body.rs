@@ -147,6 +147,10 @@ pub fn translate(
                         block_state,
                         ..
                     }) => {
+                        if ty != Type::EmptyBlockType {
+                            return_from_block(&mut ctx, block_state.depth);
+                        }
+
                         // Finalize if..else block by jumping to the `end_label`.
                         br(&mut ctx, end_label);
 
@@ -174,6 +178,10 @@ pub fn translate(
             Operator::End => {
                 let control_frame = control_frames.pop().expect("control stack is never empty");
 
+                if control_frame.ty != Type::EmptyBlockType && !control_frames.is_empty() {
+                    return_from_block(&mut ctx, control_frame.block_state.depth);
+                }
+
                 if !control_frame.kind.is_loop() {
                     // Branches to a control frame with block type directs control flow to the header of the loop
                     // and we don't need to resolve it here. Branching to other control frames always lead
@@ -191,7 +199,8 @@ pub fn translate(
                     prepare_return_value(&mut ctx);
                 }
 
-                // restore_block_state(&mut ctx, control_frame.block_state);
+                restore_block_state(&mut ctx, control_frame.block_state);
+                push_block_return_value(&mut ctx);
             }
             Operator::I32Eq => relop_eq_i32(&mut ctx),
             Operator::I32Add => i32_add(&mut ctx),
