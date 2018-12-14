@@ -5,11 +5,6 @@ environment:
     MSYS2: 1
   - TARGET: x86_64-pc-windows-msvc
     BITS: 64
-  - TARGET: i686-pc-windows-gnu
-    BITS: 32
-    MSYS2: 1
-  - TARGET: i686-pc-windows-msvc
-    BITS: 32
 install:
   - curl -sSf -o rustup-init.exe https://win.rustup.rs/
   - rustup-init.exe -y --default-host %TARGET%
