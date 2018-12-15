@@ -317,17 +317,23 @@ const FIBONACCI: &str = r#"
 
 #[test]
 fn fib() {
-    // fac(x) = y <=> (x, y)
-    const FIB_SEQ: &[u32] = &[1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+    fn fib(n: u32) -> u32 {
+        let (mut a, mut b) = (1, 1);
+
+        for _ in 0..n {
+            let old_a = a;
+            a = b;
+            b += old_a;
+        }
+
+        a
+    }
 
     let translated = translate_wat(FIBONACCI);
 
-    for x in 0..10 {
+    for x in 0..30 {
         unsafe {
-            assert_eq!(
-                translated.execute_func::<_, u32>(0, (x,)),
-                FIB_SEQ[x as usize]
-            );
+            assert_eq!(translated.execute_func::<_, u32>(0, (x,)), fib(x));
         }
     }
 }

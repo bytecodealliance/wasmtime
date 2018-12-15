@@ -397,10 +397,33 @@ fn pop_i32(ctx: &mut Context) -> Value {
 }
 
 fn pop_i32_into(ctx: &mut Context, dst: ValueLocation) {
-    let val = pop_i32(ctx);
-    let val_loc = val.location(&ctx.locals);
-    copy_value(ctx, val_loc, dst);
-    free_val(ctx, val);
+    let to_move = match ctx.block_state.stack.pop().expect("Stack is empty") {
+        StackValue::Local(loc) => Value::Local(loc),
+        StackValue::Immediate(i) => Value::Immediate(i),
+        StackValue::Temp(reg) => Value::Temp(reg),
+        StackValue::Pop => {
+            ctx.block_state.depth.free(1);
+            match dst {
+                ValueLocation::Reg(r) => dynasm!(ctx.asm
+                    ; pop Rq(r)
+                ),
+                ValueLocation::Stack(offset) => {
+                    let offset = adjusted_offset(ctx, offset);
+                    dynasm!(ctx.asm
+                        ; pop QWORD [rsp + offset]
+                    )
+                }
+                ValueLocation::Immediate(_) => panic!("Tried to write to literal!"),
+            }
+
+            // DO NOT DO A `copy_val`
+            return;
+        }
+    };
+
+    let src = to_move.location(&ctx.locals);
+    copy_value(ctx, src, dst);
+    free_val(ctx, to_move);
 }
 
 fn free_val(ctx: &mut Context, val: Value) {
