@@ -13,8 +13,7 @@ enum ControlFrameKind {
     /// Can be used for an implicit function block.
     Block { end_label: Label },
     /// Loop frame (branching to the beginning of block).
-    #[allow(unused)]
-    Loop { header: Label },
+    Loop { header: Label, break_: Label },
     /// True-subblock of if expression.
     IfTrue {
         /// If jump happens inside the if-true block then control will
@@ -32,10 +31,10 @@ enum ControlFrameKind {
 
 impl ControlFrameKind {
     /// Returns a label which should be used as a branch destination.
-    fn br_destination(&self) -> Label {
+    fn block_end(&self) -> Label {
         match *self {
             ControlFrameKind::Block { end_label } => end_label,
-            ControlFrameKind::Loop { header } => header,
+            ControlFrameKind::Loop { break_, .. } => break_,
             ControlFrameKind::IfTrue { end_label, .. } => end_label,
             ControlFrameKind::IfFalse { end_label } => end_label,
         }
@@ -100,16 +99,16 @@ pub fn translate(
         num_locals += count;
     }
 
-    let mut ctx = session.new_context(func_idx);
+    let ctx = &mut session.new_context(func_idx);
     let operators = body.get_operators_reader()?;
 
-    start_function(&mut ctx, arg_count, num_locals);
+    start_function(ctx, arg_count, num_locals);
 
     let mut control_frames = Vec::new();
 
     // Upon entering the function implicit frame for function body is pushed. It has the same
     // result type as the function itself. Branching to it is equivalent to returning from the function.
-    let epilogue_label = create_label(&mut ctx);
+    let epilogue_label = create_label(ctx);
     control_frames.push(ControlFrame::new(
         ControlFrameKind::Block {
             end_label: epilogue_label,
@@ -125,16 +124,29 @@ pub fn translate(
                     .last_mut()
                     .expect("control stack is never empty")
                     .mark_stack_polymorphic();
-                trap(&mut ctx);
+                trap(ctx);
             }
             Operator::If { ty } => {
-                let end_label = create_label(&mut ctx);
-                let if_not = create_label(&mut ctx);
+                let end_label = create_label(ctx);
+                let if_not = create_label(ctx);
 
-                pop_and_breq(&mut ctx, if_not);
+                pop_and_breq(ctx, if_not);
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::IfTrue { end_label, if_not },
+                    current_block_state(&ctx),
+                    ty,
+                ));
+            }
+            Operator::Loop { ty } => {
+                let header = create_label(ctx);
+                let break_ = create_label(ctx);
+
+                define_label(ctx, header);
+                pop_and_breq(ctx, break_);
+
+                control_frames.push(ControlFrame::new(
+                    ControlFrameKind::Loop { header, break_ },
                     current_block_state(&ctx),
                     ty,
                 ));
@@ -148,17 +160,17 @@ pub fn translate(
                         ..
                     }) => {
                         if ty != Type::EmptyBlockType {
-                            return_from_block(&mut ctx);
+                            return_from_block(ctx);
                         }
 
                         // Finalize if..else block by jumping to the `end_label`.
-                        br(&mut ctx, end_label);
+                        br(ctx, end_label);
 
                         // Define `if_not` label here, so if the corresponding `if` block receives
                         // 0 it will branch here.
                         // After that reset stack depth to the value before entering `if` block.
-                        define_label(&mut ctx, if_not);
-                        end_block(&mut ctx, block_state.clone());
+                        define_label(ctx, if_not);
+                        end_block(ctx, block_state.clone());
 
                         // Carry over the `end_label`, so it will be resolved when the corresponding `end`
                         // is encountered.
@@ -179,57 +191,56 @@ pub fn translate(
                 let control_frame = control_frames.pop().expect("control stack is never empty");
 
                 if control_frame.ty != Type::EmptyBlockType && !control_frames.is_empty() {
-                    return_from_block(&mut ctx);
+                    return_from_block(ctx);
                 }
 
-                if !control_frame.kind.is_loop() {
-                    // Branches to a control frame with block type directs control flow to the header of the loop
-                    // and we don't need to resolve it here. Branching to other control frames always lead
-                    // control flow to the corresponding `end`.
-                    define_label(&mut ctx, control_frame.kind.br_destination());
+                if let ControlFrameKind::Loop { header, .. } = control_frame.kind {
+                    br(ctx, header);
                 }
+
+                define_label(ctx, control_frame.kind.block_end());
 
                 if let ControlFrameKind::IfTrue { if_not, .. } = control_frame.kind {
                     // this is `if .. end` construction. Define the `if_not` label here.
-                    define_label(&mut ctx, if_not);
+                    define_label(ctx, if_not);
                 }
 
                 // This is the last control frame. Perform the implicit return here.
                 if control_frames.len() == 0 && return_ty != Type::EmptyBlockType {
-                    prepare_return_value(&mut ctx);
+                    prepare_return_value(ctx);
                 }
 
-                end_block(&mut ctx, control_frame.block_state);
-                push_block_return_value(&mut ctx);
+                end_block(ctx, control_frame.block_state);
+                push_block_return_value(ctx);
             }
-            Operator::I32Eq => relop_eq_i32(&mut ctx),
-            Operator::I32Add => i32_add(&mut ctx),
-            Operator::I32Sub => i32_sub(&mut ctx),
-            Operator::I32And => i32_and(&mut ctx),
-            Operator::I32Or => i32_or(&mut ctx),
-            Operator::I32Xor => i32_xor(&mut ctx),
-            Operator::I32Mul => i32_mul(&mut ctx),
-            Operator::GetLocal { local_index } => get_local_i32(&mut ctx, local_index),
-            Operator::I32Const { value } => literal_i32(&mut ctx, value),
+            Operator::I32Eq => relop_eq_i32(ctx),
+            Operator::I32Add => i32_add(ctx),
+            Operator::I32Sub => i32_sub(ctx),
+            Operator::I32And => i32_and(ctx),
+            Operator::I32Or => i32_or(ctx),
+            Operator::I32Xor => i32_xor(ctx),
+            Operator::I32Mul => i32_mul(ctx),
+            Operator::GetLocal { local_index } => get_local_i32(ctx, local_index),
+            Operator::I32Const { value } => literal_i32(ctx, value),
             Operator::Call { function_index } => {
                 let callee_ty = translation_ctx.func_type(function_index);
 
                 // TODO: this implementation assumes that this function is locally defined.
 
                 call_direct(
-                    &mut ctx,
+                    ctx,
                     function_index,
                     callee_ty.params.len() as u32,
                     callee_ty.returns.len() as u32,
                 );
-                push_return_value(&mut ctx);
+                push_return_value(ctx);
             }
             _ => {
-                trap(&mut ctx);
+                trap(ctx);
             }
         }
     }
-    epilogue(&mut ctx);
+    epilogue(ctx);
 
     Ok(())
 }
