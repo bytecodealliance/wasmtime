@@ -1,8 +1,9 @@
-#![feature(plugin, test)]
+#![feature(plugin, test, const_slice_len)]
 #![plugin(dynasm)]
 
 extern crate test;
 
+extern crate arrayvec;
 extern crate capstone;
 extern crate failure;
 extern crate wasmparser;

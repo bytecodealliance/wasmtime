@@ -9,6 +9,7 @@ keywords = ["webassembly", "wasm", "compile", "compiler", "jit"]
 publish = false
 
 [dependencies]
+arrayvec = "0.4"
 dynasm = "0.2.3"
 dynasmrt = "0.2.3"
 wasmparser = "0.21.6"

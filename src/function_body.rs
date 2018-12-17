@@ -158,7 +158,7 @@ pub fn translate(
                         // 0 it will branch here.
                         // After that reset stack depth to the value before entering `if` block.
                         define_label(&mut ctx, if_not);
-                        restore_block_state(&mut ctx, block_state.clone());
+                        end_block(&mut ctx, block_state.clone());
 
                         // Carry over the `end_label`, so it will be resolved when the corresponding `end`
                         // is encountered.
@@ -199,7 +199,7 @@ pub fn translate(
                     prepare_return_value(&mut ctx);
                 }
 
-                restore_block_state(&mut ctx, control_frame.block_state);
+                end_block(&mut ctx, control_frame.block_state);
                 push_block_return_value(&mut ctx);
             }
             Operator::I32Eq => relop_eq_i32(&mut ctx),

@@ -250,6 +250,7 @@ fn function_write_args_spill_to_stack() {
     assert_eq!(
         {
             let translated = translate_wat(code);
+            translated.disassemble();
             let out: u32 =
                 unsafe { translated.execute_func(0, (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)) };
             out
@@ -330,6 +331,7 @@ fn fib() {
     }
 
     let translated = translate_wat(FIBONACCI);
+    translated.disassemble();
 
     for x in 0..30 {
         unsafe {
