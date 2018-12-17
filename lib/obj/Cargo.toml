@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-obj"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["The Cranelift Project Developers"]
 description = "Native object file output for WebAsssembly code in Wasmtime"
 publish = false
