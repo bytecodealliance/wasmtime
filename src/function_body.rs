@@ -250,7 +250,11 @@ pub fn translate(
                 };
             }
             Operator::End => {
-                // TODO: Merge `End`s
+                // TODO: Merge `End`s so that we can
+                //       A) Move values directly into RAX when returning from deeply-nested blocks.
+                //       B) Avoid restoring locals when not necessary.
+                // This doesn't require lookahead but it does require turning this loop into a kind
+                // of state machine.
                 let control_frame = control_frames.pop().expect("control stack is never empty");
 
                 let arity = control_frame.arity();

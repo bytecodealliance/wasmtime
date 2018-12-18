@@ -679,7 +679,11 @@ macro_rules! commutative_binop {
 
             let (op1, op0) = match op1 {
                 Value::Temp(reg) => (reg, op0),
-                _ => (into_temp_reg(ctx, op0), op1),
+                _ => if op0.immediate().is_some() {
+                    (into_temp_reg(ctx, op1), op0)
+                } else {
+                    (into_temp_reg(ctx, op0), op1)
+                }
             };
 
             match op0.location(&ctx.block_state.locals) {
@@ -712,6 +716,8 @@ commutative_binop!(i32_and, and, |a, b| a & b);
 commutative_binop!(i32_or, or, |a, b| a | b);
 commutative_binop!(i32_xor, xor, |a, b| a ^ b);
 
+// `i32_mul` needs to be seperate because the immediate form of the instruction
+// has a different syntax to the immediate form of the other instructions.
 pub fn i32_mul(ctx: &mut Context) {
     let op0 = pop_i32(ctx);
     let op1 = pop_i32(ctx);
@@ -727,7 +733,13 @@ pub fn i32_mul(ctx: &mut Context) {
 
     let (op1, op0) = match op1 {
         Value::Temp(reg) => (reg, op0),
-        _ => (into_temp_reg(ctx, op0), op1),
+        _ => {
+            if op0.immediate().is_some() {
+                (into_temp_reg(ctx, op1), op0)
+            } else {
+                (into_temp_reg(ctx, op0), op1)
+            }
+        }
     };
 
     match op0.location(&ctx.block_state.locals) {
@@ -811,8 +823,67 @@ pub fn set_local_i32(ctx: &mut Context, local_idx: u32) {
         *cur = dst_loc;
     }
 
+    // TODO: We can have a specified stack depth where we always materialize locals,
+    //       which would preserve linear runtime.
+    materialize_local(ctx, local_idx);
     copy_value(ctx, val_loc, dst_loc);
     free_value(ctx, val);
+}
+
+fn materialize_local(ctx: &mut Context, local_idx: u32) {
+    let mut to_repush = 0;
+    let mut out = None;
+
+    // TODO: With real stack allocation we can make this constant-time
+    for stack_val in ctx.block_state.stack.iter_mut().rev() {
+        match *stack_val {
+            // For now it's impossible for a local to be in RAX but that might be
+            // possible in the future, so we check both cases.
+            StackValue::Local(i) if i == local_idx => {
+                ctx.block_state.depth.reserve(1);
+                *stack_val = StackValue::Pop;
+
+                out = Some(*stack_val);
+
+                break;
+            }
+            StackValue::Pop => {
+                to_repush += 1;
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(out) = out {
+        match out {
+            StackValue::Temp(gpr) => {
+                dynasm!(ctx.asm
+                    ; mov Rq(gpr), rax
+                );
+            }
+            StackValue::Pop => {
+                // TODO: Ideally we should do proper stack allocation so we
+                //       don't have to check this at all (i.e. order on the
+                //       physical stack and order on the logical stack should
+                //       be independent).
+                assert_eq!(to_repush, 0);
+                match ctx.block_state.locals.get(local_idx) {
+                    ValueLocation::Reg(r) => dynasm!(ctx.asm
+                        ; push Rq(r)
+                    ),
+                    ValueLocation::Stack(offset) => {
+                        let offset = adjusted_offset(ctx, offset);
+                        dynasm!(ctx.asm
+                            ; push QWORD [rsp + offset]
+                        )
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            _ => unreachable!(),
+        }
+        ctx.block_state.regs.release_scratch_gpr(RAX);
+    }
 }
 
 pub fn literal_i32(ctx: &mut Context, imm: i32) {
@@ -1031,7 +1102,7 @@ fn free_register(ctx: &mut Context, reg: GPR) {
                 //       be independent).
                 assert_eq!(to_repush, 0);
                 dynasm!(ctx.asm
-                    ; push rax
+                    ; push Rq(reg)
                 );
             }
             _ => unreachable!(),
