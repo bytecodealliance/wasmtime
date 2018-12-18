@@ -5,8 +5,9 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::divconst_magic_numbers::{magic_s32, magic_s64, magic_u32, magic_u64};
 use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
+use crate::ir::condcodes::IntCC;
 use crate::ir::dfg::ValueDef;
-use crate::ir::instructions::Opcode;
+use crate::ir::instructions::{Opcode, ValueList};
 use crate::ir::types::{I32, I64};
 use crate::ir::Inst;
 use crate::ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
@@ -536,6 +537,88 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
     }
 }
 
+struct BranchOptInfo {
+    br_inst: Inst,
+    cmp_arg: Value,
+    destination: Ebb,
+    args: ValueList,
+    kind: BranchOptKind,
+}
+
+enum BranchOptKind {
+    EqualZero,
+    NotEqualZero,
+}
+
+fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
+    let info = match pos.func.dfg[inst] {
+        InstructionData::BranchInt {
+            opcode: Opcode::Brif,
+            cond: br_cond,
+            destination,
+            ref args,
+        } => {
+            let first_arg = {
+                let args = pos.func.dfg.inst_args(inst);
+                args[0]
+            };
+            if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(first_arg) {
+                if let InstructionData::BinaryImm {
+                    opcode: Opcode::IfcmpImm,
+                    imm: cmp_imm,
+                    arg: cmp_arg,
+                } = pos.func.dfg[iconst_inst]
+                {
+                    let cmp_imm: i64 = cmp_imm.into();
+                    if cmp_imm != 0 {
+                        return;
+                    }
+
+                    match br_cond {
+                        IntCC::NotEqual => BranchOptInfo {
+                            br_inst: inst,
+                            cmp_arg: cmp_arg,
+                            destination: destination,
+                            args: args.clone(),
+                            kind: BranchOptKind::NotEqualZero,
+                        },
+                        IntCC::Equal => BranchOptInfo {
+                            br_inst: inst,
+                            cmp_arg: cmp_arg,
+                            destination: destination,
+                            args: args.clone(),
+                            kind: BranchOptKind::EqualZero,
+                        },
+                        _ => return,
+                    }
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
+        _ => return,
+    };
+
+    match info.kind {
+        BranchOptKind::EqualZero => {
+            let args = info.args.as_slice(&pos.func.dfg.value_lists)[1..].to_vec();
+            pos.func
+                .dfg
+                .replace(info.br_inst)
+                .brz(info.cmp_arg, info.destination, &args);
+        }
+        BranchOptKind::NotEqualZero => {
+            let args = info.args.as_slice(&pos.func.dfg.value_lists)[1..].to_vec();
+            pos.func
+                .dfg
+                .replace(info.br_inst)
+                .brnz(info.cmp_arg, info.destination, &args);
+        }
+    }
+}
+
 /// The main pre-opt pass.
 pub fn do_preopt(func: &mut Function) {
     let _tt = timing::preopt();
@@ -554,6 +637,8 @@ pub fn do_preopt(func: &mut Function) {
             }
 
             //-- END -- division by constants ------------------
+
+            branch_opt(&mut pos, inst);
         }
     }
 }
