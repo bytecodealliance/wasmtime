@@ -471,7 +471,7 @@ fn fib() {
 
     for x in 0..30 {
         unsafe {
-            assert_eq!(translated.execute_func::<_, u32>(0, (x,)), fib(x));
+            assert_eq!(translated.execute_func::<_, u32>(0, (x,)), fib(x), "Failed for x={}", x);
         }
     }
 }

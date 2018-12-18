@@ -211,7 +211,6 @@ impl TranslatedCodeSection {
     }
 }
 
-// TODO: Immediates? We could implement on-the-fly const folding
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum Value {
     Local(u32),
@@ -287,6 +286,7 @@ pub struct BlockState {
     // TODO: `BitVec`
     stack_map: Vec<bool>,
     depth: StackDepth,
+    return_register: Option<GPR>,
     regs: Registers,
     /// This is the _current_ locals, since we can shuffle them about during function calls.
     /// We will restore this to be the same state as the `Locals` in `Context` at the end
@@ -426,17 +426,43 @@ pub fn return_from_block(ctx: &mut Context, arity: u32, is_function_end: bool) {
     }
 
     let stack_top = *ctx.block_state.stack.last().expect("Stack is empty");
-    put_stack_val_into(ctx, stack_top, ValueLocation::Reg(RAX))
+    if let Some(reg) = ctx.block_state.return_register {
+        put_stack_val_into(ctx, stack_top, ValueLocation::Reg(reg));
+    } else {
+        let out_reg = match stack_top {
+            StackValue::Temp(r) => r,
+            other => {
+                let new_scratch = ctx.block_state.regs.take_scratch_gpr();
+                put_stack_val_into(ctx, other, ValueLocation::Reg(new_scratch));
+                new_scratch
+            }
+        };
+
+        ctx.block_state.return_register = Some(out_reg);
+    }
 }
 
-pub fn start_block(ctx: &mut Context, arity: u32) -> BlockState {
-    free_return_register(ctx, arity);
+pub fn start_block(ctx: &mut Context) -> BlockState {
+    // free_return_register(ctx, arity);
     let current_state = ctx.block_state.clone();
     ctx.block_state.parent_locals = ctx.block_state.locals.clone();
+    ctx.block_state.return_register = None;
     current_state
 }
 
-pub fn end_block(ctx: &mut Context, parent_block_state: BlockState, arity: u32) {
+// To start the next subblock of a block (for `if..then..else..end`).
+// The only difference is that choices we made in the first subblock
+// (for now only the return register) must be maintained in the next
+// subblocks.
+pub fn reset_block(ctx: &mut Context, parent_block_state: BlockState) {
+    let return_reg = ctx.block_state.return_register;
+
+    ctx.block_state = parent_block_state;
+
+    ctx.block_state.return_register = return_reg;
+}
+
+pub fn end_block(ctx: &mut Context, parent_block_state: BlockState) {
     // TODO: This is currently never called, but is important for if we want to
     //       have a more complex stack spilling scheme.
     if ctx.block_state.depth != parent_block_state.depth {
@@ -445,10 +471,12 @@ pub fn end_block(ctx: &mut Context, parent_block_state: BlockState, arity: u32) 
         );
     }
 
+    let return_reg = ctx.block_state.return_register;
     ctx.block_state = parent_block_state;
 
-    if arity > 0 {
-        push_return_value(ctx);
+    if let Some(reg) = return_reg {
+        ctx.block_state.regs.mark_used(reg);
+        ctx.block_state.stack.push(StackValue::Temp(reg));
     }
 }
 
@@ -457,7 +485,11 @@ pub fn end_block(ctx: &mut Context, parent_block_state: BlockState, arity: u32) 
 //       use that one. This will mean that `(block ...)` is no less efficient than `...`
 //       alone, and you only pay for the shuffling of registers in the case that you use
 //       `BrIf` or similar.
-pub fn push_return_value(ctx: &mut Context) {
+fn push_return_value(ctx: &mut Context, arity: u32) {
+    if arity == 0 {
+        return;
+    }
+    assert_eq!(arity, 1);
     ctx.block_state.regs.mark_used(RAX);
     ctx.block_state.stack.push(StackValue::Temp(RAX));
 }
@@ -662,10 +694,9 @@ macro_rules! commutative_binop {
                         ; $instr Rd(op1), [rsp + offset]
                     );
                 }
-                ValueLocation::Immediate(offset) => {
-                    let offset = adjusted_offset(ctx, offset);
+                ValueLocation::Immediate(i) => {
                     dynasm!(ctx.asm
-                        ; $instr Rd(op1), [rsp + offset]
+                        ; $instr Rd(op1), i
                     );
                 }
             }
@@ -677,11 +708,50 @@ macro_rules! commutative_binop {
 }
 
 commutative_binop!(i32_add, add, i32::wrapping_add);
-
 commutative_binop!(i32_and, and, |a, b| a & b);
 commutative_binop!(i32_or, or, |a, b| a | b);
 commutative_binop!(i32_xor, xor, |a, b| a ^ b);
-commutative_binop!(i32_mul, imul, i32::wrapping_mul);
+
+pub fn i32_mul(ctx: &mut Context) {
+    let op0 = pop_i32(ctx);
+    let op1 = pop_i32(ctx);
+
+    if let Some(i1) = op1.immediate() {
+        if let Some(i0) = op0.immediate() {
+            ctx.block_state
+                .stack
+                .push(StackValue::Immediate(i32::wrapping_mul(i1, i0)));
+            return;
+        }
+    }
+
+    let (op1, op0) = match op1 {
+        Value::Temp(reg) => (reg, op0),
+        _ => (into_temp_reg(ctx, op0), op1),
+    };
+
+    match op0.location(&ctx.block_state.locals) {
+        ValueLocation::Reg(reg) => {
+            dynasm!(ctx.asm
+                ; imul Rd(op1), Rd(reg)
+            );
+        }
+        ValueLocation::Stack(offset) => {
+            let offset = adjusted_offset(ctx, offset);
+            dynasm!(ctx.asm
+                ; imul Rd(op1), [rsp + offset]
+            );
+        }
+        ValueLocation::Immediate(i) => {
+            dynasm!(ctx.asm
+                ; imul Rd(op1), Rd(op1), i
+            );
+        }
+    }
+
+    ctx.block_state.stack.push(StackValue::Temp(op1));
+    free_value(ctx, op0);
+}
 
 // `sub` is not commutative, so we have to handle it differently (we _must_ use the `op1`
 // temp register as the output)
@@ -927,19 +997,14 @@ fn free_register(ctx: &mut Context, reg: GPR) {
         return;
     }
 
+    // TODO: With real stack allocation we can make this constant-time
     for stack_val in ctx.block_state.stack.iter_mut().rev() {
         match stack_val.location(&ctx.block_state.locals) {
             // For now it's impossible for a local to be in RAX but that might be
             // possible in the future, so we check both cases.
             Some(ValueLocation::Reg(r)) if r == reg => {
-                *stack_val = if ctx.block_state.regs.free_scratch() > 1 {
-                    let gpr = ctx.block_state.regs.take_scratch_gpr();
-                    assert!(gpr != RAX, "RAX in stack but marked as free");
-                    StackValue::Temp(gpr)
-                } else {
-                    ctx.block_state.depth.reserve(1);
-                    StackValue::Pop
-                };
+                ctx.block_state.depth.reserve(1);
+                *stack_val = StackValue::Pop;
 
                 out = Some(*stack_val);
 
@@ -998,8 +1063,10 @@ fn save_volatile(ctx: &mut Context) -> ArrayVec<[GPR; SCRATCH_REGS.len()]> {
 
 /// Write the arguments to the callee to the registers and the stack using the SystemV
 /// calling convention.
-fn pass_outgoing_args(ctx: &mut Context, arity: u32) -> CallCleanup {
+fn pass_outgoing_args(ctx: &mut Context, arity: u32, return_arity: u32) -> CallCleanup {
     let num_stack_args = (arity as usize).saturating_sub(ARGS_IN_GPRS.len()) as i32;
+
+    free_arg_registers(ctx, arity);
 
     // We pop stack arguments first - arguments are RTL
     if num_stack_args > 0 {
@@ -1032,6 +1099,10 @@ fn pass_outgoing_args(ctx: &mut Context, arity: u32) -> CallCleanup {
         pop_i32_into(ctx, ValueLocation::Reg(*reg));
     }
 
+    // We do this before doing `save_volatile`, since otherwise we'll trample the return value
+    // of the call when we pop back.
+    free_return_register(ctx, return_arity);
+
     CallCleanup {
         stack_depth: num_stack_args,
         restore_registers: save_volatile(ctx),
@@ -1063,12 +1134,7 @@ pub fn call_direct(ctx: &mut Context, index: u32, arg_arity: u32, return_arity: 
         "We don't support multiple return yet"
     );
 
-    free_arg_registers(ctx, arg_arity);
-    if return_arity > 0 {
-        free_return_register(ctx, return_arity);
-    }
-
-    let cleanup = pass_outgoing_args(ctx, arg_arity);
+    let cleanup = pass_outgoing_args(ctx, arg_arity, return_arity);
 
     let label = &ctx.func_starts[index as usize].1;
     dynasm!(ctx.asm
@@ -1076,10 +1142,7 @@ pub fn call_direct(ctx: &mut Context, index: u32, arg_arity: u32, return_arity: 
     );
 
     post_call_cleanup(ctx, cleanup);
-
-    if return_arity > 0 {
-        push_return_value(ctx);
-    }
+    push_return_value(ctx, return_arity);
 }
 
 #[must_use]
@@ -1106,6 +1169,7 @@ pub fn start_function(ctx: &mut Context, arguments: u32, locals: u32) -> Functio
         reg_args.iter().cloned().map(ValueLocation::Reg).collect();
     ctx.block_state.locals.num_stack_args = arguments.saturating_sub(ARGS_IN_GPRS.len() as _);
     ctx.block_state.locals.num_local_stack_slots = locals;
+    ctx.block_state.return_register = Some(RAX);
     ctx.block_state.parent_locals = ctx.block_state.locals.clone();
 
     // ctx.block_state.depth.reserve(aligned_stack_slots - locals);

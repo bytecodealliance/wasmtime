@@ -124,7 +124,7 @@ pub fn translate(
     // Upon entering the function implicit frame for function body is pushed. It has the same
     // result type as the function itself. Branching to it is equivalent to returning from the function.
     let epilogue_label = create_label(ctx);
-    let function_block_state = start_block(ctx, arity(return_ty));
+    let function_block_state = start_block(ctx);
     control_frames.push(ControlFrame::new(
         ControlFrameKind::Block {
             end_label: epilogue_label,
@@ -157,7 +157,7 @@ pub fn translate(
             }
             Operator::Block { ty } => {
                 let label = create_label(ctx);
-                let state = start_block(ctx, arity(ty));
+                let state = start_block(ctx);
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Block { end_label: label },
                     state,
@@ -195,7 +195,7 @@ pub fn translate(
                 let if_not = create_label(ctx);
 
                 jump_if_equal_zero(ctx, if_not);
-                let state = start_block(ctx, arity(ty));
+                let state = start_block(ctx);
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::IfTrue { end_label, if_not },
@@ -206,7 +206,7 @@ pub fn translate(
             Operator::Loop { ty } => {
                 let header = create_label(ctx);
 
-                let state = start_block(ctx, arity(ty));
+                let state = start_block(ctx);
                 define_label(ctx, header);
 
                 control_frames.push(ControlFrame::new(
@@ -224,7 +224,7 @@ pub fn translate(
                         ..
                     }) => {
                         return_from_block(ctx, arity(ty), false);
-                        end_block(ctx, block_state.clone(), arity(ty));
+                        reset_block(ctx, block_state.clone());
 
                         // Finalize `then` block by jumping to the `end_label`.
                         br(ctx, end_label);
@@ -250,6 +250,7 @@ pub fn translate(
                 };
             }
             Operator::End => {
+                // TODO: Merge `End`s
                 let control_frame = control_frames.pop().expect("control stack is never empty");
 
                 let arity = control_frame.arity();
@@ -259,7 +260,7 @@ pub fn translate(
                     return_from_block(ctx, arity, control_frames.is_empty());
                 }
 
-                end_block(ctx, control_frame.block_state, arity);
+                end_block(ctx, control_frame.block_state);
 
                 if let Some(block_end) = control_frame.kind.block_end() {
                     define_label(ctx, block_end);
