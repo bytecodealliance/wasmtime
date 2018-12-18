@@ -248,9 +248,6 @@ pub trait ModuleEnvironment<'data> {
     /// Declares a function signature to the environment.
     fn declare_signature(&mut self, sig: &ir::Signature);
 
-    /// Return the signature with the given index.
-    fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature;
-
     /// Declares a function import to the environment.
     fn declare_func_import(
         &mut self,
@@ -259,23 +256,14 @@ pub trait ModuleEnvironment<'data> {
         field: &'data str,
     );
 
-    /// Return the number of imported funcs.
-    fn get_num_func_imports(&self) -> usize;
-
     /// Declares the type (signature) of a local function in the module.
     fn declare_func_type(&mut self, sig_index: SignatureIndex);
-
-    /// Return the signature index for the given function index.
-    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex;
 
     /// Declares a global to the environment.
     fn declare_global(&mut self, global: Global);
 
     /// Declares a global import to the environment.
     fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str);
-
-    /// Return the global for the given global index.
-    fn get_global(&self, global_index: GlobalIndex) -> &Global;
 
     /// Declares a table to the environment.
     fn declare_table(&mut self, table: Table);
@@ -291,6 +279,7 @@ pub trait ModuleEnvironment<'data> {
         offset: usize,
         elements: Vec<FuncIndex>,
     );
+
     /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory);
 

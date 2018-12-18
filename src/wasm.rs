@@ -7,18 +7,16 @@
     allow(too_many_arguments, cyclomatic_complexity)
 )]
 
+use crate::utils::{parse_sets_and_triple, read_to_end};
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
-use cranelift_wasm::{
-    translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment, ReturnMode,
-};
+use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::path::Path;
 use std::path::PathBuf;
 use term;
-use crate::utils::{parse_sets_and_triple, read_to_end};
 use wabt::wat2wasm;
 
 macro_rules! vprintln {
