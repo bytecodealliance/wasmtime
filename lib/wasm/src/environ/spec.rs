@@ -14,8 +14,8 @@ use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use failure_derive::Fail;
+use std::boxed::Box;
 use std::convert::From;
-use std::vec::Vec;
 use wasmparser::BinaryReaderError;
 
 /// The value of a WebAssembly global variable.
@@ -336,7 +336,7 @@ pub trait ModuleEnvironment<'data> {
         table_index: TableIndex,
         base: Option<GlobalIndex>,
         offset: usize,
-        elements: Vec<FuncIndex>,
+        elements: Box<[FuncIndex]>,
     );
 
     /// Provides the contents of a function body.
