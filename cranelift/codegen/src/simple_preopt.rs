@@ -1,4 +1,8 @@
 //! A pre-legalization rewriting pass.
+//!
+//! This module provides early-stage optimizations. The optimizations found
+//! should be useful for already well-optimized code. More general purpose
+//! early-stage optimizations can be found in the preopt crate.
 
 #![allow(non_snake_case)]
 
