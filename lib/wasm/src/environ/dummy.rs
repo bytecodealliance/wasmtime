@@ -402,7 +402,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         _table_index: TableIndex,
         _base: Option<GlobalIndex>,
         _offset: usize,
-        _elements: Vec<FuncIndex>,
+        _elements: Box<[FuncIndex]>,
     ) {
         // We do nothing
     }

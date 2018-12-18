@@ -253,7 +253,12 @@ pub fn parse_element_section<'data>(
             let x = item?;
             elems.push(FuncIndex::from_u32(x));
         }
-        environ.declare_table_elements(TableIndex::from_u32(table_index), base, offset, elems)
+        environ.declare_table_elements(
+            TableIndex::from_u32(table_index),
+            base,
+            offset,
+            elems.into_boxed_slice(),
+        )
     }
     Ok(())
 }
