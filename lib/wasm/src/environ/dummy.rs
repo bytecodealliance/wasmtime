@@ -138,6 +138,15 @@ impl DummyEnvironment {
     pub fn func_env(&self) -> DummyFuncEnvironment {
         DummyFuncEnvironment::new(&self.info, self.return_mode)
     }
+
+    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
+        self.info.functions[func_index].entity
+    }
+
+    /// Return the number of imported functions within this `DummyEnvironment`.
+    pub fn get_num_func_imports(&self) -> usize {
+        self.info.imported_funcs.len()
+    }
 }
 
 /// The `FuncEnvironment` implementation for use by the `DummyEnvironment`.
@@ -345,10 +354,6 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.signatures.push(sig.clone());
     }
 
-    fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature {
-        &self.info.signatures[sig_index]
-    }
-
     fn declare_func_import(
         &mut self,
         sig_index: SignatureIndex,
@@ -366,16 +371,8 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             .push((String::from(module), String::from(field)));
     }
 
-    fn get_num_func_imports(&self) -> usize {
-        self.info.imported_funcs.len()
-    }
-
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {
         self.info.functions.push(Exportable::new(sig_index));
-    }
-
-    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
-        self.info.functions[func_index].entity
     }
 
     fn declare_global(&mut self, global: Global) {
@@ -387,10 +384,6 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info
             .imported_globals
             .push((String::from(module), String::from(field)));
-    }
-
-    fn get_global(&self, global_index: GlobalIndex) -> &Global {
-        &self.info.globals[global_index].entity
     }
 
     fn declare_table(&mut self, table: Table) {

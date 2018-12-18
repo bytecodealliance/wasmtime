@@ -244,14 +244,7 @@ pub fn parse_element_section<'data>(
         let mut init_expr_reader = init_expr.get_binary_reader();
         let (base, offset) = match init_expr_reader.read_operator()? {
             Operator::I32Const { value } => (None, value as u32 as usize),
-            Operator::GetGlobal { global_index } => match environ
-                .get_global(GlobalIndex::from_u32(global_index))
-                .initializer
-            {
-                GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                GlobalInit::Import => (Some(GlobalIndex::from_u32(global_index)), 0),
-                _ => panic!("should not happen"),
-            },
+            Operator::GetGlobal { global_index } => (Some(GlobalIndex::from_u32(global_index)), 0),
             ref s => panic!("unsupported init expr in element section: {:?}", s),
         };
         let items_reader = items.get_items_reader()?;
@@ -292,14 +285,7 @@ pub fn parse_data_section<'data>(
         let mut init_expr_reader = init_expr.get_binary_reader();
         let (base, offset) = match init_expr_reader.read_operator()? {
             Operator::I32Const { value } => (None, value as u32 as usize),
-            Operator::GetGlobal { global_index } => match environ
-                .get_global(GlobalIndex::from_u32(global_index))
-                .initializer
-            {
-                GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                GlobalInit::Import => (Some(GlobalIndex::from_u32(global_index)), 0),
-                _ => panic!("should not happen"),
-            },
+            Operator::GetGlobal { global_index } => (Some(GlobalIndex::from_u32(global_index)), 0),
             ref s => panic!("unsupported init expr in data section: {:?}", s),
         };
         environ.declare_data_initialization(
