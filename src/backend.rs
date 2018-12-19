@@ -597,7 +597,8 @@ pub fn drop(ctx: &mut Context) {
             );
         }
         StackValue::Temp(gpr) => free_value(ctx, Value::Temp(gpr)),
-        _ => {}
+        StackValue::Local(loc) => free_value(ctx, Value::Local(loc)),
+        StackValue::Immediate(imm) => free_value(ctx, Value::Immediate(imm)),
     }
 }
 

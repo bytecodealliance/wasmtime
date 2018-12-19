@@ -169,6 +169,18 @@ pub fn translate(
                     ty,
                 ));
             }
+            Operator::Return => {
+                control_frames
+                    .last_mut()
+                    .expect("control stack is never empty")
+                    .mark_unreachable();
+
+                let control_frame = control_frames.get(0).expect("control stack is never empty");
+
+                return_from_block(ctx, control_frame.arity(), true);
+
+                br(ctx, control_frame.kind.branch_target());
+            }
             Operator::Br { relative_depth } => {
                 control_frames
                     .last_mut()
