@@ -253,7 +253,7 @@ impl WastContext {
     ) -> Result<(), WastFileError> {
         let mut parser = ScriptParser::from_str(str::from_utf8(wast).unwrap()).unwrap();
 
-        while let Some(Command { kind, line }) = parser.next().unwrap() {
+        while let Some(Command { kind, line }) = parser.next().expect("parser") {
             match kind {
                 CommandKind::Module { module, name } => {
                     self.module(isa, name, module)

@@ -87,11 +87,13 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
         "            .expect(\"instantiating \\\"spectest\\\"\");"
     )?;
     writeln!(out, "        wast_context")?;
-    writeln!(
-        out,
-        "            .run_file(&*isa, Path::new(\"{}\"))",
-        path.display()
-    )?;
+    write!(out, "            .run_file(&*isa, Path::new(\"")?;
+    // Write out the string with escape_debug to prevent special characters such
+    // as backslash from being reinterpreted.
+    for c in path.display().to_string().chars() {
+        write!(out, "{}", c.escape_debug())?;
+    }
+    writeln!(out, "\"))")?;
     writeln!(out, "            .expect(\"error running wast file\");",)?;
     writeln!(out, "    }}")?;
     writeln!(out)?;

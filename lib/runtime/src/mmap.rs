@@ -130,7 +130,7 @@ impl Drop for Mmap {
         if !self.ptr.is_null() {
             use winapi::um::memoryapi::VirtualFree;
             use winapi::um::winnt::MEM_RELEASE;
-            let r = unsafe { VirtualFree(self.ptr, self.len, MEM_RELEASE) };
+            let r = unsafe { VirtualFree(self.ptr as *mut libc::c_void, self.len, MEM_RELEASE) };
             assert_eq!(r, 0);
         }
     }

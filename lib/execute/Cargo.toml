@@ -19,6 +19,7 @@ wasmtime-runtime = { path = "../runtime" }
 region = "1.0.0"
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
+target-lexicon = "0.2.0"
 
 [features]
 default = ["std"]

@@ -7,7 +7,7 @@ use target_lexicon::HOST;
 use wasmtime_environ::{
     translate_signature, Export, MemoryPlan, MemoryStyle, Module, TablePlan, TableStyle,
 };
-use wasmtime_execute::{ActionError, InstancePlus};
+use wasmtime_execute::{target_tunables, ActionError, InstancePlus};
 use wasmtime_runtime::{Imports, VMFunctionBody};
 
 extern "C" fn spectest_print() {}
@@ -199,14 +199,17 @@ pub fn instantiate_spectest() -> Result<InstancePlus, ActionError> {
         .exports
         .insert("table".to_owned(), Export::Table(table));
 
+    let tunables = target_tunables(&HOST);
     let memory = module.memory_plans.push(MemoryPlan {
         memory: Memory {
             minimum: 1,
             maximum: Some(2),
             shared: false,
         },
-        style: MemoryStyle::Static { bound: 65536 },
-        offset_guard_size: 0x80000000,
+        style: MemoryStyle::Static {
+            bound: tunables.static_memory_bound,
+        },
+        offset_guard_size: tunables.static_memory_offset_guard_size,
     });
     module
         .exports

@@ -12,9 +12,10 @@ use std::slice;
 use std::string::String;
 use std::vec::Vec;
 use std::{mem, ptr};
+use target_tunables::target_tunables;
 use trampoline_park::TrampolinePark;
 use wasmtime_environ::{
-    compile_module, Compilation, CompileError, DataInitializer, Module, ModuleEnvironment, Tunables,
+    compile_module, Compilation, CompileError, DataInitializer, Module, ModuleEnvironment,
 };
 use wasmtime_runtime::{
     wasmtime_call_trampoline, Export, Imports, Instance, InstantiationError, VMFunctionBody,
@@ -42,9 +43,7 @@ impl InstancePlus {
         resolver: &mut Resolver,
     ) -> Result<Self, ActionError> {
         let mut module = Module::new();
-
-        // TODO: Allow the tunables to be overridden.
-        let tunables = Tunables::default();
+        let tunables = target_tunables(isa.triple());
 
         let (lazy_function_body_inputs, lazy_data_initializers) = {
             let environ = ModuleEnvironment::new(isa, &mut module, tunables);

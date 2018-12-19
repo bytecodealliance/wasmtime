@@ -37,12 +37,14 @@ extern crate alloc;
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
+extern crate target_lexicon;
 
 mod action;
 mod instance_plus;
 mod jit_code;
 mod link;
 mod resolver;
+mod target_tunables;
 mod trampoline_park;
 
 pub use action::{ActionError, ActionOutcome, RuntimeValue};
@@ -50,6 +52,7 @@ pub use instance_plus::InstancePlus;
 pub use jit_code::JITCode;
 pub use link::link_module;
 pub use resolver::{NullResolver, Resolver};
+pub use target_tunables::target_tunables;
 
 #[cfg(not(feature = "std"))]
 mod std {

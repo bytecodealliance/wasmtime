@@ -320,7 +320,10 @@ fn relocate(
                         FloorF64 => wasmtime_f64_floor as usize,
                         TruncF64 => wasmtime_f64_trunc as usize,
                         NearestF64 => wasmtime_f64_nearest as usize,
+                        #[cfg(not(target_os = "windows"))]
                         Probestack => __rust_probestack as usize,
+                        #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
+                        Probestack => __chkstk as usize,
                         other => panic!("unexpected libcall: {}", other),
                     }
                 }
@@ -357,5 +360,8 @@ fn relocate(
 /// A declaration for the stack probe function in Rust's standard library, for
 /// catching callstack overflow.
 extern "C" {
+    #[cfg(not(target_os = "windows"))]
     pub fn __rust_probestack();
+    #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
+    pub fn __chkstk();
 }
