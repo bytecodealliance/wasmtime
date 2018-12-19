@@ -448,8 +448,18 @@ pub fn return_from_block(ctx: &mut Context, arity: u32, is_function_end: bool) {
 }
 
 pub fn start_block(ctx: &mut Context) -> BlockState {
-    // free_return_register(ctx, arity);
-    let current_state = ctx.block_state.clone();
+    use std::mem;
+
+    // OPTIMISATION: We cannot use the parent's stack values (it is disallowed by the spec)
+    //               so we start a new stack, using `mem::replace` to ensure that we never
+    //               clone or deallocate anything.
+    //
+    //               I believe that it would be possible to cause a compiler bomb if we did
+    //               not do this, since cloning iterates over the whole `Vec`.
+    let out_stack = mem::replace(&mut ctx.block_state.stack, vec![]);
+    let mut current_state = ctx.block_state.clone();
+    current_state.stack = out_stack;
+
     ctx.block_state.parent_locals = ctx.block_state.locals.clone();
     ctx.block_state.return_register = None;
     current_state
