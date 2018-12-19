@@ -136,14 +136,16 @@ pub fn translate(
     for op in operators {
         let op = op?;
 
-        if let Operator::End = op {
-        } else {
-            if control_frames
-                .last()
-                .expect("Control stack never empty")
-                .unreachable
-            {
-                continue;
+        match op {
+            Operator::End | Operator::Else => {}
+            _ => {
+                if control_frames
+                    .last()
+                    .expect("Control stack never empty")
+                    .unreachable
+                {
+                    continue;
+                }
             }
         }
 
@@ -183,7 +185,7 @@ pub fn translate(
 
                 let if_not = create_label(ctx);
 
-                jump_if_equal_zero(ctx, if_not);
+                jump_if_false(ctx, if_not);
 
                 return_from_block(ctx, control_frame.arity(), idx == 0);
                 br(ctx, control_frame.kind.branch_target());
@@ -194,7 +196,7 @@ pub fn translate(
                 let end_label = create_label(ctx);
                 let if_not = create_label(ctx);
 
-                jump_if_equal_zero(ctx, if_not);
+                jump_if_false(ctx, if_not);
                 let state = start_block(ctx);
 
                 control_frames.push(ControlFrame::new(
@@ -206,8 +208,8 @@ pub fn translate(
             Operator::Loop { ty } => {
                 let header = create_label(ctx);
 
-                let state = start_block(ctx);
                 define_label(ctx, header);
+                let state = start_block(ctx);
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Loop { header },
@@ -275,7 +277,12 @@ pub fn translate(
                     define_label(ctx, if_not);
                 }
             }
-            Operator::I32Eq => relop_eq_i32(ctx),
+            Operator::I32Eq => i32_eq(ctx),
+            Operator::I32Ne => i32_neq(ctx),
+            Operator::I32LtS => i32_lt(ctx),
+            Operator::I32LeS => i32_le(ctx),
+            Operator::I32GtS => i32_gt(ctx),
+            Operator::I32GeS => i32_ge(ctx),
             Operator::I32Add => i32_add(ctx),
             Operator::I32Sub => i32_sub(ctx),
             Operator::I32And => i32_and(ctx),

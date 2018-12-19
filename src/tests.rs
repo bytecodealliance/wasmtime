@@ -374,6 +374,85 @@ fn spec_loop() {
     unsafe { translated.execute_func::<(), ()>(0, ()) }
 }
 
+quickcheck! {
+    fn spec_fac(n: i32) -> bool {
+        const CODE: &str = r#"
+            (module
+              (func (param i32) (result i32)
+                (local i32)
+                (set_local 1 (call $fac-iter (get_local 0)))
+                (call $assert-eq (get_local 1) (call $fac-opt (get_local 0)))
+                (get_local 1)
+              )
+
+              (func $assert-eq (param i32) (param i32)
+                 (if (i32.ne (get_local 0) (get_local 1))
+                    (unreachable)
+                 )
+              )
+
+              ;; Iterative factorial
+              (func $fac-iter (param i32) (result i32)
+                (local i32 i32)
+                (set_local 1 (get_local 0))
+                (set_local 2 (i32.const 1))
+                (block
+                  (loop
+                    (if
+                      (i32.lt_s (get_local 1) (i32.const 2))
+                      (then (br 2))
+                      (else
+                        (set_local 2 (i32.mul (get_local 1) (get_local 2)))
+                        (set_local 1 (i32.sub (get_local 1) (i32.const 1)))
+                      )
+                    )
+                    (br 0)
+                  )
+                )
+                (get_local 2)
+              )
+            
+              ;; Optimized factorial.
+              (func $fac-opt (param i32) (result i32)
+                (local i32)
+                (set_local 1 (i32.const 1))
+                (block
+                  (br_if 0 (i32.lt_s (get_local 0) (i32.const 2)))
+                  (loop
+                    (set_local 1 (i32.mul (get_local 1) (get_local 0)))
+                    (set_local 0 (i32.add (get_local 0) (i32.const -1)))
+                    (br_if 0 (i32.gt_s (get_local 0) (i32.const 1)))
+                  )
+                )
+                (get_local 1)
+              )
+            )"#;
+
+        fn fac(mut n: i32) -> i32 {
+            let mut a = 1i32;
+
+            while n > 1 {
+                a = a.wrapping_mul(n);
+                n -= 1;
+            }
+
+            a
+        }
+
+        lazy_static! {
+            static ref TRANSLATED: TranslatedModule = {
+                let out = translate_wat(CODE);
+                out.disassemble();
+                out
+            };
+        }
+
+        unsafe {
+            TRANSLATED.execute_func::<(i32,), i32>(0, (n,)) == fac(n)
+         }
+    }
+}
+
 // Tests that br_if keeps values in the case if the branch
 // hasn't been taken.
 #[test]
@@ -471,7 +550,12 @@ fn fib() {
 
     for x in 0..30 {
         unsafe {
-            assert_eq!(translated.execute_func::<_, u32>(0, (x,)), fib(x), "Failed for x={}", x);
+            assert_eq!(
+                translated.execute_func::<_, u32>(0, (x,)),
+                fib(x),
+                "Failed for x={}",
+                x
+            );
         }
     }
 }
