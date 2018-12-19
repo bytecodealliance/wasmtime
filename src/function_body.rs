@@ -269,6 +269,8 @@ pub fn translate(
                     return_from_block(ctx, arity, control_frames.is_empty());
                 }
 
+                // TODO: What is the correct order of this and the `define_label`? It's clear for `block`s
+                //       but I'm not certain for `if..then..else..end`.
                 end_block(ctx, control_frame.block_state);
 
                 if let Some(block_end) = control_frame.kind.block_end() {

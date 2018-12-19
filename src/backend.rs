@@ -468,11 +468,15 @@ pub fn reset_block(ctx: &mut Context, parent_block_state: BlockState) {
 }
 
 pub fn end_block(ctx: &mut Context, parent_block_state: BlockState) {
-    // TODO: This is currently never called, but is important for if we want to
+    // TODO: This should currently never be called, but is important for if we want to
     //       have a more complex stack spilling scheme.
+    assert_eq!(
+        ctx.block_state.depth, parent_block_state.depth,
+        "Imbalanced pushes and pops"
+    );
     if ctx.block_state.depth != parent_block_state.depth {
         dynasm!(ctx.asm
-            ; add rsp, (ctx.block_state.depth.0 - parent_block_state.depth.0) as i32
+            ; add rsp, ((ctx.block_state.depth.0 - parent_block_state.depth.0) * WORD_SIZE) as i32
         );
     }
 
@@ -587,8 +591,9 @@ fn put_stack_val_into(ctx: &mut Context, val: StackValue, dst: ValueLocation) {
 pub fn drop(ctx: &mut Context) {
     match ctx.block_state.stack.pop().expect("Stack is empty") {
         StackValue::Pop => {
+            ctx.block_state.depth.free(1);
             dynasm!(ctx.asm
-            ; add rsp, WORD_SIZE as i32
+                ; add rsp, WORD_SIZE as i32
             );
         }
         StackValue::Temp(gpr) => free_value(ctx, Value::Temp(gpr)),
@@ -948,7 +953,7 @@ macro_rules! cmp {
 
 cmp!(i32_eq, sete, |a, b| a == b);
 cmp!(i32_neq, setne, |a, b| a != b);
-// TODO: `dynasm-rs` inexplicably doesn't support setb
+// `dynasm-rs` inexplicably doesn't support setb but `setnae` (and `setc`) are synonymous
 cmp!(i32_lt_u, setnae, |a, b| (a as u32) < (b as u32));
 cmp!(i32_le_u, setbe, |a, b| (a as u32) <= (b as u32));
 cmp!(i32_gt_u, seta, |a, b| (a as u32) > (b as u32));
@@ -1021,6 +1026,7 @@ fn copy_value(ctx: &mut Context, src: ValueLocation, dst: ValueLocation) {
                 ; mov Rq(out_reg), i
             );
         }
+        // TODO: Have separate `ReadLocation` and `WriteLocation`?
         (_, ValueLocation::Immediate(_)) => panic!("Tried to copy to an immediate value!"),
     }
 }
@@ -1083,7 +1089,6 @@ fn free_register(ctx: &mut Context, reg: GPR) {
             // For now it's impossible for a local to be in RAX but that might be
             // possible in the future, so we check both cases.
             Some(ValueLocation::Reg(r)) if r == reg => {
-                ctx.block_state.depth.reserve(1);
                 *stack_val = StackValue::Pop;
 
                 out = Some(*stack_val);
@@ -1105,6 +1110,7 @@ fn free_register(ctx: &mut Context, reg: GPR) {
                 );
             }
             StackValue::Pop => {
+                ctx.block_state.depth.reserve(1);
                 // TODO: Ideally we should do proper stack allocation so we
                 //       don't have to check this at all (i.e. order on the
                 //       physical stack and order on the logical stack should
@@ -1195,6 +1201,7 @@ fn pass_outgoing_args(ctx: &mut Context, arity: u32, return_arity: u32) -> CallC
 fn post_call_cleanup(ctx: &mut Context, mut cleanup: CallCleanup) {
     if cleanup.stack_depth > 0 {
         let size = cleanup.stack_depth * WORD_SIZE as i32;
+        ctx.block_state.depth.free(cleanup.stack_depth as _);
         dynasm!(ctx.asm
             ; add rsp, size
         );
