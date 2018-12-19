@@ -44,6 +44,14 @@ binop_test!(and, std::ops::BitAnd::bitand);
 binop_test!(or, std::ops::BitOr::bitor);
 binop_test!(xor, std::ops::BitXor::bitxor);
 binop_test!(mul, u32::wrapping_mul);
+binop_test!(lt_u, |a, b| if a < b { 1 } else { 0 });
+binop_test!(le_u, |a, b| if a <= b { 1 } else { 0 });
+binop_test!(gt_u, |a, b| if a > b { 1 } else { 0 });
+binop_test!(ge_u, |a, b| if a >= b { 1 } else { 0 });
+binop_test!(lt_s, |a, b| if (a as i32) < (b as i32) { 1 } else { 0 });
+binop_test!(le_s, |a, b| if (a as i32) <= (b as i32) { 1 } else { 0 });
+binop_test!(gt_s, |a, b| if (a as i32) > (b as i32) { 1 } else { 0 });
+binop_test!(ge_s, |a, b| if (a as i32) >= (b as i32) { 1 } else { 0 });
 
 quickcheck! {
     fn relop_eq(a: u32, b: u32) -> bool{

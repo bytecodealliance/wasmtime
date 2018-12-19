@@ -949,7 +949,7 @@ macro_rules! cmp {
 cmp!(i32_eq, sete, |a, b| a == b);
 cmp!(i32_neq, setne, |a, b| a != b);
 // TODO: `dynasm-rs` inexplicably doesn't support setb
-// cmp!(i32_lt_u, setb, |a, b| (a as u32) < (b as u32));
+cmp!(i32_lt_u, setnae, |a, b| (a as u32) < (b as u32));
 cmp!(i32_le_u, setbe, |a, b| (a as u32) <= (b as u32));
 cmp!(i32_gt_u, seta, |a, b| (a as u32) > (b as u32));
 cmp!(i32_ge_u, setae, |a, b| (a as u32) >= (b as u32));

@@ -286,8 +286,7 @@ pub fn translate(
             Operator::I32LeS => i32_le_s(ctx),
             Operator::I32GtS => i32_gt_s(ctx),
             Operator::I32GeS => i32_ge_s(ctx),
-            // TODO: `dynasm-rs` inexplicably doesn't support setb
-            // Operator::I32LtU => i32_lt_u(ctx),
+            Operator::I32LtU => i32_lt_u(ctx),
             Operator::I32LeU => i32_le_u(ctx),
             Operator::I32GtU => i32_gt_u(ctx),
             Operator::I32GeU => i32_ge_u(ctx),
