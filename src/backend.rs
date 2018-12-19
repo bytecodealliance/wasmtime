@@ -499,11 +499,6 @@ pub fn end_block(ctx: &mut Context, parent_block_state: BlockState) {
     }
 }
 
-// TODO: We should be able to have arbitrary return registers. For blocks with multiple
-//       return points we can just choose the first one that we encounter and then always
-//       use that one. This will mean that `(block ...)` is no less efficient than `...`
-//       alone, and you only pay for the shuffling of registers in the case that you use
-//       `BrIf` or similar.
 fn push_return_value(ctx: &mut Context, arity: u32) {
     if arity == 0 {
         return;
