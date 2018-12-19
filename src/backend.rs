@@ -117,6 +117,8 @@ impl Registers {
     }
 }
 
+// TODO: Allow pushing condition codes to stack? We'd have to immediately
+//       materialise them into a register if anything is pushed above them.
 /// Describes location of a value.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum ValueLocation {
@@ -816,8 +818,6 @@ pub fn set_local_i32(ctx: &mut Context, local_idx: u32) {
     let val_loc = val.location(&ctx.block_state.locals);
     let dst_loc = ctx.block_state.parent_locals.get(local_idx);
 
-    // TODO: We can have a specified stack depth where we always materialize locals,
-    //       which would preserve linear runtime.
     materialize_local(ctx, local_idx);
 
     if let Some(cur) = ctx
@@ -834,42 +834,20 @@ pub fn set_local_i32(ctx: &mut Context, local_idx: u32) {
 }
 
 fn materialize_local(ctx: &mut Context, local_idx: u32) {
-    let mut to_repush = 0;
-    let mut out = None;
-
-    // TODO: With real stack allocation we can make this constant-time
-    for stack_val in ctx.block_state.stack.iter_mut().rev() {
-        match *stack_val {
+    // TODO: With real stack allocation we can make this constant-time. We can have a kind of
+    //       on-the-fly SSA transformation where we mark each `StackValue::Local` with an ID
+    //       that increases with each assignment (this can be stored in block state and so
+    //       is reset when the block ends). We then refcount the storage associated with each
+    //       "value ID" and in `pop` we free up slots whose refcount hits 0. This means we
+    //       can have even cleaner assembly than we currently do while giving us back
+    //       linear runtime.
+    for index in (0..ctx.block_state.stack.len()).rev() {
+        match ctx.block_state.stack[index] {
             // For now it's impossible for a local to be in RAX but that might be
             // possible in the future, so we check both cases.
             StackValue::Local(i) if i == local_idx => {
                 ctx.block_state.depth.reserve(1);
-                *stack_val = StackValue::Pop;
-
-                out = Some(*stack_val);
-
-                break;
-            }
-            StackValue::Pop => {
-                to_repush += 1;
-            }
-            _ => {}
-        }
-    }
-
-    if let Some(out) = out {
-        match out {
-            StackValue::Temp(gpr) => {
-                dynasm!(ctx.asm
-                    ; mov Rq(gpr), rax
-                );
-            }
-            StackValue::Pop => {
-                // TODO: Ideally we should do proper stack allocation so we
-                //       don't have to check this at all (i.e. order on the
-                //       physical stack and order on the logical stack should
-                //       be independent).
-                assert_eq!(to_repush, 0);
+                ctx.block_state.stack[index] = StackValue::Pop;
                 match ctx.block_state.locals.get(local_idx) {
                     ValueLocation::Reg(r) => dynasm!(ctx.asm
                         ; push Rq(r)
@@ -883,9 +861,14 @@ fn materialize_local(ctx: &mut Context, local_idx: u32) {
                     _ => unreachable!(),
                 }
             }
-            _ => unreachable!(),
+            StackValue::Pop => {
+                // We don't need to fail if the `Pop` is lower in the stack than the last instance of this
+                // local, but we might as well fail for now since we want to reimplement this using proper
+                // stack allocation anyway.
+                panic!("Tried to materialize local but the stack already contains elements");
+            }
+            _ => {}
         }
-        ctx.block_state.regs.release_scratch_gpr(RAX);
     }
 }
 
@@ -965,10 +948,15 @@ macro_rules! cmp {
 
 cmp!(i32_eq, sete, |a, b| a == b);
 cmp!(i32_neq, setne, |a, b| a != b);
-cmp!(i32_lt, setl, |a, b| a == b);
-cmp!(i32_le, setle, |a, b| a == b);
-cmp!(i32_gt, setg, |a, b| a == b);
-cmp!(i32_ge, setge, |a, b| a == b);
+// TODO: `dynasm-rs` inexplicably doesn't support setb
+// cmp!(i32_lt_u, setb, |a, b| (a as u32) < (b as u32));
+cmp!(i32_le_u, setbe, |a, b| (a as u32) <= (b as u32));
+cmp!(i32_gt_u, seta, |a, b| (a as u32) > (b as u32));
+cmp!(i32_ge_u, setae, |a, b| (a as u32) >= (b as u32));
+cmp!(i32_lt_s, setl, |a, b| a < b);
+cmp!(i32_le_s, setle, |a, b| a <= b);
+cmp!(i32_gt_s, setg, |a, b| a == b);
+cmp!(i32_ge_s, setge, |a, b| a == b);
 
 /// Pops i32 predicate and branches to the specified label
 /// if the predicate is equal to zero.
@@ -1128,7 +1116,7 @@ fn free_register(ctx: &mut Context, reg: GPR) {
             }
             _ => unreachable!(),
         }
-        ctx.block_state.regs.release_scratch_gpr(RAX);
+        ctx.block_state.regs.release_scratch_gpr(reg);
     }
 }
 

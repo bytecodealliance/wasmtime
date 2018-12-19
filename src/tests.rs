@@ -320,11 +320,11 @@ fn spec_loop() {
     let code = r#"
 (module
   (func
-    (call $assert-return (call $as-binary-operand) (i32.const 12))
-    (call $assert-return (call $break-bare) (i32.const 19))
-    (call $assert-return (call $break-value) (i32.const 18))
-    (call $assert-return (call $break-repeated) (i32.const 18))
-    (call $assert-return (call $break-inner) (i32.const 0x7))
+    (call $assert-eq (call $as-binary-operand) (i32.const 12))
+    (call $assert-eq (call $break-bare) (i32.const 19))
+    (call $assert-eq (call $break-value) (i32.const 18))
+    (call $assert-eq (call $break-repeated) (i32.const 18))
+    (call $assert-eq (call $break-inner) (i32.const 0x7))
   )
   (func $dummy)
   (func $as-binary-operand (result i32)
@@ -363,8 +363,10 @@ fn spec_loop() {
     (set_local 0 (i32.add (get_local 0) (block (result i32) (loop (result i32) (block (result i32) (loop (result i32) (br 1 (i32.const 0x4))))))))
     (get_local 0)
   )
-  (func $assert-return (param i32) (param i32)
-    (if (i32.eq (get_local 0) (get_local 1)) (then) (else (unreachable)))
+  (func $assert-eq (param i32) (param i32)
+     (if (i32.ne (get_local 0) (get_local 1))
+        (unreachable)
+     )
   )
 )
 "#;
