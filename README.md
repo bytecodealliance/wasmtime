@@ -21,7 +21,7 @@ implements a toy language.
 [SimpleJIT Demo]: https://github.com/CraneStation/simplejit-demo
 
 For an example of how to use Cranelift to run WebAssembly code, see
-[Wasmtime], which implements a standalone VM using Cranelift.
+[Wasmtime], which implements a standalone, embeddable, VM using Cranelift.
 
 [Wasmtime]: https://github.com/CraneStation/wasmtime
 

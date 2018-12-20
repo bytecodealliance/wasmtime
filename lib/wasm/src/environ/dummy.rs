@@ -1,5 +1,9 @@
 //! "Dummy" implementations of `ModuleEnvironment` and `FuncEnvironment` for testing
-//! wasm translation.
+//! wasm translation. For complete implementations of `ModuleEnvironment` and
+//! `FuncEnvironment`, see [wasmtime-environ] in [Wasmtime].
+//!
+//! [wasmtime-environ]: https://crates.io/crates/wasmtime-environ
+//! [Wasmtime]: https://github.com/CraneStation/wasmtime
 
 use cast;
 use cranelift_codegen::cursor::FuncCursor;
