@@ -1,5 +1,11 @@
 //! All the runtime support necessary for the wasm to cranelift translation is formalized by the
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
+//!
+//! There are skeleton implementations of these traits in the `dummy` module, and complete
+//! implementations in [Wasmtime].
+//!
+//! [Wasmtime]: https://github.com/CraneStation/wasmtime
+
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
