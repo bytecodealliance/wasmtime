@@ -9,7 +9,7 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::divconst_magic_numbers::{magic_s32, magic_s64, magic_u32, magic_u64};
 use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
-use crate::ir::condcodes::IntCC;
+use crate::ir::condcodes::{CondCode, FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
 use crate::ir::instructions::{Opcode, ValueList};
 use crate::ir::types::{I32, I64};
@@ -623,11 +623,197 @@ fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
     }
 }
 
+struct BranchOrderInfo {
+    term_inst: Inst,
+    term_inst_args: ValueList,
+    term_dest: Ebb,
+    cond_inst: Inst,
+    cond_arg: Value,
+    cond_inst_args: ValueList,
+    cond_dest: Ebb,
+    kind: BranchOrderKind,
+}
+
+enum BranchOrderKind {
+    BrzToBrnz,
+    BrnzToBrz,
+    InvertIntCond(IntCC),
+    InvertFloatCond(FloatCC),
+}
+
+fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst: Inst) {
+    let info = match pos.func.dfg[inst] {
+        InstructionData::Jump {
+            opcode: Opcode::Jump,
+            destination,
+            ref args,
+        } => {
+            if let Some(next_ebb) = pos.func.layout.next_ebb(ebb) {
+                if destination == next_ebb {
+                    return;
+                }
+
+                if let Some(prev_inst) = pos.func.layout.prev_inst(inst) {
+                    let prev_inst_data = &pos.func.dfg[prev_inst];
+                    if !prev_inst_data.opcode().is_branch() {
+                        return;
+                    }
+
+                    if let Some(prev_dest) = prev_inst_data.branch_destination() {
+                        if prev_dest != next_ebb {
+                            return;
+                        }
+
+                        match prev_inst_data {
+                            InstructionData::Branch {
+                                opcode,
+                                args: ref prev_args,
+                                destination: cond_dest,
+                                ..
+                            } => {
+                                let cond_arg = {
+                                    let args = pos.func.dfg.inst_args(prev_inst);
+                                    args[0]
+                                };
+
+                                match opcode {
+                                    Opcode::Brz => BranchOrderInfo {
+                                        term_inst: inst,
+                                        term_inst_args: args.clone(),
+                                        term_dest: destination,
+                                        cond_inst: prev_inst,
+                                        cond_arg: cond_arg,
+                                        cond_inst_args: prev_args.clone(),
+                                        cond_dest: *cond_dest,
+                                        kind: BranchOrderKind::BrzToBrnz,
+                                    },
+                                    Opcode::Brnz => BranchOrderInfo {
+                                        term_inst: inst,
+                                        term_inst_args: args.clone(),
+                                        term_dest: destination,
+                                        cond_inst: prev_inst,
+                                        cond_arg: cond_arg,
+                                        cond_inst_args: prev_args.clone(),
+                                        cond_dest: *cond_dest,
+                                        kind: BranchOrderKind::BrnzToBrz,
+                                    },
+                                    _ => panic!("unexpected opcode"),
+                                }
+                            }
+                            InstructionData::BranchInt {
+                                opcode: Opcode::Brif,
+                                args: ref prev_args,
+                                cond,
+                                destination: cond_dest,
+                                ..
+                            } => {
+                                let cond_arg = {
+                                    let args = pos.func.dfg.inst_args(prev_inst);
+                                    args[0]
+                                };
+                                BranchOrderInfo {
+                                    term_inst: inst,
+                                    term_inst_args: args.clone(),
+                                    term_dest: destination,
+                                    cond_inst: prev_inst,
+                                    cond_arg: cond_arg,
+                                    cond_inst_args: prev_args.clone(),
+                                    cond_dest: *cond_dest,
+                                    kind: BranchOrderKind::InvertIntCond(*cond),
+                                }
+                            }
+                            InstructionData::BranchFloat {
+                                opcode: Opcode::Brff,
+                                args: ref prev_args,
+                                cond,
+                                destination: cond_dest,
+                                ..
+                            } => {
+                                let cond_arg = {
+                                    let args = pos.func.dfg.inst_args(prev_inst);
+                                    args[0]
+                                };
+                                BranchOrderInfo {
+                                    term_inst: inst,
+                                    term_inst_args: args.clone(),
+                                    term_dest: destination,
+                                    cond_inst: prev_inst,
+                                    cond_arg: cond_arg,
+                                    cond_inst_args: prev_args.clone(),
+                                    cond_dest: *cond_dest,
+                                    kind: BranchOrderKind::InvertFloatCond(*cond),
+                                }
+                            }
+                            _ => return,
+                        }
+                    } else {
+                        return;
+                    }
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
+        _ => return,
+    };
+
+    let cond_args = {
+        info.cond_inst_args
+            .as_slice(&pos.func.dfg.value_lists)
+            .to_vec()
+    };
+    let term_args = {
+        info.term_inst_args
+            .as_slice(&pos.func.dfg.value_lists)
+            .to_vec()
+    };
+
+    pos.func
+        .dfg
+        .replace(info.term_inst)
+        .fallthrough(info.cond_dest, &cond_args[1..]);
+
+    match info.kind {
+        BranchOrderKind::BrnzToBrz => {
+            pos.func
+                .dfg
+                .replace(info.cond_inst)
+                .brz(info.cond_arg, info.term_dest, &term_args);
+        }
+        BranchOrderKind::BrzToBrnz => {
+            pos.func
+                .dfg
+                .replace(info.cond_inst)
+                .brnz(info.cond_arg, info.term_dest, &term_args);
+        }
+        BranchOrderKind::InvertIntCond(cond) => {
+            pos.func.dfg.replace(info.cond_inst).brif(
+                cond.inverse(),
+                info.cond_arg,
+                info.term_dest,
+                &term_args,
+            );
+        }
+        BranchOrderKind::InvertFloatCond(cond) => {
+            pos.func.dfg.replace(info.cond_inst).brff(
+                cond.inverse(),
+                info.cond_arg,
+                info.term_dest,
+                &term_args,
+            );
+        }
+    }
+
+    cfg.recompute_ebb(pos.func, ebb);
+}
+
 /// The main pre-opt pass.
-pub fn do_preopt(func: &mut Function) {
+pub fn do_preopt(func: &mut Function, cfg: &mut ControlFlowGraph) {
     let _tt = timing::preopt();
     let mut pos = FuncCursor::new(func);
-    while let Some(_ebb) = pos.next_ebb() {
+    while let Some(ebb) = pos.next_ebb() {
         while let Some(inst) = pos.next_inst() {
             // Apply basic simplifications.
             simplify(&mut pos, inst);
@@ -643,6 +829,7 @@ pub fn do_preopt(func: &mut Function) {
             //-- END -- division by constants ------------------
 
             branch_opt(&mut pos, inst);
+            branch_order(&mut pos, cfg, ebb, inst);
         }
     }
 }
