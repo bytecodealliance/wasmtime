@@ -33,11 +33,10 @@ impl SubTest for TestSimplePreopt {
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
         let isa = context.isa.expect("preopt needs an ISA");
 
-        comp_ctx.flowgraph();
+        comp_ctx.compute_cfg();
         comp_ctx
             .preopt(isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
-
         let text = &comp_ctx.func.display(isa).to_string();
         run_filecheck(&text, context)
     }
