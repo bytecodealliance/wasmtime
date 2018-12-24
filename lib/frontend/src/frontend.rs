@@ -598,6 +598,10 @@ impl<'a> FunctionBuilder<'a> {
         // Currently the result of guess work, not actual profiling.
         const THRESHOLD: u64 = 4;
 
+        if size == 0 {
+            return;
+        }
+
         let access_size = greatest_divisible_power_of_two(size);
         assert!(
             access_size.is_power_of_two(),
@@ -607,6 +611,13 @@ impl<'a> FunctionBuilder<'a> {
             access_size >= ::std::cmp::min(src_align, dest_align) as u64,
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
+
+        let (access_size, int_type) = if access_size > 8 {
+            (access_size, Type::int((access_size * 8) as u16).unwrap())
+        } else {
+            (8, types::I64)
+        };
+
         let load_and_store_amount = size / access_size;
 
         if load_and_store_amount > THRESHOLD {
@@ -615,7 +626,6 @@ impl<'a> FunctionBuilder<'a> {
             return;
         }
 
-        let int_type = Type::int((access_size * 8) as u16).unwrap();
         let mut flags = MemFlags::new();
         flags.set_aligned();
 
@@ -669,6 +679,10 @@ impl<'a> FunctionBuilder<'a> {
         // Currently the result of guess work, not actual profiling.
         const THRESHOLD: u64 = 4;
 
+        if size == 0 {
+            return;
+        }
+
         let access_size = greatest_divisible_power_of_two(size);
         assert!(
             access_size.is_power_of_two(),
@@ -678,6 +692,13 @@ impl<'a> FunctionBuilder<'a> {
             access_size >= buffer_align as u64,
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
+
+        let (access_size, int_type) = if access_size > 8 {
+            (access_size, Type::int((access_size * 8) as u16).unwrap())
+        } else {
+            (8, types::I64)
+        };
+
         let load_and_store_amount = size / access_size;
 
         if load_and_store_amount > THRESHOLD {
@@ -689,7 +710,6 @@ impl<'a> FunctionBuilder<'a> {
             flags.set_aligned();
 
             let ch = ch as u64;
-            let int_type = Type::int((access_size * 8) as u16).unwrap();
             let raw_value = if int_type == types::I64 {
                 (ch << 32) | (ch << 16) | (ch << 8) | ch
             } else if int_type == types::I32 {
