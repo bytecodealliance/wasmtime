@@ -51,7 +51,7 @@ class Rtl(object):
         # type: (VarAtomMap) -> Rtl
         """
         Return a copy of this rtl with all Vars substituted with copies or
-        according to m. Update m as neccessary.
+        according to m. Update m as necessary.
         """
         return Rtl(*[d.copy(m) for d in self.rtl])
 

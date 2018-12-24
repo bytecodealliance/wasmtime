@@ -2,7 +2,7 @@
 Abstract syntax trees.
 
 This module defines classes that can be used to create abstract syntax trees
-for patern matching an rewriting of cranelift instructions.
+for pattern matching an rewriting of cranelift instructions.
 """
 from __future__ import absolute_import
 from . import instructions
@@ -79,7 +79,7 @@ class Def(object):
         # type: (VarAtomMap) -> Def
         """
         Return a copy of this Def with vars replaced with fresh variables,
-        in accordance with the map m. Update m as neccessary.
+        in accordance with the map m. Update m as necessary.
         """
         new_expr = self.expr.copy(m)
         new_defs = []  # type: List[Var]
@@ -423,7 +423,7 @@ class Apply(Expr):
         # type: (VarAtomMap) -> Apply
         """
         Return a copy of this Expr with vars replaced with fresh variables,
-        in accordance with the map m. Update m as neccessary.
+        in accordance with the map m. Update m as necessary.
         """
         return Apply(self.inst, tuple(map(lambda e: replace_var(e, m),
                                           self.args)))
@@ -441,7 +441,7 @@ class Apply(Expr):
     def substitution(self, other, s):
         # type: (Apply, VarAtomMap) -> Optional[VarAtomMap]
         """
-        If there is a substituion from Var->Atom that converts self to other,
+        If there is a substitution from Var->Atom that converts self to other,
         return it, otherwise return None. Note that this is strictly weaker
         than unification (see TestXForm.test_subst_enum_bad_var_const for
         example).
@@ -513,7 +513,7 @@ class ConstantInt(Literal):
     A value of an integer immediate operand.
 
     Immediate operands like `imm64` or `offset32` can be specified in AST
-    expressions using the call syntax: `imm64(5)` which greates a `ConstantInt`
+    expressions using the call syntax: `imm64(5)` which creates a `ConstantInt`
     node.
     """
 

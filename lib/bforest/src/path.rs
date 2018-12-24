@@ -476,7 +476,7 @@ impl<F: Forest> Path<F> {
         match status {
             Removed::Healthy => {}
             Removed::Rightmost => {
-                // The rightmost entry was removed from the curent node, so move the path so it
+                // The rightmost entry was removed from the current node, so move the path so it
                 // points at the first entry of the next node at this level.
                 debug_assert_eq!(
                     usize::from(self.entry[level]),

@@ -897,7 +897,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 #[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
 /// Deals with a Wasm instruction located in an unreachable portion of the code. Most of them
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
-/// portion so the translation state muts be updated accordingly.
+/// portion so the translation state must be updated accordingly.
 fn translate_unreachable_operator(
     op: &Operator,
     builder: &mut FunctionBuilder,

@@ -107,7 +107,7 @@ impl Backend for FaerieBackend {
     type CompiledFunction = FaerieCompiledFunction;
     type CompiledData = FaerieCompiledData;
 
-    // There's no need to return invidual artifacts; we're writing them into
+    // There's no need to return individual artifacts; we're writing them into
     // the output file instead.
     type FinalizedFunction = ();
     type FinalizedData = ();

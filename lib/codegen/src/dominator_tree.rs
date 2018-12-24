@@ -505,7 +505,7 @@ impl DominatorTree {
 /// - An ordering of EBBs according to a dominator tree pre-order.
 /// - Constant time dominance checks at the EBB granularity.
 ///
-/// The information in this auxillary data structure is not easy to update when the control flow
+/// The information in this auxiliary data structure is not easy to update when the control flow
 /// graph changes, which is why it is kept separate.
 pub struct DominatorTreePreorder {
     nodes: SecondaryMap<Ebb, ExtraNode>,

@@ -201,7 +201,7 @@ def equivalent(r1, r2, inp_m, out_m):
         assert isinstance(v2, Var)
         results_eq_exp.append(mk_eq(m1[v1], m2[v2]))
 
-    # Put the whole query toghether
+    # Put the whole query together
     return q1 + q2 + args_eq_exp + [Not(And(*results_eq_exp))]
 
 

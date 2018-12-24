@@ -206,7 +206,7 @@ ebb0:
     ; Comparisons.
     ;
     ; Only `supported_floatccs` are tested here. Others are handled by
-    ; legalization paterns.
+    ; legalization patterns.
 
     ; asm: ucomiss %xmm10, %xmm5
     ; asm: setnp %bl
@@ -469,7 +469,7 @@ ebb0:
     ; Comparisons.
     ;
     ; Only `supported_floatccs` are tested here. Others are handled by
-    ; legalization paterns.
+    ; legalization patterns.
 
     ; asm: ucomisd %xmm10, %xmm5
     ; asm: setnp %bl

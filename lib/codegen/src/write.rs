@@ -377,7 +377,7 @@ fn write_instruction(
     write_operands(w, &func.dfg, isa, inst)?;
     writeln!(w)?;
 
-    // Value aliases come out on lines after the instruction defining the referrent.
+    // Value aliases come out on lines after the instruction defining the referent.
     for r in func.dfg.inst_results(inst) {
         write_value_aliases(w, aliases, *r, indent)?;
     }
