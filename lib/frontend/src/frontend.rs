@@ -580,7 +580,7 @@ impl<'a> FunctionBuilder<'a> {
         self.ins().call(libc_memcpy, &[dest, src, size]);
     }
 
-    /// Optimised memcpy for small copys.
+    /// Optimised memcpy for small copies.
     pub fn emit_small_memcpy(
         &mut self,
         config: TargetFrontendConfig,

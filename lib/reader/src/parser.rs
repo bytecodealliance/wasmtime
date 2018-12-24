@@ -2034,7 +2034,7 @@ impl<'a> Parser<'a> {
                     opcode
                 );
             }
-        // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
+        // Treat it as a syntax error to specify a typevar on a non-polymorphic opcode.
         } else if ctrl_type != INVALID {
             return err!(self.loc, "{} does not take a typevar", opcode);
         }
@@ -2080,7 +2080,7 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    // Parse an optional value list enclosed in parantheses.
+    // Parse an optional value list enclosed in parentheses.
     fn parse_opt_value_list(&mut self) -> ParseResult<VariableArgs> {
         if !self.optional(Token::LPar) {
             return Ok(VariableArgs::new());

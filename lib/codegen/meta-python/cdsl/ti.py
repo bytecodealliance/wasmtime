@@ -276,7 +276,7 @@ class SameWidth(TypeConstraint):
 
 class TypeEnv(object):
     """
-    Class encapsulating the neccessary book keeping for type inference.
+    Class encapsulating the necessary book keeping for type inference.
         :attribute type_map: dict holding the equivalence relations between tvs
         :attribute constraints: a list of accumulated constraints - tuples
                             (tv1, tv2)) where tv1 and tv2 are equal
@@ -331,7 +331,7 @@ class TypeEnv(object):
         """
         Record a that the free tv1 is part of the same equivalence class as
         tv2. The canonical representative of the merged class is tv2's
-        cannonical representative.
+        canonical representative.
         """
         assert not tv1.is_derived
         assert self[tv1] == tv1
@@ -376,7 +376,7 @@ class TypeEnv(object):
         non-derived TVs implicitly get the lowest rank (0). Derived variables
         get their rank from their free typevar. Singletons have the highest
         rank. TVs associated with vars in a source pattern have a higher rank
-        than TVs associted with temporary vars.
+        than TVs associated with temporary vars.
         """
         default_rank = TypeEnv.RANK_INTERNAL if tv.singleton_type() is None \
             else TypeEnv.RANK_SINGLETON
@@ -837,7 +837,7 @@ def ti_def(definition, typ):
         fresh_formal_tvs = move_first(fresh_formal_tvs, idx)
         actual_tvs = move_first(actual_tvs, idx)
 
-    # Unify each actual typevar with the correpsonding fresh formal tv
+    # Unify each actual typevar with the corresponding fresh formal tv
     for (actual_tv, formal_tv) in zip(actual_tvs, fresh_formal_tvs):
         typ_or_err = unify(actual_tv, formal_tv, typ)
         err = get_error(typ_or_err)

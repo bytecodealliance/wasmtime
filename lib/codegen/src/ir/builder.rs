@@ -162,7 +162,7 @@ where
         {
             let dfg = self.inserter.data_flow_graph_mut();
             inst = dfg.make_inst(data);
-            // Make an `Interator<Item = Option<Value>>`.
+            // Make an `Iterator<Item = Option<Value>>`.
             let ru = self.reuse.as_ref().iter().cloned();
             dfg.make_inst_results_reusing(inst, ctrl_typevar, ru);
         }

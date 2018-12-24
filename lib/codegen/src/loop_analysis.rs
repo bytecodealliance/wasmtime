@@ -118,7 +118,7 @@ impl LoopAnalysis {
         self.valid
     }
 
-    /// Clear all the data structures contanted in the loop analysis. This will leave the
+    /// Clear all the data structures contained in the loop analysis. This will leave the
     /// analysis in a similar state to a context returned by `new()` except that allocated
     /// memory be retained.
     pub fn clear(&mut self) {
@@ -191,7 +191,7 @@ impl LoopAnalysis {
                         let mut node_loop_parent_option = self.loops[node_loop].parent;
                         while let Some(node_loop_parent) = node_loop_parent_option.expand() {
                             if node_loop_parent == lp {
-                                // We have encounterd lp so we stop (already visited)
+                                // We have encountered lp so we stop (already visited)
                                 break;
                             } else {
                                 //

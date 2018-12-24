@@ -49,7 +49,7 @@ pub enum Reloc {
 
 impl fmt::Display for Reloc {
     /// Display trait implementation drops the arch, since its used in contexts where the arch is
-    /// already unambigious, e.g. clif syntax with isa specified. In other contexts, use Debug.
+    /// already unambiguous, e.g. clif syntax with isa specified. In other contexts, use Debug.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Reloc::Abs4 => write!(f, "Abs4"),

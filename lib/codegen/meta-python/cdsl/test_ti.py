@@ -502,7 +502,7 @@ class TestXForm(TypeCheckingBaseTest):
             # For any patterns where the type env includes constraints, at
             # least one of the "theoretically possible" concrete typings must
             # be prevented by the constraints. (i.e. we are not emitting
-            # unneccessary constraints).
+            # unnecessary constraints).
             # We check that by asserting that the number of concrete typings is
             # less than the number of all possible free typevar assignments
             if (len(xform.ti.constraints) > 0):

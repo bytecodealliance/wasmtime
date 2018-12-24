@@ -157,7 +157,7 @@ mod details {
                     continue;
                 }
 
-                // Write a duration as secs.milis, trailing space.
+                // Write a duration as secs.millis, trailing space.
                 fn fmtdur(mut dur: Duration, f: &mut fmt::Formatter) -> fmt::Result {
                     // Round to nearest ms by adding 500us.
                     dur += Duration::new(0, 500_000);

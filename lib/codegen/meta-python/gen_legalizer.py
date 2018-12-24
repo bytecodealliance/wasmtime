@@ -32,10 +32,10 @@ except ImportError:
 def get_runtime_typechecks(xform):
     # type: (XForm) -> List[TypeConstraint]
     """
-    Given a XForm build a list of runtime type checks neccessary to determine
+    Given a XForm build a list of runtime type checks necessary to determine
     if it applies. We have 2 types of runtime checks:
         1) typevar tv belongs to typeset T - needed for free tvs whose
-               typeset is constrainted by their use in the dst pattern
+               typeset is constrained by their use in the dst pattern
 
         2) tv1 == tv2 where tv1 and tv2 are derived TVs - caused by unification
                 of non-bijective functions

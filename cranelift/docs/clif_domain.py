@@ -42,7 +42,7 @@ class ClifObject(ObjectDescription):
 
     def add_target_and_index(self, name, sig, signode):
         """
-        Add ``name`` the the index.
+        Add ``name`` to the index.
 
         :param name: The object name returned by :func:`handle_signature`.
         :param sig: The signature text.
@@ -76,7 +76,7 @@ def parse_type(name, signode):
     """
     Parse a type with embedded type vars and append to signode.
 
-    Return a a string that can be compiled into a regular expression matching
+    Return a string that can be compiled into a regular expression matching
     the type.
     """
 
