@@ -54,22 +54,23 @@ impl MemoryStyle {
     /// Decide on an implementation style for the given `Memory`.
     pub fn for_memory(memory: Memory, tunables: &Tunables) -> (Self, u64) {
         if let Some(maximum) = memory.maximum {
-            // A heap with a declared maximum is prepared to be used with
-            // threads and therefore be immovable, so make it static.
-            (
-                MemoryStyle::Static {
-                    bound: cmp::max(tunables.static_memory_bound, maximum),
-                },
-                tunables.static_memory_offset_guard_size,
-            )
-        } else {
-            // A heap without a declared maximum is likely to want to be small
-            // at least some of the time, so make it dynamic.
-            (
-                MemoryStyle::Dynamic,
-                tunables.dynamic_memory_offset_guard_size,
-            )
+            if maximum <= tunables.static_memory_bound {
+                // A heap with a declared maximum can be immovable, so make
+                // it static.
+                return (
+                    MemoryStyle::Static {
+                        bound: tunables.static_memory_bound,
+                    },
+                    tunables.static_memory_offset_guard_size,
+                );
+            }
         }
+
+        // Otherwise, make it dynamic.
+        (
+            MemoryStyle::Dynamic,
+            tunables.dynamic_memory_offset_guard_size,
+        )
     }
 }
 
