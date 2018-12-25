@@ -34,6 +34,7 @@ extern crate cranelift_codegen;
 extern crate cranelift_native;
 extern crate docopt;
 extern crate wasmtime_execute;
+extern crate wasmtime_wast;
 #[macro_use]
 extern crate serde_derive;
 extern crate file_per_thread_logger;
@@ -51,7 +52,8 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
-use wasmtime_execute::{ActionOutcome, InstancePlus, JITCode, NullResolver};
+use wasmtime_execute::{ActionOutcome, InstancePlus, JITCode, Namespace};
+use wasmtime_wast::instantiate_spectest;
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
@@ -122,9 +124,19 @@ fn main() {
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
+    let mut namespace = Namespace::new();
+
+    // Make spectest available by default.
+    namespace.instance(
+        Some("spectest"),
+        instantiate_spectest().expect("instantiating spectest"),
+    );
+
+    let mut jit_code = JITCode::new();
+
     for filename in &args.arg_file {
         let path = Path::new(&filename);
-        match handle_module(&args, path, &*isa) {
+        match handle_module(&mut jit_code, &mut namespace, &args, path, &*isa) {
             Ok(()) => {}
             Err(message) => {
                 let name = path.as_os_str().to_string_lossy();
@@ -135,21 +147,32 @@ fn main() {
     }
 }
 
-fn handle_module(args: &Args, path: &Path, isa: &TargetIsa) -> Result<(), String> {
+fn handle_module(
+    jit_code: &mut JITCode,
+    namespace: &mut Namespace,
+    args: &Args,
+    path: &Path,
+    isa: &TargetIsa,
+) -> Result<(), String> {
     let mut data =
         read_to_end(path.to_path_buf()).map_err(|err| String::from(err.description()))?;
-    // if data is using wat-format, first convert data to wasm
+
+    // If data is using wat-format, first convert data to wasm.
     if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
         data = wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?;
     }
-    let mut resolver = NullResolver {};
-    let mut jit_code = JITCode::new();
-    let mut instance_plus =
-        InstancePlus::new(&mut jit_code, isa, &data, &mut resolver).map_err(|e| e.to_string())?;
 
+    // Create a new `InstancePlus` by compiling and instantiating a wasm module.
+    let instance_plus =
+        InstancePlus::new(jit_code, isa, &data, namespace).map_err(|e| e.to_string())?;
+
+    // Register it in the namespace.
+    let index = namespace.instance(None, instance_plus);
+
+    // If a function to invoke was given, invoke it.
     if let Some(ref f) = args.flag_invoke {
-        match instance_plus
-            .invoke(&mut jit_code, isa, &f, &[])
+        match namespace
+            .invoke(jit_code, isa, index, &f, &[])
             .map_err(|e| e.to_string())?
         {
             ActionOutcome::Returned { .. } => {}

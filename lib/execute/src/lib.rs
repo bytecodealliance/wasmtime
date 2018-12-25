@@ -25,6 +25,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate cranelift_codegen;
+#[macro_use]
 extern crate cranelift_entity;
 extern crate cranelift_frontend;
 extern crate cranelift_wasm;
@@ -43,6 +44,7 @@ mod action;
 mod instance_plus;
 mod jit_code;
 mod link;
+mod namespace;
 mod resolver;
 mod target_tunables;
 mod trampoline_park;
@@ -51,6 +53,7 @@ pub use action::{ActionError, ActionOutcome, RuntimeValue};
 pub use instance_plus::InstancePlus;
 pub use jit_code::JITCode;
 pub use link::link_module;
+pub use namespace::{InstancePlusIndex, Namespace};
 pub use resolver::{NullResolver, Resolver};
 pub use target_tunables::target_tunables;
 

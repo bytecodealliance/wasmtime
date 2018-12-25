@@ -1,14 +1,13 @@
 use cranelift_codegen::isa;
-use cranelift_entity::PrimaryMap;
 use spectest::instantiate_spectest;
-use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
-use wasmtime_execute::{ActionError, ActionOutcome, InstancePlus, JITCode, Resolver, RuntimeValue};
-use wasmtime_runtime::Export;
+use wasmtime_execute::{
+    ActionError, ActionOutcome, InstancePlus, InstancePlusIndex, JITCode, Namespace, RuntimeValue,
+};
 
 /// Translate from a script::Value to a RuntimeValue.
 fn runtime_value(v: Value) -> RuntimeValue {
@@ -20,17 +19,17 @@ fn runtime_value(v: Value) -> RuntimeValue {
     }
 }
 
-/// Indicates an unknown module was specified.
+/// Indicates an unknown instance was specified.
 #[derive(Fail, Debug)]
-pub struct UnknownModule {
-    module: Option<String>,
+pub struct UnknownInstance {
+    instance: Option<String>,
 }
 
-impl fmt::Display for UnknownModule {
+impl fmt::Display for UnknownInstance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.module {
-            None => write!(f, "no default module present"),
-            Some(ref name) => write!(f, "no module {} present", name),
+        match self.instance {
+            None => write!(f, "no default instance present"),
+            Some(ref name) => write!(f, "no instance {} present", name),
         }
     }
 }
@@ -40,8 +39,8 @@ impl fmt::Display for UnknownModule {
 pub enum WastError {
     /// An assert command was not satisfied.
     Assert(String),
-    /// An unknown module name was used.
-    Module(UnknownModule),
+    /// An unknown instance name was used.
+    Instance(UnknownInstance),
     /// An error occured while performing an action.
     Action(ActionError),
     /// An action trapped.
@@ -56,7 +55,7 @@ impl fmt::Display for WastError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             WastError::Assert(ref message) => write!(f, "Assert command failed: {}", message),
-            WastError::Module(ref error) => error.fmt(f),
+            WastError::Instance(ref error) => error.fmt(f),
             WastError::Action(ref error) => error.fmt(f),
             WastError::Trap(ref message) => write!(f, "trap: {}", message),
             WastError::Type(ref message) => write!(f, "type error: {}", message),
@@ -74,41 +73,12 @@ pub struct WastFileError {
     error: WastError,
 }
 
-/// An opaque reference to an `InstancePlus`.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct InstancePlusIndex(u32);
-entity_impl!(InstancePlusIndex, "instance");
-
-struct WasmNamespace {
-    names: HashMap<String, InstancePlusIndex>,
-    instances: PrimaryMap<InstancePlusIndex, InstancePlus>,
-}
-
-impl WasmNamespace {
-    fn new() -> Self {
-        Self {
-            names: HashMap::new(),
-            instances: PrimaryMap::new(),
-        }
-    }
-}
-
-impl Resolver for WasmNamespace {
-    fn resolve(&mut self, module: &str, field: &str) -> Option<Export> {
-        if let Some(index) = self.names.get(module) {
-            self.instances[*index].instance.lookup(field)
-        } else {
-            None
-        }
-    }
-}
-
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
 pub struct WastContext {
     /// A namespace of wasm modules, keyed by an optional name.
     current: Option<InstancePlusIndex>,
-    namespace: WasmNamespace,
+    namespace: Namespace,
     jit_code: JITCode,
 }
 
@@ -117,7 +87,7 @@ impl WastContext {
     pub fn new() -> Self {
         Self {
             current: None,
-            namespace: WasmNamespace::new(),
+            namespace: Namespace::new(),
             jit_code: JITCode::new(),
         }
     }
@@ -153,17 +123,22 @@ impl WastContext {
         InstancePlus::new(&mut self.jit_code, isa, &data, &mut self.namespace)
     }
 
-    fn get_instance(&mut self, module: &Option<String>) -> Result<InstancePlusIndex, WastError> {
-        let index = *if let Some(name) = module {
-            self.namespace.names.get_mut(name).ok_or_else(|| {
-                WastError::Module(UnknownModule {
-                    module: Some(name.to_owned()),
+    fn get_index(
+        &mut self,
+        instance_name: &Option<String>,
+    ) -> Result<InstancePlusIndex, WastError> {
+        let index = *if let Some(instance_name) = instance_name {
+            self.namespace
+                .get_instance_index(instance_name)
+                .ok_or_else(|| {
+                    WastError::Instance(UnknownInstance {
+                        instance: Some(instance_name.to_string()),
+                    })
                 })
-            })
         } else {
             self.current
                 .as_mut()
-                .ok_or_else(|| WastError::Module(UnknownModule { module: None }))
+                .ok_or_else(|| WastError::Instance(UnknownInstance { instance: None }))
         }?;
 
         Ok(index)
@@ -172,58 +147,11 @@ impl WastContext {
     /// Register "spectest" which is used by the spec testsuite.
     pub fn register_spectest(&mut self) -> Result<(), ActionError> {
         let instance = instantiate_spectest()?;
-        let index = self.namespace.instances.push(instance);
-        self.register("spectest".to_owned(), index);
+        self.namespace.instance(Some("spectest"), instance);
         Ok(())
     }
 
-    /// Define a module and register it.
-    pub fn module(
-        &mut self,
-        isa: &isa::TargetIsa,
-        name: Option<String>,
-        module: ModuleBinary,
-    ) -> Result<(), ActionError> {
-        let instance = self.instantiate(isa, module)?;
-        let index = self.namespace.instances.push(instance);
-        if let Some(name) = name {
-            self.register(name, index);
-        }
-        self.current = Some(index);
-        Ok(())
-    }
-
-    /// Register a module to make it available for performing actions.
-    pub fn register(&mut self, name: String, index: InstancePlusIndex) {
-        self.namespace.names.insert(name, index);
-    }
-
-    /// Invoke an exported function from a defined module.
-    pub fn invoke(
-        &mut self,
-        isa: &isa::TargetIsa,
-        module: Option<String>,
-        field: &str,
-        args: &[Value],
-    ) -> Result<ActionOutcome, WastError> {
-        let mut value_args = Vec::with_capacity(args.len());
-        for arg in args {
-            value_args.push(runtime_value(*arg));
-        }
-        let index = self.get_instance(&module)?;
-        self.namespace.instances[index]
-            .invoke(&mut self.jit_code, isa, &field, &value_args)
-            .map_err(WastError::Action)
-    }
-
-    /// Get the value of an exported global from a defined module.
-    pub fn get(&mut self, module: Option<String>, field: &str) -> Result<RuntimeValue, WastError> {
-        let index = self.get_instance(&module)?;
-        self.namespace.instances[index]
-            .get(&field)
-            .map_err(WastError::Action)
-    }
-
+    /// Perform the action portion of a command.
     fn perform_action(
         &mut self,
         isa: &isa::TargetIsa,
@@ -231,16 +159,82 @@ impl WastContext {
     ) -> Result<ActionOutcome, WastError> {
         match action {
             Action::Invoke {
-                module,
+                module: instance_name,
                 field,
                 args,
-            } => self.invoke(isa, module, &field, &args),
-            Action::Get { module, field } => {
-                let value = self.get(module, &field)?;
-                Ok(ActionOutcome::Returned {
-                    values: vec![value],
-                })
-            }
+            } => self.invoke(isa, instance_name, &field, &args),
+            Action::Get {
+                module: instance_name,
+                field,
+            } => self.get(instance_name, &field),
+        }
+    }
+
+    /// Define a module and register it.
+    fn module(
+        &mut self,
+        isa: &isa::TargetIsa,
+        instance_name: Option<String>,
+        module: ModuleBinary,
+    ) -> Result<(), ActionError> {
+        let instance = self.instantiate(isa, module)?;
+        let index = self
+            .namespace
+            .instance(instance_name.as_ref().map(String::as_str), instance);
+        self.current = Some(index);
+        Ok(())
+    }
+
+    /// Register an instance to make it available for performing actions.
+    fn register(&mut self, name: Option<String>, as_name: String) -> Result<(), WastError> {
+        let index = self.get_index(&name)?;
+        self.namespace.register(as_name, index);
+        Ok(())
+    }
+
+    /// Invoke an exported function from an instance.
+    fn invoke(
+        &mut self,
+        isa: &isa::TargetIsa,
+        instance_name: Option<String>,
+        field: &str,
+        args: &[Value],
+    ) -> Result<ActionOutcome, WastError> {
+        let value_args = args
+            .iter()
+            .map(|arg| runtime_value(*arg))
+            .collect::<Vec<_>>();
+        let index = self.get_index(&instance_name)?;
+        self.namespace
+            .invoke(&mut self.jit_code, isa, index, &field, &value_args)
+            .map_err(WastError::Action)
+    }
+
+    /// Get the value of an exported global from an instance.
+    fn get(
+        &mut self,
+        instance_name: Option<String>,
+        field: &str,
+    ) -> Result<ActionOutcome, WastError> {
+        let index = self.get_index(&instance_name)?;
+        let value = self
+            .namespace
+            .get(index, field)
+            .map_err(WastError::Action)?;
+        Ok(ActionOutcome::Returned {
+            values: vec![value],
+        })
+    }
+
+    /// Perform the action of a `PerformAction`.
+    fn perform_action_command(
+        &mut self,
+        isa: &isa::TargetIsa,
+        action: Action,
+    ) -> Result<(), WastError> {
+        match self.perform_action(isa, action)? {
+            ActionOutcome::Returned { .. } => Ok(()),
+            ActionOutcome::Trapped { message } => Err(WastError::Trap(message)),
         }
     }
 
@@ -255,8 +249,11 @@ impl WastContext {
 
         while let Some(Command { kind, line }) = parser.next().expect("parser") {
             match kind {
-                CommandKind::Module { module, name } => {
-                    self.module(isa, name, module)
+                CommandKind::Module {
+                    module: instance_name,
+                    name,
+                } => {
+                    self.module(isa, name, instance_name)
                         .map_err(|error| WastFileError {
                             filename: filename.to_string(),
                             line,
@@ -264,29 +261,21 @@ impl WastContext {
                         })?;
                 }
                 CommandKind::Register { name, as_name } => {
-                    let index = self.get_instance(&name).map_err(|error| WastFileError {
-                        filename: filename.to_string(),
-                        line,
-                        error,
-                    })?;
-                    self.register(as_name, index);
-                }
-                CommandKind::PerformAction(action) => match self
-                    .perform_action(isa, action)
-                    .map_err(|error| WastFileError {
-                        filename: filename.to_string(),
-                        line,
-                        error,
-                    })? {
-                    ActionOutcome::Returned { .. } => {}
-                    ActionOutcome::Trapped { message } => {
-                        return Err(WastFileError {
+                    self.register(name, as_name)
+                        .map_err(|error| WastFileError {
                             filename: filename.to_string(),
                             line,
-                            error: WastError::Trap(message),
-                        });
-                    }
-                },
+                            error,
+                        })?;
+                }
+                CommandKind::PerformAction(action) => {
+                    self.perform_action_command(isa, action)
+                        .map_err(|error| WastFileError {
+                            filename: filename.to_string(),
+                            line,
+                            error,
+                        })?;
+                }
                 CommandKind::AssertReturn { action, expected } => {
                     match self
                         .perform_action(isa, action)
