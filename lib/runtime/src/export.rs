@@ -21,7 +21,7 @@ pub enum Export {
     /// A table export value.
     Table {
         /// The address of the table descriptor.
-        address: *mut VMTableDefinition,
+        definition: *mut VMTableDefinition,
         /// Pointer to the containing VMContext.
         vmctx: *mut VMContext,
         /// The table declaration, used for compatibilty checking.
@@ -31,7 +31,7 @@ pub enum Export {
     /// A memory export value.
     Memory {
         /// The address of the memory descriptor.
-        address: *mut VMMemoryDefinition,
+        definition: *mut VMMemoryDefinition,
         /// Pointer to the containing VMContext.
         vmctx: *mut VMContext,
         /// The memory declaration, used for compatibilty checking.
@@ -41,7 +41,7 @@ pub enum Export {
     /// A global export value.
     Global {
         /// The address of the global storage.
-        address: *mut VMGlobalDefinition,
+        definition: *mut VMGlobalDefinition,
         /// The global declaration, used for compatibilty checking.
         global: Global,
     },
@@ -62,9 +62,13 @@ impl Export {
     }
 
     /// Construct a table export value.
-    pub fn table(address: *mut VMTableDefinition, vmctx: *mut VMContext, table: TablePlan) -> Self {
+    pub fn table(
+        definition: *mut VMTableDefinition,
+        vmctx: *mut VMContext,
+        table: TablePlan,
+    ) -> Self {
         Export::Table {
-            address,
+            definition,
             vmctx,
             table,
         }
@@ -72,19 +76,19 @@ impl Export {
 
     /// Construct a memory export value.
     pub fn memory(
-        address: *mut VMMemoryDefinition,
+        definition: *mut VMMemoryDefinition,
         vmctx: *mut VMContext,
         memory: MemoryPlan,
     ) -> Self {
         Export::Memory {
-            address,
+            definition,
             vmctx,
             memory,
         }
     }
 
     /// Construct a global export value.
-    pub fn global(address: *mut VMGlobalDefinition, global: Global) -> Self {
-        Export::Global { address, global }
+    pub fn global(definition: *mut VMGlobalDefinition, global: Global) -> Self {
+        Export::Global { definition, global }
     }
 }

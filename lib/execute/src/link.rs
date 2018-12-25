@@ -71,7 +71,7 @@ pub fn link_module(
         match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
                 Export::Table {
-                    address,
+                    definition,
                     vmctx,
                     table,
                 } => {
@@ -83,7 +83,7 @@ pub fn link_module(
                         )));
                     }
                     table_imports.push(VMTableImport {
-                        from: address,
+                        from: definition,
                         vmctx,
                     });
                 }
@@ -108,7 +108,7 @@ pub fn link_module(
         match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
                 Export::Memory {
-                    address,
+                    definition,
                     vmctx,
                     memory,
                 } => {
@@ -136,7 +136,7 @@ pub fn link_module(
                     assert!(memory.offset_guard_size >= import_memory.offset_guard_size);
 
                     memory_imports.push(VMMemoryImport {
-                        from: address,
+                        from: definition,
                         vmctx,
                     });
                 }
@@ -160,7 +160,7 @@ pub fn link_module(
     for (index, (ref module_name, ref field)) in module.imported_globals.iter() {
         match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
-                Export::Global { address, global } => {
+                Export::Global { definition, global } => {
                     let imported_global = module.globals[index];
                     if !is_global_compatible(&global, &imported_global) {
                         return Err(LinkError(format!(
@@ -168,7 +168,7 @@ pub fn link_module(
                             module_name, field
                         )));
                     }
-                    global_imports.push(VMGlobalImport { from: address });
+                    global_imports.push(VMGlobalImport { from: definition });
                 }
                 Export::Table { .. } | Export::Memory { .. } | Export::Function { .. } => {
                     return Err(LinkError(format!(

@@ -213,12 +213,12 @@ impl InstancePlus {
         start: usize,
         len: usize,
     ) -> Result<&[u8], ActionError> {
-        let address = match unsafe { self.instance.lookup_immutable(memory_name) } {
+        let definition = match unsafe { self.instance.lookup_immutable(memory_name) } {
             Some(Export::Memory {
-                address,
+                definition,
                 memory: _memory,
                 vmctx: _vmctx,
-            }) => address,
+            }) => definition,
             Some(_) => {
                 return Err(ActionError::Kind(format!(
                     "exported item \"{}\" is not a linear memory",
@@ -234,15 +234,15 @@ impl InstancePlus {
         };
 
         Ok(unsafe {
-            let memory_def = &*address;
+            let memory_def = &*definition;
             &slice::from_raw_parts(memory_def.base, memory_def.current_length)[start..start + len]
         })
     }
 
     /// Read a global in this `Instance` identified by an export name.
     pub fn get(&self, global_name: &str) -> Result<RuntimeValue, ActionError> {
-        let (address, global) = match unsafe { self.instance.lookup_immutable(global_name) } {
-            Some(Export::Global { address, global }) => (address, global),
+        let (definition, global) = match unsafe { self.instance.lookup_immutable(global_name) } {
+            Some(Export::Global { definition, global }) => (definition, global),
             Some(_) => {
                 return Err(ActionError::Kind(format!(
                     "exported item \"{}\" is not a global variable",
@@ -258,7 +258,7 @@ impl InstancePlus {
         };
 
         unsafe {
-            let global_def = &*address;
+            let global_def = &*definition;
             Ok(match global.ty {
                 ir::types::I32 => RuntimeValue::I32(*global_def.as_i32()),
                 ir::types::I64 => RuntimeValue::I64(*global_def.as_i64()),

@@ -260,7 +260,7 @@ impl Instance {
                     }
                 }
                 wasmtime_environ::Export::Table(index) => {
-                    let (address, vmctx) = if let Some(def_index) =
+                    let (definition, vmctx) = if let Some(def_index) =
                         self.module.defined_table_index(*index)
                     {
                         (
@@ -272,13 +272,13 @@ impl Instance {
                         (import.from, import.vmctx)
                     };
                     Export::Table {
-                        address,
+                        definition,
                         vmctx,
                         table: self.module.table_plans[*index].clone(),
                     }
                 }
                 wasmtime_environ::Export::Memory(index) => {
-                    let (address, vmctx) = if let Some(def_index) =
+                    let (definition, vmctx) = if let Some(def_index) =
                         self.module.defined_memory_index(*index)
                     {
                         (
@@ -290,13 +290,13 @@ impl Instance {
                         (import.from, import.vmctx)
                     };
                     Export::Memory {
-                        address,
+                        definition,
                         vmctx,
                         memory: self.module.memory_plans[*index].clone(),
                     }
                 }
                 wasmtime_environ::Export::Global(index) => Export::Global {
-                    address: if let Some(def_index) = self.module.defined_global_index(*index) {
+                    definition: if let Some(def_index) = self.module.defined_global_index(*index) {
                         unsafe { self.vmctx.global_mut(def_index) }
                     } else {
                         unsafe { self.vmctx.imported_global(*index).from }
