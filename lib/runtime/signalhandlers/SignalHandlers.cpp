@@ -455,7 +455,8 @@ WasmTrapHandler(LPEXCEPTION_POINTERS exception)
     if (record->ExceptionCode != EXCEPTION_ACCESS_VIOLATION &&
         record->ExceptionCode != EXCEPTION_ILLEGAL_INSTRUCTION &&
         record->ExceptionCode != EXCEPTION_STACK_OVERFLOW &&
-        record->ExceptionCode != EXCEPTION_INT_DIVIDE_BY_ZERO)
+        record->ExceptionCode != EXCEPTION_INT_DIVIDE_BY_ZERO &&
+        record->ExceptionCode != EXCEPTION_INT_OVERFLOW)
     {
         return EXCEPTION_CONTINUE_SEARCH;
     }
