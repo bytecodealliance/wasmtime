@@ -6,6 +6,7 @@ use vmcontext::{
 use wasmtime_environ::{MemoryPlan, TablePlan};
 
 /// The value of an export passed from one instance to another.
+#[derive(Debug)]
 pub enum Export {
     /// A function export value.
     Function {
