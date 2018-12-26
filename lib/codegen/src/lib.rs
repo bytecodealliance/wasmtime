@@ -49,26 +49,17 @@
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
-extern crate failure;
-#[macro_use]
-extern crate failure_derive;
-#[cfg_attr(test, macro_use)]
-extern crate target_lexicon;
 
-#[macro_use]
-extern crate log;
-
-pub use context::Context;
-pub use legalizer::legalize_function;
-pub use verifier::verify_function;
-pub use write::write_function;
+pub use crate::context::Context;
+pub use crate::legalizer::legalize_function;
+pub use crate::verifier::verify_function;
+pub use crate::write::write_function;
 
 /// Version number of the cranelift-codegen crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[macro_use]
-pub extern crate cranelift_entity as entity;
-pub extern crate cranelift_bforest as bforest;
+pub use cranelift_bforest as bforest;
+pub use cranelift_entity as entity;
 
 pub mod binemit;
 pub mod cfg_printer;
@@ -85,7 +76,7 @@ pub mod timing;
 pub mod verifier;
 pub mod write;
 
-pub use entity::packed_option;
+pub use crate::entity::packed_option;
 
 mod abi;
 mod bitset;
@@ -111,7 +102,7 @@ mod stack_layout;
 mod topo_order;
 mod unreachable_code;
 
-pub use result::{CodegenError, CodegenResult};
+pub use crate::result::{CodegenError, CodegenResult};
 
 /// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]

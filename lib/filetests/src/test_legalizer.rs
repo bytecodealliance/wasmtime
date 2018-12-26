@@ -3,12 +3,12 @@
 //! The `test legalizer` test command runs each function through `legalize_function()` and sends
 //! the result to filecheck.
 
+use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
-use subtest::{run_filecheck, Context, SubTest, SubtestResult};
 
 struct TestLegalizer;
 

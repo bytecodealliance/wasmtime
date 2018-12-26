@@ -8,6 +8,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["webassembly", "serde"]
+edition = "2018"
 
 [[bin]]
 name = "clif-json"

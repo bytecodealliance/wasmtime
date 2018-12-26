@@ -6,15 +6,16 @@
 //!
 //! [Wasmtime]: https://github.com/CraneStation/wasmtime
 
+use crate::translation_utils::{
+    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
+use failure_derive::Fail;
 use std::convert::From;
 use std::vec::Vec;
-use translation_utils::{
-    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
-};
 use wasmparser::BinaryReaderError;
 
 /// The value of a WebAssembly global variable.

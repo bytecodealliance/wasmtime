@@ -7,6 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/en/latest/testing.html#file-tests"
 repository = "https://github.com/CraneStation/cranelift"
 publish = false
+edition = "2018"
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.26.0", features = ["testing_hooks"] }

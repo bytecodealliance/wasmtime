@@ -9,6 +9,7 @@ repository = "https://github.com/CraneStation/cranelift"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["optimize", "compile", "compiler", "jit"]
+edition = "2018"
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.26.0", default-features = false }

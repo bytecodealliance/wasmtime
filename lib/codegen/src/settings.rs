@@ -20,8 +20,9 @@
 //! assert_eq!(f.opt_level(), settings::OptLevel::Fastest);
 //! ```
 
-use constant_hash::{probe, simple_hash};
-use isa::TargetIsa;
+use crate::constant_hash::{probe, simple_hash};
+use crate::isa::TargetIsa;
+use failure_derive::Fail;
 use std::boxed::Box;
 use std::fmt;
 use std::str;
@@ -202,7 +203,7 @@ impl<'a> PredicateView<'a> {
 /// This module holds definitions that need to be public so the can be instantiated by generated
 /// code in other modules.
 pub mod detail {
-    use constant_hash;
+    use crate::constant_hash;
     use std::fmt;
 
     /// An instruction group template.

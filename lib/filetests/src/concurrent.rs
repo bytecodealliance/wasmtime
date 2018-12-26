@@ -3,18 +3,19 @@
 //! This module provides the `ConcurrentRunner` struct which uses a pool of threads to run tests
 //! concurrently.
 
+use crate::runone;
+use crate::TestResult;
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::timing;
 use file_per_thread_logger;
+use log::error;
 use num_cpus;
-use runone;
 use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use TestResult;
 
 /// Request sent to worker threads contains jobid and path.
 struct Request(usize, PathBuf);

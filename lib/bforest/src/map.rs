@@ -1,7 +1,7 @@
 //! Forest of maps.
 
 use super::{Comparator, Forest, Node, NodeData, NodePool, Path, INNER_SIZE};
-use packed_option::PackedOption;
+use crate::packed_option::PackedOption;
 #[cfg(test)]
 use std::fmt;
 use std::marker::PhantomData;

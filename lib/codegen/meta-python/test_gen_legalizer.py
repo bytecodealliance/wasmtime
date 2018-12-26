@@ -148,9 +148,9 @@ class TestRuntimeChecks(TestCase):
                 self.v5 << vselect(self.v1, self.v3, self.v4),
         )
         x = XForm(r, r)
-        tv2_exp = 'Some({}).map(|t: ir::Type| t.as_bool())'\
+        tv2_exp = 'Some({}).map(|t: crate::ir::Type| t.as_bool())'\
             .format(self.v2.get_typevar().name)
-        tv3_exp = 'Some({}).map(|t: ir::Type| t.as_bool())'\
+        tv3_exp = 'Some({}).map(|t: crate::ir::Type| t.as_bool())'\
             .format(self.v3.get_typevar().name)
 
         self.check_yo_check(

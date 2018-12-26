@@ -5,8 +5,8 @@
 //!
 //! This module declares the data types used to represent external functions and call signatures.
 
-use ir::{ArgumentLoc, ExternalName, SigRef, Type};
-use isa::{CallConv, RegInfo, RegUnit};
+use crate::ir::{ArgumentLoc, ExternalName, SigRef, Type};
+use crate::isa::{CallConv, RegInfo, RegUnit};
 use std::fmt;
 use std::str::FromStr;
 use std::vec::Vec;
@@ -334,7 +334,7 @@ impl fmt::Display for ExtFuncData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::types::{B8, F32, I32};
+    use crate::ir::types::{B8, F32, I32};
     use std::string::ToString;
 
     #[test]

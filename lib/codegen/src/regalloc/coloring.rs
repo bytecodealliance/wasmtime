@@ -42,22 +42,23 @@
 //!
 //! The exception is the entry block whose arguments are colored from the ABI requirements.
 
-use cursor::{Cursor, EncCursor};
-use dominator_tree::DominatorTree;
-use ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
-use ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
-use isa::{regs_overlap, RegClass, RegInfo, RegUnit};
-use isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
-use packed_option::PackedOption;
-use regalloc::affinity::Affinity;
-use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
-use regalloc::liveness::Liveness;
-use regalloc::liverange::{LiveRange, LiveRangeContext};
-use regalloc::register_set::RegisterSet;
-use regalloc::solver::{Solver, SolverError};
-use regalloc::RegDiversions;
+use crate::cursor::{Cursor, EncCursor};
+use crate::dominator_tree::DominatorTree;
+use crate::ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
+use crate::ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
+use crate::isa::{regs_overlap, RegClass, RegInfo, RegUnit};
+use crate::isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
+use crate::packed_option::PackedOption;
+use crate::regalloc::affinity::Affinity;
+use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
+use crate::regalloc::liveness::Liveness;
+use crate::regalloc::liverange::{LiveRange, LiveRangeContext};
+use crate::regalloc::register_set::RegisterSet;
+use crate::regalloc::solver::{Solver, SolverError};
+use crate::regalloc::RegDiversions;
+use crate::timing;
+use log::debug;
 use std::mem;
-use timing;
 
 /// Data structures for the coloring pass.
 ///
@@ -901,7 +902,7 @@ impl<'a> Context<'a> {
     /// branch destinations. Branch arguments and EBB parameters are not considered live on the
     /// edge.
     fn is_live_on_outgoing_edge(&self, value: Value) -> bool {
-        use ir::instructions::BranchInfo::*;
+        use crate::ir::instructions::BranchInfo::*;
 
         let inst = self.cur.current_inst().expect("Not on an instruction");
         let ctx = self.liveness.context(&self.cur.func.layout);
@@ -930,7 +931,7 @@ impl<'a> Context<'a> {
     ///
     /// The solver needs to be reminded of the available registers before any moves are inserted.
     fn shuffle_inputs(&mut self, regs: &mut RegisterSet) {
-        use regalloc::solver::Move::*;
+        use crate::regalloc::solver::Move::*;
 
         let spills = self.solver.schedule_moves(regs);
 

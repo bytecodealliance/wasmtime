@@ -23,12 +23,12 @@
 //! Here `Ebb1` and `Ebb2` would each have a single predecessor denoted as `(Ebb0, brz)`
 //! and `(Ebb0, jmp Ebb2)` respectively.
 
-use bforest;
-use entity::SecondaryMap;
-use ir::instructions::BranchInfo;
-use ir::{Ebb, Function, Inst};
+use crate::bforest;
+use crate::entity::SecondaryMap;
+use crate::ir::instructions::BranchInfo;
+use crate::ir::{Ebb, Function, Inst};
+use crate::timing;
 use std::mem;
-use timing;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 #[derive(PartialEq, Eq)]
@@ -212,8 +212,8 @@ pub type SuccIter<'a> = bforest::SetIter<'a, Ebb>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cursor::{Cursor, FuncCursor};
-    use ir::{types, Function, InstBuilder};
+    use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::{types, Function, InstBuilder};
     use std::vec::Vec;
 
     #[test]

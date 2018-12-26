@@ -28,16 +28,9 @@
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate cranelift_module;
-extern crate faerie;
-extern crate failure;
-extern crate goblin;
-extern crate target_lexicon;
-
 mod backend;
 mod container;
 pub mod traps;
 
-pub use backend::{FaerieBackend, FaerieBuilder, FaerieProduct, FaerieTrapCollection};
-pub use container::Format;
+pub use crate::backend::{FaerieBackend, FaerieBuilder, FaerieProduct, FaerieTrapCollection};
+pub use crate::container::Format;

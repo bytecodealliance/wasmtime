@@ -103,19 +103,21 @@ def emit_runtime_typecheck(check, fmt, type_sets):
 
         base_exp = build_derived_expr(tv.base)
         if (tv.derived_func == TypeVar.LANEOF):
-            return "{}.map(|t: ir::Type| t.lane_type())".format(base_exp)
+            return "{}.map(|t: crate::ir::Type| t.lane_type())"\
+                .format(base_exp)
         elif (tv.derived_func == TypeVar.ASBOOL):
-            return "{}.map(|t: ir::Type| t.as_bool())".format(base_exp)
+            return "{}.map(|t: crate::ir::Type| t.as_bool())".format(base_exp)
         elif (tv.derived_func == TypeVar.HALFWIDTH):
-            return "{}.and_then(|t: ir::Type| t.half_width())".format(base_exp)
+            return "{}.and_then(|t: crate::ir::Type| t.half_width())"\
+                .format(base_exp)
         elif (tv.derived_func == TypeVar.DOUBLEWIDTH):
-            return "{}.and_then(|t: ir::Type| t.double_width())"\
+            return "{}.and_then(|t: crate::ir::Type| t.double_width())"\
                 .format(base_exp)
         elif (tv.derived_func == TypeVar.HALFVECTOR):
-            return "{}.and_then(|t: ir::Type| t.half_vector())"\
+            return "{}.and_then(|t: crate::ir::Type| t.half_vector())"\
                 .format(base_exp)
         elif (tv.derived_func == TypeVar.DOUBLEVECTOR):
-            return "{}.and_then(|t: ir::Type| t.by(2))".format(base_exp)
+            return "{}.and_then(|t: crate::ir::Type| t.by(2))".format(base_exp)
         else:
             assert False, "Unknown derived function {}".format(tv.derived_func)
 
@@ -174,7 +176,7 @@ def unwrap_inst(iref, node, fmt):
     arg_names = tuple(
             arg.name if isinstance(arg, Var) else '_' for arg in expr.args)
     with fmt.indented(
-            'let ({}, predicate) = if let ir::InstructionData::{} {{'
+            'let ({}, predicate) = if let crate::ir::InstructionData::{} {{'
             .format(', '.join(map(str, arg_names)), iform.name), '};'):
         # Fields are encoded directly.
         for f in iform.imm_fields:
@@ -359,13 +361,13 @@ def gen_xform_group(xgrp, fmt, type_sets):
     fmt.doc_comment("Legalize `inst`.")
     fmt.line('#[allow(unused_variables,unused_assignments,non_snake_case)]')
     with fmt.indented('pub fn {}('.format(xgrp.name)):
-        fmt.line('inst: ir::Inst,')
-        fmt.line('func: &mut ir::Function,')
-        fmt.line('cfg: &mut ::flowgraph::ControlFlowGraph,')
-        fmt.line('isa: &::isa::TargetIsa,')
+        fmt.line('inst: crate::ir::Inst,')
+        fmt.line('func: &mut crate::ir::Function,')
+        fmt.line('cfg: &mut crate::flowgraph::ControlFlowGraph,')
+        fmt.line('isa: &crate::isa::TargetIsa,')
     with fmt.indented(') -> bool {', '}'):
-        fmt.line('use ir::InstBuilder;')
-        fmt.line('use cursor::{Cursor, FuncCursor};')
+        fmt.line('use crate::ir::InstBuilder;')
+        fmt.line('use crate::cursor::{Cursor, FuncCursor};')
         fmt.line('let mut pos = FuncCursor::new(func).at_inst(inst);')
         fmt.line('pos.use_srcloc(inst);')
 

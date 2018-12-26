@@ -25,13 +25,6 @@
     )
 )]
 
-extern crate clap;
-extern crate cranelift_reader;
-extern crate serde_json;
-#[macro_use]
-extern crate serde_derive;
-extern crate cranelift_codegen;
-
 use clap::{App, Arg, SubCommand};
 use cranelift_reader::parse_functions;
 use std::fs::File;

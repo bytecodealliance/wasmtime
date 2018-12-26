@@ -3,20 +3,20 @@
 //! The `Function` struct defined in this module owns all of its extended basic blocks and
 //! instructions.
 
-use binemit::CodeOffset;
-use entity::{PrimaryMap, SecondaryMap};
-use ir;
-use ir::{DataFlowGraph, ExternalName, Layout, Signature};
-use ir::{
+use crate::binemit::CodeOffset;
+use crate::entity::{PrimaryMap, SecondaryMap};
+use crate::ir;
+use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
+use crate::ir::{
     Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
     JumpTableData, SigRef, StackSlot, StackSlotData, Table, TableData,
 };
-use ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
-use ir::{JumpTableOffsets, JumpTables};
-use isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
-use regalloc::RegDiversions;
+use crate::ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
+use crate::ir::{JumpTableOffsets, JumpTables};
+use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
+use crate::regalloc::RegDiversions;
+use crate::write::write_function;
 use std::fmt;
-use write::write_function;
 
 /// A function.
 ///

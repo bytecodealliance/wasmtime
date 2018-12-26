@@ -1,9 +1,3 @@
-extern crate cranelift_codegen;
-extern crate cranelift_entity;
-extern crate cranelift_frontend;
-extern crate cranelift_module;
-extern crate cranelift_simplejit;
-
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::Context;

@@ -3,12 +3,12 @@
 //! This module exports the `expand_table_addr` function which transforms a `table_addr`
 //! instruction into code that depends on the kind of table referenced.
 
-use cursor::{Cursor, FuncCursor};
-use flowgraph::ControlFlowGraph;
-use ir::condcodes::IntCC;
-use ir::immediates::Offset32;
-use ir::{self, InstBuilder};
-use isa::TargetIsa;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::condcodes::IntCC;
+use crate::ir::immediates::Offset32;
+use crate::ir::{self, InstBuilder};
+use crate::isa::TargetIsa;
 
 /// Expand a `table_addr` instruction according to the definition of the table.
 pub fn expand_table_addr(

@@ -1,5 +1,5 @@
-use cdsl::isa::TargetIsa;
-use cdsl::settings::SettingGroup;
+use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::settings::SettingGroup;
 use std::fmt;
 
 mod arm32;

@@ -661,7 +661,7 @@ def gen_inst_builder(inst, fmt):
     # The controlling type variable will be inferred from the input values if
     # possible. Otherwise, it is the first method argument.
     if inst.is_polymorphic and not inst.use_typevar_operand:
-        args.append('{}: ir::Type'.format(inst.ctrl_typevar.name))
+        args.append('{}: crate::ir::Type'.format(inst.ctrl_typevar.name))
 
     tmpl_types = list()  # type: List[str]
     into_args = list()  # type: List[str]

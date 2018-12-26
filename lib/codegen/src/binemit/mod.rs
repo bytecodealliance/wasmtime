@@ -10,9 +10,9 @@ mod shrink;
 pub use self::memorysink::{MemoryCodeSink, NullTrapSink, RelocSink, TrapSink};
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;
-pub use regalloc::RegDiversions;
+pub use crate::regalloc::RegDiversions;
 
-use ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
 use std::fmt;
 
 /// Offset in bytes from the beginning of the function.
@@ -72,28 +72,28 @@ pub trait CodeSink {
     fn offset(&self) -> CodeOffset;
 
     /// Add 1 byte to the code section.
-    fn put1(&mut self, u8);
+    fn put1(&mut self, _: u8);
 
     /// Add 2 bytes to the code section.
-    fn put2(&mut self, u16);
+    fn put2(&mut self, _: u16);
 
     /// Add 4 bytes to the code section.
-    fn put4(&mut self, u32);
+    fn put4(&mut self, _: u32);
 
     /// Add 8 bytes to the code section.
-    fn put8(&mut self, u64);
+    fn put8(&mut self, _: u64);
 
     /// Add a relocation referencing an EBB at the current offset.
-    fn reloc_ebb(&mut self, Reloc, CodeOffset);
+    fn reloc_ebb(&mut self, _: Reloc, _: CodeOffset);
 
     /// Add a relocation referencing an external symbol plus the addend at the current offset.
-    fn reloc_external(&mut self, Reloc, &ExternalName, Addend);
+    fn reloc_external(&mut self, _: Reloc, _: &ExternalName, _: Addend);
 
     /// Add a relocation referencing a jump table.
-    fn reloc_jt(&mut self, Reloc, JumpTable);
+    fn reloc_jt(&mut self, _: Reloc, _: JumpTable);
 
     /// Add trap information for the current offset.
-    fn trap(&mut self, TrapCode, SourceLoc);
+    fn trap(&mut self, _: TrapCode, _: SourceLoc);
 
     /// Code output is complete, read-only data may follow.
     fn begin_rodata(&mut self);

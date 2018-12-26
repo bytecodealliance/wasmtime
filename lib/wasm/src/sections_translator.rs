@@ -7,15 +7,15 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use cranelift_codegen::ir::{self, AbiParam, Signature};
-use cranelift_entity::EntityRef;
-use environ::{ModuleEnvironment, WasmResult};
-use std::str::from_utf8;
-use std::vec::Vec;
-use translation_utils::{
+use crate::environ::{ModuleEnvironment, WasmResult};
+use crate::translation_utils::{
     type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex,
     Table, TableElementType, TableIndex,
 };
+use cranelift_codegen::ir::{self, AbiParam, Signature};
+use cranelift_entity::EntityRef;
+use std::str::from_utf8;
+use std::vec::Vec;
 use wasmparser::{
     self, CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
     ExportSectionReader, ExternalKind, FuncType, FunctionSectionReader, GlobalSectionReader,

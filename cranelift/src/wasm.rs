@@ -18,7 +18,7 @@ use cranelift_wasm::{
 use std::path::Path;
 use std::path::PathBuf;
 use term;
-use utils::{parse_sets_and_triple, read_to_end};
+use crate::utils::{parse_sets_and_triple, read_to_end};
 use wabt::wat2wasm;
 
 macro_rules! vprintln {

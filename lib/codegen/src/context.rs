@@ -9,28 +9,28 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use binemit::{
+use crate::binemit::{
     relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink,
 };
-use dce::do_dce;
-use dominator_tree::DominatorTree;
-use flowgraph::ControlFlowGraph;
-use ir::Function;
-use isa::TargetIsa;
-use legalize_function;
-use licm::do_licm;
-use loop_analysis::LoopAnalysis;
-use nan_canonicalization::do_nan_canonicalization;
-use postopt::do_postopt;
-use regalloc;
-use result::CodegenResult;
-use settings::{FlagsOrIsa, OptLevel};
-use simple_gvn::do_simple_gvn;
-use simple_preopt::do_preopt;
+use crate::dce::do_dce;
+use crate::dominator_tree::DominatorTree;
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::Function;
+use crate::isa::TargetIsa;
+use crate::legalize_function;
+use crate::licm::do_licm;
+use crate::loop_analysis::LoopAnalysis;
+use crate::nan_canonicalization::do_nan_canonicalization;
+use crate::postopt::do_postopt;
+use crate::regalloc;
+use crate::result::CodegenResult;
+use crate::settings::{FlagsOrIsa, OptLevel};
+use crate::simple_gvn::do_simple_gvn;
+use crate::simple_preopt::do_preopt;
+use crate::timing;
+use crate::unreachable_code::eliminate_unreachable_code;
+use crate::verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
 use std::vec::Vec;
-use timing;
-use unreachable_code::eliminate_unreachable_code;
-use verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {

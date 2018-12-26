@@ -117,10 +117,10 @@ def gen_getters(sgrp, fmt):
     with fmt.indented('impl Flags {', '}'):
         fmt.doc_comment('Get a view of the boolean predicates.')
         with fmt.indented(
-                'pub fn predicate_view(&self) -> ::settings::PredicateView {',
-                '}'):
+                'pub fn predicate_view(&self) -> '
+                'crate::settings::PredicateView {', '}'):
             fmt.format(
-                    '::settings::PredicateView::new(&self.bytes[{}..])',
+                    'crate::settings::PredicateView::new(&self.bytes[{}..])',
                     sgrp.boolean_offset)
         if sgrp.settings:
             fmt.doc_comment('Dynamic numbered predicate getter.')

@@ -3,8 +3,8 @@
 //! The register allocator assigns every SSA value to either a register or a stack slot. This
 //! assignment is represented by a `ValueLoc` object.
 
-use ir::StackSlot;
-use isa::{RegInfo, RegUnit};
+use crate::ir::StackSlot;
+use crate::isa::{RegInfo, RegUnit};
 use std::fmt;
 
 /// Value location.

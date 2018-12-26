@@ -19,6 +19,7 @@
 //! The entity references all implement the `Display` trait in a way that matches the textual IR
 //! format.
 
+use crate::entity::entity_impl;
 use std::fmt;
 use std::u32;
 
@@ -318,7 +319,7 @@ mod tests {
 
     #[test]
     fn memory() {
-        use packed_option::PackedOption;
+        use crate::packed_option::PackedOption;
         use std::mem;
         // This is the whole point of `PackedOption`.
         assert_eq!(

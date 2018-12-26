@@ -7,12 +7,12 @@
 //! > Briggs, Torczon, *An efficient representation for sparse sets*,
 //!   ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
 
-use map::SecondaryMap;
+use crate::map::SecondaryMap;
+use crate::EntityRef;
 use std::mem;
 use std::slice;
 use std::u32;
 use std::vec::Vec;
-use EntityRef;
 
 /// Trait for extracting keys from values stored in a `SparseMap`.
 ///
@@ -230,7 +230,7 @@ pub type SparseSet<T> = SparseMap<T, T>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use EntityRef;
+    use crate::EntityRef;
 
     /// An opaque reference to an instruction in a function.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

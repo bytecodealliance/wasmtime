@@ -2,12 +2,13 @@
 //!
 //! The `compile` test command runs each function through the full code generator pipeline
 
+use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
 use cranelift_codegen;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, ir};
 use cranelift_reader::TestCommand;
+use log::info;
 use std::borrow::Cow;
-use subtest::{run_filecheck, Context, SubTest, SubtestResult};
 
 struct TestCompile;
 

@@ -1,14 +1,14 @@
 //! Liveness verifier.
 
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use ir::entities::AnyEntity;
-use ir::{ExpandedProgramPoint, Function, Inst, ProgramOrder, ProgramPoint, Value};
-use isa::TargetIsa;
-use regalloc::liveness::Liveness;
-use regalloc::liverange::LiveRange;
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::ir::entities::AnyEntity;
+use crate::ir::{ExpandedProgramPoint, Function, Inst, ProgramOrder, ProgramPoint, Value};
+use crate::isa::TargetIsa;
+use crate::regalloc::liveness::Liveness;
+use crate::regalloc::liverange::LiveRange;
+use crate::timing;
+use crate::verifier::{VerifierErrors, VerifierStepResult};
 use std::cmp::Ordering;
-use timing;
-use verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify liveness information for `func`.
 ///

@@ -23,18 +23,9 @@
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate cranelift_preopt;
-extern crate cranelift_reader;
-extern crate file_per_thread_logger;
-extern crate filecheck;
-extern crate num_cpus;
-#[macro_use]
-extern crate log;
-
+use crate::runner::TestRunner;
 use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
-use runner::TestRunner;
 use std::path::Path;
 use std::time;
 

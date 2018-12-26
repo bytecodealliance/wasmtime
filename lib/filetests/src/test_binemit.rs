@@ -3,6 +3,8 @@
 //! The `binemit` test command generates binary machine code for every instruction in the input
 //! functions and compares the results to the expected output.
 
+use crate::match_directive::match_directive;
+use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen::binemit;
 use cranelift_codegen::binemit::{CodeSink, RegDiversions};
 use cranelift_codegen::dbg::DisplayList;
@@ -11,11 +13,9 @@ use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::OptLevel;
 use cranelift_reader::TestCommand;
-use match_directive::match_directive;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
-use subtest::{Context, SubTest, SubtestResult};
 
 struct TestBinEmit;
 

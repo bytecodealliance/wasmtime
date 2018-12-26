@@ -1,10 +1,10 @@
 //! ARM ABI implementation.
 
 use super::registers::{D, GPR, Q, S};
-use ir;
-use isa::RegClass;
-use regalloc::RegisterSet;
-use settings as shared_settings;
+use crate::ir;
+use crate::isa::RegClass;
+use crate::regalloc::RegisterSet;
+use crate::settings as shared_settings;
 
 /// Legalize `sig`.
 pub fn legalize_signature(

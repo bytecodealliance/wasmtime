@@ -1,12 +1,12 @@
 //! Densely numbered entity references as mapping keys.
 
-use iter::{Iter, IterMut};
-use keys::Keys;
+use crate::iter::{Iter, IterMut};
+use crate::keys::Keys;
+use crate::EntityRef;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 use std::vec::Vec;
-use EntityRef;
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///

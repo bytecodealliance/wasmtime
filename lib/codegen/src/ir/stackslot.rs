@@ -3,9 +3,9 @@
 //! The `StackSlotData` struct keeps track of a single stack slot in a function.
 //!
 
-use entity::{Iter, IterMut, Keys, PrimaryMap};
-use ir::{StackSlot, Type};
-use packed_option::PackedOption;
+use crate::entity::{Iter, IterMut, Keys, PrimaryMap};
+use crate::ir::{StackSlot, Type};
+use crate::packed_option::PackedOption;
 use std::cmp;
 use std::fmt;
 use std::ops::{Index, IndexMut};
@@ -340,8 +340,8 @@ impl StackSlots {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::types;
-    use ir::Function;
+    use crate::ir::types;
+    use crate::ir::Function;
     use std::string::ToString;
 
     #[test]

@@ -5,23 +5,24 @@
 //! possible and inserting copies where necessary such that all argument values passed to an EBB
 //! parameter will belong to the same virtual register as the EBB parameter value itself.
 
-use cursor::{Cursor, EncCursor};
-use dbg::DisplayList;
-use dominator_tree::{DominatorTree, DominatorTreePreorder};
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use fx::FxHashMap;
-use ir::{self, InstBuilder, ProgramOrder};
-use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Value};
-use isa::{EncInfo, TargetIsa};
-use regalloc::affinity::Affinity;
-use regalloc::liveness::Liveness;
-use regalloc::virtregs::{VirtReg, VirtRegs};
+use crate::cursor::{Cursor, EncCursor};
+use crate::dbg::DisplayList;
+use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::fx::FxHashMap;
+use crate::ir::{self, InstBuilder, ProgramOrder};
+use crate::ir::{Ebb, ExpandedProgramPoint, Function, Inst, Value};
+use crate::isa::{EncInfo, TargetIsa};
+use crate::regalloc::affinity::Affinity;
+use crate::regalloc::liveness::Liveness;
+use crate::regalloc::virtregs::{VirtReg, VirtRegs};
+use crate::timing;
+use log::debug;
 use std::cmp;
 use std::fmt;
 use std::iter;
 use std::slice;
 use std::vec::Vec;
-use timing;
 
 // # Implementation
 //

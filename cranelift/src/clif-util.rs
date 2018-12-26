@@ -13,28 +13,13 @@
     )
 )]
 
-extern crate file_per_thread_logger;
-#[macro_use]
-extern crate cfg_if;
-#[cfg(feature = "disas")]
-extern crate capstone;
-extern crate clap;
-extern crate cranelift_codegen;
-#[cfg(feature = "wasm")]
-extern crate cranelift_entity;
-extern crate cranelift_filetests;
-extern crate cranelift_reader;
-extern crate pretty_env_logger;
+use cfg_if::cfg_if;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {
-        extern crate cranelift_wasm;
-        extern crate term;
-        extern crate wabt;
         mod wasm;
     }
 }
-extern crate target_lexicon;
 
 use clap::{App, Arg, SubCommand};
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;

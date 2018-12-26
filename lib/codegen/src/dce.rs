@@ -3,13 +3,13 @@
 //! Dead code here means instructions that have no side effects and have no
 //! result values used by other instructions.
 
-use cursor::{Cursor, FuncCursor};
-use dominator_tree::DominatorTree;
-use entity::EntityRef;
-use ir::instructions::InstructionData;
-use ir::{DataFlowGraph, Function, Inst, Opcode};
+use crate::cursor::{Cursor, FuncCursor};
+use crate::dominator_tree::DominatorTree;
+use crate::entity::EntityRef;
+use crate::ir::instructions::InstructionData;
+use crate::ir::{DataFlowGraph, Function, Inst, Opcode};
+use crate::timing;
 use std::vec::Vec;
-use timing;
 
 /// Test whether the given opcode is unsafe to even consider for DCE.
 fn trivially_unsafe_for_dce(opcode: Opcode) -> bool {

@@ -5,6 +5,7 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
+use crate::Variable;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
@@ -16,7 +17,6 @@ use cranelift_codegen::packed_option::ReservedValue;
 use std::mem;
 use std::u32;
 use std::vec::Vec;
-use Variable;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -749,6 +749,8 @@ impl SSABuilder {
 
 #[cfg(test)]
 mod tests {
+    use crate::ssa::SSABuilder;
+    use crate::Variable;
     use cranelift_codegen::cursor::{Cursor, FuncCursor};
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::instructions::BranchInfo;
@@ -756,8 +758,6 @@ mod tests {
     use cranelift_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
     use cranelift_codegen::settings;
     use cranelift_codegen::verify_function;
-    use ssa::SSABuilder;
-    use Variable;
 
     #[test]
     fn simple_block() {

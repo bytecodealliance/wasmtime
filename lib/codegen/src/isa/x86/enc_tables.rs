@@ -1,18 +1,18 @@
 //! Encoding tables for x86 ISAs.
 
 use super::registers::*;
-use bitset::BitSet;
-use cursor::{Cursor, FuncCursor};
-use flowgraph::ControlFlowGraph;
-use ir::condcodes::IntCC;
-use ir::{self, Function, Inst, InstBuilder};
-use isa;
-use isa::constraints::*;
-use isa::enc_tables::*;
-use isa::encoding::base_size;
-use isa::encoding::RecipeSizing;
-use isa::RegUnit;
-use regalloc::RegDiversions;
+use crate::bitset::BitSet;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::condcodes::IntCC;
+use crate::ir::{self, Function, Inst, InstBuilder};
+use crate::isa;
+use crate::isa::constraints::*;
+use crate::isa::enc_tables::*;
+use crate::isa::encoding::base_size;
+use crate::isa::encoding::RecipeSizing;
+use crate::isa::RegUnit;
+use crate::regalloc::RegDiversions;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-x86.rs"));
@@ -228,7 +228,7 @@ fn expand_minmax(
     cfg: &mut ControlFlowGraph,
     _isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::FloatCC;
+    use crate::ir::condcodes::FloatCC;
 
     let (x, y, x86_opc, bitwise_opc) = match func.dfg[inst] {
         ir::InstructionData::Binary {
@@ -322,7 +322,7 @@ fn expand_fcvt_from_uint(
     cfg: &mut ControlFlowGraph,
     _isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::IntCC;
+    use crate::ir::condcodes::IntCC;
 
     let x;
     match func.dfg[inst] {
@@ -395,8 +395,8 @@ fn expand_fcvt_to_sint(
     cfg: &mut ControlFlowGraph,
     _isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::{FloatCC, IntCC};
-    use ir::immediates::{Ieee32, Ieee64};
+    use crate::ir::condcodes::{FloatCC, IntCC};
+    use crate::ir::immediates::{Ieee32, Ieee64};
 
     let x = match func.dfg[inst] {
         ir::InstructionData::Unary {
@@ -491,8 +491,8 @@ fn expand_fcvt_to_sint_sat(
     cfg: &mut ControlFlowGraph,
     _isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::{FloatCC, IntCC};
-    use ir::immediates::{Ieee32, Ieee64};
+    use crate::ir::condcodes::{FloatCC, IntCC};
+    use crate::ir::immediates::{Ieee32, Ieee64};
 
     let x = match func.dfg[inst] {
         ir::InstructionData::Unary {
@@ -611,8 +611,8 @@ fn expand_fcvt_to_uint(
     cfg: &mut ControlFlowGraph,
     _isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::{FloatCC, IntCC};
-    use ir::immediates::{Ieee32, Ieee64};
+    use crate::ir::condcodes::{FloatCC, IntCC};
+    use crate::ir::immediates::{Ieee32, Ieee64};
 
     let x = match func.dfg[inst] {
         ir::InstructionData::Unary {
@@ -693,8 +693,8 @@ fn expand_fcvt_to_uint_sat(
     cfg: &mut ControlFlowGraph,
     _isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::{FloatCC, IntCC};
-    use ir::immediates::{Ieee32, Ieee64};
+    use crate::ir::condcodes::{FloatCC, IntCC};
+    use crate::ir::immediates::{Ieee32, Ieee64};
 
     let x = match func.dfg[inst] {
         ir::InstructionData::Unary {

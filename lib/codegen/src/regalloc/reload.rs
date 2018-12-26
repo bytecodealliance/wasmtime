@@ -9,19 +9,20 @@
 //! possible to minimize the number of `fill` instructions needed. This must not cause the register
 //! pressure limits to be exceeded.
 
-use cursor::{Cursor, EncCursor};
-use dominator_tree::DominatorTree;
-use entity::{SparseMap, SparseMapValue};
-use ir::{AbiParam, ArgumentLoc, InstBuilder};
-use ir::{Ebb, Function, Inst, InstructionData, Opcode, Value};
-use isa::RegClass;
-use isa::{ConstraintKind, EncInfo, Encoding, RecipeConstraints, TargetIsa};
-use regalloc::affinity::Affinity;
-use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
-use regalloc::liveness::Liveness;
+use crate::cursor::{Cursor, EncCursor};
+use crate::dominator_tree::DominatorTree;
+use crate::entity::{SparseMap, SparseMapValue};
+use crate::ir::{AbiParam, ArgumentLoc, InstBuilder};
+use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value};
+use crate::isa::RegClass;
+use crate::isa::{ConstraintKind, EncInfo, Encoding, RecipeConstraints, TargetIsa};
+use crate::regalloc::affinity::Affinity;
+use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
+use crate::regalloc::liveness::Liveness;
+use crate::timing;
+use crate::topo_order::TopoOrder;
+use log::debug;
 use std::vec::Vec;
-use timing;
-use topo_order::TopoOrder;
 
 /// Reusable data structures for the reload pass.
 pub struct Reload {

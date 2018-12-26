@@ -26,18 +26,7 @@
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate cranelift_module;
-extern crate cranelift_native;
-extern crate errno;
-extern crate libc;
-extern crate region;
-extern crate target_lexicon;
-
-#[cfg(target_os = "windows")]
-extern crate winapi;
-
 mod backend;
 mod memory;
 
-pub use backend::{SimpleJITBackend, SimpleJITBuilder};
+pub use crate::backend::{SimpleJITBackend, SimpleJITBuilder};

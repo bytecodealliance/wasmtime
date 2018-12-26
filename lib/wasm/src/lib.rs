@@ -33,22 +33,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate cranelift_codegen;
-#[macro_use]
-extern crate cranelift_entity;
-extern crate cast;
-extern crate cranelift_frontend;
-#[cfg(test)]
-extern crate target_lexicon;
-extern crate wasmparser;
-
-extern crate failure;
-#[macro_use]
-extern crate failure_derive;
-
-#[macro_use]
-extern crate log;
-
 mod code_translator;
 mod environ;
 mod func_translator;
@@ -57,13 +41,13 @@ mod sections_translator;
 mod state;
 mod translation_utils;
 
-pub use environ::{
+pub use crate::environ::{
     DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmError,
     WasmResult,
 };
-pub use func_translator::FuncTranslator;
-pub use module_translator::translate_module;
-pub use translation_utils::{
+pub use crate::func_translator::FuncTranslator;
+pub use crate::module_translator::translate_module;
+pub use crate::translation_utils::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
     GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex, Table, TableElementType,
     TableIndex,

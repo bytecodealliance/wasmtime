@@ -1,7 +1,3 @@
-extern crate cranelift;
-extern crate cranelift_module;
-extern crate cranelift_simplejit;
-
 use cranelift::prelude::*;
 use cranelift_module::{Linkage, Module};
 use cranelift_simplejit::{SimpleJITBackend, SimpleJITBuilder};

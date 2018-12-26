@@ -180,15 +180,10 @@
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
-extern crate cranelift_codegen;
-#[cfg(test)]
-extern crate target_lexicon;
-#[macro_use]
-extern crate log;
 
-pub use frontend::{FunctionBuilder, FunctionBuilderContext};
-pub use switch::Switch;
-pub use variable::Variable;
+pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
+pub use crate::switch::Switch;
+pub use crate::variable::Variable;
 
 mod frontend;
 mod ssa;

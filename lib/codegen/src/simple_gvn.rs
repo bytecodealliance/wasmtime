@@ -1,13 +1,13 @@
 //! A simple GVN pass.
 
-use cursor::{Cursor, FuncCursor};
-use dominator_tree::DominatorTree;
-use ir::{Function, Inst, InstructionData, Opcode, Type};
-use scoped_hash_map::ScopedHashMap;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::dominator_tree::DominatorTree;
+use crate::ir::{Function, Inst, InstructionData, Opcode, Type};
+use crate::scoped_hash_map::ScopedHashMap;
+use crate::timing;
 use std::cell::{Ref, RefCell};
 use std::hash::{Hash, Hasher};
 use std::vec::Vec;
-use timing;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
@@ -121,7 +121,7 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
                 ty: ctrl_typevar,
                 pos: &pos,
             };
-            use scoped_hash_map::Entry::*;
+            use crate::scoped_hash_map::Entry::*;
             match visible_values.entry(key) {
                 Occupied(entry) => {
                     debug_assert!(domtree.dominates(*entry.get(), inst, &func.layout));

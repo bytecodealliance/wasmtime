@@ -1,11 +1,11 @@
 //! Encoding tables for RISC-V.
 
 use super::registers::*;
-use ir;
-use isa;
-use isa::constraints::*;
-use isa::enc_tables::*;
-use isa::encoding::{base_size, RecipeSizing};
+use crate::ir;
+use crate::isa;
+use crate::isa::constraints::*;
+use crate::isa::enc_tables::*;
+use crate::isa::encoding::{base_size, RecipeSizing};
 
 // Include the generated encoding tables:
 // - `LEVEL1_RV32`

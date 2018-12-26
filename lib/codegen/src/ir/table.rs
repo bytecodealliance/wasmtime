@@ -1,7 +1,7 @@
 //! Tables.
 
-use ir::immediates::Uimm64;
-use ir::{GlobalValue, Type};
+use crate::ir::immediates::Uimm64;
+use crate::ir::{GlobalValue, Type};
 use std::fmt;
 
 /// Information about a table declaration.

@@ -1,6 +1,7 @@
 //! Result and error types representing the outcome of compiling a function.
 
-use verifier::VerifierErrors;
+use crate::verifier::VerifierErrors;
+use failure_derive::Fail;
 
 /// A compilation error.
 ///

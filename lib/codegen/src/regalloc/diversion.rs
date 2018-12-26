@@ -7,10 +7,10 @@
 //! These register diversions are local to an EBB. No values can be diverted when entering a new
 //! EBB.
 
-use fx::FxHashMap;
-use ir::{InstructionData, Opcode};
-use ir::{StackSlot, Value, ValueLoc, ValueLocations};
-use isa::{RegInfo, RegUnit};
+use crate::fx::FxHashMap;
+use crate::ir::{InstructionData, Opcode};
+use crate::ir::{StackSlot, Value, ValueLoc, ValueLocations};
+use crate::isa::{RegInfo, RegUnit};
 use std::collections::hash_map::{Entry, Iter};
 use std::fmt;
 
@@ -191,8 +191,8 @@ impl<'a> fmt::Display for DisplayDiversions<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity::EntityRef;
-    use ir::Value;
+    use crate::entity::EntityRef;
+    use crate::ir::Value;
 
     #[test]
     fn inserts() {

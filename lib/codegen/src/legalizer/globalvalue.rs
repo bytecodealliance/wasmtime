@@ -3,10 +3,10 @@
 //! This module exports the `expand_global_value` function which transforms a `global_value`
 //! instruction into code that depends on the kind of global value referenced.
 
-use cursor::{Cursor, FuncCursor};
-use flowgraph::ControlFlowGraph;
-use ir::{self, InstBuilder};
-use isa::TargetIsa;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::{self, InstBuilder};
+use crate::isa::TargetIsa;
 
 /// Expand a `global_value` instruction according to the definition of the global value.
 pub fn expand_global_value(

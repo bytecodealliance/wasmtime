@@ -1,5 +1,7 @@
 //! Run the tests in a single test file.
 
+use crate::subtest::{Context, SubTest, SubtestResult};
+use crate::{new_subtest, TestResult};
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
@@ -8,13 +10,12 @@ use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
 use cranelift_reader::parse_test;
 use cranelift_reader::IsaSpec;
+use log::info;
 use std::borrow::Cow;
 use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
 use std::time;
-use subtest::{Context, SubTest, SubtestResult};
-use {new_subtest, TestResult};
 
 /// Read an entire file into a string.
 fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {

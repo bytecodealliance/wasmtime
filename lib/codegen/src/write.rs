@@ -3,11 +3,11 @@
 //! The `write` module provides the `write_function` function which converts an IR `Function` to an
 //! equivalent textual form. This textual form can be read back by the `cranelift-reader` crate.
 
-use entity::SecondaryMap;
-use ir::entities::AnyEntity;
-use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
-use isa::{RegInfo, TargetIsa};
-use packed_option::ReservedValue;
+use crate::entity::SecondaryMap;
+use crate::ir::entities::AnyEntity;
+use crate::ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
+use crate::isa::{RegInfo, TargetIsa};
+use crate::packed_option::ReservedValue;
 use std::fmt::{self, Write};
 use std::string::String;
 use std::vec::Vec;
@@ -413,7 +413,7 @@ pub fn write_operands(
     inst: Inst,
 ) -> fmt::Result {
     let pool = &dfg.value_lists;
-    use ir::instructions::InstructionData::*;
+    use crate::ir::instructions::InstructionData::*;
     match dfg[inst] {
         Unary { arg, .. } => write!(w, " {}", arg),
         UnaryImm { imm, .. } => write!(w, " {}", imm),
@@ -663,9 +663,9 @@ impl<'a> fmt::Display for DisplayValuesWithDelimiter<'a> {
 
 #[cfg(test)]
 mod tests {
-    use cursor::{Cursor, CursorPosition, FuncCursor};
-    use ir::types;
-    use ir::{ExternalName, Function, InstBuilder, StackSlotData, StackSlotKind};
+    use crate::cursor::{Cursor, CursorPosition, FuncCursor};
+    use crate::ir::types;
+    use crate::ir::{ExternalName, Function, InstBuilder, StackSlotData, StackSlotKind};
     use std::string::ToString;
 
     #[test]
@@ -714,7 +714,7 @@ mod tests {
 
     #[test]
     fn aliases() {
-        use ir::InstBuilder;
+        use crate::ir::InstBuilder;
 
         let mut func = Function::new();
         {

@@ -1,11 +1,11 @@
 //! Boxed slices for `PrimaryMap`.
 
-use iter::{Iter, IterMut};
-use keys::Keys;
+use crate::iter::{Iter, IterMut};
+use crate::keys::Keys;
+use crate::EntityRef;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
-use EntityRef;
 
 /// A slice mapping `K -> V` allocating dense entity references.
 ///
@@ -144,7 +144,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use primary::PrimaryMap;
+    use crate::primary::PrimaryMap;
 
     // `EntityRef` impl for testing.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]

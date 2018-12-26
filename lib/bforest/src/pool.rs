@@ -3,7 +3,7 @@
 #[cfg(test)]
 use super::Comparator;
 use super::{Forest, Node, NodeData};
-use entity::PrimaryMap;
+use crate::entity::PrimaryMap;
 #[cfg(test)]
 use std::fmt;
 use std::ops::{Index, IndexMut};
@@ -83,7 +83,7 @@ impl<F: Forest> NodePool<F> {
         NodeData<F>: fmt::Display,
         F::Key: fmt::Display,
     {
-        use entity::SparseSet;
+        use crate::entity::SparseSet;
         use std::borrow::Borrow;
         use std::cmp::Ordering;
         use std::vec::Vec;

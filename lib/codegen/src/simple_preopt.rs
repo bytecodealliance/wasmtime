@@ -2,15 +2,15 @@
 
 #![allow(non_snake_case)]
 
-use cursor::{Cursor, FuncCursor};
-use divconst_magic_numbers::{magicS32, magicS64, magicU32, magicU64};
-use divconst_magic_numbers::{MS32, MS64, MU32, MU64};
-use ir::dfg::ValueDef;
-use ir::instructions::Opcode;
-use ir::types::{I32, I64};
-use ir::Inst;
-use ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
-use timing;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::divconst_magic_numbers::{magicS32, magicS64, magicU32, magicU64};
+use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
+use crate::ir::dfg::ValueDef;
+use crate::ir::instructions::Opcode;
+use crate::ir::types::{I32, I64};
+use crate::ir::Inst;
+use crate::ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
+use crate::timing;
 
 //----------------------------------------------------------------------
 //

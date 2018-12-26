@@ -1,15 +1,15 @@
 //! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
-use entity::SecondaryMap;
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use ir::instructions::BranchInfo;
-use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
-use packed_option::PackedOption;
+use crate::entity::SecondaryMap;
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::ir::instructions::BranchInfo;
+use crate::ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
+use crate::packed_option::PackedOption;
+use crate::timing;
 use std::cmp;
 use std::cmp::Ordering;
 use std::mem;
 use std::vec::Vec;
-use timing;
 
 /// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
 /// room for modifications of the dominator tree.
@@ -671,12 +671,12 @@ impl DominatorTreePreorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cursor::{Cursor, FuncCursor};
-    use flowgraph::ControlFlowGraph;
-    use ir::types::*;
-    use ir::{Function, InstBuilder, TrapCode};
-    use settings;
-    use verifier::{verify_context, VerifierErrors};
+    use crate::cursor::{Cursor, FuncCursor};
+    use crate::flowgraph::ControlFlowGraph;
+    use crate::ir::types::*;
+    use crate::ir::{Function, InstBuilder, TrapCode};
+    use crate::settings;
+    use crate::verifier::{verify_context, VerifierErrors};
 
     #[test]
     fn empty() {

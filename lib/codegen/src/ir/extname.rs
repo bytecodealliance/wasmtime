@@ -4,7 +4,7 @@
 //! function. The name of an external declaration doesn't have any meaning to
 //! Cranelift, which compiles functions independently.
 
-use ir::LibCall;
+use crate::ir::LibCall;
 use std::cmp;
 use std::fmt::{self, Write};
 use std::str::FromStr;
@@ -119,7 +119,7 @@ impl FromStr for ExternalName {
 #[cfg(test)]
 mod tests {
     use super::ExternalName;
-    use ir::LibCall;
+    use crate::ir::LibCall;
     use std::string::ToString;
     use std::u32;
 

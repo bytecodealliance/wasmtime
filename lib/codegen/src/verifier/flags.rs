@@ -1,13 +1,13 @@
 //! Verify CPU flags values.
 
-use entity::{SecondaryMap, SparseSet};
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use ir;
-use ir::instructions::BranchInfo;
-use isa;
-use packed_option::PackedOption;
-use timing;
-use verifier::{VerifierErrors, VerifierStepResult};
+use crate::entity::{SecondaryMap, SparseSet};
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::ir;
+use crate::ir::instructions::BranchInfo;
+use crate::isa;
+use crate::packed_option::PackedOption;
+use crate::timing;
+use crate::verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify that CPU flags are used correctly.
 ///

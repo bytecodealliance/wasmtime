@@ -1,5 +1,11 @@
 //! Parser for .clif files.
 
+use crate::error::{Location, ParseError, ParseResult};
+use crate::isaspec;
+use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
+use crate::sourcemap::SourceMap;
+use crate::testcommand::TestCommand;
+use crate::testfile::{Comment, Details, TestFile};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -15,16 +21,10 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, timing};
-use error::{Location, ParseError, ParseResult};
-use isaspec;
-use lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
-use sourcemap::SourceMap;
 use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
 use target_lexicon::Triple;
-use testcommand::TestCommand;
-use testfile::{Comment, Details, TestFile};
 
 /// Parse the entire `text` into a list of functions.
 ///
@@ -793,7 +793,7 @@ impl<'a> Parser<'a> {
                 Ok(triple) => triple,
                 Err(err) => return err!(loc, err),
             };
-            let mut isa_builder = match isa::lookup(triple) {
+            let isa_builder = match isa::lookup(triple) {
                 Err(isa::LookupError::SupportDisabled) => {
                     return err!(loc, "support disabled target '{}'", targ)
                 }
@@ -2571,14 +2571,14 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ParseError;
+    use crate::isaspec::IsaSpec;
+    use crate::testfile::{Comment, Details};
     use cranelift_codegen::ir::entities::AnyEntity;
     use cranelift_codegen::ir::types;
     use cranelift_codegen::ir::StackSlotKind;
     use cranelift_codegen::ir::{ArgumentExtension, ArgumentPurpose};
     use cranelift_codegen::isa::CallConv;
-    use error::ParseError;
-    use isaspec::IsaSpec;
-    use testfile::{Comment, Details};
 
     #[test]
     fn argument_type() {

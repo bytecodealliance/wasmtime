@@ -10,6 +10,7 @@ categories = ["no-std"]
 readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
 build = "build.rs"
+edition = "2018"
 
 [dependencies]
 cranelift-entity = { path = "../entity", version = "0.26.0", default-features = false }
