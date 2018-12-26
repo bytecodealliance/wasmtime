@@ -42,6 +42,16 @@ pub trait FuncWriter {
         func: &Function,
         regs: Option<&RegInfo>,
     ) -> Result<bool, fmt::Error> {
+        self.super_preamble(w, func, regs)
+    }
+
+    /// Default impl of `write_preamble`
+    fn super_preamble(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        regs: Option<&RegInfo>,
+    ) -> Result<bool, fmt::Error> {
         let mut any = false;
 
         for (ss, slot) in func.stack_slots.iter() {
@@ -91,8 +101,19 @@ pub trait FuncWriter {
     }
 
     /// Write an entity definition defined in the preamble to `w`.
-    #[allow(unused_variables)]
     fn write_entity_definition(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        entity: AnyEntity,
+        value: &fmt::Display,
+    ) -> fmt::Result {
+        self.super_entity_definition(w, func, entity, value)
+    }
+
+    /// Default impl of `write_entity_definition`
+    #[allow(unused_variables)]
+    fn super_entity_definition(
         &mut self,
         w: &mut Write,
         func: &Function,
