@@ -1,13 +1,13 @@
 //! x86 register descriptions.
 
-use isa::registers::{RegBank, RegClass, RegClassData, RegInfo, RegUnit};
+use crate::isa::registers::{RegBank, RegClass, RegClassData, RegInfo, RegUnit};
 
 include!(concat!(env!("OUT_DIR"), "/registers-x86.rs"));
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use isa::RegUnit;
+    use crate::isa::RegUnit;
     use std::string::{String, ToString};
 
     #[test]

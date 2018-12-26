@@ -9,6 +9,7 @@ repository = "https://github.com/CraneStation/cranelift"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["entity", "set", "map"]
+edition = "2018"
 
 [features]
 default = ["std"]

@@ -1,14 +1,15 @@
 //! A loop analysis represented as mappings of loops to their header Ebb
 //! and parent in the loop tree.
 
-use dominator_tree::DominatorTree;
-use entity::SecondaryMap;
-use entity::{Keys, PrimaryMap};
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use ir::{Ebb, Function, Layout};
-use packed_option::PackedOption;
+use crate::dominator_tree::DominatorTree;
+use crate::entity::entity_impl;
+use crate::entity::SecondaryMap;
+use crate::entity::{Keys, PrimaryMap};
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::ir::{Ebb, Function, Layout};
+use crate::packed_option::PackedOption;
+use crate::timing;
 use std::vec::Vec;
-use timing;
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -231,11 +232,11 @@ impl LoopAnalysis {
 
 #[cfg(test)]
 mod tests {
-    use cursor::{Cursor, FuncCursor};
-    use dominator_tree::DominatorTree;
-    use flowgraph::ControlFlowGraph;
-    use ir::{types, Function, InstBuilder};
-    use loop_analysis::{Loop, LoopAnalysis};
+    use crate::cursor::{Cursor, FuncCursor};
+    use crate::dominator_tree::DominatorTree;
+    use crate::flowgraph::ControlFlowGraph;
+    use crate::ir::{types, Function, InstBuilder};
+    use crate::loop_analysis::{Loop, LoopAnalysis};
     use std::vec::Vec;
 
     #[test]

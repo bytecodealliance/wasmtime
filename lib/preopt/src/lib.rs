@@ -27,9 +27,6 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-extern crate cranelift_codegen;
-// extern crate rustc_apfloat;
-
 mod constant_folding;
 
 use cranelift_codegen::{isa::TargetIsa, settings::FlagsOrIsa, CodegenResult, Context};

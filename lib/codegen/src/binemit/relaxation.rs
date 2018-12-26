@@ -27,14 +27,15 @@
 //! ebb23:
 //! ```
 
-use binemit::CodeOffset;
-use cursor::{Cursor, FuncCursor};
-use ir::{Function, InstructionData, Opcode};
-use isa::{EncInfo, TargetIsa};
-use iterators::IteratorExtras;
-use regalloc::RegDiversions;
-use timing;
-use CodegenResult;
+use crate::binemit::CodeOffset;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::ir::{Function, InstructionData, Opcode};
+use crate::isa::{EncInfo, TargetIsa};
+use crate::iterators::IteratorExtras;
+use crate::regalloc::RegDiversions;
+use crate::timing;
+use crate::CodegenResult;
+use log::debug;
 
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///

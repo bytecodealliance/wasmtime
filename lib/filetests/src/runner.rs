@@ -3,15 +3,15 @@
 //! This module implements the `TestRunner` struct which manages executing tests as well as
 //! scanning directories for tests.
 
-use concurrent::{ConcurrentRunner, Reply};
+use crate::concurrent::{ConcurrentRunner, Reply};
+use crate::runone;
+use crate::TestResult;
 use cranelift_codegen::timing;
-use runone;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::time;
-use TestResult;
 
 /// Timeout in seconds when we're not making progress.
 const TIMEOUT_PANIC: usize = 10;

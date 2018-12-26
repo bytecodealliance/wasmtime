@@ -28,11 +28,6 @@
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate cranelift_codegen;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-extern crate raw_cpuid;
-extern crate target_lexicon;
-
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::Configurable;
 use target_lexicon::Triple;

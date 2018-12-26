@@ -1,6 +1,6 @@
-use cdsl::isa::{TargetIsa, TargetIsaBuilder};
-use cdsl::regs::{RegBankBuilder, RegClassBuilder};
-use cdsl::settings::{SettingGroup, SettingGroupBuilder};
+use crate::cdsl::isa::{TargetIsa, TargetIsaBuilder};
+use crate::cdsl::regs::{RegBankBuilder, RegClassBuilder};
+use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let setting = SettingGroupBuilder::new("arm64");

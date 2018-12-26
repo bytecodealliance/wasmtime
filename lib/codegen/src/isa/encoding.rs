@@ -1,9 +1,9 @@
 //! The `Encoding` struct.
 
-use binemit::CodeOffset;
-use ir::{Function, Inst};
-use isa::constraints::{BranchRange, RecipeConstraints};
-use regalloc::RegDiversions;
+use crate::binemit::CodeOffset;
+use crate::ir::{Function, Inst};
+use crate::isa::constraints::{BranchRange, RecipeConstraints};
+use crate::regalloc::RegDiversions;
 use std::fmt;
 
 /// Bits needed to encode an instruction as binary machine code.

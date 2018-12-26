@@ -394,7 +394,7 @@ class XFormGroup(object):
             # table referring to it.
             return self.name
         else:
-            return '::legalizer::{}'.format(self.name)
+            return 'crate::legalizer::{}'.format(self.name)
 
     def legalize(self, src, dst):
         # type: (Union[Def, Apply], Rtl) -> None

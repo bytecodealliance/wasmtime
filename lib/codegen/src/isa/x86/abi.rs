@@ -1,19 +1,19 @@
 //! x86 ABI implementation.
 
 use super::registers::{FPR, GPR, RU};
-use abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
-use cursor::{Cursor, CursorPosition, EncCursor};
-use ir;
-use ir::immediates::Imm64;
-use ir::stackslot::{StackOffset, StackSize};
-use ir::{
+use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
+use crate::cursor::{Cursor, CursorPosition, EncCursor};
+use crate::ir;
+use crate::ir::immediates::Imm64;
+use crate::ir::stackslot::{StackOffset, StackSize};
+use crate::ir::{
     get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, InstBuilder,
     ValueLoc,
 };
-use isa::{CallConv, RegClass, RegUnit, TargetIsa};
-use regalloc::RegisterSet;
-use result::CodegenResult;
-use stack_layout::layout_stack;
+use crate::isa::{CallConv, RegClass, RegUnit, TargetIsa};
+use crate::regalloc::RegisterSet;
+use crate::result::CodegenResult;
+use crate::stack_layout::layout_stack;
 use std::i32;
 use target_lexicon::{PointerWidth, Triple};
 
@@ -511,7 +511,7 @@ fn insert_common_prologue(
 /// Insert a check that generates a trap if the stack pointer goes
 /// below a value in `stack_limit_arg`.
 fn insert_stack_check(pos: &mut EncCursor, stack_size: i64, stack_limit_arg: ir::Value) {
-    use ir::condcodes::IntCC;
+    use crate::ir::condcodes::IntCC;
 
     // Copy `stack_limit_arg` into a %rax and use it for calculating
     // a SP threshold.

@@ -1,6 +1,6 @@
-use cdsl::isa::{TargetIsa, TargetIsaBuilder};
-use cdsl::regs::{RegBankBuilder, RegClassBuilder};
-use cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
+use crate::cdsl::isa::{TargetIsa, TargetIsaBuilder};
+use crate::cdsl::regs::{RegBankBuilder, RegClassBuilder};
+use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 
 fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let mut setting = SettingGroupBuilder::new("riscv");

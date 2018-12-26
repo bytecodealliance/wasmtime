@@ -1,8 +1,8 @@
 //! Lexical analysis for .clif files.
 
+use crate::error::Location;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{Ebb, Value};
-use error::Location;
 #[allow(unused_imports, deprecated)]
 use std::ascii::AsciiExt;
 use std::str::CharIndices;
@@ -481,9 +481,9 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::trailing_digits;
     use super::*;
+    use crate::error::Location;
     use cranelift_codegen::ir::types;
     use cranelift_codegen::ir::{Ebb, Value};
-    use error::Location;
 
     #[test]
     fn digits() {

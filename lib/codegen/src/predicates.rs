@@ -9,7 +9,7 @@
 //! Some of these predicates may be unused in certain ISA configurations, so we suppress the
 //! dead code warning.
 
-use ir;
+use crate::ir;
 
 /// Check that a 64-bit floating point value is zero.
 #[allow(dead_code)]
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn cvt_imm64() {
-        use ir::immediates::Imm64;
+        use crate::ir::immediates::Imm64;
 
         let x1 = Imm64::new(-8);
         let x2 = Imm64::new(8);

@@ -5,7 +5,7 @@
 //! "register unit" abstraction. Every register contains one or more register units. Registers that
 //! share a register unit can't be in use at the same time.
 
-use isa::registers::{RegClass, RegInfo, RegUnit, RegUnitMask};
+use crate::isa::registers::{RegClass, RegInfo, RegUnit, RegUnitMask};
 use std::char;
 use std::fmt;
 use std::iter::ExactSizeIterator;
@@ -228,7 +228,7 @@ impl fmt::Display for RegisterSet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use isa::registers::{RegClass, RegClassData};
+    use crate::isa::registers::{RegClass, RegClassData};
     use std::vec::Vec;
 
     // Register classes for testing.

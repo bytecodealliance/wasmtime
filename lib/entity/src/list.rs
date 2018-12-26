@@ -1,8 +1,8 @@
 //! Small lists of entity references.
+use crate::EntityRef;
 use std::marker::PhantomData;
 use std::mem;
 use std::vec::Vec;
-use EntityRef;
 
 /// A small list of entity references allocated from a pool.
 ///
@@ -483,7 +483,7 @@ impl<T: EntityRef> EntityList<T> {
 mod tests {
     use super::*;
     use super::{sclass_for_length, sclass_size};
-    use EntityRef;
+    use crate::EntityRef;
 
     /// An opaque reference to an instruction in a function.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

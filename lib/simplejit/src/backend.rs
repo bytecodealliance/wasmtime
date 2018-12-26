@@ -1,5 +1,6 @@
 //! Defines `SimpleJITBackend`.
 
+use crate::memory::Memory;
 use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir, settings};
@@ -8,7 +9,6 @@ use cranelift_module::{
 };
 use cranelift_native;
 use libc;
-use memory::Memory;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::io::Write;

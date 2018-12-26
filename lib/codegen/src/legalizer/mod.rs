@@ -13,13 +13,13 @@
 //! The legalizer does not deal with register allocation constraints. These constraints are derived
 //! from the encoding recipes, and solved later by the register allocator.
 
-use bitset::BitSet;
-use cursor::{Cursor, FuncCursor};
-use flowgraph::ControlFlowGraph;
-use ir::types::I32;
-use ir::{self, InstBuilder, MemFlags};
-use isa::TargetIsa;
-use timing;
+use crate::bitset::BitSet;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::types::I32;
+use crate::ir::{self, InstBuilder, MemFlags};
+use crate::isa::TargetIsa;
+use crate::timing;
 
 mod boundary;
 mod call;
@@ -195,7 +195,7 @@ fn expand_br_table_jt(
     cfg: &mut ControlFlowGraph,
     isa: &TargetIsa,
 ) {
-    use ir::condcodes::IntCC;
+    use crate::ir::condcodes::IntCC;
 
     let (arg, default_ebb, table) = match func.dfg[inst] {
         ir::InstructionData::BranchTable {
@@ -241,7 +241,7 @@ fn expand_br_table_conds(
     cfg: &mut ControlFlowGraph,
     _isa: &TargetIsa,
 ) {
-    use ir::condcodes::IntCC;
+    use crate::ir::condcodes::IntCC;
 
     let (arg, default_ebb, table) = match func.dfg[inst] {
         ir::InstructionData::BranchTable {

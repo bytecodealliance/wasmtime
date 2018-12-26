@@ -9,6 +9,7 @@ repository = "https://github.com/CraneStation/cranelift"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["btree", "forest", "set", "map"]
+edition = "2018"
 
 [dependencies]
 cranelift-entity = { path = "../entity", version = "0.26.0", default-features = false }

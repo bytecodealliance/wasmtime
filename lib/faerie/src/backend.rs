@@ -1,6 +1,7 @@
 //! Defines `FaerieBackend`.
 
-use container;
+use crate::container;
+use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
 use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
@@ -12,7 +13,6 @@ use faerie;
 use failure::Error;
 use std::fs::File;
 use target_lexicon::Triple;
-use traps::{FaerieTrapManifest, FaerieTrapSink};
 
 #[derive(Debug)]
 /// Setting to enable collection of traps. Setting this to `Enabled` in

@@ -1,8 +1,8 @@
 //! Global values.
 
-use ir::immediates::{Imm64, Offset32};
-use ir::{ExternalName, GlobalValue, Type};
-use isa::TargetIsa;
+use crate::ir::immediates::{Imm64, Offset32};
+use crate::ir::{ExternalName, GlobalValue, Type};
+use crate::isa::TargetIsa;
 use std::fmt;
 
 /// Information about a global value declaration.

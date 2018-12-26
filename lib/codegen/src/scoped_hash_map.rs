@@ -4,7 +4,7 @@
 //! container that has a concept of scopes that can be entered and exited, such that
 //! values inserted while inside a scope aren't visible outside the scope.
 
-use fx::FxHashMap;
+use crate::fx::FxHashMap;
 use std::collections::hash_map;
 use std::hash::Hash;
 use std::mem;

@@ -3,13 +3,14 @@
 //! The order of extended basic blocks in a function and the order of instructions in an EBB is
 //! determined by the `Layout` data structure defined in this module.
 
-use entity::SecondaryMap;
-use ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
-use ir::{Ebb, Inst};
-use packed_option::PackedOption;
+use crate::entity::SecondaryMap;
+use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
+use crate::ir::{Ebb, Inst};
+use crate::packed_option::PackedOption;
+use crate::timing;
+use log::debug;
 use std::cmp;
 use std::iter::{IntoIterator, Iterator};
-use timing;
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
 /// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references
@@ -741,9 +742,9 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
 #[cfg(test)]
 mod tests {
     use super::Layout;
-    use cursor::{Cursor, CursorPosition};
-    use entity::EntityRef;
-    use ir::{Ebb, Inst, ProgramOrder, SourceLoc};
+    use crate::cursor::{Cursor, CursorPosition};
+    use crate::entity::EntityRef;
+    use crate::ir::{Ebb, Inst, ProgramOrder, SourceLoc};
     use std::cmp::Ordering;
     use std::vec::Vec;
 

@@ -4,14 +4,14 @@
 //! The sets of live values are computed on the fly as the tracker is moved from instruction to
 //! instruction, starting at the EBB header.
 
-use dominator_tree::DominatorTree;
-use entity::{EntityList, ListPool};
-use fx::FxHashMap;
-use ir::{DataFlowGraph, Ebb, ExpandedProgramPoint, Inst, Layout, Value};
-use partition_slice::partition_slice;
-use regalloc::affinity::Affinity;
-use regalloc::liveness::Liveness;
-use regalloc::liverange::LiveRange;
+use crate::dominator_tree::DominatorTree;
+use crate::entity::{EntityList, ListPool};
+use crate::fx::FxHashMap;
+use crate::ir::{DataFlowGraph, Ebb, ExpandedProgramPoint, Inst, Layout, Value};
+use crate::partition_slice::partition_slice;
+use crate::regalloc::affinity::Affinity;
+use crate::regalloc::liveness::Liveness;
+use crate::regalloc::liverange::LiveRange;
 use std::vec::Vec;
 
 type ValueList = EntityList<Value>;

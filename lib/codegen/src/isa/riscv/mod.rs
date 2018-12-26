@@ -8,13 +8,13 @@ pub mod settings;
 
 use super::super::settings as shared_settings;
 #[cfg(feature = "testing_hooks")]
-use binemit::CodeSink;
-use binemit::{emit_function, MemoryCodeSink};
-use ir;
-use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
-use isa::Builder as IsaBuilder;
-use isa::{EncInfo, RegClass, RegInfo, TargetIsa};
-use regalloc;
+use crate::binemit::CodeSink;
+use crate::binemit::{emit_function, MemoryCodeSink};
+use crate::ir;
+use crate::isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
+use crate::isa::Builder as IsaBuilder;
+use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
+use crate::regalloc;
 use std::boxed::Box;
 use std::fmt;
 use target_lexicon::{PointerWidth, Triple};
@@ -125,13 +125,13 @@ impl TargetIsa for Isa {
 
 #[cfg(test)]
 mod tests {
-    use ir::{immediates, types};
-    use ir::{Function, InstructionData, Opcode};
-    use isa;
-    use settings::{self, Configurable};
+    use crate::ir::{immediates, types};
+    use crate::ir::{Function, InstructionData, Opcode};
+    use crate::isa;
+    use crate::settings::{self, Configurable};
     use std::str::FromStr;
     use std::string::{String, ToString};
-    use target_lexicon;
+    use target_lexicon::triple;
 
     fn encstr(isa: &isa::TargetIsa, enc: Result<isa::Encoding, isa::Legalize>) -> String {
         match enc {

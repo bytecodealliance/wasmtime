@@ -110,7 +110,7 @@ def emit_instp(instp, fmt, has_func=False):
     fields = ', '.join(sorted(fnames))
 
     with fmt.indented(
-            'if let ir::InstructionData::{} {{ {}, .. }} = *inst {{'
+            'if let crate::ir::InstructionData::{} {{ {}, .. }} = *inst {{'
             .format(iform.name, fields), '}'):
         if has_type_check:
             # We could implement this if we need to.
@@ -132,7 +132,8 @@ def emit_inst_predicates(instps, fmt):
     for instp, number in instps.items():
         name = 'inst_predicate_{}'.format(number)
         with fmt.indented(
-                'fn {}(func: &ir::Function, inst: &ir::InstructionData)'
+                'fn {}(func: &crate::ir::Function, '
+                'inst: &crate::ir::InstructionData)'
                 '-> bool {{'.format(name), '}'):
             emit_instp(instp, fmt, has_func=True)
 
@@ -168,7 +169,7 @@ def emit_recipe_predicates(isa, fmt):
 
         # Generate the predicate function.
         with fmt.indented(
-                'fn {}({}: ::settings::PredicateView, '
+                'fn {}({}: crate::settings::PredicateView, '
                 '{}: &ir::InstructionData) -> bool {{'
                 .format(
                     name,
@@ -657,7 +658,8 @@ def emit_level2_hashtables(level2_hashtables, offt, level2_doc, fmt):
             if entry:
                 fmt.line(
                         'Level2Entry ' +
-                        '{{ opcode: Some(ir::Opcode::{}), offset: {:#08x} }},'
+                        '{{ opcode: Some(crate::ir::Opcode::{}), '
+                        'offset: {:#08x} }},'
                         .format(entry.inst.camel_name, entry.offset))
             else:
                 fmt.line(
@@ -682,15 +684,15 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
             # Empty hash table entry. Include the default legalization action.
             if not level2:
                 fmt.format(
-                        'Level1Entry {{ ty: ir::types::INVALID, log2len: !0, '
-                        'offset: 0, legalize: {} }},',
+                        'Level1Entry {{ ty: crate::ir::types::INVALID, '
+                        'log2len: !0, offset: 0, legalize: {} }},',
                         level1.legalize_code)
                 continue
 
             if level2.ty is not None:
                 tyname = level2.ty.rust_name()
             else:
-                tyname = 'ir::types::INVALID'
+                tyname = 'crate::ir::types::INVALID'
 
             lcode = cpumode.isa.legalize_code(level2.legalize)
 

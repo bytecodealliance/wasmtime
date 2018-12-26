@@ -5,14 +5,16 @@
 // TODO: Factor out `ir::Function`'s `ext_funcs` and `global_values` into a struct
 // shared with `DataContext`?
 
-use cranelift_codegen::entity::PrimaryMap;
+use crate::data_context::DataContext;
+use crate::Backend;
+use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{binemit, ir, isa, CodegenError, Context};
-use data_context::DataContext;
+use failure::Fail;
+use log::info;
 use std::borrow::ToOwned;
 use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;
-use Backend;
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -3,11 +3,11 @@
 //! This module exports the `expand_heap_addr` function which transforms a `heap_addr`
 //! instruction into code that depends on the kind of heap referenced.
 
-use cursor::{Cursor, FuncCursor};
-use flowgraph::ControlFlowGraph;
-use ir::condcodes::IntCC;
-use ir::{self, InstBuilder};
-use isa::TargetIsa;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::condcodes::IntCC;
+use crate::ir::{self, InstBuilder};
+use crate::isa::TargetIsa;
 
 /// Expand a `heap_addr` instruction according to the definition of the heap.
 pub fn expand_heap_addr(

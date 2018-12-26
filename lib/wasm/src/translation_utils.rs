@@ -1,4 +1,5 @@
 //! Helper functions and structures for the translation.
+use cranelift_codegen::entity::entity_impl;
 use cranelift_codegen::ir;
 use std::u32;
 use wasmparser;

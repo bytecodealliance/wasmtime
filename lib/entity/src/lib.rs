@@ -71,7 +71,7 @@ pub extern crate core as __core;
 pub trait EntityRef: Copy + Eq {
     /// Create a new entity reference from a small integer.
     /// This should crash if the requested index is not representable.
-    fn new(usize) -> Self;
+    fn new(_: usize) -> Self;
 
     /// Get the index that was used to create this entity reference.
     fn index(self) -> usize;

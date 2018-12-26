@@ -48,7 +48,7 @@ mod std {
 
 #[macro_use]
 extern crate cranelift_entity as entity;
-use entity::packed_option;
+use crate::entity::packed_option;
 
 use std::borrow::BorrowMut;
 use std::cmp::Ordering;
@@ -157,7 +157,7 @@ fn slice_shift<T: Copy>(s: &mut [T], n: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity::EntityRef;
+    use crate::entity::EntityRef;
 
     /// An opaque reference to an extended basic block in a function.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

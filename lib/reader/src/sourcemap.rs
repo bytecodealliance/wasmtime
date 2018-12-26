@@ -6,12 +6,12 @@
 //! The `SourceMap` struct defined in this module makes this mapping available
 //! to parser clients.
 
+use crate::error::{Location, ParseResult};
+use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::{
     Ebb, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
 };
-use error::{Location, ParseResult};
-use lexer::split_entity_name;
 use std::collections::HashMap;
 
 /// Mapping from entity names to source locations.
@@ -211,7 +211,7 @@ impl SourceMap {
 
 #[cfg(test)]
 mod tests {
-    use parse_test;
+    use crate::parse_test;
 
     #[test]
     fn details() {

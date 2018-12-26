@@ -4,21 +4,23 @@
 //! the register allocator algorithm. This doesn't preserve any data between functions, but it
 //! avoids allocating data structures independently for each function begin compiled.
 
-use dominator_tree::DominatorTree;
-use flowgraph::ControlFlowGraph;
-use ir::Function;
-use isa::TargetIsa;
-use regalloc::coalescing::Coalescing;
-use regalloc::coloring::Coloring;
-use regalloc::live_value_tracker::LiveValueTracker;
-use regalloc::liveness::Liveness;
-use regalloc::reload::Reload;
-use regalloc::spilling::Spilling;
-use regalloc::virtregs::VirtRegs;
-use result::CodegenResult;
-use timing;
-use topo_order::TopoOrder;
-use verifier::{verify_context, verify_cssa, verify_liveness, verify_locations, VerifierErrors};
+use crate::dominator_tree::DominatorTree;
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::Function;
+use crate::isa::TargetIsa;
+use crate::regalloc::coalescing::Coalescing;
+use crate::regalloc::coloring::Coloring;
+use crate::regalloc::live_value_tracker::LiveValueTracker;
+use crate::regalloc::liveness::Liveness;
+use crate::regalloc::reload::Reload;
+use crate::regalloc::spilling::Spilling;
+use crate::regalloc::virtregs::VirtRegs;
+use crate::result::CodegenResult;
+use crate::timing;
+use crate::topo_order::TopoOrder;
+use crate::verifier::{
+    verify_context, verify_cssa, verify_liveness, verify_locations, VerifierErrors,
+};
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {

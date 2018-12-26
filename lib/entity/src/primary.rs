@@ -1,13 +1,13 @@
 //! Densely numbered entity references as mapping keys.
-use boxed_slice::BoxedSlice;
-use iter::{Iter, IterMut};
-use keys::Keys;
+use crate::boxed_slice::BoxedSlice;
+use crate::iter::{Iter, IterMut};
+use crate::keys::Keys;
+use crate::EntityRef;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 use std::vec::Vec;
-use EntityRef;
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///

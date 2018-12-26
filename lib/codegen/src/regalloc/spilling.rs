@@ -15,20 +15,21 @@
 //!    be compatible. Otherwise, the value must be copied into a new register for some of the
 //!    operands.
 
-use cursor::{Cursor, EncCursor};
-use dominator_tree::DominatorTree;
-use ir::{ArgumentLoc, Ebb, Function, Inst, InstBuilder, SigRef, Value, ValueLoc};
-use isa::registers::{RegClass, RegClassIndex, RegClassMask, RegUnit};
-use isa::{ConstraintKind, EncInfo, RecipeConstraints, RegInfo, TargetIsa};
-use regalloc::affinity::Affinity;
-use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
-use regalloc::liveness::Liveness;
-use regalloc::pressure::Pressure;
-use regalloc::virtregs::VirtRegs;
+use crate::cursor::{Cursor, EncCursor};
+use crate::dominator_tree::DominatorTree;
+use crate::ir::{ArgumentLoc, Ebb, Function, Inst, InstBuilder, SigRef, Value, ValueLoc};
+use crate::isa::registers::{RegClass, RegClassIndex, RegClassMask, RegUnit};
+use crate::isa::{ConstraintKind, EncInfo, RecipeConstraints, RegInfo, TargetIsa};
+use crate::regalloc::affinity::Affinity;
+use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
+use crate::regalloc::liveness::Liveness;
+use crate::regalloc::pressure::Pressure;
+use crate::regalloc::virtregs::VirtRegs;
+use crate::timing;
+use crate::topo_order::TopoOrder;
+use log::debug;
 use std::fmt;
 use std::vec::Vec;
-use timing;
-use topo_order::TopoOrder;
 
 /// Return a top-level register class which contains `unit`.
 fn toprc_containing_regunit(unit: RegUnit, reginfo: &RegInfo) -> RegClass {

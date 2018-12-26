@@ -1,12 +1,12 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use cranelift_codegen::timing;
-use environ::{ModuleEnvironment, WasmResult};
-use sections_translator::{
+use crate::environ::{ModuleEnvironment, WasmResult};
+use crate::sections_translator::{
     parse_code_section, parse_data_section, parse_element_section, parse_export_section,
     parse_function_section, parse_global_section, parse_import_section, parse_memory_section,
     parse_start_section, parse_table_section, parse_type_section,
 };
+use cranelift_codegen::timing;
 use wasmparser::{ModuleReader, SectionCode};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cranelift IR

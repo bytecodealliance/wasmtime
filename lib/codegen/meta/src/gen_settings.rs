@@ -1,12 +1,14 @@
-use base;
-use cdsl::camel_case;
-use cdsl::isa::TargetIsa;
-use cdsl::settings::{BoolSetting, Predicate, Preset, Setting, SettingGroup, SpecificSetting};
-use constant_hash::{generate_table, simple_hash};
-use error;
-use srcgen::{Formatter, Match};
+use crate::base;
+use crate::cdsl::camel_case;
+use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::settings::{
+    BoolSetting, Predicate, Preset, Setting, SettingGroup, SpecificSetting,
+};
+use crate::constant_hash::{generate_table, simple_hash};
+use crate::error;
+use crate::srcgen::{Formatter, Match};
+use crate::unique_table::UniqueTable;
 use std::collections::HashMap;
-use unique_table::UniqueTable;
 
 enum ParentGroup {
     None,

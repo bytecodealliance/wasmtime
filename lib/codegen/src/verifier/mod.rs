@@ -57,26 +57,27 @@
 //!   of arguments must match the destination type, and the lane indexes must be in range.
 
 use self::flags::verify_flags;
-use dbg::DisplayList;
-use dominator_tree::DominatorTree;
-use entity::SparseSet;
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use ir;
-use ir::entities::AnyEntity;
-use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
-use ir::{
+use crate::dbg::DisplayList;
+use crate::dominator_tree::DominatorTree;
+use crate::entity::SparseSet;
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::ir;
+use crate::ir::entities::AnyEntity;
+use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
+use crate::ir::{
     types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, JumpTable, Opcode, SigRef,
     StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
 };
-use isa::TargetIsa;
-use iterators::IteratorExtras;
-use settings::FlagsOrIsa;
+use crate::isa::TargetIsa;
+use crate::iterators::IteratorExtras;
+use crate::settings::FlagsOrIsa;
+use crate::timing;
+use failure_derive::Fail;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter, Write};
 use std::string::String;
 use std::vec::Vec;
-use timing;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;
@@ -90,14 +91,14 @@ pub use self::locations::verify_locations;
 /// as the error message.
 macro_rules! report {
     ( $errors: expr, $loc: expr, $msg: tt ) => {
-        $errors.0.push(::verifier::VerifierError {
+        $errors.0.push(crate::verifier::VerifierError {
             location: $loc.into(),
             message: String::from($msg),
         })
     };
 
     ( $errors: expr, $loc: expr, $fmt: tt, $( $arg: expr ),+ ) => {
-        $errors.0.push(::verifier::VerifierError {
+        $errors.0.push(crate::verifier::VerifierError {
             location: $loc.into(),
             message: format!( $fmt, $( $arg ),+ ),
         })
@@ -551,7 +552,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        use ir::instructions::InstructionData::*;
+        use crate::ir::instructions::InstructionData::*;
 
         for &arg in self.func.dfg.inst_args(inst) {
             self.verify_inst_arg(inst, arg, errors)?;
@@ -1699,10 +1700,10 @@ impl<'a> Verifier<'a> {
 #[cfg(test)]
 mod tests {
     use super::{Verifier, VerifierError, VerifierErrors};
-    use entity::EntityList;
-    use ir::instructions::{InstructionData, Opcode};
-    use ir::Function;
-    use settings;
+    use crate::entity::EntityList;
+    use crate::ir::instructions::{InstructionData, Opcode};
+    use crate::ir::Function;
+    use crate::settings;
 
     macro_rules! assert_err_with_msg {
         ($e:expr, $msg:expr) => {

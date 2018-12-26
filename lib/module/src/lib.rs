@@ -29,21 +29,13 @@
 #[cfg_attr(test, macro_use)]
 extern crate alloc;
 
-extern crate cranelift_codegen;
-#[macro_use]
-extern crate cranelift_entity;
-#[macro_use]
-extern crate failure;
-#[macro_use]
-extern crate log;
-
 mod backend;
 mod data_context;
 mod module;
 
-pub use backend::Backend;
-pub use data_context::{DataContext, DataDescription, Init};
-pub use module::{
+pub use crate::backend::Backend;
+pub use crate::data_context::{DataContext, DataDescription, Init};
+pub use crate::module::{
     DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleNamespace, ModuleResult,
 };
 

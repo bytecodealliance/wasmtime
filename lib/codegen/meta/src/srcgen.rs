@@ -9,7 +9,7 @@ use std::fs;
 use std::io::Write;
 use std::path;
 
-use error;
+use crate::error;
 
 static SHIFTWIDTH: usize = 4;
 
@@ -151,7 +151,7 @@ fn _indent(s: &str) -> Option<usize> {
     if s.is_empty() {
         None
     } else {
-        let t = s.trim_left();
+        let t = s.trim_start();
         Some(s.len() - t.len())
     }
 }
@@ -169,7 +169,7 @@ fn parse_multiline(s: &str) -> Vec<String> {
         .iter()
         .skip(1)
         .filter(|l| !l.trim().is_empty())
-        .map(|l| l.len() - l.trim_left().len())
+        .map(|l| l.len() - l.trim_start().len())
         .min();
 
     // Strip off leading blank lines.
@@ -186,12 +186,12 @@ fn parse_multiline(s: &str) -> Vec<String> {
         // Note that empty lines may have fewer than `indent` chars.
         lines_iter
             .map(|l| &l[cmp::min(indent, l.len())..])
-            .map(|l| l.trim_right())
+            .map(|l| l.trim_end())
             .map(|l| l.to_string())
             .collect::<Vec<_>>()
     } else {
         lines_iter
-            .map(|l| l.trim_right())
+            .map(|l| l.trim_end())
             .map(|l| l.to_string())
             .collect::<Vec<_>>()
     };

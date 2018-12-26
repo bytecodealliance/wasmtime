@@ -175,17 +175,17 @@
 //!
 //! There is some room for improvement.
 
-use entity::SparseMap;
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use ir::dfg::ValueDef;
-use ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
-use isa::{EncInfo, OperandConstraint, TargetIsa};
-use regalloc::affinity::Affinity;
-use regalloc::liverange::{LiveRange, LiveRangeContext, LiveRangeForest};
+use crate::entity::SparseMap;
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::ir::dfg::ValueDef;
+use crate::ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
+use crate::isa::{EncInfo, OperandConstraint, TargetIsa};
+use crate::regalloc::affinity::Affinity;
+use crate::regalloc::liverange::{LiveRange, LiveRangeContext, LiveRangeForest};
+use crate::timing;
 use std::mem;
 use std::ops::Index;
 use std::vec::Vec;
-use timing;
 
 /// A set of live ranges, indexed by value number.
 type LiveRangeSet = SparseMap<Value, LiveRange>;

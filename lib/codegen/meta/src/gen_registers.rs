@@ -1,8 +1,8 @@
-use cdsl::isa::TargetIsa;
-use cdsl::regs::{RegBank, RegClass};
+use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::regs::{RegBank, RegClass};
+use crate::error;
+use crate::srcgen::Formatter;
 use cranelift_entity::EntityRef;
-use error;
-use srcgen::Formatter;
 
 fn gen_regbank(fmt: &mut Formatter, reg_bank: &RegBank) {
     let names = if reg_bank.names.len() > 0 {

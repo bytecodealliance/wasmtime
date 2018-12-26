@@ -15,7 +15,7 @@
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 
 use super::{Addend, CodeOffset, CodeSink, Reloc};
-use ir::{ExternalName, JumpTable, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, JumpTable, SourceLoc, TrapCode};
 use std::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
@@ -57,13 +57,13 @@ impl<'a> MemoryCodeSink<'a> {
 /// A trait for receiving relocations for code that is emitted directly into memory.
 pub trait RelocSink {
     /// Add a relocation referencing an EBB at the current offset.
-    fn reloc_ebb(&mut self, CodeOffset, Reloc, CodeOffset);
+    fn reloc_ebb(&mut self, _: CodeOffset, _: Reloc, _: CodeOffset);
 
     /// Add a relocation referencing an external symbol at the current offset.
-    fn reloc_external(&mut self, CodeOffset, Reloc, &ExternalName, Addend);
+    fn reloc_external(&mut self, _: CodeOffset, _: Reloc, _: &ExternalName, _: Addend);
 
     /// Add a relocation referencing a jump table.
-    fn reloc_jt(&mut self, CodeOffset, Reloc, JumpTable);
+    fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable);
 }
 
 /// A trait for receiving trap codes and offsets.
@@ -72,7 +72,7 @@ pub trait RelocSink {
 /// [`NullTrapSink`](binemit/trait.TrapSink.html) implementation.
 pub trait TrapSink {
     /// Add trap information for a specific offset.
-    fn trap(&mut self, CodeOffset, SourceLoc, TrapCode);
+    fn trap(&mut self, _: CodeOffset, _: SourceLoc, _: TrapCode);
 }
 
 impl<'a> CodeSink for MemoryCodeSink<'a> {

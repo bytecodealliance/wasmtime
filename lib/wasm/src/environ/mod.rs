@@ -3,7 +3,7 @@
 mod dummy;
 mod spec;
 
-pub use environ::dummy::DummyEnvironment;
-pub use environ::spec::{
+pub use crate::environ::dummy::DummyEnvironment;
+pub use crate::environ::spec::{
     FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmError, WasmResult,
 };

@@ -11,14 +11,14 @@ use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::vec::Vec;
 
-use ir;
-use ir::types;
-use ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
-use isa;
+use crate::ir;
+use crate::ir::types;
+use crate::ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
+use crate::isa;
 
-use bitset::BitSet;
-use entity;
-use ref_slice::{ref_slice, ref_slice_mut};
+use crate::bitset::BitSet;
+use crate::entity;
+use crate::ref_slice::{ref_slice, ref_slice_mut};
 
 /// Some instructions use an external list of argument values because there is not enough space in
 /// the 16-byte `InstructionData` struct. These value lists are stored in a memory pool in
@@ -73,7 +73,7 @@ impl FromStr for Opcode {
 
     /// Parse an Opcode name from a string.
     fn from_str(s: &str) -> Result<Self, &'static str> {
-        use constant_hash::{probe, simple_hash, Table};
+        use crate::constant_hash::{probe, simple_hash, Table};
 
         impl<'a> Table<&'a str> for [Option<Opcode>] {
             fn len(&self) -> usize {
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn value_set() {
-        use ir::types::*;
+        use crate::ir::types::*;
 
         let vts = ValueTypeSet {
             lanes: BitSet16::from_range(0, 8),

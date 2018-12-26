@@ -27,23 +27,23 @@
 )]
 
 /// Provide these crates, renamed to reduce stutter.
-pub extern crate cranelift_codegen as codegen;
-pub extern crate cranelift_frontend as frontend;
+pub use cranelift_codegen as codegen;
+pub use cranelift_frontend as frontend;
 
 /// A prelude providing convenient access to commonly-used cranelift features. Use
 /// as `use cranelift::prelude::*`.
 pub mod prelude {
-    pub use codegen;
-    pub use codegen::entity::EntityRef;
-    pub use codegen::ir::condcodes::{FloatCC, IntCC};
-    pub use codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Uimm64};
-    pub use codegen::ir::types;
-    pub use codegen::ir::{
+    pub use crate::codegen;
+    pub use crate::codegen::entity::EntityRef;
+    pub use crate::codegen::ir::condcodes::{FloatCC, IntCC};
+    pub use crate::codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Uimm64};
+    pub use crate::codegen::ir::types;
+    pub use crate::codegen::ir::{
         AbiParam, Ebb, ExtFuncData, ExternalName, GlobalValueData, InstBuilder, JumpTableData,
         MemFlags, Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value,
     };
-    pub use codegen::isa;
-    pub use codegen::settings::{self, Configurable};
+    pub use crate::codegen::isa;
+    pub use crate::codegen::settings::{self, Configurable};
 
-    pub use frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+    pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 }

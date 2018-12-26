@@ -29,15 +29,12 @@
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate target_lexicon;
-
-pub use error::{Location, ParseError, ParseResult};
-pub use isaspec::{parse_options, IsaSpec};
-pub use parser::{parse_functions, parse_test};
-pub use sourcemap::SourceMap;
-pub use testcommand::{TestCommand, TestOption};
-pub use testfile::{Comment, Details, TestFile};
+pub use crate::error::{Location, ParseError, ParseResult};
+pub use crate::isaspec::{parse_options, IsaSpec};
+pub use crate::parser::{parse_functions, parse_test};
+pub use crate::sourcemap::SourceMap;
+pub use crate::testcommand::{TestCommand, TestOption};
+pub use crate::testfile::{Comment, Details, TestFile};
 
 mod error;
 mod isaspec;

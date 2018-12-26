@@ -1,4 +1,6 @@
 //! A frontend for building Cranelift IR from other languages.
+use crate::ssa::{Block, SSABuilder, SideEffects};
+use crate::variable::Variable;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
@@ -11,9 +13,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::packed_option::PackedOption;
-use ssa::{Block, SSABuilder, SideEffects};
 use std::vec::Vec;
-use variable::Variable;
 
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
@@ -822,15 +822,15 @@ impl<'a> FunctionBuilder<'a> {
 #[cfg(test)]
 mod tests {
     use super::greatest_divisible_power_of_two;
+    use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
+    use crate::Variable;
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::types::*;
     use cranelift_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
     use cranelift_codegen::isa::CallConv;
     use cranelift_codegen::settings;
     use cranelift_codegen::verifier::verify_function;
-    use frontend::{FunctionBuilder, FunctionBuilderContext};
     use std::string::ToString;
-    use Variable;
 
     fn sample_function(lazy_seal: bool) {
         let mut sig = Signature::new(CallConv::SystemV);

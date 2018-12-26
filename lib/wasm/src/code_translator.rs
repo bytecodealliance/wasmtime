@@ -22,18 +22,18 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
+use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
+use crate::state::{ControlStackFrame, TranslationState};
+use crate::translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
+use crate::translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
-use environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
-use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
 use std::{i32, u32};
-use translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
-use translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored

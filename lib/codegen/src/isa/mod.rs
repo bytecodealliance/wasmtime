@@ -46,24 +46,27 @@
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
 //! concurrent function compilations.
 
-pub use isa::call_conv::CallConv;
-pub use isa::constraints::{BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints};
-pub use isa::encoding::{base_size, EncInfo, Encoding};
-pub use isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
-pub use isa::stack::{StackBase, StackBaseMask, StackRef};
+pub use crate::isa::call_conv::CallConv;
+pub use crate::isa::constraints::{
+    BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints,
+};
+pub use crate::isa::encoding::{base_size, EncInfo, Encoding};
+pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
+pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
-use binemit;
-use flowgraph;
-use ir;
-use isa::enc_tables::Encodings;
-use regalloc;
-use result::CodegenResult;
-use settings;
-use settings::SetResult;
+use crate::binemit;
+use crate::flowgraph;
+use crate::ir;
+use crate::isa::enc_tables::Encodings;
+use crate::regalloc;
+use crate::result::CodegenResult;
+use crate::settings;
+use crate::settings::SetResult;
+use crate::timing;
+use failure_derive::Fail;
 use std::boxed::Box;
 use std::fmt;
 use target_lexicon::{Architecture, PointerWidth, Triple};
-use timing;
 
 #[cfg(build_riscv)]
 mod riscv;
@@ -334,8 +337,8 @@ pub trait TargetIsa: fmt::Display + Sync {
     fn prologue_epilogue(&self, func: &mut ir::Function) -> CodegenResult<()> {
         let _tt = timing::prologue_epilogue();
         // This default implementation is unlikely to be good enough.
-        use ir::stackslot::{StackOffset, StackSize};
-        use stack_layout::layout_stack;
+        use crate::ir::stackslot::{StackOffset, StackSize};
+        use crate::stack_layout::layout_stack;
 
         let word_size = StackSize::from(self.pointer_bytes());
 

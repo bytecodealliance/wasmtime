@@ -8,6 +8,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 categories = ["no-std", "wasm"]
 readme = "README.md"
 keywords = ["webassembly", "wasm"]
+edition = "2018"
 
 [dependencies]
 wasmparser = { version = "0.23.0", default-features = false }

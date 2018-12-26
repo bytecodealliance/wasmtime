@@ -1,4 +1,5 @@
 use cranelift_codegen::ir::{Ebb, Function, Inst, InstructionData, Signature};
+use serde_derive::{Deserialize, Serialize};
 
 /// Serializable version of the original Cranelift IR
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]

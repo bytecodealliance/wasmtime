@@ -1,10 +1,10 @@
 //! Naming well-known routines in the runtime library.
 
-use ir::{
+use crate::ir::{
     types, AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, Inst, Opcode,
     Signature, Type,
 };
-use isa::{CallConv, RegUnit, TargetIsa};
+use crate::isa::{CallConv, RegUnit, TargetIsa};
 use std::fmt;
 use std::str::FromStr;
 
