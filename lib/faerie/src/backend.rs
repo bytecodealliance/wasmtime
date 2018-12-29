@@ -67,8 +67,7 @@ impl FaerieBuilder {
     }
 
     /// Default names for `ir::LibCall`s. A function by this name is imported into the object as
-    /// part of the translation of a `ir::ExternalName::LibCall` variant. Calls to a LibCall should
-    /// only be inserted into the IR by the `cranelift_codegen` legalizer pass.
+    /// part of the translation of a `ir::ExternalName::LibCall` variant.
     pub fn default_libcall_names() -> Box<Fn(ir::LibCall) -> String> {
         Box::new(move |libcall| match libcall {
             ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
