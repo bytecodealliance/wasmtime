@@ -408,7 +408,7 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
                     to: &ref_name,
                     at: u64::from(offset),
                 },
-                faerie::RelocOverride {
+                faerie::Reloc::Raw {
                     reloc: raw_reloc,
                     addend: addend_i32,
                 },

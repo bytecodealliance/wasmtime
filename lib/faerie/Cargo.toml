@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.26.0" }
 cranelift-module = { path = "../module", version = "0.26.0" }
-faerie = "0.6.0"
+faerie = "0.7.0"
 goblin = "0.0.19"
 failure = "0.1.2"
 target-lexicon = "0.2.0"
