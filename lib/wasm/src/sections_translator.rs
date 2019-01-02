@@ -255,7 +255,7 @@ pub fn parse_element_section<'data>(
             ref s => panic!("unsupported init expr in element section: {:?}", s),
         };
         let items_reader = items.get_items_reader()?;
-        let mut elems = Vec::new();
+        let mut elems = Vec::with_capacity(cast::usize(items_reader.get_count()));
         for item in items_reader {
             let x = item?;
             elems.push(FuncIndex::from_u32(x));
