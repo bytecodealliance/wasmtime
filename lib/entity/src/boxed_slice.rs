@@ -83,11 +83,6 @@ where
         IterMut::new(self.elems.iter_mut())
     }
 
-    /// Get the key that will be assigned to the next pushed value.
-    pub fn next_key(&self) -> K {
-        K::new(self.elems.len())
-    }
-
     /// Returns the last element that was inserted in the map.
     pub fn last(&self) -> Option<&V> {
         self.elems.last()
