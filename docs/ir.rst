@@ -814,8 +814,6 @@ Integer operations
 
 .. autoinst:: icmp
 .. autoinst:: icmp_imm
-.. autoinst:: ifcmp
-.. autoinst:: ifcmp_imm
 .. autoinst:: iadd
 .. autoinst:: iadd_imm
 .. autoinst:: iadd_cin
@@ -914,7 +912,6 @@ Floating point operations
 These operations generally follow IEEE 754-2008 semantics.
 
 .. autoinst:: fcmp
-.. autoinst:: ffcmp
 .. autoinst:: fadd
 .. autoinst:: fsub
 .. autoinst:: fmul
@@ -1061,6 +1058,9 @@ CPU flag operations
 These operations are for working with the "flags" registers of some CPU
 architectures.
 
+.. autoinst:: ifcmp
+.. autoinst:: ifcmp_imm
+.. autoinst:: ffcmp
 .. autoinst:: trueif
 .. autoinst:: trueff
 .. autoinst:: trapif
