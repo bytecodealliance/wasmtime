@@ -135,6 +135,11 @@ where
         self.elems.reserve_exact(additional)
     }
 
+    /// Shrinks the capacity of the `PrimaryMap` as much as possible.
+    pub fn shrink_to_fit(&mut self) {
+        self.elems.shrink_to_fit()
+    }
+
     /// Consumes this `PrimaryMap` and produces a `BoxedSlice`.
     pub fn into_boxed_slice(self) -> BoxedSlice<K, V> {
         unsafe { BoxedSlice::<K, V>::from_raw(Box::<[V]>::into_raw(self.elems.into_boxed_slice())) }
