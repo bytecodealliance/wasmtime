@@ -1,4 +1,5 @@
 //! Small lists of entity references.
+use crate::packed_option::ReservedValue;
 use crate::EntityRef;
 use std::marker::PhantomData;
 use std::mem;
@@ -59,13 +60,13 @@ use std::vec::Vec;
 /// The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
 /// reserved for the empty list which isn't allocated in the vector.
 #[derive(Clone, Debug)]
-pub struct EntityList<T: EntityRef> {
+pub struct EntityList<T: EntityRef + ReservedValue> {
     index: u32,
     unused: PhantomData<T>,
 }
 
 /// Create an empty list.
-impl<T: EntityRef> Default for EntityList<T> {
+impl<T: EntityRef + ReservedValue> Default for EntityList<T> {
     fn default() -> Self {
         Self {
             index: 0,
@@ -76,7 +77,7 @@ impl<T: EntityRef> Default for EntityList<T> {
 
 /// A memory pool for storing lists of `T`.
 #[derive(Clone, Debug)]
-pub struct ListPool<T: EntityRef> {
+pub struct ListPool<T: EntityRef + ReservedValue> {
     // The main array containing the lists.
     data: Vec<T>,
 
@@ -105,7 +106,7 @@ fn is_sclass_min_length(len: usize) -> bool {
     len > 3 && len.is_power_of_two()
 }
 
-impl<T: EntityRef> ListPool<T> {
+impl<T: EntityRef + ReservedValue> ListPool<T> {
     /// Create a new list pool.
     pub fn new() -> Self {
         Self {
@@ -140,7 +141,8 @@ impl<T: EntityRef> ListPool<T> {
     /// Allocate a storage block with a size given by `sclass`.
     ///
     /// Returns the first index of an available segment of `self.data` containing
-    /// `sclass_size(sclass)` elements.
+    /// `sclass_size(sclass)` elements. The allocated memory is filled with reserved
+    /// values.
     fn alloc(&mut self, sclass: SizeClass) -> usize {
         // First try the free list for this size class.
         match self.free.get(sclass as usize).cloned() {
@@ -155,9 +157,8 @@ impl<T: EntityRef> ListPool<T> {
             _ => {
                 // Nothing on the free list. Allocate more memory.
                 let offset = self.data.len();
-                // We don't want to mess around with uninitialized data.
-                // Just fill it up with nulls.
-                self.data.resize(offset + sclass_size(sclass), T::new(0));
+                self.data
+                    .resize(offset + sclass_size(sclass), T::reserved_value());
                 offset
             }
         }
@@ -219,7 +220,7 @@ impl<T: EntityRef> ListPool<T> {
     }
 }
 
-impl<T: EntityRef> EntityList<T> {
+impl<T: EntityRef + ReservedValue> EntityList<T> {
     /// Create a new empty list.
     pub fn new() -> Self {
         Default::default()
@@ -351,7 +352,7 @@ impl<T: EntityRef> EntityList<T> {
         }
     }
 
-    /// Grow list by adding `count` uninitialized elements at the end.
+    /// Grow list by adding `count` reserved-value elements at the end.
     ///
     /// Returns a mutable slice representing the whole list.
     fn grow<'a>(&'a mut self, count: usize, pool: &'a mut ListPool<T>) -> &'a mut [T] {
@@ -483,6 +484,7 @@ impl<T: EntityRef> EntityList<T> {
 mod tests {
     use super::*;
     use super::{sclass_for_length, sclass_size};
+    use crate::packed_option::ReservedValue;
     use crate::EntityRef;
 
     /// An opaque reference to an instruction in a function.
