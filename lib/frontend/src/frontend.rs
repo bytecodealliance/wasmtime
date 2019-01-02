@@ -405,6 +405,11 @@ impl<'a> FunctionBuilder<'a> {
     /// parameters. This can be used to set up the ebb parameters for the
     /// entry block.
     pub fn append_ebb_params_for_function_params(&mut self, ebb: Ebb) {
+        debug_assert!(
+            !self.func_ctx.ssa.has_any_predecessors(ebb),
+            "ebb parameters for function parameters should only be added to the entry block"
+        );
+
         // These parameters count as "user" parameters here because they aren't
         // inserted by the SSABuilder.
         let user_param_count = &mut self.func_ctx.ebbs[ebb].user_param_count;
