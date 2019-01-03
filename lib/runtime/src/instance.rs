@@ -717,7 +717,7 @@ fn get_memory_init_start(
         } else {
             contents.imported_global(base).from
         };
-        start += cast::usize(unsafe { *(&*global).as_u32() });
+        start += cast::usize(*unsafe { (*global).as_u32() });
     }
 
     start
@@ -787,7 +787,7 @@ fn get_table_init_start(
         } else {
             contents.imported_global(base).from
         };
-        start += cast::usize(unsafe { *(&*global).as_u32() });
+        start += cast::usize(*unsafe { (*global).as_u32() });
     }
 
     start
