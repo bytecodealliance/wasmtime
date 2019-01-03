@@ -546,7 +546,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let sig_ids = pos.ins().global_value(pointer_type, signature_ids_base);
 
                 // Load the caller ID.
-                let mem_flags = ir::MemFlags::trusted();
+                let mut mem_flags = ir::MemFlags::trusted();
+                mem_flags.set_readonly();
                 let caller_sig_id = pos.ins().load(
                     sig_id_type,
                     mem_flags,
