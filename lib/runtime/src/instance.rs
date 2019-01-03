@@ -570,7 +570,7 @@ impl Instance {
 
     /// Return a reference to the vmctx used by compiled wasm code.
     pub fn vmctx(&self) -> &VMContext {
-        &self.mmap_field.contents().vmctx()
+        self.mmap_field.contents().vmctx()
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
@@ -818,7 +818,7 @@ fn create_memories(
     let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
         PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
     for plan in &module.memory_plans.values().as_slice()[num_imports..] {
-        memories.push(LinearMemory::new(&plan).map_err(InstantiationError::Resource)?);
+        memories.push(LinearMemory::new(plan).map_err(InstantiationError::Resource)?);
     }
     Ok(memories.into_boxed_slice())
 }

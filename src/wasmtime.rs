@@ -168,7 +168,7 @@ fn handle_module(
     // If a function to invoke was given, invoke it.
     if let Some(ref f) = args.flag_invoke {
         match namespace
-            .invoke(compiler, index, &f, &[])
+            .invoke(compiler, index, f, &[])
             .map_err(|e| e.to_string())?
         {
             ActionOutcome::Returned { .. } => {}

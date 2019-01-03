@@ -74,7 +74,7 @@ impl Compiler {
         SetupError,
     > {
         let (compilation, relocations) =
-            cranelift::compile_module(&module, function_body_inputs, &*self.isa)
+            cranelift::compile_module(module, function_body_inputs, &*self.isa)
                 .map_err(SetupError::Compile)?;
 
         let allocated_functions =

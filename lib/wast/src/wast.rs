@@ -193,7 +193,7 @@ impl WastContext {
             .collect::<Vec<_>>();
         let index = self.get_index(&instance_name)?;
         self.namespace
-            .invoke(&mut *self.compiler, index, &field, &value_args)
+            .invoke(&mut *self.compiler, index, field, &value_args)
             .map_err(WastError::Action)
     }
 

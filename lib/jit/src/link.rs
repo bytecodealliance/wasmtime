@@ -183,7 +183,7 @@ pub fn link_module(
     }
 
     // Apply relocations, now that we have virtual addresses for everything.
-    relocate(allocated_functions, relocations, &module);
+    relocate(allocated_functions, relocations, module);
 
     Ok(Imports::new(
         function_imports,

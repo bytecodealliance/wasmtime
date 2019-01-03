@@ -65,7 +65,7 @@ impl Namespace {
         field_name: &str,
         args: &[RuntimeValue],
     ) -> Result<ActionOutcome, ActionError> {
-        invoke(compiler, &mut self.instances[index], &field_name, &args)
+        invoke(compiler, &mut self.instances[index], field_name, args)
     }
 
     /// Get a slice of memory from an instance.
@@ -76,12 +76,12 @@ impl Namespace {
         start: usize,
         len: usize,
     ) -> Result<&[u8], ActionError> {
-        inspect_memory(&self.instances[index], &field_name, start, len)
+        inspect_memory(&self.instances[index], field_name, start, len)
     }
 
     /// Get the value of an exported global from an instance.
     pub fn get(&self, index: InstanceIndex, field_name: &str) -> Result<RuntimeValue, ActionError> {
-        get(&self.instances[index], &field_name)
+        get(&self.instances[index], field_name)
     }
 }
 
