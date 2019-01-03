@@ -24,8 +24,11 @@ pub struct Mmap {
 impl Mmap {
     /// Construct a new empty instance of `Mmap`.
     pub fn new() -> Self {
+        // Rust's slices require non-null pointers, even when empty. `Vec`
+        // contains code to create a non-null dangling pointer value when
+        // constructed empty, so we reuse that here.
         Self {
-            ptr: ptr::null_mut(),
+            ptr: Vec::new().as_mut_ptr(),
             len: 0,
         }
     }
@@ -119,7 +122,7 @@ impl Mmap {
 impl Drop for Mmap {
     #[cfg(not(target_os = "windows"))]
     fn drop(&mut self) {
-        if !self.ptr.is_null() {
+        if self.len != 0 {
             let r = unsafe { libc::munmap(self.ptr as *mut libc::c_void, self.len) };
             assert_eq!(r, 0, "munmap failed: {}", errno::errno());
         }
@@ -127,7 +130,7 @@ impl Drop for Mmap {
 
     #[cfg(target_os = "windows")]
     fn drop(&mut self) {
-        if !self.ptr.is_null() {
+        if self.len != 0 {
             use winapi::um::memoryapi::VirtualFree;
             use winapi::um::winnt::MEM_RELEASE;
             let r = unsafe { VirtualFree(self.ptr as *mut libc::c_void, self.len, MEM_RELEASE) };

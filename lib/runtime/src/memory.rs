@@ -121,7 +121,6 @@ impl LinearMemory {
 
         if new_bytes > self.mmap.len() - self.offset_guard_size {
             // If we have no maximum, this is a "dynamic" heap, and it's allowed to move.
-            assert!(self.maximum.is_none());
             let guard_bytes = self.offset_guard_size;
             let request_bytes = new_bytes.checked_add(guard_bytes)?;
 

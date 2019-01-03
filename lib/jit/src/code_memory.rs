@@ -70,7 +70,7 @@ impl CodeMemory {
         self.position = 0;
 
         for m in &mut self.mmaps[self.published..] {
-            if !m.as_ptr().is_null() {
+            if m.len() != 0 {
                 unsafe {
                     region::protect(m.as_mut_ptr(), m.len(), region::Protection::ReadExecute)
                 }

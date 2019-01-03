@@ -56,6 +56,7 @@ impl MemoryStyle {
             if maximum <= tunables.static_memory_bound {
                 // A heap with a declared maximum can be immovable, so make
                 // it static.
+                assert!(tunables.static_memory_bound >= memory.minimum);
                 return (
                     MemoryStyle::Static {
                         bound: tunables.static_memory_bound,
