@@ -14,7 +14,8 @@ cranelift-codegen = "0.26.0"
 cranelift-wasm = "0.26.0"
 cranelift-native = "0.26.0"
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
-wasmparser = { version = "0.22.0", default-features = false }
+wasmparser = { version = "0.23.0", default-features = false }
+binaryen = "0.5.0"
 
 [features]
 default = ["wasmparser/core"]
@@ -26,3 +27,11 @@ members = ["."]
 [[bin]]
 name = "compile"
 path = "fuzz_targets/compile.rs"
+
+[[bin]]
+name = "instantiate"
+path = "fuzz_targets/instantiate.rs"
+
+[[bin]]
+name = "instantiate_translated"
+path = "fuzz_targets/instantiate_translated.rs"
