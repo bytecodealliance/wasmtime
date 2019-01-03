@@ -33,7 +33,7 @@ fn signature_id(
     #[allow(clippy::cast_ptr_alignment)]
     unsafe {
         let ptr = (vmctx as *const VMContext as *const u8)
-            .add(offsets.vmctx_vmshared_signature_id(index) as usize);
+            .add(cast::usize(offsets.vmctx_vmshared_signature_id(index)));
         *(ptr as *const VMSharedSignatureIndex)
     }
 }
@@ -46,7 +46,7 @@ fn imported_function<'vmctx>(
     #[allow(clippy::cast_ptr_alignment)]
     unsafe {
         let ptr = (vmctx as *const VMContext as *const u8)
-            .add(offsets.vmctx_vmfunction_import(index) as usize);
+            .add(cast::usize(offsets.vmctx_vmfunction_import(index)));
         &*(ptr as *const VMFunctionImport)
     }
 }
@@ -87,7 +87,7 @@ impl InstanceContents {
     fn signature_ids_ptr(&mut self) -> *mut VMSharedSignatureIndex {
         unsafe {
             (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(self.offsets.vmctx_signature_ids_begin() as usize)
+                .add(cast::usize(self.offsets.vmctx_signature_ids_begin()))
                 as *mut VMSharedSignatureIndex
         }
     }
@@ -101,7 +101,7 @@ impl InstanceContents {
     fn imported_functions_ptr(&mut self) -> *mut VMFunctionImport {
         unsafe {
             (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(self.offsets.vmctx_imported_functions_begin() as usize)
+                .add(cast::usize(self.offsets.vmctx_imported_functions_begin()))
                 as *mut VMFunctionImport
         }
     }
@@ -110,7 +110,7 @@ impl InstanceContents {
     fn imported_table(&self, index: TableIndex) -> &VMTableImport {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *const u8)
-                .add(self.offsets.vmctx_vmtable_import(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmtable_import(index)));
             &*(ptr as *const VMTableImport)
         }
     }
@@ -119,7 +119,7 @@ impl InstanceContents {
     fn imported_tables_ptr(&mut self) -> *mut VMTableImport {
         unsafe {
             (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(self.offsets.vmctx_imported_tables_begin() as usize)
+                .add(cast::usize(self.offsets.vmctx_imported_tables_begin()))
                 as *mut VMTableImport
         }
     }
@@ -128,7 +128,7 @@ impl InstanceContents {
     fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *const u8)
-                .add(self.offsets.vmctx_vmmemory_import(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmmemory_import(index)));
             &*(ptr as *const VMMemoryImport)
         }
     }
@@ -137,7 +137,7 @@ impl InstanceContents {
     fn imported_memories_ptr(&mut self) -> *mut VMMemoryImport {
         unsafe {
             (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(self.offsets.vmctx_imported_memories_begin() as usize)
+                .add(cast::usize(self.offsets.vmctx_imported_memories_begin()))
                 as *mut VMMemoryImport
         }
     }
@@ -146,7 +146,7 @@ impl InstanceContents {
     fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *const u8)
-                .add(self.offsets.vmctx_vmglobal_import(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmglobal_import(index)));
             &*(ptr as *const VMGlobalImport)
         }
     }
@@ -155,7 +155,7 @@ impl InstanceContents {
     fn imported_globals_ptr(&mut self) -> *mut VMGlobalImport {
         unsafe {
             (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(self.offsets.vmctx_imported_globals_begin() as usize)
+                .add(cast::usize(self.offsets.vmctx_imported_globals_begin()))
                 as *mut VMGlobalImport
         }
     }
@@ -165,7 +165,7 @@ impl InstanceContents {
     fn table(&self, index: DefinedTableIndex) -> &VMTableDefinition {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *const u8)
-                .add(self.offsets.vmctx_vmtable_definition(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmtable_definition(index)));
             &*(ptr as *const VMTableDefinition)
         }
     }
@@ -174,7 +174,7 @@ impl InstanceContents {
     fn table_mut(&mut self, index: DefinedTableIndex) -> &mut VMTableDefinition {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *mut u8)
-                .add(self.offsets.vmctx_vmtable_definition(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmtable_definition(index)));
             &mut *(ptr as *mut VMTableDefinition)
         }
     }
@@ -183,7 +183,7 @@ impl InstanceContents {
     fn tables_ptr(&mut self) -> *mut VMTableDefinition {
         unsafe {
             (&self.vmctx as *const VMContext as *mut u8)
-                .add(self.offsets.vmctx_tables_begin() as usize)
+                .add(cast::usize(self.offsets.vmctx_tables_begin()))
                 as *mut VMTableDefinition
         }
     }
@@ -192,7 +192,7 @@ impl InstanceContents {
     fn memory(&self, index: DefinedMemoryIndex) -> &VMMemoryDefinition {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *const u8)
-                .add(self.offsets.vmctx_vmmemory_definition(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmmemory_definition(index)));
             &*(ptr as *const VMMemoryDefinition)
         }
     }
@@ -201,7 +201,7 @@ impl InstanceContents {
     fn memory_mut(&mut self, index: DefinedMemoryIndex) -> &mut VMMemoryDefinition {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *mut u8)
-                .add(self.offsets.vmctx_vmmemory_definition(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmmemory_definition(index)));
             &mut *(ptr as *mut VMMemoryDefinition)
         }
     }
@@ -210,7 +210,7 @@ impl InstanceContents {
     fn memories_ptr(&mut self) -> *mut VMMemoryDefinition {
         unsafe {
             (&self.vmctx as *const VMContext as *mut u8)
-                .add(self.offsets.vmctx_memories_begin() as usize)
+                .add(cast::usize(self.offsets.vmctx_memories_begin()))
                 as *mut VMMemoryDefinition
         }
     }
@@ -220,7 +220,7 @@ impl InstanceContents {
     fn global(&self, index: DefinedGlobalIndex) -> &VMGlobalDefinition {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *const u8)
-                .add(self.offsets.vmctx_vmglobal_definition(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmglobal_definition(index)));
             &*(ptr as *const VMGlobalDefinition)
         }
     }
@@ -229,7 +229,7 @@ impl InstanceContents {
     fn global_mut(&mut self, index: DefinedGlobalIndex) -> &mut VMGlobalDefinition {
         unsafe {
             let ptr = (&self.vmctx as *const VMContext as *mut u8)
-                .add(self.offsets.vmctx_vmglobal_definition(index) as usize);
+                .add(cast::usize(self.offsets.vmctx_vmglobal_definition(index)));
             &mut *(ptr as *mut VMGlobalDefinition)
         }
     }
@@ -238,7 +238,7 @@ impl InstanceContents {
     fn globals_ptr(&mut self) -> *mut VMGlobalDefinition {
         unsafe {
             (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(self.offsets.vmctx_globals_begin() as usize)
+                .add(cast::usize(self.offsets.vmctx_globals_begin()))
                 as *mut VMGlobalDefinition
         }
     }
@@ -298,7 +298,8 @@ impl InstanceContents {
     pub(crate) fn table_index(&self, table: &mut VMTableDefinition) -> DefinedTableIndex {
         let offsets = &self.offsets;
         let begin = unsafe {
-            (&self.vmctx as *const VMContext as *mut u8).add(offsets.vmctx_tables_begin() as usize)
+            (&self.vmctx as *const VMContext as *mut u8)
+                .add(cast::usize(offsets.vmctx_tables_begin()))
         } as *mut VMTableDefinition;
         let end: *mut VMTableDefinition = table;
         // TODO: Use `offset_from` once it stablizes.
@@ -314,7 +315,7 @@ impl InstanceContents {
         let offsets = &self.offsets;
         let begin = unsafe {
             (&self.vmctx as *const VMContext as *mut u8)
-                .add(offsets.vmctx_memories_begin() as usize)
+                .add(cast::usize(offsets.vmctx_memories_begin()))
         } as *mut VMMemoryDefinition;
         let end: *mut VMMemoryDefinition = memory;
         // TODO: Use `offset_from` once it stablizes.
@@ -682,7 +683,7 @@ fn check_table_init_bounds(
             } else {
                 contents.imported_global(base).from
             };
-            start += unsafe { *(&*global).as_u32() } as usize;
+            start += cast::usize(unsafe { *(&*global).as_u32() });
         }
 
         // TODO: Refactor this.
@@ -721,7 +722,7 @@ fn check_memory_init_bounds(
             } else {
                 contents.imported_global(base).from
             };
-            start += unsafe { *(&*global).as_u32() } as usize;
+            start += cast::usize(unsafe { *(&*global).as_u32() });
         }
 
         // TODO: Refactor this.
@@ -773,7 +774,7 @@ fn initialize_tables(
             } else {
                 contents.imported_global(base).from
             };
-            start += unsafe { *(&*global).as_i32() } as u32 as usize;
+            start += cast::usize(unsafe { *(&*global).as_u32() });
         }
 
         let slice = if let Some(defined_table_index) = module.defined_table_index(init.table_index)
@@ -837,7 +838,7 @@ fn initialize_memories(
             } else {
                 contents.imported_global(base).from
             };
-            start += unsafe { *(&*global).as_i32() } as u32 as usize;
+            start += cast::usize(unsafe { *(&*global).as_u32() });
         }
 
         let memory = if let Some(defined_memory_index) =
