@@ -207,45 +207,45 @@ impl VMOffsets {
 
 /// Offsets for `VMContext`.
 impl VMOffsets {
+    /// The offset of the `signature_ids` field.
+    pub fn vmctx_signature_ids(&self) -> u8 {
+        0 * self.pointer_size
+    }
+
     /// The offset of the `tables` field.
     #[allow(clippy::erasing_op)]
     pub fn vmctx_imported_functions(&self) -> u8 {
-        0 * self.pointer_size
+        1 * self.pointer_size
     }
 
     /// The offset of the `tables` field.
     #[allow(clippy::identity_op)]
     pub fn vmctx_imported_tables(&self) -> u8 {
-        1 * self.pointer_size
+        2 * self.pointer_size
     }
 
     /// The offset of the `memories` field.
     pub fn vmctx_imported_memories(&self) -> u8 {
-        2 * self.pointer_size
+        3 * self.pointer_size
     }
 
     /// The offset of the `globals` field.
     pub fn vmctx_imported_globals(&self) -> u8 {
-        3 * self.pointer_size
+        4 * self.pointer_size
     }
 
     /// The offset of the `tables` field.
     pub fn vmctx_tables(&self) -> u8 {
-        4 * self.pointer_size
+        5 * self.pointer_size
     }
 
     /// The offset of the `memories` field.
     pub fn vmctx_memories(&self) -> u8 {
-        5 * self.pointer_size
+        6 * self.pointer_size
     }
 
     /// The offset of the `globals` field.
     pub fn vmctx_globals(&self) -> u8 {
-        6 * self.pointer_size
-    }
-
-    /// The offset of the `signature_ids` field.
-    pub fn vmctx_signature_ids(&self) -> u8 {
         7 * self.pointer_size
     }
 

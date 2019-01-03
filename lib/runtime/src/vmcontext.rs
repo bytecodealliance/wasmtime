@@ -469,6 +469,9 @@ impl Default for VMCallerCheckedAnyfunc {
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMContext {
+    /// Signature identifiers for signature-checking indirect calls.
+    signature_ids: *mut VMSharedSignatureIndex,
+
     /// A pointer to an array of `*const VMFunctionBody` instances, indexed by `FuncIndex`.
     imported_functions: *const VMFunctionImport,
 
@@ -492,9 +495,6 @@ pub struct VMContext {
     /// A pointer to an array of locally-defined `VMGlobalDefinition` instances,
     /// indexed by `DefinedGlobalIndex`.
     globals: *mut VMGlobalDefinition,
-
-    /// Signature identifiers for signature-checking indirect calls.
-    signature_ids: *mut VMSharedSignatureIndex,
     // If more elements are added here, remember to add offset_of tests below!
 }
 
@@ -509,20 +509,36 @@ mod test {
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
         assert_eq!(size_of::<VMContext>(), usize::from(offsets.size_of_vmctx()));
         assert_eq!(
-            offset_of!(VMContext, memories),
-            usize::from(offsets.vmctx_memories())
+            offset_of!(VMContext, signature_ids),
+            usize::from(offsets.vmctx_signature_ids())
         );
         assert_eq!(
-            offset_of!(VMContext, globals),
-            usize::from(offsets.vmctx_globals())
+            offset_of!(VMContext, imported_functions),
+            usize::from(offsets.vmctx_imported_functions())
+        );
+        assert_eq!(
+            offset_of!(VMContext, imported_tables),
+            usize::from(offsets.vmctx_imported_tables())
+        );
+        assert_eq!(
+            offset_of!(VMContext, imported_memories),
+            usize::from(offsets.vmctx_imported_memories())
+        );
+        assert_eq!(
+            offset_of!(VMContext, imported_globals),
+            usize::from(offsets.vmctx_imported_globals())
         );
         assert_eq!(
             offset_of!(VMContext, tables),
             usize::from(offsets.vmctx_tables())
         );
         assert_eq!(
-            offset_of!(VMContext, signature_ids),
-            usize::from(offsets.vmctx_signature_ids())
+            offset_of!(VMContext, memories),
+            usize::from(offsets.vmctx_memories())
+        );
+        assert_eq!(
+            offset_of!(VMContext, globals),
+            usize::from(offsets.vmctx_globals())
         );
     }
 }

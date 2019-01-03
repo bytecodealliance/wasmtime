@@ -59,6 +59,9 @@ pub struct FuncEnvironment<'module_environment> {
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
 
+    /// The Cranelift global holding the base address of the signature IDs vector.
+    signature_ids_base: Option<ir::GlobalValue>,
+
     /// The Cranelift global holding the base address of the imported functions table.
     imported_functions_base: Option<ir::GlobalValue>,
 
@@ -79,9 +82,6 @@ pub struct FuncEnvironment<'module_environment> {
 
     /// The Cranelift global holding the base address of the globals vector.
     globals_base: Option<ir::GlobalValue>,
-
-    /// The Cranelift global holding the base address of the signature IDs vector.
-    signature_ids_base: Option<ir::GlobalValue>,
 
     /// The external function declaration for implementing wasm's `memory.size`
     /// for locally-defined 32-bit memories.
@@ -109,6 +109,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             target_config,
             module,
             vmctx: None,
+            signature_ids_base: None,
             imported_functions_base: None,
             imported_tables_base: None,
             imported_memories_base: None,
@@ -116,7 +117,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             tables_base: None,
             memories_base: None,
             globals_base: None,
-            signature_ids_base: None,
             memory32_size_extfunc: None,
             imported_memory32_size_extfunc: None,
             memory_grow_extfunc: None,
