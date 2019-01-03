@@ -55,7 +55,7 @@ use std::process::exit;
 use wasmtime_execute::{ActionOutcome, InstancePlus, JITCode, Namespace};
 use wasmtime_wast::instantiate_spectest;
 
-static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
+static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
 
 const USAGE: &str = "
 Wasm runner.
