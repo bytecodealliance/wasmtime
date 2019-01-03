@@ -39,9 +39,6 @@ use hashmap_core::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use cast;
-use cranelift_wasm;
-use failure;
 #[macro_use]
 extern crate failure_derive;
 

@@ -36,16 +36,10 @@ use hashmap_core::{map as hash_map, HashMap};
 #[cfg(feature = "std")]
 use std::collections::{hash_map, HashMap};
 
-use errno;
-use region;
-
 #[macro_use]
 extern crate lazy_static;
-use libc;
 #[macro_use]
 extern crate memoffset;
-use cast;
-use failure;
 #[macro_use]
 extern crate failure_derive;
 #[cfg(target_os = "windows")]

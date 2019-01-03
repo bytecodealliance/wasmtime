@@ -38,10 +38,6 @@ use std::collections::{hash_map, HashMap};
 
 #[macro_use]
 extern crate cranelift_entity;
-
-use failure;
-use region;
-
 #[macro_use]
 extern crate failure_derive;
 
