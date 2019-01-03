@@ -48,7 +48,7 @@ pub fn get_imported_memory32_size_name() -> ir::ExternalName {
     ir::ExternalName::user(1, 3)
 }
 
-/// The FuncEnvironment implementation for use by the `ModuleEnvironment`.
+/// The `FuncEnvironment` implementation for use by the `ModuleEnvironment`.
 pub struct FuncEnvironment<'module_environment> {
     /// Target-specified configuration.
     target_config: TargetFrontendConfig,

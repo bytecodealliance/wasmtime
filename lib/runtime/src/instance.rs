@@ -422,7 +422,7 @@ impl Drop for MmapField {
     }
 }
 
-/// An Instance of a WebAssemby module.
+/// An Instance of a WebAssembly module.
 ///
 /// Note that compiled wasm code passes around raw pointers to `Instance`, so
 /// this shouldn't be moved.

@@ -8,7 +8,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use std::vec::Vec;
 
-/// The result of compiling a WebAssemby module's functions.
+/// The result of compiling a WebAssembly module's functions.
 #[derive(Debug)]
 pub struct Compilation {
     /// Compiled machine code for the function bodies.
@@ -35,7 +35,7 @@ pub struct Relocation {
     pub addend: binemit::Addend,
 }
 
-/// Destination function. Can be either user function or some special one, like grow_memory.
+/// Destination function. Can be either user function or some special one, like `memory.grow`.
 #[derive(Debug, Copy, Clone)]
 pub enum RelocationTarget {
     /// The user function index.

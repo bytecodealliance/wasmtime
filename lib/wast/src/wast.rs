@@ -9,7 +9,7 @@ use wasmtime_jit::{
     Namespace, RuntimeValue, SetupError,
 };
 
-/// Translate from a script::Value to a RuntimeValue.
+/// Translate from a `script::Value` to a `RuntimeValue`.
 fn runtime_value(v: Value) -> RuntimeValue {
     match v {
         Value::I32(x) => RuntimeValue::I32(x),
