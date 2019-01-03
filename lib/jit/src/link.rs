@@ -1,10 +1,10 @@
 //! Linking for JIT-compiled code.
 
 use crate::resolver::Resolver;
+use core::ptr::write_unaligned;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
-use std::ptr::write_unaligned;
 use std::vec::Vec;
 use wasmtime_environ::{
     MemoryPlan, MemoryStyle, Module, Relocation, RelocationTarget, Relocations, TablePlan,

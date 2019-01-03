@@ -24,14 +24,23 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-use cranelift_wasm;
 #[cfg(not(feature = "std"))]
 #[macro_use]
-extern crate alloc;
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+
+#[cfg(not(feature = "std"))]
+use hashmap_core::HashMap;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+
 use cast;
+use cranelift_wasm;
 use failure;
 #[macro_use]
 extern crate failure_derive;
@@ -63,10 +72,3 @@ pub const WASM_PAGE_SIZE: u32 = 0x10000;
 
 /// The number of pages we can have before we run out of byte index space.
 pub const WASM_MAX_PAGES: u32 = 0x10000;
-
-#[cfg(not(feature = "std"))]
-mod std {
-    pub use alloc::{string, vec};
-    pub use core::*;
-    pub use core::{i32, str, u32};
-}

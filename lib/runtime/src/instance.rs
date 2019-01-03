@@ -13,16 +13,17 @@ use crate::vmcontext::{
     VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
     VMTableImport,
 };
+use core::slice;
+use core::{mem, ptr};
 use cranelift_entity::EntityRef;
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
+use std::borrow::ToOwned;
 use std::rc::Rc;
-use std::slice;
 use std::string::String;
-use std::{mem, ptr};
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 fn signature_id(

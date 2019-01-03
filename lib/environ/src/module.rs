@@ -1,5 +1,6 @@
 //! Data structures for representing decoded wasm modules.
 
+use super::HashMap;
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
@@ -7,7 +8,6 @@ use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
-use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;
 

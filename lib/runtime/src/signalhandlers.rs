@@ -5,8 +5,8 @@
 #![allow(non_snake_case)]
 
 use crate::vmcontext::VMContext;
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
+use core::borrow::{Borrow, BorrowMut};
+use core::cell::RefCell;
 use std::sync::RwLock;
 
 include!(concat!(env!("OUT_DIR"), "/signalhandlers.rs"));

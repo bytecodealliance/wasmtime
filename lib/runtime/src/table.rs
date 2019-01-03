@@ -4,6 +4,7 @@
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use cranelift_wasm::TableElementType;
+use std::vec::Vec;
 use wasmtime_environ::{TablePlan, TableStyle};
 
 /// A table instance.

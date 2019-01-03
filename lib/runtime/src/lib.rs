@@ -21,15 +21,24 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+
+#[cfg(not(feature = "std"))]
+use hashmap_core::{map as hash_map, HashMap};
+#[cfg(feature = "std")]
+use std::collections::{hash_map, HashMap};
 
 use errno;
 use region;
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc;
 #[macro_use]
 extern crate lazy_static;
 use libc;
@@ -66,10 +75,3 @@ pub use crate::vmcontext::{
     VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
     VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
 };
-
-#[cfg(not(feature = "std"))]
-mod std {
-    pub use alloc::{string, vec};
-    pub use core::*;
-    pub use core::{i32, str, u32};
-}

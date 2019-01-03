@@ -1,9 +1,9 @@
 //! Memory management for executable code.
 
+use core::{cmp, mem};
 use region;
 use std::string::String;
 use std::vec::Vec;
-use std::{cmp, mem};
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
 /// Memory manager for executable code.

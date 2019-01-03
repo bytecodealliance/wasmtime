@@ -2,6 +2,7 @@ use crate::module::{MemoryPlan, MemoryStyle, Module, TableStyle};
 use crate::vmoffsets::VMOffsets;
 use crate::WASM_PAGE_SIZE;
 use cast;
+use core::clone::Clone;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
@@ -16,7 +17,6 @@ use cranelift_wasm::{
     self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
     WasmResult,
 };
-use std::clone::Clone;
 use std::vec::Vec;
 
 /// Compute an `ir::ExternalName` for a given wasm function index.

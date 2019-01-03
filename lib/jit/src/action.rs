@@ -2,11 +2,11 @@
 
 use crate::compiler::Compiler;
 use crate::instantiate::SetupError;
+use core::cmp::max;
+use core::{fmt, mem, ptr, slice};
 use cranelift_codegen::ir;
-use std::cmp::max;
 use std::string::String;
 use std::vec::Vec;
-use std::{fmt, mem, ptr, slice};
 use wasmtime_runtime::{wasmtime_call_trampoline, Export, Instance};
 
 /// A runtime value.

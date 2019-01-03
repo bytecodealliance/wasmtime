@@ -1,5 +1,6 @@
 //! JIT compilation.
 
+use super::HashMap;
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
 use crate::target_tunables::target_tunables;
@@ -11,7 +12,6 @@ use cranelift_entity::PrimaryMap;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::DefinedFuncIndex;
 use std::boxed::Box;
-use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;
 use wasmtime_environ::cranelift;
@@ -95,7 +95,7 @@ impl Compiler {
         signature: &ir::Signature,
         value_size: usize,
     ) -> Result<*const VMFunctionBody, SetupError> {
-        use std::collections::hash_map::Entry::{Occupied, Vacant};
+        use super::hash_map::Entry::{Occupied, Vacant};
         Ok(match self.trampoline_park.entry(callee_address) {
             Occupied(entry) => *entry.get(),
             Vacant(entry) => {

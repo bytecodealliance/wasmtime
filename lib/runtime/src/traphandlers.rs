@@ -3,11 +3,12 @@
 
 use crate::signalhandlers::jmp_buf;
 use crate::vmcontext::{VMContext, VMFunctionBody};
+use core::cell::{Cell, RefCell};
+use core::mem;
+use core::ptr;
 use libc::c_int;
-use std::cell::{Cell, RefCell};
-use std::mem;
-use std::ptr;
 use std::string::String;
+use std::vec::Vec;
 
 // Currently we uset setjmp/longjmp to unwind out of a signal handler
 // and back to the point where WebAssembly was called (via `call_wasm`).

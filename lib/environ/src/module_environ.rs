@@ -1,6 +1,7 @@
 use crate::func_environ::FuncEnvironment;
 use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
 use crate::tunables::Tunables;
+use core::clone::Clone;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
@@ -9,7 +10,6 @@ use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     SignatureIndex, Table, TableIndex, WasmResult,
 };
-use std::clone::Clone;
 use std::string::String;
 use std::vec::Vec;
 

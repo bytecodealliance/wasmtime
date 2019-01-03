@@ -20,12 +20,13 @@ wasmtime-runtime = { path = "../runtime" }
 region = "1.0.0"
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
-target-lexicon = "0.2.0"
+target-lexicon = { version = "0.2.0", default-features = false }
+hashmap_core = { version = "0.1.9", optional = true }
 
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-wasm/std"]
-core = ["cranelift-codegen/core", "cranelift-wasm/core", "wasmtime-environ/core"]
+core = ["hashmap_core", "cranelift-codegen/core", "cranelift-wasm/core", "wasmtime-environ/core"]
 
 [badges]
 maintenance = { status = "experimental" }

@@ -1,10 +1,10 @@
 //! Implement a registry of function signatures, for fast indirect call
 //! signature checking.
 
+use super::{hash_map, HashMap};
 use crate::vmcontext::VMSharedSignatureIndex;
 use cast;
 use cranelift_codegen::ir;
-use std::collections::{hash_map, HashMap};
 
 /// WebAssembly requires that the caller and callee signatures in an indirect
 /// call must match. To implement this efficiently, keep a registry of all
