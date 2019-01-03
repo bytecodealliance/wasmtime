@@ -13,7 +13,7 @@ edition = "2018"
 cranelift-codegen = { path = "../codegen", version = "0.26.0", features = ["testing_hooks"] }
 cranelift-reader = { path = "../reader", version = "0.26.0" }
 cranelift-preopt = { path = "../preopt", version = "0.26.0" }
-file-per-thread-logger = "0.1.1"
+file-per-thread-logger = "0.1.2"
 filecheck = "0.4.0"
 num_cpus = "1.8.0"
-log = "0.4.4"
+log = "0.4.6"
