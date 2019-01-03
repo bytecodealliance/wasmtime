@@ -242,6 +242,21 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
+    fn get_signature_ids_base(&mut self, func: &mut Function) -> ir::GlobalValue {
+        self.signature_ids_base.unwrap_or_else(|| {
+            let pointer_type = self.pointer_type();
+            let vmctx = self.vmctx(func);
+            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: Offset32::new(i32::from(self.offsets.vmctx_signature_ids())),
+                global_type: pointer_type,
+                readonly: true,
+            });
+            self.signature_ids_base = Some(new_base);
+            new_base
+        })
+    }
+
     fn get_memory_grow_sig(&self, func: &mut Function) -> ir::SigRef {
         func.import_signature(Signature {
             params: vec![
@@ -533,18 +548,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             TableStyle::CallerChecksSignature => {
                 let sig_id_size = self.offsets.size_of_vmshared_signature_index();
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
-
-                let vmctx = self.vmctx(pos.func);
-                let signature_ids_base = self.signature_ids_base.unwrap_or_else(|| {
-                    let new_base = pos.func.create_global_value(ir::GlobalValueData::Load {
-                        base: vmctx,
-                        offset: Offset32::new(i32::from(self.offsets.vmctx_signature_ids())),
-                        global_type: pointer_type,
-                        readonly: true,
-                    });
-                    self.signature_ids_base = Some(new_base);
-                    new_base
-                });
+                let signature_ids_base = self.get_signature_ids_base(pos.func);
                 let sig_ids = pos.ins().global_value(pointer_type, signature_ids_base);
 
                 // Load the caller ID.
