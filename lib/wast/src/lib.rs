@@ -30,3 +30,6 @@ mod wast;
 
 pub use crate::spectest::instantiate_spectest;
 pub use crate::wast::{WastContext, WastError};
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

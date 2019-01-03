@@ -29,3 +29,6 @@
 mod emit_module;
 
 pub use crate::emit_module::emit_module;
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

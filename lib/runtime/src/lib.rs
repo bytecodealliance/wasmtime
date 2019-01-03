@@ -69,3 +69,6 @@ pub use crate::vmcontext::{
     VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
     VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
 };
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

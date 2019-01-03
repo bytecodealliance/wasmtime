@@ -61,3 +61,6 @@ pub use crate::target_tunables::target_tunables;
 // Re-export `Instance` so that users won't need to separately depend on
 // wasmtime-runtime in common cases.
 pub use wasmtime_runtime::{Instance, InstantiationError};
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
