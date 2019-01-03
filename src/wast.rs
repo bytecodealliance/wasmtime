@@ -35,6 +35,7 @@ use docopt::Docopt;
 use file_per_thread_logger;
 use pretty_env_logger;
 use std::path::Path;
+use std::process;
 use wasmtime_jit::Compiler;
 use wasmtime_wast::WastContext;
 
@@ -102,6 +103,9 @@ fn main() {
     for filename in &args.arg_file {
         wast_context
             .run_file(Path::new(&filename))
-            .unwrap_or_else(|e| panic!("{}", e));
+            .unwrap_or_else(|e| {
+                eprintln!("{}", e);
+                process::exit(1)
+            });
     }
 }

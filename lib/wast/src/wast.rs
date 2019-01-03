@@ -47,6 +47,10 @@ pub enum WastError {
     Trap(String),
     /// There was a type error in inputs or outputs of an action.
     Type(String),
+    /// The was a syntax error while parsing the wast script.
+    Syntax(wabt::script::Error),
+    /// The was a character encoding error while parsing the wast script.
+    Utf8(str::Utf8Error),
     /// The was an I/O error while reading the wast file.
     IO(io::Error),
 }
@@ -59,6 +63,8 @@ impl fmt::Display for WastError {
             WastError::Action(ref error) => error.fmt(f),
             WastError::Trap(ref message) => write!(f, "trap: {}", message),
             WastError::Type(ref message) => write!(f, "type error: {}", message),
+            WastError::Syntax(ref message) => write!(f, "syntax error: {}", message),
+            WastError::Utf8(ref message) => write!(f, "UTF-8 decoding error: {}", message),
             WastError::IO(ref error) => write!(f, "I/O error: {}", error),
         }
     }
@@ -223,7 +229,17 @@ impl WastContext {
 
     /// Run a wast script from a byte buffer.
     pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<(), WastFileError> {
-        let mut parser = ScriptParser::from_str(str::from_utf8(wast).unwrap()).unwrap();
+        let mut parser =
+            ScriptParser::from_str(str::from_utf8(wast).map_err(|error| WastFileError {
+                filename: filename.to_string(),
+                line: 0,
+                error: WastError::Utf8(error),
+            })?)
+            .map_err(|error| WastFileError {
+                filename: filename.to_string(),
+                line: 0,
+                error: WastError::Syntax(error),
+            })?;
 
         while let Some(Command { kind, line }) = parser.next().expect("parser") {
             match kind {
