@@ -94,9 +94,9 @@ pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {
         })
     }
 
-    let instance = unsafe { vmctx.instance() };
+    let instance_contents = unsafe { vmctx.instance_contents() };
     let have_signal_handlers = TRAP_CONTEXT.with(|cx| cx.borrow().haveSignalHandlers);
-    if !have_signal_handlers && instance.needs_signal_handlers() {
+    if !have_signal_handlers && instance_contents.needs_signal_handlers() {
         panic!("failed to install signal handlers");
     }
 }

@@ -111,7 +111,7 @@ impl WastContext {
         }
     }
 
-    fn instantiate(&mut self, module: ModuleBinary) -> Result<Box<Instance>, SetupError> {
+    fn instantiate(&mut self, module: ModuleBinary) -> Result<Instance, SetupError> {
         let data = module.into_vec();
 
         self.validate(&data).map_err(SetupError::Validate)?;

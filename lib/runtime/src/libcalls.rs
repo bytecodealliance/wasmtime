@@ -94,10 +94,10 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
     memory_index: u32,
     vmctx: *mut VMContext,
 ) -> u32 {
-    let instance = (&mut *vmctx).instance();
+    let instance_contents = (&mut *vmctx).instance_contents();
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
 
-    instance
+    instance_contents
         .memory_grow(memory_index, delta)
         .unwrap_or(u32::max_value())
 }
@@ -109,30 +109,21 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_grow(
     memory_index: u32,
     vmctx: *mut VMContext,
 ) -> u32 {
-    let instance = (&mut *vmctx).instance();
-    assert!(
-        (memory_index as usize) < instance.num_imported_memories(),
-        "imported memory index for memory.grow out of bounds"
-    );
-
+    let instance_contents = (&mut *vmctx).instance_contents();
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let import = instance.vmctx().imported_memory(memory_index);
-    let foreign_instance = (&mut *import.vmctx).instance();
-    let foreign_memory = &mut *import.from;
-    let foreign_index = foreign_instance.vmctx().memory_index(foreign_memory);
 
-    foreign_instance
-        .memory_grow(foreign_index, delta)
+    instance_contents
+        .imported_memory_grow(memory_index, delta)
         .unwrap_or(u32::max_value())
 }
 
 /// Implementation of memory.size for locally-defined 32-bit memories.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_memory32_size(memory_index: u32, vmctx: *mut VMContext) -> u32 {
-    let instance = (&mut *vmctx).instance();
+    let instance_contents = (&mut *vmctx).instance_contents();
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
 
-    instance.memory_size(memory_index)
+    instance_contents.memory_size(memory_index)
 }
 
 /// Implementation of memory.size for imported 32-bit memories.
@@ -141,17 +132,8 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
     memory_index: u32,
     vmctx: *mut VMContext,
 ) -> u32 {
-    let instance = (&mut *vmctx).instance();
-    assert!(
-        (memory_index as usize) < instance.num_imported_memories(),
-        "imported memory index for memory.grow out of bounds"
-    );
-
+    let instance_contents = (&mut *vmctx).instance_contents();
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let import = instance.vmctx().imported_memory(memory_index);
-    let foreign_instance = (&mut *import.vmctx).instance();
-    let foreign_memory = &mut *import.from;
-    let foreign_index = foreign_instance.vmctx().memory_index(foreign_memory);
 
-    foreign_instance.memory_size(foreign_index)
+    instance_contents.imported_memory_size(memory_index)
 }

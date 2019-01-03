@@ -45,7 +45,7 @@ extern "C" fn spectest_print_f64_f64(x: f64, y: f64) {
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
-pub fn instantiate_spectest() -> Result<Box<Instance>, InstantiationError> {
+pub fn instantiate_spectest() -> Result<Instance, InstantiationError> {
     let call_conv = isa::CallConv::triple_default(&HOST);
     let pointer_type = types::Type::triple_pointer_type(&HOST);
     let mut module = Module::new();

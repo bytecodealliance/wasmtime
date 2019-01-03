@@ -1,13 +1,8 @@
 //! This file declares `VMContext` and several related structs which contain
 //! fields that compiled wasm code accesses directly.
 
-use cranelift_entity::EntityRef;
-use cranelift_wasm::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
-    TableIndex,
-};
-use instance::Instance;
-use std::{mem, ptr, u32};
+use instance::InstanceContents;
+use std::{ptr, u32};
 
 /// An imported function.
 #[derive(Debug, Copy, Clone)]
@@ -24,11 +19,12 @@ pub struct VMFunctionImport {
 mod test_vmfunction_import {
     use super::VMFunctionImport;
     use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmfunction_import_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMFunctionImport>(),
             usize::from(offsets.size_of_vmfunction_import())
@@ -78,11 +74,12 @@ pub struct VMTableImport {
 mod test_vmtable_import {
     use super::VMTableImport;
     use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmtable_import_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMTableImport>(),
             usize::from(offsets.size_of_vmtable_import())
@@ -114,11 +111,12 @@ pub struct VMMemoryImport {
 mod test_vmmemory_import {
     use super::VMMemoryImport;
     use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmmemory_import_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMMemoryImport>(),
             usize::from(offsets.size_of_vmmemory_import())
@@ -147,11 +145,12 @@ pub struct VMGlobalImport {
 mod test_vmglobal_import {
     use super::VMGlobalImport;
     use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmglobal_import_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMGlobalImport>(),
             usize::from(offsets.size_of_vmglobal_import())
@@ -180,11 +179,12 @@ pub struct VMMemoryDefinition {
 mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
     use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmmemory_definition_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMMemoryDefinition>(),
             usize::from(offsets.size_of_vmmemory_definition())
@@ -222,11 +222,12 @@ pub struct VMTableDefinition {
 mod test_vmtable_definition {
     use super::VMTableDefinition;
     use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmtable_definition_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMTableDefinition>(),
             usize::from(offsets.size_of_vmtable_definition())
@@ -257,7 +258,7 @@ pub struct VMGlobalDefinition {
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
     use std::mem::{align_of, size_of};
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmglobal_definition_alignment() {
@@ -269,7 +270,8 @@ mod test_vmglobal_definition {
 
     #[test]
     fn check_vmglobal_definition_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMGlobalDefinition>(),
             usize::from(offsets.size_of_vmglobal_definition())
@@ -390,11 +392,12 @@ pub struct VMSharedSignatureIndex(u32);
 mod test_vmshared_signature_index {
     use super::VMSharedSignatureIndex;
     use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmshared_signature_index() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMSharedSignatureIndex>(),
             usize::from(offsets.size_of_vmshared_signature_index())
@@ -425,11 +428,12 @@ pub struct VMCallerCheckedAnyfunc {
 mod test_vmcaller_checked_anyfunc {
     use super::VMCallerCheckedAnyfunc;
     use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
+    use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmcaller_checked_anyfunc_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMCallerCheckedAnyfunc>(),
             usize::from(offsets.size_of_vmcaller_checked_anyfunc())
@@ -460,186 +464,23 @@ impl Default for VMCallerCheckedAnyfunc {
 }
 
 /// The VM "context", which is pointed to by the `vmctx` arg in Cranelift.
-/// This has pointers to the globals, memories, tables, and other runtime
+/// This has information about globals, memories, tables, and other runtime
 /// state associated with the current instance.
 ///
-/// TODO: The number of memories, globals, tables, and signature IDs does
-/// not change dynamically, and pointer arrays are not indexed dynamically,
-/// so these fields could all be contiguously allocated.
+/// The struct here is empty, as the sizes of these fields are dynamic, and
+/// we can't describe them in Rust's type system. Sufficient memory is
+/// allocated at runtime.
+///
+/// TODO: We could move the globals into the `vmctx` allocation too.
 #[derive(Debug)]
 #[repr(C)]
-pub struct VMContext {
-    /// Signature identifiers for signature-checking indirect calls.
-    signature_ids: *mut VMSharedSignatureIndex,
-
-    /// A pointer to an array of `*const VMFunctionBody` instances, indexed by `FuncIndex`.
-    imported_functions: *const VMFunctionImport,
-
-    /// A pointer to an array of `VMTableImport` instances, indexed by `TableIndex`.
-    imported_tables: *const VMTableImport,
-
-    /// A pointer to an array of `VMMemoryImport` instances, indexed by `MemoryIndex`.
-    imported_memories: *const VMMemoryImport,
-
-    /// A pointer to an array of `VMGlobalImport` instances, indexed by `GlobalIndex`.
-    imported_globals: *const VMGlobalImport,
-
-    /// A pointer to an array of locally-defined `VMTableDefinition` instances,
-    /// indexed by `DefinedTableIndex`.
-    tables: *mut VMTableDefinition,
-
-    /// A pointer to an array of locally-defined `VMMemoryDefinition` instances,
-    /// indexed by `DefinedMemoryIndex`.
-    memories: *mut VMMemoryDefinition,
-
-    /// A pointer to an array of locally-defined `VMGlobalDefinition` instances,
-    /// indexed by `DefinedGlobalIndex`.
-    globals: *mut VMGlobalDefinition,
-    // If more elements are added here, remember to add offset_of tests below!
-}
-
-#[cfg(test)]
-mod test {
-    use super::VMContext;
-    use std::mem::size_of;
-    use wasmtime_environ::VMOffsets;
-
-    #[test]
-    fn check_vmctx_offsets() {
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8);
-        assert_eq!(size_of::<VMContext>(), usize::from(offsets.size_of_vmctx()));
-        assert_eq!(
-            offset_of!(VMContext, signature_ids),
-            usize::from(offsets.vmctx_signature_ids())
-        );
-        assert_eq!(
-            offset_of!(VMContext, imported_functions),
-            usize::from(offsets.vmctx_imported_functions())
-        );
-        assert_eq!(
-            offset_of!(VMContext, imported_tables),
-            usize::from(offsets.vmctx_imported_tables())
-        );
-        assert_eq!(
-            offset_of!(VMContext, imported_memories),
-            usize::from(offsets.vmctx_imported_memories())
-        );
-        assert_eq!(
-            offset_of!(VMContext, imported_globals),
-            usize::from(offsets.vmctx_imported_globals())
-        );
-        assert_eq!(
-            offset_of!(VMContext, tables),
-            usize::from(offsets.vmctx_tables())
-        );
-        assert_eq!(
-            offset_of!(VMContext, memories),
-            usize::from(offsets.vmctx_memories())
-        );
-        assert_eq!(
-            offset_of!(VMContext, globals),
-            usize::from(offsets.vmctx_globals())
-        );
-    }
-}
+pub struct VMContext {}
 
 impl VMContext {
-    /// Create a new `VMContext` instance.
-    pub fn new(
-        imported_functions: *const VMFunctionImport,
-        imported_tables: *const VMTableImport,
-        imported_memories: *const VMMemoryImport,
-        imported_globals: *const VMGlobalImport,
-        tables: *mut VMTableDefinition,
-        memories: *mut VMMemoryDefinition,
-        globals: *mut VMGlobalDefinition,
-        signature_ids: *mut VMSharedSignatureIndex,
-    ) -> Self {
-        Self {
-            imported_functions,
-            imported_tables,
-            imported_memories,
-            imported_globals,
-            tables,
-            memories,
-            globals,
-            signature_ids,
-        }
-    }
-
-    /// Return a reference to imported function `index`.
-    pub unsafe fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
-        &*self.imported_functions.add(index.index())
-    }
-
-    /// Return a reference to imported table `index`.
-    pub unsafe fn imported_table(&self, index: TableIndex) -> &VMTableImport {
-        &*self.imported_tables.add(index.index())
-    }
-
-    /// Return a reference to imported memory `index`.
-    pub unsafe fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
-        &*self.imported_memories.add(index.index())
-    }
-
-    /// Return a reference to imported global `index`.
-    pub unsafe fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
-        &*self.imported_globals.add(index.index())
-    }
-
-    /// Return a reference to locally-defined table `index`.
-    pub unsafe fn table(&self, index: DefinedTableIndex) -> &VMTableDefinition {
-        &*self.tables.add(index.index())
-    }
-
-    /// Return a mutable reference to locally-defined table `index`.
-    pub unsafe fn table_mut(&mut self, index: DefinedTableIndex) -> &mut VMTableDefinition {
-        &mut *self.tables.add(index.index())
-    }
-
-    /// Return a reference to locally-defined linear memory `index`.
-    pub unsafe fn memory(&self, index: DefinedMemoryIndex) -> &VMMemoryDefinition {
-        &*self.memories.add(index.index())
-    }
-
-    /// Return a mutable reference to locally-defined linear memory `index`.
-    pub unsafe fn memory_mut(&mut self, index: DefinedMemoryIndex) -> &mut VMMemoryDefinition {
-        &mut *self.memories.add(index.index())
-    }
-
-    /// Return a reference to locally-defined global variable `index`.
-    pub unsafe fn global(&self, index: DefinedGlobalIndex) -> &VMGlobalDefinition {
-        &*self.globals.add(index.index())
-    }
-
-    /// Return a mutable reference to locally-defined global variable `index`.
-    pub unsafe fn global_mut(&mut self, index: DefinedGlobalIndex) -> &mut VMGlobalDefinition {
-        &mut *self.globals.add(index.index())
-    }
-
     /// Return a mutable reference to the associated `Instance`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn instance(&mut self) -> &mut Instance {
-        &mut *((self as *mut Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
-    }
-
-    /// Return the table index for the given `VMTableDefinition`.
-    pub fn table_index(&self, table: &mut VMTableDefinition) -> DefinedTableIndex {
-        // TODO: Use `offset_from` once it stablizes.
-        let begin = self.tables;
-        let end: *mut VMTableDefinition = table;
-        DefinedTableIndex::new(
-            (end as usize - begin as usize) / mem::size_of::<VMTableDefinition>(),
-        )
-    }
-
-    /// Return the memory index for the given `VMMemoryDefinition`.
-    pub fn memory_index(&self, memory: &mut VMMemoryDefinition) -> DefinedMemoryIndex {
-        // TODO: Use `offset_from` once it stablizes.
-        let begin = self.memories;
-        let end: *mut VMMemoryDefinition = memory;
-        DefinedMemoryIndex::new(
-            (end as usize - begin as usize) / mem::size_of::<VMMemoryDefinition>(),
-        )
+    pub(crate) unsafe fn instance_contents(&mut self) -> &mut InstanceContents {
+        &mut *((self as *mut Self as *mut u8).offset(-InstanceContents::vmctx_offset())
+            as *mut InstanceContents)
     }
 }

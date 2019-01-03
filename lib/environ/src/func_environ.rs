@@ -2,7 +2,7 @@ use cast;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
-use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
+use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentPurpose, ExtFuncData, FuncRef, Function, InstBuilder, Signature,
@@ -60,6 +60,8 @@ pub struct FuncEnvironment<'module_environment> {
     vmctx: Option<ir::GlobalValue>,
 
     /// The Cranelift global holding the base address of the signature IDs vector.
+    /// TODO: Now that the bases are just offsets from vmctx rather than loads, we
+    /// can eliminate these base variables.
     signature_ids_base: Option<ir::GlobalValue>,
 
     /// The Cranelift global holding the base address of the imported functions table.
@@ -121,7 +123,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             imported_memory32_size_extfunc: None,
             memory_grow_extfunc: None,
             imported_memory_grow_extfunc: None,
-            offsets: VMOffsets::new(target_config.pointer_bytes()),
+            offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
 
@@ -141,11 +143,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.imported_functions_base.unwrap_or_else(|| {
             let pointer_type = self.pointer_type();
             let vmctx = self.vmctx(func);
-            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+            let new_base = func.create_global_value(ir::GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Offset32::new(i32::from(self.offsets.vmctx_imported_functions())),
+                offset: Imm64::new(self.offsets.vmctx_imported_functions()),
                 global_type: pointer_type,
-                readonly: true,
             });
             self.imported_functions_base = Some(new_base);
             new_base
@@ -156,11 +157,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.imported_tables_base.unwrap_or_else(|| {
             let pointer_type = self.pointer_type();
             let vmctx = self.vmctx(func);
-            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+            let new_base = func.create_global_value(ir::GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Offset32::new(i32::from(self.offsets.vmctx_imported_tables())),
+                offset: Imm64::new(self.offsets.vmctx_imported_tables()),
                 global_type: pointer_type,
-                readonly: true,
             });
             self.imported_tables_base = Some(new_base);
             new_base
@@ -171,11 +171,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.imported_memories_base.unwrap_or_else(|| {
             let pointer_type = self.pointer_type();
             let vmctx = self.vmctx(func);
-            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+            let new_base = func.create_global_value(ir::GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Offset32::new(i32::from(self.offsets.vmctx_imported_memories())),
+                offset: Imm64::new(self.offsets.vmctx_imported_memories()),
                 global_type: pointer_type,
-                readonly: true,
             });
             self.imported_memories_base = Some(new_base);
             new_base
@@ -186,11 +185,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.imported_globals_base.unwrap_or_else(|| {
             let pointer_type = self.pointer_type();
             let vmctx = self.vmctx(func);
-            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+            let new_base = func.create_global_value(ir::GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Offset32::new(i32::from(self.offsets.vmctx_imported_globals())),
+                offset: Imm64::new(self.offsets.vmctx_imported_globals()),
                 global_type: pointer_type,
-                readonly: true,
             });
             self.imported_globals_base = Some(new_base);
             new_base
@@ -201,11 +199,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.tables_base.unwrap_or_else(|| {
             let pointer_type = self.pointer_type();
             let vmctx = self.vmctx(func);
-            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+            let new_base = func.create_global_value(ir::GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Offset32::new(i32::from(self.offsets.vmctx_tables())),
+                offset: Imm64::new(self.offsets.vmctx_tables()),
                 global_type: pointer_type,
-                readonly: true,
             });
             self.tables_base = Some(new_base);
             new_base
@@ -216,11 +213,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.memories_base.unwrap_or_else(|| {
             let pointer_type = self.pointer_type();
             let vmctx = self.vmctx(func);
-            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+            let new_base = func.create_global_value(ir::GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Offset32::new(i32::from(self.offsets.vmctx_memories())),
+                offset: Imm64::new(self.offsets.vmctx_memories()),
                 global_type: pointer_type,
-                readonly: true,
             });
             self.memories_base = Some(new_base);
             new_base
@@ -231,11 +227,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.globals_base.unwrap_or_else(|| {
             let pointer_type = self.pointer_type();
             let vmctx = self.vmctx(func);
-            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+            let new_base = func.create_global_value(ir::GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Offset32::new(i32::from(self.offsets.vmctx_globals())),
+                offset: Imm64::new(self.offsets.vmctx_globals()),
                 global_type: pointer_type,
-                readonly: true,
             });
             self.globals_base = Some(new_base);
             new_base
@@ -246,11 +241,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.signature_ids_base.unwrap_or_else(|| {
             let pointer_type = self.pointer_type();
             let vmctx = self.vmctx(func);
-            let new_base = func.create_global_value(ir::GlobalValueData::Load {
+            let new_base = func.create_global_value(ir::GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Offset32::new(i32::from(self.offsets.vmctx_signature_ids())),
+                offset: Imm64::new(self.offsets.vmctx_signature_ids()),
                 global_type: pointer_type,
-                readonly: true,
             });
             self.signature_ids_base = Some(new_base);
             new_base

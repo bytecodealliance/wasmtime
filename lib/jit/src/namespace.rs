@@ -7,7 +7,6 @@ use action::{ActionError, ActionOutcome, RuntimeValue};
 use compiler::Compiler;
 use cranelift_entity::PrimaryMap;
 use resolver::Resolver;
-use std::boxed::Box;
 use std::collections::HashMap;
 use std::string::String;
 use wasmtime_runtime::{Export, Instance};
@@ -26,7 +25,7 @@ pub struct Namespace {
     names: HashMap<String, InstanceIndex>,
 
     /// The instances, available by index.
-    instances: PrimaryMap<InstanceIndex, Box<Instance>>,
+    instances: PrimaryMap<InstanceIndex, Instance>,
 }
 
 impl Namespace {
@@ -40,11 +39,7 @@ impl Namespace {
 
     /// Install a new `Instance` in this `Namespace`, optionally with the
     /// given name, and return its index.
-    pub fn instance(
-        &mut self,
-        instance_name: Option<&str>,
-        instance: Box<Instance>,
-    ) -> InstanceIndex {
+    pub fn instance(&mut self, instance_name: Option<&str>, instance: Instance) -> InstanceIndex {
         let index = self.instances.push(instance);
         if let Some(instance_name) = instance_name {
             self.names.insert(instance_name.into(), index);

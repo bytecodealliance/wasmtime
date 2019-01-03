@@ -159,7 +159,7 @@ impl CompiledModule {
     /// Note that if only one instance of this module is needed, it may be more
     /// efficient to call the top-level `instantiate`, since that avoids copying
     /// the data initializers.
-    pub fn instantiate(&mut self) -> Result<Box<Instance>, InstantiationError> {
+    pub fn instantiate(&mut self) -> Result<Instance, InstantiationError> {
         let data_initializers = self
             .data_initializers
             .iter()
@@ -205,7 +205,7 @@ pub fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
     resolver: &mut Resolver,
-) -> Result<Box<Instance>, SetupError> {
+) -> Result<Instance, SetupError> {
     let raw = RawCompiledModule::new(compiler, data, resolver)?;
 
     Instance::new(
