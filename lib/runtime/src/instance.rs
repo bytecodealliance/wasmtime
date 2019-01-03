@@ -370,7 +370,7 @@ impl InstanceContents {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
     ///
-    /// TODO:This and `imported_memory_size` are currently unsafe because
+    /// TODO: This and `imported_memory_size` are currently unsafe because
     /// they dereference the memory import's pointers.
     pub(crate) unsafe fn imported_memory_grow(
         &mut self,
