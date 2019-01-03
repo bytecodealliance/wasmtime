@@ -4,8 +4,8 @@
 use cranelift_entity::EntityRef;
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, GlobalInit,
-    SignatureIndex,
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use export::Export;
 use imports::Imports;
@@ -17,20 +17,15 @@ use std::string::String;
 use table::Table;
 use traphandlers::wasmtime_call;
 use vmcontext::{
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition,
-    VMSharedSignatureIndex, VMTableDefinition,
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
+    VMTableImport,
 };
 use wasmtime_environ::{DataInitializer, Module};
 
-/// An Instance of a WebAssemby module.
-///
-/// Note that compiled wasm code passes around raw pointers to `Instance`, so
-/// this shouldn't be moved.
+/// The runtime state of an `Instance`.
 #[derive(Debug)]
-pub struct Instance {
-    /// The `Module` this `Instance` was instantiated from.
-    module: Rc<Module>,
-
+struct State {
     /// WebAssembly linear memory data.
     memories: BoxedSlice<DefinedMemoryIndex, LinearMemory>,
 
@@ -57,6 +52,83 @@ pub struct Instance {
 
     /// Context pointer used by compiled wasm code.
     vmctx: VMContext,
+}
+
+impl State {
+    /// Return the indexed `VMFunctionImport`.
+    fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
+        assert!(index.index() < self.vmctx_imports.functions.len());
+        unsafe { self.vmctx.imported_function(index) }
+    }
+
+    /// Return a reference to imported table `index`.
+    fn imported_table(&self, index: TableIndex) -> &VMTableImport {
+        assert!(index.index() < self.vmctx_imports.tables.len());
+        unsafe { self.vmctx.imported_table(index) }
+    }
+
+    /// Return a reference to imported memory `index`.
+    fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
+        assert!(index.index() < self.vmctx_imports.memories.len());
+        unsafe { self.vmctx.imported_memory(index) }
+    }
+
+    /// Return a reference to imported global `index`.
+    fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
+        assert!(index.index() < self.vmctx_imports.globals.len());
+        unsafe { self.vmctx.imported_global(index) }
+    }
+
+    /// Return a reference to locally-defined table `index`.
+    #[allow(dead_code)]
+    fn table(&self, index: DefinedTableIndex) -> &VMTableDefinition {
+        assert!(index.index() < self.tables.len());
+        unsafe { self.vmctx.table(index) }
+    }
+
+    /// Return a mutable reference to locally-defined table `index`.
+    fn table_mut(&mut self, index: DefinedTableIndex) -> &mut VMTableDefinition {
+        assert!(index.index() < self.tables.len());
+        unsafe { self.vmctx.table_mut(index) }
+    }
+
+    /// Return a reference to locally-defined linear memory `index`.
+    fn memory(&self, index: DefinedMemoryIndex) -> &VMMemoryDefinition {
+        assert!(index.index() < self.memories.len());
+        unsafe { self.vmctx.memory(index) }
+    }
+
+    /// Return a mutable reference to locally-defined linear memory `index`.
+    fn memory_mut(&mut self, index: DefinedMemoryIndex) -> &mut VMMemoryDefinition {
+        assert!(index.index() < self.memories.len());
+        unsafe { self.vmctx.memory_mut(index) }
+    }
+
+    /// Return a reference to locally-defined global variable `index`.
+    #[allow(dead_code)]
+    fn global(&self, index: DefinedGlobalIndex) -> &VMGlobalDefinition {
+        assert!(index.index() < self.vmctx_globals.len());
+        unsafe { self.vmctx.global(index) }
+    }
+
+    /// Return a mutable reference to locally-defined global variable `index`.
+    fn global_mut(&mut self, index: DefinedGlobalIndex) -> &mut VMGlobalDefinition {
+        assert!(index.index() < self.vmctx_globals.len());
+        unsafe { self.vmctx.global_mut(index) }
+    }
+}
+
+/// An Instance of a WebAssemby module.
+///
+/// Note that compiled wasm code passes around raw pointers to `Instance`, so
+/// this shouldn't be moved.
+#[derive(Debug)]
+pub struct Instance {
+    /// The `Module` this `Instance` was instantiated from.
+    module: Rc<Module>,
+
+    /// The runtime state of this instance.
+    state: State,
 }
 
 impl Instance {
@@ -106,24 +178,26 @@ impl Instance {
 
         let mut result = Box::new(Self {
             module,
-            memories,
-            tables,
-            vmshared_signatures,
-            vmctx_imports,
-            finished_functions,
-            vmctx_tables,
-            vmctx_memories,
-            vmctx_globals,
-            vmctx: VMContext::new(
-                vmctx_imported_functions_ptr,
-                vmctx_imported_tables_ptr,
-                vmctx_imported_memories_ptr,
-                vmctx_imported_globals_ptr,
-                vmctx_tables_ptr,
-                vmctx_memories_ptr,
-                vmctx_globals_ptr,
-                vmctx_shared_signatures_ptr,
-            ),
+            state: State {
+                memories,
+                tables,
+                vmshared_signatures,
+                vmctx_imports,
+                finished_functions,
+                vmctx_tables,
+                vmctx_memories,
+                vmctx_globals,
+                vmctx: VMContext::new(
+                    vmctx_imported_functions_ptr,
+                    vmctx_imported_tables_ptr,
+                    vmctx_imported_memories_ptr,
+                    vmctx_imported_globals_ptr,
+                    vmctx_tables_ptr,
+                    vmctx_memories_ptr,
+                    vmctx_globals_ptr,
+                    vmctx_shared_signatures_ptr,
+                ),
+            },
         });
 
         // Check initializer bounds before initializing anything.
@@ -153,7 +227,7 @@ impl Instance {
 
     /// Return a reference to the vmctx used by compiled wasm code.
     pub fn vmctx(&self) -> &VMContext {
-        &self.vmctx
+        &self.state.vmctx
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
@@ -163,7 +237,7 @@ impl Instance {
 
     /// Return a mutable reference to the vmctx used by compiled wasm code.
     pub fn vmctx_mut(&mut self) -> &mut VMContext {
-        &mut self.vmctx
+        &mut self.state.vmctx
     }
 
     /// Return a mutable raw pointer to the vmctx used by compiled wasm code.
@@ -173,7 +247,7 @@ impl Instance {
 
     /// Return the offset from the vmctx pointer to its containing Instance.
     pub(crate) fn vmctx_offset() -> isize {
-        offset_of!(Self, vmctx) as isize
+        (offset_of!(Self, state) + offset_of!(State, vmctx)) as isize
     }
 
     /// Grow memory by the specified amount of pages.
@@ -182,20 +256,22 @@ impl Instance {
     /// of pages.
     pub fn memory_grow(&mut self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
         let result = self
+            .state
             .memories
             .get_mut(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
             .grow(delta);
 
         // Keep current the VMContext pointers used by compiled wasm code.
-        self.vmctx_memories[memory_index] = self.memories[memory_index].vmmemory();
+        self.state.vmctx_memories[memory_index] = self.state.memories[memory_index].vmmemory();
 
         result
     }
 
     /// Returns the number of allocated wasm pages.
     pub fn memory_size(&mut self, memory_index: DefinedMemoryIndex) -> u32 {
-        self.memories
+        self.state
+            .memories
             .get(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
             .size()
@@ -204,14 +280,15 @@ impl Instance {
     /// Test whether any of the objects inside this instance require signal
     /// handlers to catch out of bounds accesses.
     pub(crate) fn needs_signal_handlers(&self) -> bool {
-        self.memories
+        self.state
+            .memories
             .values()
             .any(|memory| memory.needs_signal_handlers)
     }
 
     /// Return the number of imported memories.
     pub(crate) fn num_imported_memories(&self) -> usize {
-        self.vmctx_imports.memories.len()
+        self.state.vmctx_imports.memories.len()
     }
 
     /// Invoke the WebAssembly start function of the instance, if one is present.
@@ -220,6 +297,7 @@ impl Instance {
             let (callee_address, callee_vmctx) = match self.module.defined_func_index(start_index) {
                 Some(defined_start_index) => {
                     let body = *self
+                        .state
                         .finished_functions
                         .get(defined_start_index)
                         .expect("start function index is out of bounds");
@@ -227,7 +305,7 @@ impl Instance {
                 }
                 None => {
                     assert!(start_index.index() < self.module.imported_funcs.len());
-                    let import = unsafe { self.vmctx.imported_function(start_index) };
+                    let import = self.state.imported_function(start_index);
                     (import.body, import.vmctx)
                 }
             };
@@ -249,11 +327,11 @@ impl Instance {
                     let (address, vmctx) =
                         if let Some(def_index) = self.module.defined_func_index(*index) {
                             (
-                                self.finished_functions[def_index],
-                                &mut self.vmctx as *mut VMContext,
+                                self.state.finished_functions[def_index],
+                                &mut self.state.vmctx as *mut VMContext,
                             )
                         } else {
-                            let import = unsafe { self.vmctx.imported_function(*index) };
+                            let import = self.state.imported_function(*index);
                             (import.body, import.vmctx)
                         };
                     Export::Function {
@@ -263,17 +341,16 @@ impl Instance {
                     }
                 }
                 wasmtime_environ::Export::Table(index) => {
-                    let (definition, vmctx) = if let Some(def_index) =
-                        self.module.defined_table_index(*index)
-                    {
-                        (
-                            unsafe { self.vmctx.table_mut(def_index) } as *mut VMTableDefinition,
-                            &mut self.vmctx as *mut VMContext,
-                        )
-                    } else {
-                        let import = unsafe { self.vmctx.imported_table(*index) };
-                        (import.from, import.vmctx)
-                    };
+                    let (definition, vmctx) =
+                        if let Some(def_index) = self.module.defined_table_index(*index) {
+                            (
+                                self.state.table_mut(def_index) as *mut VMTableDefinition,
+                                &mut self.state.vmctx as *mut VMContext,
+                            )
+                        } else {
+                            let import = self.state.imported_table(*index);
+                            (import.from, import.vmctx)
+                        };
                     Export::Table {
                         definition,
                         vmctx,
@@ -281,17 +358,16 @@ impl Instance {
                     }
                 }
                 wasmtime_environ::Export::Memory(index) => {
-                    let (definition, vmctx) = if let Some(def_index) =
-                        self.module.defined_memory_index(*index)
-                    {
-                        (
-                            unsafe { self.vmctx.memory_mut(def_index) } as *mut VMMemoryDefinition,
-                            &mut self.vmctx as *mut VMContext,
-                        )
-                    } else {
-                        let import = unsafe { self.vmctx.imported_memory(*index) };
-                        (import.from, import.vmctx)
-                    };
+                    let (definition, vmctx) =
+                        if let Some(def_index) = self.module.defined_memory_index(*index) {
+                            (
+                                self.state.memory_mut(def_index) as *mut VMMemoryDefinition,
+                                &mut self.state.vmctx as *mut VMContext,
+                            )
+                        } else {
+                            let import = self.state.imported_memory(*index);
+                            (import.from, import.vmctx)
+                        };
                     Export::Memory {
                         definition,
                         vmctx,
@@ -300,9 +376,9 @@ impl Instance {
                 }
                 wasmtime_environ::Export::Global(index) => Export::Global {
                     definition: if let Some(def_index) = self.module.defined_global_index(*index) {
-                        unsafe { self.vmctx.global_mut(def_index) }
+                        self.state.global_mut(def_index)
                     } else {
-                        unsafe { self.vmctx.imported_global(*index).from }
+                        self.state.imported_global(*index).from
                     },
                     global: self.module.globals[*index],
                 },
@@ -328,9 +404,9 @@ fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationE
         let mut start = init.offset;
         if let Some(base) = init.base {
             let global = if let Some(def_index) = instance.module.defined_global_index(base) {
-                unsafe { instance.vmctx.global_mut(def_index) }
+                instance.state.global_mut(def_index)
             } else {
-                unsafe { instance.vmctx.imported_global(base).from }
+                instance.state.imported_global(base).from
             };
             start += unsafe { *(&*global).as_u32() } as usize;
         }
@@ -339,13 +415,13 @@ fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationE
         let slice = if let Some(defined_table_index) =
             instance.module.defined_table_index(init.table_index)
         {
-            instance.tables[defined_table_index].as_mut()
+            instance.state.tables[defined_table_index].as_mut()
         } else {
-            let import = &instance.vmctx_imports.tables[init.table_index];
+            let import = &instance.state.vmctx_imports.tables[init.table_index];
             let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
             let foreign_table = unsafe { &mut *(import).from };
             let foreign_index = foreign_instance.vmctx().table_index(foreign_table);
-            foreign_instance.tables[foreign_index].as_mut()
+            foreign_instance.state.tables[foreign_index].as_mut()
         };
 
         if slice.get_mut(start..start + init.elements.len()).is_none() {
@@ -367,9 +443,9 @@ fn check_memory_init_bounds(
         let mut start = init.location.offset;
         if let Some(base) = init.location.base {
             let global = if let Some(def_index) = instance.module.defined_global_index(base) {
-                unsafe { instance.vmctx.global_mut(def_index) }
+                instance.state.global_mut(def_index)
             } else {
-                unsafe { instance.vmctx.imported_global(base).from }
+                instance.state.imported_global(base).from
             };
             start += unsafe { *(&*global).as_u32() } as usize;
         }
@@ -379,13 +455,13 @@ fn check_memory_init_bounds(
             .module
             .defined_memory_index(init.location.memory_index)
         {
-            unsafe { instance.vmctx.memory(defined_memory_index) }
+            instance.state.memory(defined_memory_index)
         } else {
-            let import = &instance.vmctx_imports.memories[init.location.memory_index];
+            let import = &instance.state.vmctx_imports.memories[init.location.memory_index];
             let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
             let foreign_memory = unsafe { &mut *(import).from };
             let foreign_index = foreign_instance.vmctx().memory_index(foreign_memory);
-            unsafe { foreign_instance.vmctx.memory(foreign_index) }
+            foreign_instance.state.memory(foreign_index)
         };
         let mem_slice = unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
 
@@ -417,9 +493,9 @@ fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> 
         let mut start = init.offset;
         if let Some(base) = init.base {
             let global = if let Some(def_index) = instance.module.defined_global_index(base) {
-                unsafe { instance.vmctx.global_mut(def_index) }
+                instance.state.global_mut(def_index)
             } else {
-                unsafe { instance.vmctx.imported_global(base).from }
+                instance.state.imported_global(base).from
             };
             start += unsafe { *(&*global).as_i32() } as u32 as usize;
         }
@@ -427,25 +503,25 @@ fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> 
         let slice = if let Some(defined_table_index) =
             instance.module.defined_table_index(init.table_index)
         {
-            instance.tables[defined_table_index].as_mut()
+            instance.state.tables[defined_table_index].as_mut()
         } else {
-            let import = &instance.vmctx_imports.tables[init.table_index];
+            let import = &instance.state.vmctx_imports.tables[init.table_index];
             let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
             let foreign_table = unsafe { &mut *(import).from };
             let foreign_index = foreign_instance.vmctx().table_index(foreign_table);
-            foreign_instance.tables[foreign_index].as_mut()
+            foreign_instance.state.tables[foreign_index].as_mut()
         };
         if let Some(subslice) = slice.get_mut(start..start + init.elements.len()) {
             for (i, func_idx) in init.elements.iter().enumerate() {
                 let callee_sig = instance.module.functions[*func_idx];
                 let (callee_ptr, callee_vmctx) =
                     if let Some(index) = instance.module.defined_func_index(*func_idx) {
-                        (instance.finished_functions[index], vmctx)
+                        (instance.state.finished_functions[index], vmctx)
                     } else {
-                        let imported_func = &instance.vmctx_imports.functions[*func_idx];
+                        let imported_func = &instance.state.vmctx_imports.functions[*func_idx];
                         (imported_func.body, imported_func.vmctx)
                     };
-                let type_index = instance.vmshared_signatures[callee_sig];
+                let type_index = instance.state.vmshared_signatures[callee_sig];
                 subslice[i] = VMCallerCheckedAnyfunc {
                     func_ptr: callee_ptr,
                     type_index,
@@ -484,9 +560,9 @@ fn initialize_memories(
         let mut start = init.location.offset;
         if let Some(base) = init.location.base {
             let global = if let Some(def_index) = instance.module.defined_global_index(base) {
-                unsafe { instance.vmctx.global_mut(def_index) }
+                instance.state.global_mut(def_index)
             } else {
-                unsafe { instance.vmctx.imported_global(base).from }
+                instance.state.imported_global(base).from
             };
             start += unsafe { *(&*global).as_i32() } as u32 as usize;
         }
@@ -495,13 +571,13 @@ fn initialize_memories(
             .module
             .defined_memory_index(init.location.memory_index)
         {
-            unsafe { instance.vmctx.memory(defined_memory_index) }
+            instance.state.memory(defined_memory_index)
         } else {
-            let import = &instance.vmctx_imports.memories[init.location.memory_index];
+            let import = &instance.state.vmctx_imports.memories[init.location.memory_index];
             let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
             let foreign_memory = unsafe { &mut *(import).from };
             let foreign_index = foreign_instance.vmctx().memory_index(foreign_memory);
-            unsafe { foreign_instance.vmctx.memory(foreign_index) }
+            foreign_instance.state.memory(foreign_index)
         };
         let mem_slice = unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
         if let Some(to_init) = mem_slice.get_mut(start..start + init.data.len()) {
@@ -533,7 +609,7 @@ fn initialize_globals(instance: &mut Instance) {
     let num_imports = instance.module.imported_globals.len();
     for (index, global) in instance.module.globals.iter().skip(num_imports) {
         let def_index = instance.module.defined_global_index(index).unwrap();
-        let to: *mut VMGlobalDefinition = unsafe { instance.vmctx.global_mut(def_index) };
+        let to: *mut VMGlobalDefinition = instance.state.global_mut(def_index);
         match global.initializer {
             GlobalInit::I32Const(x) => *unsafe { (*to).as_i32_mut() } = x,
             GlobalInit::I64Const(x) => *unsafe { (*to).as_i64_mut() } = x,
@@ -541,9 +617,9 @@ fn initialize_globals(instance: &mut Instance) {
             GlobalInit::F64Const(x) => *unsafe { (*to).as_f64_bits_mut() } = x,
             GlobalInit::GetGlobal(x) => {
                 let from = if let Some(def_x) = instance.module.defined_global_index(x) {
-                    unsafe { instance.vmctx.global_mut(def_x) }
+                    instance.state.global_mut(def_x)
                 } else {
-                    unsafe { instance.vmctx.imported_global(x).from }
+                    instance.state.imported_global(x).from
                 };
                 unsafe { *to = *from };
             }
