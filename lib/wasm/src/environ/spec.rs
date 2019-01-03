@@ -340,6 +340,9 @@ pub trait ModuleEnvironment<'data> {
     );
 
     /// Provides the contents of a function body.
+    ///
+    /// Note there's no `reserve_function_bodies` function because the number of
+    /// functions is already provided by `reserve_func_types`.
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()>;
 
     /// Provides the number of data initializers up front. By default this does nothing, but
