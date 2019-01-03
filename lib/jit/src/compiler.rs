@@ -16,7 +16,7 @@ use std::vec::Vec;
 use target_tunables::target_tunables;
 use wasmtime_environ::cranelift;
 use wasmtime_environ::{Compilation, CompileError, Module, Relocations, Tunables};
-use wasmtime_runtime::{InstantiationError, VMFunctionBody};
+use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
 
 /// A WebAssembly code JIT compiler.
 ///
@@ -31,6 +31,7 @@ pub struct Compiler {
 
     code_memory: CodeMemory,
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
+    signatures: SignatureRegistry,
 
     /// The `FunctionBuilderContext`, shared between trampline function compilations.
     fn_builder_ctx: FunctionBuilderContext,
@@ -43,6 +44,7 @@ impl Compiler {
             isa,
             code_memory: CodeMemory::new(),
             trampoline_park: HashMap::new(),
+            signatures: SignatureRegistry::new(),
             fn_builder_ctx: FunctionBuilderContext::new(),
         }
     }
@@ -114,6 +116,10 @@ impl Compiler {
     /// Make memory containing compiled code executable.
     pub(crate) fn publish_compiled_code(&mut self) {
         self.code_memory.publish();
+    }
+
+    pub(crate) fn signatures(&mut self) -> &mut SignatureRegistry {
+        &mut self.signatures
     }
 }
 

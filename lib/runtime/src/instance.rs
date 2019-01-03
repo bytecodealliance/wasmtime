@@ -5,11 +5,11 @@ use cranelift_entity::EntityRef;
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, GlobalInit,
+    SignatureIndex,
 };
 use export::Export;
 use imports::Imports;
 use memory::LinearMemory;
-use sig_registry::SignatureRegistry;
 use signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 use std::rc::Rc;
 use std::slice;
@@ -18,7 +18,7 @@ use table::Table;
 use traphandlers::wasmtime_call;
 use vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition,
-    VMTableDefinition,
+    VMSharedSignatureIndex, VMTableDefinition,
 };
 use wasmtime_environ::{DataInitializer, Module};
 
@@ -38,8 +38,7 @@ pub struct Instance {
     tables: BoxedSlice<DefinedTableIndex, Table>,
 
     /// Function Signature IDs.
-    /// FIXME: This should be shared across instances rather than per-Instance.
-    sig_registry: SignatureRegistry,
+    vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
 
     /// Resolved imports.
     vmctx_imports: Imports,
@@ -67,8 +66,8 @@ impl Instance {
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         mut vmctx_imports: Imports,
         data_initializers: &[DataInitializer],
+        mut vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     ) -> Result<Box<Self>, InstantiationError> {
-        let mut sig_registry = create_and_initialize_signatures(&module);
         let mut tables = create_tables(&module);
         let mut memories = create_memories(&module)?;
 
@@ -102,13 +101,14 @@ impl Instance {
         let vmctx_tables_ptr = vmctx_tables.values_mut().into_slice().as_mut_ptr();
         let vmctx_memories_ptr = vmctx_memories.values_mut().into_slice().as_mut_ptr();
         let vmctx_globals_ptr = vmctx_globals.values_mut().into_slice().as_mut_ptr();
-        let vmctx_shared_signatures_ptr = sig_registry.vmshared_signatures();
+        let vmctx_shared_signatures_ptr =
+            vmshared_signatures.values_mut().into_slice().as_mut_ptr();
 
         let mut result = Box::new(Self {
             module,
             memories,
             tables,
-            sig_registry,
+            vmshared_signatures,
             vmctx_imports,
             finished_functions,
             vmctx_tables,
@@ -399,14 +399,6 @@ fn check_memory_init_bounds(
     Ok(())
 }
 
-fn create_and_initialize_signatures(module: &Module) -> SignatureRegistry {
-    let mut sig_registry = SignatureRegistry::new();
-    for (sig_index, sig) in module.signatures.iter() {
-        sig_registry.register(sig_index, sig);
-    }
-    sig_registry
-}
-
 /// Allocate memory for just the tables of the current module.
 fn create_tables(module: &Module) -> BoxedSlice<DefinedTableIndex, Table> {
     let num_imports = module.imported_tables.len();
@@ -453,7 +445,7 @@ fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> 
                         let imported_func = &instance.vmctx_imports.functions[*func_idx];
                         (imported_func.body, imported_func.vmctx)
                     };
-                let type_index = instance.sig_registry.lookup(callee_sig);
+                let type_index = instance.vmshared_signatures[callee_sig];
                 subslice[i] = VMCallerCheckedAnyfunc {
                     func_ptr: callee_ptr,
                     type_index,

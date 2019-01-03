@@ -216,12 +216,14 @@ pub fn instantiate_spectest() -> Result<Box<Instance>, InstantiationError> {
 
     let imports = Imports::none();
     let data_initializers = Vec::new();
+    let signatures = PrimaryMap::new();
 
     CompiledModule::from_parts(
         module,
         finished_functions.into_boxed_slice(),
         imports,
         data_initializers.into_boxed_slice(),
+        signatures.into_boxed_slice(),
     )
     .instantiate()
 }

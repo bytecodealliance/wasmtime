@@ -5,7 +5,7 @@
 
 use compiler::Compiler;
 use cranelift_entity::{BoxedSlice, PrimaryMap};
-use cranelift_wasm::DefinedFuncIndex;
+use cranelift_wasm::{DefinedFuncIndex, SignatureIndex};
 use link::link_module;
 use resolver::Resolver;
 use std::boxed::Box;
@@ -15,7 +15,9 @@ use std::vec::Vec;
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
 };
-use wasmtime_runtime::{Imports, Instance, InstantiationError, VMFunctionBody};
+use wasmtime_runtime::{
+    Imports, Instance, InstantiationError, VMFunctionBody, VMSharedSignatureIndex,
+};
 
 /// An error condition while setting up a wasm instance, be it validation,
 /// compilation, or instantiation.
@@ -42,6 +44,7 @@ struct RawCompiledModule<'data> {
     finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
     imports: Imports,
     data_initializers: Box<[DataInitializer<'data>]>,
+    signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
 }
 
 impl<'data> RawCompiledModule<'data> {
@@ -79,6 +82,16 @@ impl<'data> RawCompiledModule<'data> {
                 .collect::<PrimaryMap<_, _>>()
                 .into_boxed_slice();
 
+        // Compute indices into the shared signature table.
+        let signatures = {
+            let signature_registry = compiler.signatures();
+            let mut signatures = PrimaryMap::new();
+            for sig in translation.module.signatures.values() {
+                signatures.push(signature_registry.register(sig));
+            }
+            signatures
+        };
+
         // Make all code compiled thus far executable.
         compiler.publish_compiled_code();
 
@@ -87,6 +100,7 @@ impl<'data> RawCompiledModule<'data> {
             finished_functions,
             imports,
             data_initializers: translation.data_initializers.into_boxed_slice(),
+            signatures: signatures.into_boxed_slice(),
         })
     }
 }
@@ -97,6 +111,7 @@ pub struct CompiledModule {
     finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
     imports: Imports,
     data_initializers: Box<[OwnedDataInitializer]>,
+    signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
 }
 
 impl CompiledModule {
@@ -118,6 +133,7 @@ impl CompiledModule {
                 .map(OwnedDataInitializer::new)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
+            signatures: raw.signatures.clone(),
         })
     }
 
@@ -127,12 +143,14 @@ impl CompiledModule {
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         imports: Imports,
         data_initializers: Box<[OwnedDataInitializer]>,
+        signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     ) -> Self {
         Self {
             module: Rc::new(module),
             finished_functions,
             imports,
             data_initializers,
+            signatures,
         }
     }
 
@@ -155,6 +173,7 @@ impl CompiledModule {
             self.finished_functions.clone(),
             self.imports.clone(),
             &data_initializers,
+            self.signatures.clone(),
         )
     }
 }
@@ -194,6 +213,7 @@ pub fn instantiate(
         raw.finished_functions,
         raw.imports,
         &*raw.data_initializers,
+        raw.signatures,
     )
     .map_err(SetupError::Instantiate)
 }
