@@ -136,9 +136,9 @@ impl Instance {
         initialize_globals(&mut *result);
 
         // Rather than writing inline assembly to jump to the code region, we use the fact that
-        // the Rust ABI for calling a function with no arguments and no return values matches the one
-        // of the generated code. Thanks to this, we can transmute the code region into a first-class
-        // Rust function and call it.
+        // the Rust ABI for calling a function with no arguments and no return values matches the
+        // one of the generated code. Thanks to this, we can transmute the code region into a
+        // first-class Rust function and call it.
         // Ensure that our signal handlers are ready for action.
         // TODO: Move these calls out of `Instance`.
         wasmtime_init_eager();
