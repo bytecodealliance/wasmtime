@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::string::String;
 use wasmtime_runtime::{Export, Instance};
 
-/// An opaque reference to an `Instance`.
+/// An opaque reference to an `Instance` within a `Namespace`.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct InstanceIndex(u32);
 entity_impl!(InstanceIndex, "instance");
