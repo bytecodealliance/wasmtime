@@ -58,7 +58,8 @@ pub extern "C" fn wasmtime_init_eager() {
 }
 
 thread_local! {
-    static TRAP_CONTEXT: RefCell<TrapContext> = RefCell::new(TrapContext { triedToInstallSignalHandlers: false, haveSignalHandlers: false });
+    static TRAP_CONTEXT: RefCell<TrapContext> =
+        RefCell::new(TrapContext { triedToInstallSignalHandlers: false, haveSignalHandlers: false });
 }
 
 /// Assuming `EnsureEagerProcessSignalHandlers` has already been called,
