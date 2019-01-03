@@ -25,7 +25,7 @@ impl Table {
 
         match plan.style {
             TableStyle::CallerChecksSignature => {
-                let mut vec = Vec::new();
+                let mut vec = Vec::with_capacity(plan.table.minimum as usize);
                 vec.resize(
                     plan.table.minimum as usize,
                     VMCallerCheckedAnyfunc::default(),
