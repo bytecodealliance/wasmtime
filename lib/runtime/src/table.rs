@@ -2,8 +2,8 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
+use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use cranelift_wasm::TableElementType;
-use vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use wasmtime_environ::{TablePlan, TableStyle};
 
 /// A table instance.

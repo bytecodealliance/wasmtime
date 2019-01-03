@@ -1,3 +1,6 @@
+use crate::module::{MemoryPlan, MemoryStyle, Module, TableStyle};
+use crate::vmoffsets::VMOffsets;
+use crate::WASM_PAGE_SIZE;
 use cast;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
@@ -13,11 +16,8 @@ use cranelift_wasm::{
     self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
     WasmResult,
 };
-use module::{MemoryPlan, MemoryStyle, Module, TableStyle};
 use std::clone::Clone;
 use std::vec::Vec;
-use vmoffsets::VMOffsets;
-use WASM_PAGE_SIZE;
 
 /// Compute an `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
@@ -394,7 +394,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_call_indirect(
         &mut self,
-        mut pos: FuncCursor,
+        mut pos: FuncCursor<'_>,
         table_index: TableIndex,
         table: ir::Table,
         sig_index: SignatureIndex,
@@ -462,7 +462,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_call(
         &mut self,
-        mut pos: FuncCursor,
+        mut pos: FuncCursor<'_>,
         callee_index: FuncIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
@@ -501,7 +501,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_memory_grow(
         &mut self,
-        mut pos: FuncCursor,
+        mut pos: FuncCursor<'_>,
         index: MemoryIndex,
         _heap: ir::Heap,
         val: ir::Value,
@@ -517,7 +517,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_memory_size(
         &mut self,
-        mut pos: FuncCursor,
+        mut pos: FuncCursor<'_>,
         index: MemoryIndex,
         _heap: ir::Heap,
     ) -> WasmResult<ir::Value> {

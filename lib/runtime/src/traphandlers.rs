@@ -1,13 +1,13 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
+use crate::signalhandlers::jmp_buf;
+use crate::vmcontext::{VMContext, VMFunctionBody};
 use libc::c_int;
-use signalhandlers::jmp_buf;
 use std::cell::{Cell, RefCell};
 use std::mem;
 use std::ptr;
 use std::string::String;
-use vmcontext::{VMContext, VMFunctionBody};
 
 // Currently we uset setjmp/longjmp to unwind out of a signal handler
 // and back to the point where WebAssembly was called (via `call_wasm`).

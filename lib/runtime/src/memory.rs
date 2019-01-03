@@ -2,10 +2,10 @@
 //!
 //! `LinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
 
-use mmap::Mmap;
+use crate::mmap::Mmap;
+use crate::vmcontext::VMMemoryDefinition;
 use region;
 use std::string::String;
-use vmcontext::VMMemoryDefinition;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A linear memory instance.

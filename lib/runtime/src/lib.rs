@@ -24,22 +24,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate cranelift_codegen;
-extern crate cranelift_entity;
-extern crate cranelift_wasm;
-extern crate errno;
-extern crate region;
-extern crate wasmtime_environ;
+use errno;
+use region;
+
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
 #[macro_use]
 extern crate lazy_static;
-extern crate libc;
+use libc;
 #[macro_use]
 extern crate memoffset;
-extern crate cast;
-extern crate failure;
+use cast;
+use failure;
 #[macro_use]
 extern crate failure_derive;
 #[cfg(target_os = "windows")]
@@ -58,14 +55,14 @@ mod vmcontext;
 
 pub mod libcalls;
 
-pub use export::Export;
-pub use imports::Imports;
-pub use instance::{Instance, InstantiationError, LinkError};
-pub use mmap::Mmap;
-pub use sig_registry::SignatureRegistry;
-pub use signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
-pub use traphandlers::{wasmtime_call, wasmtime_call_trampoline};
-pub use vmcontext::{
+pub use crate::export::Export;
+pub use crate::imports::Imports;
+pub use crate::instance::{Instance, InstantiationError, LinkError};
+pub use crate::mmap::Mmap;
+pub use crate::sig_registry::SignatureRegistry;
+pub use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
+pub use crate::traphandlers::{wasmtime_call, wasmtime_call_trampoline};
+pub use crate::vmcontext::{
     VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
     VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
 };

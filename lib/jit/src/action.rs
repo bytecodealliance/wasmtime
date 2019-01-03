@@ -1,8 +1,8 @@
 //! Support for performing actions with a wasm module from the outside.
 
-use compiler::Compiler;
+use crate::compiler::Compiler;
+use crate::instantiate::SetupError;
 use cranelift_codegen::ir;
-use instantiate::SetupError;
 use std::cmp::max;
 use std::string::String;
 use std::vec::Vec;
@@ -77,7 +77,7 @@ impl RuntimeValue {
 }
 
 impl fmt::Display for RuntimeValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RuntimeValue::I32(x) => write!(f, "{}: i32", x),
             RuntimeValue::I64(x) => write!(f, "{}: i64", x),

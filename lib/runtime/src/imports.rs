@@ -1,6 +1,6 @@
+use crate::vmcontext::{VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport};
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
-use vmcontext::{VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport};
 
 /// Resolved import pointers.
 #[derive(Debug, Clone)]

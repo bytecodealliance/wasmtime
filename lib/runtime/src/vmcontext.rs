@@ -1,7 +1,7 @@
 //! This file declares `VMContext` and several related structs which contain
 //! fields that compiled wasm code accesses directly.
 
-use instance::InstanceContents;
+use crate::instance::InstanceContents;
 use std::{ptr, u32};
 
 /// An imported function.

@@ -2,11 +2,11 @@
 //! to exports. This file provides one possible way to manage multiple instances
 //! and resolve imports to exports among them.
 
-use action::{get, inspect_memory, invoke};
-use action::{ActionError, ActionOutcome, RuntimeValue};
-use compiler::Compiler;
+use crate::action::{get, inspect_memory, invoke};
+use crate::action::{ActionError, ActionOutcome, RuntimeValue};
+use crate::compiler::Compiler;
+use crate::resolver::Resolver;
 use cranelift_entity::PrimaryMap;
-use resolver::Resolver;
 use std::collections::HashMap;
 use std::string::String;
 use wasmtime_runtime::{Export, Instance};

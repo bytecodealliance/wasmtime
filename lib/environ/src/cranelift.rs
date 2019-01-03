@@ -1,6 +1,11 @@
 //! Support for compiling with Cranelift.
 
-use compilation::{Compilation, CompileError, Relocation, RelocationTarget, Relocations};
+use crate::compilation::{Compilation, CompileError, Relocation, RelocationTarget, Relocations};
+use crate::func_environ::{
+    get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
+    get_memory32_grow_name, get_memory32_size_name, FuncEnvironment,
+};
+use crate::module::Module;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
@@ -8,11 +13,6 @@ use cranelift_codegen::isa;
 use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
-use func_environ::{
-    get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
-    get_memory32_grow_name, get_memory32_size_name, FuncEnvironment,
-};
-use module::Module;
 use std::vec::Vec;
 
 /// Implementation of a relocation sink that just saves all the information for later
@@ -85,7 +85,7 @@ impl RelocSink {
 pub fn compile_module<'data, 'module>(
     module: &'module Module,
     function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
-    isa: &isa::TargetIsa,
+    isa: &dyn isa::TargetIsa,
 ) -> Result<(Compilation, Relocations), CompileError> {
     let mut functions = PrimaryMap::new();
     let mut relocations = PrimaryMap::new();

@@ -22,21 +22,12 @@
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate cranelift_entity;
-extern crate cranelift_wasm;
-extern crate failure;
+use failure;
 #[macro_use]
 extern crate failure_derive;
-extern crate target_lexicon;
-extern crate wabt;
-extern crate wasmparser;
-extern crate wasmtime_environ;
-extern crate wasmtime_jit;
-extern crate wasmtime_runtime;
 
 mod spectest;
 mod wast;
 
-pub use spectest::instantiate_spectest;
-pub use wast::{WastContext, WastError};
+pub use crate::spectest::instantiate_spectest;
+pub use crate::wast::{WastContext, WastError};

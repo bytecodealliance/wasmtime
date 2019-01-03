@@ -27,14 +27,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate cranelift_codegen;
-extern crate cranelift_entity;
-extern crate cranelift_wasm;
+use cranelift_wasm;
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
-extern crate cast;
-extern crate failure;
+use cast;
+use failure;
 #[macro_use]
 extern crate failure_derive;
 
@@ -47,14 +45,18 @@ mod vmoffsets;
 
 pub mod cranelift;
 
-pub use compilation::{Compilation, CompileError, Relocation, RelocationTarget, Relocations};
-pub use module::{Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle};
-pub use module_environ::{
+pub use crate::compilation::{
+    Compilation, CompileError, Relocation, RelocationTarget, Relocations,
+};
+pub use crate::module::{
+    Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
+};
+pub use crate::module_environ::{
     translate_signature, DataInitializer, DataInitializerLocation, ModuleEnvironment,
     ModuleTranslation,
 };
-pub use tunables::Tunables;
-pub use vmoffsets::VMOffsets;
+pub use crate::tunables::Tunables;
+pub use crate::vmoffsets::VMOffsets;
 
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;

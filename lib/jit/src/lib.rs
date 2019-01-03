@@ -24,19 +24,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate cranelift_codegen;
 #[macro_use]
 extern crate cranelift_entity;
-extern crate cranelift_frontend;
-extern crate cranelift_wasm;
-extern crate region;
-extern crate wasmtime_environ;
-extern crate wasmtime_runtime;
+
+use region;
+
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
-extern crate failure;
-extern crate target_lexicon;
+use failure;
+
 #[macro_use]
 extern crate failure_derive;
 
@@ -49,13 +46,13 @@ mod namespace;
 mod resolver;
 mod target_tunables;
 
-pub use action::{ActionError, ActionOutcome, RuntimeValue};
-pub use compiler::Compiler;
-pub use instantiate::{instantiate, CompiledModule, SetupError};
-pub use link::link_module;
-pub use namespace::{InstanceIndex, Namespace};
-pub use resolver::{NullResolver, Resolver};
-pub use target_tunables::target_tunables;
+pub use crate::action::{ActionError, ActionOutcome, RuntimeValue};
+pub use crate::compiler::Compiler;
+pub use crate::instantiate::{instantiate, CompiledModule, SetupError};
+pub use crate::link::link_module;
+pub use crate::namespace::{InstanceIndex, Namespace};
+pub use crate::resolver::{NullResolver, Resolver};
+pub use crate::target_tunables::target_tunables;
 
 // Re-export `Instance` so that users won't need to separately depend on
 // wasmtime-runtime in common cases.

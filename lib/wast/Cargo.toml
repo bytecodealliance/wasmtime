@@ -8,6 +8,7 @@ categories = ["wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
+edition = "2018"
 
 [dependencies]
 cranelift-codegen = "0.26.0"

@@ -1,6 +1,8 @@
 //! JIT compilation.
 
-use code_memory::CodeMemory;
+use crate::code_memory::CodeMemory;
+use crate::instantiate::SetupError;
+use crate::target_tunables::target_tunables;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::Context;
@@ -8,12 +10,10 @@ use cranelift_codegen::{binemit, ir};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::DefinedFuncIndex;
-use instantiate::SetupError;
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;
-use target_tunables::target_tunables;
 use wasmtime_environ::cranelift;
 use wasmtime_environ::{Compilation, CompileError, Module, Relocations, Tunables};
 use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
@@ -27,7 +27,7 @@ use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
 ///
 /// TODO: Consider using cranelift-module.
 pub struct Compiler {
-    isa: Box<TargetIsa>,
+    isa: Box<dyn TargetIsa>,
 
     code_memory: CodeMemory,
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
@@ -39,7 +39,7 @@ pub struct Compiler {
 
 impl Compiler {
     /// Construct a new `Compiler`.
-    pub fn new(isa: Box<TargetIsa>) -> Self {
+    pub fn new(isa: Box<dyn TargetIsa>) -> Self {
         Self {
             isa,
             code_memory: CodeMemory::new(),
@@ -125,7 +125,7 @@ impl Compiler {
 
 /// Create a trampoline for invoking a function.
 fn make_trampoline(
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     code_memory: &mut CodeMemory,
     fn_builder_ctx: &mut FunctionBuilderContext,
     callee_address: *const VMFunctionBody,

@@ -3,11 +3,11 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
-use compiler::Compiler;
+use crate::compiler::Compiler;
+use crate::link::link_module;
+use crate::resolver::Resolver;
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{DefinedFuncIndex, SignatureIndex};
-use link::link_module;
-use resolver::Resolver;
 use std::boxed::Box;
 use std::rc::Rc;
 use std::string::String;
@@ -52,7 +52,7 @@ impl<'data> RawCompiledModule<'data> {
     fn new(
         compiler: &mut Compiler,
         data: &'data [u8],
-        resolver: &mut Resolver,
+        resolver: &mut dyn Resolver,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
@@ -119,7 +119,7 @@ impl CompiledModule {
     pub fn new<'data>(
         compiler: &mut Compiler,
         data: &'data [u8],
-        resolver: &mut Resolver,
+        resolver: &mut dyn Resolver,
     ) -> Result<Self, SetupError> {
         let raw = RawCompiledModule::<'data>::new(compiler, data, resolver)?;
 
@@ -189,7 +189,7 @@ pub struct OwnedDataInitializer {
 }
 
 impl OwnedDataInitializer {
-    fn new(borrowed: &DataInitializer) -> Self {
+    fn new(borrowed: &DataInitializer<'_>) -> Self {
         Self {
             location: borrowed.location.clone(),
             data: borrowed.data.to_vec().into_boxed_slice(),
@@ -204,7 +204,7 @@ impl OwnedDataInitializer {
 pub fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
-    resolver: &mut Resolver,
+    resolver: &mut dyn Resolver,
 ) -> Result<Instance, SetupError> {
     let raw = RawCompiledModule::new(compiler, data, resolver)?;
 

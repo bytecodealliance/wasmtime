@@ -29,18 +29,12 @@
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate cranelift_native;
-extern crate docopt;
-extern crate wasmtime_environ;
-extern crate wasmtime_obj;
 #[macro_use]
 extern crate serde_derive;
-extern crate faerie;
-extern crate target_lexicon;
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
+use cranelift_native;
 use docopt::Docopt;
 use faerie::Artifact;
 use std::error::Error;

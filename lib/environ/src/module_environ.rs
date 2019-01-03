@@ -1,3 +1,6 @@
+use crate::func_environ::FuncEnvironment;
+use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
+use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
@@ -6,12 +9,9 @@ use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     SignatureIndex, Table, TableIndex, WasmResult,
 };
-use func_environ::FuncEnvironment;
-use module::{Export, MemoryPlan, Module, TableElements, TablePlan};
 use std::clone::Clone;
 use std::string::String;
 use std::vec::Vec;
-use tunables::Tunables;
 
 /// The result of translating via `ModuleEnvironment`. Function bodies are not
 /// yet translated, and data initializers have not yet been copied out of the
@@ -35,7 +35,7 @@ pub struct ModuleTranslation<'data> {
 
 impl<'data> ModuleTranslation<'data> {
     /// Return a new `FuncEnvironment` for translating a function.
-    pub fn func_env(&self) -> FuncEnvironment {
+    pub fn func_env(&self) -> FuncEnvironment<'_> {
         FuncEnvironment::new(self.target_config, &self.module)
     }
 }

@@ -26,11 +26,6 @@
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate cranelift_entity;
-extern crate faerie;
-extern crate wasmtime_environ;
-
 mod emit_module;
 
-pub use emit_module::emit_module;
+pub use crate::emit_module::emit_module;

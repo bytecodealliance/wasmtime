@@ -2,8 +2,8 @@
 //! inline rather than calling them, particularly when CPUs have special
 //! instructions which compute them directly.
 
+use crate::vmcontext::VMContext;
 use cranelift_wasm::{DefinedMemoryIndex, MemoryIndex};
-use vmcontext::VMContext;
 
 /// Implementation of f32.ceil
 pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {

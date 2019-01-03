@@ -1,7 +1,4 @@
-extern crate cranelift_codegen;
-extern crate cranelift_native;
-extern crate wasmtime_jit;
-extern crate wasmtime_wast;
+use cranelift_native;
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
@@ -13,7 +10,7 @@ use wasmtime_wast::WastContext;
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 
 #[cfg(test)]
-fn native_isa() -> Box<isa::TargetIsa> {
+fn native_isa() -> Box<dyn isa::TargetIsa> {
     let mut flag_builder = settings::builder();
     flag_builder.enable("enable_verifier").unwrap();
 

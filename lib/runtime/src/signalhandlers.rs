@@ -4,10 +4,10 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+use crate::vmcontext::VMContext;
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 use std::sync::RwLock;
-use vmcontext::VMContext;
 
 include!(concat!(env!("OUT_DIR"), "/signalhandlers.rs"));
 

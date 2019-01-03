@@ -1,9 +1,9 @@
 //! Linking for JIT-compiled code.
 
+use crate::resolver::Resolver;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
-use resolver::Resolver;
 use std::ptr::write_unaligned;
 use std::vec::Vec;
 use wasmtime_environ::{
@@ -20,7 +20,7 @@ pub fn link_module(
     module: &Module,
     allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     relocations: Relocations,
-    resolver: &mut Resolver,
+    resolver: &mut dyn Resolver,
 ) -> Result<Imports, LinkError> {
     let mut function_imports = PrimaryMap::with_capacity(module.imported_funcs.len());
     for (index, (ref module_name, ref field)) in module.imported_funcs.iter() {

@@ -1,28 +1,28 @@
 //! An `Instance` contains all the runtime state used by execution of a wasm
 //! module.
 
+use crate::export::Export;
+use crate::imports::Imports;
+use crate::memory::LinearMemory;
+use crate::mmap::Mmap;
+use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
+use crate::table::Table;
+use crate::traphandlers::wasmtime_call;
+use crate::vmcontext::{
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
+    VMTableImport,
+};
 use cranelift_entity::EntityRef;
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
-use export::Export;
-use imports::Imports;
-use memory::LinearMemory;
-use mmap::Mmap;
-use signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 use std::rc::Rc;
 use std::slice;
 use std::string::String;
 use std::{mem, ptr};
-use table::Table;
-use traphandlers::wasmtime_call;
-use vmcontext::{
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
-    VMTableImport,
-};
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 fn signature_id(
@@ -450,7 +450,7 @@ impl Instance {
         module: Rc<Module>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         imports: Imports,
-        data_initializers: &[DataInitializer],
+        data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     ) -> Result<Self, InstantiationError> {
         let mut tables = create_tables(&module);
@@ -705,7 +705,7 @@ fn check_table_init_bounds(
 
 /// Compute the offset for a memory data initializer.
 fn get_memory_init_start(
-    init: &DataInitializer,
+    init: &DataInitializer<'_>,
     module: &Module,
     contents: &mut InstanceContents,
 ) -> usize {
@@ -725,7 +725,7 @@ fn get_memory_init_start(
 
 /// Return a byte-slice view of a memory's data.
 fn get_memory_slice<'contents>(
-    init: &DataInitializer,
+    init: &DataInitializer<'_>,
     module: &Module,
     contents: &'contents mut InstanceContents,
 ) -> &'contents mut [u8] {
@@ -746,7 +746,7 @@ fn get_memory_slice<'contents>(
 fn check_memory_init_bounds(
     module: &Module,
     contents: &mut InstanceContents,
-    data_initializers: &[DataInitializer],
+    data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
         let start = get_memory_init_start(init, module, contents);
@@ -868,7 +868,7 @@ fn create_memories(
 fn initialize_memories(
     module: &Module,
     contents: &mut InstanceContents,
-    data_initializers: &[DataInitializer],
+    data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
         let start = get_memory_init_start(init, module, contents);

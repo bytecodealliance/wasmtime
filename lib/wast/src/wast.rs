@@ -1,4 +1,4 @@
-use spectest::instantiate_spectest;
+use crate::spectest::instantiate_spectest;
 use std::io::Read;
 use std::path::Path;
 use std::{fmt, fs, io, str};
@@ -26,7 +26,7 @@ pub struct UnknownInstance {
 }
 
 impl fmt::Display for UnknownInstance {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.instance {
             None => write!(f, "no default instance present"),
             Some(ref name) => write!(f, "no instance {} present", name),
@@ -52,7 +52,7 @@ pub enum WastError {
 }
 
 impl fmt::Display for WastError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             WastError::Assert(ref message) => write!(f, "Assert command failed: {}", message),
             WastError::Instance(ref error) => error.fmt(f),

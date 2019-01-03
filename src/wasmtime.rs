@@ -30,20 +30,15 @@
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate cranelift_native;
-extern crate docopt;
-extern crate wasmtime_jit;
-extern crate wasmtime_wast;
 #[macro_use]
 extern crate serde_derive;
-extern crate file_per_thread_logger;
-extern crate pretty_env_logger;
-extern crate wabt;
 
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
+use cranelift_native;
 use docopt::Docopt;
+use file_per_thread_logger;
+use pretty_env_logger;
 use std::error::Error;
 use std::fs::File;
 use std::io;
@@ -51,6 +46,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
+use wabt;
 use wasmtime_jit::{instantiate, ActionOutcome, Compiler, Namespace};
 use wasmtime_wast::instantiate_spectest;
 

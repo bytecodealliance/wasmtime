@@ -1,5 +1,6 @@
 //! Data structures for representing decoded wasm modules.
 
+use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
@@ -9,7 +10,6 @@ use cranelift_wasm::{
 use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;
-use tunables::Tunables;
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug)]

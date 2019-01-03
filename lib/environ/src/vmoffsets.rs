@@ -1,12 +1,12 @@
 //! Offsets and sizes of various structs in wasmtime-runtime's vmcontext
 //! module.
 
+use crate::module::Module;
 use cranelift_codegen::ir;
 use cranelift_wasm::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
     SignatureIndex, TableIndex,
 };
-use module::Module;
 
 /// This class computes offsets to fields within `VMContext` and other
 /// related structs that JIT code accesses directly.
