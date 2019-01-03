@@ -158,9 +158,8 @@ pub fn invoke(
 
     // TODO: Support values larger than u64. And pack the values into memory
     // instead of just using fixed-sized slots.
-    let mut values_vec: Vec<u64> = Vec::new();
     let value_size = mem::size_of::<u64>();
-    values_vec.resize(max(signature.params.len(), signature.returns.len()), 0u64);
+    let mut values_vec: Vec<u64> = vec![0; max(signature.params.len(), signature.returns.len())];
 
     // Store the argument values into `values_vec`.
     for (index, arg) in args.iter().enumerate() {

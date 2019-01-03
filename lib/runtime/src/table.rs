@@ -25,18 +25,10 @@ impl Table {
         };
 
         match plan.style {
-            TableStyle::CallerChecksSignature => {
-                let mut vec = Vec::with_capacity(plan.table.minimum as usize);
-                vec.resize(
-                    plan.table.minimum as usize,
-                    VMCallerCheckedAnyfunc::default(),
-                );
-
-                Self {
-                    vec,
-                    maximum: plan.table.maximum,
-                }
-            }
+            TableStyle::CallerChecksSignature => Self {
+                vec: vec![VMCallerCheckedAnyfunc::default(); plan.table.minimum as usize],
+                maximum: plan.table.maximum,
+            },
         }
     }
 
