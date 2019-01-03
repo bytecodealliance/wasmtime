@@ -745,7 +745,7 @@ pub fn populate_inst(func: &Function, ebb: Ebb) -> Vec<SerInst> {
     let mut ser_vec: Vec<SerInst> = Vec::new();
     let ret_iter = func.layout.ebb_insts(ebb);
     for inst in ret_iter {
-        let mut ser_inst: SerInst = SerInst::new(inst, &func);
+        let ser_inst: SerInst = SerInst::new(inst, &func);
         ser_vec.push(ser_inst);
     }
     ser_vec
@@ -867,7 +867,7 @@ impl SerObj {
     pub fn new(funcs: &[Function]) -> Self {
         let mut func_vec: Vec<SerFunction> = Vec::new();
         for func in funcs {
-            let mut ser_func: SerFunction = SerFunction::new(&func);
+            let ser_func: SerFunction = SerFunction::new(&func);
             func_vec.push(ser_func);
         }
         Self::create_new(func_vec)
