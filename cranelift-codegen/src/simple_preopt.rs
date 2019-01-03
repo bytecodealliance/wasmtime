@@ -555,6 +555,11 @@ enum BranchOptKind {
     NotEqualZero,
 }
 
+/// Fold comparisons into branch operations when possible.
+///
+/// This matches against operations which compare against zero, then use the
+/// result in a `brz` or `brnz` branch. It folds those two operations into a
+/// single `brz` or `brnz`.
 fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
     let info = match pos.func.dfg[inst] {
         InstructionData::Branch {
@@ -648,6 +653,11 @@ enum BranchOrderKind {
     InvertIcmpCond(IntCC, Value, Value),
 }
 
+/// Reorder branches to encourage fallthroughs.
+///
+/// When an ebb ends with a conditional branch followed by an unconditional
+/// branch, this will reorder them if one of them is branching to the next Ebb
+/// layout-wise. The unconditional jump can then become a fallthrough.
 fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst: Inst) {
     let info = match pos.func.dfg[inst] {
         InstructionData::Jump {
