@@ -484,7 +484,6 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
 mod tests {
     use super::*;
     use super::{sclass_for_length, sclass_size};
-    use crate::packed_option::ReservedValue;
     use crate::EntityRef;
 
     /// An opaque reference to an instruction in a function.

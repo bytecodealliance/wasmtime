@@ -223,8 +223,8 @@ mod tests {
             }
             func
                 .to_string()
-                .trim_left_matches("function u0:0() fast {\n")
-                .trim_right_matches("\n}\n")
+                .trim_start_matches("function u0:0() fast {\n")
+                .trim_end_matches("\n}\n")
                 .to_string()
         }};
     }

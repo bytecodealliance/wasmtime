@@ -100,8 +100,7 @@ fn main() {
             }
         }
         ("deserialize", Some(m)) => {
-            let mut file =
-                File::open(m.value_of("FILE").unwrap()).expect("Unable to open the file");
+            let file = File::open(m.value_of("FILE").unwrap()).expect("Unable to open the file");
             call_de(&file)
         }
         _ => Err("Invalid subcommand.".to_string()),
