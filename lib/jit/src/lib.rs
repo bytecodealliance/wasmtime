@@ -36,26 +36,30 @@ extern crate wasmtime_runtime;
 #[macro_use]
 extern crate alloc;
 extern crate failure;
+extern crate target_lexicon;
 #[macro_use]
 extern crate failure_derive;
-extern crate target_lexicon;
 
 mod action;
-mod instance_plus;
-mod jit_code;
+mod code_memory;
+mod compiler;
+mod instantiate;
 mod link;
 mod namespace;
 mod resolver;
 mod target_tunables;
-mod trampoline_park;
 
 pub use action::{ActionError, ActionOutcome, RuntimeValue};
-pub use instance_plus::InstancePlus;
-pub use jit_code::JITCode;
+pub use compiler::Compiler;
+pub use instantiate::{instantiate, CompiledModule, SetupError};
 pub use link::link_module;
-pub use namespace::{InstancePlusIndex, Namespace};
+pub use namespace::{InstanceIndex, Namespace};
 pub use resolver::{NullResolver, Resolver};
 pub use target_tunables::target_tunables;
+
+// Re-export `Instance` so that users won't need to separately depend on
+// wasmtime-runtime in common cases.
+pub use wasmtime_runtime::{Instance, InstantiationError};
 
 #[cfg(not(feature = "std"))]
 mod std {

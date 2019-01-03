@@ -1,5 +1,5 @@
 //! This file declares `VMContext` and several related structs which contain
-//! fields that JIT code accesses directly.
+//! fields that compiled wasm code accesses directly.
 
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
@@ -62,7 +62,7 @@ mod test_vmfunction_body {
     }
 }
 
-/// The fields a JIT needs to access to utilize a WebAssembly table
+/// The fields compiled code needs to access to utilize a WebAssembly table
 /// imported from another instance.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -98,7 +98,7 @@ mod test_vmtable_import {
     }
 }
 
-/// The fields a JIT needs to access to utilize a WebAssembly linear
+/// The fields compiled code needs to access to utilize a WebAssembly linear
 /// memory imported from another instance.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -134,7 +134,7 @@ mod test_vmmemory_import {
     }
 }
 
-/// The fields a JIT needs to access to utilize a WebAssembly global
+/// The fields compiled code needs to access to utilize a WebAssembly global
 /// variable imported from another instance.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -163,7 +163,7 @@ mod test_vmglobal_import {
     }
 }
 
-/// The fields a JIT needs to access to utilize a WebAssembly linear
+/// The fields compiled code needs to access to utilize a WebAssembly linear
 /// memory defined within the instance, namely the start address and the
 /// size in bytes.
 #[derive(Debug, Copy, Clone)]
@@ -206,7 +206,7 @@ mod test_vmmemory_definition {
     }
 }
 
-/// The fields a JIT needs to access to utilize a WebAssembly table
+/// The fields compiled code needs to access to utilize a WebAssembly table
 /// defined within the instance.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]

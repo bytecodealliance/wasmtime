@@ -53,7 +53,7 @@ use std::path::PathBuf;
 use std::process;
 use std::str::FromStr;
 use target_lexicon::Triple;
-use wasmtime_environ::{compile_module, Module, ModuleEnvironment, Tunables};
+use wasmtime_environ::{cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
 
 const USAGE: &str = "
@@ -133,30 +133,38 @@ fn handle_module(path: PathBuf, target: &Option<String>, output: &str) -> Result
 
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));
 
-    let mut module = Module::new();
     // TODO: Expose the tunables as command-line flags.
     let tunables = Tunables::default();
-    let environ = ModuleEnvironment::new(&*isa, &mut module, tunables);
-    let translation = environ.translate(&data).map_err(|e| e.to_string())?;
+
+    let (module, lazy_function_body_inputs, lazy_data_initializers) = {
+        let environ = ModuleEnvironment::new(isa.frontend_config(), tunables);
+
+        let translation = environ
+            .translate(&data)
+            .map_err(|error| error.to_string())?;
+
+        (
+            translation.module,
+            translation.function_body_inputs,
+            translation.data_initializers,
+        )
+    };
 
     // FIXME: We need to initialize memory in a way that supports alternate
     // memory spaces, imported base addresses, and offsets.
-    for init in &translation.lazy.data_initializers {
+    for init in lazy_data_initializers.into_iter() {
         obj.define("memory", Vec::from(init.data))
             .map_err(|err| format!("{}", err))?;
     }
 
-    let (compilation, relocations) = compile_module(
-        &translation.module,
-        &translation.lazy.function_body_inputs,
-        &*isa,
-    )
-    .map_err(|e| e.to_string())?;
+    let (compilation, relocations) =
+        cranelift::compile_module(&module, lazy_function_body_inputs, &*isa)
+            .map_err(|e| e.to_string())?;
 
-    emit_module(&mut obj, &translation.module, &compilation, &relocations)?;
+    emit_module(&mut obj, &module, &compilation, &relocations)?;
 
-    if !translation.module.table_plans.is_empty() {
-        if translation.module.table_plans.len() > 1 {
+    if !module.table_plans.is_empty() {
+        if module.table_plans.len() > 1 {
             return Err(String::from("multiple tables not supported yet"));
         }
         return Err(String::from("FIXME: implement tables"));

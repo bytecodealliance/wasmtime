@@ -1,3 +1,6 @@
+//! Define the `Resolver` trait, allowing custom resolution for external
+//! references.
+
 use wasmtime_runtime::Export;
 
 /// Import resolver connects imports with available exported values.

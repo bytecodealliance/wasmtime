@@ -1,23 +1,19 @@
+//! Linking for JIT-compiled code.
+
 use cranelift_codegen::binemit::Reloc;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
 use resolver::Resolver;
 use std::ptr::write_unaligned;
-use std::string::String;
 use std::vec::Vec;
 use wasmtime_environ::{
     MemoryPlan, MemoryStyle, Module, Relocation, RelocationTarget, Relocations, TablePlan,
 };
 use wasmtime_runtime::libcalls;
 use wasmtime_runtime::{
-    Export, Imports, VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport,
+    Export, Imports, LinkError, VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport,
     VMTableImport,
 };
-
-/// A link error, such as incompatible or unmatched imports/exports.
-#[derive(Fail, Debug)]
-#[fail(display = "Link error: {}", _0)]
-pub struct LinkError(String);
 
 /// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
 pub fn link_module(

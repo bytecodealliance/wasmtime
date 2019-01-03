@@ -7,7 +7,7 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentPurpose, ExtFuncData, FuncRef, Function, InstBuilder, Signature,
 };
-use cranelift_codegen::isa;
+use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
     self, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex,
@@ -50,8 +50,8 @@ pub fn get_imported_memory32_size_name() -> ir::ExternalName {
 
 /// The FuncEnvironment implementation for use by the `ModuleEnvironment`.
 pub struct FuncEnvironment<'module_environment> {
-    /// Compilation setting flags.
-    isa: &'module_environment isa::TargetIsa,
+    /// Target-specified configuration.
+    target_config: TargetFrontendConfig,
 
     /// The module-level environment which this function-level environment belongs to.
     module: &'module_environment Module,
@@ -104,12 +104,9 @@ pub struct FuncEnvironment<'module_environment> {
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
-    pub fn new(
-        isa: &'module_environment isa::TargetIsa,
-        module: &'module_environment Module,
-    ) -> Self {
+    pub fn new(target_config: TargetFrontendConfig, module: &'module_environment Module) -> Self {
         Self {
-            isa,
+            target_config,
             module,
             vmctx: None,
             imported_functions_base: None,
@@ -124,12 +121,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             imported_memory32_size_extfunc: None,
             memory_grow_extfunc: None,
             imported_memory_grow_extfunc: None,
-            offsets: VMOffsets::new(isa.pointer_bytes()),
+            offsets: VMOffsets::new(target_config.pointer_bytes()),
         }
     }
 
     fn pointer_type(&self) -> ir::Type {
-        self.isa.frontend_config().pointer_type()
+        self.target_config.pointer_type()
     }
 
     fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
@@ -253,7 +250,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
             ],
             returns: vec![AbiParam::new(I32)],
-            call_conv: self.isa.frontend_config().default_call_conv,
+            call_conv: self.target_config.default_call_conv,
         })
     }
 
@@ -303,7 +300,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
             ],
             returns: vec![AbiParam::new(I32)],
-            call_conv: self.isa.frontend_config().default_call_conv,
+            call_conv: self.target_config.default_call_conv,
         })
     }
 
@@ -348,8 +345,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
-    fn target_config(&self) -> isa::TargetFrontendConfig {
-        self.isa.frontend_config()
+    fn target_config(&self) -> TargetFrontendConfig {
+        self.target_config
     }
 
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> ir::Table {

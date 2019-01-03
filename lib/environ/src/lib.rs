@@ -45,12 +45,13 @@ mod module_environ;
 mod tunables;
 mod vmoffsets;
 
-pub use compilation::{
-    compile_module, Compilation, CompileError, RelocSink, Relocation, RelocationTarget, Relocations,
-};
+pub mod cranelift;
+
+pub use compilation::{Compilation, CompileError, Relocation, RelocationTarget, Relocations};
 pub use module::{Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle};
 pub use module_environ::{
-    translate_signature, DataInitializer, ModuleEnvironment, ModuleTranslation,
+    translate_signature, DataInitializer, DataInitializerLocation, ModuleEnvironment,
+    ModuleTranslation,
 };
 pub use tunables::Tunables;
 pub use vmoffsets::VMOffsets;

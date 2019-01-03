@@ -28,6 +28,7 @@
 extern crate cranelift_codegen;
 extern crate cranelift_native;
 extern crate docopt;
+extern crate wasmtime_jit;
 extern crate wasmtime_wast;
 #[macro_use]
 extern crate serde_derive;
@@ -38,6 +39,7 @@ use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use docopt::Docopt;
 use std::path::Path;
+use wasmtime_jit::Compiler;
 use wasmtime_wast::WastContext;
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
@@ -94,7 +96,8 @@ fn main() {
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut wast_context = WastContext::new();
+    let engine = Compiler::new(isa);
+    let mut wast_context = WastContext::new(Box::new(engine));
 
     wast_context
         .register_spectest()
@@ -102,7 +105,7 @@ fn main() {
 
     for filename in &args.arg_file {
         wast_context
-            .run_file(&*isa, Path::new(&filename))
+            .run_file(Path::new(&filename))
             .unwrap_or_else(|e| panic!("{}", e));
     }
 }

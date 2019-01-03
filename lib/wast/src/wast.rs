@@ -1,12 +1,12 @@
-use cranelift_codegen::isa;
 use spectest::instantiate_spectest;
 use std::io::Read;
 use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
-use wasmtime_execute::{
-    ActionError, ActionOutcome, InstancePlus, InstancePlusIndex, JITCode, Namespace, RuntimeValue,
+use wasmtime_jit::{
+    instantiate, ActionError, ActionOutcome, Compiler, Instance, InstanceIndex, InstantiationError,
+    Namespace, RuntimeValue, SetupError,
 };
 
 /// Translate from a script::Value to a RuntimeValue.
@@ -77,22 +77,22 @@ pub struct WastFileError {
 /// to be performed on them.
 pub struct WastContext {
     /// A namespace of wasm modules, keyed by an optional name.
-    current: Option<InstancePlusIndex>,
+    current: Option<InstanceIndex>,
     namespace: Namespace,
-    jit_code: JITCode,
+    compiler: Box<Compiler>,
 }
 
 impl WastContext {
     /// Construct a new instance of `WastContext`.
-    pub fn new() -> Self {
+    pub fn new(compiler: Box<Compiler>) -> Self {
         Self {
             current: None,
             namespace: Namespace::new(),
-            jit_code: JITCode::new(),
+            compiler,
         }
     }
 
-    fn validate(&mut self, data: &[u8]) -> Result<(), ActionError> {
+    fn validate(&mut self, data: &[u8]) -> Result<(), String> {
         let config = ValidatingParserConfig {
             operator_config: OperatorValidatorConfig {
                 enable_threads: false,
@@ -107,26 +107,19 @@ impl WastContext {
             Ok(())
         } else {
             // TODO: Work with wasmparser to get better error messages.
-            Err(ActionError::Validate("module did not validate".to_owned()))
+            Err("module did not validate".to_owned())
         }
     }
 
-    fn instantiate(
-        &mut self,
-        isa: &isa::TargetIsa,
-        module: ModuleBinary,
-    ) -> Result<InstancePlus, ActionError> {
+    fn instantiate(&mut self, module: ModuleBinary) -> Result<Box<Instance>, SetupError> {
         let data = module.into_vec();
 
-        self.validate(&data)?;
+        self.validate(&data).map_err(SetupError::Validate)?;
 
-        InstancePlus::new(&mut self.jit_code, isa, &data, &mut self.namespace)
+        instantiate(&mut *self.compiler, &data, &mut self.namespace)
     }
 
-    fn get_index(
-        &mut self,
-        instance_name: &Option<String>,
-    ) -> Result<InstancePlusIndex, WastError> {
+    fn get_index(&mut self, instance_name: &Option<String>) -> Result<InstanceIndex, WastError> {
         let index = *if let Some(instance_name) = instance_name {
             self.namespace
                 .get_instance_index(instance_name)
@@ -145,24 +138,20 @@ impl WastContext {
     }
 
     /// Register "spectest" which is used by the spec testsuite.
-    pub fn register_spectest(&mut self) -> Result<(), ActionError> {
+    pub fn register_spectest(&mut self) -> Result<(), InstantiationError> {
         let instance = instantiate_spectest()?;
         self.namespace.instance(Some("spectest"), instance);
         Ok(())
     }
 
     /// Perform the action portion of a command.
-    fn perform_action(
-        &mut self,
-        isa: &isa::TargetIsa,
-        action: Action,
-    ) -> Result<ActionOutcome, WastError> {
+    fn perform_action(&mut self, action: Action) -> Result<ActionOutcome, WastError> {
         match action {
             Action::Invoke {
                 module: instance_name,
                 field,
                 args,
-            } => self.invoke(isa, instance_name, &field, &args),
+            } => self.invoke(instance_name, &field, &args),
             Action::Get {
                 module: instance_name,
                 field,
@@ -173,11 +162,10 @@ impl WastContext {
     /// Define a module and register it.
     fn module(
         &mut self,
-        isa: &isa::TargetIsa,
         instance_name: Option<String>,
         module: ModuleBinary,
     ) -> Result<(), ActionError> {
-        let instance = self.instantiate(isa, module)?;
+        let instance = self.instantiate(module).map_err(ActionError::Setup)?;
         let index = self
             .namespace
             .instance(instance_name.as_ref().map(String::as_str), instance);
@@ -195,7 +183,6 @@ impl WastContext {
     /// Invoke an exported function from an instance.
     fn invoke(
         &mut self,
-        isa: &isa::TargetIsa,
         instance_name: Option<String>,
         field: &str,
         args: &[Value],
@@ -206,7 +193,7 @@ impl WastContext {
             .collect::<Vec<_>>();
         let index = self.get_index(&instance_name)?;
         self.namespace
-            .invoke(&mut self.jit_code, isa, index, &field, &value_args)
+            .invoke(&mut *self.compiler, index, &field, &value_args)
             .map_err(WastError::Action)
     }
 
@@ -227,24 +214,15 @@ impl WastContext {
     }
 
     /// Perform the action of a `PerformAction`.
-    fn perform_action_command(
-        &mut self,
-        isa: &isa::TargetIsa,
-        action: Action,
-    ) -> Result<(), WastError> {
-        match self.perform_action(isa, action)? {
+    fn perform_action_command(&mut self, action: Action) -> Result<(), WastError> {
+        match self.perform_action(action)? {
             ActionOutcome::Returned { .. } => Ok(()),
             ActionOutcome::Trapped { message } => Err(WastError::Trap(message)),
         }
     }
 
     /// Run a wast script from a byte buffer.
-    pub fn run_buffer(
-        &mut self,
-        isa: &isa::TargetIsa,
-        filename: &str,
-        wast: &[u8],
-    ) -> Result<(), WastFileError> {
+    pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<(), WastFileError> {
         let mut parser = ScriptParser::from_str(str::from_utf8(wast).unwrap()).unwrap();
 
         while let Some(Command { kind, line }) = parser.next().expect("parser") {
@@ -253,7 +231,7 @@ impl WastContext {
                     module: instance_name,
                     name,
                 } => {
-                    self.module(isa, name, instance_name)
+                    self.module(name, instance_name)
                         .map_err(|error| WastFileError {
                             filename: filename.to_string(),
                             line,
@@ -269,7 +247,7 @@ impl WastContext {
                         })?;
                 }
                 CommandKind::PerformAction(action) => {
-                    self.perform_action_command(isa, action)
+                    self.perform_action_command(action)
                         .map_err(|error| WastFileError {
                             filename: filename.to_string(),
                             line,
@@ -277,13 +255,11 @@ impl WastContext {
                         })?;
                 }
                 CommandKind::AssertReturn { action, expected } => {
-                    match self
-                        .perform_action(isa, action)
-                        .map_err(|error| WastFileError {
-                            filename: filename.to_string(),
-                            line,
-                            error,
-                        })? {
+                    match self.perform_action(action).map_err(|error| WastFileError {
+                        filename: filename.to_string(),
+                        line,
+                        error,
+                    })? {
                         ActionOutcome::Returned { values } => {
                             for (v, e) in values
                                 .iter()
@@ -312,13 +288,11 @@ impl WastContext {
                     }
                 }
                 CommandKind::AssertTrap { action, message } => {
-                    match self
-                        .perform_action(isa, action)
-                        .map_err(|error| WastFileError {
-                            filename: filename.to_string(),
-                            line,
-                            error,
-                        })? {
+                    match self.perform_action(action).map_err(|error| WastFileError {
+                        filename: filename.to_string(),
+                        line,
+                        error,
+                    })? {
                         ActionOutcome::Returned { values } => {
                             return Err(WastFileError {
                                 filename: filename.to_string(),
@@ -340,13 +314,11 @@ impl WastContext {
                     }
                 }
                 CommandKind::AssertExhaustion { action } => {
-                    match self
-                        .perform_action(isa, action)
-                        .map_err(|error| WastFileError {
-                            filename: filename.to_string(),
-                            line,
-                            error,
-                        })? {
+                    match self.perform_action(action).map_err(|error| WastFileError {
+                        filename: filename.to_string(),
+                        line,
+                        error,
+                    })? {
                         ActionOutcome::Returned { values } => {
                             return Err(WastFileError {
                                 filename: filename.to_string(),
@@ -366,13 +338,11 @@ impl WastContext {
                     }
                 }
                 CommandKind::AssertReturnCanonicalNan { action } => {
-                    match self
-                        .perform_action(isa, action)
-                        .map_err(|error| WastFileError {
-                            filename: filename.to_string(),
-                            line,
-                            error,
-                        })? {
+                    match self.perform_action(action).map_err(|error| WastFileError {
+                        filename: filename.to_string(),
+                        line,
+                        error,
+                    })? {
                         ActionOutcome::Returned { values } => {
                             for v in values.iter() {
                                 match v {
@@ -420,13 +390,11 @@ impl WastContext {
                     }
                 }
                 CommandKind::AssertReturnArithmeticNan { action } => {
-                    match self
-                        .perform_action(isa, action)
-                        .map_err(|error| WastFileError {
-                            filename: filename.to_string(),
-                            line,
-                            error,
-                        })? {
+                    match self.perform_action(action).map_err(|error| WastFileError {
+                        filename: filename.to_string(),
+                        line,
+                        error,
+                    })? {
                         ActionOutcome::Returned { values } => {
                             for v in values.iter() {
                                 match v {
@@ -474,7 +442,7 @@ impl WastContext {
                     }
                 }
                 CommandKind::AssertInvalid { module, message } => {
-                    self.module(isa, None, module).expect_err(&format!(
+                    self.module(None, module).expect_err(&format!(
                         "{}:{}: invalid module was successfully instantiated",
                         filename, line
                     ));
@@ -484,7 +452,7 @@ impl WastContext {
                     );
                 }
                 CommandKind::AssertMalformed { module, message } => {
-                    self.module(isa, None, module).expect_err(&format!(
+                    self.module(None, module).expect_err(&format!(
                         "{}:{}: malformed module was successfully instantiated",
                         filename, line
                     ));
@@ -494,7 +462,7 @@ impl WastContext {
                     );
                 }
                 CommandKind::AssertUninstantiable { module, message } => {
-                    let _err = self.module(isa, None, module).expect_err(&format!(
+                    let _err = self.module(None, module).expect_err(&format!(
                         "{}:{}: uninstantiable module was successfully instantiated",
                         filename, line
                     ));
@@ -504,7 +472,7 @@ impl WastContext {
                     );
                 }
                 CommandKind::AssertUnlinkable { module, message } => {
-                    let _err = self.module(isa, None, module).expect_err(&format!(
+                    let _err = self.module(None, module).expect_err(&format!(
                         "{}:{}: unlinkable module was successfully linked",
                         filename, line
                     ));
@@ -520,14 +488,14 @@ impl WastContext {
     }
 
     /// Run a wast script from a file.
-    pub fn run_file(&mut self, isa: &isa::TargetIsa, path: &Path) -> Result<(), WastFileError> {
+    pub fn run_file(&mut self, path: &Path) -> Result<(), WastFileError> {
         let filename = path.display().to_string();
         let buffer = read_to_end(path).map_err(|e| WastFileError {
             filename,
             line: 0,
             error: WastError::IO(e),
         })?;
-        self.run_buffer(isa, &path.display().to_string(), &buffer)
+        self.run_buffer(&path.display().to_string(), &buffer)
     }
 }
 

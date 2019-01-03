@@ -60,7 +60,7 @@ pub mod libcalls;
 
 pub use export::Export;
 pub use imports::Imports;
-pub use instance::{Instance, InstantiationError};
+pub use instance::{Instance, InstantiationError, LinkError};
 pub use mmap::Mmap;
 pub use signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 pub use traphandlers::{wasmtime_call, wasmtime_call_trampoline};

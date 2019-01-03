@@ -32,7 +32,7 @@ extern crate target_lexicon;
 extern crate wabt;
 extern crate wasmparser;
 extern crate wasmtime_environ;
-extern crate wasmtime_execute;
+extern crate wasmtime_jit;
 extern crate wasmtime_runtime;
 
 mod spectest;

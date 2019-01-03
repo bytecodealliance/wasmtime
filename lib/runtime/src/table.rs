@@ -39,7 +39,7 @@ impl Table {
         }
     }
 
-    /// Return a `VMTableDefinition` for exposing the table to JIT code.
+    /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.
     pub fn vmtable(&mut self) -> VMTableDefinition {
         VMTableDefinition {
             base: self.vec.as_mut_ptr() as *mut u8,

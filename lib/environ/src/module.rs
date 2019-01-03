@@ -6,7 +6,6 @@ use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
-use std::cmp;
 use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;

@@ -53,7 +53,10 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
             .expect("testsuite filename should be representable as a string")
             .replace("-", "_")
     )?;
-    writeln!(out, "    use super::{{native_isa, Path, WastContext}};")?;
+    writeln!(
+        out,
+        "    use super::{{native_isa, Path, WastContext, Compiler}};"
+    )?;
     for dir_entry in dir_entries {
         write_testsuite_tests(out, dir_entry, testsuite)?;
     }
@@ -78,8 +81,12 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
         "    fn {}() {{",
         avoid_keywords(&stemstr.replace("-", "_"))
     )?;
-    writeln!(out, "        let mut wast_context = WastContext::new();")?;
     writeln!(out, "        let isa = native_isa();")?;
+    writeln!(out, "        let compiler = Compiler::new(isa);")?;
+    writeln!(
+        out,
+        "        let mut wast_context = WastContext::new(Box::new(compiler));"
+    )?;
     writeln!(out, "        wast_context")?;
     writeln!(out, "            .register_spectest()")?;
     writeln!(
@@ -87,7 +94,7 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
         "            .expect(\"instantiating \\\"spectest\\\"\");"
     )?;
     writeln!(out, "        wast_context")?;
-    write!(out, "            .run_file(&*isa, Path::new(\"")?;
+    write!(out, "            .run_file(Path::new(\"")?;
     // Write out the string with escape_debug to prevent special characters such
     // as backslash from being reinterpreted.
     for c in path.display().to_string().chars() {

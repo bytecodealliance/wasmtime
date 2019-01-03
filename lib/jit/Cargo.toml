@@ -1,5 +1,5 @@
 [package]
-name = "wasmtime-execute"
+name = "wasmtime-jit"
 version = "0.1.0"
 authors = ["The Cranelift Project Developers"]
 publish = false

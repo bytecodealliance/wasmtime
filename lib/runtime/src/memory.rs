@@ -148,7 +148,7 @@ impl LinearMemory {
         Some(prev_pages)
     }
 
-    /// Return a `VMMemoryDefinition` for exposing the memory to JIT code.
+    /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.mmap.as_mut_ptr(),

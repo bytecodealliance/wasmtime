@@ -6,7 +6,7 @@ extern crate cranelift_codegen;
 extern crate cranelift_native;
 extern crate wasmparser;
 extern crate wasmtime_environ;
-extern crate wasmtime_execute;
+extern crate wasmtime_jit;
 
 use cranelift_codegen::settings;
 use wasmparser::validate;
@@ -28,9 +28,8 @@ fuzz_target!(|data: &[u8]| {
         Err(_) => return,
     };
     let imports_resolver = |_env: &str, _function: &str| None;
-    let _exec =
-        match wasmtime_execute::compile_and_link_module(&*isa, &translation, imports_resolver) {
-            Ok(x) => x,
-            Err(_) => return,
-        };
+    let _exec = match wasmtime_jit::compile_and_link_module(&*isa, &translation, imports_resolver) {
+        Ok(x) => x,
+        Err(_) => return,
+    };
 });

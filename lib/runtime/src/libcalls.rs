@@ -1,6 +1,6 @@
-//! Runtime library calls. Note that the JIT may sometimes perform these inline
-//! rather than calling them, particularly when CPUs have special instructions
-//! which compute them directly.
+//! Runtime library calls. Note that wasm compilers may sometimes perform these
+//! inline rather than calling them, particularly when CPUs have special
+//! instructions which compute them directly.
 
 use cranelift_wasm::{DefinedMemoryIndex, MemoryIndex};
 use vmcontext::VMContext;

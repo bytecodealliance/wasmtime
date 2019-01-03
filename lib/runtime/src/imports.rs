@@ -3,7 +3,7 @@ use cranelift_wasm::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
 use vmcontext::{VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport};
 
 /// Resolved import pointers.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Imports {
     /// Resolved addresses for imported functions.
     pub functions: BoxedSlice<FuncIndex, VMFunctionImport>,

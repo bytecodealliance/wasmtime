@@ -33,7 +33,7 @@
 extern crate cranelift_codegen;
 extern crate cranelift_native;
 extern crate docopt;
-extern crate wasmtime_execute;
+extern crate wasmtime_jit;
 extern crate wasmtime_wast;
 #[macro_use]
 extern crate serde_derive;
@@ -41,7 +41,6 @@ extern crate file_per_thread_logger;
 extern crate pretty_env_logger;
 extern crate wabt;
 
-use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use docopt::Docopt;
@@ -52,7 +51,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
-use wasmtime_execute::{ActionOutcome, InstancePlus, JITCode, Namespace};
+use wasmtime_jit::{instantiate, ActionOutcome, Compiler, Namespace};
 use wasmtime_wast::instantiate_spectest;
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
@@ -123,6 +122,7 @@ fn main() {
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let mut compiler = Compiler::new(isa);
 
     let mut namespace = Namespace::new();
 
@@ -132,11 +132,9 @@ fn main() {
         instantiate_spectest().expect("instantiating spectest"),
     );
 
-    let mut jit_code = JITCode::new();
-
     for filename in &args.arg_file {
         let path = Path::new(&filename);
-        match handle_module(&mut jit_code, &mut namespace, &args, path, &*isa) {
+        match handle_module(&mut compiler, &mut namespace, &args, path) {
             Ok(()) => {}
             Err(message) => {
                 let name = path.as_os_str().to_string_lossy();
@@ -148,11 +146,10 @@ fn main() {
 }
 
 fn handle_module(
-    jit_code: &mut JITCode,
+    compiler: &mut Compiler,
     namespace: &mut Namespace,
     args: &Args,
     path: &Path,
-    isa: &TargetIsa,
 ) -> Result<(), String> {
     let mut data =
         read_to_end(path.to_path_buf()).map_err(|err| String::from(err.description()))?;
@@ -162,17 +159,16 @@ fn handle_module(
         data = wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?;
     }
 
-    // Create a new `InstancePlus` by compiling and instantiating a wasm module.
-    let instance_plus =
-        InstancePlus::new(jit_code, isa, &data, namespace).map_err(|e| e.to_string())?;
+    // Create a new `Instance` by compiling and instantiating a wasm module.
+    let instance = instantiate(compiler, &data, namespace).map_err(|e| e.to_string())?;
 
     // Register it in the namespace.
-    let index = namespace.instance(None, instance_plus);
+    let index = namespace.instance(None, instance);
 
     // If a function to invoke was given, invoke it.
     if let Some(ref f) = args.flag_invoke {
         match namespace
-            .invoke(jit_code, isa, index, &f, &[])
+            .invoke(compiler, index, &f, &[])
             .map_err(|e| e.to_string())?
         {
             ActionOutcome::Returned { .. } => {}
@@ -191,7 +187,7 @@ mod tests {
     use cranelift_codegen::settings::Configurable;
     use std::path::PathBuf;
     use wabt;
-    use wasmtime_execute::{InstancePlus, JITCode, NullResolver};
+    use wasmtime_jit::{instantiate, Compiler, NullResolver};
 
     const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
 
@@ -214,8 +210,8 @@ mod tests {
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
         let mut resolver = NullResolver {};
-        let mut code = JITCode::new();
-        let instance = InstancePlus::new(&mut code, &*isa, &data, &mut resolver);
+        let mut compiler = Compiler::new(isa);
+        let instance = instantiate(&mut compiler, &data, &mut resolver);
         assert!(instance.is_ok());
     }
 }

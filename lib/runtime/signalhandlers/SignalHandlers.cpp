@@ -640,9 +640,9 @@ WasmTrapHandler(int signum, siginfo_t* info, void* context)
     }
     assert(previousSignal);
 
-    // This signal is not for any JIT code we expect, so we need to forward
-    // the signal to the next handler. If there is no next handler (SIG_IGN or
-    // SIG_DFL), then it's time to crash. To do this, we set the signal back to
+    // This signal is not for any compiled wasm code we expect, so we need to
+    // forward the signal to the next handler. If there is no next handler (SIG_IGN
+    // or SIG_DFL), then it's time to crash. To do this, we set the signal back to
     // its original disposition and return. This will cause the faulting op to
     // be re-executed which will crash in the normal way. The advantage of
     // doing this to calling _exit() is that we remove ourselves from the crash

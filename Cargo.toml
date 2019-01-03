@@ -28,7 +28,7 @@ cranelift-entity = "0.26.0"
 cranelift-wasm = "0.26.0"
 wasmtime-environ = { path = "lib/environ" }
 wasmtime-runtime = { path = "lib/runtime" }
-wasmtime-execute = { path = "lib/execute" }
+wasmtime-jit = { path = "lib/jit" }
 wasmtime-obj = { path = "lib/obj" }
 wasmtime-wast = { path = "lib/wast" }
 docopt = "1.0.1"

@@ -2,13 +2,12 @@ use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
-use std::rc::Rc;
 use target_lexicon::HOST;
 use wasmtime_environ::{
     translate_signature, Export, MemoryPlan, MemoryStyle, Module, TablePlan, TableStyle,
 };
-use wasmtime_execute::{target_tunables, ActionError, InstancePlus};
-use wasmtime_runtime::{Imports, VMFunctionBody};
+use wasmtime_jit::{target_tunables, CompiledModule};
+use wasmtime_runtime::{Imports, Instance, InstantiationError, VMFunctionBody};
 
 extern "C" fn spectest_print() {}
 
@@ -46,7 +45,7 @@ extern "C" fn spectest_print_f64_f64(x: f64, y: f64) {
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
-pub fn instantiate_spectest() -> Result<InstancePlus, ActionError> {
+pub fn instantiate_spectest() -> Result<Box<Instance>, InstantiationError> {
     let call_conv = isa::CallConv::triple_default(&HOST);
     let pointer_type = types::Type::triple_pointer_type(&HOST);
     let mut module = Module::new();
@@ -218,10 +217,11 @@ pub fn instantiate_spectest() -> Result<InstancePlus, ActionError> {
     let imports = Imports::none();
     let data_initializers = Vec::new();
 
-    InstancePlus::with_parts(
-        Rc::new(module),
+    CompiledModule::from_parts(
+        module,
         finished_functions.into_boxed_slice(),
         imports,
-        data_initializers,
+        data_initializers.into_boxed_slice(),
     )
+    .instantiate()
 }

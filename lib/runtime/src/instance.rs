@@ -23,6 +23,9 @@ use vmcontext::{
 use wasmtime_environ::{DataInitializer, Module};
 
 /// An Instance of a WebAssemby module.
+///
+/// Note that compiled wasm code passes around raw pointers to `Instance`, so
+/// this shouldn't be moved.
 #[derive(Debug)]
 pub struct Instance {
     /// The `Module` this `Instance` was instantiated from.
@@ -53,7 +56,7 @@ pub struct Instance {
     /// WebAssembly global variable data.
     vmctx_globals: BoxedSlice<DefinedGlobalIndex, VMGlobalDefinition>,
 
-    /// Context pointer used by JIT code.
+    /// Context pointer used by compiled wasm code.
     vmctx: VMContext,
 }
 
@@ -63,7 +66,7 @@ impl Instance {
         module: Rc<Module>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         mut vmctx_imports: Imports,
-        data_initializers: Vec<DataInitializer>,
+        data_initializers: &[DataInitializer],
     ) -> Result<Box<Self>, InstantiationError> {
         let mut sig_registry = create_and_initialize_signatures(&module);
         let mut tables = create_tables(&module);
@@ -125,7 +128,7 @@ impl Instance {
 
         // Check initializer bounds before initializing anything.
         check_table_init_bounds(&mut *result)?;
-        check_memory_init_bounds(&mut *result, &data_initializers)?;
+        check_memory_init_bounds(&mut *result, data_initializers)?;
 
         // Apply the initializers.
         initialize_tables(&mut *result)?;
@@ -148,22 +151,22 @@ impl Instance {
         Ok(result)
     }
 
-    /// Return a reference to the vmctx used by JIT code.
+    /// Return a reference to the vmctx used by compiled wasm code.
     pub fn vmctx(&self) -> &VMContext {
         &self.vmctx
     }
 
-    /// Return a raw pointer to the vmctx used by JIT code.
+    /// Return a raw pointer to the vmctx used by compiled wasm code.
     pub fn vmctx_ptr(&self) -> *const VMContext {
         self.vmctx()
     }
 
-    /// Return a mutable reference to the vmctx used by JIT code.
+    /// Return a mutable reference to the vmctx used by compiled wasm code.
     pub fn vmctx_mut(&mut self) -> &mut VMContext {
         &mut self.vmctx
     }
 
-    /// Return a mutable raw pointer to the vmctx used by JIT code.
+    /// Return a mutable raw pointer to the vmctx used by compiled wasm code.
     pub fn vmctx_mut_ptr(&mut self) -> *mut VMContext {
         self.vmctx_mut()
     }
@@ -184,7 +187,7 @@ impl Instance {
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
             .grow(delta);
 
-        // Keep current the VMContext pointers used by JIT code.
+        // Keep current the VMContext pointers used by compiled wasm code.
         self.vmctx_memories[memory_index] = self.memories[memory_index].vmmemory();
 
         result
@@ -314,7 +317,7 @@ impl Instance {
     /// This requirement is not enforced in the type system, so this function is
     /// unsafe.
     pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
-        let temporary_mut = &mut *(self as *const Instance as *mut Instance);
+        let temporary_mut = &mut *(self as *const Self as *mut Self);
         temporary_mut.lookup(field)
     }
 }
@@ -346,9 +349,9 @@ fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationE
         };
 
         if slice.get_mut(start..start + init.elements.len()).is_none() {
-            return Err(InstantiationError::Link(
+            return Err(InstantiationError::Link(LinkError(
                 "elements segment does not fit".to_owned(),
-            ));
+            )));
         }
     }
 
@@ -361,8 +364,8 @@ fn check_memory_init_bounds(
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
         // TODO: Refactor this.
-        let mut start = init.offset;
-        if let Some(base) = init.base {
+        let mut start = init.location.offset;
+        if let Some(base) = init.location.base {
             let global = if let Some(def_index) = instance.module.defined_global_index(base) {
                 unsafe { instance.vmctx.global_mut(def_index) }
             } else {
@@ -372,12 +375,13 @@ fn check_memory_init_bounds(
         }
 
         // TODO: Refactor this.
-        let memory = if let Some(defined_memory_index) =
-            instance.module.defined_memory_index(init.memory_index)
+        let memory = if let Some(defined_memory_index) = instance
+            .module
+            .defined_memory_index(init.location.memory_index)
         {
             unsafe { instance.vmctx.memory(defined_memory_index) }
         } else {
-            let import = &instance.vmctx_imports.memories[init.memory_index];
+            let import = &instance.vmctx_imports.memories[init.location.memory_index];
             let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
             let foreign_memory = unsafe { &mut *(import).from };
             let foreign_index = foreign_instance.vmctx().memory_index(foreign_memory);
@@ -386,9 +390,9 @@ fn check_memory_init_bounds(
         let mem_slice = unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
 
         if mem_slice.get_mut(start..start + init.data.len()).is_none() {
-            return Err(InstantiationError::Link(
+            return Err(InstantiationError::Link(LinkError(
                 "data segment does not fit".to_owned(),
-            ));
+            )));
         }
     }
 
@@ -457,9 +461,9 @@ fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> 
                 };
             }
         } else {
-            return Err(InstantiationError::Link(
+            return Err(InstantiationError::Link(LinkError(
                 "elements segment does not fit".to_owned(),
-            ));
+            )));
         }
     }
 
@@ -482,11 +486,11 @@ fn create_memories(
 /// Initialize the table memory from the provided initializers.
 fn initialize_memories(
     instance: &mut Instance,
-    data_initializers: Vec<DataInitializer>,
+    data_initializers: &[DataInitializer],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
-        let mut start = init.offset;
-        if let Some(base) = init.base {
+        let mut start = init.location.offset;
+        if let Some(base) = init.location.base {
             let global = if let Some(def_index) = instance.module.defined_global_index(base) {
                 unsafe { instance.vmctx.global_mut(def_index) }
             } else {
@@ -495,12 +499,13 @@ fn initialize_memories(
             start += unsafe { *(&*global).as_i32() } as u32 as usize;
         }
 
-        let memory = if let Some(defined_memory_index) =
-            instance.module.defined_memory_index(init.memory_index)
+        let memory = if let Some(defined_memory_index) = instance
+            .module
+            .defined_memory_index(init.location.memory_index)
         {
             unsafe { instance.vmctx.memory(defined_memory_index) }
         } else {
-            let import = &instance.vmctx_imports.memories[init.memory_index];
+            let import = &instance.vmctx_imports.memories[init.location.memory_index];
             let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
             let foreign_memory = unsafe { &mut *(import).from };
             let foreign_index = foreign_instance.vmctx().memory_index(foreign_memory);
@@ -510,9 +515,9 @@ fn initialize_memories(
         if let Some(to_init) = mem_slice.get_mut(start..start + init.data.len()) {
             to_init.copy_from_slice(init.data);
         } else {
-            return Err(InstantiationError::Link(
+            return Err(InstantiationError::Link(LinkError(
                 "data segment does not fit".to_owned(),
-            ));
+            )));
         }
     }
 
@@ -555,6 +560,11 @@ fn initialize_globals(instance: &mut Instance) {
     }
 }
 
+/// An link error while instantiating a module.
+#[derive(Fail, Debug)]
+#[fail(display = "Link error: {}", _0)]
+pub struct LinkError(pub String);
+
 /// An error while instantiating a module.
 #[derive(Fail, Debug)]
 pub enum InstantiationError {
@@ -562,9 +572,9 @@ pub enum InstantiationError {
     #[fail(display = "Insufficient resources: {}", _0)]
     Resource(String),
 
-    /// A wasm translation error occured.
-    #[fail(display = "Link error: {}", _0)]
-    Link(String),
+    /// A wasm link error occured.
+    #[fail(display = "{}", _0)]
+    Link(LinkError),
 
     /// A compilation error occured.
     #[fail(display = "Trap occurred while invoking start function: {}", _0)]

@@ -110,7 +110,7 @@ impl Mmap {
         self.ptr
     }
 
-    /// Return the lengthof the allocated memory.
+    /// Return the length of the allocated memory.
     pub fn len(&self) -> usize {
         self.len
     }

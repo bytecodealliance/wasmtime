@@ -1,4 +1,4 @@
-//! Offsets and sizes of various structs in wasmtime-execute's vmcontext
+//! Offsets and sizes of various structs in wasmtime-runtime's vmcontext
 //! module.
 
 use cranelift_codegen::ir;
