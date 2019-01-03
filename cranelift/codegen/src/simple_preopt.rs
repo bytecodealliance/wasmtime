@@ -9,12 +9,13 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::divconst_magic_numbers::{magic_s32, magic_s64, magic_u32, magic_u64};
 use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
-use crate::ir::condcodes::{CondCode, FloatCC, IntCC};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::condcodes::{CondCode, IntCC};
 use crate::ir::dfg::ValueDef;
 use crate::ir::instructions::{Opcode, ValueList};
 use crate::ir::types::{I32, I64};
 use crate::ir::Inst;
-use crate::ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
+use crate::ir::{DataFlowGraph, Ebb, Function, InstBuilder, InstructionData, Type, Value};
 use crate::timing;
 
 //----------------------------------------------------------------------
@@ -636,17 +637,15 @@ struct BranchOrderInfo {
     term_inst_args: ValueList,
     term_dest: Ebb,
     cond_inst: Inst,
-    cond_arg: Value,
     cond_inst_args: ValueList,
     cond_dest: Ebb,
     kind: BranchOrderKind,
 }
 
 enum BranchOrderKind {
-    BrzToBrnz,
-    BrnzToBrz,
-    InvertIntCond(IntCC),
-    InvertFloatCond(FloatCC),
+    BrzToBrnz(Value),
+    BrnzToBrz(Value),
+    InvertIcmpCond(IntCC, Value, Value),
 }
 
 fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst: Inst) {
@@ -695,8 +694,8 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst
                     };
 
                     let kind = match opcode {
-                        Opcode::Brz => BranchOrderKind::BrzToBrnz,
-                        Opcode::Brnz => BranchOrderKind::BrnzToBrz,
+                        Opcode::Brz => BranchOrderKind::BrzToBrnz(cond_arg),
+                        Opcode::Brnz => BranchOrderKind::BrnzToBrz(cond_arg),
                         _ => panic!("unexpected opcode"),
                     };
 
@@ -705,54 +704,29 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst
                         term_inst_args: args.clone(),
                         term_dest: destination,
                         cond_inst: prev_inst,
-                        cond_arg: cond_arg,
                         cond_inst_args: prev_args.clone(),
                         cond_dest: *cond_dest,
                         kind: kind,
                     }
                 }
-                InstructionData::BranchInt {
-                    opcode: Opcode::Brif,
-                    args: ref prev_args,
+                InstructionData::BranchIcmp {
+                    opcode: Opcode::BrIcmp,
                     cond,
                     destination: cond_dest,
-                    ..
+                    args: ref prev_args,
                 } => {
-                    let cond_arg = {
+                    let (x_arg, y_arg) = {
                         let args = pos.func.dfg.inst_args(prev_inst);
-                        args[0]
+                        (args[0], args[1])
                     };
                     BranchOrderInfo {
                         term_inst: inst,
                         term_inst_args: args.clone(),
                         term_dest: destination,
                         cond_inst: prev_inst,
-                        cond_arg: cond_arg,
                         cond_inst_args: prev_args.clone(),
                         cond_dest: *cond_dest,
-                        kind: BranchOrderKind::InvertIntCond(*cond),
-                    }
-                }
-                InstructionData::BranchFloat {
-                    opcode: Opcode::Brff,
-                    args: ref prev_args,
-                    cond,
-                    destination: cond_dest,
-                    ..
-                } => {
-                    let cond_arg = {
-                        let args = pos.func.dfg.inst_args(prev_inst);
-                        args[0]
-                    };
-                    BranchOrderInfo {
-                        term_inst: inst,
-                        term_inst_args: args.clone(),
-                        term_dest: destination,
-                        cond_inst: prev_inst,
-                        cond_arg: cond_arg,
-                        cond_inst_args: prev_args.clone(),
-                        cond_dest: *cond_dest,
-                        kind: BranchOrderKind::InvertFloatCond(*cond),
+                        kind: BranchOrderKind::InvertIcmpCond(*cond, x_arg, y_arg),
                     }
                 }
                 _ => return,
@@ -773,36 +747,36 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst
             .to_vec()
     };
 
-    pos.func
-        .dfg
-        .replace(info.term_inst)
-        .fallthrough(info.cond_dest, &cond_args[1..]);
-
     match info.kind {
-        BranchOrderKind::BrnzToBrz => {
+        BranchOrderKind::BrnzToBrz(cond_arg) => {
+            pos.func
+                .dfg
+                .replace(info.term_inst)
+                .fallthrough(info.cond_dest, &cond_args[1..]);
             pos.func
                 .dfg
                 .replace(info.cond_inst)
-                .brz(info.cond_arg, info.term_dest, &term_args);
+                .brz(cond_arg, info.term_dest, &term_args);
         }
-        BranchOrderKind::BrzToBrnz => {
+        BranchOrderKind::BrzToBrnz(cond_arg) => {
+            pos.func
+                .dfg
+                .replace(info.term_inst)
+                .fallthrough(info.cond_dest, &cond_args[1..]);
             pos.func
                 .dfg
                 .replace(info.cond_inst)
-                .brnz(info.cond_arg, info.term_dest, &term_args);
+                .brnz(cond_arg, info.term_dest, &term_args);
         }
-        BranchOrderKind::InvertIntCond(cond) => {
-            pos.func.dfg.replace(info.cond_inst).brif(
+        BranchOrderKind::InvertIcmpCond(cond, x_arg, y_arg) => {
+            pos.func
+                .dfg
+                .replace(info.term_inst)
+                .fallthrough(info.cond_dest, &cond_args[2..]);
+            pos.func.dfg.replace(info.cond_inst).br_icmp(
                 cond.inverse(),
-                info.cond_arg,
-                info.term_dest,
-                &term_args,
-            );
-        }
-        BranchOrderKind::InvertFloatCond(cond) => {
-            pos.func.dfg.replace(info.cond_inst).brff(
-                cond.inverse(),
-                info.cond_arg,
+                x_arg,
+                y_arg,
                 info.term_dest,
                 &term_args,
             );
