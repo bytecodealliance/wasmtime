@@ -1,7 +1,7 @@
 [package]
 name = "wasmtime-environ"
 version = "0.1.0"
-authors = ["The Cranelift Project Developers"]
+authors = ["The Wasmtime Project Developers"]
 description = "Standalone environment support for WebAsssembly code in Cranelift"
 repository = "https://github.com/CraneStation/wasmtime"
 documentation = "https://docs.rs/wasmtime-environ/"

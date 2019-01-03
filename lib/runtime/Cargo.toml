@@ -1,7 +1,7 @@
 [package]
 name = "wasmtime-runtime"
 version = "0.1.0"
-authors = ["The Cranelift Project Developers"]
+authors = ["The Wasmtime Project Developers"]
 publish = false
 description = "Runtime library support for Wasmtime"
 categories = ["wasm"]
