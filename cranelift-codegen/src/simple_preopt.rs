@@ -556,9 +556,8 @@ enum BranchOptKind {
 
 fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
     let info = match pos.func.dfg[inst] {
-        InstructionData::BranchInt {
-            opcode: Opcode::Brif,
-            cond: br_cond,
+        InstructionData::Branch {
+            opcode,
             destination,
             ref args,
         } => {
@@ -566,6 +565,7 @@ fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
                 let args = pos.func.dfg.inst_args(inst);
                 args[0]
             };
+
             let iconst_inst =
                 if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(first_arg) {
                     iconst_inst
@@ -573,10 +573,11 @@ fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
                     return;
                 };
 
-            if let InstructionData::BinaryImm {
-                opcode: Opcode::IfcmpImm,
-                imm: cmp_imm,
+            if let InstructionData::IntCompareImm {
+                opcode: Opcode::IcmpImm,
                 arg: cmp_arg,
+                cond: cmp_cond,
+                imm: cmp_imm,
             } = pos.func.dfg[iconst_inst]
             {
                 let cmp_imm: i64 = cmp_imm.into();
@@ -584,9 +585,17 @@ fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
                     return;
                 }
 
-                let kind = match br_cond {
-                    IntCC::NotEqual => BranchOptKind::NotEqualZero,
+                // icmp_imm returns non-zero when the comparison is true. So, if
+                // we're branching on zero, we need to invert the condition.
+                let cond = match opcode {
+                    Opcode::Brz => cmp_cond.inverse(),
+                    Opcode::Brnz => cmp_cond,
+                    _ => return,
+                };
+
+                let kind = match cond {
                     IntCC::Equal => BranchOptKind::EqualZero,
+                    IntCC::NotEqual => BranchOptKind::NotEqualZero,
                     _ => return,
                 };
 
