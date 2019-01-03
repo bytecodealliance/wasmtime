@@ -5,6 +5,7 @@ authors = ["The Wasmtime Project Developers"]
 publish = false
 description = "wast testing support for wasmtime"
 categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"

@@ -6,6 +6,7 @@ description = "Standalone environment support for WebAsssembly code in Cranelift
 repository = "https://github.com/CraneStation/wasmtime"
 documentation = "https://docs.rs/wasmtime-environ/"
 categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition = "2018"

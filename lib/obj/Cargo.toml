@@ -6,6 +6,7 @@ description = "Native object file output for WebAsssembly code in Wasmtime"
 publish = false
 repository = "https://github.com/CraneStation/wasmtime"
 categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition = "2018"
