@@ -9,7 +9,7 @@ pub fn match_directive<'a>(comment: &'a str, directive: &str) -> Option<&'a str>
         directive.ends_with(':'),
         "Directive must include trailing colon"
     );
-    let text = comment.trim_left_matches(';').trim_start();
+    let text = comment.trim_start_matches(';').trim_start();
     if text.starts_with(directive) {
         Some(text[directive.len()..].trim())
     } else {
