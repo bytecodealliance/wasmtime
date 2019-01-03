@@ -3,9 +3,7 @@ use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
 use target_lexicon::HOST;
-use wasmtime_environ::{
-    translate_signature, Export, MemoryPlan, MemoryStyle, Module, TablePlan, TableStyle,
-};
+use wasmtime_environ::{translate_signature, Export, MemoryPlan, Module, TablePlan};
 use wasmtime_jit::{target_tunables, CompiledModule};
 use wasmtime_runtime::{Imports, Instance, InstantiationError, VMFunctionBody};
 
@@ -186,30 +184,27 @@ pub fn instantiate_spectest() -> Result<Instance, InstantiationError> {
         .exports
         .insert("global_f64".to_owned(), Export::Global(global));
 
-    let table = module.table_plans.push(TablePlan {
-        table: Table {
+    let tunables = target_tunables(&HOST);
+    let table = module.table_plans.push(TablePlan::for_table(
+        Table {
             ty: TableElementType::Func,
             minimum: 10,
             maximum: Some(20),
         },
-        style: TableStyle::CallerChecksSignature,
-    });
+        &tunables,
+    ));
     module
         .exports
         .insert("table".to_owned(), Export::Table(table));
 
-    let tunables = target_tunables(&HOST);
-    let memory = module.memory_plans.push(MemoryPlan {
-        memory: Memory {
+    let memory = module.memory_plans.push(MemoryPlan::for_memory(
+        Memory {
             minimum: 1,
             maximum: Some(2),
             shared: false,
         },
-        style: MemoryStyle::Static {
-            bound: tunables.static_memory_bound,
-        },
-        offset_guard_size: tunables.static_memory_offset_guard_size,
-    });
+        &tunables,
+    ));
     module
         .exports
         .insert("memory".to_owned(), Export::Memory(memory));
