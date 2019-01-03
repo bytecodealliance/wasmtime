@@ -23,7 +23,7 @@ use vmcontext::{
     VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
     VMTableImport,
 };
-use wasmtime_environ::{DataInitializer, Module, VMOffsets};
+use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 fn signature_id(
     vmctx: &VMContext,
@@ -48,6 +48,19 @@ fn imported_function<'vmctx>(
         let ptr = (vmctx as *const VMContext as *const u8)
             .add(cast::usize(offsets.vmctx_vmfunction_import(index)));
         &*(ptr as *const VMFunctionImport)
+    }
+}
+
+fn imported_table<'vmctx>(
+    vmctx: &'vmctx VMContext,
+    offsets: &VMOffsets,
+    index: TableIndex,
+) -> &'vmctx VMTableImport {
+    #[allow(clippy::cast_ptr_alignment)]
+    unsafe {
+        let ptr = (vmctx as *const VMContext as *const u8)
+            .add(cast::usize(offsets.vmctx_vmtable_import(index)));
+        &*(ptr as *const VMTableImport)
     }
 }
 
@@ -108,11 +121,7 @@ impl InstanceContents {
 
     /// Return the index `VMTableImport`.
     fn imported_table(&self, index: TableIndex) -> &VMTableImport {
-        unsafe {
-            let ptr = (&self.vmctx as *const VMContext as *const u8)
-                .add(cast::usize(self.offsets.vmctx_vmtable_import(index)));
-            &*(ptr as *const VMTableImport)
-        }
+        imported_table(&self.vmctx, &self.offsets, index)
     }
 
     /// Return a pointer to the `VMTableImports`s.
@@ -475,7 +484,7 @@ impl Instance {
 
         let mut contents_mmap = Mmap::with_size(
             mem::size_of::<InstanceContents>()
-                .checked_add(cast::usize(offsets.size_of_vmctx()).unwrap())
+                .checked_add(cast::usize(offsets.size_of_vmctx()))
                 .unwrap(),
         )
         .map_err(InstantiationError::Resource)?;
@@ -675,28 +684,14 @@ fn check_table_init_bounds(
     contents: &mut InstanceContents,
 ) -> Result<(), InstantiationError> {
     for init in &module.table_elements {
-        // TODO: Refactor this.
-        let mut start = init.offset;
-        if let Some(base) = init.base {
-            let global = if let Some(def_index) = module.defined_global_index(base) {
-                contents.global_mut(def_index)
-            } else {
-                contents.imported_global(base).from
-            };
-            start += cast::usize(unsafe { *(&*global).as_u32() });
-        }
-
-        // TODO: Refactor this.
-        let slice = if let Some(defined_table_index) = module.defined_table_index(init.table_index)
-        {
-            contents.tables[defined_table_index].as_mut()
-        } else {
-            let import = contents.imported_table(init.table_index);
-            let foreign_contents = unsafe { (&mut *(import).vmctx).instance_contents() };
-            let foreign_table = unsafe { &mut *(import).from };
-            let foreign_index = foreign_contents.table_index(foreign_table);
-            foreign_contents.tables[foreign_index].as_mut()
-        };
+        let start = get_table_init_start(init, module, contents);
+        let slice = get_table_slice(
+            init,
+            module,
+            &mut contents.tables,
+            &contents.vmctx,
+            &contents.offsets,
+        );
 
         if slice.get_mut(start..start + init.elements.len()).is_none() {
             return Err(InstantiationError::Link(LinkError(
@@ -708,36 +703,54 @@ fn check_table_init_bounds(
     Ok(())
 }
 
+/// Compute the offset for a memory data initializer.
+fn get_memory_init_start(
+    init: &DataInitializer,
+    module: &Module,
+    contents: &mut InstanceContents,
+) -> usize {
+    let mut start = init.location.offset;
+
+    if let Some(base) = init.location.base {
+        let global = if let Some(def_index) = module.defined_global_index(base) {
+            contents.global_mut(def_index)
+        } else {
+            contents.imported_global(base).from
+        };
+        start += cast::usize(unsafe { *(&*global).as_u32() });
+    }
+
+    start
+}
+
+/// Return a byte-slice view of a memory's data.
+fn get_memory_slice<'contents>(
+    init: &DataInitializer,
+    module: &Module,
+    contents: &'contents mut InstanceContents,
+) -> &'contents mut [u8] {
+    let memory = if let Some(defined_memory_index) =
+        module.defined_memory_index(init.location.memory_index)
+    {
+        contents.memory(defined_memory_index)
+    } else {
+        let import = contents.imported_memory(init.location.memory_index);
+        let foreign_contents = unsafe { (&mut *(import).vmctx).instance_contents() };
+        let foreign_memory = unsafe { &mut *(import).from };
+        let foreign_index = foreign_contents.memory_index(foreign_memory);
+        foreign_contents.memory(foreign_index)
+    };
+    unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) }
+}
+
 fn check_memory_init_bounds(
     module: &Module,
     contents: &mut InstanceContents,
     data_initializers: &[DataInitializer],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
-        // TODO: Refactor this.
-        let mut start = init.location.offset;
-        if let Some(base) = init.location.base {
-            let global = if let Some(def_index) = module.defined_global_index(base) {
-                contents.global_mut(def_index)
-            } else {
-                contents.imported_global(base).from
-            };
-            start += cast::usize(unsafe { *(&*global).as_u32() });
-        }
-
-        // TODO: Refactor this.
-        let memory = if let Some(defined_memory_index) =
-            module.defined_memory_index(init.location.memory_index)
-        {
-            contents.memory(defined_memory_index)
-        } else {
-            let import = contents.imported_memory(init.location.memory_index);
-            let foreign_contents = unsafe { (&mut *(import).vmctx).instance_contents() };
-            let foreign_memory = unsafe { &mut *(import).from };
-            let foreign_index = foreign_contents.memory_index(foreign_memory);
-            foreign_contents.memory(foreign_index)
-        };
-        let mem_slice = unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
+        let start = get_memory_init_start(init, module, contents);
+        let mem_slice = get_memory_slice(init, module, contents);
 
         if mem_slice.get_mut(start..start + init.data.len()).is_none() {
             return Err(InstantiationError::Link(LinkError(
@@ -760,6 +773,45 @@ fn create_tables(module: &Module) -> BoxedSlice<DefinedTableIndex, Table> {
     tables.into_boxed_slice()
 }
 
+/// Compute the offset for a table element initializer.
+fn get_table_init_start(
+    init: &TableElements,
+    module: &Module,
+    contents: &mut InstanceContents,
+) -> usize {
+    let mut start = init.offset;
+
+    if let Some(base) = init.base {
+        let global = if let Some(def_index) = module.defined_global_index(base) {
+            contents.global_mut(def_index)
+        } else {
+            contents.imported_global(base).from
+        };
+        start += cast::usize(unsafe { *(&*global).as_u32() });
+    }
+
+    start
+}
+
+/// Return a byte-slice view of a table's data.
+fn get_table_slice<'contents>(
+    init: &TableElements,
+    module: &Module,
+    tables: &'contents mut BoxedSlice<DefinedTableIndex, Table>,
+    vmctx: &VMContext,
+    offsets: &VMOffsets,
+) -> &'contents mut [VMCallerCheckedAnyfunc] {
+    if let Some(defined_table_index) = module.defined_table_index(init.table_index) {
+        tables[defined_table_index].as_mut()
+    } else {
+        let import = imported_table(vmctx, offsets, init.table_index);
+        let foreign_contents = unsafe { (&mut *(import).vmctx).instance_contents() };
+        let foreign_table = unsafe { &mut *(import).from };
+        let foreign_index = foreign_contents.table_index(foreign_table);
+        foreign_contents.tables[foreign_index].as_mut()
+    }
+}
+
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(
     module: &Module,
@@ -767,26 +819,14 @@ fn initialize_tables(
 ) -> Result<(), InstantiationError> {
     let vmctx: *mut VMContext = contents.vmctx_mut();
     for init in &module.table_elements {
-        let mut start = init.offset;
-        if let Some(base) = init.base {
-            let global = if let Some(def_index) = module.defined_global_index(base) {
-                contents.global_mut(def_index)
-            } else {
-                contents.imported_global(base).from
-            };
-            start += cast::usize(unsafe { *(&*global).as_u32() });
-        }
-
-        let slice = if let Some(defined_table_index) = module.defined_table_index(init.table_index)
-        {
-            contents.tables[defined_table_index].as_mut()
-        } else {
-            let import = contents.imported_table(init.table_index);
-            let foreign_contents = unsafe { (&mut *(import).vmctx).instance_contents() };
-            let foreign_table = unsafe { &mut *(import).from };
-            let foreign_index = foreign_contents.table_index(foreign_table);
-            foreign_contents.tables[foreign_index].as_mut()
-        };
+        let start = get_table_init_start(init, module, contents);
+        let slice = get_table_slice(
+            init,
+            module,
+            &mut contents.tables,
+            &contents.vmctx,
+            &contents.offsets,
+        );
 
         let subslice = &mut slice[start..start + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
@@ -831,28 +871,9 @@ fn initialize_memories(
     data_initializers: &[DataInitializer],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
-        let mut start = init.location.offset;
-        if let Some(base) = init.location.base {
-            let global = if let Some(def_index) = module.defined_global_index(base) {
-                contents.global_mut(def_index)
-            } else {
-                contents.imported_global(base).from
-            };
-            start += cast::usize(unsafe { *(&*global).as_u32() });
-        }
+        let start = get_memory_init_start(init, module, contents);
+        let mem_slice = get_memory_slice(init, module, contents);
 
-        let memory = if let Some(defined_memory_index) =
-            module.defined_memory_index(init.location.memory_index)
-        {
-            contents.memory(defined_memory_index)
-        } else {
-            let import = contents.imported_memory(init.location.memory_index);
-            let foreign_contents = unsafe { (&mut *(import).vmctx).instance_contents() };
-            let foreign_memory = unsafe { &mut *(import).from };
-            let foreign_index = foreign_contents.memory_index(foreign_memory);
-            foreign_contents.memory(foreign_index)
-        };
-        let mem_slice = unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
         let to_init = &mut mem_slice[start..start + init.data.len()];
         to_init.copy_from_slice(init.data);
     }
