@@ -28,6 +28,8 @@ pub fn parse_type_section(
     types: TypeSectionReader,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
+    environ.reserve_signatures(types.get_count());
+
     for entry in types {
         match entry? {
             FuncType {
@@ -59,6 +61,8 @@ pub fn parse_import_section<'data>(
     imports: ImportSectionReader<'data>,
     environ: &mut ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
+    environ.reserve_imports(imports.get_count());
+
     for entry in imports {
         let import = entry?;
 
@@ -113,6 +117,8 @@ pub fn parse_import_section<'data>(
             }
         }
     }
+
+    environ.finish_imports();
     Ok(())
 }
 
@@ -121,10 +127,13 @@ pub fn parse_function_section(
     functions: FunctionSectionReader,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
+    environ.reserve_func_types(functions.get_count());
+
     for entry in functions {
         let sigindex = entry?;
         environ.declare_func_type(SignatureIndex::from_u32(sigindex));
     }
+
     Ok(())
 }
 
@@ -133,6 +142,8 @@ pub fn parse_table_section(
     tables: TableSectionReader,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
+    environ.reserve_tables(tables.get_count());
+
     for entry in tables {
         let table = entry?;
         environ.declare_table(Table {
@@ -144,6 +155,7 @@ pub fn parse_table_section(
             maximum: table.limits.maximum,
         });
     }
+
     Ok(())
 }
 
@@ -152,6 +164,8 @@ pub fn parse_memory_section(
     memories: MemorySectionReader,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
+    environ.reserve_memories(memories.get_count());
+
     for entry in memories {
         let memory = entry?;
         environ.declare_memory(Memory {
@@ -160,6 +174,7 @@ pub fn parse_memory_section(
             shared: memory.shared,
         });
     }
+
     Ok(())
 }
 
@@ -168,6 +183,8 @@ pub fn parse_global_section(
     globals: GlobalSectionReader,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
+    environ.reserve_globals(globals.get_count());
+
     for entry in globals {
         let wasmparser::Global {
             ty: GlobalType {
@@ -194,6 +211,7 @@ pub fn parse_global_section(
         };
         environ.declare_global(global);
     }
+
     Ok(())
 }
 
@@ -202,6 +220,8 @@ pub fn parse_export_section<'data>(
     exports: ExportSectionReader<'data>,
     environ: &mut ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
+    environ.reserve_exports(exports.get_count());
+
     for entry in exports {
         let Export {
             field,
@@ -221,6 +241,8 @@ pub fn parse_export_section<'data>(
             ExternalKind::Global => environ.declare_global_export(GlobalIndex::new(index), name),
         }
     }
+
+    environ.finish_exports();
     Ok(())
 }
 
@@ -235,6 +257,8 @@ pub fn parse_element_section<'data>(
     elements: ElementSectionReader<'data>,
     environ: &mut ModuleEnvironment,
 ) -> WasmResult<()> {
+    environ.reserve_table_elements(elements.get_count());
+
     for entry in elements {
         let Element {
             table_index,
@@ -281,6 +305,8 @@ pub fn parse_data_section<'data>(
     data: DataSectionReader<'data>,
     environ: &mut ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
+    environ.reserve_data_initializers(data.get_count());
+
     for entry in data {
         let Data {
             memory_index,
@@ -300,5 +326,6 @@ pub fn parse_data_section<'data>(
             data,
         );
     }
+
     Ok(())
 }
