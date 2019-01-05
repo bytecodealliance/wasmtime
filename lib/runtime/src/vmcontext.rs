@@ -2,6 +2,7 @@
 //! fields that compiled wasm code accesses directly.
 
 use crate::instance::InstanceContents;
+use core::any::Any;
 use core::{ptr, u32};
 
 /// An imported function.
@@ -478,9 +479,20 @@ pub struct VMContext {}
 
 impl VMContext {
     /// Return a mutable reference to the associated `Instance`.
+    ///
+    /// This is unsafe because it doesn't work on just any `VMContext`, it must
+    /// be a `VMContext` allocated as part of an `Instance`.
     #[allow(clippy::cast_ptr_alignment)]
     pub(crate) unsafe fn instance_contents(&mut self) -> &mut InstanceContents {
         &mut *((self as *mut Self as *mut u8).offset(-InstanceContents::vmctx_offset())
             as *mut InstanceContents)
+    }
+
+    /// Return a mutable reference to the host state associated with `Instance`.
+    ///
+    /// This is unsafe because it doesn't work on just any `VMContext`, it must
+    /// be a `VMContext` allocated as part of an `Instance`.
+    pub unsafe fn host_state(&mut self) -> &mut Any {
+        self.instance_contents().host_state()
     }
 }

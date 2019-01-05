@@ -409,6 +409,11 @@ impl InstanceContents {
 
         foreign_instance_contents.memory_size(foreign_index)
     }
+
+    /// Return a reference to the custom state attached to this instance.
+    pub fn host_state(&mut self) -> &mut Any {
+        return &mut *self.host_state;
+    }
 }
 
 /// A wrapper around an `Mmap` holding an `InstanceContents`.
@@ -686,7 +691,7 @@ impl Instance {
 
     /// Return a reference to the custom state attached to this instance.
     pub fn host_state(&mut self) -> &mut Any {
-        return &mut *self.mmap_field.contents_mut().host_state;
+        return self.mmap_field.contents_mut().host_state();
     }
 }
 
