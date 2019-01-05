@@ -174,6 +174,7 @@ impl CompiledModule {
             self.imports.clone(),
             &data_initializers,
             self.signatures.clone(),
+            Box::new(()),
         )
     }
 }
@@ -214,6 +215,7 @@ pub fn instantiate(
         raw.imports,
         &*raw.data_initializers,
         raw.signatures,
+        Box::new(()),
     )
     .map_err(SetupError::Instantiate)
 }

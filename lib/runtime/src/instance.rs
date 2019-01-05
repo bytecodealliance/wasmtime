@@ -13,6 +13,7 @@ use crate::vmcontext::{
     VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
     VMTableImport,
 };
+use core::any::Any;
 use core::slice;
 use core::{mem, ptr};
 use cranelift_entity::EntityRef;
@@ -22,6 +23,7 @@ use cranelift_wasm::{
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use std::borrow::ToOwned;
+use std::boxed::Box;
 use std::rc::Rc;
 use std::string::String;
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
@@ -85,7 +87,12 @@ pub(crate) struct InstanceContents {
     /// Pointers to functions in executable memory.
     finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
 
-    /// Context pointer used by compiled wasm code.
+    /// Hosts can store arbitrary per-instance information here.
+    host_state: Box<dyn Any>,
+
+    /// Context pointer used by compiled wasm code. This field is last, and
+    /// represents a dynamically-sized array that extends beyond the nominal
+    /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
 }
 
@@ -453,6 +460,7 @@ impl Instance {
         imports: Imports,
         data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
+        host_state: Box<dyn Any>,
     ) -> Result<Self, InstantiationError> {
         let mut tables = create_tables(&module);
         let mut memories = create_memories(&module)?;
@@ -498,6 +506,7 @@ impl Instance {
                 memories,
                 tables,
                 finished_functions,
+                host_state,
                 vmctx: VMContext {},
             };
             unsafe {
@@ -673,6 +682,11 @@ impl Instance {
     pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
         let temporary_mut = &mut *(self as *const Self as *mut Self);
         temporary_mut.lookup(field)
+    }
+
+    /// Return a reference to the custom state attached to this instance.
+    pub fn host_state(&mut self) -> &mut Any {
+        return &mut *self.mmap_field.contents_mut().host_state;
     }
 }
 

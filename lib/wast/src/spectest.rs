@@ -2,9 +2,10 @@ use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
+use std::rc::Rc;
 use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, Export, MemoryPlan, Module, TablePlan};
-use wasmtime_jit::{target_tunables, CompiledModule};
+use wasmtime_jit::target_tunables;
 use wasmtime_runtime::{Imports, Instance, InstantiationError, VMFunctionBody};
 
 extern "C" fn spectest_print() {}
@@ -213,12 +214,12 @@ pub fn instantiate_spectest() -> Result<Instance, InstantiationError> {
     let data_initializers = Vec::new();
     let signatures = PrimaryMap::new();
 
-    CompiledModule::from_parts(
-        module,
+    Instance::new(
+        Rc::new(module),
         finished_functions.into_boxed_slice(),
         imports,
-        data_initializers.into_boxed_slice(),
+        &data_initializers,
         signatures.into_boxed_slice(),
+        Box::new(()),
     )
-    .instantiate()
 }
