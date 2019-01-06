@@ -108,9 +108,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // We do nothing
         }
         Operator::Unreachable => {
-            // We use `trap user0` to indicate a user-generated trap.
-            // We could make the trap code configurable if need be.
-            builder.ins().trap(ir::TrapCode::User(0));
+            builder.ins().trap(ir::TrapCode::UnreachableCodeReached);
             state.reachable = false;
         }
         /***************************** Control flow blocks **********************************
