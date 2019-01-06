@@ -34,64 +34,196 @@ impl Mmap {
         }
     }
 
-    /// Create a new `Mmap` pointing to at least `size` bytes of memory,
+    /// Create a new `Mmap` pointing to at least `size` bytes of accessible memory,
     /// suitably sized and aligned for memory protection.
-    #[cfg(not(target_os = "windows"))]
     pub fn with_size(size: usize) -> Result<Self, String> {
+        Self::accessible_reserved(size, size)
+    }
+
+    /// Create a new `Mmap` pointing to at least `accessible_size` bytes of accessible memory,
+    /// within a reserved mapping of at least `mapping_size` bytes, suitably sized and aligned
+    /// for memory protection.
+    #[cfg(not(target_os = "windows"))]
+    pub fn accessible_reserved(
+        accessible_size: usize,
+        mapping_size: usize,
+    ) -> Result<Self, String> {
+        assert!(accessible_size <= mapping_size);
+
         // Mmap may return EINVAL if the size is zero, so just
         // special-case that.
-        if size == 0 {
+        if mapping_size == 0 {
             return Ok(Self::new());
         }
 
         let page_size = region::page::size();
-        let alloc_size = round_up_to_page_size(size, page_size);
-        let ptr = unsafe {
-            libc::mmap(
-                ptr::null_mut(),
-                alloc_size,
-                libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANON,
-                -1,
-                0,
-            )
-        };
-        if ptr as isize == -1isize {
-            Err(errno::errno().to_string())
-        } else {
-            Ok(Self {
+        let rounded_mapping_size = round_up_to_page_size(mapping_size, page_size);
+
+        Ok(if accessible_size == mapping_size {
+            // Allocate a single read-write region at once.
+            let ptr = unsafe {
+                libc::mmap(
+                    ptr::null_mut(),
+                    rounded_mapping_size,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    libc::MAP_PRIVATE | libc::MAP_ANON,
+                    -1,
+                    0,
+                )
+            };
+            if ptr as isize == -1_isize {
+                return Err(errno::errno().to_string());
+            }
+
+            Self {
                 ptr: ptr as *mut u8,
-                len: alloc_size,
-            })
-        }
+                len: rounded_mapping_size,
+            }
+        } else {
+            // Reserve the mapping size.
+            let ptr = unsafe {
+                libc::mmap(
+                    ptr::null_mut(),
+                    rounded_mapping_size,
+                    libc::PROT_NONE,
+                    libc::MAP_PRIVATE | libc::MAP_ANON,
+                    -1,
+                    0,
+                )
+            };
+            if ptr as isize == -1_isize {
+                return Err(errno::errno().to_string());
+            }
+
+            let result = Self {
+                ptr: ptr as *mut u8,
+                len: rounded_mapping_size,
+            };
+
+            if accessible_size != 0 {
+                // Commit the accessible size.
+                let rounded_accessible_size = round_up_to_page_size(accessible_size, page_size);
+                unsafe {
+                    region::protect(
+                        result.ptr,
+                        rounded_accessible_size,
+                        region::Protection::ReadWrite,
+                    )
+                }
+                .map_err(|e| e.to_string())?;
+            }
+
+            result
+        })
     }
 
-    /// Create a new `Mmap` pointing to at least `size` bytes of memory,
-    /// suitably sized and aligned for memory protection.
+    /// Create a new `Mmap` pointing to at least `accessible_size` bytes of accessible memory,
+    /// within a reserved mapping of at least `mapping_size` bytes, suitably sized and aligned
+    /// for memory protection.
     #[cfg(target_os = "windows")]
-    pub fn with_size(size: usize) -> Result<Self, String> {
+    pub fn accessible_reserved(
+        accessible_size: usize,
+        mapping_size: usize,
+    ) -> Result<Self, String> {
+        assert!(accessible_size <= mapping_size);
+
         use winapi::um::memoryapi::VirtualAlloc;
-        use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE};
+        use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
+
+        let page_size = region::page::size();
+        let rounded_mapping_size = round_up_to_page_size(mapping_size, page_size);
+
+        Ok(if accessible_size == mapping_size {
+            // Allocate a single read-write region at once.
+            let ptr = unsafe {
+                VirtualAlloc(
+                    ptr::null_mut(),
+                    rounded_mapping_size,
+                    MEM_RESERVE | MEM_COMMIT,
+                    PAGE_READWRITE,
+                )
+            };
+            if ptr.is_null() {
+                return Err(errno::errno().to_string());
+            }
+
+            Self {
+                ptr: ptr as *mut u8,
+                len: rounded_mapping_size,
+            }
+        } else {
+            // Reserve the mapping size.
+            let ptr = unsafe {
+                VirtualAlloc(
+                    ptr::null_mut(),
+                    rounded_mapping_size,
+                    MEM_RESERVE,
+                    PAGE_NOACCESS,
+                )
+            };
+            if ptr.is_null() {
+                return Err(errno::errno().to_string());
+            }
+
+            let result = Self {
+                ptr: ptr as *mut u8,
+                len: rounded_mapping_size,
+            };
+
+            if accessible_size != 0 {
+                // Commit the accessible size.
+                let rounded_accessible_size = round_up_to_page_size(accessible_size, page_size);
+                if unsafe { VirtualAlloc(ptr, rounded_accessible_size, MEM_COMMIT, PAGE_READWRITE) }
+                    .is_null()
+                {
+                    return Err(errno::errno().to_string());
+                }
+            }
+
+            result
+        })
+    }
+
+    /// Make the memory starting at `start` and extending for `len` bytes accessible.
+    #[cfg(not(target_os = "windows"))]
+    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<(), String> {
+        // Mmap may return EINVAL if the size is zero, so just
+        // special-case that.
+        if len == 0 {
+            return Ok(());
+        }
 
         let page_size = region::page::size();
 
-        // VirtualAlloc always rounds up to the next multiple of the page size
-        let ptr = unsafe {
-            VirtualAlloc(
-                ptr::null_mut(),
-                size,
-                MEM_COMMIT | MEM_RESERVE,
-                PAGE_READWRITE,
-            )
-        };
-        if !ptr.is_null() {
-            Ok(Self {
-                ptr: ptr as *mut u8,
-                len: round_up_to_page_size(size, page_size),
-            })
-        } else {
-            Err(errno::errno().to_string())
+        assert_eq!(start % page_size, 0);
+        assert_eq!(len % page_size, 0);
+        assert!(len < self.len);
+        assert!(start < self.len - len);
+
+        // Commit the accessible size.
+        unsafe { region::protect(self.ptr.add(start), len, region::Protection::ReadWrite) }
+            .map_err(|e| e.to_string())
+    }
+
+    /// Make the memory starting at `start` and extending for `len` bytes accessible.
+    #[cfg(target_os = "windows")]
+    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<(), String> {
+        use winapi::um::memoryapi::VirtualAlloc;
+        use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
+
+        let page_size = region::page::size();
+
+        assert_eq!(start % page_size, 0);
+        assert_eq!(len % page_size, 0);
+        assert!(len < self.len);
+        assert!(start < self.len - len);
+
+        // Commit the accessible size.
+        if unsafe { VirtualAlloc(self.ptr.add(start), len, MEM_COMMIT, PAGE_READWRITE) }.is_null() {
+            return Err(errno::errno().to_string());
         }
+
+        Ok(())
     }
 
     /// Return the allocated memory as a slice of u8.

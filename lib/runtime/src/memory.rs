@@ -4,7 +4,6 @@
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
-use region;
 use std::string::String;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
@@ -58,23 +57,8 @@ impl LinearMemory {
         let request_bytes = minimum_bytes.checked_add(offset_guard_bytes).unwrap();
         let mapped_pages = plan.memory.minimum as usize;
         let mapped_bytes = mapped_pages * WASM_PAGE_SIZE as usize;
-        let unmapped_pages = minimum_pages - mapped_pages;
-        let unmapped_bytes = unmapped_pages * WASM_PAGE_SIZE as usize;
-        let inaccessible_bytes = unmapped_bytes + offset_guard_bytes;
 
-        let mmap = Mmap::with_size(request_bytes)?;
-
-        // Make the unmapped and offset-guard pages inaccessible.
-        if request_bytes != 0 {
-            unsafe {
-                region::protect(
-                    mmap.as_ptr().add(mapped_bytes),
-                    inaccessible_bytes,
-                    region::Protection::None,
-                )
-            }
-            .expect("unable to make memory inaccessible");
-        }
+        let mmap = Mmap::accessible_reserved(mapped_bytes, request_bytes)?;
 
         Ok(Self {
             mmap,
@@ -117,29 +101,25 @@ impl LinearMemory {
             return None;
         }
 
-        let new_bytes = new_pages as usize * WASM_PAGE_SIZE as usize;
+        let delta_bytes = cast::usize(delta) * WASM_PAGE_SIZE as usize;
+        let prev_bytes = cast::usize(prev_pages) * WASM_PAGE_SIZE as usize;
+        let new_bytes = cast::usize(new_pages) * WASM_PAGE_SIZE as usize;
 
         if new_bytes > self.mmap.len() - self.offset_guard_size {
-            // If we have no maximum, this is a "dynamic" heap, and it's allowed to move.
+            // If the new size is within the declared maximum, but needs more memory than we
+            // have on hand, it's a dynamic heap and it can move.
             let guard_bytes = self.offset_guard_size;
             let request_bytes = new_bytes.checked_add(guard_bytes)?;
 
-            let mut new_mmap = Mmap::with_size(request_bytes).ok()?;
-
-            // Make the offset-guard pages inaccessible.
-            unsafe {
-                region::protect(
-                    new_mmap.as_ptr().add(new_bytes),
-                    guard_bytes,
-                    region::Protection::None,
-                )
-            }
-            .expect("unable to make memory inaccessible");
+            let mut new_mmap = Mmap::accessible_reserved(new_bytes, request_bytes).ok()?;
 
             let copy_len = self.mmap.len() - self.offset_guard_size;
             new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&self.mmap.as_slice()[..copy_len]);
 
             self.mmap = new_mmap;
+        } else {
+            // Make the newly allocated pages accessible.
+            self.mmap.make_accessible(prev_bytes, delta_bytes).ok()?;
         }
 
         self.current = new_pages;
