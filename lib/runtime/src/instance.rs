@@ -412,7 +412,7 @@ impl InstanceContents {
 
     /// Return a reference to the custom state attached to this instance.
     pub fn host_state(&mut self) -> &mut Any {
-        return &mut *self.host_state;
+        &mut *self.host_state
     }
 }
 
@@ -691,7 +691,7 @@ impl Instance {
 
     /// Return a reference to the custom state attached to this instance.
     pub fn host_state(&mut self) -> &mut Any {
-        return self.mmap_field.contents_mut().host_state();
+        self.mmap_field.contents_mut().host_state()
     }
 }
 
