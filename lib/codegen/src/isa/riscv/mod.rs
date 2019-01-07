@@ -15,8 +15,8 @@ use crate::isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encoding
 use crate::isa::Builder as IsaBuilder;
 use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
+use core::fmt;
 use std::boxed::Box;
-use std::fmt;
 use target_lexicon::{PointerWidth, Triple};
 
 #[allow(dead_code)]
@@ -129,7 +129,7 @@ mod tests {
     use crate::ir::{Function, InstructionData, Opcode};
     use crate::isa;
     use crate::settings::{self, Configurable};
-    use std::str::FromStr;
+    use core::str::FromStr;
     use std::string::{String, ToString};
     use target_lexicon::triple;
 

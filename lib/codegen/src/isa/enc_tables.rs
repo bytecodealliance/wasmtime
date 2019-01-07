@@ -7,7 +7,7 @@ use crate::constant_hash::{probe, Table};
 use crate::ir::{Function, InstructionData, Opcode, Type};
 use crate::isa::{Encoding, Legalize};
 use crate::settings::PredicateView;
-use std::ops::Range;
+use core::ops::Range;
 
 /// A recipe predicate.
 ///

@@ -3,6 +3,7 @@ name = "clif-wasm-fuzz"
 version = "0.0.1"
 authors = ["foote@fastly.com"]
 publish = false
+edition = "2018"
 
 [package.metadata]
 cargo-fuzz = true

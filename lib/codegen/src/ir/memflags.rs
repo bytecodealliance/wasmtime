@@ -1,6 +1,6 @@
 //! Memory operation flags.
 
-use std::fmt;
+use core::fmt;
 
 enum FlagBit {
     Notrap,

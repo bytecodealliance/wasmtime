@@ -13,7 +13,7 @@ pub use self::shrink::shrink_instructions;
 pub use crate::regalloc::RegDiversions;
 
 use crate::ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
-use std::fmt;
+use core::fmt;
 
 /// Offset in bytes from the beginning of the function.
 ///

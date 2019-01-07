@@ -5,7 +5,7 @@
 
 use crate::ir::StackSlot;
 use crate::isa::{RegInfo, RegUnit};
-use std::fmt;
+use core::fmt;
 
 /// Value location.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

@@ -4,7 +4,7 @@
 //! `TargetIsa::legalize_signature()` method.
 
 use crate::ir::{AbiParam, ArgumentExtension, ArgumentLoc, Type};
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 use std::vec::Vec;
 
 /// Legalization action to perform on a single argument or return value when converting a

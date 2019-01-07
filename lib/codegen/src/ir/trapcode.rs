@@ -1,7 +1,7 @@
 //! Trap codes describing the reason for a trap.
 
-use std::fmt::{self, Display, Formatter};
-use std::str::FromStr;
+use core::fmt::{self, Display, Formatter};
+use core::str::FromStr;
 
 /// A trap code describing the reason for a trap.
 ///

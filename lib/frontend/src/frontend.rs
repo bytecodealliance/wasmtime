@@ -608,7 +608,7 @@ impl<'a> FunctionBuilder<'a> {
             "`size` is not a power of two"
         );
         assert!(
-            access_size >= u64::from(::std::cmp::min(src_align, dest_align)),
+            access_size >= u64::from(::core::cmp::min(src_align, dest_align)),
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
 
@@ -777,7 +777,7 @@ impl<'a> FunctionBuilder<'a> {
             "`size` is not a power of two"
         );
         assert!(
-            access_size >= u64::from(::std::cmp::min(src_align, dest_align)),
+            access_size >= u64::from(::core::cmp::min(src_align, dest_align)),
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
         let load_and_store_amount = size / access_size;
@@ -962,8 +962,8 @@ mod tests {
 
     #[test]
     fn memcpy() {
+        use core::str::FromStr;
         use cranelift_codegen::{isa, settings};
-        use std::str::FromStr;
 
         let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(shared_builder);
@@ -1023,8 +1023,8 @@ ebb0:
 
     #[test]
     fn small_memcpy() {
+        use core::str::FromStr;
         use cranelift_codegen::{isa, settings};
-        use std::str::FromStr;
 
         let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(shared_builder);

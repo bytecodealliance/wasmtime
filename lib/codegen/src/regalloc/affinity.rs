@@ -10,7 +10,7 @@
 
 use crate::ir::{AbiParam, ArgumentLoc};
 use crate::isa::{ConstraintKind, OperandConstraint, RegClassIndex, RegInfo, TargetIsa};
-use std::fmt;
+use core::fmt;
 
 /// Preferred register allocation for an SSA value.
 #[derive(Clone, Copy, Debug)]

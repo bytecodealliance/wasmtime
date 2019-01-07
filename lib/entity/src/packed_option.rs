@@ -7,8 +7,8 @@
 //! This module provides a `PackedOption<T>` for types that have a reserved value that can be used
 //! to represent `None`.
 
-use std::fmt;
-use std::mem;
+use core::fmt;
+use core::mem;
 
 /// Types that have a reserved value which can't be created any other way.
 pub trait ReservedValue: Eq {

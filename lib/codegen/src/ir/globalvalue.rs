@@ -3,7 +3,7 @@
 use crate::ir::immediates::{Imm64, Offset32};
 use crate::ir::{ExternalName, GlobalValue, Type};
 use crate::isa::TargetIsa;
-use std::fmt;
+use core::fmt;
 
 /// Information about a global value declaration.
 #[derive(Clone)]

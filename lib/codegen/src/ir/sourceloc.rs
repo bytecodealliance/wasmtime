@@ -3,7 +3,7 @@
 //! Cranelift tracks the original source location of each instruction, and preserves the source
 //! location when instructions are transformed.
 
-use std::fmt;
+use core::fmt;
 
 /// A source location.
 ///

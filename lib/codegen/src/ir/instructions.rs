@@ -6,9 +6,9 @@
 //! A large part of this module is auto-generated from the instruction descriptions in the meta
 //! directory.
 
-use std::fmt::{self, Display, Formatter};
-use std::ops::{Deref, DerefMut};
-use std::str::FromStr;
+use core::fmt::{self, Display, Formatter};
+use core::ops::{Deref, DerefMut};
+use core::str::FromStr;
 use std::vec::Vec;
 
 use crate::ir;
@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn opcodes() {
-        use std::mem;
+        use core::mem;
 
         let x = Opcode::Iadd;
         let mut y = Opcode::Isub;
@@ -590,7 +590,7 @@ mod tests {
 
     #[test]
     fn instruction_data() {
-        use std::mem;
+        use core::mem;
         // The size of the `InstructionData` enum is important for performance. It should not
         // exceed 16 bytes. Use `Box<FooData>` out-of-line payloads for instruction formats that
         // require more space than that. It would be fine with a data structure smaller than 16

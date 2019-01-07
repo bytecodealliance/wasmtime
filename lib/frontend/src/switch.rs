@@ -1,8 +1,8 @@
+use super::HashMap;
 use crate::frontend::FunctionBuilder;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::*;
 use log::debug;
-use std::collections::HashMap;
 use std::vec::Vec;
 
 type EntryIndex = u64;
@@ -334,7 +334,7 @@ ebb10:
 
     #[test]
     fn switch_min_index_value() {
-        let func = setup!(0, [::std::i64::MIN as u64, 1,]);
+        let func = setup!(0, [::core::i64::MIN as u64, 1,]);
         assert_eq!(
             func,
             "ebb0:
@@ -350,7 +350,7 @@ ebb10:
 
     #[test]
     fn switch_max_index_value() {
-        let func = setup!(0, [::std::i64::MAX as u64, 1,]);
+        let func = setup!(0, [::core::i64::MAX as u64, 1,]);
         assert_eq!(
             func,
             "ebb0:

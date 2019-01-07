@@ -8,9 +8,9 @@ use crate::isa::TargetIsa;
 use crate::result::CodegenError;
 use crate::verifier::{VerifierError, VerifierErrors};
 use crate::write::{decorate_function, FuncWriter, PlainWriter};
+use core::fmt;
+use core::fmt::Write;
 use std::boxed::Box;
-use std::fmt;
-use std::fmt::Write;
 use std::string::{String, ToString};
 use std::vec::Vec;
 

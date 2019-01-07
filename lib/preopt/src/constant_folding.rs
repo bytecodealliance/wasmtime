@@ -102,7 +102,7 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
 }
 
 fn evaluate_binary(opcode: ir::Opcode, imm0: ConstImm, imm1: ConstImm) -> Option<ConstImm> {
-    use std::num::Wrapping;
+    use core::num::Wrapping;
 
     match opcode {
         ir::Opcode::Iadd => {

@@ -5,8 +5,8 @@
 //! their own index types to use them directly. Frontends which don't
 //! can use the `Variable` defined here.
 
+use core::u32;
 use cranelift_codegen::entity::EntityRef;
-use std::u32;
 
 ///! An opaque reference to a variable.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

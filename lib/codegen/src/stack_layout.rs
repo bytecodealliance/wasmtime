@@ -3,7 +3,7 @@
 use crate::ir::stackslot::{StackOffset, StackSize, StackSlotKind};
 use crate::ir::StackSlots;
 use crate::result::{CodegenError, CodegenResult};
-use std::cmp::{max, min};
+use core::cmp::{max, min};
 
 /// Compute the stack frame layout.
 ///

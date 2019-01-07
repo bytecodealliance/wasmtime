@@ -174,12 +174,20 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
-extern crate alloc;
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+
+#[cfg(not(feature = "std"))]
+use hashmap_core::HashMap;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 
 pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use crate::switch::Switch;
@@ -189,20 +197,6 @@ mod frontend;
 mod ssa;
 mod switch;
 mod variable;
-
-/// This replaces `std` in builds with `core`.
-#[cfg(not(feature = "std"))]
-mod std {
-    pub use alloc::{string, vec};
-    pub use core::*;
-    pub mod collections {
-        #[allow(unused_extern_crates)]
-        extern crate hashmap_core;
-
-        pub use self::hashmap_core::map as hash_map;
-        pub use self::hashmap_core::{HashMap, HashSet};
-    }
-}
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

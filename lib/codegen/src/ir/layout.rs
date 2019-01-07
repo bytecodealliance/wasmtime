@@ -8,9 +8,9 @@ use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
 use crate::ir::{Ebb, Inst};
 use crate::packed_option::PackedOption;
 use crate::timing;
+use core::cmp;
+use core::iter::{IntoIterator, Iterator};
 use log::debug;
-use std::cmp;
-use std::iter::{IntoIterator, Iterator};
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
 /// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references
@@ -745,7 +745,7 @@ mod tests {
     use crate::cursor::{Cursor, CursorPosition};
     use crate::entity::EntityRef;
     use crate::ir::{Ebb, Inst, ProgramOrder, SourceLoc};
-    use std::cmp::Ordering;
+    use core::cmp::Ordering;
     use std::vec::Vec;
 
     struct LayoutCursor<'f> {

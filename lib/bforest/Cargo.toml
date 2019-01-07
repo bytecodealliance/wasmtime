@@ -17,6 +17,7 @@ cranelift-entity = { path = "../entity", version = "0.26.0", default-features = 
 [features]
 default = ["std"]
 std = ["cranelift-entity/std"]
+core = []
 
 [badges]
 maintenance = { status = "experimental" }

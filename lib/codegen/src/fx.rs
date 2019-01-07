@@ -10,10 +10,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::collections::{HashMap, HashSet};
-use std::default::Default;
-use std::hash::{BuildHasherDefault, Hash, Hasher};
-use std::ops::BitXor;
+use super::{HashMap, HashSet};
+use core::default::Default;
+use core::hash::{BuildHasherDefault, Hash, Hasher};
+use core::ops::BitXor;
 
 pub type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
 pub type FxHashSet<V> = HashSet<V, BuildHasherDefault<FxHasher>>;

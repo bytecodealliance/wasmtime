@@ -16,7 +16,7 @@
 
 use super::{Addend, CodeOffset, CodeSink, Reloc};
 use crate::ir::{ExternalName, JumpTable, SourceLoc, TrapCode};
-use std::ptr::write_unaligned;
+use core::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
 ///

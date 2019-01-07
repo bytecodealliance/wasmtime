@@ -4,10 +4,10 @@
 //! Each type here should have a corresponding definition in the `cranelift.immediates` Python
 //! module in the meta language.
 
-use std::fmt::{self, Display, Formatter};
-use std::mem;
-use std::str::FromStr;
-use std::{i32, u32};
+use core::fmt::{self, Display, Formatter};
+use core::mem;
+use core::str::FromStr;
+use core::{i32, u32};
 
 /// 64-bit immediate signed integer operand.
 ///
@@ -729,10 +729,10 @@ impl FromStr for Ieee64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fmt::Display;
-    use std::str::FromStr;
+    use core::fmt::Display;
+    use core::str::FromStr;
+    use core::{f32, f64};
     use std::string::ToString;
-    use std::{f32, f64};
 
     #[test]
     fn format_imm64() {

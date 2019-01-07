@@ -9,9 +9,9 @@
 
 use crate::map::SecondaryMap;
 use crate::EntityRef;
-use std::mem;
-use std::slice;
-use std::u32;
+use core::mem;
+use core::slice;
+use core::u32;
 use std::vec::Vec;
 
 /// Trait for extracting keys from values stored in a `SparseMap`.

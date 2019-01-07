@@ -59,7 +59,7 @@ pub trait InstInserterBase<'f>: Sized {
     fn insert_built_inst(self, inst: Inst, ctrl_typevar: Type) -> &'f mut DataFlowGraph;
 }
 
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 /// Builder that inserts an instruction at the current position.
 ///

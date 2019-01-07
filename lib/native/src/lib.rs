@@ -23,7 +23,7 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::Configurable;

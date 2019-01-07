@@ -57,8 +57,8 @@ use crate::regalloc::register_set::RegisterSet;
 use crate::regalloc::solver::{Solver, SolverError};
 use crate::regalloc::RegDiversions;
 use crate::timing;
+use core::mem;
 use log::debug;
-use std::mem;
 
 /// Data structures for the coloring pass.
 ///

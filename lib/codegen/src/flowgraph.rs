@@ -28,7 +28,7 @@ use crate::entity::SecondaryMap;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{Ebb, Function, Inst};
 use crate::timing;
-use std::mem;
+use core::mem;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 #[derive(PartialEq, Eq)]

@@ -17,8 +17,8 @@ use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::timing;
+use core::fmt;
 use std::boxed::Box;
-use std::fmt;
 use target_lexicon::{PointerWidth, Triple};
 
 #[allow(dead_code)]

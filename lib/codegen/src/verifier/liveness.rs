@@ -8,7 +8,7 @@ use crate::regalloc::liveness::Liveness;
 use crate::regalloc::liverange::LiveRange;
 use crate::timing;
 use crate::verifier::{VerifierErrors, VerifierStepResult};
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 /// Verify liveness information for `func`.
 ///

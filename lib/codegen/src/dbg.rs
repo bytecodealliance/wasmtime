@@ -1,5 +1,5 @@
 //! Debug tracing helpers.
-use std::fmt;
+use core::fmt;
 
 /// Prefix added to the log file names, just before the thread name or id.
 pub static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";

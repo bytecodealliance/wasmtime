@@ -1,7 +1,7 @@
 //! Data structures describing the registers in an ISA.
 
 use crate::entity::EntityRef;
-use std::fmt;
+use core::fmt;
 
 /// Register units are the smallest units of register allocation.
 ///

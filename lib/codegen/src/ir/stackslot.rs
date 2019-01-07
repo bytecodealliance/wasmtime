@@ -6,11 +6,11 @@
 use crate::entity::{Iter, IterMut, Keys, PrimaryMap};
 use crate::ir::{StackSlot, Type};
 use crate::packed_option::PackedOption;
-use std::cmp;
-use std::fmt;
-use std::ops::{Index, IndexMut};
-use std::slice;
-use std::str::FromStr;
+use core::cmp;
+use core::fmt;
+use core::ops::{Index, IndexMut};
+use core::slice;
+use core::str::FromStr;
 use std::vec::Vec;
 
 /// The size of an object on the stack, or the size of a stack frame.

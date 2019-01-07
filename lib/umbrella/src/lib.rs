@@ -22,6 +22,7 @@
         clippy::use_self
     )
 )]
+#![no_std]
 
 /// Provide these crates, renamed to reduce stutter.
 pub use cranelift_codegen as codegen;

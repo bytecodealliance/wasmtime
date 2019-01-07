@@ -38,9 +38,9 @@
 
 use crate::isa::registers::{RegClass, RegClassMask, RegInfo, MAX_TRACKED_TOPRCS};
 use crate::regalloc::RegisterSet;
-use std::cmp::min;
-use std::fmt;
-use std::iter::ExactSizeIterator;
+use core::cmp::min;
+use core::fmt;
+use core::iter::ExactSizeIterator;
 
 /// Information per top-level register class.
 ///
@@ -275,9 +275,9 @@ mod tests {
     use super::Pressure;
     use crate::isa::{RegClass, TargetIsa};
     use crate::regalloc::RegisterSet;
-    use std::borrow::Borrow;
+    use core::borrow::Borrow;
+    use core::str::FromStr;
     use std::boxed::Box;
-    use std::str::FromStr;
     use target_lexicon::triple;
 
     // Make an arm32 `TargetIsa`, if possible.

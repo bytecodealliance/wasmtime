@@ -94,7 +94,7 @@ mod tests {
     use crate::dominator_tree::DominatorTree;
     use crate::flowgraph::ControlFlowGraph;
     use crate::ir::{Function, InstBuilder};
-    use std::iter;
+    use core::iter;
 
     #[test]
     fn empty() {
