@@ -18,11 +18,15 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(not(feature = "std"))]
-extern crate alloc;
+#[macro_use]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
 
 mod constant_folding;
 
@@ -48,11 +52,4 @@ where
     constant_folding::fold_constants(&mut ctx.func);
     ctx.verify_if(fisa)?;
     Ok(())
-}
-
-/// This replaces `std` in builds with `core`.
-#[cfg(not(feature = "std"))]
-mod std {
-    pub use alloc::{boxed, slice, string, vec};
-    pub use core::*;
 }

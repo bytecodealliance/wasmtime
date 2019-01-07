@@ -31,24 +31,24 @@
         clippy::use_self
     )
 )]
-// Turns on no_std and alloc features if std is not available.
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-/// This replaces `std` in builds with `core`.
+#[cfg(test)]
 #[cfg(not(feature = "std"))]
-mod std {
-    extern crate alloc;
-    pub use self::alloc::{boxed, string, vec};
-    pub use core::*;
-}
+#[macro_use]
+extern crate alloc as std;
+#[cfg(test)]
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
 
 #[macro_use]
 extern crate cranelift_entity as entity;
 use crate::entity::packed_option;
 
-use std::borrow::BorrowMut;
-use std::cmp::Ordering;
+use core::borrow::BorrowMut;
+use core::cmp::Ordering;
 
 mod map;
 mod node;

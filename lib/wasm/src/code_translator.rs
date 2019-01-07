@@ -22,18 +22,17 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
+use super::{hash_map, HashMap};
 use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
 use crate::state::{ControlStackFrame, TranslationState};
 use crate::translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
 use crate::translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
+use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
-use std::collections::{hash_map, HashMap};
-use std::vec::Vec;
-use std::{i32, u32};
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
@@ -288,7 +287,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // Here we have jump arguments, but Cranelift's br_table doesn't support them
                 // We then proceed to split the edges going out of the br_table
                 let return_count = jump_args_count;
-                let mut dest_ebb_sequence = Vec::new();
+                let mut dest_ebb_sequence = vec![];
                 let mut dest_ebb_map = HashMap::new();
                 for depth in &*depths {
                     let branch_ebb = match dest_ebb_map.entry(*depth as usize) {
@@ -984,7 +983,7 @@ fn get_heap_addr(
     addr_ty: Type,
     builder: &mut FunctionBuilder,
 ) -> (ir::Value, i32) {
-    use std::cmp::min;
+    use core::cmp::min;
 
     let mut adjusted_offset = u64::from(offset);
     let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();

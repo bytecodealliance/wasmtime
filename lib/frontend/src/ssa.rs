@@ -6,6 +6,8 @@
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
 use crate::Variable;
+use core::mem;
+use core::u32;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
@@ -14,8 +16,6 @@ use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::packed_option::ReservedValue;
-use std::mem;
-use std::u32;
 use std::vec::Vec;
 
 /// Structure containing the data relevant the construction of SSA for a given function.

@@ -27,8 +27,8 @@ use crate::regalloc::pressure::Pressure;
 use crate::regalloc::virtregs::VirtRegs;
 use crate::timing;
 use crate::topo_order::TopoOrder;
+use core::fmt;
 use log::debug;
-use std::fmt;
 use std::vec::Vec;
 
 /// Return a top-level register class which contains `unit`.

@@ -19,8 +19,8 @@ use crate::entity::{Keys, PrimaryMap, SecondaryMap};
 use crate::ir::{Function, Value};
 use crate::packed_option::PackedOption;
 use crate::ref_slice::ref_slice;
-use std::cmp::Ordering;
-use std::fmt;
+use core::cmp::Ordering;
+use core::fmt;
 use std::vec::Vec;
 
 /// A virtual register reference.

@@ -5,6 +5,7 @@
 // TODO: Factor out `ir::Function`'s `ext_funcs` and `global_values` into a struct
 // shared with `DataContext`?
 
+use super::HashMap;
 use crate::data_context::DataContext;
 use crate::Backend;
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
@@ -12,7 +13,6 @@ use cranelift_codegen::{binemit, ir, isa, CodegenError, Context};
 use failure::Fail;
 use log::info;
 use std::borrow::ToOwned;
-use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;
 
@@ -398,7 +398,7 @@ where
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
         // TODO: Can we avoid allocating names so often?
-        use std::collections::hash_map::Entry::*;
+        use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Func(id) => {
@@ -435,7 +435,7 @@ where
         writable: bool,
     ) -> ModuleResult<DataId> {
         // TODO: Can we avoid allocating names so often?
-        use std::collections::hash_map::Entry::*;
+        use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Data(id) => {

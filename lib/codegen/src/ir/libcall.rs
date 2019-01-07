@@ -5,8 +5,8 @@ use crate::ir::{
     Signature, Type,
 };
 use crate::isa::{CallConv, RegUnit, TargetIsa};
-use std::fmt;
-use std::str::FromStr;
+use core::fmt;
+use core::str::FromStr;
 
 /// The name of a runtime library routine.
 ///

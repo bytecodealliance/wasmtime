@@ -94,7 +94,7 @@ The following crates support \`no\_std\`, although they do depend on liballoc:
  - cranelift-native
  - cranelift-wasm
  - cranelift-module
- - cranelift-simplejit
+ - cranelift-preopt
  - cranelift
 
 To use no\_std mode, disable the std feature and enable the core

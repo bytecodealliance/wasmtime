@@ -2,7 +2,7 @@
 //!
 //! This modules provides facilities for timing the execution of individual compilation passes.
 
-use std::fmt;
+use core::fmt;
 
 pub use self::details::{add_to_current, take_current, PassTimes, TimingToken};
 

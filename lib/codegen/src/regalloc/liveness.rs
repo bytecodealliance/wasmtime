@@ -183,8 +183,8 @@ use crate::isa::{EncInfo, OperandConstraint, TargetIsa};
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liverange::{LiveRange, LiveRangeContext, LiveRangeForest};
 use crate::timing;
-use std::mem;
-use std::ops::Index;
+use core::mem;
+use core::ops::Index;
 use std::vec::Vec;
 
 /// A set of live ranges, indexed by value number.

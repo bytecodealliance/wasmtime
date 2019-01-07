@@ -14,7 +14,7 @@ use crate::isa::{CallConv, RegClass, RegUnit, TargetIsa};
 use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
-use std::i32;
+use core::i32;
 use target_lexicon::{PointerWidth, Triple};
 
 /// Argument registers for x86-64

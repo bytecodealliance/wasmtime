@@ -7,8 +7,8 @@
 
 use crate::ir::{ArgumentLoc, ExternalName, SigRef, Type};
 use crate::isa::{CallConv, RegInfo, RegUnit};
-use std::fmt;
-use std::str::FromStr;
+use core::fmt;
+use core::str::FromStr;
 use std::vec::Vec;
 
 /// Function signature.

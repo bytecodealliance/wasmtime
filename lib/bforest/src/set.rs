@@ -3,8 +3,8 @@
 use super::{Comparator, Forest, Node, NodeData, NodePool, Path, SetValue, INNER_SIZE};
 use crate::packed_option::PackedOption;
 #[cfg(test)]
-use std::fmt;
-use std::marker::PhantomData;
+use core::fmt;
+use core::marker::PhantomData;
 #[cfg(test)]
 use std::string::String;
 
@@ -357,7 +357,7 @@ where
 mod tests {
     use super::super::NodeData;
     use super::*;
-    use std::mem;
+    use core::mem;
     use std::vec::Vec;
 
     #[test]

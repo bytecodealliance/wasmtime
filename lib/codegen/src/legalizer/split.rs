@@ -67,7 +67,7 @@
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::ir::{self, Ebb, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
-use std::iter;
+use core::iter;
 use std::vec::Vec;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values

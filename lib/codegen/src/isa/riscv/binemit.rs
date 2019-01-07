@@ -5,7 +5,7 @@ use crate::ir::{Function, Inst, InstructionData};
 use crate::isa::{RegUnit, StackBaseMask, StackRef};
 use crate::predicates::is_signed_int;
 use crate::regalloc::RegDiversions;
-use std::u32;
+use core::u32;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-riscv.rs"));
 

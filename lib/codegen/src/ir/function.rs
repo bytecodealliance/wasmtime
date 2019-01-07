@@ -16,7 +16,7 @@ use crate::ir::{JumpTableOffsets, JumpTables};
 use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
 use crate::regalloc::RegDiversions;
 use crate::write::write_function;
-use std::fmt;
+use core::fmt;
 
 /// A function.
 ///

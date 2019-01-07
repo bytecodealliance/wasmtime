@@ -1,6 +1,6 @@
 //! Rearrange the elements in a slice according to a predicate.
 
-use std::mem;
+use core::mem;
 
 /// Rearrange the elements of the mutable slice `s` such that elements where `p(t)` is true precede
 /// the elements where `p(t)` is false.

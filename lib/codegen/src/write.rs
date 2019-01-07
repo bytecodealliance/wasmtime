@@ -8,7 +8,7 @@ use crate::ir::entities::AnyEntity;
 use crate::ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
 use crate::isa::{RegInfo, TargetIsa};
 use crate::packed_option::ReservedValue;
-use std::fmt::{self, Write};
+use core::fmt::{self, Write};
 use std::string::String;
 use std::vec::Vec;
 

@@ -2,9 +2,9 @@
 
 use crate::entity::EntityRef;
 use crate::ir::{Ebb, Inst, ValueDef};
-use std::cmp;
-use std::fmt;
-use std::u32;
+use core::cmp;
+use core::fmt;
+use core::u32;
 
 /// A `ProgramPoint` represents a position in a function where the live range of an SSA value can
 /// begin or end. It can be either:

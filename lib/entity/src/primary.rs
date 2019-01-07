@@ -3,10 +3,11 @@ use crate::boxed_slice::BoxedSlice;
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
 use crate::EntityRef;
-use std::iter::FromIterator;
-use std::marker::PhantomData;
-use std::ops::{Index, IndexMut};
-use std::slice;
+use core::iter::FromIterator;
+use core::marker::PhantomData;
+use core::ops::{Index, IndexMut};
+use core::slice;
+use std::boxed::Box;
 use std::vec::Vec;
 
 /// A primary mapping `K -> V` allocating dense entity references.

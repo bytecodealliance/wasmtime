@@ -50,17 +50,15 @@
         clippy::use_self
     )
 )]
-// Turns on no_std and alloc features if std is not available.
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-/// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]
-mod std {
-    extern crate alloc;
-    pub use self::alloc::{boxed, string, vec};
-    pub use core::*;
-}
+#[macro_use]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
 
 // Re-export core so that the macros works with both std and no_std crates
 #[doc(hidden)]

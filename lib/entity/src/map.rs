@@ -3,9 +3,9 @@
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
 use crate::EntityRef;
-use std::marker::PhantomData;
-use std::ops::{Index, IndexMut};
-use std::slice;
+use core::marker::PhantomData;
+use core::ops::{Index, IndexMut};
+use core::slice;
 use std::vec::Vec;
 
 /// A mapping `K -> V` for densely indexed entity references.

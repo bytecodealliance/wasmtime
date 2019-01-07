@@ -18,6 +18,7 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::{EntityRef, PrimaryMap};
+use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 

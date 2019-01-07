@@ -10,11 +10,11 @@ use crate::ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, V
 use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
-use std::fmt;
-use std::iter;
-use std::mem;
-use std::ops::{Index, IndexMut};
-use std::u16;
+use core::fmt;
+use core::iter;
+use core::mem;
+use core::ops::{Index, IndexMut};
+use core::u16;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either

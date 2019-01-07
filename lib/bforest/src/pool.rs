@@ -5,8 +5,8 @@ use super::Comparator;
 use super::{Forest, Node, NodeData};
 use crate::entity::PrimaryMap;
 #[cfg(test)]
-use std::fmt;
-use std::ops::{Index, IndexMut};
+use core::fmt;
+use core::ops::{Index, IndexMut};
 
 /// A pool of nodes, including a free list.
 pub(super) struct NodePool<F: Forest> {
@@ -84,8 +84,8 @@ impl<F: Forest> NodePool<F> {
         F::Key: fmt::Display,
     {
         use crate::entity::SparseSet;
-        use std::borrow::Borrow;
-        use std::cmp::Ordering;
+        use core::borrow::Borrow;
+        use core::cmp::Ordering;
         use std::vec::Vec;
 
         // The root node can't be an inner node with just a single sub-tree. It should have been

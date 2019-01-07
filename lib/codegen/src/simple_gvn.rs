@@ -5,8 +5,8 @@ use crate::dominator_tree::DominatorTree;
 use crate::ir::{Function, Inst, InstructionData, Opcode, Type};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::timing;
-use std::cell::{Ref, RefCell};
-use std::hash::{Hash, Hasher};
+use core::cell::{Ref, RefCell};
+use core::hash::{Hash, Hasher};
 use std::vec::Vec;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.

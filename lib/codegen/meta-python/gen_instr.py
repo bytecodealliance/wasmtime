@@ -257,8 +257,8 @@ def gen_instruction_data_impl(fmt):
                 'pub fn eq(&self, other: &Self, pool: &ir::ValueListPool)'
                 ' -> bool {',
                 '}'):
-            with fmt.indented('if ::std::mem::discriminant(self) != '
-                              '::std::mem::discriminant(other) {', '}'):
+            with fmt.indented('if ::core::mem::discriminant(self) != '
+                              '::core::mem::discriminant(other) {', '}'):
                 fmt.line('return false;')
             with fmt.indented('match (self, other) {', '}'):
                 for f in InstructionFormat.all_formats:
@@ -301,7 +301,7 @@ def gen_instruction_data_impl(fmt):
                 hash the contents of any `ValueLists`.
                 """)
         with fmt.indented(
-                'pub fn hash<H: ::std::hash::Hasher>'
+                'pub fn hash<H: ::core::hash::Hasher>'
                 '(&self, state: &mut H, pool: &ir::ValueListPool) {',
                 '}'):
             with fmt.indented('match *self {', '}'):
@@ -323,13 +323,13 @@ def gen_instruction_data_impl(fmt):
                         members.append(field.member)
                     pat = n + ' { ' + ', '.join(members) + ' }'
                     with fmt.indented(pat + ' => {', '}'):
-                        fmt.line('::std::hash::Hash::hash( '
-                                 '&::std::mem::discriminant(self), state);')
-                        fmt.line('::std::hash::Hash::hash(&opcode, state);')
+                        fmt.line('::core::hash::Hash::hash( '
+                                 '&::core::mem::discriminant(self), state);')
+                        fmt.line('::core::hash::Hash::hash(&opcode, state);')
                         for field in f.imm_fields:
-                            fmt.line('::std::hash::Hash::hash(&{}, state);'
+                            fmt.line('::core::hash::Hash::hash(&{}, state);'
                                      .format(field.member))
-                        fmt.line('::std::hash::Hash::hash({}, state);'
+                        fmt.line('::core::hash::Hash::hash({}, state);'
                                  .format(args))
 
 

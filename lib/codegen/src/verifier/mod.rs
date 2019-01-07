@@ -72,10 +72,10 @@ use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
 use crate::settings::FlagsOrIsa;
 use crate::timing;
+use core::cmp::Ordering;
+use core::fmt::{self, Display, Formatter, Write};
 use failure_derive::Fail;
-use std::cmp::Ordering;
 use std::collections::BTreeSet;
-use std::fmt::{self, Display, Formatter, Write};
 use std::string::String;
 use std::vec::Vec;
 

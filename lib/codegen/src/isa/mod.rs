@@ -63,9 +63,9 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use crate::timing;
+use core::fmt;
 use failure_derive::Fail;
 use std::boxed::Box;
-use std::fmt;
 use target_lexicon::{Architecture, PointerWidth, Triple};
 
 #[cfg(build_riscv)]

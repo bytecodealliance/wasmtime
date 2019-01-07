@@ -8,11 +8,11 @@
 //! EBB.
 
 use crate::fx::FxHashMap;
+use crate::hash_map::{Entry, Iter};
 use crate::ir::{InstructionData, Opcode};
 use crate::ir::{StackSlot, Value, ValueLoc, ValueLocations};
 use crate::isa::{RegInfo, RegUnit};
-use std::collections::hash_map::{Entry, Iter};
-use std::fmt;
+use core::fmt;
 
 /// A diversion of a value from its original location to a new register or stack location.
 ///

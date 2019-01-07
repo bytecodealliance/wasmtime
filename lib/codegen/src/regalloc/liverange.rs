@@ -111,8 +111,8 @@ use crate::bforest;
 use crate::entity::SparseMapValue;
 use crate::ir::{Ebb, ExpandedProgramPoint, Inst, Layout, ProgramOrder, ProgramPoint, Value};
 use crate::regalloc::affinity::Affinity;
-use std::cmp::Ordering;
-use std::marker::PhantomData;
+use core::cmp::Ordering;
+use core::marker::PhantomData;
 
 /// Global live range of a single SSA value.
 ///
@@ -461,7 +461,7 @@ mod tests {
     use crate::entity::EntityRef;
     use crate::ir::{Ebb, Inst, Value};
     use crate::ir::{ExpandedProgramPoint, ProgramOrder};
-    use std::cmp::Ordering;
+    use core::cmp::Ordering;
     use std::vec::Vec;
 
     // Dummy program order which simply compares indexes.

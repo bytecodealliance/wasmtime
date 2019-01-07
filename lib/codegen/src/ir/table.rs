@@ -2,7 +2,7 @@
 
 use crate::ir::immediates::Uimm64;
 use crate::ir::{GlobalValue, Type};
-use std::fmt;
+use core::fmt;
 
 /// Information about a table declaration.
 #[derive(Clone)]

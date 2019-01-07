@@ -27,8 +27,20 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+
+#[cfg(not(feature = "std"))]
+use hashmap_core::{map as hash_map, HashMap};
+#[cfg(feature = "std")]
+use std::collections::{hash_map, HashMap};
 
 mod code_translator;
 mod environ;
@@ -49,24 +61,6 @@ pub use crate::translation_utils::{
     GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex, Table, TableElementType,
     TableIndex,
 };
-
-#[cfg(not(feature = "std"))]
-mod std {
-    extern crate alloc;
-
-    pub use self::alloc::string;
-    pub use self::alloc::vec;
-    pub use core::convert;
-    pub use core::fmt;
-    pub use core::option;
-    pub use core::{cmp, i32, str, u32};
-    pub mod collections {
-        #[allow(unused_extern_crates)]
-        extern crate hashmap_core;
-
-        pub use self::hashmap_core::{map as hash_map, HashMap};
-    }
-}
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
