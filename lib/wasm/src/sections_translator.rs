@@ -48,7 +48,7 @@ pub fn parse_type_section(
                         .expect("only numeric types are supported in function signatures");
                     AbiParam::new(cret_arg)
                 }));
-                environ.declare_signature(&sig);
+                environ.declare_signature(sig);
             }
             ref s => panic!("unsupported type: {:?}", s),
         }

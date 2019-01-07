@@ -350,8 +350,8 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.config
     }
 
-    fn declare_signature(&mut self, sig: &ir::Signature) {
-        self.info.signatures.push(sig.clone());
+    fn declare_signature(&mut self, sig: ir::Signature) {
+        self.info.signatures.push(sig);
     }
 
     fn declare_func_import(

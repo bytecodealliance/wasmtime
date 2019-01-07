@@ -250,7 +250,7 @@ pub trait ModuleEnvironment<'data> {
     fn reserve_signatures(&mut self, _num: u32) {}
 
     /// Declares a function signature to the environment.
-    fn declare_signature(&mut self, sig: &ir::Signature);
+    fn declare_signature(&mut self, sig: ir::Signature);
 
     /// Provides the number of imports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
