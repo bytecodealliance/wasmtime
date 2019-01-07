@@ -18,8 +18,7 @@ pub fn generate_table<T, H: Fn(&T) -> usize>(items: &Vec<T>, hash_function: H) -
         size.next_power_of_two()
     };
 
-    let mut table: Vec<Option<&T>> = Vec::new();
-    table.resize(size, None);
+    let mut table: Vec<Option<&T>> = vec![None; size];
 
     for i in items {
         let mut h = hash_function(i) % size;

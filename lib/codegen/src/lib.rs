@@ -6,27 +6,27 @@
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(feature="cargo-clippy", allow(
 // Produces only a false positive:
-                while_let_loop,
+                clippy::while_let_loop,
 // Produces many false positives, but did produce some valid lints, now fixed:
-                needless_lifetimes,
+                clippy::needless_lifetimes,
 // Generated code makes some style transgressions, but readability doesn't suffer much:
-                many_single_char_names,
-                identity_op,
-                needless_borrow,
-                cast_lossless,
-                unreadable_literal,
-                assign_op_pattern,
-                empty_line_after_outer_attr,
+                clippy::many_single_char_names,
+                clippy::identity_op,
+                clippy::needless_borrow,
+                clippy::cast_lossless,
+                clippy::unreadable_literal,
+                clippy::assign_op_pattern,
+                clippy::empty_line_after_outer_attr,
 // Hard to avoid in generated code:
-                cyclomatic_complexity,
-                too_many_arguments,
+                clippy::cyclomatic_complexity,
+                clippy::too_many_arguments,
 // Code generator doesn't have a way to collapse identical arms:
-                match_same_arms,
+                clippy::match_same_arms,
 // These are relatively minor style issues, but would be easy to fix:
-                new_without_default,
-                new_without_default_derive,
-                should_implement_trait,
-                len_without_is_empty))]
+                clippy::new_without_default,
+                clippy::new_without_default_derive,
+                clippy::should_implement_trait,
+                clippy::len_without_is_empty))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(

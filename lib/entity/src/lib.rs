@@ -15,9 +15,9 @@
 //!
 //! - [`PrimaryMap`](struct.PrimaryMap.html) is used to keep track of a vector of entities,
 //!   assigning a unique entity reference to each.
-//! - [`SecondaryMap`](struct.SecondaryMap.html) is used to associate secondary information to an entity.
-//!   The map is implemented as a simple vector, so it does not keep track of which entities have
-//!   been inserted. Instead, any unknown entities map to the default value.
+//! - [`SecondaryMap`](struct.SecondaryMap.html) is used to associate secondary information to an
+//!   entity. The map is implemented as a simple vector, so it does not keep track of which
+//!   entities have been inserted. Instead, any unknown entities map to the default value.
 //! - [`SparseMap`](struct.SparseMap.html) is used to associate secondary information to a small
 //!   number of entities. It tracks accurately which entities have been inserted. This is a
 //!   specialized data structure which can use a lot of memory, so read the documentation before
@@ -35,7 +35,7 @@
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
-    allow(new_without_default, new_without_default_derive)
+    allow(clippy::new_without_default, clippy::new_without_default_derive)
 )]
 #![cfg_attr(
     feature = "cargo-clippy",

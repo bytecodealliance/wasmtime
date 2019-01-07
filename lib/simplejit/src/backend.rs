@@ -326,13 +326,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             match reloc {
                 Reloc::Abs4 => {
                     // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u32, what as u32)
                     };
                 }
                 Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u64, what as u64)
                     };
@@ -340,7 +340,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
                     // TODO: Handle overflow.
                     let pcrel = ((what as isize) - (at as isize)) as i32;
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut i32, pcrel)
                     };
@@ -391,13 +391,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             match reloc {
                 Reloc::Abs4 => {
                     // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u32, what as u32)
                     };
                 }
                 Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u64, what as u64)
                     };

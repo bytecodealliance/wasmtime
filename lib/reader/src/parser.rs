@@ -51,7 +51,8 @@ pub fn parse_test<'a>(
     let isa_spec: isaspec::IsaSpec;
     let commands: Vec<TestCommand<'a>>;
 
-    // Check for specified passes and target, if present throw out test commands/targets specified in file.
+    // Check for specified passes and target, if present throw out test commands/targets specified
+    // in file.
     match passes {
         Some(pass_vec) => {
             parser.parse_test_commands();
@@ -338,7 +339,7 @@ impl<'a> Parser<'a> {
         // clippy says self.lookahead is immutable so this loop is either infinite or never
         // running. I don't think this is true - self.lookahead is mutated in the loop body - so
         // maybe this is a clippy bug? Either way, disable clippy for this.
-        #[cfg_attr(feature = "cargo-clippy", allow(while_immutable_condition))]
+        #[cfg_attr(feature = "cargo-clippy", allow(clippy::while_immutable_condition))]
         while self.lookahead == None {
             match self.lex.next() {
                 Some(Ok(LocatedToken { token, location })) => {

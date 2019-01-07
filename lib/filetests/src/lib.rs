@@ -10,7 +10,7 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "cargo-clippy", allow(type_complexity))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(

@@ -4,7 +4,7 @@
 //! Reads Wasm binary/text files, translates the functions' code to Cranelift IR.
 #![cfg_attr(
     feature = "cargo-clippy",
-    allow(too_many_arguments, cyclomatic_complexity)
+    allow(clippy::too_many_arguments, clippy::cyclomatic_complexity)
 )]
 
 use crate::utils::{parse_sets_and_triple, read_to_end};

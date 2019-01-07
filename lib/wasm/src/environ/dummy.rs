@@ -187,7 +187,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
         GlobalVariable::Memory {
             gv: vmctx,
-            offset: offset,
+            offset,
             ty: self.mod_info.globals[index].entity.ty,
         }
     }

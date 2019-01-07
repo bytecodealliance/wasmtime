@@ -751,7 +751,7 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         }
         // Assign an encoding.
         // XXX Is there a way to describe this error to the user?
-        #[cfg_attr(feature = "cargo-clippy", allow(match_wild_err_arm))]
+        #[cfg_attr(feature = "cargo-clippy", allow(clippy::match_wild_err_arm))]
         match self
             .isa
             .encode(&self.func, &self.func.dfg[inst], ctrl_typevar)
