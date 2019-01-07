@@ -49,3 +49,6 @@ mod std {
         pub use self::hashmap_core::{HashMap, HashSet};
     }
 }
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -34,3 +34,6 @@ pub mod traps;
 
 pub use crate::backend::{FaerieBackend, FaerieBuilder, FaerieProduct, FaerieTrapCollection};
 pub use crate::container::Format;
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
