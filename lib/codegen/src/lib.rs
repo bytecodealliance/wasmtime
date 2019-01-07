@@ -55,9 +55,6 @@ pub use crate::legalizer::legalize_function;
 pub use crate::verifier::verify_function;
 pub use crate::write::write_function;
 
-/// Version number of the cranelift-codegen crate.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 pub use cranelift_bforest as bforest;
 pub use cranelift_entity as entity;
 
@@ -118,3 +115,6 @@ mod std {
         pub use alloc::collections::BTreeSet;
     }
 }
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

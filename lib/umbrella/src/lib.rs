@@ -44,3 +44,6 @@ pub mod prelude {
 
     pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 }
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
