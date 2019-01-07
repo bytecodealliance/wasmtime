@@ -117,7 +117,7 @@ fn static_addr(
     }
 
     // Check `offset > limit` which is now known non-negative.
-    let limit = bound - u64::from(access_size);
+    let limit = bound - access_size;
 
     // We may be able to omit the check entirely for 32-bit offsets if the heap bound is 4 GB or
     // more.

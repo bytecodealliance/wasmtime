@@ -191,7 +191,7 @@ fn remove_loop_invariant_instructions(
             loop_values.insert(*val);
         }
         pos.goto_top(*ebb);
-        #[cfg_attr(feature = "cargo-clippy", allow(block_in_if_condition_stmt))]
+        #[cfg_attr(feature = "cargo-clippy", allow(clippy::block_in_if_condition_stmt))]
         while let Some(inst) = pos.next_inst() {
             if is_loop_invariant(inst, &pos.func.dfg, &loop_values) {
                 // If all the instruction's argument are defined outside the loop

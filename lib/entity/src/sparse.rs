@@ -37,19 +37,20 @@ pub trait SparseMapValue<K> {
 ///
 /// # Compared to `SecondaryMap`
 ///
-/// When should we use a `SparseMap` instead of a secondary `SecondaryMap`? First of all, `SparseMap`
-/// does not provide the functionality of a `PrimaryMap` which can allocate and assign entity
-/// references to objects as they are pushed onto the map. It is only the secondary entity maps
-/// that can be replaced with a `SparseMap`.
+/// When should we use a `SparseMap` instead of a secondary `SecondaryMap`? First of all,
+/// `SparseMap` does not provide the functionality of a `PrimaryMap` which can allocate and assign
+/// entity references to objects as they are pushed onto the map. It is only the secondary entity
+/// maps that can be replaced with a `SparseMap`.
 ///
 /// - A secondary entity map assigns a default mapping to all keys. It doesn't distinguish between
 ///   an unmapped key and one that maps to the default value. `SparseMap` does not require
 ///   `Default` values, and it tracks accurately if a key has been mapped or not.
-/// - Iterating over the contents of an `SecondaryMap` is linear in the size of the *key space*, while
-///   iterating over a `SparseMap` is linear in the number of elements in the mapping. This is an
-///   advantage precisely when the mapping is sparse.
-/// - `SparseMap::clear()` is constant time and super-fast. `SecondaryMap::clear()` is linear in the
-///   size of the key space. (Or, rather the required `resize()` call following the `clear()` is).
+/// - Iterating over the contents of an `SecondaryMap` is linear in the size of the *key space*,
+///   while iterating over a `SparseMap` is linear in the number of elements in the mapping. This
+///   is an advantage precisely when the mapping is sparse.
+/// - `SparseMap::clear()` is constant time and super-fast. `SecondaryMap::clear()` is linear in
+///   the size of the key space. (Or, rather the required `resize()` call following the `clear()`
+///   is).
 /// - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
 ///   contain their own key.
 pub struct SparseMap<K, V>

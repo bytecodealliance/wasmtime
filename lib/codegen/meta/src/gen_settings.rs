@@ -355,8 +355,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
 }
 
 fn gen_template(group: &SettingGroup, fmt: &mut Formatter) {
-    let mut default_bytes: Vec<u8> = Vec::new();
-    default_bytes.resize(group.settings_size as usize, 0);
+    let mut default_bytes: Vec<u8> = vec![0; group.settings_size as usize];
     for setting in &group.settings {
         *default_bytes.get_mut(setting.byte_offset as usize).unwrap() |= setting.default_byte();
     }

@@ -546,7 +546,7 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// Useful for debug purposes. Use it with `None` for standard printing.
     // Clippy thinks the lifetime that follows is needless, but rustc needs it
-    #[cfg_attr(feature = "cargo-clippy", allow(needless_lifetimes))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_lifetimes))]
     pub fn display<'b, I: Into<Option<&'b TargetIsa>>>(&'b self, isa: I) -> DisplayFunction {
         self.func.display(isa)
     }
@@ -608,7 +608,7 @@ impl<'a> FunctionBuilder<'a> {
             "`size` is not a power of two"
         );
         assert!(
-            access_size >= ::std::cmp::min(src_align, dest_align) as u64,
+            access_size >= u64::from(::std::cmp::min(src_align, dest_align)),
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
 
@@ -689,7 +689,7 @@ impl<'a> FunctionBuilder<'a> {
             "`size` is not a power of two"
         );
         assert!(
-            access_size >= buffer_align as u64,
+            access_size >= u64::from(buffer_align),
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
 
@@ -702,14 +702,14 @@ impl<'a> FunctionBuilder<'a> {
         let load_and_store_amount = size / access_size;
 
         if load_and_store_amount > THRESHOLD {
-            let ch = self.ins().iconst(types::I32, ch as i64);
+            let ch = self.ins().iconst(types::I32, i64::from(ch));
             let size = self.ins().iconst(config.pointer_type(), size as i64);
             self.call_memset(config, buffer, ch, size);
         } else {
             let mut flags = MemFlags::new();
             flags.set_aligned();
 
-            let ch = ch as u64;
+            let ch = u64::from(ch);
             let raw_value = if int_type == types::I64 {
                 (ch << 32) | (ch << 16) | (ch << 8) | ch
             } else if int_type == types::I32 {
@@ -777,7 +777,7 @@ impl<'a> FunctionBuilder<'a> {
             "`size` is not a power of two"
         );
         assert!(
-            access_size >= ::std::cmp::min(src_align, dest_align) as u64,
+            access_size >= u64::from(::std::cmp::min(src_align, dest_align)),
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
         let load_and_store_amount = size / access_size;

@@ -27,7 +27,8 @@ pub enum GlobalValueData {
         /// Type of the loaded value.
         global_type: Type,
 
-        /// Specifies whether the memory that this refers to is readonly, allowing for the elimination of redundant loads.
+        /// Specifies whether the memory that this refers to is readonly, allowing for the
+        /// elimination of redundant loads.
         readonly: bool,
     },
 

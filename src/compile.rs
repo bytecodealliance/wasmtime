@@ -111,9 +111,7 @@ fn handle_module(
             .compile(isa)
             .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
 
-        let mut mem = Vec::new();
-        mem.resize(total_size as usize, 0);
-
+        let mut mem = vec![0; total_size as usize];
         let mut relocs = PrintRelocs { flag_print };
         let mut traps = PrintTraps { flag_print };
         let mut code_sink: binemit::MemoryCodeSink;

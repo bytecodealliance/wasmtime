@@ -152,8 +152,7 @@ impl Backend for FaerieBackend {
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
     ) -> ModuleResult<FaerieCompiledFunction> {
-        let mut code: Vec<u8> = Vec::with_capacity(code_size as usize);
-        code.resize(code_size as usize, 0);
+        let mut code: Vec<u8> = vec![0; code_size as usize];
 
         // Non-lexical lifetimes would obviate the braces here.
         {
