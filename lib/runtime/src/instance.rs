@@ -496,7 +496,7 @@ impl Instance {
             num_defined_globals: vmctx_globals.len() as u64,
         };
 
-        let mut contents_mmap = Mmap::with_size(
+        let mut contents_mmap = Mmap::with_at_least(
             mem::size_of::<InstanceContents>()
                 .checked_add(cast::usize(offsets.size_of_vmctx()))
                 .unwrap(),

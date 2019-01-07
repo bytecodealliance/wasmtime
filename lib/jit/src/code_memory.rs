@@ -35,7 +35,7 @@ impl CodeMemory {
         if self.current.len() - self.position < size {
             self.mmaps.push(mem::replace(
                 &mut self.current,
-                Mmap::with_size(cmp::max(0x10000, size.next_power_of_two()))?,
+                Mmap::with_at_least(cmp::max(0x10000, size))?,
             ));
             self.position = 0;
         }
