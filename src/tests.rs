@@ -18,40 +18,88 @@ fn empty() {
     let _ = translate_wat("(module (func))");
 }
 
-macro_rules! binop_test {
-    ($op:ident, $func:expr) => {
-        quickcheck! {
-            fn $op(a: u32, b: u32) -> bool {
-                static CODE: &str = concat!(
-                    "(module (func (param i32) (param i32) (result i32) (i32.",
-                    stringify!($op),
-                    " (get_local 0) (get_local 1))))"
-                );
+mod op32 {
+    use super::{translate_wat, TranslatedModule};
 
-                lazy_static! {
-                    static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+    macro_rules! binop_test {
+        ($op:ident, $func:expr) => {
+            quickcheck! {
+                fn $op(a: u32, b: u32) -> bool {
+                    static CODE: &str = concat!(
+                        "(module (func (param i32) (param i32) (result i32) (i32.",
+                        stringify!($op),
+                        " (get_local 0) (get_local 1))))"
+                    );
+
+                    lazy_static! {
+                        static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+                    }
+
+                    unsafe { TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)) == $func(a, b) }
                 }
-
-                unsafe { TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)) == $func(a, b) }
             }
-        }
-    };
+        };
+    }
+
+    binop_test!(add, u32::wrapping_add);
+    binop_test!(sub, u32::wrapping_sub);
+    binop_test!(and, std::ops::BitAnd::bitand);
+    binop_test!(or, std::ops::BitOr::bitor);
+    binop_test!(xor, std::ops::BitXor::bitxor);
+    binop_test!(mul, u32::wrapping_mul);
+    binop_test!(lt_u, |a, b| if a < b { 1 } else { 0 });
+    binop_test!(le_u, |a, b| if a <= b { 1 } else { 0 });
+    binop_test!(gt_u, |a, b| if a > b { 1 } else { 0 });
+    binop_test!(ge_u, |a, b| if a >= b { 1 } else { 0 });
+    binop_test!(lt_s, |a, b| if (a as i32) < (b as i32) { 1 } else { 0 });
+    binop_test!(le_s, |a, b| if (a as i32) <= (b as i32) { 1 } else { 0 });
+    binop_test!(gt_s, |a, b| if (a as i32) > (b as i32) { 1 } else { 0 });
+    binop_test!(ge_s, |a, b| if (a as i32) >= (b as i32) { 1 } else { 0 });
 }
 
-binop_test!(add, u32::wrapping_add);
-binop_test!(sub, u32::wrapping_sub);
-binop_test!(and, std::ops::BitAnd::bitand);
-binop_test!(or, std::ops::BitOr::bitor);
-binop_test!(xor, std::ops::BitXor::bitxor);
-binop_test!(mul, u32::wrapping_mul);
-binop_test!(lt_u, |a, b| if a < b { 1 } else { 0 });
-binop_test!(le_u, |a, b| if a <= b { 1 } else { 0 });
-binop_test!(gt_u, |a, b| if a > b { 1 } else { 0 });
-binop_test!(ge_u, |a, b| if a >= b { 1 } else { 0 });
-binop_test!(lt_s, |a, b| if (a as i32) < (b as i32) { 1 } else { 0 });
-binop_test!(le_s, |a, b| if (a as i32) <= (b as i32) { 1 } else { 0 });
-binop_test!(gt_s, |a, b| if (a as i32) > (b as i32) { 1 } else { 0 });
-binop_test!(ge_s, |a, b| if (a as i32) >= (b as i32) { 1 } else { 0 });
+mod op64 {
+    use super::{translate_wat, TranslatedModule};
+
+    macro_rules! binop_test {
+        ($op:ident, $func:expr) => {
+            binop_test!($op, $func, i64);
+        };
+        ($op:ident, $func:expr, $retty:ident) => {
+            quickcheck! {
+                fn $op(a: u64, b: u64) -> bool {
+                    static CODE: &str = concat!(
+                        "(module (func (param i64) (param i64) (result ",
+                        stringify!($retty),
+                        ") (i64.",
+                        stringify!($op),
+                        " (get_local 0) (get_local 1))))"
+                    );
+
+                    lazy_static! {
+                        static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+                    }
+
+                    unsafe { TRANSLATED.execute_func::<(u64, u64), u64>(0, (a, b)) == $func(a, b) }
+                }
+            }
+        };
+    }
+
+    binop_test!(add, u64::wrapping_add);
+    binop_test!(sub, u64::wrapping_sub);
+    binop_test!(and, std::ops::BitAnd::bitand);
+    binop_test!(or, std::ops::BitOr::bitor);
+    binop_test!(xor, std::ops::BitXor::bitxor);
+    binop_test!(mul, u64::wrapping_mul);
+    binop_test!(lt_u, |a, b| if a < b { 1 } else { 0 }, i32);
+    binop_test!(le_u, |a, b| if a <= b { 1 } else { 0 }, i32);
+    binop_test!(gt_u, |a, b| if a > b { 1 } else { 0 }, i32);
+    binop_test!(ge_u, |a, b| if a >= b { 1 } else { 0 }, i32);
+    binop_test!(lt_s, |a, b| if (a as i64) < (b as i64) { 1 } else { 0 }, i32);
+    binop_test!(le_s, |a, b| if (a as i64) <= (b as i64) { 1 } else { 0 }, i32);
+    binop_test!(gt_s, |a, b| if (a as i64) > (b as i64) { 1 } else { 0 }, i32);
+    binop_test!(ge_s, |a, b| if (a as i64) >= (b as i64) { 1 } else { 0 }, i32);
+}
 
 quickcheck! {
     fn relop_eq(a: u32, b: u32) -> bool{
@@ -571,16 +619,29 @@ fn fib() {
 }
 
 #[bench]
-fn bench_compile(b: &mut test::Bencher) {
+fn bench_fibonacci_compile(b: &mut test::Bencher) {
     let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
 
     b.iter(|| test::black_box(translate(&wasm).unwrap()));
 }
 
 #[bench]
-fn bench_run(b: &mut test::Bencher) {
+fn bench_fibonacci_run(b: &mut test::Bencher) {
     let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
     let module = translate(&wasm).unwrap();
 
     b.iter(|| unsafe { module.execute_func::<_, u32>(0, (20,)) });
+}
+
+#[bench]
+fn bench_fibonacci_baseline(b: &mut test::Bencher) {
+    fn fib(n: i32) -> i32 {
+        if n == 0 || n == 1 {
+            1
+        } else {
+            fib(n - 1) + fib(n - 2)
+        }
+    }
+
+    b.iter(|| test::black_box(fib(test::black_box(20))));
 }

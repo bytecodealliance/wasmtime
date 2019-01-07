@@ -134,8 +134,7 @@ pub fn translate(
     ));
 
     // TODO: We want to make this a state machine (maybe requires 1-element lookahead? Not sure) so that we
-    //       can coelesce multiple `end`s and optimise break-at-end-of-block into noop. We can't do one
-    //       without the other, since the main case we want to optimise is `(block (loop (br 1)))`.
+    //       can coelesce multiple `end`s and optimise break-at-end-of-block into noop.
     for op in operators {
         let op = op?;
 
@@ -311,6 +310,22 @@ pub fn translate(
             Operator::I32Or => i32_or(ctx),
             Operator::I32Xor => i32_xor(ctx),
             Operator::I32Mul => i32_mul(ctx),
+            Operator::I64Eq => i64_eq(ctx),
+            Operator::I64Ne => i64_neq(ctx),
+            Operator::I64LtS => i64_lt_s(ctx),
+            Operator::I64LeS => i64_le_s(ctx),
+            Operator::I64GtS => i64_gt_s(ctx),
+            Operator::I64GeS => i64_ge_s(ctx),
+            Operator::I64LtU => i64_lt_u(ctx),
+            Operator::I64LeU => i64_le_u(ctx),
+            Operator::I64GtU => i64_gt_u(ctx),
+            Operator::I64GeU => i64_ge_u(ctx),
+            Operator::I64Add => i64_add(ctx),
+            Operator::I64Sub => i64_sub(ctx),
+            Operator::I64And => i64_and(ctx),
+            Operator::I64Or => i64_or(ctx),
+            Operator::I64Xor => i64_xor(ctx),
+            Operator::I64Mul => i64_mul(ctx),
             Operator::Drop => drop(ctx),
             Operator::SetLocal { local_index } => set_local_i32(ctx, local_index),
             Operator::GetLocal { local_index } => get_local_i32(ctx, local_index),
