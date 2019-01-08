@@ -23,19 +23,54 @@ mod op32 {
 
     macro_rules! binop_test {
         ($op:ident, $func:expr) => {
-            quickcheck! {
-                fn $op(a: u32, b: u32) -> bool {
-                    static CODE: &str = concat!(
-                        "(module (func (param i32) (param i32) (result i32) (i32.",
-                        stringify!($op),
-                        " (get_local 0) (get_local 1))))"
-                    );
+            mod $op {
+                use super::{translate_wat, TranslatedModule};
 
-                    lazy_static! {
-                        static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+                const OP: &str = stringify!($op);
+
+                lazy_static! {
+                    static ref AS_PARAMS: TranslatedModule = translate_wat(&format!("
+                        (module (func (param i32) (param i32) (result i32)
+                            (i32.{op} (get_local 0) (get_local 1))))
+                    ", op = OP));
+                }
+
+                quickcheck! {
+                    fn as_params(a: u32, b: u32) -> bool {
+                        unsafe { AS_PARAMS.execute_func::<(u32, u32), u32>(0, (a, b)) == $func(a, b) }
                     }
 
-                    unsafe { TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)) == $func(a, b) }
+                    fn lit_lit(a: u32, b: u32) -> bool {
+                        unsafe {
+                            translate_wat(&format!("
+                                (module (func (result i32)
+                                    (i32.{op} (i32.const {left}) (i32.const {right}))))
+                            ", op = OP, left = a, right = b)).execute_func::<(), u32>(0, ()) == $func(a, b)
+                        }
+                    }
+
+                    fn lit_reg(a: u32, b: u32) -> bool {
+                        use std::sync::Once;
+
+                        let translated = translate_wat(&format!("
+                            (module (func (param i32) (result i32)
+                                (i32.{op} (i32.const {left}) (get_local 0))))
+                        ", op = OP, left = a));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+                        unsafe {
+                            translated.execute_func::<(u32,), u32>(0, (b,)) == $func(a, b)
+                        }
+                    }
+
+                    fn reg_lit(a: u32, b: u32) -> bool {
+                        unsafe {
+                            translate_wat(&format!("
+                                (module (func (param i32) (result i32)
+                                    (i32.{op} (get_local 0) (i32.const {right}))))
+                            ", op = OP, right = b)).execute_func::<(u32,), u32>(0, (a,)) == $func(a, b)
+                        }
+                    }
                 }
             }
         };
@@ -47,6 +82,8 @@ mod op32 {
     binop_test!(or, std::ops::BitOr::bitor);
     binop_test!(xor, std::ops::BitXor::bitxor);
     binop_test!(mul, u32::wrapping_mul);
+    binop_test!(eq, |a, b| if a == b { 1 } else { 0 });
+    binop_test!(ne, |a, b| if a != b { 1 } else { 0 });
     binop_test!(lt_u, |a, b| if a < b { 1 } else { 0 });
     binop_test!(le_u, |a, b| if a <= b { 1 } else { 0 });
     binop_test!(gt_u, |a, b| if a > b { 1 } else { 0 });
@@ -65,21 +102,55 @@ mod op64 {
             binop_test!($op, $func, i64);
         };
         ($op:ident, $func:expr, $retty:ident) => {
-            quickcheck! {
-                fn $op(a: u64, b: u64) -> bool {
-                    static CODE: &str = concat!(
-                        "(module (func (param i64) (param i64) (result ",
-                        stringify!($retty),
-                        ") (i64.",
-                        stringify!($op),
-                        " (get_local 0) (get_local 1))))"
-                    );
+            mod $op {
+                use super::{translate_wat, TranslatedModule};
 
-                    lazy_static! {
-                        static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+                const RETTY: &str = stringify!($retty);
+                const OP: &str = stringify!($op);
+
+                lazy_static! {
+                    static ref AS_PARAMS: TranslatedModule = translate_wat(&format!("
+                        (module (func (param i64) (param i64) (result {retty})
+                            (i64.{op} (get_local 0) (get_local 1))))
+                    ", retty = RETTY, op = OP));
+                }
+
+                quickcheck! {
+                    fn as_params(a: u64, b: u64) -> bool {
+                        unsafe { AS_PARAMS.execute_func::<(u64, u64), $retty>(0, (a, b)) == ($func(a, b) as $retty) }
                     }
 
-                    unsafe { TRANSLATED.execute_func::<(u64, u64), u64>(0, (a, b)) == $func(a, b) }
+                    fn lit_lit(a: u64, b: u64) -> bool {
+                        unsafe {
+                            translate_wat(&format!("
+                                (module (func (result {retty})
+                                    (i64.{op} (i64.const {left}) (i64.const {right}))))
+                            ", retty = RETTY, op = OP, left = a, right = b)).execute_func::<(), $retty>(0, ()) == ($func(a, b) as $retty)
+                        }
+                    }
+
+                    fn lit_reg(a: u64, b: u64) -> bool {
+                        use std::sync::Once;
+
+                        let translated = translate_wat(&format!("
+                            (module (func (param i64) (result {retty})
+                                (i64.{op} (i64.const {left}) (get_local 0))))
+                        ", retty = RETTY, op = OP, left = a));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+                        unsafe {
+                            translated.execute_func::<(u64,), $retty>(0, (b,)) == ($func(a, b) as $retty)
+                        }
+                    }
+
+                    fn reg_lit(a: u64, b: u64) -> bool {
+                        unsafe {
+                            translate_wat(&format!("
+                                (module (func (param i64) (result {retty})
+                                    (i64.{op} (get_local 0) (i64.const {right}))))
+                            ", retty = RETTY, op = OP, right = b)).execute_func::<(u64,), $retty>(0, (a,)) == ($func(a, b) as $retty)
+                        }
+                    }
                 }
             }
         };
@@ -91,18 +162,36 @@ mod op64 {
     binop_test!(or, std::ops::BitOr::bitor);
     binop_test!(xor, std::ops::BitXor::bitxor);
     binop_test!(mul, u64::wrapping_mul);
+    binop_test!(eq, |a, b| if a == b { 1 } else { 0 }, i32);
+    binop_test!(ne, |a, b| if a != b { 1 } else { 0 }, i32);
     binop_test!(lt_u, |a, b| if a < b { 1 } else { 0 }, i32);
     binop_test!(le_u, |a, b| if a <= b { 1 } else { 0 }, i32);
     binop_test!(gt_u, |a, b| if a > b { 1 } else { 0 }, i32);
     binop_test!(ge_u, |a, b| if a >= b { 1 } else { 0 }, i32);
-    binop_test!(lt_s, |a, b| if (a as i64) < (b as i64) { 1 } else { 0 }, i32);
-    binop_test!(le_s, |a, b| if (a as i64) <= (b as i64) { 1 } else { 0 }, i32);
-    binop_test!(gt_s, |a, b| if (a as i64) > (b as i64) { 1 } else { 0 }, i32);
-    binop_test!(ge_s, |a, b| if (a as i64) >= (b as i64) { 1 } else { 0 }, i32);
+    binop_test!(
+        lt_s,
+        |a, b| if (a as i64) < (b as i64) { 1 } else { 0 },
+        i32
+    );
+    binop_test!(
+        le_s,
+        |a, b| if (a as i64) <= (b as i64) { 1 } else { 0 },
+        i32
+    );
+    binop_test!(
+        gt_s,
+        |a, b| if (a as i64) > (b as i64) { 1 } else { 0 },
+        i32
+    );
+    binop_test!(
+        ge_s,
+        |a, b| if (a as i64) >= (b as i64) { 1 } else { 0 },
+        i32
+    );
 }
 
 quickcheck! {
-    fn relop_eq(a: u32, b: u32) -> bool{
+    fn relop_eq(a: u32, b: u32) -> bool {
         static CODE: &str = r#"
             (module
               (func (param i32) (param i32) (result i32) (i32.eq (get_local 0) (get_local 1)))
@@ -433,7 +522,7 @@ fn spec_loop() {
 }
 
 quickcheck! {
-    fn spec_fac(n: i32) -> bool {
+    fn spec_fac(n: i8) -> bool {
         const CODE: &str = r#"
             (module
               (func (param i32) (result i32)
@@ -505,9 +594,10 @@ quickcheck! {
             };
         }
 
+        let n = n as i32;
         unsafe {
             TRANSLATED.execute_func::<(i32,), i32>(0, (n,)) == fac(n)
-         }
+        }
     }
 }
 

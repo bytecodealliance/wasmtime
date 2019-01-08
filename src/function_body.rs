@@ -330,6 +330,7 @@ pub fn translate(
             Operator::SetLocal { local_index } => set_local_i32(ctx, local_index),
             Operator::GetLocal { local_index } => get_local_i32(ctx, local_index),
             Operator::I32Const { value } => literal_i32(ctx, value),
+            Operator::I64Const { value } => literal_i64(ctx, value),
             Operator::Call { function_index } => {
                 let callee_ty = translation_ctx.func_type(function_index);
 

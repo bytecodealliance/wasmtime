@@ -749,7 +749,14 @@ macro_rules! commutative_binop_i64 {
                             ; $instr Rq(op1), i as i32
                         );
                     } else {
-                        unimplemented!(concat!("Unsupported `", stringify!($instr), "` with large 64-bit immediate operand"));
+                        let scratch = ctx.block_state.regs.take_scratch_gpr();
+
+                        dynasm!(ctx.asm
+                            ; mov Rq(scratch), QWORD i
+                            ; $instr Rq(op1), Rq(scratch)
+                        );
+
+                        ctx.block_state.regs.release_scratch_gpr(scratch);
                     }
                 }
             }
@@ -1028,7 +1035,7 @@ pub fn literal_i64(ctx: &mut Context, imm: i64) {
 }
 
 macro_rules! cmp_i32 {
-    ($name:ident, $instr:ident, $const_fallback:expr) => {
+    ($name:ident, $instr:ident, $reverse_instr:ident, $const_fallback:expr) => {
         pub fn $name(ctx: &mut Context) {
             let right = pop(ctx);
             let left = pop(ctx);
@@ -1050,7 +1057,7 @@ macro_rules! cmp_i32 {
                         dynasm!(ctx.asm
                             ; xor Rd(result), Rd(result)
                             ; cmp Rd(rreg), i as i32
-                            ; $instr Rb(result)
+                            ; $reverse_instr Rb(result)
                         );
                         Value::Temp(result)
                     }
@@ -1098,7 +1105,7 @@ macro_rules! cmp_i32 {
 }
 
 macro_rules! cmp_i64 {
-    ($name:ident, $instr:ident, $const_fallback:expr) => {
+    ($name:ident, $instr:ident, $reverse_instr:ident, $const_fallback:expr) => {
         pub fn $name(ctx: &mut Context) {
             let right = pop(ctx);
             let left = pop(ctx);
@@ -1108,20 +1115,28 @@ macro_rules! cmp_i64 {
                     ValueLocation::Stack(offset) => {
                         let result = ctx.block_state.regs.take_scratch_gpr();
                         let offset = adjusted_offset(ctx, offset);
-                        dynasm!(ctx.asm
-                            ; xor Rd(result), Rd(result)
-                            ; cmp QWORD [rsp + offset], i as i32
-                            ; $instr Rb(result)
-                        );
+                        if (i as u64) <= u32::max_value() as u64 {
+                            dynasm!(ctx.asm
+                                ; xor Rd(result), Rd(result)
+                                ; cmp QWORD [rsp + offset], i as i32
+                                ; $instr Rb(result)
+                            );
+                        } else {
+                            unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
+                        }
                         Value::Temp(result)
                     }
                     ValueLocation::Reg(rreg) => {
                         let result = ctx.block_state.regs.take_scratch_gpr();
-                        dynasm!(ctx.asm
-                            ; xor Rd(result), Rd(result)
-                            ; cmp Rq(rreg), i as i32
-                            ; $instr Rb(result)
-                        );
+                        if (i as u64) <= u32::max_value() as u64 {
+                            dynasm!(ctx.asm
+                                ; xor Rd(result), Rd(result)
+                                ; cmp Rq(rreg), i as i32
+                                ; $reverse_instr Rb(result)
+                            );
+                        } else {
+                            unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
+                        }
                         Value::Temp(result)
                     }
                     ValueLocation::Immediate(right) => {
@@ -1156,7 +1171,7 @@ macro_rules! cmp_i64 {
                                 ; $instr Rb(result)
                             );
                         } else {
-                            unimplemented!("Have yet to implement `cmp` with imm64 operand");
+                            unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
                         }
                     }
                 }
@@ -1171,29 +1186,29 @@ macro_rules! cmp_i64 {
     }
 }
 
-cmp_i32!(i32_eq, sete, |a, b| a == b);
-cmp_i32!(i32_neq, setne, |a, b| a != b);
+cmp_i32!(i32_eq, sete, sete, |a, b| a == b);
+cmp_i32!(i32_neq, setne, setne, |a, b| a != b);
 // `dynasm-rs` inexplicably doesn't support setb but `setnae` (and `setc`) are synonymous
-cmp_i32!(i32_lt_u, setnae, |a, b| (a as u32) < (b as u32));
-cmp_i32!(i32_le_u, setbe, |a, b| (a as u32) <= (b as u32));
-cmp_i32!(i32_gt_u, seta, |a, b| (a as u32) > (b as u32));
-cmp_i32!(i32_ge_u, setae, |a, b| (a as u32) >= (b as u32));
-cmp_i32!(i32_lt_s, setl, |a, b| a < b);
-cmp_i32!(i32_le_s, setle, |a, b| a <= b);
-cmp_i32!(i32_gt_s, setg, |a, b| a == b);
-cmp_i32!(i32_ge_s, setge, |a, b| a == b);
+cmp_i32!(i32_lt_u, setnae, seta, |a, b| (a as u32) < (b as u32));
+cmp_i32!(i32_le_u, setbe, setae, |a, b| (a as u32) <= (b as u32));
+cmp_i32!(i32_gt_u, seta, setnae, |a, b| (a as u32) > (b as u32));
+cmp_i32!(i32_ge_u, setae, setna, |a, b| (a as u32) >= (b as u32));
+cmp_i32!(i32_lt_s, setl, setnle, |a, b| a < b);
+cmp_i32!(i32_le_s, setle, setnl, |a, b| a <= b);
+cmp_i32!(i32_gt_s, setg, setnge, |a, b| a > b);
+cmp_i32!(i32_ge_s, setge, setng, |a, b| a >= b);
 
-cmp_i64!(i64_eq, sete, |a, b| a == b);
-cmp_i64!(i64_neq, setne, |a, b| a != b);
+cmp_i64!(i64_eq, sete, sete, |a, b| a == b);
+cmp_i64!(i64_neq, setne, setne, |a, b| a != b);
 // `dynasm-rs` inexplicably doesn't support setb but `setnae` (and `setc`) are synonymous
-cmp_i64!(i64_lt_u, setnae, |a, b| (a as u64) < (b as u64));
-cmp_i64!(i64_le_u, setbe, |a, b| (a as u64) <= (b as u64));
-cmp_i64!(i64_gt_u, seta, |a, b| (a as u64) > (b as u64));
-cmp_i64!(i64_ge_u, setae, |a, b| (a as u64) >= (b as u64));
-cmp_i64!(i64_lt_s, setl, |a, b| a < b);
-cmp_i64!(i64_le_s, setle, |a, b| a <= b);
-cmp_i64!(i64_gt_s, setg, |a, b| a == b);
-cmp_i64!(i64_ge_s, setge, |a, b| a == b);
+cmp_i64!(i64_lt_u, setnae, seta, |a, b| (a as u64) < (b as u64));
+cmp_i64!(i64_le_u, setbe, setae, |a, b| (a as u64) <= (b as u64));
+cmp_i64!(i64_gt_u, seta, setnae, |a, b| (a as u64) > (b as u64));
+cmp_i64!(i64_ge_u, setae, setna, |a, b| (a as u64) >= (b as u64));
+cmp_i64!(i64_lt_s, setl, setnle, |a, b| a < b);
+cmp_i64!(i64_le_s, setle, setnl, |a, b| a <= b);
+cmp_i64!(i64_gt_s, setg, setnge, |a, b| a > b);
+cmp_i64!(i64_ge_s, setge, setng, |a, b| a >= b);
 
 /// Pops i32 predicate and branches to the specified label
 /// if the predicate is equal to zero.
@@ -1219,12 +1234,10 @@ fn immediate_to_reg(ctx: &mut Context, reg: GPR, val: i64) {
         dynasm!(ctx.asm
             ; mov Rd(reg), val as i32
         );
-    } else if reg == RAX {
-        dynasm!(ctx.asm
-            ; movabs rax, val
-        );
     } else {
-        unimplemented!("dynasm doesn't yet support mov r64, imm64");
+        dynasm!(ctx.asm
+            ; mov Rq(reg), QWORD val
+        );
     }
 }
 
@@ -1250,14 +1263,19 @@ fn copy_value(ctx: &mut Context, src: ValueLocation, dst: ValueLocation) {
         }
         (ValueLocation::Immediate(i), ValueLocation::Stack(out_offset)) => {
             let out_offset = adjusted_offset(ctx, out_offset);
-            dynasm!(ctx.asm
-                ; mov DWORD [rsp + out_offset], i as i32
-            );
-            if (i as u64) > u32::max_value() as u64 {
-                let i = (i >> 4) as i32;
+            if (i as u64) <= u32::max_value() as u64 {
                 dynasm!(ctx.asm
-                    ; mov DWORD [rsp + out_offset + 4], i
+                    ; mov DWORD [rsp + out_offset], i as i32
                 );
+            } else {
+                let scratch = ctx.block_state.regs.take_scratch_gpr();
+
+                dynasm!(ctx.asm
+                    ; mov Rq(scratch), QWORD i
+                    ; mov [rsp + out_offset], Rq(scratch)
+                );
+
+                ctx.block_state.regs.release_scratch_gpr(scratch);
             }
         }
         (ValueLocation::Stack(in_offset), ValueLocation::Reg(out_reg)) => {
