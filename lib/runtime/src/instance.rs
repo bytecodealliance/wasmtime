@@ -190,7 +190,7 @@ impl InstanceContents {
     /// Return the indexed `VMTableDefinition`.
     fn table_mut(&mut self, index: DefinedTableIndex) -> &mut VMTableDefinition {
         unsafe {
-            let ptr = (&self.vmctx as *const VMContext as *mut u8)
+            let ptr = (&mut self.vmctx as *mut VMContext as *mut u8)
                 .add(cast::usize(self.offsets.vmctx_vmtable_definition(index)));
             &mut *(ptr as *mut VMTableDefinition)
         }
@@ -199,7 +199,7 @@ impl InstanceContents {
     /// Return a pointer to the `VMTableDefinition`s.
     fn tables_ptr(&mut self) -> *mut VMTableDefinition {
         unsafe {
-            (&self.vmctx as *const VMContext as *mut u8)
+            (&mut self.vmctx as *mut VMContext as *mut u8)
                 .add(cast::usize(self.offsets.vmctx_tables_begin()))
                 as *mut VMTableDefinition
         }
@@ -217,7 +217,7 @@ impl InstanceContents {
     /// Return the indexed `VMMemoryDefinition`.
     fn memory_mut(&mut self, index: DefinedMemoryIndex) -> &mut VMMemoryDefinition {
         unsafe {
-            let ptr = (&self.vmctx as *const VMContext as *mut u8)
+            let ptr = (&mut self.vmctx as *mut VMContext as *mut u8)
                 .add(cast::usize(self.offsets.vmctx_vmmemory_definition(index)));
             &mut *(ptr as *mut VMMemoryDefinition)
         }
@@ -226,7 +226,7 @@ impl InstanceContents {
     /// Return a pointer to the `VMMemoryDefinition`s.
     fn memories_ptr(&mut self) -> *mut VMMemoryDefinition {
         unsafe {
-            (&self.vmctx as *const VMContext as *mut u8)
+            (&mut self.vmctx as *mut VMContext as *mut u8)
                 .add(cast::usize(self.offsets.vmctx_memories_begin()))
                 as *mut VMMemoryDefinition
         }
@@ -245,7 +245,7 @@ impl InstanceContents {
     /// Return the indexed `VMGlobalDefinition`.
     fn global_mut(&mut self, index: DefinedGlobalIndex) -> &mut VMGlobalDefinition {
         unsafe {
-            let ptr = (&self.vmctx as *const VMContext as *mut u8)
+            let ptr = (&mut self.vmctx as *mut VMContext as *mut u8)
                 .add(cast::usize(self.offsets.vmctx_vmglobal_definition(index)));
             &mut *(ptr as *mut VMGlobalDefinition)
         }
@@ -312,13 +312,13 @@ impl InstanceContents {
     }
 
     /// Return the table index for the given `VMTableDefinition`.
-    pub(crate) fn table_index(&self, table: &mut VMTableDefinition) -> DefinedTableIndex {
+    pub(crate) fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
         let offsets = &self.offsets;
         let begin = unsafe {
-            (&self.vmctx as *const VMContext as *mut u8)
+            (&self.vmctx as *const VMContext as *const u8)
                 .add(cast::usize(offsets.vmctx_tables_begin()))
-        } as *mut VMTableDefinition;
-        let end: *mut VMTableDefinition = table;
+        } as *const VMTableDefinition;
+        let end: *const VMTableDefinition = table;
         // TODO: Use `offset_from` once it stablizes.
         let index = DefinedTableIndex::new(
             (end as usize - begin as usize) / mem::size_of::<VMTableDefinition>(),
@@ -328,13 +328,13 @@ impl InstanceContents {
     }
 
     /// Return the memory index for the given `VMMemoryDefinition`.
-    pub(crate) fn memory_index(&self, memory: &mut VMMemoryDefinition) -> DefinedMemoryIndex {
+    pub(crate) fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
         let offsets = &self.offsets;
         let begin = unsafe {
-            (&self.vmctx as *const VMContext as *mut u8)
+            (&self.vmctx as *const VMContext as *const u8)
                 .add(cast::usize(offsets.vmctx_memories_begin()))
-        } as *mut VMMemoryDefinition;
-        let end: *mut VMMemoryDefinition = memory;
+        } as *const VMMemoryDefinition;
+        let end: *const VMMemoryDefinition = memory;
         // TODO: Use `offset_from` once it stablizes.
         let index = DefinedMemoryIndex::new(
             (end as usize - begin as usize) / mem::size_of::<VMMemoryDefinition>(),
