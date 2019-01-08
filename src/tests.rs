@@ -36,20 +36,20 @@ mod op32 {
                 }
 
                 quickcheck! {
-                    fn as_params(a: u32, b: u32) -> bool {
-                        unsafe { AS_PARAMS.execute_func::<(u32, u32), u32>(0, (a, b)) == $func(a, b) }
+                    fn as_params(a: i32, b: i32) -> bool {
+                        unsafe { AS_PARAMS.execute_func::<(i32, i32), i32>(0, (a, b)) == $func(a, b) }
                     }
 
-                    fn lit_lit(a: u32, b: u32) -> bool {
+                    fn lit_lit(a: i32, b: i32) -> bool {
                         unsafe {
                             translate_wat(&format!("
                                 (module (func (result i32)
                                     (i32.{op} (i32.const {left}) (i32.const {right}))))
-                            ", op = OP, left = a, right = b)).execute_func::<(), u32>(0, ()) == $func(a, b)
+                            ", op = OP, left = a, right = b)).execute_func::<(), i32>(0, ()) == $func(a, b)
                         }
                     }
 
-                    fn lit_reg(a: u32, b: u32) -> bool {
+                    fn lit_reg(a: i32, b: i32) -> bool {
                         use std::sync::Once;
 
                         let translated = translate_wat(&format!("
@@ -59,16 +59,16 @@ mod op32 {
                         static ONCE: Once = Once::new();
                         ONCE.call_once(|| translated.disassemble());
                         unsafe {
-                            translated.execute_func::<(u32,), u32>(0, (b,)) == $func(a, b)
+                            translated.execute_func::<(i32,), i32>(0, (b,)) == $func(a, b)
                         }
                     }
 
-                    fn reg_lit(a: u32, b: u32) -> bool {
+                    fn reg_lit(a: i32, b: i32) -> bool {
                         unsafe {
                             translate_wat(&format!("
                                 (module (func (param i32) (result i32)
                                     (i32.{op} (get_local 0) (i32.const {right}))))
-                            ", op = OP, right = b)).execute_func::<(u32,), u32>(0, (a,)) == $func(a, b)
+                            ", op = OP, right = b)).execute_func::<(i32,), i32>(0, (a,)) == $func(a, b)
                         }
                     }
                 }
@@ -76,22 +76,22 @@ mod op32 {
         };
     }
 
-    binop_test!(add, u32::wrapping_add);
-    binop_test!(sub, u32::wrapping_sub);
+    binop_test!(add, i32::wrapping_add);
+    binop_test!(sub, i32::wrapping_sub);
     binop_test!(and, std::ops::BitAnd::bitand);
     binop_test!(or, std::ops::BitOr::bitor);
     binop_test!(xor, std::ops::BitXor::bitxor);
-    binop_test!(mul, u32::wrapping_mul);
+    binop_test!(mul, i32::wrapping_mul);
     binop_test!(eq, |a, b| if a == b { 1 } else { 0 });
     binop_test!(ne, |a, b| if a != b { 1 } else { 0 });
-    binop_test!(lt_u, |a, b| if a < b { 1 } else { 0 });
-    binop_test!(le_u, |a, b| if a <= b { 1 } else { 0 });
-    binop_test!(gt_u, |a, b| if a > b { 1 } else { 0 });
-    binop_test!(ge_u, |a, b| if a >= b { 1 } else { 0 });
-    binop_test!(lt_s, |a, b| if (a as i32) < (b as i32) { 1 } else { 0 });
-    binop_test!(le_s, |a, b| if (a as i32) <= (b as i32) { 1 } else { 0 });
-    binop_test!(gt_s, |a, b| if (a as i32) > (b as i32) { 1 } else { 0 });
-    binop_test!(ge_s, |a, b| if (a as i32) >= (b as i32) { 1 } else { 0 });
+    binop_test!(lt_u, |a, b| if (a as u32) < (b as u32) { 1 } else { 0 });
+    binop_test!(le_u, |a, b| if (a as u32) <= (b as u32) { 1 } else { 0 });
+    binop_test!(gt_u, |a, b| if (a as u32) > (b as u32) { 1 } else { 0 });
+    binop_test!(ge_u, |a, b| if (a as u32) >= (b as u32) { 1 } else { 0 });
+    binop_test!(lt_s, |a, b| if a < b { 1 } else { 0 });
+    binop_test!(le_s, |a, b| if a <= b { 1 } else { 0 });
+    binop_test!(gt_s, |a, b| if a > b { 1 } else { 0 });
+    binop_test!(ge_s, |a, b| if a >= b { 1 } else { 0 });
 }
 
 mod op64 {
@@ -116,11 +116,11 @@ mod op64 {
                 }
 
                 quickcheck! {
-                    fn as_params(a: u64, b: u64) -> bool {
-                        unsafe { AS_PARAMS.execute_func::<(u64, u64), $retty>(0, (a, b)) == ($func(a, b) as $retty) }
+                    fn as_params(a: i64, b: i64) -> bool {
+                        unsafe { AS_PARAMS.execute_func::<(i64, i64), $retty>(0, (a, b)) == ($func(a, b) as $retty) }
                     }
 
-                    fn lit_lit(a: u64, b: u64) -> bool {
+                    fn lit_lit(a: i64, b: i64) -> bool {
                         unsafe {
                             translate_wat(&format!("
                                 (module (func (result {retty})
@@ -129,7 +129,7 @@ mod op64 {
                         }
                     }
 
-                    fn lit_reg(a: u64, b: u64) -> bool {
+                    fn lit_reg(a: i64, b: i64) -> bool {
                         use std::sync::Once;
 
                         let translated = translate_wat(&format!("
@@ -139,16 +139,16 @@ mod op64 {
                         static ONCE: Once = Once::new();
                         ONCE.call_once(|| translated.disassemble());
                         unsafe {
-                            translated.execute_func::<(u64,), $retty>(0, (b,)) == ($func(a, b) as $retty)
+                            translated.execute_func::<(i64,), $retty>(0, (b,)) == ($func(a, b) as $retty)
                         }
                     }
 
-                    fn reg_lit(a: u64, b: u64) -> bool {
+                    fn reg_lit(a: i64, b: i64) -> bool {
                         unsafe {
                             translate_wat(&format!("
                                 (module (func (param i64) (result {retty})
                                     (i64.{op} (get_local 0) (i64.const {right}))))
-                            ", retty = RETTY, op = OP, right = b)).execute_func::<(u64,), $retty>(0, (a,)) == ($func(a, b) as $retty)
+                            ", retty = RETTY, op = OP, right = b)).execute_func::<(i64,), $retty>(0, (a,)) == ($func(a, b) as $retty)
                         }
                     }
                 }
@@ -156,38 +156,38 @@ mod op64 {
         };
     }
 
-    binop_test!(add, u64::wrapping_add);
-    binop_test!(sub, u64::wrapping_sub);
+    binop_test!(add, i64::wrapping_add);
+    binop_test!(sub, i64::wrapping_sub);
     binop_test!(and, std::ops::BitAnd::bitand);
     binop_test!(or, std::ops::BitOr::bitor);
     binop_test!(xor, std::ops::BitXor::bitxor);
-    binop_test!(mul, u64::wrapping_mul);
+    binop_test!(mul, i64::wrapping_mul);
     binop_test!(eq, |a, b| if a == b { 1 } else { 0 }, i32);
     binop_test!(ne, |a, b| if a != b { 1 } else { 0 }, i32);
-    binop_test!(lt_u, |a, b| if a < b { 1 } else { 0 }, i32);
-    binop_test!(le_u, |a, b| if a <= b { 1 } else { 0 }, i32);
-    binop_test!(gt_u, |a, b| if a > b { 1 } else { 0 }, i32);
-    binop_test!(ge_u, |a, b| if a >= b { 1 } else { 0 }, i32);
     binop_test!(
-        lt_s,
-        |a, b| if (a as i64) < (b as i64) { 1 } else { 0 },
+        lt_u,
+        |a, b| if (a as u64) < (b as u64) { 1 } else { 0 },
         i32
     );
     binop_test!(
-        le_s,
-        |a, b| if (a as i64) <= (b as i64) { 1 } else { 0 },
+        le_u,
+        |a, b| if (a as u64) <= (b as u64) { 1 } else { 0 },
         i32
     );
     binop_test!(
-        gt_s,
-        |a, b| if (a as i64) > (b as i64) { 1 } else { 0 },
+        gt_u,
+        |a, b| if (a as u64) > (b as u64) { 1 } else { 0 },
         i32
     );
     binop_test!(
-        ge_s,
-        |a, b| if (a as i64) >= (b as i64) { 1 } else { 0 },
+        ge_u,
+        |a, b| if (a as u64) >= (b as u64) { 1 } else { 0 },
         i32
     );
+    binop_test!(lt_s, |a, b| if a < b { 1 } else { 0 }, i32);
+    binop_test!(le_s, |a, b| if a <= b { 1 } else { 0 }, i32);
+    binop_test!(gt_s, |a, b| if a > b { 1 } else { 0 }, i32);
+    binop_test!(ge_s, |a, b| if a >= b { 1 } else { 0 }, i32);
 }
 
 quickcheck! {
@@ -348,14 +348,17 @@ fn function_read_args_spill_to_stack() {
     );
 }
 
-#[test]
-fn function_write_args_spill_to_stack() {
-    let code = r#"
+macro_rules! mk_function_write_args_spill_to_stack {
+    ($name:ident, $typ:ty) => {
+        #[test]
+        fn $name() {
+            let code = format!(
+                "
 (module
-  (func (param i32) (param i32) (param i32) (param i32)
-        (param i32) (param i32) (param i32) (param i32)
-        (param i32) (param i32) (param i32) (param i32)
-        (result i32)
+  (func (param {typ}) (param {typ}) (param {typ}) (param {typ})
+        (param {typ}) (param {typ}) (param {typ}) (param {typ})
+        (param {typ}) (param {typ}) (param {typ}) (param {typ})
+        (result {typ})
 
     (call $called
       (get_local 0)
@@ -374,10 +377,10 @@ fn function_write_args_spill_to_stack() {
   )
 
   (func $called
-        (param i32) (param i32) (param i32) (param i32)
-        (param i32) (param i32) (param i32) (param i32)
-        (param i32) (param i32) (param i32) (param i32)
-        (result i32)
+        (param {typ}) (param {typ}) (param {typ}) (param {typ})
+        (param {typ}) (param {typ}) (param {typ}) (param {typ})
+        (param {typ}) (param {typ}) (param {typ}) (param {typ})
+        (result {typ})
 
     (call $assert_zero
       (get_local 11)
@@ -385,26 +388,39 @@ fn function_write_args_spill_to_stack() {
     (get_local 0)
   )
 
-  (func $assert_zero (param $v i32)
-    (local i32)
-    (if (get_local $v)
+  (func $assert_zero (param $v {typ})
+    (local {typ})
+    (if ({typ}.ne (get_local $v) ({typ}.const 0))
       (unreachable)
     )
   )
 )
-    "#;
+    ",
+                typ = stringify!($typ)
+            );
 
-    assert_eq!(
-        {
-            let translated = translate_wat(code);
-            translated.disassemble();
-            let out: u32 =
-                unsafe { translated.execute_func(0, (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)) };
-            out
-        },
-        11
-    );
+            assert_eq!(
+                {
+                    let translated = translate_wat(&code);
+                    translated.disassemble();
+                    let out: $typ = unsafe {
+                        translated.execute_func(
+                            0,
+                            (
+                                11 as $typ, 10 as $typ, 9 as $typ, 8 as $typ, 7 as $typ, 6 as $typ,
+                                5 as $typ, 4 as $typ, 3 as $typ, 2 as $typ, 1 as $typ, 0 as $typ,
+                            ),
+                        )
+                    };
+                    out
+                },
+                11
+            );
+        }
+    };
 }
+mk_function_write_args_spill_to_stack!(function_write_args_spill_to_stack_i32, i32);
+mk_function_write_args_spill_to_stack!(function_write_args_spill_to_stack_i64, i64);
 
 #[test]
 fn block() {

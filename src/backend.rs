@@ -744,9 +744,9 @@ macro_rules! commutative_binop_i64 {
                     );
                 }
                 ValueLocation::Immediate(i) => {
-                    if (i as u64) <= u32::max_value() as u64 {
+                    if let Some(i) = i.try_into() {
                         dynasm!(ctx.asm
-                            ; $instr Rq(op1), i as i32
+                            ; $instr Rq(op1), i
                         );
                     } else {
                         let scratch = ctx.block_state.regs.take_scratch_gpr();
@@ -766,6 +766,7 @@ macro_rules! commutative_binop_i64 {
         }
     }
 }
+
 // TODO: Use `inc`/`dec` where possible?
 commutative_binop_i32!(i32_add, add, |a, b| (a as i32).wrapping_add(b as i32));
 commutative_binop_i32!(i32_and, and, |a, b| a & b);
@@ -777,53 +778,21 @@ commutative_binop_i64!(i64_and, and, |a, b| a & b);
 commutative_binop_i64!(i64_or, or, |a, b| a | b);
 commutative_binop_i64!(i64_xor, xor, |a, b| a ^ b);
 
-// `i32_mul` needs to be seperate because the immediate form of the instruction
-// has a different syntax to the immediate form of the other instructions.
-pub fn i32_mul(ctx: &mut Context) {
-    let op0 = pop(ctx);
-    let op1 = pop(ctx);
+trait TryInto<O> {
+    fn try_into(self) -> Option<O>;
+}
 
-    if let Some(i1) = op1.immediate() {
-        if let Some(i0) = op0.immediate() {
-            ctx.block_state.stack.push(StackValue::Immediate(
-                i32::wrapping_mul(i1 as i32, i0 as i32) as _,
-            ));
-            return;
+impl TryInto<i32> for i64 {
+    fn try_into(self) -> Option<i32> {
+        let min = i32::min_value() as i64;
+        let max = i32::max_value() as i64;
+
+        if self > min && self < max {
+            Some(self as i32)
+        } else {
+            None
         }
     }
-
-    let (op1, op0) = match op1 {
-        Value::Temp(reg) => (reg, op0),
-        _ => {
-            if op0.immediate().is_some() {
-                (into_temp_reg(ctx, op1), op0)
-            } else {
-                (into_temp_reg(ctx, op0), op1)
-            }
-        }
-    };
-
-    match op0.location(&ctx.block_state.locals) {
-        ValueLocation::Reg(reg) => {
-            dynasm!(ctx.asm
-                ; imul Rd(op1), Rd(reg)
-            );
-        }
-        ValueLocation::Stack(offset) => {
-            let offset = adjusted_offset(ctx, offset);
-            dynasm!(ctx.asm
-                ; imul Rd(op1), [rsp + offset]
-            );
-        }
-        ValueLocation::Immediate(i) => {
-            dynasm!(ctx.asm
-                ; imul Rd(op1), Rd(op1), i as i32
-            );
-        }
-    }
-
-    ctx.block_state.stack.push(StackValue::Temp(op1));
-    free_value(ctx, op0);
 }
 
 // `sub` is not commutative, so we have to handle it differently (we _must_ use the `op1`
@@ -853,9 +822,9 @@ pub fn i64_sub(ctx: &mut Context) {
             );
         }
         ValueLocation::Immediate(i) => {
-            if (i as u64) <= u32::max_value() as u64 {
+            if let Some(i) = i.try_into() {
                 dynasm!(ctx.asm
-                    ; sub Rq(op1), i as i32
+                    ; sub Rq(op1), i
                 );
             } else {
                 unimplemented!(concat!(
@@ -908,9 +877,9 @@ pub fn i64_mul(ctx: &mut Context) {
             );
         }
         ValueLocation::Immediate(i) => {
-            if (i as u64) <= u32::max_value() as u64 {
+            if let Some(i) = i.try_into() {
                 dynasm!(ctx.asm
-                    ; imul Rq(op1), Rq(op1), i as i32
+                    ; imul Rq(op1), Rq(op1), i
                 );
             } else {
                 unimplemented!(concat!(
@@ -951,8 +920,63 @@ pub fn i32_sub(ctx: &mut Context) {
             );
         }
         ValueLocation::Immediate(i) => {
+            if i == 1 {
+                dynasm!(ctx.asm
+                    ; dec Rd(op1)
+                );
+            } else {
+                dynasm!(ctx.asm
+                    ; sub Rd(op1), i as i32
+                );
+            }
+        }
+    }
+
+    ctx.block_state.stack.push(StackValue::Temp(op1));
+    free_value(ctx, op0);
+}
+
+// `i32_mul` needs to be seperate because the immediate form of the instruction
+// has a different syntax to the immediate form of the other instructions.
+pub fn i32_mul(ctx: &mut Context) {
+    let op0 = pop(ctx);
+    let op1 = pop(ctx);
+
+    if let Some(i1) = op1.immediate() {
+        if let Some(i0) = op0.immediate() {
+            ctx.block_state.stack.push(StackValue::Immediate(
+                i32::wrapping_mul(i1 as i32, i0 as i32) as _,
+            ));
+            return;
+        }
+    }
+
+    let (op1, op0) = match op1 {
+        Value::Temp(reg) => (reg, op0),
+        _ => {
+            if op0.immediate().is_some() {
+                (into_temp_reg(ctx, op1), op0)
+            } else {
+                (into_temp_reg(ctx, op0), op1)
+            }
+        }
+    };
+
+    match op0.location(&ctx.block_state.locals) {
+        ValueLocation::Reg(reg) => {
             dynasm!(ctx.asm
-                ; sub Rd(op1), i as i32
+                ; imul Rd(op1), Rd(reg)
+            );
+        }
+        ValueLocation::Stack(offset) => {
+            let offset = adjusted_offset(ctx, offset);
+            dynasm!(ctx.asm
+                ; imul Rd(op1), [rsp + offset]
+            );
+        }
+        ValueLocation::Immediate(i) => {
+            dynasm!(ctx.asm
+                ; imul Rd(op1), Rd(op1), i as i32
             );
         }
     }
@@ -1115,10 +1139,10 @@ macro_rules! cmp_i64 {
                     ValueLocation::Stack(offset) => {
                         let result = ctx.block_state.regs.take_scratch_gpr();
                         let offset = adjusted_offset(ctx, offset);
-                        if (i as u64) <= u32::max_value() as u64 {
+                        if let Some(i) = i.try_into() {
                             dynasm!(ctx.asm
                                 ; xor Rd(result), Rd(result)
-                                ; cmp QWORD [rsp + offset], i as i32
+                                ; cmp QWORD [rsp + offset], i
                                 ; $instr Rb(result)
                             );
                         } else {
@@ -1128,10 +1152,10 @@ macro_rules! cmp_i64 {
                     }
                     ValueLocation::Reg(rreg) => {
                         let result = ctx.block_state.regs.take_scratch_gpr();
-                        if (i as u64) <= u32::max_value() as u64 {
+                        if let Some(i) = i.try_into() {
                             dynasm!(ctx.asm
                                 ; xor Rd(result), Rd(result)
-                                ; cmp Rq(rreg), i as i32
+                                ; cmp Rq(rreg), i
                                 ; $reverse_instr Rb(result)
                             );
                         } else {
@@ -1164,10 +1188,10 @@ macro_rules! cmp_i64 {
                         );
                     }
                     ValueLocation::Immediate(i) => {
-                        if (i as u64) <= u32::max_value() as u64 {
+                        if let Some(i) = i.try_into() {
                             dynasm!(ctx.asm
                                 ; xor Rd(result), Rd(result)
-                                ; cmp Rq(lreg), i as i32
+                                ; cmp Rq(lreg), i
                                 ; $instr Rb(result)
                             );
                         } else {
@@ -1575,3 +1599,4 @@ pub fn trap(ctx: &mut Context) {
         ; ud2
     );
 }
+
