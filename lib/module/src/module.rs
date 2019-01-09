@@ -506,7 +506,18 @@ where
 
     /// Define a function, producing the function body from the given `Context`.
     pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
-        let compiled = {
+        self.define_function_peek_compiled(func, ctx, |_, _| ())
+    }
+
+    /// Define a function, allowing to peek at the compiled function and producing the
+    /// function body from the given `Context`.
+    pub fn define_function_peek_compiled<T>(
+        &mut self,
+        func: FuncId,
+        ctx: &mut Context,
+        peek_compiled: impl FnOnce(u32, &Context) -> T,
+    ) -> ModuleResult<T> {
+        let (compiled, peek_res) = {
             let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
                 info!(
                     "defining function {}: {}",
@@ -523,18 +534,24 @@ where
             if !info.decl.linkage.is_definable() {
                 return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
             }
-            Some(self.backend.define_function(
-                &info.decl.name,
-                ctx,
-                &ModuleNamespace::<B> {
-                    contents: &self.contents,
-                },
-                code_size,
-            )?)
+
+            let peek_res = peek_compiled(code_size, &ctx);
+
+            (
+                self.backend.define_function(
+                    &info.decl.name,
+                    ctx,
+                    &ModuleNamespace::<B> {
+                        contents: &self.contents,
+                    },
+                    code_size,
+                )?,
+                peek_res,
+            )
         };
-        self.contents.functions[func].compiled = compiled;
+        self.contents.functions[func].compiled = Some(compiled);
         self.functions_to_finalize.push(func);
-        Ok(())
+        Ok(peek_res)
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.
