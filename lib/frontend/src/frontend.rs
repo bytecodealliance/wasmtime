@@ -612,7 +612,7 @@ impl<'a> FunctionBuilder<'a> {
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
 
-        let (access_size, int_type) = if access_size > 8 {
+        let (access_size, int_type) = if access_size <= 8 {
             (access_size, Type::int((access_size * 8) as u16).unwrap())
         } else {
             (8, types::I64)
@@ -693,7 +693,7 @@ impl<'a> FunctionBuilder<'a> {
             "`size` is smaller than `dest` and `src`'s alignment value."
         );
 
-        let (access_size, int_type) = if access_size > 8 {
+        let (access_size, int_type) = if access_size <= 8 {
             (access_size, Type::int((access_size * 8) as u16).unwrap())
         } else {
             (8, types::I64)
