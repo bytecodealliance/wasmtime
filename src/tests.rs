@@ -25,6 +25,7 @@ mod op32 {
         ($op:ident, $func:expr) => {
             mod $op {
                 use super::{translate_wat, TranslatedModule};
+                use std::sync::Once;
 
                 const OP: &str = stringify!($op);
 
@@ -41,17 +42,18 @@ mod op32 {
                     }
 
                     fn lit_lit(a: i32, b: i32) -> bool {
+                        let translated = translate_wat(&format!("
+                            (module (func (result i32)
+                                (i32.{op} (i32.const {left}) (i32.const {right}))))
+                        ", op = OP, left = a, right = b));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
                         unsafe {
-                            translate_wat(&format!("
-                                (module (func (result i32)
-                                    (i32.{op} (i32.const {left}) (i32.const {right}))))
-                            ", op = OP, left = a, right = b)).execute_func::<(), i32>(0, ()) == $func(a, b)
+                            translated.execute_func::<(), i32>(0, ()) == $func(a, b)
                         }
                     }
 
                     fn lit_reg(a: i32, b: i32) -> bool {
-                        use std::sync::Once;
-
                         let translated = translate_wat(&format!("
                             (module (func (param i32) (result i32)
                                 (i32.{op} (i32.const {left}) (get_local 0))))
@@ -64,11 +66,14 @@ mod op32 {
                     }
 
                     fn reg_lit(a: i32, b: i32) -> bool {
+                        let translated = translate_wat(&format!("
+                            (module (func (param i32) (result i32)
+                                (i32.{op} (get_local 0) (i32.const {right}))))
+                        ", op = OP, right = b));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
                         unsafe {
-                            translate_wat(&format!("
-                                (module (func (param i32) (result i32)
-                                    (i32.{op} (get_local 0) (i32.const {right}))))
-                            ", op = OP, right = b)).execute_func::<(i32,), i32>(0, (a,)) == $func(a, b)
+                            translated.execute_func::<(i32,), i32>(0, (a,)) == $func(a, b)
                         }
                     }
                 }
@@ -452,7 +457,11 @@ fn br_block() {
   )
 )
     "#;
-    assert_eq!(execute_wat(code, 5, 7), 12);
+
+    let translated = translate_wat(code);
+    translated.disassemble();
+
+    assert_eq!(unsafe { translated.execute_func::<(i32, i32), i32>(0, (5, 7)) }, 12);
 }
 
 // Tests discarding values on the value stack, while
@@ -722,6 +731,42 @@ fn fib() {
             );
         }
     }
+}
+
+#[test]
+fn storage() {
+    const CODE: &str = r#"
+(module
+  (memory 1 1)
+
+  (func (result i32)
+    (local i32 i32 i32)
+    (set_local 0 (i32.const 10))
+    (block
+      (loop
+        (if
+          (i32.eq (get_local 0) (i32.const 0))
+          (then (br 2))
+        )
+        (set_local 2 (i32.mul (get_local 0) (i32.const 4)))
+        (i32.store (get_local 2) (get_local 0))
+        (set_local 1 (i32.load (get_local 2)))
+        (if
+          (i32.ne (get_local 0) (get_local 1))
+          (then (return (i32.const 0)))
+        )
+        (set_local 0 (i32.sub (get_local 0) (i32.const 1)))
+        (br 0)
+      )
+    )
+    (i32.const 1)
+  )
+)"#;
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    assert_eq!(unsafe { translated.execute_func::<(), i32>(0, ()) }, 1);
 }
 
 #[bench]

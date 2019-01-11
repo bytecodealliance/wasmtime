@@ -1,4 +1,4 @@
-#![feature(plugin, test, const_slice_len)]
+#![feature(plugin, test, const_slice_len, never_type)]
 #![plugin(dynasm)]
 
 extern crate test;

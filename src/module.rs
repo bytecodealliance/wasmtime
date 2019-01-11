@@ -38,6 +38,7 @@ impl_function_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
 #[derive(Default)]
 pub struct TranslatedModule {
     translated_code_section: Option<TranslatedCodeSection>,
+    memory: Option<Vec<u8>>,
 }
 
 impl TranslatedModule {
@@ -136,7 +137,18 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Memory = section.code {
         let memories = section.get_memory_section_reader()?;
-        translate_sections::memory(memories)?;
+        let mem = translate_sections::memory(memories)?;
+
+        assert!(
+            mem.len() <= 1,
+            "Multiple memory sections not yet unimplemented"
+        );
+
+        if !mem.is_empty() {
+            let mem = mem[0];
+            assert_eq!(Some(mem.limits.initial), mem.limits.maximum);
+            output.memory = Some(vec![0; mem.limits.initial as usize * 65_536]);
+        }
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -191,7 +203,11 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Code = section.code {
         let code = section.get_code_section_reader()?;
-        output.translated_code_section = Some(translate_sections::code(code, &ctx)?);
+        output.translated_code_section = Some(translate_sections::code(
+            code,
+            &ctx,
+            output.memory.as_mut().map(|m| &mut m[..]),
+        )?);
 
         reader.skip_custom_sections()?;
         if reader.eof() {

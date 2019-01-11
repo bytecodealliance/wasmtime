@@ -90,12 +90,31 @@ impl ControlFrame {
     }
 }
 
-pub fn translate(
-    session: &mut CodeGenSession,
+pub fn translate<T: Memory>(
+    session: &mut CodeGenSession<T>,
     translation_ctx: &TranslationContext,
     func_idx: u32,
     body: &FunctionBody,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+    Error: From<T::Error>,
+{
+    fn break_from_control_frame_with_id<T0: Memory>(
+        ctx: &mut Context<T0>,
+        control_frames: &mut Vec<ControlFrame>,
+        idx: usize,
+    ) {
+        control_frames
+            .last_mut()
+            .expect("Control stack is empty!")
+            .mark_unreachable();
+
+        let control_frame = control_frames.get(idx).expect("wrong depth");
+        ctx.return_from_block(control_frame.arity(), idx == 0);
+
+        ctx.br(control_frame.kind.branch_target());
+    }
+
     let locals = body.get_locals_reader()?;
 
     let func_type = translation_ctx.func_type(func_idx);
@@ -117,14 +136,14 @@ pub fn translate(
     let ctx = &mut session.new_context(func_idx);
     let operators = body.get_operators_reader()?;
 
-    let func = start_function(ctx, arg_count, num_locals);
+    let func = ctx.start_function(arg_count, num_locals);
 
     let mut control_frames = Vec::new();
 
     // Upon entering the function implicit frame for function body is pushed. It has the same
     // result type as the function itself. Branching to it is equivalent to returning from the function.
-    let epilogue_label = create_label(ctx);
-    let function_block_state = start_block(ctx);
+    let epilogue_label = ctx.create_label();
+    let function_block_state = ctx.start_block();
     control_frames.push(ControlFrame::new(
         ControlFrameKind::Block {
             end_label: epilogue_label,
@@ -135,6 +154,8 @@ pub fn translate(
 
     // TODO: We want to make this a state machine (maybe requires 1-element lookahead? Not sure) so that we
     //       can coelesce multiple `end`s and optimise break-at-end-of-block into noop.
+    // TODO: Does coelescing multiple `end`s matter since at worst this really only elides a single move at
+    //       the end of a function, and this is probably a no-op anyway due to register renaming.
     for op in operators {
         let op = op?;
 
@@ -157,11 +178,11 @@ pub fn translate(
                     .last_mut()
                     .expect("control stack is never empty")
                     .mark_unreachable();
-                trap(ctx);
+                ctx.trap();
             }
             Operator::Block { ty } => {
-                let label = create_label(ctx);
-                let state = start_block(ctx);
+                let label = ctx.create_label();
+                let state = ctx.start_block();
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Block { end_label: label },
                     state,
@@ -169,49 +190,32 @@ pub fn translate(
                 ));
             }
             Operator::Return => {
-                control_frames
-                    .last_mut()
-                    .expect("control stack is never empty")
-                    .mark_unreachable();
-
-                let control_frame = control_frames.get(0).expect("control stack is never empty");
-
-                return_from_block(ctx, control_frame.arity(), true);
-
-                br(ctx, control_frame.kind.branch_target());
+                break_from_control_frame_with_id(ctx, &mut control_frames, 0);
             }
             Operator::Br { relative_depth } => {
-                control_frames
-                    .last_mut()
-                    .expect("control stack is never empty")
-                    .mark_unreachable();
-
                 let idx = control_frames.len() - 1 - relative_depth as usize;
-                let control_frame = control_frames.get(idx).expect("wrong depth");
 
-                return_from_block(ctx, control_frame.arity(), idx == 0);
-
-                br(ctx, control_frame.kind.branch_target());
+                break_from_control_frame_with_id(ctx, &mut control_frames, idx);
             }
             Operator::BrIf { relative_depth } => {
                 let idx = control_frames.len() - 1 - relative_depth as usize;
                 let control_frame = control_frames.get(idx).expect("wrong depth");
 
-                let if_not = create_label(ctx);
+                let if_not = ctx.create_label();
 
-                jump_if_false(ctx, if_not);
+                ctx.jump_if_false(if_not);
 
-                return_from_block(ctx, control_frame.arity(), idx == 0);
-                br(ctx, control_frame.kind.branch_target());
+                ctx.return_from_block(control_frame.arity(), idx == 0);
+                ctx.br(control_frame.kind.branch_target());
 
-                define_label(ctx, if_not);
+                ctx.define_label(if_not);
             }
             Operator::If { ty } => {
-                let end_label = create_label(ctx);
-                let if_not = create_label(ctx);
+                let end_label = ctx.create_label();
+                let if_not = ctx.create_label();
 
-                jump_if_false(ctx, if_not);
-                let state = start_block(ctx);
+                ctx.jump_if_false(if_not);
+                let state = ctx.start_block();
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::IfTrue { end_label, if_not },
@@ -220,10 +224,10 @@ pub fn translate(
                 ));
             }
             Operator::Loop { ty } => {
-                let header = create_label(ctx);
+                let header = ctx.create_label();
 
-                define_label(ctx, header);
-                let state = start_block(ctx);
+                ctx.define_label(header);
+                let state = ctx.start_block();
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Loop { header },
@@ -239,16 +243,16 @@ pub fn translate(
                         block_state,
                         ..
                     }) => {
-                        return_from_block(ctx, arity(ty), false);
-                        reset_block(ctx, block_state.clone());
+                        ctx.return_from_block(arity(ty), false);
+                        ctx.reset_block(block_state.clone());
 
                         // Finalize `then` block by jumping to the `end_label`.
-                        br(ctx, end_label);
+                        ctx.br(end_label);
 
                         // Define `if_not` label here, so if the corresponding `if` block receives
                         // 0 it will branch here.
                         // After that reset stack depth to the value before entering `if` block.
-                        define_label(ctx, if_not);
+                        ctx.define_label(if_not);
 
                         // Carry over the `end_label`, so it will be resolved when the corresponding `end`
                         // is encountered.
@@ -278,66 +282,71 @@ pub fn translate(
 
                 // Don't bother generating this code if we're in unreachable code
                 if !control_frame.unreachable {
-                    return_from_block(ctx, arity, control_frames.is_empty());
+                    ctx.return_from_block(arity, control_frames.is_empty());
                 }
 
+                let block_end = control_frame.kind.block_end();
                 // TODO: What is the correct order of this and the `define_label`? It's clear for `block`s
                 //       but I'm not certain for `if..then..else..end`.
-                end_block(ctx, control_frame.block_state);
-
-                if let Some(block_end) = control_frame.kind.block_end() {
-                    define_label(ctx, block_end);
-                }
+                ctx.end_block(control_frame.block_state, |ctx| {
+                    if let Some(block_end) = block_end {
+                        ctx.define_label(block_end);
+                    }
+                });
 
                 if let ControlFrameKind::IfTrue { if_not, .. } = control_frame.kind {
                     // this is `if .. end` construction. Define the `if_not` label here.
-                    define_label(ctx, if_not);
+                    ctx.define_label(if_not);
                 }
             }
-            Operator::I32Eq => i32_eq(ctx),
-            Operator::I32Ne => i32_neq(ctx),
-            Operator::I32LtS => i32_lt_s(ctx),
-            Operator::I32LeS => i32_le_s(ctx),
-            Operator::I32GtS => i32_gt_s(ctx),
-            Operator::I32GeS => i32_ge_s(ctx),
-            Operator::I32LtU => i32_lt_u(ctx),
-            Operator::I32LeU => i32_le_u(ctx),
-            Operator::I32GtU => i32_gt_u(ctx),
-            Operator::I32GeU => i32_ge_u(ctx),
-            Operator::I32Add => i32_add(ctx),
-            Operator::I32Sub => i32_sub(ctx),
-            Operator::I32And => i32_and(ctx),
-            Operator::I32Or => i32_or(ctx),
-            Operator::I32Xor => i32_xor(ctx),
-            Operator::I32Mul => i32_mul(ctx),
-            Operator::I64Eq => i64_eq(ctx),
-            Operator::I64Ne => i64_neq(ctx),
-            Operator::I64LtS => i64_lt_s(ctx),
-            Operator::I64LeS => i64_le_s(ctx),
-            Operator::I64GtS => i64_gt_s(ctx),
-            Operator::I64GeS => i64_ge_s(ctx),
-            Operator::I64LtU => i64_lt_u(ctx),
-            Operator::I64LeU => i64_le_u(ctx),
-            Operator::I64GtU => i64_gt_u(ctx),
-            Operator::I64GeU => i64_ge_u(ctx),
-            Operator::I64Add => i64_add(ctx),
-            Operator::I64Sub => i64_sub(ctx),
-            Operator::I64And => i64_and(ctx),
-            Operator::I64Or => i64_or(ctx),
-            Operator::I64Xor => i64_xor(ctx),
-            Operator::I64Mul => i64_mul(ctx),
-            Operator::Drop => drop(ctx),
-            Operator::SetLocal { local_index } => set_local_i32(ctx, local_index),
-            Operator::GetLocal { local_index } => get_local_i32(ctx, local_index),
-            Operator::I32Const { value } => literal_i32(ctx, value),
-            Operator::I64Const { value } => literal_i64(ctx, value),
+            Operator::I32Eq => ctx.i32_eq(),
+            Operator::I32Ne => ctx.i32_neq(),
+            Operator::I32LtS => ctx.i32_lt_s(),
+            Operator::I32LeS => ctx.i32_le_s(),
+            Operator::I32GtS => ctx.i32_gt_s(),
+            Operator::I32GeS => ctx.i32_ge_s(),
+            Operator::I32LtU => ctx.i32_lt_u(),
+            Operator::I32LeU => ctx.i32_le_u(),
+            Operator::I32GtU => ctx.i32_gt_u(),
+            Operator::I32GeU => ctx.i32_ge_u(),
+            Operator::I32Add => ctx.i32_add(),
+            Operator::I32Sub => ctx.i32_sub(),
+            Operator::I32And => ctx.i32_and(),
+            Operator::I32Or => ctx.i32_or(),
+            Operator::I32Xor => ctx.i32_xor(),
+            Operator::I32Mul => ctx.i32_mul(),
+            Operator::I64Eq => ctx.i64_eq(),
+            Operator::I64Ne => ctx.i64_neq(),
+            Operator::I64LtS => ctx.i64_lt_s(),
+            Operator::I64LeS => ctx.i64_le_s(),
+            Operator::I64GtS => ctx.i64_gt_s(),
+            Operator::I64GeS => ctx.i64_ge_s(),
+            Operator::I64LtU => ctx.i64_lt_u(),
+            Operator::I64LeU => ctx.i64_le_u(),
+            Operator::I64GtU => ctx.i64_gt_u(),
+            Operator::I64GeU => ctx.i64_ge_u(),
+            Operator::I64Add => ctx.i64_add(),
+            Operator::I64Sub => ctx.i64_sub(),
+            Operator::I64And => ctx.i64_and(),
+            Operator::I64Or => ctx.i64_or(),
+            Operator::I64Xor => ctx.i64_xor(),
+            Operator::I64Mul => ctx.i64_mul(),
+            Operator::Drop => ctx.drop(),
+            Operator::SetLocal { local_index } => ctx.set_local(local_index),
+            Operator::GetLocal { local_index } => ctx.get_local(local_index),
+            Operator::TeeLocal { local_index } => ctx.tee_local(local_index),
+            Operator::I32Const { value } => ctx.i32_literal(value),
+            Operator::I64Const { value } => ctx.i64_literal(value),
+            Operator::I32Load { memarg } => ctx.i32_load(memarg.offset)?,
+            Operator::I64Load { memarg } => ctx.i64_load(memarg.offset)?,
+            Operator::I32Store { memarg } => ctx.i32_store(memarg.offset)?,
+            Operator::I64Store { memarg } => ctx.i64_store(memarg.offset)?,
             Operator::Call { function_index } => {
                 let callee_ty = translation_ctx.func_type(function_index);
 
                 // TODO: this implementation assumes that this function is locally defined.
 
-                call_direct(
-                    ctx,
+                ctx.call_direct(
                     function_index,
                     callee_ty.params.len() as u32,
                     callee_ty.returns.len() as u32,
@@ -349,7 +358,7 @@ pub fn translate(
             }
         }
     }
-    epilogue(ctx, func);
+    ctx.epilogue(func);
 
     Ok(())
 }

@@ -45,11 +45,11 @@ pub fn table(tables: TableSectionReader) -> Result<(), Error> {
 }
 
 /// Parses the Memory section of the wasm module.
-pub fn memory(memories: MemorySectionReader) -> Result<(), Error> {
-    for entry in memories {
-        entry?; // TODO
-    }
-    Ok(())
+pub fn memory(memories: MemorySectionReader) -> Result<Vec<MemoryType>, Error> {
+    memories
+        .into_iter()
+        .map(|r| r.map_err(Into::into))
+        .collect()
 }
 
 /// Parses the Global section of the wasm module.
@@ -86,13 +86,22 @@ pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
 pub fn code(
     code: CodeSectionReader,
     translation_ctx: &TranslationContext,
+    memory: Option<&mut [u8]>,
 ) -> Result<TranslatedCodeSection, Error> {
     let func_count = code.get_count();
-    let mut session = CodeGenSession::new(func_count);
-    for (idx, body) in code.into_iter().enumerate() {
-        function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
+    if let Some(memory) = memory {
+        let mut session = CodeGenSession::<::backend::HasMemory>::with_memory(func_count, memory.as_mut_ptr());
+        for (idx, body) in code.into_iter().enumerate() {
+            function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
+        }
+        Ok(session.into_translated_code_section()?)
+    } else {
+        let mut session = CodeGenSession::<::backend::NoMemory>::new(func_count);
+        for (idx, body) in code.into_iter().enumerate() {
+            function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
+        }
+        Ok(session.into_translated_code_section()?)
     }
-    Ok(session.into_translated_code_section()?)
 }
 
 /// Parses the Data section of the wasm module.
