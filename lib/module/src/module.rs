@@ -506,7 +506,7 @@ where
 
     /// Define a function, producing the function body from the given `Context`.
     pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
-        self.define_function_peek_compiled(func, ctx, |_, _| ())
+        self.define_function_peek_compiled(func, ctx, |_, _, _| ())
     }
 
     /// Define a function, allowing to peek at the compiled function and producing the
@@ -515,7 +515,7 @@ where
         &mut self,
         func: FuncId,
         ctx: &mut Context,
-        peek_compiled: impl FnOnce(u32, &Context) -> T,
+        peek_compiled: impl FnOnce(u32, &Context, &isa::TargetIsa) -> T,
     ) -> ModuleResult<T> {
         let (compiled, peek_res) = {
             let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
@@ -535,7 +535,7 @@ where
                 return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
             }
 
-            let peek_res = peek_compiled(code_size, &ctx);
+            let peek_res = peek_compiled(code_size, &ctx, self.backend.isa());
 
             (
                 self.backend.define_function(
