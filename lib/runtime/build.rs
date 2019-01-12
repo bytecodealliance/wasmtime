@@ -14,7 +14,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static=SignalHandlers");
 
     let mut bindings_builder = bindgen::Builder::default()
-        .header("signalhandlers/SignalHandlers.h")
+        .header("signalhandlers/SignalHandlers.hpp")
         .whitelist_type("TrapContext")
         .whitelist_type("jmp_buf")
         .whitelist_function("EnsureEagerSignalHandlers");

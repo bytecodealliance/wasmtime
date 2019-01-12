@@ -5,7 +5,7 @@
 //! Use of Mach ports on Darwin platforms (the USE_APPLE_MACH_PORTS code below) is
 //! currently disabled.
 
-#include "SignalHandlers.h"
+#include "SignalHandlers.hpp"
 
 #include <stdint.h>
 #include <assert.h>
