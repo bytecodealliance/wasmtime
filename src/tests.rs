@@ -1,4 +1,4 @@
-use super::{translate, TranslatedModule};
+use super::{module::ExecutionError, translate, TranslatedModule};
 use wabt;
 
 fn translate_wat(wat: &str) -> TranslatedModule {
@@ -10,7 +10,7 @@ fn translate_wat(wat: &str) -> TranslatedModule {
 /// Execute the first function in the module.
 fn execute_wat(wat: &str, a: u32, b: u32) -> u32 {
     let translated = translate_wat(wat);
-    unsafe { translated.execute_func(0, (a, b)) }
+    translated.execute_func(0, (a, b)).unwrap()
 }
 
 #[test]
@@ -30,51 +30,51 @@ mod op32 {
                 const OP: &str = stringify!($op);
 
                 lazy_static! {
-                    static ref AS_PARAMS: TranslatedModule = translate_wat(&format!("
+                    static ref AS_PARAMS: TranslatedModule = translate_wat(&format!(
+                        "
                         (module (func (param i32) (param i32) (result i32)
                             (i32.{op} (get_local 0) (get_local 1))))
-                    ", op = OP));
+                    ",
+                        op = OP
+                    ));
                 }
 
                 quickcheck! {
                     fn as_params(a: i32, b: i32) -> bool {
-                        unsafe { AS_PARAMS.execute_func::<(i32, i32), i32>(0, (a, b)) == $func(a, b) }
+                         AS_PARAMS.execute_func::<(i32, i32), i32>(0, (a, b)) == Ok($func(a, b))
                     }
 
                     fn lit_lit(a: i32, b: i32) -> bool {
-                        let translated = translate_wat(&format!("
+                                                let translated = translate_wat(&format!("
                             (module (func (result i32)
                                 (i32.{op} (i32.const {left}) (i32.const {right}))))
                         ", op = OP, left = a, right = b));
                         static ONCE: Once = Once::new();
                         ONCE.call_once(|| translated.disassemble());
-                        unsafe {
-                            translated.execute_func::<(), i32>(0, ()) == $func(a, b)
-                        }
+
+                        translated.execute_func::<(), i32>(0, ()) == Ok($func(a, b))
                     }
 
                     fn lit_reg(a: i32, b: i32) -> bool {
-                        let translated = translate_wat(&format!("
+                                                let translated = translate_wat(&format!("
                             (module (func (param i32) (result i32)
                                 (i32.{op} (i32.const {left}) (get_local 0))))
                         ", op = OP, left = a));
                         static ONCE: Once = Once::new();
                         ONCE.call_once(|| translated.disassemble());
-                        unsafe {
-                            translated.execute_func::<(i32,), i32>(0, (b,)) == $func(a, b)
-                        }
+
+                        translated.execute_func::<(i32,), i32>(0, (b,)) == Ok($func(a, b))
                     }
 
                     fn reg_lit(a: i32, b: i32) -> bool {
-                        let translated = translate_wat(&format!("
+                                                let translated = translate_wat(&format!("
                             (module (func (param i32) (result i32)
                                 (i32.{op} (get_local 0) (i32.const {right}))))
                         ", op = OP, right = b));
                         static ONCE: Once = Once::new();
                         ONCE.call_once(|| translated.disassemble());
-                        unsafe {
-                            translated.execute_func::<(i32,), i32>(0, (a,)) == $func(a, b)
-                        }
+
+                        translated.execute_func::<(i32,), i32>(0, (a,)) == Ok($func(a, b))
                     }
                 }
             }
@@ -122,16 +122,14 @@ mod op64 {
 
                 quickcheck! {
                     fn as_params(a: i64, b: i64) -> bool {
-                        unsafe { AS_PARAMS.execute_func::<(i64, i64), $retty>(0, (a, b)) == ($func(a, b) as $retty) }
+                        AS_PARAMS.execute_func::<(i64, i64), $retty>(0, (a, b)) == Ok($func(a, b) as $retty)
                     }
 
                     fn lit_lit(a: i64, b: i64) -> bool {
-                        unsafe {
-                            translate_wat(&format!("
-                                (module (func (result {retty})
-                                    (i64.{op} (i64.const {left}) (i64.const {right}))))
-                            ", retty = RETTY, op = OP, left = a, right = b)).execute_func::<(), $retty>(0, ()) == ($func(a, b) as $retty)
-                        }
+                        translate_wat(&format!("
+                            (module (func (result {retty})
+                                (i64.{op} (i64.const {left}) (i64.const {right}))))
+                        ", retty = RETTY, op = OP, left = a, right = b)).execute_func::<(), $retty>(0, ()) == Ok($func(a, b) as $retty)
                     }
 
                     fn lit_reg(a: i64, b: i64) -> bool {
@@ -143,18 +141,15 @@ mod op64 {
                         ", retty = RETTY, op = OP, left = a));
                         static ONCE: Once = Once::new();
                         ONCE.call_once(|| translated.disassemble());
-                        unsafe {
-                            translated.execute_func::<(i64,), $retty>(0, (b,)) == ($func(a, b) as $retty)
-                        }
+
+                        translated.execute_func::<(i64,), $retty>(0, (b,)) == Ok($func(a, b) as $retty)
                     }
 
                     fn reg_lit(a: i64, b: i64) -> bool {
-                        unsafe {
-                            translate_wat(&format!("
-                                (module (func (param i64) (result {retty})
-                                    (i64.{op} (get_local 0) (i64.const {right}))))
-                            ", retty = RETTY, op = OP, right = b)).execute_func::<(i64,), $retty>(0, (a,)) == ($func(a, b) as $retty)
-                        }
+                        translate_wat(&format!("
+                            (module (func (param i64) (result {retty})
+                                (i64.{op} (get_local 0) (i64.const {right}))))
+                        ", retty = RETTY, op = OP, right = b)).execute_func::<(i64,), $retty>(0, (a,)) == Ok($func(a, b) as $retty)
                     }
                 }
             }
@@ -207,7 +202,7 @@ quickcheck! {
             static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
         }
 
-        let out = unsafe { TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)) };
+        let out = TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)).unwrap();
 
         (a == b) == (out == 1)
     }
@@ -234,9 +229,9 @@ quickcheck! {
             static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
         }
 
-        let out = unsafe { TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)) };
+        let out = TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b));
 
-        out == (if a == b { a } else { b })
+        out == Ok(if a == b { a } else { b })
     }
 }
 #[test]
@@ -310,10 +305,10 @@ fn large_function() {
         {
             let translated = translate_wat(code);
             translated.disassemble();
-            let out: u32 = unsafe { translated.execute_func(0, (5, 4, 3, 2, 1, 0)) };
+            let out: Result<u32, _> = translated.execute_func(0, (5, 4, 3, 2, 1, 0));
             out
         },
-        5
+        Ok(5)
     );
 }
 
@@ -344,12 +339,9 @@ fn function_read_args_spill_to_stack() {
         {
             let translated = translate_wat(code);
             translated.disassemble();
-            let out: u32 = unsafe {
-                translated.execute_func(0, (7u32, 6u32, 5u32, 4u32, 3u32, 2u32, 1u32, 0u32))
-            };
-            out
+            translated.execute_func(0, (7u32, 6u32, 5u32, 4u32, 3u32, 2u32, 1u32, 0u32))
         },
-        7
+        Ok(7u32)
     );
 }
 
@@ -408,18 +400,16 @@ macro_rules! mk_function_write_args_spill_to_stack {
                 {
                     let translated = translate_wat(&code);
                     translated.disassemble();
-                    let out: $typ = unsafe {
-                        translated.execute_func(
-                            0,
-                            (
-                                11 as $typ, 10 as $typ, 9 as $typ, 8 as $typ, 7 as $typ, 6 as $typ,
-                                5 as $typ, 4 as $typ, 3 as $typ, 2 as $typ, 1 as $typ, 0 as $typ,
-                            ),
-                        )
-                    };
+                    let out: Result<$typ, _> = translated.execute_func(
+                        0,
+                        (
+                            11 as $typ, 10 as $typ, 9 as $typ, 8 as $typ, 7 as $typ, 6 as $typ,
+                            5 as $typ, 4 as $typ, 3 as $typ, 2 as $typ, 1 as $typ, 0 as $typ,
+                        ),
+                    );
                     out
                 },
-                11
+                Ok(11)
             );
         }
     };
@@ -461,7 +451,10 @@ fn br_block() {
     let translated = translate_wat(code);
     translated.disassemble();
 
-    assert_eq!(unsafe { translated.execute_func::<(i32, i32), i32>(0, (5, 7)) }, 12);
+    assert_eq!(
+        translated.execute_func::<(i32, i32), i32>(0, (5, 7)),
+        Ok(12)
+    );
 }
 
 // Tests discarding values on the value stack, while
@@ -543,7 +536,7 @@ fn spec_loop() {
 
     let translated = translate_wat(code);
     translated.disassemble();
-    unsafe { translated.execute_func::<(), ()>(0, ()) }
+    translated.execute_func::<(), ()>(0, ()).unwrap();
 }
 
 quickcheck! {
@@ -620,9 +613,8 @@ quickcheck! {
         }
 
         let n = n as i32;
-        unsafe {
-            TRANSLATED.execute_func::<(i32,), i32>(0, (n,)) == fac(n)
-        }
+
+        TRANSLATED.execute_func::<(i32,), i32>(0, (n,)) == Ok(fac(n))
     }
 }
 
@@ -657,6 +649,44 @@ fn literals() {
     "#;
 
     assert_eq!(execute_wat(code, 0, 0), 228);
+}
+
+#[test]
+fn wrong_type() {
+    let code = r#"
+(module
+  (func (param i32) (param i64) (result i32)
+    (i32.const 228)
+  )
+)
+    "#;
+
+    let translated = translate_wat(code);
+    assert_eq!(
+        translated
+            .execute_func::<_, ()>(0, (0u32, 0u32))
+            .unwrap_err(),
+        ExecutionError::TypeMismatch
+    );
+}
+
+#[test]
+fn wrong_index() {
+    let code = r#"
+(module
+  (func (param i32) (param i64) (result i32)
+    (i32.const 228)
+  )
+)
+    "#;
+
+    let translated = translate_wat(code);
+    assert_eq!(
+        translated
+            .execute_func::<_, ()>(10, (0u32, 0u32))
+            .unwrap_err(),
+        ExecutionError::FuncIndexOutOfBounds
+    );
 }
 
 const FIBONACCI: &str = r#"
@@ -722,14 +752,12 @@ fn fib() {
     translated.disassemble();
 
     for x in 0..30 {
-        unsafe {
-            assert_eq!(
-                translated.execute_func::<_, u32>(0, (x,)),
-                fib(x),
-                "Failed for x={}",
-                x
-            );
-        }
+        assert_eq!(
+            translated.execute_func::<_, u32>(0, (x,)),
+            Ok(fib(x)),
+            "Failed for x={}",
+            x
+        );
     }
 }
 
@@ -766,7 +794,7 @@ fn storage() {
     let translated = translate_wat(CODE);
     translated.disassemble();
 
-    assert_eq!(unsafe { translated.execute_func::<(), i32>(0, ()) }, 1);
+    assert_eq!(translated.execute_func::<(), i32>(0, ()), Ok(1));
 }
 
 #[bench]
@@ -781,7 +809,7 @@ fn bench_fibonacci_run(b: &mut test::Bencher) {
     let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
     let module = translate(&wasm).unwrap();
 
-    b.iter(|| unsafe { module.execute_func::<_, u32>(0, (20,)) });
+    b.iter(|| module.execute_func::<_, u32>(0, (20,)));
 }
 
 #[bench]

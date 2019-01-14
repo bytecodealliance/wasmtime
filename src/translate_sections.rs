@@ -1,7 +1,7 @@
 use backend::{CodeGenSession, TranslatedCodeSection};
 use error::Error;
 use function_body;
-use module::TranslationContext;
+use module::FuncTyStore;
 #[allow(unused_imports)] // for now
 use wasmparser::{
     CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
@@ -12,11 +12,10 @@ use wasmparser::{
 
 /// Parses the Type section of the wasm module.
 pub fn type_(types_reader: TypeSectionReader) -> Result<Vec<FuncType>, Error> {
-    let mut types = vec![];
-    for entry in types_reader {
-        types.push(entry?);
-    }
-    Ok(types)
+    types_reader
+        .into_iter()
+        .map(|r| r.map_err(Into::into))
+        .collect()
 }
 
 /// Parses the Import section of the wasm module.
@@ -29,11 +28,10 @@ pub fn import(imports: ImportSectionReader) -> Result<(), Error> {
 
 /// Parses the Function section of the wasm module.
 pub fn function(functions: FunctionSectionReader) -> Result<Vec<u32>, Error> {
-    let mut func_ty_indicies = vec![];
-    for entry in functions {
-        func_ty_indicies.push(entry?);
-    }
-    Ok(func_ty_indicies)
+    functions
+        .into_iter()
+        .map(|r| r.map_err(Into::into))
+        .collect()
 }
 
 /// Parses the Table section of the wasm module.
@@ -85,7 +83,7 @@ pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
 /// Parses the Code section of the wasm module.
 pub fn code(
     code: CodeSectionReader,
-    translation_ctx: &TranslationContext,
+    translation_ctx: &FuncTyStore,
     memory: Option<&mut [u8]>,
 ) -> Result<TranslatedCodeSection, Error> {
     let func_count = code.get_count();

@@ -1,8 +1,55 @@
 use backend::TranslatedCodeSection;
 use error::Error;
+use std::borrow::Cow;
 use std::mem;
 use translate_sections;
-use wasmparser::{FuncType, ModuleReader, SectionCode};
+use wasmparser::{FuncType, ModuleReader, SectionCode, Type};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Signature {
+    params: Cow<'static, [Type]>,
+    returns: Cow<'static, [Type]>,
+}
+
+impl PartialEq<FuncType> for Signature {
+    fn eq(&self, other: &FuncType) -> bool {
+        &self.params[..] == &other.params[..] && &self.returns[..] == &other.returns[..]
+    }
+}
+
+pub trait AsValueType {
+    const TYPE: Type;
+}
+
+pub trait TypeList {
+    const TYPE_LIST: &'static [Type];
+}
+
+impl<T> TypeList for T
+where
+    T: AsValueType,
+{
+    const TYPE_LIST: &'static [Type] = &[T::TYPE];
+}
+
+impl AsValueType for i32 {
+    const TYPE: Type = Type::I32;
+}
+impl AsValueType for i64 {
+    const TYPE: Type = Type::I64;
+}
+impl AsValueType for u32 {
+    const TYPE: Type = Type::I32;
+}
+impl AsValueType for u64 {
+    const TYPE: Type = Type::I64;
+}
+impl AsValueType for f32 {
+    const TYPE: Type = Type::F32;
+}
+impl AsValueType for f64 {
+    const TYPE: Type = Type::F64;
+}
 
 pub trait FunctionArgs {
     unsafe fn call<T>(self, start: *const u8) -> T;
@@ -21,6 +68,10 @@ macro_rules! impl_function_args {
             }
         }
 
+        impl<$first: AsValueType, $($rest: AsValueType),*> TypeList for ($first, $($rest),*) {
+            const TYPE_LIST: &'static [Type] = &[$first::TYPE, $($rest::TYPE),*];
+        }
+
         impl_function_args!($($rest),*);
     };
     () => {
@@ -30,28 +81,57 @@ macro_rules! impl_function_args {
                 func()
             }
         }
+
+        impl TypeList for () {
+            const TYPE_LIST: &'static [Type] = &[];
+        }
     };
 }
 
 impl_function_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TranslatedModule {
     translated_code_section: Option<TranslatedCodeSection>,
+    types: FuncTyStore,
+    // Note: This vector should never be deallocated or reallocated or the pointer
+    //       to its contents otherwise invalidated while the JIT'd code is still
+    //       callable.
     memory: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ExecutionError {
+    FuncIndexOutOfBounds,
+    TypeMismatch,
 }
 
 impl TranslatedModule {
     // For testing only.
     // TODO: Handle generic signatures.
-    pub unsafe fn execute_func<Args: FunctionArgs, T>(&self, func_idx: u32, args: Args) -> T {
+    pub fn execute_func<Args: FunctionArgs + TypeList, T: TypeList>(
+        &self,
+        func_idx: u32,
+        args: Args,
+    ) -> Result<T, ExecutionError> {
         let code_section = self
             .translated_code_section
             .as_ref()
             .expect("no code section");
+
+        if func_idx as usize >= self.types.func_ty_indicies.len() {
+            return Err(ExecutionError::FuncIndexOutOfBounds);
+        }
+
+        let type_ = self.types.func_type(func_idx);
+
+        if (&type_.params[..], &type_.returns[..]) != (Args::TYPE_LIST, T::TYPE_LIST) {
+            return Err(ExecutionError::TypeMismatch);
+        }
+
         let start_buf = code_section.func_start(func_idx as usize);
 
-        args.call(start_buf)
+        Ok(unsafe { args.call(start_buf) })
     }
 
     pub fn disassemble(&self) {
@@ -62,13 +142,13 @@ impl TranslatedModule {
     }
 }
 
-#[derive(Default)]
-pub struct TranslationContext {
+#[derive(Default, Debug)]
+pub struct FuncTyStore {
     types: Vec<FuncType>,
     func_ty_indicies: Vec<u32>,
 }
 
-impl TranslationContext {
+impl FuncTyStore {
     pub fn func_type(&self, func_idx: u32) -> &FuncType {
         // TODO: This assumes that there is no imported functions.
         let func_ty_idx = self.func_ty_indicies[func_idx as usize];
@@ -89,11 +169,9 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
     }
     let mut section = reader.read()?;
 
-    let mut ctx = TranslationContext::default();
-
     if let SectionCode::Type = section.code {
         let types_reader = section.get_type_section_reader()?;
-        ctx.types = translate_sections::type_(types_reader)?;
+        output.types.types = translate_sections::type_(types_reader)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -115,7 +193,7 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Function = section.code {
         let functions = section.get_function_section_reader()?;
-        ctx.func_ty_indicies = translate_sections::function(functions)?;
+        output.types.func_ty_indicies = translate_sections::function(functions)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -205,7 +283,7 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
         let code = section.get_code_section_reader()?;
         output.translated_code_section = Some(translate_sections::code(
             code,
-            &ctx,
+            &output.types,
             output.memory.as_mut().map(|m| &mut m[..]),
         )?);
 
@@ -220,6 +298,8 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
         let data = section.get_data_section_reader()?;
         translate_sections::data(data)?;
     }
+
+    assert!(reader.eof());
 
     Ok(output)
 }

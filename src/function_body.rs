@@ -1,6 +1,6 @@
 use backend::*;
 use error::Error;
-use module::TranslationContext;
+use module::FuncTyStore;
 use wasmparser::{FunctionBody, Operator, Type};
 
 // TODO: Use own declared `Type` enum.
@@ -92,7 +92,7 @@ impl ControlFrame {
 
 pub fn translate<T: Memory>(
     session: &mut CodeGenSession<T>,
-    translation_ctx: &TranslationContext,
+    translation_ctx: &FuncTyStore,
     func_idx: u32,
     body: &FunctionBody,
 ) -> Result<(), Error>
