@@ -84,22 +84,14 @@ pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
 pub fn code(
     code: CodeSectionReader,
     translation_ctx: &FuncTyStore,
-    memory: Option<&mut [u8]>,
+    has_memory: bool,
 ) -> Result<TranslatedCodeSection, Error> {
     let func_count = code.get_count();
-    if let Some(memory) = memory {
-        let mut session = CodeGenSession::<::backend::HasMemory>::with_memory(func_count, memory.as_mut_ptr());
-        for (idx, body) in code.into_iter().enumerate() {
-            function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
-        }
-        Ok(session.into_translated_code_section()?)
-    } else {
-        let mut session = CodeGenSession::<::backend::NoMemory>::new(func_count);
-        for (idx, body) in code.into_iter().enumerate() {
-            function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
-        }
-        Ok(session.into_translated_code_section()?)
+    let mut session = CodeGenSession::new(func_count, has_memory);
+    for (idx, body) in code.into_iter().enumerate() {
+        function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
     }
+    Ok(session.into_translated_code_section()?)
 }
 
 /// Parses the Data section of the wasm module.

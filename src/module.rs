@@ -52,18 +52,20 @@ impl AsValueType for f64 {
 }
 
 pub trait FunctionArgs {
-    unsafe fn call<T>(self, start: *const u8) -> T;
+    unsafe fn call<T>(self, start: *const u8, vm_ctx: *const u8) -> T;
 }
+
+type VmCtx = u64;
 
 macro_rules! impl_function_args {
     ($first:ident $(, $rest:ident)*) => {
         impl<$first, $($rest),*> FunctionArgs for ($first, $($rest),*) {
             #[allow(non_snake_case)]
-            unsafe fn call<T>(self, start: *const u8) -> T {
-                let func = mem::transmute::<_, extern "sysv64" fn($first, $($rest),*) -> T>(start);
+            unsafe fn call<T>(self, start: *const u8, vm_ctx: *const u8) -> T {
+                let func = mem::transmute::<_, extern "sysv64" fn($first $(, $rest)*, VmCtx) -> T>(start);
                 {
                     let ($first, $($rest),*) = self;
-                    func($first, $($rest),*)
+                    func($first $(, $rest)*, vm_ctx as VmCtx)
                 }
             }
         }
@@ -76,9 +78,9 @@ macro_rules! impl_function_args {
     };
     () => {
         impl FunctionArgs for () {
-            unsafe fn call<T>(self, start: *const u8) -> T {
-                let func = mem::transmute::<_, extern "sysv64" fn() -> T>(start);
-                func()
+            unsafe fn call<T>(self, start: *const u8, vm_ctx: *const u8) -> T {
+                let func = mem::transmute::<_, extern "sysv64" fn(VmCtx) -> T>(start);
+                func(vm_ctx as VmCtx)
             }
         }
 
@@ -97,6 +99,8 @@ pub struct TranslatedModule {
     // Note: This vector should never be deallocated or reallocated or the pointer
     //       to its contents otherwise invalidated while the JIT'd code is still
     //       callable.
+    // TODO: Should we wrap this in a `Mutex` so that calling functions from multiple
+    //       threads doesn't cause data races?
     memory: Option<Vec<u8>>,
 }
 
@@ -131,7 +135,15 @@ impl TranslatedModule {
 
         let start_buf = code_section.func_start(func_idx as usize);
 
-        Ok(unsafe { args.call(start_buf) })
+        Ok(unsafe {
+            args.call(
+                start_buf,
+                self.memory
+                    .as_ref()
+                    .map(|b| b.as_ptr())
+                    .unwrap_or(std::ptr::null()),
+            )
+        })
     }
 
     pub fn disassemble(&self) {
@@ -284,7 +296,7 @@ pub fn translate(data: &[u8]) -> Result<TranslatedModule, Error> {
         output.translated_code_section = Some(translate_sections::code(
             code,
             &output.types,
-            output.memory.as_mut().map(|m| &mut m[..]),
+            output.memory.is_some(),
         )?);
 
         reader.skip_custom_sections()?;

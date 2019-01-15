@@ -539,6 +539,7 @@ fn spec_loop() {
     translated.execute_func::<(), ()>(0, ()).unwrap();
 }
 
+
 quickcheck! {
     fn spec_fac(n: i8) -> bool {
         const CODE: &str = r#"
@@ -614,7 +615,8 @@ quickcheck! {
 
         let n = n as i32;
 
-        TRANSLATED.execute_func::<(i32,), i32>(0, (n,)) == Ok(fac(n))
+        assert_eq!(TRANSLATED.execute_func::<(i32,), i32>(0, (n,)), Ok(fac(n)));
+        true
     }
 }
 
@@ -797,6 +799,71 @@ fn storage() {
     assert_eq!(translated.execute_func::<(), i32>(0, ()), Ok(1));
 }
 
+#[test]
+fn nested_storage_calls() {
+    const CODE: &str = r#"
+(module
+  (memory 1 1)
+
+  (func (result i32)
+    (local i32 i32 i32)
+    (set_local 0 (i32.const 10))
+    (block
+      (loop
+        (if
+          (i32.eq (get_local 0) (i32.const 0))
+          (then (br 2))
+        )
+        (set_local 2 (i32.mul (get_local 0) (i32.const 4)))
+        (call $assert_eq (call $inner) (i32.const 1))
+        (i32.store (get_local 2) (get_local 0))
+        (set_local 1 (i32.load (get_local 2)))
+        (if
+          (i32.ne (get_local 0) (get_local 1))
+          (then (return (i32.const 0)))
+        )
+        (set_local 0 (i32.sub (get_local 0) (i32.const 1)))
+        (br 0)
+      )
+    )
+    (i32.const 1)
+  )
+
+  (func $assert_eq (param $a i32) (param $b i32)
+    (if (i32.ne (get_local $a) (get_local $b))
+      (unreachable)
+    )
+  )
+
+  (func $inner (result i32)
+    (local i32 i32 i32)
+    (set_local 0 (i32.const 10))
+    (block
+      (loop
+        (if
+          (i32.eq (get_local 0) (i32.const 0))
+          (then (br 2))
+        )
+        (set_local 2 (i32.mul (get_local 0) (i32.const 4)))
+        (i32.store (get_local 2) (get_local 0))
+        (set_local 1 (i32.load (get_local 2)))
+        (if
+          (i32.ne (get_local 0) (get_local 1))
+          (then (return (i32.const 0)))
+        )
+        (set_local 0 (i32.sub (get_local 0) (i32.const 1)))
+        (br 0)
+      )
+    )
+    (i32.const 1)
+  )
+)"#;
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    assert_eq!(translated.execute_func::<(), i32>(0, ()), Ok(1));
+}
 #[bench]
 fn bench_fibonacci_compile(b: &mut test::Bencher) {
     let wasm = wabt::wat2wasm(FIBONACCI).unwrap();

@@ -90,17 +90,14 @@ impl ControlFrame {
     }
 }
 
-pub fn translate<T: Memory>(
-    session: &mut CodeGenSession<T>,
+pub fn translate(
+    session: &mut CodeGenSession,
     translation_ctx: &FuncTyStore,
     func_idx: u32,
     body: &FunctionBody,
-) -> Result<(), Error>
-where
-    Error: From<T::Error>,
-{
-    fn break_from_control_frame_with_id<T0: Memory>(
-        ctx: &mut Context<T0>,
+) -> Result<(), Error> {
+    fn break_from_control_frame_with_id(
+        ctx: &mut Context,
         control_frames: &mut Vec<ControlFrame>,
         idx: usize,
     ) {
@@ -136,14 +133,15 @@ where
     let ctx = &mut session.new_context(func_idx);
     let operators = body.get_operators_reader()?;
 
-    let func = ctx.start_function(arg_count, num_locals);
+    // We must add 1 here to supply `vmctx`
+    let func = ctx.start_function(arg_count + 1, num_locals);
 
     let mut control_frames = Vec::new();
 
     // Upon entering the function implicit frame for function body is pushed. It has the same
     // result type as the function itself. Branching to it is equivalent to returning from the function.
     let epilogue_label = ctx.create_label();
-    let function_block_state = ctx.start_block();
+    let function_block_state = ctx.start_block(false);
     control_frames.push(ControlFrame::new(
         ControlFrameKind::Block {
             end_label: epilogue_label,
@@ -182,7 +180,7 @@ where
             }
             Operator::Block { ty } => {
                 let label = ctx.create_label();
-                let state = ctx.start_block();
+                let state = ctx.start_block(false);
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Block { end_label: label },
                     state,
@@ -215,7 +213,7 @@ where
                 let if_not = ctx.create_label();
 
                 ctx.jump_if_false(if_not);
-                let state = ctx.start_block();
+                let state = ctx.start_block(false);
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::IfTrue { end_label, if_not },
@@ -227,7 +225,7 @@ where
                 let header = ctx.create_label();
 
                 ctx.define_label(header);
-                let state = ctx.start_block();
+                let state = ctx.start_block(true);
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Loop { header },
