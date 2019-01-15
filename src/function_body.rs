@@ -40,6 +40,13 @@ impl ControlFrameKind {
         }
     }
 
+    fn is_loop(&self) -> bool {
+        match *self {
+            ControlFrameKind::Loop { .. } => true,
+            _ => false,
+        }
+    }
+
     fn branch_target(&self) -> Label {
         match *self {
             ControlFrameKind::Block { end_label } => end_label,
@@ -101,13 +108,30 @@ pub fn translate(
         control_frames: &mut Vec<ControlFrame>,
         idx: usize,
     ) {
-        control_frames
-            .last_mut()
-            .expect("Control stack is empty!")
-            .mark_unreachable();
+        let control_frame = control_frames.get_mut(idx).expect("wrong depth");
 
-        let control_frame = control_frames.get(idx).expect("wrong depth");
-        ctx.return_from_block(control_frame.arity(), idx == 0);
+        if control_frame.kind.is_loop() {
+            ctx.restore_locals_to(&control_frame.block_state.locals);
+        } else {
+            // We can't do any execution after the function end so we just skip this logic
+            // if we're breaking out of the whole function.
+            if idx != 0 {
+                // Workaround for borrowck limitations
+                let should_set = if let Some(locals) = control_frame.block_state.end_locals.as_ref()
+                {
+                    ctx.restore_locals_to(locals);
+                    false
+                } else {
+                    true
+                };
+
+                if should_set {
+                    control_frame.block_state.end_locals = Some(ctx.block_state.locals.clone());
+                }
+            }
+
+            ctx.return_from_block(control_frame.arity());
+        }
 
         ctx.br(control_frame.kind.branch_target());
     }
@@ -141,7 +165,7 @@ pub fn translate(
     // Upon entering the function implicit frame for function body is pushed. It has the same
     // result type as the function itself. Branching to it is equivalent to returning from the function.
     let epilogue_label = ctx.create_label();
-    let function_block_state = ctx.start_block(false);
+    let function_block_state = ctx.start_block();
     control_frames.push(ControlFrame::new(
         ControlFrameKind::Block {
             end_label: epilogue_label,
@@ -180,7 +204,7 @@ pub fn translate(
             }
             Operator::Block { ty } => {
                 let label = ctx.create_label();
-                let state = ctx.start_block(false);
+                let state = ctx.start_block();
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Block { end_label: label },
                     state,
@@ -188,23 +212,31 @@ pub fn translate(
                 ));
             }
             Operator::Return => {
+                control_frames
+                    .last_mut()
+                    .expect("Control stack is empty!")
+                    .mark_unreachable();
+
                 break_from_control_frame_with_id(ctx, &mut control_frames, 0);
             }
             Operator::Br { relative_depth } => {
+                control_frames
+                    .last_mut()
+                    .expect("Control stack is empty!")
+                    .mark_unreachable();
+
                 let idx = control_frames.len() - 1 - relative_depth as usize;
 
                 break_from_control_frame_with_id(ctx, &mut control_frames, idx);
             }
             Operator::BrIf { relative_depth } => {
                 let idx = control_frames.len() - 1 - relative_depth as usize;
-                let control_frame = control_frames.get(idx).expect("wrong depth");
 
                 let if_not = ctx.create_label();
 
                 ctx.jump_if_false(if_not);
 
-                ctx.return_from_block(control_frame.arity(), idx == 0);
-                ctx.br(control_frame.kind.branch_target());
+                break_from_control_frame_with_id(ctx, &mut control_frames, idx);
 
                 ctx.define_label(if_not);
             }
@@ -213,7 +245,7 @@ pub fn translate(
                 let if_not = ctx.create_label();
 
                 ctx.jump_if_false(if_not);
-                let state = ctx.start_block(false);
+                let state = ctx.start_block();
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::IfTrue { end_label, if_not },
@@ -225,7 +257,7 @@ pub fn translate(
                 let header = ctx.create_label();
 
                 ctx.define_label(header);
-                let state = ctx.start_block(true);
+                let state = ctx.start_block();
 
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Loop { header },
@@ -241,7 +273,7 @@ pub fn translate(
                         block_state,
                         ..
                     }) => {
-                        ctx.return_from_block(arity(ty), false);
+                        ctx.return_from_block(arity(ty));
                         ctx.reset_block(block_state.clone());
 
                         // Finalize `then` block by jumping to the `end_label`.
@@ -280,7 +312,7 @@ pub fn translate(
 
                 // Don't bother generating this code if we're in unreachable code
                 if !control_frame.unreachable {
-                    ctx.return_from_block(arity, control_frames.is_empty());
+                    ctx.return_from_block(arity);
                 }
 
                 let block_end = control_frame.kind.block_end();

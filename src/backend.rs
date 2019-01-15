@@ -263,15 +263,32 @@ impl Value {
     }
 }
 
+/// A value on the logical stack. The logical stack is the value stack as it
+/// is visible to the WebAssembly, whereas the physical stack is the stack as
+/// it exists on the machine (i.e. as offsets in memory relative to `rsp`).
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum StackValue {
+    /// A local (arguments are also locals). Note that when setting a local
+    /// any values of this local stored on the stack are rendered invalid.
+    /// See `manifest_local` for how we manage this.
     Local(u32),
+    /// A temporary, stored in a register
     Temp(GPR),
+    /// An immediate value, created with `i32.const`/`i64.const` etc.
     Immediate(i64),
+    /// This value is on the physical stack and so should be accessed
+    /// with the `pop` instruction.
     Pop,
 }
 
 impl StackValue {
+    /// Returns either the location that this value can be accessed at
+    /// if possible. If this value is `Pop`, you can only access it by
+    /// popping the physical stack and so this function returns `None`.
+    ///
+    /// Of course, we could calculate the location of the value on the
+    /// physical stack, but that would be unncessary computation for
+    /// our usecases.
     fn location(&self, locals: &Locals) -> Option<ValueLocation> {
         match *self {
             StackValue::Local(loc) => Some(locals.get(loc)),
@@ -282,13 +299,20 @@ impl StackValue {
     }
 }
 
+/// A store for the local values for our function, including arguments.
 #[derive(Debug, Default, Clone)]
-struct Locals {
+pub struct Locals {
     // TODO: Store all places that the value can be read, so we can optimise
     //       passing (register) arguments along into a noop after saving their
     //       values.
+    /// All arguments in registers, check `ARGS_IN_GPRS` for the list of
+    /// registers that this can contain. If we need to move the argument
+    /// out of a register (for example, because we're calling a function)
+    /// we note that down here, so we don't have to move it back afterwards.
     register_arguments: ArrayVec<[ValueLocation; ARGS_IN_GPRS.len()]>,
+    /// The number of arguments stored on the stack.
     num_stack_args: u32,
+    /// The number of local stack slots, i.e. the amount of stack space reserved for locals.
     num_local_stack_slots: u32,
 }
 
@@ -340,10 +364,10 @@ pub struct BlockState {
     return_register: Option<GPR>,
     regs: Registers,
     /// This is the _current_ locals, since we can shuffle them about during function calls.
-    /// We will restore this to be the same state as the `Locals` in `Context<T>` at the end
-    /// of a block.
-    locals: Locals,
-    end_locals: Option<Locals>,
+    pub locals: Locals,
+    /// In non-linear control flow (ifs and loops) we have to set the locals to the state that
+    /// the next block that we enter will expect them in.
+    pub end_locals: Option<Locals>,
 }
 
 type Stack = Vec<StackValue>;
@@ -366,7 +390,7 @@ pub struct Context<'a> {
     asm: &'a mut Assembler,
     func_starts: &'a Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
-    block_state: BlockState,
+    pub block_state: BlockState,
     has_memory: bool,
 }
 
@@ -1064,13 +1088,7 @@ impl Context<'_> {
 
     // We use `put` instead of `pop` since with `BrIf` it's possible
     // that the block will continue after returning.
-    pub fn return_from_block(&mut self, arity: u32, is_function_end: bool) {
-        // This should just be an optimisation, passing `false` should always result
-        // in correct code.
-        if !is_function_end {
-            self.restore_locals();
-        }
-
+    pub fn return_from_block(&mut self, arity: u32) {
         if arity == 0 {
             return;
         }
@@ -1092,7 +1110,7 @@ impl Context<'_> {
         }
     }
 
-    pub fn start_block(&mut self, is_loop: bool) -> BlockState {
+    pub fn start_block(&mut self) -> BlockState {
         use std::mem;
 
         // OPTIMISATION: We cannot use the parent's stack values (it is disallowed by the spec)
@@ -1104,10 +1122,6 @@ impl Context<'_> {
         let out_stack = mem::replace(&mut self.block_state.stack, vec![]);
         let mut current_state = self.block_state.clone();
         current_state.stack = out_stack;
-
-        if is_loop {
-            self.block_state.end_locals = Some(current_state.locals.clone());
-        }
 
         self.block_state.return_register = None;
         current_state
@@ -1140,6 +1154,8 @@ impl Context<'_> {
             );
         }
 
+        self.restore_locals();
+
         let return_reg = self.block_state.return_register;
         let locals = mem::replace(&mut self.block_state.locals, Default::default());
         self.block_state = parent_block_state;
@@ -1153,33 +1169,32 @@ impl Context<'_> {
         }
     }
 
-    fn restore_locals(&mut self) {
-        if let Some(end_registers) = self
-            .block_state
-            .end_locals
-            .as_ref()
-            .map(|l| l.register_arguments.clone())
-        {
-            for (src, dst) in self
-                .block_state
-                .locals
-                .register_arguments
-                .clone()
-                .iter()
-                .zip(&end_registers)
-            {
-                self.copy_value(*src, *dst);
-            }
+    pub fn restore_locals(&mut self) {
+        if let Some(end_locals) = self.block_state.end_locals.clone() {
+            self.restore_locals_to(&end_locals);
+        }
+    }
 
-            for (src, dst) in self
-                .block_state
-                .locals
-                .register_arguments
-                .iter_mut()
-                .zip(&end_registers)
-            {
-                *src = *dst;
-            }
+    pub fn restore_locals_to(&mut self, locals: &Locals) {
+        for (src, dst) in self
+            .block_state
+            .locals
+            .register_arguments
+            .clone()
+            .iter()
+            .zip(&locals.register_arguments)
+        {
+            self.copy_value(*src, *dst);
+        }
+
+        for (src, dst) in self
+            .block_state
+            .locals
+            .register_arguments
+            .iter_mut()
+            .zip(&locals.register_arguments)
+        {
+            *src = *dst;
         }
     }
 
