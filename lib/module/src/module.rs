@@ -517,8 +517,9 @@ where
         ctx: &mut Context,
         peek_compiled: impl FnOnce(u32, &Context, &isa::TargetIsa) -> T,
     ) -> ModuleResult<T> {
-        let (compiled, peek_res) = {
-            let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
+        let code_size;
+        let compiled = {
+            code_size = ctx.compile(self.backend.isa()).map_err(|e| {
                 info!(
                     "defining function {}: {}",
                     func,
@@ -535,23 +536,18 @@ where
                 return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
             }
 
-            let peek_res = peek_compiled(code_size, &ctx, self.backend.isa());
-
-            (
-                self.backend.define_function(
-                    &info.decl.name,
-                    ctx,
-                    &ModuleNamespace::<B> {
-                        contents: &self.contents,
-                    },
-                    code_size,
-                )?,
-                peek_res,
-            )
+            Some(self.backend.define_function(
+                &info.decl.name,
+                ctx,
+                &ModuleNamespace::<B> {
+                    contents: &self.contents,
+                },
+                code_size,
+            )?)
         };
-        self.contents.functions[func].compiled = Some(compiled);
+        self.contents.functions[func].compiled = compiled;
         self.functions_to_finalize.push(func);
-        Ok(peek_res)
+        Ok(peek_compiled(code_size, &ctx, self.backend.isa()))
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.
