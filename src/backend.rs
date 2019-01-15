@@ -144,7 +144,7 @@ const ARGS_IN_GPRS: &[GPR] = &[RDI, RSI, RDX, RCX, R8, R9];
 const SCRATCH_REGS: &[GPR] = &[RAX, R10, R11];
 
 #[must_use]
-pub struct Function {
+pub struct FunctionEnd {
     should_generate_epilogue: bool,
 }
 
@@ -299,6 +299,79 @@ impl StackValue {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum ArgLoc {
+    Register(GPR),
+    Stack(i32),
+    Both(GPR, i32),
+}
+
+impl ArgLoc {
+    fn from_loc(loc: ValueLocation) -> Self {
+        match loc {
+            ValueLocation::Stack(offset) => ArgLoc::Stack(offset),
+            ValueLocation::Reg(gpr) => ArgLoc::Register(gpr),
+            _ => panic!("Unsupported local location"),
+        }
+    }
+
+    fn union(&mut self, other: ArgLoc) {
+        for l in other.locs() {
+            self.add_loc(l);
+        }
+    }
+
+    fn locs(&self) -> impl Iterator<Item = ValueLocation> {
+        self.reg()
+            .map(ValueLocation::Reg)
+            .into_iter()
+            .chain(self.stack().map(ValueLocation::Stack))
+    }
+
+    fn reg(&self) -> Option<GPR> {
+        match *self {
+            ArgLoc::Register(gpr) | ArgLoc::Both(gpr, _) => Some(gpr),
+            ArgLoc::Stack(_) => None,
+        }
+    }
+
+    fn stack(&self) -> Option<i32> {
+        match *self {
+            ArgLoc::Stack(o) | ArgLoc::Both(_, o) => Some(o),
+            ArgLoc::Register(_) => None,
+        }
+    }
+
+    fn add_loc(&mut self, loc: ValueLocation) {
+        match loc {
+            ValueLocation::Stack(offset) => self.add_stack(offset),
+            ValueLocation::Reg(gpr) => self.add_reg(gpr),
+            _ => panic!("Unsupported local location"),
+        }
+    }
+
+    fn add_stack(&mut self, offset: i32) {
+        *self = match *self {
+            ArgLoc::Register(gpr) | ArgLoc::Both(gpr, _) => ArgLoc::Both(gpr, offset),
+            ArgLoc::Stack(_) => ArgLoc::Stack(offset),
+        };
+    }
+
+    fn add_reg(&mut self, gpr: GPR) {
+        *self = match *self {
+            ArgLoc::Stack(offset) | ArgLoc::Both(_, offset) => ArgLoc::Both(gpr, offset),
+            ArgLoc::Register(_) => ArgLoc::Register(gpr),
+        };
+    }
+
+    fn best_loc(&self) -> ValueLocation {
+        match *self {
+            ArgLoc::Register(gpr) | ArgLoc::Both(gpr, _) => ValueLocation::Reg(gpr),
+            ArgLoc::Stack(offset) => ValueLocation::Stack(offset),
+        }
+    }
+}
+
 /// A store for the local values for our function, including arguments.
 #[derive(Debug, Default, Clone)]
 pub struct Locals {
@@ -309,7 +382,7 @@ pub struct Locals {
     /// registers that this can contain. If we need to move the argument
     /// out of a register (for example, because we're calling a function)
     /// we note that down here, so we don't have to move it back afterwards.
-    register_arguments: ArrayVec<[ValueLocation; ARGS_IN_GPRS.len()]>,
+    register_arguments: ArrayVec<[ArgLoc; ARGS_IN_GPRS.len()]>,
     /// The number of arguments stored on the stack.
     num_stack_args: u32,
     /// The number of local stack slots, i.e. the amount of stack space reserved for locals.
@@ -325,14 +398,18 @@ impl Locals {
         }
     }
 
+    fn add_pos(&mut self, index: u32, loc: ValueLocation) {
+        self.register_arguments[index as usize].add_loc(loc);
+    }
+
     fn set_pos(&mut self, index: u32, loc: ValueLocation) {
-        self.register_arguments[index as usize] = loc;
+        self.register_arguments[index as usize] = ArgLoc::from_loc(loc);
     }
 
     fn get(&self, index: u32) -> ValueLocation {
         self.register_arguments
             .get(index as usize)
-            .cloned()
+            .map(ArgLoc::best_loc)
             .unwrap_or_else(|| {
                 let stack_index = index - self.register_arguments.len() as u32;
                 if stack_index < self.num_stack_args {
@@ -890,6 +967,14 @@ impl Context<'_> {
         Label(self.asm.new_dynamic_label())
     }
 
+    pub fn define_host_fn(&mut self, host_fn: *const u8) {
+        dynasm!(self.asm
+            ; mov rax, QWORD host_fn as i64
+            ; call rax
+            ; ret
+        );
+    }
+
     fn adjusted_offset(&self, offset: i32) -> i32 {
         (self.block_state.depth.0 * WORD_SIZE) as i32 + offset
     }
@@ -1184,7 +1269,7 @@ impl Context<'_> {
             .iter()
             .zip(&locals.register_arguments)
         {
-            self.copy_value(*src, *dst);
+            self.copy_value(src.best_loc(), dst.best_loc());
         }
 
         for (src, dst) in self
@@ -1194,7 +1279,7 @@ impl Context<'_> {
             .iter_mut()
             .zip(&locals.register_arguments)
         {
-            *src = *dst;
+            src.union(*dst);
         }
     }
 
@@ -1615,7 +1700,7 @@ impl Context<'_> {
             .register_arguments
             .get_mut(local_idx as usize)
         {
-            *cur = dst_loc;
+            *cur = ArgLoc::from_loc(dst_loc);
         }
 
         self.copy_value(val_loc, dst_loc);
@@ -1636,7 +1721,7 @@ impl Context<'_> {
             .register_arguments
             .get_mut(local_idx as usize)
         {
-            *cur = dst_loc;
+            *cur = ArgLoc::from_loc(dst_loc);
         }
 
         self.copy_value(val_loc, dst_loc);
@@ -1715,23 +1800,25 @@ impl Context<'_> {
     /// Unfortunately, we can't elide this store if we're just passing arguments on
     /// because these registers are caller-saved and so the callee can use them as
     /// scratch space.
-    fn free_arg_registers(&mut self, count: u32) {
-        if count == 0 {
-            return;
-        }
-
+    fn free_arg_registers(&mut self, arity: u32) {
         // This is bound to the maximum size of the `ArrayVec` amd so can be considered to have constant
         // runtime
-        for i in 0..self.block_state.locals.register_arguments.len() {
+        for i in 0..self
+            .block_state
+            .locals
+            .register_arguments
+            .len()
+            .min(arity as usize)
+        {
             match self.block_state.locals.register_arguments[i] {
-                ValueLocation::Reg(reg) => {
+                ArgLoc::Register(reg) => {
                     if ARGS_IN_GPRS.contains(&reg) {
-                        let dst = ValueLocation::Stack(
+                        let offset =
                             ((self.block_state.locals.num_local_stack_slots - 1 - i as u32)
-                                * WORD_SIZE) as _,
-                        );
+                                * WORD_SIZE) as _;
+                        let dst = ValueLocation::Stack(offset);
                         self.copy_value(ValueLocation::Reg(reg), dst);
-                        self.block_state.locals.register_arguments[i] = dst;
+                        self.block_state.locals.register_arguments[i].add_stack(offset);
                     }
                 }
                 _ => {}
@@ -1821,10 +1908,15 @@ impl Context<'_> {
 
     /// Write the arguments to the callee to the registers and the stack using the SystemV
     /// calling convention.
-    fn pass_outgoing_args(&mut self, arity: u32, return_arity: u32) -> CallCleanup {
+    fn pass_outgoing_args(
+        &mut self,
+        arity: u32,
+        return_arity: u32,
+        has_vmctx: bool,
+    ) -> CallCleanup {
         let num_stack_args = (arity as usize).saturating_sub(ARGS_IN_GPRS.len()) as i32;
 
-        self.free_arg_registers(arity);
+        self.free_arg_registers(if has_vmctx { arity - 1} else { arity } );
 
         // We pop stack arguments first - arguments are RTL
         if num_stack_args > 0 {
@@ -1879,6 +1971,14 @@ impl Context<'_> {
             );
         }
 
+        // If these values were in register they've now been invalidated, since
+        // the callee can use them as scratch.
+        for loc in self.block_state.locals.register_arguments.iter_mut() {
+            if let Some(offset) = loc.stack() {
+                *loc = ArgLoc::Stack(offset);
+            }
+        }
+
         for reg in cleanup.restore_registers.drain(..).rev() {
             dynasm!(self.asm
                 ; pop Rq(reg)
@@ -1904,7 +2004,7 @@ impl Context<'_> {
 
         let vmctx = Value::Local(self.block_state.locals.vmctx_index());
         self.push(vmctx);
-        let cleanup = self.pass_outgoing_args(arg_arity + 1, return_arity);
+        let cleanup = self.pass_outgoing_args(arg_arity + 1, return_arity, true);
 
         let label = &self.func_starts[index as usize].1;
         dynasm!(self.asm
@@ -1919,7 +2019,7 @@ impl Context<'_> {
     //       as scratch registers
     // TODO: Allow use of unused argument registers as scratch registers.
     /// Writes the function prologue and stores the arguments as locals
-    pub fn start_function(&mut self, arguments: u32, locals: u32) -> Function {
+    pub fn start_function(&mut self, arguments: u32, locals: u32) -> FunctionEnd {
         let reg_args = &ARGS_IN_GPRS[..(arguments as usize).min(ARGS_IN_GPRS.len())];
 
         // We need space to store the register arguments if we need to call a function
@@ -1931,7 +2031,7 @@ impl Context<'_> {
         let frame_size: i32 = aligned_stack_slots as i32 * WORD_SIZE as i32;
 
         self.block_state.locals.register_arguments =
-            reg_args.iter().cloned().map(ValueLocation::Reg).collect();
+            reg_args.iter().cloned().map(ArgLoc::Register).collect();
         self.block_state.locals.num_stack_args = arguments.saturating_sub(ARGS_IN_GPRS.len() as _);
         self.block_state.locals.num_local_stack_slots = stack_slots;
         self.block_state.return_register = Some(RAX);
@@ -1946,14 +2046,14 @@ impl Context<'_> {
             );
         }
 
-        Function {
+        FunctionEnd {
             should_generate_epilogue,
         }
     }
 
     /// Writes the function epilogue, restoring the stack pointer and returning to the
     /// caller.
-    pub fn epilogue(&mut self, func: Function) {
+    pub fn epilogue(&mut self, func: FunctionEnd) {
         // We don't need to clean up the stack - RSP is restored and
         // the calling function has its own register stack and will
         // stomp on the registers from our stack if necessary.
