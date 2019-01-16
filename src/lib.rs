@@ -1,4 +1,4 @@
-#![feature(plugin, test, const_slice_len, never_type)]
+#![feature(plugin, test, const_slice_len, never_type, alloc_layout_extra)]
 #![plugin(dynasm)]
 
 extern crate test;
@@ -28,5 +28,4 @@ mod translate_sections;
 #[cfg(test)]
 mod tests;
 
-pub use module::translate;
-pub use module::TranslatedModule;
+pub use module::{translate, TranslatedModule, ExecutableModule};

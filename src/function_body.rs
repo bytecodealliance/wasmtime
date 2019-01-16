@@ -330,6 +330,7 @@ pub fn translate(
                 }
             }
             Operator::I32Eq => ctx.i32_eq(),
+            Operator::I32Eqz => ctx.i32_eqz(),
             Operator::I32Ne => ctx.i32_neq(),
             Operator::I32LtS => ctx.i32_lt_s(),
             Operator::I32LeS => ctx.i32_le_s(),
@@ -346,6 +347,7 @@ pub fn translate(
             Operator::I32Xor => ctx.i32_xor(),
             Operator::I32Mul => ctx.i32_mul(),
             Operator::I64Eq => ctx.i64_eq(),
+            Operator::I64Eqz => ctx.i64_eqz(),
             Operator::I64Ne => ctx.i64_neq(),
             Operator::I64LtS => ctx.i64_lt_s(),
             Operator::I64LeS => ctx.i64_le_s(),
@@ -378,6 +380,20 @@ pub fn translate(
 
                 ctx.call_direct(
                     function_index,
+                    callee_ty.params.len() as u32,
+                    callee_ty.returns.len() as u32,
+                );
+            }
+            Operator::CallIndirect { index, table_index } => {
+                assert_eq!(table_index, 0);
+
+                let callee_ty = translation_ctx.signature(index);
+
+                // TODO: this implementation assumes that this function is locally defined.
+
+                ctx.call_indirect(
+                    (0..translation_ctx.func_count() as u32)
+                        .filter(|i| translation_ctx.func_type_index(*i) == index),
                     callee_ty.params.len() as u32,
                     callee_ty.returns.len() as u32,
                 );

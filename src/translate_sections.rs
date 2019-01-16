@@ -7,7 +7,8 @@ use wasmparser::{
     CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
     ExportSectionReader, ExternalKind, FuncType, FunctionSectionReader, Global,
     GlobalSectionReader, GlobalType, Import, ImportSectionEntryType, ImportSectionReader,
-    MemorySectionReader, MemoryType, Operator, TableSectionReader, Type, TypeSectionReader,
+    MemorySectionReader, MemoryType, Operator, TableSectionReader, TableType, Type,
+    TypeSectionReader,
 };
 
 /// Parses the Type section of the wasm module.
@@ -35,11 +36,11 @@ pub fn function(functions: FunctionSectionReader) -> Result<Vec<u32>, Error> {
 }
 
 /// Parses the Table section of the wasm module.
-pub fn table(tables: TableSectionReader) -> Result<(), Error> {
-    for entry in tables {
-        entry?; // TODO
-    }
-    Ok(())
+pub fn table(tables: TableSectionReader) -> Result<Vec<TableType>, Error> {
+    tables
+        .into_iter()
+        .map(|r| r.map_err(Into::into))
+        .collect()
 }
 
 /// Parses the Memory section of the wasm module.

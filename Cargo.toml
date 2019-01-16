@@ -12,7 +12,7 @@ publish = false
 arrayvec = "0.4"
 dynasm = "0.2.3"
 dynasmrt = "0.2.3"
-wasmparser = "0.21.6"
+wasmparser = { path = "./wasmparser.rs" }
 capstone = "0.5.0"
 failure = "0.1.3"
 failure_derive = "0.1.3"

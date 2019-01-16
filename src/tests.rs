@@ -1,7 +1,7 @@
-use super::{module::ExecutionError, translate, TranslatedModule};
+use super::{module::ExecutionError, translate, ExecutableModule};
 use wabt;
 
-fn translate_wat(wat: &str) -> TranslatedModule {
+fn translate_wat(wat: &str) -> ExecutableModule {
     let wasm = wabt::wat2wasm(wat).unwrap();
     let compiled = translate(&wasm).unwrap();
     compiled
@@ -20,18 +20,18 @@ fn empty() {
 }
 
 mod op32 {
-    use super::{translate_wat, TranslatedModule};
+    use super::{translate_wat, ExecutableModule};
 
     macro_rules! binop_test {
         ($op:ident, $func:expr) => {
             mod $op {
-                use super::{translate_wat, TranslatedModule};
+                use super::{translate_wat, ExecutableModule};
                 use std::sync::Once;
 
                 const OP: &str = stringify!($op);
 
                 lazy_static! {
-                    static ref AS_PARAMS: TranslatedModule = translate_wat(&format!(
+                    static ref AS_PARAMS: ExecutableModule = translate_wat(&format!(
                         "
                         (module (func (param i32) (param i32) (result i32)
                             (i32.{op} (get_local 0) (get_local 1))))
@@ -101,7 +101,7 @@ mod op32 {
 }
 
 mod op64 {
-    use super::{translate_wat, TranslatedModule};
+    use super::{translate_wat, ExecutableModule};
 
     macro_rules! binop_test {
         ($op:ident, $func:expr) => {
@@ -109,13 +109,13 @@ mod op64 {
         };
         ($op:ident, $func:expr, $retty:ident) => {
             mod $op {
-                use super::{translate_wat, TranslatedModule};
+                use super::{translate_wat, ExecutableModule};
 
                 const RETTY: &str = stringify!($retty);
                 const OP: &str = stringify!($op);
 
                 lazy_static! {
-                    static ref AS_PARAMS: TranslatedModule = translate_wat(&format!("
+                    static ref AS_PARAMS: ExecutableModule = translate_wat(&format!("
                         (module (func (param i64) (param i64) (result {retty})
                             (i64.{op} (get_local 0) (get_local 1))))
                     ", retty = RETTY, op = OP));
@@ -200,7 +200,7 @@ quickcheck! {
         "#;
 
         lazy_static! {
-            static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+            static ref TRANSLATED: ExecutableModule = translate_wat(CODE);
         }
 
         let out = TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)).unwrap();
@@ -227,7 +227,7 @@ quickcheck! {
         "#;
 
         lazy_static! {
-            static ref TRANSLATED: TranslatedModule = translate_wat(CODE);
+            static ref TRANSLATED: ExecutableModule = translate_wat(CODE);
         }
 
         let out = TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b));
@@ -613,7 +613,7 @@ quickcheck! {
         }
 
         lazy_static! {
-            static ref TRANSLATED: TranslatedModule = {
+            static ref TRANSLATED: ExecutableModule = {
                 let out = translate_wat(CODE);
                 out.disassemble();
                 out
@@ -871,6 +871,66 @@ fn nested_storage_calls() {
 
     assert_eq!(translated.execute_func::<(), i32>(0, ()), Ok(1));
 }
+
+#[test]
+fn call_indirect() {
+    const CODE: &str = r#"
+(module
+  (type $over-i64 (func (param i64) (result i64)))
+
+  (table anyfunc
+    (elem
+      $dispatch $fac $fib
+    )
+  )
+
+  (func $dispatch (param i32 i64) (result i64)
+    (call_indirect (type $over-i64) (get_local 1) (get_local 0))
+  )
+
+  (func $fac (type $over-i64)
+    (if (result i64) (i64.eqz (get_local 0))
+      (then (i64.const 1))
+      (else
+        (i64.mul
+          (get_local 0)
+          (call_indirect (type $over-i64)
+            (i64.sub (get_local 0) (i64.const 1))
+            (i32.const 1)
+          )
+        )
+      )
+    )
+  )
+
+  (func $fib (type $over-i64)
+    (if (result i64) (i64.le_u (get_local 0) (i64.const 1))
+      (then (i64.const 1))
+      (else
+        (i64.add
+          (call_indirect (type $over-i64)
+            (i64.sub (get_local 0) (i64.const 2))
+            (i32.const 2)
+          )
+          (call_indirect (type $over-i64)
+            (i64.sub (get_local 0) (i64.const 1))
+            (i32.const 2)
+          )
+        )
+      )
+    )
+  )
+)"#;
+
+    let wasm = wabt::wat2wasm(CODE).unwrap();
+    let module = translate(&wasm).unwrap();
+
+    module.disassemble();
+
+    assert_eq!(module.execute_func::<(i32, i64), i64>(0, (1, 10)).unwrap(), 3628800);
+    assert_eq!(module.execute_func::<(i32, i64), i64>(0, (2, 10)).unwrap(), 89);
+}
+
 #[bench]
 fn bench_fibonacci_compile(b: &mut test::Bencher) {
     let wasm = wabt::wat2wasm(FIBONACCI).unwrap();

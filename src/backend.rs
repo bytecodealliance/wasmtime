@@ -9,6 +9,8 @@ use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, Executab
 use error::Error;
 use std::{iter, mem};
 
+use module::VmCtx;
+
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
 
@@ -770,15 +772,16 @@ macro_rules! load {
                 vmctx: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
+                let vmctx_mem_offset = VmCtx::offset_of_memory() as i32;
                 match runtime_offset {
                     Ok(imm) => {
                         dynasm!(ctx.asm
-                            ; mov $reg_ty(dst), [Rq(vmctx) + offset + imm]
+                            ; mov $reg_ty(dst), [Rq(vmctx) + offset + imm + vmctx_mem_offset]
                         );
                     }
                     Err(offset_reg) => {
                         dynasm!(ctx.asm
-                            ; mov $reg_ty(dst), [Rq(vmctx) + Rq(offset_reg) + offset]
+                            ; mov $reg_ty(dst), [Rq(vmctx) + Rq(offset_reg) + offset + vmctx_mem_offset]
                         );
                     }
                 }
@@ -854,15 +857,16 @@ macro_rules! store {
                 vmctx: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
+                let vmctx_mem_offset = VmCtx::offset_of_memory() as i32;
                 match runtime_offset {
                     Ok(imm) => {
                         dynasm!(ctx.asm
-                            ; mov [Rq(vmctx) + offset + imm], $reg_ty(src)
+                            ; mov [Rq(vmctx) + offset + imm + vmctx_mem_offset], $reg_ty(src)
                         );
                     }
                     Err(offset_reg) => {
                         dynasm!(ctx.asm
-                            ; mov [Rq(vmctx) + Rq(offset_reg) + offset], $reg_ty(src)
+                            ; mov [Rq(vmctx) + Rq(offset_reg) + offset + vmctx_mem_offset], $reg_ty(src)
                         );
                     }
                 }
@@ -1002,6 +1006,16 @@ impl Context<'_> {
     cmp_i64!(i64_le_s, setle, setnl, |a, b| a <= b);
     cmp_i64!(i64_gt_s, setg, setnge, |a, b| a > b);
     cmp_i64!(i64_ge_s, setge, setng, |a, b| a >= b);
+
+    pub fn i32_eqz(&mut self) {
+        self.push(Value::Immediate(0));
+        self.i32_eq();
+    }
+
+    pub fn i64_eqz(&mut self) {
+        self.push(Value::Immediate(0));
+        self.i64_eq();
+    }
 
     /// Pops i32 predicate and branches to the specified label
     /// if the predicate is equal to zero.
@@ -1297,7 +1311,7 @@ impl Context<'_> {
             Value::Local(loc) => StackValue::Local(loc),
             Value::Immediate(i) => StackValue::Immediate(i),
             Value::Temp(gpr) => {
-                if self.block_state.regs.free_scratch() >= 1 {
+                if self.block_state.regs.free_scratch() >= 2 {
                     StackValue::Temp(gpr)
                 } else {
                     self.block_state.depth.reserve(1);
@@ -1890,12 +1904,14 @@ impl Context<'_> {
     fn save_volatile(&mut self) -> ArrayVec<[GPR; SCRATCH_REGS.len()]> {
         let mut out = ArrayVec::new();
 
-        // TODO: If there are no `StackValue::Pop`s that need to be popped
-        //       before we reach our `Temp` value, we can set the `StackValue`
-        //       for the register to be restored to `StackValue::Pop` (and
-        //       release the register!) instead of restoring it.
         for &reg in SCRATCH_REGS.iter() {
-            if !self.block_state.regs.is_free(reg) {
+            if self
+                .block_state
+                .stack
+                .iter()
+                .filter_map(|v| v.location(&self.block_state.locals))
+                .any(|p| p == ValueLocation::Reg(reg))
+            {
                 dynasm!(self.asm
                     ; push Rq(reg)
                 );
@@ -1993,6 +2009,59 @@ impl Context<'_> {
         debug_assert_eq!(arity, 1);
         self.block_state.regs.mark_used(RAX);
         self.push(Value::Temp(RAX));
+    }
+
+    pub fn call_indirect(
+        &mut self,
+        valid_indexes: impl IntoIterator<Item = u32>,
+        arg_arity: u32,
+        return_arity: u32,
+    ) {
+        debug_assert!(
+            return_arity == 0 || return_arity == 1,
+            "We don't support multiple return yet"
+        );
+
+        let callee = self.pop();
+        let (callee, callee_needs_release) = self.into_reg(callee);
+
+        let vmctx = StackValue::Local(self.block_state.locals.vmctx_index());
+        let count = self.block_state.stack.len();
+
+        let label = self.create_label();
+        let index_reg = self.block_state.regs.take_scratch_gpr();
+
+        // TODO: Generate faster check using bitsets like GCC does?
+        for index in valid_indexes {
+            dynasm!(self.asm
+                ; lea Rq(index_reg), [=>self.func_starts[index as usize].1]
+                ; cmp Rd(callee), index as i32
+                ; je =>label.0
+            );
+        }
+
+        self.trap();
+        self.define_label(label);
+
+        if callee_needs_release {
+            self.block_state.regs.release_scratch_gpr(callee);
+        }
+
+        // TODO: I believe that this can't cause quadratic runtime but I'm not
+        //       certain.
+        self.block_state
+            .stack
+            .insert(count - arg_arity as usize, vmctx);
+        let cleanup = self.pass_outgoing_args(arg_arity + 1, return_arity, true);
+
+        dynasm!(self.asm
+            ; call Rq(index_reg)
+        );
+
+        self.block_state.regs.release_scratch_gpr(index_reg);
+
+        self.post_call_cleanup(cleanup);
+        self.push_function_return(return_arity);
     }
 
     /// Call a function with the given index
