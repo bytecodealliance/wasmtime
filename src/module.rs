@@ -62,11 +62,9 @@ macro_rules! impl_function_args {
         impl<$first, $($rest),*> FunctionArgs for ($first, $($rest),*) {
             #[allow(non_snake_case)]
             unsafe fn call<T>(self, start: *const u8, vm_ctx: *const u8) -> T {
-                let func = mem::transmute::<_, extern "sysv64" fn($first $(, $rest)*, VmCtx) -> T>(start);
-                {
-                    let ($first, $($rest),*) = self;
-                    func($first $(, $rest)*, vm_ctx as VmCtx)
-                }
+                let func = mem::transmute::<_, extern "sysv64" fn(VmCtx, $first $(, $rest)*) -> T>(start);
+                let ($first, $($rest),*) = self;
+                func(vm_ctx as VmCtx, $first $(, $rest)*)
             }
         }
 

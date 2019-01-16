@@ -158,7 +158,7 @@ pub fn translate(
     let operators = body.get_operators_reader()?;
 
     // We must add 1 here to supply `vmctx`
-    let func = ctx.start_function(arg_count + 1, num_locals);
+    let func = ctx.start_function(arg_count, num_locals);
 
     let mut control_frames = Vec::new();
 

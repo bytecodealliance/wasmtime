@@ -428,7 +428,7 @@ impl Locals {
     }
 
     fn vmctx_index(&self) -> u32 {
-        self.num_args() - 1
+        0
     }
 }
 
@@ -1226,7 +1226,11 @@ impl Context<'_> {
         self.block_state.return_register = return_reg;
     }
 
-    pub fn end_block(&mut self, parent_block_state: BlockState, func: impl FnOnce(&mut Self)) {
+    pub fn end_block(
+        &mut self,
+        parent_block_state: BlockState,
+        before_push_return: impl FnOnce(&mut Self),
+    ) {
         // TODO: This should currently never be called, but is important for if we want to
         //       have a more complex stack spilling scheme.
         debug_assert_eq!(
@@ -1246,7 +1250,7 @@ impl Context<'_> {
         self.block_state = parent_block_state;
         self.block_state.locals = locals;
 
-        func(self);
+        before_push_return(self);
 
         if let Some(reg) = return_reg {
             self.block_state.regs.mark_used(reg);
@@ -1800,15 +1804,11 @@ impl Context<'_> {
     /// Unfortunately, we can't elide this store if we're just passing arguments on
     /// because these registers are caller-saved and so the callee can use them as
     /// scratch space.
-    fn free_arg_registers(&mut self, arity: u32) {
+    fn free_arg_registers(&mut self, exclude: Option<u32>) {
         // This is bound to the maximum size of the `ArrayVec` amd so can be considered to have constant
         // runtime
-        for i in 0..self
-            .block_state
-            .locals
-            .register_arguments
-            .len()
-            .min(arity as usize)
+        for i in (0..self.block_state.locals.register_arguments.len())
+            .filter(|i| exclude != Some(*i as u32))
         {
             match self.block_state.locals.register_arguments[i] {
                 ArgLoc::Register(reg) => {
@@ -1916,7 +1916,7 @@ impl Context<'_> {
     ) -> CallCleanup {
         let num_stack_args = (arity as usize).saturating_sub(ARGS_IN_GPRS.len()) as i32;
 
-        self.free_arg_registers(if has_vmctx { arity - 1} else { arity } );
+        self.free_arg_registers(if has_vmctx { Some(0) } else { None });
 
         // We pop stack arguments first - arguments are RTL
         if num_stack_args > 0 {
@@ -2002,8 +2002,14 @@ impl Context<'_> {
             "We don't support multiple return yet"
         );
 
-        let vmctx = Value::Local(self.block_state.locals.vmctx_index());
-        self.push(vmctx);
+        let vmctx = StackValue::Local(self.block_state.locals.vmctx_index());
+        let count = self.block_state.stack.len();
+
+        // TODO: I believe that this can't cause quadratic runtime but I'm not
+        //       certain.
+        self.block_state
+            .stack
+            .insert(count - arg_arity as usize, vmctx);
         let cleanup = self.pass_outgoing_args(arg_arity + 1, return_arity, true);
 
         let label = &self.func_starts[index as usize].1;
@@ -2020,6 +2026,8 @@ impl Context<'_> {
     // TODO: Allow use of unused argument registers as scratch registers.
     /// Writes the function prologue and stores the arguments as locals
     pub fn start_function(&mut self, arguments: u32, locals: u32) -> FunctionEnd {
+        // To support `vmctx`
+        let arguments = arguments + 1;
         let reg_args = &ARGS_IN_GPRS[..(arguments as usize).min(ARGS_IN_GPRS.len())];
 
         // We need space to store the register arguments if we need to call a function

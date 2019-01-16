@@ -10,6 +10,7 @@ fn translate_wat(wat: &str) -> TranslatedModule {
 /// Execute the first function in the module.
 fn execute_wat(wat: &str, a: u32, b: u32) -> u32 {
     let translated = translate_wat(wat);
+    translated.disassemble();
     translated.execute_func(0, (a, b)).unwrap()
 }
 
@@ -318,6 +319,7 @@ fn function_read_args_spill_to_stack() {
 (module
   (func (param i32) (param i32) (param i32) (param i32)
         (param i32) (param i32) (param i32) (param i32)
+        (param i32) (param i32) (param i32) (param i32)
         (result i32)
 
     (call $assert_zero
@@ -339,7 +341,12 @@ fn function_read_args_spill_to_stack() {
         {
             let translated = translate_wat(code);
             translated.disassemble();
-            translated.execute_func(0, (7u32, 6u32, 5u32, 4u32, 3u32, 2u32, 1u32, 0u32))
+            translated.execute_func(
+                0,
+                (
+                    7u32, 6u32, 5u32, 4u32, 3u32, 2u32, 1u32, 0u32, 1u32, 2u32, 3u32, 4u32,
+                ),
+            )
         },
         Ok(7u32)
     );
@@ -414,6 +421,7 @@ macro_rules! mk_function_write_args_spill_to_stack {
         }
     };
 }
+
 mk_function_write_args_spill_to_stack!(function_write_args_spill_to_stack_i32, i32);
 mk_function_write_args_spill_to_stack!(function_write_args_spill_to_stack_i64, i64);
 
@@ -538,7 +546,6 @@ fn spec_loop() {
     translated.disassemble();
     translated.execute_func::<(), ()>(0, ()).unwrap();
 }
-
 
 quickcheck! {
     fn spec_fac(n: i8) -> bool {
