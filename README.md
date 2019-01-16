@@ -68,6 +68,7 @@ affected its design are:
  - [Backend for the IonMonkey JavaScript JIT compiler in
     Firefox](spidermonkey.md#phase-2-ionmonkey).
  - [Debug build backend for the Rust compiler](rustc.md).
+ - [Wasmtime non-Web wasm engine](https://github.com/CraneStation/wasmtime).
 
 Building Cranelift
 ------------------
