@@ -453,9 +453,9 @@ type Stack = Vec<StackValue>;
 
 pub enum MemoryAccessMode {
     /// This is slower than using `Unchecked` mode, but works in
-    /// any scenario, running on a system that can't index more
-    /// memory than the compiled Wasm can being the most important
-    /// one.
+    /// any scenario (the most important scenario being when we're
+    /// running on a system that can't index much more memory than
+    /// the Wasm).
     Checked,
     /// This means that checks are _not emitted by the compiler_!
     /// If you're using WebAssembly to run untrusted code, you
@@ -488,6 +488,35 @@ impl StackDepth {
 
     pub fn free(&mut self, slots: u32) {
         self.0 -= slots;
+    }
+}
+
+macro_rules! unop {
+    ($name:ident, $instr:ident, $reg_ty:ident, $typ:ty, $const_fallback:expr) => {
+        pub fn $name(&mut self) {
+            let val = self.pop();
+
+            let out_val = match val.location(&self.block_state.locals) {
+                ValueLocation::Immediate(imm) => Value::Immediate($const_fallback(imm as $typ) as _),
+                ValueLocation::Stack(offset) => {
+                    let offset = self.adjusted_offset(offset);
+                    let temp = self.block_state.regs.take_scratch_gpr();
+                    dynasm!(self.asm
+                        ; $instr $reg_ty(temp), [rsp + offset]
+                    );
+                    Value::Temp(temp)
+                }
+                ValueLocation::Reg(reg) => {
+                    let temp = self.block_state.regs.take_scratch_gpr();
+                    dynasm!(self.asm
+                        ; $instr $reg_ty(temp), $reg_ty(reg)
+                    );
+                    Value::Temp(temp)
+                }
+            };
+
+            self.push(out_val);
+        }
     }
 }
 
@@ -1475,6 +1504,13 @@ impl Context<'_> {
             Value::Temp(reg) => reg,
         }
     }
+
+    unop!(i32_clz, lzcnt, Rd, u32, u32::leading_zeros);
+    unop!(i64_clz, lzcnt, Rq, u64, |a: u64| a.leading_zeros() as u64);
+    unop!(i32_ctz, tzcnt, Rd, u32, u32::trailing_zeros);
+    unop!(i64_ctz, tzcnt, Rq, u64, |a: u64| a.trailing_zeros() as u64);
+    unop!(i32_popcnt, popcnt, Rd, u32, u32::count_ones);
+    unop!(i64_popcnt, popcnt, Rq, u64, |a: u64| a.count_ones() as u64);
 
     // TODO: Use `lea` when the LHS operand isn't a temporary but both of the operands
     //       are in registers.

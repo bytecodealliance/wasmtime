@@ -131,10 +131,9 @@ impl TranslatedModule {
             });
 
         let mem_size = self.memory.map(|m| m.limits.initial).unwrap_or(0) as usize;
-        let layout = Layout::new::<VmCtx>()
+        let (layout, _mem_offset) = Layout::new::<VmCtx>()
             .extend(Layout::array::<u8>(mem_size * WASM_PAGE_SIZE).unwrap())
-            .unwrap()
-            .0;
+            .unwrap();
 
         let ptr = unsafe { alloc::alloc_zeroed(layout) } as *mut VmCtx;
 

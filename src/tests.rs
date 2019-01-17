@@ -32,10 +32,8 @@ mod op32 {
 
                 lazy_static! {
                     static ref AS_PARAMS: ExecutableModule = translate_wat(&format!(
-                        "
-                        (module (func (param i32) (param i32) (result i32)
-                            (i32.{op} (get_local 0) (get_local 1))))
-                    ",
+                        "(module (func (param i32) (param i32) (result i32)
+                            (i32.{op} (get_local 0) (get_local 1))))",
                         op = OP
                     ));
                 }
@@ -46,7 +44,7 @@ mod op32 {
                     }
 
                     fn lit_lit(a: i32, b: i32) -> bool {
-                                                let translated = translate_wat(&format!("
+                        let translated = translate_wat(&format!("
                             (module (func (result i32)
                                 (i32.{op} (i32.const {left}) (i32.const {right}))))
                         ", op = OP, left = a, right = b));
@@ -81,6 +79,43 @@ mod op32 {
             }
         };
     }
+
+    macro_rules! unop_test {
+        ($name:ident, $func:expr) => {
+            mod $name {
+                use super::{translate_wat, ExecutableModule};
+                use std::sync::Once;
+        
+                lazy_static! {
+                    static ref AS_PARAM: ExecutableModule = translate_wat(
+                        concat!("(module (func (param i32) (result i32)
+                            (i32.",stringify!($name)," (get_local 0))))"),
+                    );
+                }
+        
+                quickcheck! {
+                    fn as_param(a: u32) -> bool {
+                         AS_PARAM.execute_func::<(u32,), u32>(0, (a,)) == Ok($func(a))
+                    }
+        
+                    fn lit(a: u32) -> bool {
+                        let translated = translate_wat(&format!(concat!("
+                            (module (func (result i32)
+                                (i32.",stringify!($name)," (i32.const {val}))))
+                        "), val = a));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+        
+                        translated.execute_func::<(), u32>(0, ()) == Ok($func(a))
+                    }
+                }
+            }
+        }
+    }
+
+    unop_test!(clz, u32::leading_zeros);
+    unop_test!(ctz, u32::trailing_zeros);
+    unop_test!(popcnt, u32::count_ones);
 
     binop_test!(add, i32::wrapping_add);
     binop_test!(sub, i32::wrapping_sub);
@@ -156,6 +191,43 @@ mod op64 {
             }
         };
     }
+
+    macro_rules! unop_test {
+        ($name:ident, $func:expr) => {
+            mod $name {
+                use super::{translate_wat, ExecutableModule};
+                use std::sync::Once;
+        
+                lazy_static! {
+                    static ref AS_PARAM: ExecutableModule = translate_wat(
+                        concat!("(module (func (param i64) (result i64)
+                            (i64.",stringify!($name)," (get_local 0))))"),
+                    );
+                }
+        
+                quickcheck! {
+                    fn as_param(a: u64) -> bool {
+                         AS_PARAM.execute_func::<(u64,), u64>(0, (a,)) == Ok($func(a))
+                    }
+        
+                    fn lit(a: u64) -> bool {
+                        let translated = translate_wat(&format!(concat!("
+                            (module (func (result i64)
+                                (i64.",stringify!($name)," (i64.const {val}))))
+                        "), val = a));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+        
+                        translated.execute_func::<(), u64>(0, ()) == Ok($func(a))
+                    }
+                }
+            }
+        }
+    }
+
+    unop_test!(clz, |a: u64| a.leading_zeros() as _);
+    unop_test!(ctz, |a: u64| a.trailing_zeros() as _);
+    unop_test!(popcnt, |a: u64| a.count_ones() as _);
 
     binop_test!(add, i64::wrapping_add);
     binop_test!(sub, i64::wrapping_sub);
@@ -698,17 +770,17 @@ fn wrong_index() {
     );
 }
 
-    fn iterative_fib_baseline(n: u32) -> u32 {
-        let (mut a, mut b) = (1, 1);
+fn iterative_fib_baseline(n: u32) -> u32 {
+    let (mut a, mut b) = (1, 1);
 
-        for _ in 0..n {
-            let old_a = a;
-            a = b;
-            b += old_a;
-        }
-
-        a
+    for _ in 0..n {
+        let old_a = a;
+        a = b;
+        b += old_a;
     }
+
+    a
+}
 
 const FIBONACCI: &str = r#"
 (module
@@ -973,8 +1045,14 @@ fn call_indirect() {
 
     module.disassemble();
 
-    assert_eq!(module.execute_func::<(i32, i64), i64>(0, (1, 10)).unwrap(), 3628800);
-    assert_eq!(module.execute_func::<(i32, i64), i64>(0, (2, 10)).unwrap(), 89);
+    assert_eq!(
+        module.execute_func::<(i32, i64), i64>(0, (1, 10)).unwrap(),
+        3628800
+    );
+    assert_eq!(
+        module.execute_func::<(i32, i64), i64>(0, (2, 10)).unwrap(),
+        89
+    );
 }
 
 #[bench]
