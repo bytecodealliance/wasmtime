@@ -1036,14 +1036,55 @@ impl Context<'_> {
     cmp_i64!(i64_gt_s, setg, setnge, |a, b| a > b);
     cmp_i64!(i64_ge_s, setge, setng, |a, b| a >= b);
 
+    // TODO: Should we do this logic in `eq` and just have this delegate to `eq`?
+    //       That would mean that `eqz` and `eq` with a const 0 argument don't
+    //       result in different code.
     pub fn i32_eqz(&mut self) {
-        self.push(Value::Immediate(0));
-        self.i32_eq();
+        let val = self.pop();
+
+        if let Value::Immediate(i) = val {
+            self.push(Value::Immediate(if i == 0 { 1 } else { 0 }));
+            return;
+        }
+
+        let (reg, needs_release) = self.into_reg(val);
+        let out = self.block_state.regs.take_scratch_gpr();
+
+        dynasm!(self.asm
+            ; xor Rd(out), Rd(out)
+            ; test Rd(reg), Rd(reg)
+            ; setz Rb(out)
+        );
+
+        if needs_release {
+            self.block_state.regs.release_scratch_gpr(reg);
+        }
+
+        self.push(Value::Temp(out));
     }
 
     pub fn i64_eqz(&mut self) {
-        self.push(Value::Immediate(0));
-        self.i64_eq();
+        let val = self.pop();
+
+        if let Value::Immediate(i) = val {
+            self.push(Value::Immediate(if i == 0 { 1 } else { 0 }));
+            return;
+        }
+
+        let (reg, needs_release) = self.into_reg(val);
+        let out = self.block_state.regs.take_scratch_gpr();
+
+        dynasm!(self.asm
+            ; xor Rd(out), Rd(out)
+            ; test Rq(reg), Rq(reg)
+            ; setz Rb(out)
+        );
+
+        if needs_release {
+            self.block_state.regs.release_scratch_gpr(reg);
+        }
+
+        self.push(Value::Temp(out));
     }
 
     /// Pops i32 predicate and branches to the specified label
@@ -2133,7 +2174,8 @@ impl Context<'_> {
     pub fn start_function(&mut self, arguments: u32, locals: u32) -> FunctionEnd {
         // To support `vmctx`
         let arguments = arguments + 1;
-        let (reg_args, locals_in_gprs) = ARGS_IN_GPRS.split_at((arguments as usize).min(ARGS_IN_GPRS.len()));
+        let (reg_args, locals_in_gprs) =
+            ARGS_IN_GPRS.split_at((arguments as usize).min(ARGS_IN_GPRS.len()));
         let reg_locals = &locals_in_gprs[..(locals as usize).min(locals_in_gprs.len())];
 
         // We need space to store the register arguments if we need to call a function
@@ -2144,8 +2186,12 @@ impl Context<'_> {
         let aligned_stack_slots = (stack_slots + 1) & !1;
         let frame_size: i32 = aligned_stack_slots as i32 * WORD_SIZE as i32;
 
-        self.block_state.locals.register_locals =
-            reg_args.iter().chain(reg_locals).cloned().map(ArgLoc::Register).collect();
+        self.block_state.locals.register_locals = reg_args
+            .iter()
+            .chain(reg_locals)
+            .cloned()
+            .map(ArgLoc::Register)
+            .collect();
         self.block_state.locals.num_stack_args = arguments.saturating_sub(ARGS_IN_GPRS.len() as _);
         self.block_state.locals.num_local_stack_slots = stack_slots;
         self.block_state.return_register = Some(RAX);

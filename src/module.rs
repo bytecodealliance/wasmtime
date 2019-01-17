@@ -135,18 +135,24 @@ impl TranslatedModule {
             .extend(Layout::array::<u8>(mem_size * WASM_PAGE_SIZE).unwrap())
             .unwrap();
 
-        let ptr = unsafe { alloc::alloc_zeroed(layout) } as *mut VmCtx;
+        let ctx = if mem_size > 0 || slice.len > 0 {
+            let ptr = unsafe { alloc::alloc_zeroed(layout) } as *mut VmCtx;
 
-        unsafe {
-            *ptr = VmCtx {
-                table: slice,
-                mem_size,
+            unsafe {
+                *ptr = VmCtx {
+                    table: slice,
+                    mem_size,
+                }
             }
-        }
+
+            Some(Allocation { ptr, layout })
+        } else {
+            None
+        };
 
         ExecutableModule {
             module: self,
-            context: Allocation { ptr, layout },
+            context: ctx,
         }
     }
 
@@ -184,7 +190,7 @@ pub enum ExecutionError {
 
 pub struct ExecutableModule {
     module: TranslatedModule,
-    context: Allocation<VmCtx>,
+    context: Option<Allocation<VmCtx>>,
 }
 
 impl ExecutableModule {
@@ -216,7 +222,10 @@ impl ExecutableModule {
         Ok(unsafe {
             args.call(
                 Args::into_func(start_buf),
-                self.context.ptr as *const VmCtx as *const u8,
+                self.context
+                    .as_ref()
+                    .map(|ctx| ctx.ptr as *const VmCtx as *const u8)
+                    .unwrap_or(std::ptr::null()),
             )
         })
     }

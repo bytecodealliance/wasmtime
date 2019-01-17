@@ -116,6 +116,7 @@ mod op32 {
     unop_test!(clz, u32::leading_zeros);
     unop_test!(ctz, u32::trailing_zeros);
     unop_test!(popcnt, u32::count_ones);
+    unop_test!(eqz, |a: u32| if a == 0 { 1 } else { 0 });
 
     binop_test!(add, i32::wrapping_add);
     binop_test!(sub, i32::wrapping_sub);
@@ -194,31 +195,34 @@ mod op64 {
 
     macro_rules! unop_test {
         ($name:ident, $func:expr) => {
+            unop_test!($name, $func, i64);
+        };
+        ($name:ident, $func:expr, $out_ty:ty) => {
             mod $name {
                 use super::{translate_wat, ExecutableModule};
                 use std::sync::Once;
         
                 lazy_static! {
                     static ref AS_PARAM: ExecutableModule = translate_wat(
-                        concat!("(module (func (param i64) (result i64)
+                        concat!("(module (func (param i64) (result ",stringify!($out_ty),")
                             (i64.",stringify!($name)," (get_local 0))))"),
                     );
                 }
         
                 quickcheck! {
                     fn as_param(a: u64) -> bool {
-                         AS_PARAM.execute_func::<(u64,), u64>(0, (a,)) == Ok($func(a))
+                         AS_PARAM.execute_func::<(u64,), $out_ty>(0, (a,)) == Ok($func(a))
                     }
         
                     fn lit(a: u64) -> bool {
                         let translated = translate_wat(&format!(concat!("
-                            (module (func (result i64)
+                            (module (func (result ",stringify!($out_ty),")
                                 (i64.",stringify!($name)," (i64.const {val}))))
                         "), val = a));
                         static ONCE: Once = Once::new();
                         ONCE.call_once(|| translated.disassemble());
         
-                        translated.execute_func::<(), u64>(0, ()) == Ok($func(a))
+                        translated.execute_func::<(), $out_ty>(0, ()) == Ok($func(a))
                     }
                 }
             }
@@ -228,6 +232,7 @@ mod op64 {
     unop_test!(clz, |a: u64| a.leading_zeros() as _);
     unop_test!(ctz, |a: u64| a.trailing_zeros() as _);
     unop_test!(popcnt, |a: u64| a.count_ones() as _);
+    unop_test!(eqz, |a: u64| if a == 0 { 1 } else { 0 }, i32);
 
     binop_test!(add, i64::wrapping_add);
     binop_test!(sub, i64::wrapping_sub);
