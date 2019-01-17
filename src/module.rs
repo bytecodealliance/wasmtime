@@ -254,6 +254,10 @@ impl VmCtx {
     pub fn offset_of_memory() -> usize {
         mem::size_of::<Self>()
     }
+
+    pub fn offset_of_funcs_ptr() -> usize {
+        offset_of!(Self, table.ptr)
+    }
 }
 
 impl<T> Drop for BoxSlice<T> {

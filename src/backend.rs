@@ -384,7 +384,7 @@ pub struct Locals {
     /// registers that this can contain. If we need to move the argument
     /// out of a register (for example, because we're calling a function)
     /// we note that down here, so we don't have to move it back afterwards.
-    register_arguments: ArrayVec<[ArgLoc; ARGS_IN_GPRS.len()]>,
+    register_locals: ArrayVec<[ArgLoc; ARGS_IN_GPRS.len()]>,
     /// The number of arguments stored on the stack.
     num_stack_args: u32,
     /// The number of local stack slots, i.e. the amount of stack space reserved for locals.
@@ -393,7 +393,7 @@ pub struct Locals {
 
 impl Locals {
     fn register(&self, index: u32) -> Option<GPR> {
-        if index < self.register_arguments.len() as u32 {
+        if index < self.register_locals.len() as u32 {
             Some(ARGS_IN_GPRS[index as usize])
         } else {
             None
@@ -401,19 +401,19 @@ impl Locals {
     }
 
     fn add_pos(&mut self, index: u32, loc: ValueLocation) {
-        self.register_arguments[index as usize].add_loc(loc);
+        self.register_locals[index as usize].add_loc(loc);
     }
 
     fn set_pos(&mut self, index: u32, loc: ValueLocation) {
-        self.register_arguments[index as usize] = ArgLoc::from_loc(loc);
+        self.register_locals[index as usize] = ArgLoc::from_loc(loc);
     }
 
     fn get(&self, index: u32) -> ValueLocation {
-        self.register_arguments
+        self.register_locals
             .get(index as usize)
             .map(ArgLoc::best_loc)
             .unwrap_or_else(|| {
-                let stack_index = index - self.register_arguments.len() as u32;
+                let stack_index = index - self.register_locals.len() as u32;
                 if stack_index < self.num_stack_args {
                     ValueLocation::Stack(
                         ((stack_index + self.num_local_stack_slots + 2) * WORD_SIZE) as _,
@@ -426,7 +426,7 @@ impl Locals {
     }
 
     fn num_args(&self) -> u32 {
-        self.register_arguments.len() as u32 + self.num_stack_args
+        self.register_locals.len() as u32 + self.num_stack_args
     }
 
     fn vmctx_index(&self) -> u32 {
@@ -1245,19 +1245,19 @@ impl Context<'_> {
         parent_block_state: BlockState,
         before_push_return: impl FnOnce(&mut Self),
     ) {
-        // TODO: This should currently never be called, but is important for if we want to
-        //       have a more complex stack spilling scheme.
         debug_assert_eq!(
             self.block_state.depth, parent_block_state.depth,
             "Imbalanced pushes and pops"
         );
+        // TODO: This should currently never be called, but is important for if we want to
+        //       have a more complex stack spilling scheme.
+        // TODO: This should use an `end_locals`-style system where we only do this when
+        //       control flow splits.
         if self.block_state.depth != parent_block_state.depth {
             dynasm!(self.asm
                 ; add rsp, ((self.block_state.depth.0 - parent_block_state.depth.0) * WORD_SIZE) as i32
             );
         }
-
-        self.restore_locals();
 
         let return_reg = self.block_state.return_register;
         let locals = mem::replace(&mut self.block_state.locals, Default::default());
@@ -1282,10 +1282,10 @@ impl Context<'_> {
         for (src, dst) in self
             .block_state
             .locals
-            .register_arguments
+            .register_locals
             .clone()
             .iter()
-            .zip(&locals.register_arguments)
+            .zip(&locals.register_locals)
         {
             self.copy_value(src.best_loc(), dst.best_loc());
         }
@@ -1293,9 +1293,9 @@ impl Context<'_> {
         for (src, dst) in self
             .block_state
             .locals
-            .register_arguments
+            .register_locals
             .iter_mut()
-            .zip(&locals.register_arguments)
+            .zip(&locals.register_locals)
         {
             src.union(*dst);
         }
@@ -1715,7 +1715,7 @@ impl Context<'_> {
         if let Some(cur) = self
             .block_state
             .locals
-            .register_arguments
+            .register_locals
             .get_mut(local_idx as usize)
         {
             *cur = ArgLoc::from_loc(dst_loc);
@@ -1736,7 +1736,7 @@ impl Context<'_> {
         if let Some(cur) = self
             .block_state
             .locals
-            .register_arguments
+            .register_locals
             .get_mut(local_idx as usize)
         {
             *cur = ArgLoc::from_loc(dst_loc);
@@ -1821,10 +1821,10 @@ impl Context<'_> {
     fn free_arg_registers(&mut self, exclude: Option<u32>) {
         // This is bound to the maximum size of the `ArrayVec` amd so can be considered to have constant
         // runtime
-        for i in (0..self.block_state.locals.register_arguments.len())
+        for i in (0..self.block_state.locals.register_locals.len())
             .filter(|i| exclude != Some(*i as u32))
         {
-            match self.block_state.locals.register_arguments[i] {
+            match self.block_state.locals.register_locals[i] {
                 ArgLoc::Register(reg) => {
                     if ARGS_IN_GPRS.contains(&reg) {
                         let offset =
@@ -1832,7 +1832,7 @@ impl Context<'_> {
                                 * WORD_SIZE) as _;
                         let dst = ValueLocation::Stack(offset);
                         self.copy_value(ValueLocation::Reg(reg), dst);
-                        self.block_state.locals.register_arguments[i].add_stack(offset);
+                        self.block_state.locals.register_locals[i].add_stack(offset);
                     }
                 }
                 _ => {}
@@ -1989,7 +1989,7 @@ impl Context<'_> {
 
         // If these values were in register they've now been invalidated, since
         // the callee can use them as scratch.
-        for loc in self.block_state.locals.register_arguments.iter_mut() {
+        for loc in self.block_state.locals.register_locals.iter_mut() {
             if let Some(offset) = loc.stack() {
                 *loc = ArgLoc::Stack(offset);
             }
@@ -2097,7 +2097,8 @@ impl Context<'_> {
     pub fn start_function(&mut self, arguments: u32, locals: u32) -> FunctionEnd {
         // To support `vmctx`
         let arguments = arguments + 1;
-        let reg_args = &ARGS_IN_GPRS[..(arguments as usize).min(ARGS_IN_GPRS.len())];
+        let (reg_args, locals_in_gprs) = ARGS_IN_GPRS.split_at((arguments as usize).min(ARGS_IN_GPRS.len()));
+        let reg_locals = &locals_in_gprs[..(locals as usize).min(locals_in_gprs.len())];
 
         // We need space to store the register arguments if we need to call a function
         // and overwrite these registers so we add `reg_args.len()`
@@ -2107,8 +2108,8 @@ impl Context<'_> {
         let aligned_stack_slots = (stack_slots + 1) & !1;
         let frame_size: i32 = aligned_stack_slots as i32 * WORD_SIZE as i32;
 
-        self.block_state.locals.register_arguments =
-            reg_args.iter().cloned().map(ArgLoc::Register).collect();
+        self.block_state.locals.register_locals =
+            reg_args.iter().chain(reg_locals).cloned().map(ArgLoc::Register).collect();
         self.block_state.locals.num_stack_args = arguments.saturating_sub(ARGS_IN_GPRS.len() as _);
         self.block_state.locals.num_local_stack_slots = stack_slots;
         self.block_state.return_register = Some(RAX);

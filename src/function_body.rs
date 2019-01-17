@@ -40,6 +40,17 @@ impl ControlFrameKind {
         }
     }
 
+    fn end_labels(&self) -> impl Iterator<Item = Label> {
+        self.block_end()
+            .into_iter()
+            .chain(if let ControlFrameKind::IfTrue { if_not, .. } = self {
+                // this is `if .. end` construction. Define the `if_not` label.
+                Some(*if_not)
+            } else {
+                None
+            })
+    }
+
     fn is_loop(&self) -> bool {
         match *self {
             ControlFrameKind::Loop { .. } => true,
@@ -174,12 +185,18 @@ pub fn translate(
         return_ty,
     ));
 
+    let mut operators = itertools::put_back(operators.into_iter());
+
     // TODO: We want to make this a state machine (maybe requires 1-element lookahead? Not sure) so that we
     //       can coelesce multiple `end`s and optimise break-at-end-of-block into noop.
     // TODO: Does coelescing multiple `end`s matter since at worst this really only elides a single move at
     //       the end of a function, and this is probably a no-op anyway due to register renaming.
-    for op in operators {
-        let op = op?;
+    loop {
+        let op = if let Some(op) = operators.next() {
+            op?
+        } else {
+            break;
+        };
 
         match op {
             Operator::End | Operator::Else => {}
@@ -306,28 +323,60 @@ pub fn translate(
                 //
                 //       This doesn't require lookahead but it does require turning this loop into
                 //       a kind of state machine.
-                let control_frame = control_frames.pop().expect("control stack is never empty");
+                let mut control_frame = control_frames.pop().expect("control stack is never empty");
+                let mut labels = control_frame
+                    .kind
+                    .end_labels()
+                    .collect::<Vec<_>>();
+
+                let mut end = control_frame.block_state.end_locals.take();
+
+                // Fold `End`s together to prevent unnecessary shuffling of locals
+                loop {
+                    let op = if let Some(op) = operators.next() {
+                        op?
+                    } else {
+                        break;
+                    };
+
+                    match op {
+                        Operator::End => {
+                            control_frame =
+                                control_frames.pop().expect("control stack is never empty");
+
+                            labels.extend(control_frame.kind.end_labels());
+
+                            end = control_frame.block_state.end_locals.take().or(end);
+                        }
+                        other => {
+                            operators.put_back(Ok(other));
+                            break;
+                        }
+                    }
+                }
 
                 let arity = control_frame.arity();
 
                 // Don't bother generating this code if we're in unreachable code
                 if !control_frame.unreachable {
                     ctx.return_from_block(arity);
+
+                    // If there are no remaining frames we've hit the end of the function - we don't need to
+                    // restore locals since no execution will happen after this point.
+                    if !control_frames.is_empty() {
+                        if let Some(end) = end {
+                            ctx.restore_locals_to(&end);
+                        }
+                    }
                 }
 
-                let block_end = control_frame.kind.block_end();
                 // TODO: What is the correct order of this and the `define_label`? It's clear for `block`s
                 //       but I'm not certain for `if..then..else..end`.
                 ctx.end_block(control_frame.block_state, |ctx| {
-                    if let Some(block_end) = block_end {
-                        ctx.define_label(block_end);
+                    for label in labels {
+                        ctx.define_label(label);
                     }
                 });
-
-                if let ControlFrameKind::IfTrue { if_not, .. } = control_frame.kind {
-                    // this is `if .. end` construction. Define the `if_not` label here.
-                    ctx.define_label(if_not);
-                }
             }
             Operator::I32Eq => ctx.i32_eq(),
             Operator::I32Eqz => ctx.i32_eqz(),

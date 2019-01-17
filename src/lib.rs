@@ -9,7 +9,10 @@ extern crate failure;
 extern crate wasmparser;
 #[macro_use]
 extern crate failure_derive;
+#[macro_use]
+extern crate memoffset;
 extern crate dynasmrt;
+extern crate itertools;
 #[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
@@ -28,4 +31,4 @@ mod translate_sections;
 #[cfg(test)]
 mod tests;
 
-pub use module::{translate, TranslatedModule, ExecutableModule};
+pub use module::{translate, ExecutableModule, TranslatedModule};
