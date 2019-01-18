@@ -2036,13 +2036,13 @@ impl Context<'_> {
     fn save_volatile(&mut self) -> ArrayVec<[GPR; SCRATCH_REGS.len()]> {
         let mut out = ArrayVec::new();
 
-        for &reg in SCRATCH_REGS.iter() {
-            if self
-                .block_state
-                .stack
-                .iter()
-                .filter_map(|v| v.location(&self.block_state.locals))
-                .any(|p| p == ValueLocation::Reg(reg))
+        for &reg in self.block_state.stack.iter().filter_map(|v| {
+            if let StackValue::Temp(r) = v {
+                Some(r)
+            } else {
+                None
+            }
+        }) {
             {
                 dynasm!(self.asm
                     ; push Rq(reg)
