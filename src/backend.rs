@@ -51,6 +51,7 @@ extern "sysv64" fn println(len: u64, args: *const u8) {
     });
 }
 
+#[allow(unused_macros)]
 macro_rules! asm_println {
     ($asm:expr, $($args:tt)*) => {{
         use std::mem;
@@ -2243,6 +2244,8 @@ impl Context<'_> {
         let (reg_locals, temps) =
             locals_in_gprs.split_at((locals as usize).min(locals_in_gprs.len()));
 
+        // TODO: If we have less than some amount of extra scratch here, free
+        //       up some callee-saved regs.
         for temp in temps {
             self.block_state.regs.release_scratch_gpr(*temp);
         }

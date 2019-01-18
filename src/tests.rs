@@ -977,6 +977,8 @@ fn nested_storage_calls() {
     assert_eq!(translated.execute_func::<(), i32>(0, ()), Ok(1));
 }
 
+// TODO: Signature mismatches correctly fail, but we can't add a test
+//       for that until we implement traps properly.
 #[test]
 fn call_indirect() {
     const CODE: &str = r#"
