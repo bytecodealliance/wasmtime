@@ -99,11 +99,11 @@ pub struct TranslatedModule {
     types: FuncTyStore,
     // TODO: Should we wrap this in a `Mutex` so that calling functions from multiple
     //       threads doesn't cause data races?
-    table: Option<(TableType, Vec<RuntimeFunc>)>,
+    table: Option<(TableType, Vec<u32>)>,
     memory: Option<MemoryType>,
 }
 
-fn quickhash<H: Hash>(h: H) -> u64 {
+pub fn quickhash<H: Hash>(h: H) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     h.hash(&mut hasher);
     hasher.finish()
@@ -113,22 +113,41 @@ impl TranslatedModule {
     pub fn instantiate(mut self) -> ExecutableModule {
         use std::alloc::{self, Layout};
 
-        let slice = self
-            .table
-            .as_mut()
-            .map(|&mut (_, ref mut initial)| {
-                initial.shrink_to_fit();
-                let out = BoxSlice {
-                    ptr: initial.as_mut_ptr(),
-                    len: initial.len(),
-                };
-                mem::forget(mem::replace(initial, Default::default()));
-                out
-            })
-            .unwrap_or(BoxSlice {
-                ptr: std::ptr::NonNull::dangling().as_ptr(),
-                len: 0,
-            });
+        let slice = {
+            let code_section = self
+                .translated_code_section
+                .as_ref()
+                .expect("We don't currently support a table section without a code section");
+            let types = &self.types;
+
+            self.table
+                .as_mut()
+                .map(|&mut (_, ref mut idxs)| {
+                    let mut initial = idxs
+                        .iter()
+                        .map(|i| {
+                            let start = code_section.func_start(*i as _);
+                            let ty = types.func_type(*i);
+
+                            RuntimeFunc {
+                                func_start: start,
+                                sig_hash: quickhash(ty) as u32,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    initial.shrink_to_fit();
+                    let out = BoxSlice {
+                        ptr: initial.as_mut_ptr(),
+                        len: initial.len(),
+                    };
+                    mem::forget(initial);
+                    out
+                })
+                .unwrap_or(BoxSlice {
+                    ptr: std::ptr::NonNull::dangling().as_ptr(),
+                    len: 0,
+                })
+        };
 
         let mem_size = self.memory.map(|m| m.limits.initial).unwrap_or(0) as usize;
         let (layout, _mem_offset) = Layout::new::<VmCtx>()
@@ -137,6 +156,10 @@ impl TranslatedModule {
 
         let ctx = if mem_size > 0 || slice.len > 0 {
             let ptr = unsafe { alloc::alloc_zeroed(layout) } as *mut VmCtx;
+
+            if ptr.is_null() {
+                alloc::handle_alloc_error(layout);
+            }
 
             unsafe {
                 *ptr = VmCtx {
@@ -235,15 +258,23 @@ impl ExecutableModule {
     }
 }
 
-type FuncRef = unsafe extern "sysv64" fn();
+type FuncRef = *const u8;
 
-#[repr(C)]
 pub struct RuntimeFunc {
     sig_hash: u32,
     func_start: FuncRef,
 }
 
-#[repr(C)]
+impl RuntimeFunc {
+    pub fn offset_of_sig_hash() -> usize {
+        offset_of!(Self, sig_hash)
+    }
+
+    pub fn offset_of_func_start() -> usize {
+        offset_of!(Self, func_start)
+    }
+}
+
 struct BoxSlice<T> {
     len: usize,
     ptr: *mut T,
@@ -283,10 +314,6 @@ pub struct FuncTyStore {
 const WASM_PAGE_SIZE: usize = 65_536;
 
 impl FuncTyStore {
-    pub fn func_count(&self) -> usize {
-        self.func_ty_indicies.len()
-    }
-
     pub fn func_type_index(&self, func_idx: u32) -> u32 {
         self.func_ty_indicies[func_idx as usize]
     }
@@ -311,6 +338,7 @@ pub fn translate(data: &[u8]) -> Result<ExecutableModule, Error> {
 pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
     let mut reader = ModuleReader::new(data)?;
     let mut output = TranslatedModule::default();
+    let mut table = None;
 
     reader.skip_custom_sections()?;
     if reader.eof() {
@@ -353,9 +381,11 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Table = section.code {
         let tables = section.get_table_section_reader()?;
-        let tables = translate_sections::table(tables)?;
+        let mut tables = translate_sections::table(tables)?;
 
         assert!(tables.len() <= 1);
+
+        table = tables.drain(..).next();
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -421,7 +451,12 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Element = section.code {
         let elements = section.get_element_section_reader()?;
-        translate_sections::element(elements)?;
+        let elements = translate_sections::element(elements)?;
+
+        output.table = Some((
+            table.expect("Element section with no table section"),
+            elements,
+        ));
 
         reader.skip_custom_sections()?;
         if reader.eof() {

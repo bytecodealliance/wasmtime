@@ -9,7 +9,7 @@ use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, Executab
 use error::Error;
 use std::{iter, mem};
 
-use module::VmCtx;
+use module::{RuntimeFunc, VmCtx};
 
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
@@ -44,6 +44,62 @@ const R13: u8 = 13;
 const R14: u8 = 14;
 const R15: u8 = 15;
 const NUM_GPRS: u8 = 16;
+
+extern "sysv64" fn println(len: u64, args: *const u8) {
+    println!("{}", unsafe {
+        std::str::from_utf8_unchecked(std::slice::from_raw_parts(args, len as usize))
+    });
+}
+
+macro_rules! asm_println {
+    ($asm:expr, $($args:tt)*) => {{
+        use std::mem;
+
+        let mut args = format!($($args)*).into_bytes();
+
+        let len = args.len();
+        let ptr = args.as_mut_ptr();
+        mem::forget(args);
+
+        dynasm!($asm
+            ; push rdi
+            ; push rsi
+            ; push rdx
+            ; push rcx
+            ; push r8
+            ; push r9
+            ; push r10
+            ; push r11
+
+            ; mov rax, QWORD println as *const u8 as i64
+            ; mov rdi, QWORD len as i64
+            ; mov rsi, QWORD ptr as i64
+
+            ; mov r11, rsp
+            ; and r11, 0b1111
+            ; test r11, r11
+            ; jnz >with_adjusted_stack_ptr
+
+            ; call rax
+            ; jmp >pop_rest
+
+            ; with_adjusted_stack_ptr:
+            ; push 1
+            ; call rax
+            ; pop r11
+
+            ; pop_rest:
+            ; pop r11
+            ; pop r10
+            ; pop r9
+            ; pop r8
+            ; pop rcx
+            ; pop rdx
+            ; pop rsi
+            ; pop rdi
+        );
+    }}
+}
 
 impl GPRs {
     fn take(&mut self) -> GPR {
@@ -1381,7 +1437,7 @@ impl Context<'_> {
             Value::Local(loc) => StackValue::Local(loc),
             Value::Immediate(i) => StackValue::Immediate(i),
             Value::Temp(gpr) => {
-                if self.block_state.regs.free_scratch() >= 2 {
+                if self.block_state.regs.free_scratch() >= 3 {
                     StackValue::Temp(gpr)
                 } else {
                     self.block_state.depth.reserve(1);
@@ -1489,7 +1545,6 @@ impl Context<'_> {
                         } else {
                             (self.block_state.regs.take_scratch_gpr(), true)
                         };
-                    let offset = self.adjusted_offset(offset);
                     dynasm!(self.asm
                         ; mov Rq(reg), [rsp + offset]
                     );
@@ -2088,54 +2143,63 @@ impl Context<'_> {
         self.push(Value::Temp(RAX));
     }
 
-    pub fn call_indirect(
-        &mut self,
-        valid_indexes: impl IntoIterator<Item = u32>,
-        arg_arity: u32,
-        return_arity: u32,
-    ) {
+    pub fn call_indirect(&mut self, signature_hash: u32, arg_arity: u32, return_arity: u32) {
         debug_assert!(
             return_arity == 0 || return_arity == 1,
             "We don't support multiple return yet"
         );
 
         let callee = self.pop();
-        let (callee, callee_needs_release) = self.into_reg(callee);
+        let callee = self.into_temp_reg(callee);
 
-        let vmctx = StackValue::Local(self.block_state.locals.vmctx_index());
-        let count = self.block_state.stack.len();
+        let vmctx_idx = self.block_state.locals.vmctx_index();
+        let (vmctx_reg, should_release_vmctx_reg) = self.into_reg(Value::Local(vmctx_idx));
 
-        let label = self.create_label();
-        let index_reg = self.block_state.regs.take_scratch_gpr();
+        let signature_matches = self.create_label();
+        let temp0 = self.block_state.regs.take_scratch_gpr();
+        let temp1 = self.block_state.regs.take_scratch_gpr();
 
-        // TODO: Generate faster check using bitsets like GCC does?
-        for index in valid_indexes {
-            dynasm!(self.asm
-                ; lea Rq(index_reg), [=>self.func_starts[index as usize].1]
-                ; cmp Rd(callee), index as i32
-                ; je =>label.0
-            );
-        }
+        dynasm!(self.asm
+            ; imul Rq(callee), Rq(callee), mem::size_of::<RuntimeFunc>() as i32
+            ; mov Rq(temp0), [Rq(vmctx_reg) + VmCtx::offset_of_funcs_ptr() as i32]
+            ; mov Rd(temp1), [
+                Rq(temp0) +
+                    Rq(callee) +
+                    RuntimeFunc::offset_of_sig_hash() as i32
+            ]
+            ; cmp Rd(temp1), signature_hash as i32
+            ; je =>signature_matches.0
+        );
 
         self.trap();
-        self.define_label(label);
 
-        if callee_needs_release {
-            self.block_state.regs.release_scratch_gpr(callee);
-        }
+        self.define_label(signature_matches);
+        self.block_state.regs.release_scratch_gpr(temp1);
 
         // TODO: I believe that this can't cause quadratic runtime but I'm not
         //       certain.
+        let vmctx = StackValue::Local(vmctx_idx);
+
+        let count = self.block_state.stack.len();
         self.block_state
             .stack
             .insert(count - arg_arity as usize, vmctx);
         let cleanup = self.pass_outgoing_args(arg_arity + 1, return_arity, true);
 
         dynasm!(self.asm
-            ; call Rq(index_reg)
+            ; call QWORD [
+                Rq(temp0) +
+                    Rq(callee) +
+                    RuntimeFunc::offset_of_func_start() as i32
+            ]
         );
 
-        self.block_state.regs.release_scratch_gpr(index_reg);
+        self.block_state.regs.release_scratch_gpr(temp0);
+        self.block_state.regs.release_scratch_gpr(callee);
+
+        if should_release_vmctx_reg {
+            self.block_state.regs.release_scratch_gpr(vmctx_reg);
+        }
 
         self.post_call_cleanup(cleanup);
         self.push_function_return(return_arity);
@@ -2176,7 +2240,12 @@ impl Context<'_> {
         let arguments = arguments + 1;
         let (reg_args, locals_in_gprs) =
             ARGS_IN_GPRS.split_at((arguments as usize).min(ARGS_IN_GPRS.len()));
-        let reg_locals = &locals_in_gprs[..(locals as usize).min(locals_in_gprs.len())];
+        let (reg_locals, temps) =
+            locals_in_gprs.split_at((locals as usize).min(locals_in_gprs.len()));
+
+        for temp in temps {
+            self.block_state.regs.release_scratch_gpr(*temp);
+        }
 
         // We need space to store the register arguments if we need to call a function
         // and overwrite these registers so we add `reg_args.len()`

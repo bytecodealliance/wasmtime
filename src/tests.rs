@@ -269,24 +269,6 @@ mod op64 {
 }
 
 quickcheck! {
-    fn relop_eq(a: u32, b: u32) -> bool {
-        static CODE: &str = r#"
-            (module
-              (func (param i32) (param i32) (result i32) (i32.eq (get_local 0) (get_local 1)))
-            )
-        "#;
-
-        lazy_static! {
-            static ref TRANSLATED: ExecutableModule = translate_wat(CODE);
-        }
-
-        let out = TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b)).unwrap();
-
-        (a == b) == (out == 1)
-    }
-}
-
-quickcheck! {
     fn if_then_else(a: u32, b: u32) -> bool {
         const CODE: &str = r#"
 (module
@@ -1003,7 +985,7 @@ fn call_indirect() {
 
   (table anyfunc
     (elem
-      $dispatch $fac $fib
+      $fac $fib
     )
   )
 
@@ -1019,7 +1001,7 @@ fn call_indirect() {
           (get_local 0)
           (call_indirect (type $over-i64)
             (i64.sub (get_local 0) (i64.const 1))
-            (i32.const 1)
+            (i32.const 0)
           )
         )
       )
@@ -1033,11 +1015,11 @@ fn call_indirect() {
         (i64.add
           (call_indirect (type $over-i64)
             (i64.sub (get_local 0) (i64.const 2))
-            (i32.const 2)
+            (i32.const 1)
           )
           (call_indirect (type $over-i64)
             (i64.sub (get_local 0) (i64.const 1))
-            (i32.const 2)
+            (i32.const 1)
           )
         )
       )
@@ -1051,11 +1033,11 @@ fn call_indirect() {
     module.disassemble();
 
     assert_eq!(
-        module.execute_func::<(i32, i64), i64>(0, (1, 10)).unwrap(),
+        module.execute_func::<(i32, i64), i64>(0, (0, 10)).unwrap(),
         3628800
     );
     assert_eq!(
-        module.execute_func::<(i32, i64), i64>(0, (2, 10)).unwrap(),
+        module.execute_func::<(i32, i64), i64>(0, (1, 10)).unwrap(),
         89
     );
 }

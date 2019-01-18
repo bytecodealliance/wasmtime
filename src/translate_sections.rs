@@ -37,10 +37,7 @@ pub fn function(functions: FunctionSectionReader) -> Result<Vec<u32>, Error> {
 
 /// Parses the Table section of the wasm module.
 pub fn table(tables: TableSectionReader) -> Result<Vec<TableType>, Error> {
-    tables
-        .into_iter()
-        .map(|r| r.map_err(Into::into))
-        .collect()
+    tables.into_iter().map(|r| r.map_err(Into::into)).collect()
 }
 
 /// Parses the Memory section of the wasm module.
@@ -74,11 +71,37 @@ pub fn start(_index: u32) -> Result<(), Error> {
 }
 
 /// Parses the Element section of the wasm module.
-pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
+pub fn element(elements: ElementSectionReader) -> Result<Vec<u32>, Error> {
+    let mut out = Vec::new();
+
     for entry in elements {
-        entry?; // TODO
+        let entry = entry?;
+
+        assert_eq!(entry.table_index, 0);
+        let offset = {
+            let mut reader = entry.init_expr.get_operators_reader();
+            let out = match reader.read() {
+                Ok(Operator::I32Const { value }) => value,
+                _ => panic!("We only support i32.const table init expressions right now"),
+            };
+
+            //reader.ensure_end()?;
+
+            out
+        };
+
+        assert_eq!(offset, out.len() as i32);
+
+        let elements = entry
+            .items
+            .get_items_reader()?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        out.extend(elements);
     }
-    Ok(())
+
+    Ok(out)
 }
 
 /// Parses the Code section of the wasm module.

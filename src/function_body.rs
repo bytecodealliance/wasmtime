@@ -1,6 +1,6 @@
 use backend::*;
 use error::Error;
-use module::FuncTyStore;
+use module::{FuncTyStore, quickhash};
 use wasmparser::{FunctionBody, Operator, Type};
 
 // TODO: Use own declared `Type` enum.
@@ -447,8 +447,7 @@ pub fn translate(
                 // TODO: this implementation assumes that this function is locally defined.
 
                 ctx.call_indirect(
-                    (0..translation_ctx.func_count() as u32)
-                        .filter(|i| translation_ctx.func_type_index(*i) == index),
+                    quickhash(callee_ty) as u32,
                     callee_ty.params.len() as u32,
                     callee_ty.returns.len() as u32,
                 );
