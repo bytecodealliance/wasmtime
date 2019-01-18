@@ -505,49 +505,44 @@ where
     }
 
     /// Define a function, producing the function body from the given `Context`.
-    pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
-        self.define_function_peek_compiled(func, ctx, |_, _, _| ())
-    }
-
-    /// Define a function, allowing to peek at the compiled function and producing the
-    /// function body from the given `Context`.
-    pub fn define_function_peek_compiled<T>(
+    ///
+    /// Returns the size of the function's code.
+    ///
+    /// Note: After calling this function the given `Context` will contain the compiled function.
+    pub fn define_function(
         &mut self,
         func: FuncId,
         ctx: &mut Context,
-        peek_compiled: impl FnOnce(u32, &Context, &isa::TargetIsa) -> T,
-    ) -> ModuleResult<T> {
-        let code_size;
-        let compiled = {
-            code_size = ctx.compile(self.backend.isa()).map_err(|e| {
-                info!(
-                    "defining function {}: {}",
-                    func,
-                    ctx.func.display(self.backend.isa())
-                );
-                ModuleError::Compilation(e)
-            })?;
+    ) -> ModuleResult<binemit::CodeOffset> {
+        let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
+            info!(
+                "defining function {}: {}",
+                func,
+                ctx.func.display(self.backend.isa())
+            );
+            ModuleError::Compilation(e)
+        })?;
 
-            let info = &self.contents.functions[func];
-            if info.compiled.is_some() {
-                return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
-            }
-            if !info.decl.linkage.is_definable() {
-                return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
-            }
+        let info = &self.contents.functions[func];
+        if info.compiled.is_some() {
+            return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
+        }
+        if !info.decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
+        }
 
-            Some(self.backend.define_function(
-                &info.decl.name,
-                ctx,
-                &ModuleNamespace::<B> {
-                    contents: &self.contents,
-                },
-                code_size,
-            )?)
-        };
+        let compiled = Some(self.backend.define_function(
+            &info.decl.name,
+            ctx,
+            &ModuleNamespace::<B> {
+                contents: &self.contents,
+            },
+            code_size,
+        )?);
+
         self.contents.functions[func].compiled = compiled;
         self.functions_to_finalize.push(func);
-        Ok(peek_compiled(code_size, &ctx, self.backend.isa()))
+        Ok(code_size)
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.
@@ -677,6 +672,11 @@ where
                 .as_ref()
                 .expect("data object must be compiled before it can be finalized"),
         )
+    }
+
+    /// Return the target isa
+    pub fn isa(&self) -> &isa::TargetIsa {
+        self.backend.isa()
     }
 
     /// Consume the module and return the resulting `Product`. Some `Backend`
