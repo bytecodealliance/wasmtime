@@ -299,7 +299,7 @@ impl VmCtx {
     }
 
     pub fn offset_of_funcs_len() -> usize {
-        offset_of!(Self, table.ptr)
+        offset_of!(Self, table.len)
     }
 }
 

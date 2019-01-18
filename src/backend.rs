@@ -239,6 +239,7 @@ impl CodeGenSession {
             asm: &mut self.assembler,
             func_starts: &self.func_starts,
             has_memory: self.has_memory,
+            trap_label: None,
             block_state: Default::default(),
         }
     }
@@ -525,6 +526,7 @@ pub struct Context<'a> {
     func_starts: &'a Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     pub block_state: BlockState,
+    trap_label: Option<Label>,
     has_memory: bool,
 }
 
@@ -738,7 +740,6 @@ macro_rules! cmp_i64 {
 
 #[must_use]
 pub struct CallCleanup {
-    restore_registers: ArrayVec<[GPR; SCRATCH_REGS.len()]>,
     stack_depth: i32,
 }
 
@@ -2032,35 +2033,30 @@ impl Context<'_> {
 
     // TODO: Use `ArrayVec`?
     /// Saves volatile (i.e. caller-saved) registers before a function call, if they are used.
-    fn save_volatile(&mut self) -> ArrayVec<[GPR; SCRATCH_REGS.len()]> {
-        let mut out = ArrayVec::new();
-
-        for &reg in self.block_state.stack.iter().filter_map(|v| {
-            if let StackValue::Temp(r) = v {
-                Some(r)
-            } else {
-                None
-            }
-        }) {
-            {
+    fn save_volatile(&mut self) {
+        let mut reserved = 0;
+        for val in self.block_state.stack.iter_mut().rev() {
+            let reassign = if let StackValue::Temp(r) = val {
                 dynasm!(self.asm
-                    ; push Rq(reg)
+                    ; push Rq(*r)
                 );
-                out.push(reg);
+                true
+            } else {
+                false
+            };
+
+            if reassign {
+                *val = StackValue::Pop;
+                reserved += 1;
             }
         }
 
-        out
+        self.block_state.depth.reserve(reserved);
     }
 
     /// Write the arguments to the callee to the registers and the stack using the SystemV
     /// calling convention.
-    fn pass_outgoing_args(
-        &mut self,
-        arity: u32,
-        return_arity: u32,
-        has_vmctx: bool,
-    ) -> CallCleanup {
+    fn pass_outgoing_args(&mut self, arity: u32, has_vmctx: bool) -> CallCleanup {
         let num_stack_args = (arity as usize).saturating_sub(ARGS_IN_GPRS.len()) as i32;
 
         self.free_arg_registers(if has_vmctx { Some(0) } else { None });
@@ -2096,20 +2092,20 @@ impl Context<'_> {
             self.pop_into(ValueLocation::Reg(*reg));
         }
 
-        // We do this before doing `save_volatile`, since otherwise we'll trample the return value
-        // of the call when we pop back.
-        self.free_return_register(return_arity);
+        // TODO: This will stomp on stack arguments. We want to do this beforehand
+        //       but then not actually change the recorded positions in the stack
+        //       until `post_call_cleanup`.
+        self.save_volatile();
 
         CallCleanup {
             stack_depth: num_stack_args,
-            restore_registers: self.save_volatile(),
         }
     }
 
     /// Frees up the stack space used for stack-passed arguments and restores the value
     /// of volatile (i.e. caller-saved) registers to the state that they were in before
     /// the call.
-    fn post_call_cleanup(&mut self, mut cleanup: CallCleanup) {
+    fn post_call_cleanup(&mut self, cleanup: CallCleanup) {
         if cleanup.stack_depth > 0 {
             let size = cleanup.stack_depth * WORD_SIZE as i32;
             self.block_state.depth.free(cleanup.stack_depth as _);
@@ -2124,12 +2120,6 @@ impl Context<'_> {
             if let Some(offset) = loc.stack() {
                 *loc = ArgLoc::Stack(offset);
             }
-        }
-
-        for reg in cleanup.restore_registers.drain(..).rev() {
-            dynasm!(self.asm
-                ; pop Rq(reg)
-            );
         }
     }
 
@@ -2154,13 +2144,15 @@ impl Context<'_> {
         let vmctx_idx = self.block_state.locals.vmctx_index();
         let (vmctx_reg, should_release_vmctx_reg) = self.into_reg(Value::Local(vmctx_idx));
 
-        let signature_matches = self.create_label();
         let temp0 = self.block_state.regs.take_scratch_gpr();
         let temp1 = self.block_state.regs.take_scratch_gpr();
 
+        let fail = self.trap_label().0;
+
+        // TODO: Consider generating a single trap function and jumping to that instead.
         dynasm!(self.asm
             ; cmp Rq(callee), [Rq(vmctx_reg) + VmCtx::offset_of_funcs_len() as i32]
-            ; jae >fail
+            ; jae =>fail
             ; imul Rq(callee), Rq(callee), mem::size_of::<RuntimeFunc>() as i32
             ; mov Rq(temp0), [Rq(vmctx_reg) + VmCtx::offset_of_funcs_ptr() as i32]
             ; mov Rd(temp1), [
@@ -2169,13 +2161,9 @@ impl Context<'_> {
                     RuntimeFunc::offset_of_sig_hash() as i32
             ]
             ; cmp Rd(temp1), signature_hash as i32
-            ; je =>signature_matches.0
-            ; fail:
+            ; jne =>fail
         );
 
-        self.trap();
-
-        self.define_label(signature_matches);
         self.block_state.regs.release_scratch_gpr(temp1);
 
         // TODO: I believe that this can't cause quadratic runtime but I'm not
@@ -2186,7 +2174,7 @@ impl Context<'_> {
         self.block_state
             .stack
             .insert(count - arg_arity as usize, vmctx);
-        let cleanup = self.pass_outgoing_args(arg_arity + 1, return_arity, true);
+        let cleanup = self.pass_outgoing_args(arg_arity + 1, true);
 
         dynasm!(self.asm
             ; call QWORD [
@@ -2222,7 +2210,7 @@ impl Context<'_> {
         self.block_state
             .stack
             .insert(count - arg_arity as usize, vmctx);
-        let cleanup = self.pass_outgoing_args(arg_arity + 1, return_arity, true);
+        let cleanup = self.pass_outgoing_args(arg_arity + 1, true);
 
         let label = &self.func_starts[index as usize].1;
         dynasm!(self.asm
@@ -2300,12 +2288,30 @@ impl Context<'_> {
         dynasm!(self.asm
             ; ret
         );
+
+        if let Some(l) = self.trap_label {
+            self.define_label(l);
+            dynasm!(self.asm
+                ; ud2
+            );
+        }
     }
 
     pub fn trap(&mut self) {
+        let trap_label = self.trap_label();
         dynasm!(self.asm
-            ; ud2
+            ; jmp =>trap_label.0
         );
+    }
+
+    #[must_use]
+    fn trap_label(&mut self) -> Label {
+        if let Some(l) = self.trap_label {
+            return l;
+        }
+
+        self.trap_label = Some(self.create_label());
+        self.trap_label()
     }
 }
 
