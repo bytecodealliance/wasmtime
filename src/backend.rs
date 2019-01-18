@@ -2161,6 +2161,8 @@ impl Context<'_> {
         let temp1 = self.block_state.regs.take_scratch_gpr();
 
         dynasm!(self.asm
+            ; cmp Rq(callee), [Rq(vmctx_reg) + VmCtx::offset_of_funcs_len() as i32]
+            ; jae >fail
             ; imul Rq(callee), Rq(callee), mem::size_of::<RuntimeFunc>() as i32
             ; mov Rq(temp0), [Rq(vmctx_reg) + VmCtx::offset_of_funcs_ptr() as i32]
             ; mov Rd(temp1), [
@@ -2170,6 +2172,7 @@ impl Context<'_> {
             ]
             ; cmp Rd(temp1), signature_hash as i32
             ; je =>signature_matches.0
+            ; fail:
         );
 
         self.trap();
@@ -2252,7 +2255,7 @@ impl Context<'_> {
 
         // We need space to store the register arguments if we need to call a function
         // and overwrite these registers so we add `reg_args.len()`
-        let stack_slots = locals + reg_args.len() as u32;
+        let stack_slots = locals + reg_args.len() as u32 + reg_locals.len() as u32;
         // Align stack slots to the nearest even number. This is required
         // by x86-64 ABI.
         let aligned_stack_slots = (stack_slots + 1) & !1;

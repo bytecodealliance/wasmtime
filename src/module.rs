@@ -297,6 +297,10 @@ impl VmCtx {
     pub fn offset_of_funcs_ptr() -> usize {
         offset_of!(Self, table.ptr)
     }
+
+    pub fn offset_of_funcs_len() -> usize {
+        offset_of!(Self, table.ptr)
+    }
 }
 
 impl<T> Drop for BoxSlice<T> {
