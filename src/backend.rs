@@ -76,9 +76,7 @@ macro_rules! asm_println {
             ; mov rdi, QWORD len as i64
             ; mov rsi, QWORD ptr as i64
 
-            ; mov r11, rsp
-            ; and r11, 0b1111
-            ; test r11, r11
+            ; test rsp, 0b1111
             ; jnz >with_adjusted_stack_ptr
 
             ; call rax
