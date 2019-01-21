@@ -347,6 +347,10 @@ fn relocate(
                         .unwrap();
                     write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
                 },
+                #[cfg(target_pointer_width = "32")]
+                Reloc::X86CallPCRel4 => {
+                    // ignore
+                }
                 _ => panic!("unsupported reloc kind"),
             }
         }

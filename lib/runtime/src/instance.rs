@@ -619,17 +619,7 @@ impl Instance {
 
         let vmctx_globals = create_globals(&module);
 
-        let offsets = VMOffsets {
-            pointer_size: mem::size_of::<*const u8>() as u8,
-            num_signature_ids: vmshared_signatures.len() as u64,
-            num_imported_functions: imports.functions.len() as u64,
-            num_imported_tables: imports.tables.len() as u64,
-            num_imported_memories: imports.memories.len() as u64,
-            num_imported_globals: imports.globals.len() as u64,
-            num_defined_tables: tables.len() as u64,
-            num_defined_memories: memories.len() as u64,
-            num_defined_globals: vmctx_globals.len() as u64,
-        };
+        let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module);
 
         let mut contents_mmap = Mmap::with_at_least(
             mem::size_of::<InstanceContents>()
