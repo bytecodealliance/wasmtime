@@ -186,7 +186,7 @@ impl<'a> LivenessVerifier<'a> {
                     "Def local range for {} can't end at {}",
                     val,
                     e
-                )
+                );
             }
             ExpandedProgramPoint::Inst(i) => {
                 if self.func.layout.inst_ebb(i) != Some(def_ebb) {
@@ -216,7 +216,7 @@ impl<'a> LivenessVerifier<'a> {
                         val,
                         ebb,
                         end
-                    )
+                    );
                 }
             };
 
@@ -247,7 +247,7 @@ impl<'a> LivenessVerifier<'a> {
                             "end of {} livein ({}) never reached",
                             val,
                             end_ebb
-                        )
+                        );
                     }
                 };
             }

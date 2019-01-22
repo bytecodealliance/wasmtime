@@ -56,7 +56,7 @@ where
                         "invalid setting value for '{}', expected {}",
                         opt,
                         expected
-                    )
+                    );
                 }
             },
         }

@@ -796,10 +796,10 @@ impl<'a> Parser<'a> {
             };
             let isa_builder = match isa::lookup(triple) {
                 Err(isa::LookupError::SupportDisabled) => {
-                    return err!(loc, "support disabled target '{}'", targ)
+                    return err!(loc, "support disabled target '{}'", targ);
                 }
                 Err(isa::LookupError::Unsupported) => {
-                    return err!(loc, "unsupported target '{}'", targ)
+                    return err!(loc, "unsupported target '{}'", targ);
                 }
                 Ok(b) => b,
             };
@@ -859,7 +859,7 @@ impl<'a> Parser<'a> {
                             continue;
                         }
                         Err(isa::LookupError::Unsupported) => {
-                            return err!(loc, "unsupported target '{}'", target_name)
+                            return err!(loc, "unsupported target '{}'", target_name);
                         }
                         Ok(b) => b,
                     };
@@ -1480,7 +1480,7 @@ impl<'a> Parser<'a> {
             Some(Token::SigRef(sig_src)) => {
                 let sig = match SigRef::with_number(sig_src) {
                     None => {
-                        return err!(self.loc, "attempted to use invalid signature ss{}", sig_src)
+                        return err!(self.loc, "attempted to use invalid signature ss{}", sig_src);
                     }
                     Some(sig) => sig,
                 };
@@ -1712,7 +1712,7 @@ impl<'a> Parser<'a> {
                             self.loc,
                             "attempted to use invalid stack slot ss{}",
                             src_num
-                        )
+                        );
                     }
                     Some(ss) => ss,
                 };

@@ -55,7 +55,7 @@ impl SubTest for TestDomtree {
                         return Err(format!(
                             "annotation on non-inst {}: {}",
                             comment.entity, comment.text
-                        ))
+                        ));
                     }
                 };
                 for src_ebb in tail.split_whitespace() {

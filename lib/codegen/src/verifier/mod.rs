@@ -1641,7 +1641,7 @@ impl<'a> Verifier<'a> {
                         "{} must have an encoding (e.g., {})",
                         text,
                         isa.encoding_info().display(enc)
-                    )
+                    );
                 }
                 Err(_) => return nonfatal!(errors, inst, "{} must have an encoding", text),
             }
