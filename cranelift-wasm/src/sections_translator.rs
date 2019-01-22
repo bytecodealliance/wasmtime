@@ -295,7 +295,8 @@ pub fn parse_code_section<'data>(
     for body in code {
         let mut reader = body?.get_binary_reader();
         let size = reader.bytes_remaining();
-        environ.define_function_body(reader.read_bytes(size)?)?;
+        let offset = reader.original_position();
+        environ.define_function_body(reader.read_bytes(size)?, offset)?;
     }
     Ok(())
 }

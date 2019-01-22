@@ -458,7 +458,11 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.start_func = Some(func_index);
     }
 
-    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()> {
+    fn define_function_body(
+        &mut self,
+        body_bytes: &'data [u8],
+        body_offset: usize,
+    ) -> WasmResult<()> {
         let func = {
             let mut func_environ = DummyFuncEnvironment::new(&self.info, self.return_mode);
             let func_index =
@@ -467,7 +471,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
             let mut func = ir::Function::with_name_signature(name, sig);
             self.trans
-                .translate(body_bytes, &mut func, &mut func_environ)?;
+                .translate(body_bytes, body_offset, &mut func, &mut func_environ)?;
             func
         };
         self.func_bytecode_sizes.push(body_bytes.len());
