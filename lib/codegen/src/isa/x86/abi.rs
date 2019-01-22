@@ -99,7 +99,7 @@ impl ArgAssigner for Args {
                     } else {
                         RU::rsi
                     } as RegUnit)
-                    .into()
+                    .into();
                 }
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
                 ArgumentPurpose::SignatureId => return ArgumentLoc::Reg(RU::r10 as RegUnit).into(),

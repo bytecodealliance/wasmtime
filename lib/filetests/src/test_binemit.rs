@@ -186,7 +186,7 @@ impl SubTest for TestBinEmit {
                         return Err(format!(
                             "'bin:' directive on non-inst {}: {}",
                             comment.entity, comment.text
-                        ))
+                        ));
                     }
                 }
             }
