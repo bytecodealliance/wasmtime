@@ -62,13 +62,10 @@ if rustup toolchain list | grep -q nightly; then
         cargo +nightly install cargo-fuzz
     fi
 
-    echo "Fuzz check temporarily disabled until "
-    echo "https://github.com/Amanieu/hashmap_core/pull/8"
-    echo "is merged."
-    #fuzz_module="8f0d725b20dcea52335cf521a5bb083833a5241f"
-    #ASAN_OPTIONS=detect_leaks=0 \
-    #cargo +nightly fuzz run compile \
-    #    "$topdir/fuzz/corpus/compile/$fuzz_module"
+    fuzz_module="1340712d77d3db3c79b4b0c1494df18615485480"
+    ASAN_OPTIONS=detect_leaks=0 \
+    cargo +nightly fuzz run compile \
+        "$topdir/fuzz/corpus/compile/$fuzz_module"
 else
     echo "nightly toolchain not found, skipping fuzz target integration test"
 fi

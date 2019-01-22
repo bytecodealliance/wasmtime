@@ -35,7 +35,7 @@ extern crate alloc as std;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashmap_core::HashMap;
+use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
