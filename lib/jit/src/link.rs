@@ -57,7 +57,7 @@ pub fn link_module(
                 return Err(LinkError(format!(
                     "{}/{}: no provided import function",
                     module_name, field
-                )))
+                )));
             }
         }
     }
@@ -94,7 +94,7 @@ pub fn link_module(
                 return Err(LinkError(format!(
                     "no provided import table for {}/{}",
                     module_name, field
-                )))
+                )));
             }
         }
     }
@@ -147,7 +147,7 @@ pub fn link_module(
                 return Err(LinkError(format!(
                     "no provided import memory for {}/{}",
                     module_name, field
-                )))
+                )));
             }
         }
     }
@@ -177,7 +177,7 @@ pub fn link_module(
                 return Err(LinkError(format!(
                     "no provided import global for {}/{}",
                     module_name, field
-                )))
+                )));
             }
         }
     }

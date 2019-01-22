@@ -142,13 +142,13 @@ pub fn invoke(
             return Err(ActionError::Kind(format!(
                 "exported item \"{}\" is not a function",
                 function_name
-            )))
+            )));
         }
         None => {
             return Err(ActionError::Field(format!(
                 "no export named \"{}\"",
                 function_name
-            )))
+            )));
         }
     };
 
@@ -232,13 +232,13 @@ pub fn inspect_memory<'instance>(
             return Err(ActionError::Kind(format!(
                 "exported item \"{}\" is not a linear memory",
                 memory_name
-            )))
+            )));
         }
         None => {
             return Err(ActionError::Field(format!(
                 "no export named \"{}\"",
                 memory_name
-            )))
+            )));
         }
     };
 
@@ -256,13 +256,13 @@ pub fn get(instance: &Instance, global_name: &str) -> Result<RuntimeValue, Actio
             return Err(ActionError::Kind(format!(
                 "exported item \"{}\" is not a global variable",
                 global_name
-            )))
+            )));
         }
         None => {
             return Err(ActionError::Field(format!(
                 "no export named \"{}\"",
                 global_name
-            )))
+            )));
         }
     };
 
@@ -277,7 +277,7 @@ pub fn get(instance: &Instance, global_name: &str) -> Result<RuntimeValue, Actio
                 return Err(ActionError::Type(format!(
                     "global with type {} not supported",
                     other
-                )))
+                )));
             }
         })
     }
