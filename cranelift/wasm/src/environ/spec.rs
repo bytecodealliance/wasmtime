@@ -343,7 +343,11 @@ pub trait ModuleEnvironment<'data> {
     ///
     /// Note there's no `reserve_function_bodies` function because the number of
     /// functions is already provided by `reserve_func_types`.
-    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()>;
+    fn define_function_body(
+        &mut self,
+        body_bytes: &'data [u8],
+        body_offset: usize,
+    ) -> WasmResult<()>;
 
     /// Provides the number of data initializers up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
