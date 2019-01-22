@@ -39,6 +39,8 @@ use cranelift_native;
 use docopt::Docopt;
 use file_per_thread_logger;
 use pretty_env_logger;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io;
@@ -46,6 +48,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
+use std::rc::Rc;
 use wabt;
 use wasmtime_jit::{instantiate, ActionOutcome, Compiler, Namespace};
 use wasmtime_wast::instantiate_spectest;
@@ -121,6 +124,7 @@ fn main() {
     let mut compiler = Compiler::new(isa);
 
     let mut namespace = Namespace::new();
+    let global_exports = Rc::new(RefCell::new(HashMap::new()));
 
     // Make spectest available by default.
     namespace.instance(
@@ -130,7 +134,13 @@ fn main() {
 
     for filename in &args.arg_file {
         let path = Path::new(&filename);
-        match handle_module(&mut compiler, &mut namespace, &args, path) {
+        match handle_module(
+            &mut compiler,
+            &mut namespace,
+            Rc::clone(&global_exports),
+            &args,
+            path,
+        ) {
             Ok(()) => {}
             Err(message) => {
                 let name = path.as_os_str().to_string_lossy();
@@ -144,6 +154,7 @@ fn main() {
 fn handle_module(
     compiler: &mut Compiler,
     namespace: &mut Namespace,
+    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     args: &Args,
     path: &Path,
 ) -> Result<(), String> {
@@ -156,7 +167,8 @@ fn handle_module(
     }
 
     // Create a new `Instance` by compiling and instantiating a wasm module.
-    let instance = instantiate(compiler, &data, namespace).map_err(|e| e.to_string())?;
+    let instance =
+        instantiate(compiler, &data, namespace, global_exports).map_err(|e| e.to_string())?;
 
     // Register it in the namespace.
     let index = namespace.instance(None, instance);
@@ -181,7 +193,10 @@ fn handle_module(
 mod tests {
     use cranelift_codegen::settings;
     use cranelift_codegen::settings::Configurable;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::rc::Rc;
     use wabt;
     use wasmtime_jit::{instantiate, Compiler, NullResolver};
 
@@ -207,7 +222,8 @@ mod tests {
 
         let mut resolver = NullResolver {};
         let mut compiler = Compiler::new(isa);
-        let instance = instantiate(&mut compiler, &data, &mut resolver);
+        let global_exports = Rc::new(RefCell::new(HashMap::new()));
+        let instance = instantiate(&mut compiler, &data, &mut resolver, global_exports);
         assert!(instance.is_ok());
     }
 }

@@ -1,6 +1,5 @@
 //! Data structures for representing decoded wasm modules.
 
-use super::HashMap;
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
@@ -8,6 +7,7 @@ use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
+use indexmap::IndexMap;
 use std::string::String;
 use std::vec::Vec;
 
@@ -162,7 +162,7 @@ pub struct Module {
     pub globals: PrimaryMap<GlobalIndex, Global>,
 
     /// Exported entities.
-    pub exports: HashMap<String, Export>,
+    pub exports: IndexMap<String, Export>,
 
     /// The module "start" function, if present.
     pub start_func: Option<FuncIndex>,
@@ -184,7 +184,7 @@ impl Module {
             table_plans: PrimaryMap::new(),
             memory_plans: PrimaryMap::new(),
             globals: PrimaryMap::new(),
-            exports: HashMap::new(),
+            exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
         }

@@ -34,11 +34,6 @@ extern crate alloc as std;
 #[macro_use]
 extern crate std;
 
-#[cfg(not(feature = "std"))]
-use hashbrown::HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
-
 #[macro_use]
 extern crate failure_derive;
 

@@ -3,9 +3,11 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
+use super::HashMap;
 use crate::compiler::Compiler;
 use crate::link::link_module;
 use crate::resolver::Resolver;
+use core::cell::RefCell;
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{DefinedFuncIndex, SignatureIndex};
 use std::boxed::Box;
@@ -16,7 +18,7 @@ use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
 };
 use wasmtime_runtime::{
-    Imports, Instance, InstantiationError, VMFunctionBody, VMSharedSignatureIndex,
+    Export, Imports, Instance, InstantiationError, VMFunctionBody, VMSharedSignatureIndex,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -112,6 +114,7 @@ pub struct CompiledModule {
     imports: Imports,
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
+    global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
 }
 
 impl CompiledModule {
@@ -120,26 +123,28 @@ impl CompiledModule {
         compiler: &mut Compiler,
         data: &'data [u8],
         resolver: &mut dyn Resolver,
+        global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
     ) -> Result<Self, SetupError> {
         let raw = RawCompiledModule::<'data>::new(compiler, data, resolver)?;
 
-        Ok(Self {
-            module: Rc::new(raw.module),
-            finished_functions: raw.finished_functions,
-            imports: raw.imports,
-            data_initializers: raw
-                .data_initializers
+        Ok(Self::from_parts(
+            raw.module,
+            global_exports,
+            raw.finished_functions,
+            raw.imports,
+            raw.data_initializers
                 .iter()
                 .map(OwnedDataInitializer::new)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-            signatures: raw.signatures.clone(),
-        })
+            raw.signatures.clone(),
+        ))
     }
 
     /// Construct a `CompiledModule` from component parts.
     pub fn from_parts(
         module: Module,
+        global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         imports: Imports,
         data_initializers: Box<[OwnedDataInitializer]>,
@@ -147,6 +152,7 @@ impl CompiledModule {
     ) -> Self {
         Self {
             module: Rc::new(module),
+            global_exports: Rc::clone(&global_exports),
             finished_functions,
             imports,
             data_initializers,
@@ -170,6 +176,7 @@ impl CompiledModule {
             .collect::<Vec<_>>();
         Instance::new(
             Rc::clone(&self.module),
+            Rc::clone(&self.global_exports),
             self.finished_functions.clone(),
             self.imports.clone(),
             &data_initializers,
@@ -206,11 +213,13 @@ pub fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
     resolver: &mut dyn Resolver,
+    global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
 ) -> Result<Instance, SetupError> {
     let raw = RawCompiledModule::new(compiler, data, resolver)?;
 
     Instance::new(
         Rc::new(raw.module),
+        global_exports,
         raw.finished_functions,
         raw.imports,
         &*raw.data_initializers,

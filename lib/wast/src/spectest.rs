@@ -2,6 +2,8 @@ use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, Export, MemoryPlan, Module, TablePlan};
@@ -216,6 +218,7 @@ pub fn instantiate_spectest() -> Result<Instance, InstantiationError> {
 
     Instance::new(
         Rc::new(module),
+        Rc::new(RefCell::new(HashMap::new())),
         finished_functions.into_boxed_slice(),
         imports,
         &data_initializers,

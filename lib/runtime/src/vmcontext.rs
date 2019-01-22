@@ -409,7 +409,7 @@ mod test_vmshared_signature_index {
 impl VMSharedSignatureIndex {
     /// Create a new `VMSharedSignatureIndex`.
     pub fn new(value: u32) -> Self {
-        VMSharedSignatureIndex(value)
+        Self(value)
     }
 }
 
@@ -482,8 +482,9 @@ impl VMContext {
     ///
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
+    /// FIXME: make this pub(crate)?
     #[allow(clippy::cast_ptr_alignment)]
-    pub(crate) unsafe fn instance_contents(&mut self) -> &mut InstanceContents {
+    pub unsafe fn instance_contents(&mut self) -> &mut InstanceContents {
         &mut *((self as *mut Self as *mut u8).offset(-InstanceContents::vmctx_offset())
             as *mut InstanceContents)
     }
@@ -494,5 +495,10 @@ impl VMContext {
     /// be a `VMContext` allocated as part of an `Instance`.
     pub unsafe fn host_state(&mut self) -> &mut Any {
         self.instance_contents().host_state()
+    }
+
+    /// Lookup an export in the global exports namespace.
+    pub unsafe fn lookup_global_export(&mut self, field: &str) -> Option<crate::export::Export> {
+        self.instance_contents().lookup_global_export(field)
     }
 }

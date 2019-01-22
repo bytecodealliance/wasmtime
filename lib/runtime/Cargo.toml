@@ -15,7 +15,7 @@ edition = "2018"
 cranelift-codegen = "0.26.0"
 cranelift-entity = "0.26.0"
 cranelift-wasm = "0.26.0"
-wasmtime-environ = { path = "../environ" }
+wasmtime-environ = { path = "../environ", default-features = false }
 region = "1.0.0"
 lazy_static = "1.2.0"
 libc = { version = "0.2.44", default-features = false }
@@ -24,6 +24,7 @@ memoffset = "0.2.1"
 cast = { version = "0.2.2", default-features = false }
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
+indexmap = "1.0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.6", features = ["winbase", "memoryapi"] }
@@ -35,8 +36,7 @@ regex = "1.0.6"
 
 [features]
 default = ["std"]
-std = ["cranelift-codegen/std", "cranelift-wasm/std"]
-core = ["cranelift-codegen/core", "cranelift-wasm/core", "wasmtime-environ/core"]
+std = ["cranelift-codegen/std", "cranelift-wasm/std", "wasmtime-environ/std"]
 
 [badges]
 maintenance = { status = "experimental" }

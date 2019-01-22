@@ -21,20 +21,6 @@
         clippy::use_self
     )
 )]
-#![no_std]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
-
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc as std;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate std;
-
-#[cfg(not(feature = "std"))]
-use hashbrown::{map as hash_map, HashMap};
-#[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap};
 
 #[macro_use]
 extern crate lazy_static;

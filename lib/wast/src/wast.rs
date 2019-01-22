@@ -1,6 +1,9 @@
 use crate::spectest::instantiate_spectest;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
+use std::rc::Rc;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
@@ -122,7 +125,12 @@ impl WastContext {
 
         self.validate(&data).map_err(SetupError::Validate)?;
 
-        instantiate(&mut *self.compiler, &data, &mut self.namespace)
+        instantiate(
+            &mut *self.compiler,
+            &data,
+            &mut self.namespace,
+            Rc::new(RefCell::new(HashMap::new())),
+        )
     }
 
     fn get_index(&mut self, instance_name: &Option<String>) -> Result<InstanceIndex, WastError> {
