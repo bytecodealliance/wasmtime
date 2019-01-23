@@ -153,7 +153,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             table_index,
             base,
             offset,
-            elements: elements.to_vec(),
+            elements,
         });
     }
 

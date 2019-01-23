@@ -8,6 +8,7 @@ use cranelift_wasm::{
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use indexmap::IndexMap;
+use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 
@@ -21,7 +22,7 @@ pub struct TableElements {
     /// The offset to add to the base.
     pub offset: usize,
     /// The values to write into the table elements.
-    pub elements: Vec<FuncIndex>,
+    pub elements: Box<[FuncIndex]>,
 }
 
 /// An entity to export.

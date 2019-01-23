@@ -117,7 +117,7 @@ impl LinearMemory {
             new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&self.mmap.as_slice()[..copy_len]);
 
             self.mmap = new_mmap;
-        } else {
+        } else if delta_bytes > 0 {
             // Make the newly allocated pages accessible.
             self.mmap.make_accessible(prev_bytes, delta_bytes).ok()?;
         }

@@ -18,7 +18,7 @@ cranelift-wasm = "0.28.0"
 cranelift-frontend = "0.28.0"
 wasmtime-environ = { path = "../environ", default-features = false }
 wasmtime-runtime = { path = "../runtime", default-features = false }
-region = "1.0.0"
+region = "2.0.0"
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
 target-lexicon = { version = "0.2.0", default-features = false }
