@@ -80,6 +80,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result.target_config
     }
 
+    fn reserve_signatures(&mut self, num: u32) {
+        self.result
+            .module
+            .signatures
+            .reserve_exact(cast::usize(num));
+    }
+
     fn declare_signature(&mut self, sig: ir::Signature) {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
@@ -100,28 +107,6 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .push((String::from(module), String::from(field)));
     }
 
-    fn declare_func_type(&mut self, sig_index: SignatureIndex) {
-        self.result.module.functions.push(sig_index);
-    }
-
-    fn declare_global_import(&mut self, global: Global, module: &str, field: &str) {
-        debug_assert_eq!(
-            self.result.module.globals.len(),
-            self.result.module.imported_globals.len(),
-            "Imported globals must be declared first"
-        );
-        self.result.module.globals.push(global);
-
-        self.result
-            .module
-            .imported_globals
-            .push((String::from(module), String::from(field)));
-    }
-
-    fn declare_global(&mut self, global: Global) {
-        self.result.module.globals.push(global);
-    }
-
     fn declare_table_import(&mut self, table: Table, module: &str, field: &str) {
         debug_assert_eq!(
             self.result.module.table_plans.len(),
@@ -135,26 +120,6 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .module
             .imported_tables
             .push((String::from(module), String::from(field)));
-    }
-
-    fn declare_table(&mut self, table: Table) {
-        let plan = TablePlan::for_table(table, &self.result.tunables);
-        self.result.module.table_plans.push(plan);
-    }
-
-    fn declare_table_elements(
-        &mut self,
-        table_index: TableIndex,
-        base: Option<GlobalIndex>,
-        offset: usize,
-        elements: Box<[FuncIndex]>,
-    ) {
-        self.result.module.table_elements.push(TableElements {
-            table_index,
-            base,
-            offset,
-            elements,
-        });
     }
 
     fn declare_memory_import(&mut self, memory: Memory, module: &str, field: &str) {
@@ -172,26 +137,69 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .push((String::from(module), String::from(field)));
     }
 
+    fn declare_global_import(&mut self, global: Global, module: &str, field: &str) {
+        debug_assert_eq!(
+            self.result.module.globals.len(),
+            self.result.module.imported_globals.len(),
+            "Imported globals must be declared first"
+        );
+        self.result.module.globals.push(global);
+
+        self.result
+            .module
+            .imported_globals
+            .push((String::from(module), String::from(field)));
+    }
+
+    fn finish_imports(&mut self) {
+        self.result.module.imported_funcs.shrink_to_fit();
+        self.result.module.imported_tables.shrink_to_fit();
+        self.result.module.imported_memories.shrink_to_fit();
+        self.result.module.imported_globals.shrink_to_fit();
+    }
+
+    fn reserve_func_types(&mut self, num: u32) {
+        self.result.module.functions.reserve_exact(cast::usize(num));
+    }
+
+    fn declare_func_type(&mut self, sig_index: SignatureIndex) {
+        self.result.module.functions.push(sig_index);
+    }
+
+    fn reserve_tables(&mut self, num: u32) {
+        self.result
+            .module
+            .table_plans
+            .reserve_exact(cast::usize(num));
+    }
+
+    fn declare_table(&mut self, table: Table) {
+        let plan = TablePlan::for_table(table, &self.result.tunables);
+        self.result.module.table_plans.push(plan);
+    }
+
+    fn reserve_memories(&mut self, num: u32) {
+        self.result
+            .module
+            .memory_plans
+            .reserve_exact(cast::usize(num));
+    }
+
     fn declare_memory(&mut self, memory: Memory) {
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
         self.result.module.memory_plans.push(plan);
     }
 
-    fn declare_data_initialization(
-        &mut self,
-        memory_index: MemoryIndex,
-        base: Option<GlobalIndex>,
-        offset: usize,
-        data: &'data [u8],
-    ) {
-        self.result.data_initializers.push(DataInitializer {
-            location: DataInitializerLocation {
-                memory_index,
-                base,
-                offset,
-            },
-            data,
-        });
+    fn reserve_globals(&mut self, num: u32) {
+        self.result.module.globals.reserve_exact(cast::usize(num));
+    }
+
+    fn declare_global(&mut self, global: Global) {
+        self.result.module.globals.push(global);
+    }
+
+    fn reserve_exports(&mut self, num: u32) {
+        self.result.module.exports.reserve(cast::usize(num));
     }
 
     fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) {
@@ -227,9 +235,54 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result.module.start_func = Some(func_index);
     }
 
+    fn reserve_table_elements(&mut self, num: u32) {
+        self.result
+            .module
+            .table_elements
+            .reserve_exact(cast::usize(num));
+    }
+
+    fn declare_table_elements(
+        &mut self,
+        table_index: TableIndex,
+        base: Option<GlobalIndex>,
+        offset: usize,
+        elements: Box<[FuncIndex]>,
+    ) {
+        self.result.module.table_elements.push(TableElements {
+            table_index,
+            base,
+            offset,
+            elements,
+        });
+    }
+
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()> {
         self.result.function_body_inputs.push(body_bytes);
         Ok(())
+    }
+
+    fn reserve_data_initializers(&mut self, num: u32) {
+        self.result
+            .data_initializers
+            .reserve_exact(cast::usize(num));
+    }
+
+    fn declare_data_initialization(
+        &mut self,
+        memory_index: MemoryIndex,
+        base: Option<GlobalIndex>,
+        offset: usize,
+        data: &'data [u8],
+    ) {
+        self.result.data_initializers.push(DataInitializer {
+            location: DataInitializerLocation {
+                memory_index,
+                base,
+                offset,
+            },
+            data,
+        });
     }
 }
 
