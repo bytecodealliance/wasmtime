@@ -292,6 +292,9 @@ impl<'a> Context<'a> {
 
         // Insert a copy instruction at the top of `ebb`.
         let mut pos = EncCursor::new(self.func, self.isa).at_first_inst(ebb);
+        if let Some(inst) = pos.current_inst() {
+            pos.use_srcloc(inst);
+        }
         pos.ins().with_result(param).copy(new_val);
         let inst = pos.built_inst();
         self.liveness.move_def_locally(param, inst);
@@ -347,6 +350,7 @@ impl<'a> Context<'a> {
         pred_val: Value,
     ) -> Value {
         let mut pos = EncCursor::new(self.func, self.isa).at_inst(pred_inst);
+        pos.use_srcloc(pred_inst);
         let copy = pos.ins().copy(pred_val);
         let inst = pos.built_inst();
 

@@ -128,6 +128,7 @@ fn optimize_cpu_flags(
     // We found a compare+branch pattern. Transform it to use flags.
     let args = info.args.as_slice(&pos.func.dfg.value_lists)[1..].to_vec();
     pos.goto_inst(info.cmp_inst);
+    pos.use_srcloc(info.cmp_inst);
     match info.kind {
         CmpBrKind::Icmp { mut cond, arg } => {
             let flags = pos.ins().ifcmp(info.cmp_arg, arg);
