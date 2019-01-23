@@ -27,7 +27,7 @@ use cranelift_wasm::{
 use indexmap;
 use std::borrow::ToOwned;
 use std::boxed::Box;
-use std::collections::{hash_map, HashMap};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::string::{String, ToString};
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
@@ -700,7 +700,7 @@ impl Instance {
 
         // Collect the exports for the global export map.
         for (field, decl) in &module.exports {
-            use hash_map::Entry::*;
+            use std::collections::hash_map::Entry::*;
             let cell: &RefCell<HashMap<std::string::String, core::option::Option<Export>>> =
                 contents.global_exports.borrow();
             let map: &mut HashMap<std::string::String, core::option::Option<Export>> =
