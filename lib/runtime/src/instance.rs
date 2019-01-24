@@ -27,7 +27,7 @@ use cranelift_wasm::{
 use indexmap;
 use std::borrow::ToOwned;
 use std::boxed::Box;
-use std::collections::{hash_map, HashMap};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::string::{String, ToString};
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
@@ -619,17 +619,7 @@ impl Instance {
 
         let vmctx_globals = create_globals(&module);
 
-        let offsets = VMOffsets {
-            pointer_size: mem::size_of::<*const u8>() as u8,
-            num_signature_ids: vmshared_signatures.len() as u64,
-            num_imported_functions: imports.functions.len() as u64,
-            num_imported_tables: imports.tables.len() as u64,
-            num_imported_memories: imports.memories.len() as u64,
-            num_imported_globals: imports.globals.len() as u64,
-            num_defined_tables: tables.len() as u64,
-            num_defined_memories: memories.len() as u64,
-            num_defined_globals: vmctx_globals.len() as u64,
-        };
+        let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module);
 
         let mut contents_mmap = Mmap::with_at_least(
             mem::size_of::<InstanceContents>()
@@ -710,7 +700,7 @@ impl Instance {
 
         // Collect the exports for the global export map.
         for (field, decl) in &module.exports {
-            use hash_map::Entry::*;
+            use std::collections::hash_map::Entry::*;
             let cell: &RefCell<HashMap<std::string::String, core::option::Option<Export>>> =
                 contents.global_exports.borrow();
             let map: &mut HashMap<std::string::String, core::option::Option<Export>> =
