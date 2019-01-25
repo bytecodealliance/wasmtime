@@ -50,7 +50,7 @@ use std::str::FromStr;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::{cranelift, ModuleEnvironment, Tunables};
-use wasmtime_obj::emit_module;
+use wasmtime_obj::{emit_module, generate_c_stubs};
 
 const USAGE: &str = "
 Wasm to native object translation utility.
@@ -59,7 +59,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-g] <file> -o <output>
+    wasm2obj [--target TARGET] [-g] [--generate-c] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
@@ -67,6 +67,7 @@ Options:
     -h, --help          print this help message
     --target <TARGET>   build for the target triple; default is the host machine
     -g                  generate debug information
+    -c, --generate-c    generate C code/wrapper
     --version           print the Cranelift version
 ";
 
@@ -76,6 +77,7 @@ struct Args {
     arg_output: String,
     arg_target: Option<String>,
     flag_g: bool,
+    flag_generate_c: bool,
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -100,6 +102,7 @@ fn main() {
         &args.arg_target,
         &args.arg_output,
         args.flag_g,
+        args.flag_generate_c,
     ) {
         Ok(()) => {}
         Err(message) => {
@@ -114,6 +117,7 @@ fn handle_module(
     target: &Option<String>,
     output: &str,
     generate_debug_info: bool,
+    generate_c: bool,
 ) -> Result<(), String> {
     let data = match read_wasm_file(path) {
         Ok(data) => data,
@@ -186,6 +190,33 @@ fn handle_module(
     let file =
         ::std::fs::File::create(Path::new(output)).map_err(|x| format(format_args!("{}", x)))?;
     obj.write(file).map_err(|e| e.to_string())?;
+
+    if generate_c {
+        let base_name = Path::new(output)
+            .file_stem()
+            .expect("filename")
+            .to_str()
+            .expect("name");
+        let mut c_header = Vec::new();
+        let mut c_code = Vec::new();
+        generate_c_stubs(
+            &mut c_header,
+            &mut c_code,
+            &base_name,
+            &module,
+            &lazy_data_initializers,
+            &target_config,
+        )
+        .map_err(|e| e.to_string())?;
+        File::create(Path::new(output).with_extension("h"))
+            .map_err(|x| format(format_args!("{}", x)))?
+            .write_all(&c_header)
+            .map_err(|e| e.to_string())?;
+        File::create(Path::new(output).with_extension("c"))
+            .map_err(|x| format(format_args!("{}", x)))?
+            .write_all(&c_code)
+            .map_err(|e| e.to_string())?;
+    }
 
     Ok(())
 }

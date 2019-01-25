@@ -30,9 +30,11 @@ mod context;
 mod data_segment;
 mod function;
 mod module;
+mod stubs;
 mod table;
 
 pub use crate::module::emit_module;
+pub use crate::stubs::generate_c_stubs;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
