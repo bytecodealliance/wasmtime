@@ -42,6 +42,6 @@ fn test_environ_translate() {
     let mut resolver = NullResolver {};
     let mut compiler = Compiler::new(isa);
     let global_exports = Rc::new(RefCell::new(HashMap::new()));
-    let instance = instantiate(&mut compiler, &data, &mut resolver, global_exports);
+    let instance = instantiate(&mut compiler, &data, &mut resolver, global_exports, false);
     assert!(instance.is_ok());
 }

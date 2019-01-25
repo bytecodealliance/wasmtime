@@ -59,13 +59,14 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-od] <file>...
-    wasmtime [-od] <file>... --invoke=<fn>
+    wasmtime [-odg] <file>...
+    wasmtime [-odg] <file>... --invoke=<fn>
     wasmtime --help | --version
 
 Options:
     --invoke=<fn>       name of function to run
     -o, --optimize      runs optimization passes on the translated functions
+    -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
     -h, --help          print this help message
     --version           print the Cranelift version
@@ -76,6 +77,7 @@ struct Args {
     arg_file: Vec<String>,
     flag_optimize: bool,
     flag_debug: bool,
+    flag_g: bool,
     flag_invoke: Option<String>,
 }
 
@@ -136,6 +138,9 @@ fn main() {
         "spectest".to_owned(),
         instantiate_spectest().expect("instantiating spectest"),
     );
+
+    // Enable/disable producing of debug info.
+    context.set_debug_info(args.flag_g);
 
     for filename in &args.arg_file {
         let path = Path::new(&filename);

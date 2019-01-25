@@ -45,8 +45,10 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
+use std::str;
 use std::str::FromStr;
 use target_lexicon::Triple;
+use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::{cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
 
@@ -57,13 +59,14 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] <file> -o <output>
+    wasm2obj [--target TARGET] [-g] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
     -v, --verbose       displays the module and translated functions
     -h, --help          print this help message
     --target <TARGET>   build for the target triple; default is the host machine
+    -g                  generate debug information
     --version           print the Cranelift version
 ";
 
@@ -72,6 +75,7 @@ struct Args {
     arg_file: String,
     arg_output: String,
     arg_target: Option<String>,
+    flag_g: bool,
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -91,7 +95,12 @@ fn main() {
         .unwrap_or_else(|e| e.exit());
 
     let path = Path::new(&args.arg_file);
-    match handle_module(path.to_path_buf(), &args.arg_target, &args.arg_output) {
+    match handle_module(
+        path.to_path_buf(),
+        &args.arg_target,
+        &args.arg_output,
+        args.flag_g,
+    ) {
         Ok(()) => {}
         Err(message) => {
             println!(" error: {}", message);
@@ -100,7 +109,12 @@ fn main() {
     }
 }
 
-fn handle_module(path: PathBuf, target: &Option<String>, output: &str) -> Result<(), String> {
+fn handle_module(
+    path: PathBuf,
+    target: &Option<String>,
+    output: &str,
+    generate_debug_info: bool,
+) -> Result<(), String> {
     let data = match read_wasm_file(path) {
         Ok(data) => data,
         Err(err) => {
@@ -130,7 +144,7 @@ fn handle_module(path: PathBuf, target: &Option<String>, output: &str) -> Result
     // TODO: Expose the tunables as command-line flags.
     let tunables = Tunables::default();
 
-    let (module, lazy_function_body_inputs, lazy_data_initializers) = {
+    let (module, lazy_function_body_inputs, lazy_data_initializers, target_config) = {
         let environ = ModuleEnvironment::new(isa.frontend_config(), tunables);
 
         let translation = environ
@@ -141,27 +155,31 @@ fn handle_module(path: PathBuf, target: &Option<String>, output: &str) -> Result
             translation.module,
             translation.function_body_inputs,
             translation.data_initializers,
+            translation.target_config,
         )
     };
 
-    // FIXME: We need to initialize memory in a way that supports alternate
-    // memory spaces, imported base addresses, and offsets.
-    for init in lazy_data_initializers.into_iter() {
-        obj.define("memory", Vec::from(init.data))
-            .map_err(|err| format!("{}", err))?;
-    }
+    let (compilation, relocations, address_transform) = cranelift::compile_module(
+        &module,
+        lazy_function_body_inputs,
+        &*isa,
+        generate_debug_info,
+    )
+    .map_err(|e| e.to_string())?;
 
-    let (compilation, relocations) =
-        cranelift::compile_module(&module, lazy_function_body_inputs, &*isa)
+    emit_module(
+        &mut obj,
+        &module,
+        &compilation,
+        &relocations,
+        &lazy_data_initializers,
+        &target_config,
+    )?;
+
+    if generate_debug_info {
+        let debug_data = read_debuginfo(&data);
+        emit_debugsections(&mut obj, &target_config, &debug_data, &address_transform)
             .map_err(|e| e.to_string())?;
-
-    emit_module(&mut obj, &module, &compilation, &relocations)?;
-
-    if !module.table_plans.is_empty() {
-        if module.table_plans.len() > 1 {
-            return Err(String::from("multiple tables not supported yet"));
-        }
-        return Err(String::from("FIXME: implement tables"));
     }
 
     // FIXME: Make the format a parameter.
