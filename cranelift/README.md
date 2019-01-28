@@ -77,7 +77,7 @@ Cranelift uses a [conventional Cargo build
 process](https://doc.rust-lang.org/cargo/guide/working-on-an-existing-project.html).
 
 Cranelift consists of a collection of crates, and uses a [Cargo
-Workspace](https://doc.rust-lang.org/book/second-edition/ch14-03-cargo-workspaces.html),
+Workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html),
 so for some cargo commands, such as `cargo test`, the `--all` is needed
 to tell cargo to visit all of the crates.
 
