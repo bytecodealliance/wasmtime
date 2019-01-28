@@ -42,7 +42,7 @@ fi
 
 # Check if any Python files have changed since we last checked them.
 tsfile="$topdir/target/meta-checked"
-meta_python="$topdir/lib/codegen/meta-python"
+meta_python="$topdir/cranelift-codegen/meta-python"
 if [ -f "$tsfile" ]; then
     needcheck=$(find "$meta_python" -name '*.py' -newer "$tsfile")
 else
