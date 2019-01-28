@@ -73,10 +73,10 @@ test.
 
 These tests are usually found in the :file:`tests` top-level directory where
 they have access to all the crates in the Cranelift repository. The
-:file:`lib/codegen` and :file:`lib/reader` crates have no external
+:file:`cranelift-codegen` and :file:`cranelift-reader` crates have no external
 dependencies, which can make testing tedious. Integration tests that don't need
-to depend on other crates can be placed in :file:`lib/codegen/tests` and
-:file:`lib/reader/tests`.
+to depend on other crates can be placed in :file:`cranelift-codegen/tests` and
+:file:`cranelift-reader/tests`.
 
 File tests
 ==========
@@ -109,7 +109,7 @@ header:
     isa_spec      : "isa" isa_name { `option` } "\n"
 
 The options given on the ``isa`` line modify the ISA-specific settings defined in
-:file:`lib/codegen/meta-python/isa/*/settings.py`.
+:file:`cranelift-codegen/meta-python/isa/*/settings.py`.
 
 All types of tests allow shared Cranelift settings to be modified:
 
@@ -119,7 +119,7 @@ All types of tests allow shared Cranelift settings to be modified:
     option        : flag | setting "=" value
 
 The shared settings available for all target ISAs are defined in
-:file:`lib/codegen/meta-python/base/settings.py`.
+:file:`cranelift-codegen/meta-python/base/settings.py`.
 
 The ``set`` lines apply settings cumulatively::
 

@@ -88,7 +88,7 @@ build.
 
 Our Python code is checked with [mypy](http://mypy-lang.org/) and
 [flake8](http://flake8.pycqa.org/en/latest/); see the
-[check.sh](https://github.com/CraneStation/cranelift/blob/master/lib/codegen/meta-python/check.sh)
+[check.sh](https://github.com/CraneStation/cranelift/blob/master/cranelift-codegen/meta-python/check.sh)
 file for details. The versions available in common package repositories such
 as Ubuntu or Homebrew typically work fine.
 

@@ -1,0 +1,22 @@
+[package]
+name = "cranelift-faerie"
+version = "0.28.0"
+authors = ["The Cranelift Project Developers"]
+description = "Emit Cranelift output to native object files with Faerie"
+repository = "https://github.com/CraneStation/cranelift"
+documentation = "https://cranelift.readthedocs.io/"
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+cranelift-codegen = { path = "../cranelift-codegen", version = "0.28.0" }
+cranelift-module = { path = "../cranelift-module", version = "0.28.0" }
+faerie = "0.7.0"
+goblin = "0.0.19"
+failure = "0.1.2"
+target-lexicon = "0.2.0"
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "CraneStation/cranelift" }

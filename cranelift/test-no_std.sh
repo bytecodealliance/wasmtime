@@ -13,10 +13,12 @@ function banner {
 }
 
 # Test those packages which have no_std support.
-LIBS="codegen frontend wasm native preopt module entity bforest umbrella"
+LIBS="cranelift-codegen cranelift-frontend cranelift-wasm \
+cranelift-native cranelift-preopt cranelift-module \
+cranelift-entity cranelift-bforest cranelift-umbrella"
 for LIB in $LIBS; do
     banner "Rust unit tests in $LIB"
-    pushd "lib/$LIB" >/dev/null
+    pushd "$LIB" >/dev/null
 
     # Test with just "core" enabled.
     cargo +nightly test --no-default-features --features core

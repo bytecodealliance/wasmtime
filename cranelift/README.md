@@ -104,7 +104,7 @@ feature. This currently requires nightly rust.
 For example, to build \`cranelift-codegen\`:
 
 ``` {.sourceCode .sh}
-cd lib/codegen
+cd cranelift-codegen
 cargo build --no-default-features --features core
 ```
 
