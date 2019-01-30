@@ -12,7 +12,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = "0.26.0"
-cranelift-entity = "0.26.0"
+cranelift-codegen = "0.28.0"
+cranelift-entity = "0.28.0"
 wasmtime-environ = { path = "../environ" }
 faerie = "0.6.0"
