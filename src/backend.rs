@@ -577,6 +577,127 @@ macro_rules! unop {
     }
 }
 
+// TODO: Support immediate `count` parameters
+macro_rules! shift {
+    ($name:ident, $reg_ty:ident, $instr:ident, $const_fallback:expr) => {
+        pub fn $name(&mut self) {
+            enum RestoreRcx {
+                MoveValBack(GPR),
+                PopRcx,
+            }
+
+            let count = self.pop();
+            let mut val = self.pop();
+
+            let (free_count, restore_rcx) = match count.location(&self.block_state.locals) {
+                // TODO: What if count is `Value::Temp(RCX)`? How do we correctly free it?
+                ValueLocation::Reg(RCX) => { (true, None) }
+                count_loc => {
+                    let out = match val {
+                        Value::Temp(RCX) => {
+                            let new_val = self.block_state.regs.take_scratch_gpr();
+                            self.copy_value(&ValueLocation::Reg(RCX), &mut ValueLocation::Reg(new_val));
+                            self.free_value(val);
+                            val = Value::Temp(new_val);
+
+                            None
+                        }
+                        Value::Local(i) => {
+                            let val_loc = self.block_state.locals.get(i);
+                            if val_loc == ValueLocation::Reg(RCX) {
+                                let unshifted_reg = self.block_state.regs.take_scratch_gpr();
+                                let shifted_reg = self.block_state.regs.take_scratch_gpr();
+
+                                let unshifted = ValueLocation::Reg(unshifted_reg);
+                                let shifted = ValueLocation::Reg(shifted_reg);
+
+                                self.copy_value(&val_loc, &mut {unshifted});
+                                self.free_value(val);
+                                self.copy_value(&unshifted, &mut {shifted});
+
+                                val = Value::Temp(shifted_reg);
+
+                                Some(RestoreRcx::MoveValBack(unshifted_reg))
+                            } else {
+                                if self.block_state.regs.is_free(RCX) {
+                                    None
+                                } else {
+                                    dynasm!(self.asm
+                                        ; push rcx
+                                    );
+                                    Some(RestoreRcx::PopRcx)
+                                }
+                            }
+                        }
+                        _ => {
+                            if self.block_state.regs.is_free(RCX) {
+                                None
+                            } else {
+                                dynasm!(self.asm
+                                    ; push rcx
+                                );
+                                Some(RestoreRcx::PopRcx)
+                            }
+                        }
+                    };
+
+                    match count_loc {
+                        ValueLocation::Reg(gpr) => {
+                            dynasm!(self.asm
+                                ; mov cl, Rb(gpr)
+                            );
+                        }
+                        ValueLocation::Stack(offset) => {
+                            let offset = self.adjusted_offset(offset);
+                            dynasm!(self.asm
+                                ; mov cl, [rsp + offset]
+                            );
+                        }
+                        ValueLocation::Immediate(imm) => {
+                            dynasm!(self.asm
+                                ; mov cl, imm as i8
+                            );
+                        }
+                    }
+
+                    self.free_value(count);
+
+                    (false, out)
+                }
+            };
+
+            let reg = self.into_temp_reg(val);
+            assert_ne!(reg, RCX);
+
+            dynasm!(self.asm
+                ; $instr $reg_ty(reg), cl
+            );
+
+            self.free_value(val);
+            if free_count {
+                self.free_value(count);
+            }
+
+            match restore_rcx {
+                Some(RestoreRcx::MoveValBack(gpr)) => {
+                    dynasm!(self.asm
+                        ; mov rcx, Rq(gpr)
+                    );
+                    self.block_state.regs.release_scratch_gpr(gpr);
+                }
+                Some(RestoreRcx::PopRcx) => {
+                    dynasm!(self.asm
+                        ; pop rcx
+                    );
+                }
+                None => {}
+            }
+
+            self.push(Value::Temp(reg));
+        }
+    }
+}
+
 macro_rules! cmp_i32 {
     ($name:ident, $instr:ident, $reverse_instr:ident, $const_fallback:expr) => {
         pub fn $name(&mut self) {
@@ -959,6 +1080,8 @@ macro_rules! store {
 
             assert!(offset <= i32::max_value() as u32);
 
+            // TODO: Is this necessary or is this ensured by the validation step?
+            //       In other places we assume the wasm is validated.
             if !self.has_memory {
                 return Err(Error::Input(
                     concat!(
@@ -1174,8 +1297,11 @@ impl Context<'_> {
         }
     }
 
-    fn copy_value(&mut self, src: ValueLocation, dst: ValueLocation) {
-        match (src, dst) {
+    // The `&` and `&mut` aren't necessary (`ValueLocation` is copy) but it ensures that we don't get
+    // the arguments the wrong way around. In the future we want to have a `ReadLocation` and `WriteLocation`
+    // so we statically can't write to a literal so this will become a non-issue.
+    fn copy_value(&mut self, src: &ValueLocation, dst: &mut ValueLocation) {
+        match (*src, *dst) {
             (ValueLocation::Stack(in_offset), ValueLocation::Stack(out_offset)) => {
                 let in_offset = self.adjusted_offset(in_offset);
                 let out_offset = self.adjusted_offset(out_offset);
@@ -1413,7 +1539,7 @@ impl Context<'_> {
             .iter()
             .zip(&locals.register_locals)
         {
-            self.copy_value(src.best_loc(), dst.best_loc());
+            self.copy_value(&src.best_loc(), &mut dst.best_loc());
         }
 
         for (src, dst) in self
@@ -1498,7 +1624,7 @@ impl Context<'_> {
         };
 
         let src = to_move.location(&self.block_state.locals);
-        self.copy_value(src, dst);
+        self.copy_value(&src, &mut { dst });
         if src != dst {
             self.free_value(to_move);
         }
@@ -1619,6 +1745,18 @@ impl Context<'_> {
     commutative_binop_i64!(i64_and, and, |a, b| a & b);
     commutative_binop_i64!(i64_or, or, |a, b| a | b);
     commutative_binop_i64!(i64_xor, xor, |a, b| a ^ b);
+
+    shift!(i32_shl, Rd, shl, |a, b| (a as i32).wrapping_shl(b as _));
+    shift!(i32_shr_s, Rd, sar, |a, b| (a as i32).wrapping_shr(b as _));
+    shift!(i32_shr_u, Rd, shr, |a, b| (a as u32).wrapping_shr(b as _));
+    shift!(i32_rotl, Rd, rol, |a, b| (a as u32).rotate_left(b as _));
+    shift!(i32_rotr, Rd, ror, |a, b| (a as u32).rotate_right(b as _));
+
+    shift!(i64_shl, Rq, shl, |a, b| (a as i64).wrapping_shl(b as _));
+    shift!(i64_shr_s, Rq, sar, |a, b| (a as i64).wrapping_shr(b as _));
+    shift!(i64_shr_u, Rq, shr, |a, b| (a as u64).wrapping_shr(b as _));
+    shift!(i64_rotl, Rq, rol, |a, b| (a as u64).rotate_left(b as _));
+    shift!(i64_rotr, Rq, ror, |a, b| (a as u64).rotate_right(b as _));
 
     // `sub` is not commutative, so we have to handle it differently (we _must_ use the `op1`
     // temp register as the output)
@@ -1853,7 +1991,7 @@ impl Context<'_> {
             *cur = ArgLoc::from_loc(dst_loc);
         }
 
-        self.copy_value(val_loc, dst_loc);
+        self.copy_value(&val_loc, &mut { dst_loc });
         self.free_value(val);
     }
 
@@ -1874,7 +2012,7 @@ impl Context<'_> {
             *cur = ArgLoc::from_loc(dst_loc);
         }
 
-        self.copy_value(val_loc, dst_loc);
+        self.copy_value(&val_loc, &mut { dst_loc });
 
         match (val_loc, dst_loc) {
             (ValueLocation::Stack(_), ValueLocation::Reg(_)) => {
@@ -1963,7 +2101,7 @@ impl Context<'_> {
                             ((self.block_state.locals.num_local_stack_slots - 1 - i as u32)
                                 * WORD_SIZE) as _;
                         let dst = ValueLocation::Stack(offset);
-                        self.copy_value(ValueLocation::Reg(reg), dst);
+                        self.copy_value(&ValueLocation::Reg(reg), &mut { dst });
                         self.block_state.locals.register_locals[i].add_stack(offset);
                     }
                 }
@@ -2278,6 +2416,10 @@ impl Context<'_> {
         // We don't need to clean up the stack - RSP is restored and
         // the calling function has its own register stack and will
         // stomp on the registers from our stack if necessary.
+        // TODO: Because every function has a hidden argument this is currently
+        //       always called. We should lazily initialise the stack to avoid
+        //       this but it introduces complexity around branch points. We
+        //       should latch on to the `end_locals` code for this.
         if func.should_generate_epilogue {
             dynasm!(self.asm
                 ; mov rsp, rbp

@@ -134,6 +134,11 @@ mod op32 {
     binop_test!(le_s, |a, b| if a <= b { 1 } else { 0 });
     binop_test!(gt_s, |a, b| if a > b { 1 } else { 0 });
     binop_test!(ge_s, |a, b| if a >= b { 1 } else { 0 });
+    binop_test!(shl, |a, b| (a as i32).wrapping_shl(b as _));
+    binop_test!(shr_s, |a, b| (a as i32).wrapping_shr(b as _));
+    binop_test!(shr_u, |a, b| (a as u32).wrapping_shr(b as _) as i32);
+    binop_test!(rotl, |a, b| (a as u32).rotate_left(b as _) as i32);
+    binop_test!(rotr, |a, b| (a as u32).rotate_right(b as _) as i32);
 }
 
 mod op64 {
@@ -266,6 +271,11 @@ mod op64 {
     binop_test!(le_s, |a, b| if a <= b { 1 } else { 0 }, i32);
     binop_test!(gt_s, |a, b| if a > b { 1 } else { 0 }, i32);
     binop_test!(ge_s, |a, b| if a >= b { 1 } else { 0 }, i32);
+    binop_test!(shl, |a, b| (a as i64).wrapping_shl(b as _));
+    binop_test!(shr_s, |a, b| (a as i64).wrapping_shr(b as _));
+    binop_test!(shr_u, |a, b| (a as u64).wrapping_shr(b as _) as i64);
+    binop_test!(rotl, |a, b| (a as u64).rotate_left(b as _) as i64);
+    binop_test!(rotr, |a, b| (a as u64).rotate_right(b as _) as i64);
 }
 
 quickcheck! {

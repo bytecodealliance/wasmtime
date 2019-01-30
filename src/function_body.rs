@@ -1,6 +1,6 @@
 use backend::*;
 use error::Error;
-use module::{FuncTyStore, quickhash};
+use module::{quickhash, FuncTyStore};
 use wasmparser::{FunctionBody, Operator, Type};
 
 // TODO: Use own declared `Type` enum.
@@ -324,10 +324,7 @@ pub fn translate(
                 //       This doesn't require lookahead but it does require turning this loop into
                 //       a kind of state machine.
                 let mut control_frame = control_frames.pop().expect("control stack is never empty");
-                let mut labels = control_frame
-                    .kind
-                    .end_labels()
-                    .collect::<Vec<_>>();
+                let mut labels = control_frame.kind.end_labels().collect::<Vec<_>>();
 
                 let mut end = control_frame.block_state.end_locals.take();
 
@@ -395,6 +392,11 @@ pub fn translate(
             Operator::I32Or => ctx.i32_or(),
             Operator::I32Xor => ctx.i32_xor(),
             Operator::I32Mul => ctx.i32_mul(),
+            Operator::I32Shl => ctx.i32_shl(),
+            Operator::I32ShrS => ctx.i32_shr_s(),
+            Operator::I32ShrU => ctx.i32_shr_u(),
+            Operator::I32Rotl => ctx.i32_rotl(),
+            Operator::I32Rotr => ctx.i32_rotr(),
             Operator::I32Clz => ctx.i32_clz(),
             Operator::I32Ctz => ctx.i32_ctz(),
             Operator::I32Popcnt => ctx.i32_popcnt(),
@@ -415,6 +417,11 @@ pub fn translate(
             Operator::I64Or => ctx.i64_or(),
             Operator::I64Xor => ctx.i64_xor(),
             Operator::I64Mul => ctx.i64_mul(),
+            Operator::I64Shl => ctx.i64_shl(),
+            Operator::I64ShrS => ctx.i64_shr_s(),
+            Operator::I64ShrU => ctx.i64_shr_u(),
+            Operator::I64Rotl => ctx.i64_rotl(),
+            Operator::I64Rotr => ctx.i64_rotr(),
             Operator::I64Clz => ctx.i64_clz(),
             Operator::I64Ctz => ctx.i64_ctz(),
             Operator::I64Popcnt => ctx.i64_popcnt(),
