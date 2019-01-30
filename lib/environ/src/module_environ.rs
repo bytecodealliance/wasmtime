@@ -1,7 +1,6 @@
 use crate::func_environ::FuncEnvironment;
 use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
 use crate::tunables::Tunables;
-use core::clone::Clone;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
@@ -10,6 +9,7 @@ use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     SignatureIndex, Table, TableIndex, WasmResult,
 };
+use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 
@@ -80,14 +80,10 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result.target_config
     }
 
-    fn declare_signature(&mut self, sig: &ir::Signature) {
-        let sig = translate_signature(sig.clone(), self.pointer_type());
+    fn declare_signature(&mut self, sig: ir::Signature) {
+        let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
         self.result.module.signatures.push(sig);
-    }
-
-    fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature {
-        &self.result.module.signatures[sig_index]
     }
 
     fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &str, field: &str) {
@@ -104,16 +100,8 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .push((String::from(module), String::from(field)));
     }
 
-    fn get_num_func_imports(&self) -> usize {
-        self.result.module.imported_funcs.len()
-    }
-
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {
         self.result.module.functions.push(sig_index);
-    }
-
-    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
-        self.result.module.functions[func_index]
     }
 
     fn declare_global_import(&mut self, global: Global, module: &str, field: &str) {
@@ -132,10 +120,6 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_global(&mut self, global: Global) {
         self.result.module.globals.push(global);
-    }
-
-    fn get_global(&self, global_index: GlobalIndex) -> &Global {
-        &self.result.module.globals[global_index]
     }
 
     fn declare_table_import(&mut self, table: Table, module: &str, field: &str) {
@@ -163,13 +147,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         table_index: TableIndex,
         base: Option<GlobalIndex>,
         offset: usize,
-        elements: Vec<FuncIndex>,
+        elements: Box<[FuncIndex]>,
     ) {
         self.result.module.table_elements.push(TableElements {
             table_index,
             base,
             offset,
-            elements,
+            elements: elements.to_vec(),
         });
     }
 
