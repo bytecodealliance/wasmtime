@@ -39,18 +39,14 @@ use cranelift_native;
 use docopt::Docopt;
 use file_per_thread_logger;
 use pretty_env_logger;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::rc::Rc;
 use wabt;
-use wasmtime_jit::{instantiate, ActionOutcome, Compiler, Namespace};
+use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wast::instantiate_spectest;
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
@@ -121,26 +117,17 @@ fn main() {
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut compiler = Compiler::new(isa);
-
-    let mut namespace = Namespace::new();
-    let global_exports = Rc::new(RefCell::new(HashMap::new()));
+    let mut context = Context::with_isa(isa);
 
     // Make spectest available by default.
-    namespace.instance(
-        Some("spectest"),
+    context.instance(
+        Some("spectest".to_owned()),
         instantiate_spectest().expect("instantiating spectest"),
     );
 
     for filename in &args.arg_file {
         let path = Path::new(&filename);
-        match handle_module(
-            &mut compiler,
-            &mut namespace,
-            Rc::clone(&global_exports),
-            &args,
-            path,
-        ) {
+        match handle_module(&mut context, &args, path) {
             Ok(()) => {}
             Err(message) => {
                 let name = path.as_os_str().to_string_lossy();
@@ -151,13 +138,7 @@ fn main() {
     }
 }
 
-fn handle_module(
-    compiler: &mut Compiler,
-    namespace: &mut Namespace,
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
-    args: &Args,
-    path: &Path,
-) -> Result<(), String> {
+fn handle_module(context: &mut Context, args: &Args, path: &Path) -> Result<(), String> {
     let mut data =
         read_to_end(path.to_path_buf()).map_err(|err| String::from(err.description()))?;
 
@@ -167,16 +148,14 @@ fn handle_module(
     }
 
     // Create a new `Instance` by compiling and instantiating a wasm module.
-    let instance =
-        instantiate(compiler, &data, namespace, global_exports).map_err(|e| e.to_string())?;
-
-    // Register it in the namespace.
-    let index = namespace.instance(None, instance);
+    let index = context
+        .instantiate_module(None, &data)
+        .map_err(|e| e.to_string())?;
 
     // If a function to invoke was given, invoke it.
     if let Some(ref f) = args.flag_invoke {
-        match namespace
-            .invoke(compiler, index, f, &[])
+        match context
+            .invoke_indexed(index, f, &[])
             .map_err(|e| e.to_string())?
         {
             ActionOutcome::Returned { .. } => {}

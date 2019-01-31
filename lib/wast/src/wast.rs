@@ -1,15 +1,11 @@
 use crate::spectest::instantiate_spectest;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
-use std::rc::Rc;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
-use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_jit::{
-    instantiate, ActionError, ActionOutcome, Compiler, Instance, InstanceIndex, InstantiationError,
-    Namespace, RuntimeValue, SetupError,
+    ActionError, ActionOutcome, Compiler, Context, InstanceIndex, InstantiationError, RuntimeValue,
+    UnknownInstance,
 };
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
@@ -22,21 +18,6 @@ fn runtime_value(v: Value) -> RuntimeValue {
     }
 }
 
-/// Indicates an unknown instance was specified.
-#[derive(Fail, Debug)]
-pub struct UnknownInstance {
-    instance: Option<String>,
-}
-
-impl fmt::Display for UnknownInstance {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.instance {
-            None => write!(f, "no default instance present"),
-            Some(ref name) => write!(f, "no instance {} present", name),
-        }
-    }
-}
-
 /// Error message used by `WastContext`.
 #[derive(Fail, Debug)]
 pub enum WastError {
@@ -44,6 +25,8 @@ pub enum WastError {
     Assert(String),
     /// An unknown instance name was used.
     Instance(UnknownInstance),
+    /// No default instance has been registered yet.
+    NoDefaultInstance,
     /// An error occured while performing an action.
     Action(ActionError),
     /// An action trapped.
@@ -63,6 +46,7 @@ impl fmt::Display for WastError {
         match *self {
             WastError::Assert(ref message) => write!(f, "Assert command failed: {}", message),
             WastError::Instance(ref error) => error.fmt(f),
+            WastError::NoDefaultInstance => write!(f, "no default instance defined yet"),
             WastError::Action(ref error) => error.fmt(f),
             WastError::Trap(ref message) => write!(f, "trap: {}", message),
             WastError::Type(ref message) => write!(f, "type error: {}", message),
@@ -85,10 +69,11 @@ pub struct WastFileError {
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
 pub struct WastContext {
-    /// A namespace of wasm modules, keyed by an optional name.
+    /// Wast files have a concept of a "current" module, which is the most
+    /// recently defined.
     current: Option<InstanceIndex>,
-    namespace: Namespace,
-    compiler: Box<Compiler>,
+
+    context: Context,
 }
 
 impl WastContext {
@@ -96,56 +81,23 @@ impl WastContext {
     pub fn new(compiler: Box<Compiler>) -> Self {
         Self {
             current: None,
-            namespace: Namespace::new(),
-            compiler,
+            context: Context::new(compiler),
         }
     }
 
-    fn validate(&mut self, data: &[u8]) -> Result<(), String> {
-        let config = ValidatingParserConfig {
-            operator_config: OperatorValidatorConfig {
-                enable_threads: false,
-                enable_reference_types: false,
-            },
-            mutable_global_imports: true,
-        };
-
-        // TODO: Fix Cranelift to be able to perform validation itself, rather
-        // than calling into wasmparser ourselves here.
-        if validate(data, Some(config)) {
-            Ok(())
-        } else {
-            // TODO: Work with wasmparser to get better error messages.
-            Err("module did not validate".to_owned())
-        }
-    }
-
-    fn instantiate(&mut self, module: ModuleBinary) -> Result<Instance, SetupError> {
-        let data = module.into_vec();
-
-        self.validate(&data).map_err(SetupError::Validate)?;
-
-        instantiate(
-            &mut *self.compiler,
-            &data,
-            &mut self.namespace,
-            Rc::new(RefCell::new(HashMap::new())),
-        )
-    }
-
-    fn get_index(&mut self, instance_name: &Option<String>) -> Result<InstanceIndex, WastError> {
-        let index = *if let Some(instance_name) = instance_name {
-            self.namespace
+    fn get_instance_index(
+        &mut self,
+        instance_name: Option<&str>,
+    ) -> Result<InstanceIndex, WastError> {
+        let index = if let Some(instance_name) = instance_name {
+            self.context
                 .get_instance_index(instance_name)
-                .ok_or_else(|| {
-                    WastError::Instance(UnknownInstance {
-                        instance: Some(instance_name.to_string()),
-                    })
-                })
+                .map_err(WastError::Instance)
         } else {
             self.current
                 .as_mut()
-                .ok_or_else(|| WastError::Instance(UnknownInstance { instance: None }))
+                .cloned()
+                .ok_or_else(|| WastError::NoDefaultInstance)
         }?;
 
         Ok(index)
@@ -154,7 +106,7 @@ impl WastContext {
     /// Register "spectest" which is used by the spec testsuite.
     pub fn register_spectest(&mut self) -> Result<(), InstantiationError> {
         let instance = instantiate_spectest()?;
-        self.namespace.instance(Some("spectest"), instance);
+        self.context.instance(Some("spectest".to_owned()), instance);
         Ok(())
     }
 
@@ -179,18 +131,17 @@ impl WastContext {
         instance_name: Option<String>,
         module: ModuleBinary,
     ) -> Result<(), ActionError> {
-        let instance = self.instantiate(module).map_err(ActionError::Setup)?;
         let index = self
-            .namespace
-            .instance(instance_name.as_ref().map(String::as_str), instance);
+            .context
+            .instantiate_module(instance_name, &module.into_vec())?;
         self.current = Some(index);
         Ok(())
     }
 
     /// Register an instance to make it available for performing actions.
     fn register(&mut self, name: Option<String>, as_name: String) -> Result<(), WastError> {
-        let index = self.get_index(&name)?;
-        self.namespace.register(as_name, index);
+        let index = self.get_instance_index(name.as_ref().map(|x| &**x))?;
+        self.context.alias_for_indexed(index, as_name);
         Ok(())
     }
 
@@ -205,9 +156,9 @@ impl WastContext {
             .iter()
             .map(|arg| runtime_value(*arg))
             .collect::<Vec<_>>();
-        let index = self.get_index(&instance_name)?;
-        self.namespace
-            .invoke(&mut *self.compiler, index, field, &value_args)
+        let index = self.get_instance_index(instance_name.as_ref().map(|x| &**x))?;
+        self.context
+            .invoke_indexed(index, field, &value_args)
             .map_err(WastError::Action)
     }
 
@@ -217,14 +168,10 @@ impl WastContext {
         instance_name: Option<String>,
         field: &str,
     ) -> Result<ActionOutcome, WastError> {
-        let index = self.get_index(&instance_name)?;
-        let value = self
-            .namespace
-            .get(index, field)
-            .map_err(WastError::Action)?;
-        Ok(ActionOutcome::Returned {
-            values: vec![value],
-        })
+        let index = self.get_instance_index(instance_name.as_ref().map(|x| &**x))?;
+        self.context
+            .get_indexed(index, field)
+            .map_err(WastError::Action)
     }
 
     /// Perform the action of a `PerformAction`.
