@@ -86,6 +86,18 @@ fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     Ok(buf)
 }
 
+fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
+    let data = read_to_end(path).map_err(|err| err.to_string())?;
+
+    // If data is a wasm binary, use that. If it's using wat format, convert it
+    // to a wasm binary with wat2wasm.
+    Ok(if data.starts_with(&[b'\0', b'a', b's', b'm']) {
+        data
+    } else {
+        wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?
+    })
+}
+
 fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
@@ -139,13 +151,8 @@ fn main() {
 }
 
 fn handle_module(context: &mut Context, args: &Args, path: &Path) -> Result<(), String> {
-    let mut data =
-        read_to_end(path.to_path_buf()).map_err(|err| String::from(err.description()))?;
-
-    // If data is using wat-format, first convert data to wasm.
-    if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
-        data = wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?;
-    }
+    // Read the wasm module binary.
+    let data = read_wasm(path.to_path_buf())?;
 
     // Create a new `Instance` by compiling and instantiating a wasm module.
     let index = context
