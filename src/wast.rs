@@ -71,6 +71,13 @@ fn main() {
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
+
+    if args.flag_debug {
+        pretty_env_logger::init();
+    } else {
+        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+    }
+
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
@@ -79,12 +86,6 @@ fn main() {
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
         flag_builder.enable("enable_verifier").unwrap();
-    }
-
-    if args.flag_debug {
-        pretty_env_logger::init();
-    } else {
-        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
     }
 
     // Enable optimization if requested.
