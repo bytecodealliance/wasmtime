@@ -760,8 +760,6 @@ impl Instance {
     pub fn lookup(&mut self, field: &str) -> Option<Export> {
         let export = if let Some(export) = self.module.exports.get(field) {
             export.clone()
-        } else if let Some(export) = self.mmap_field.contents().lookup_global_export(field) {
-            return Some(export.clone());
         } else {
             return None;
         };

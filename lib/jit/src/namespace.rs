@@ -39,22 +39,22 @@ impl Namespace {
 
     /// Install a new `Instance` in this `Namespace`, optionally with the
     /// given name, and return its index.
-    pub fn instance(&mut self, instance_name: Option<&str>, instance: Instance) -> InstanceIndex {
+    pub fn instance(&mut self, instance_name: Option<String>, instance: Instance) -> InstanceIndex {
         let index = self.instances.push(instance);
         if let Some(instance_name) = instance_name {
-            self.names.insert(instance_name.into(), index);
+            self.names.insert(instance_name, index);
         }
         index
     }
 
     /// Get the instance index registered with the given `instance_name`.
-    pub fn get_instance_index(&mut self, instance_name: &str) -> Option<&mut InstanceIndex> {
-        self.names.get_mut(instance_name)
+    pub fn get_instance_index(&mut self, instance_name: &str) -> Option<InstanceIndex> {
+        self.names.get_mut(instance_name).cloned()
     }
 
-    /// Register an instance with a given name.
-    pub fn register(&mut self, name: String, index: InstanceIndex) {
-        self.names.insert(name, index);
+    /// Register an additional name for an existing registered instance.
+    pub fn alias_for_indexed(&mut self, existing_index: InstanceIndex, new_name: String) {
+        self.names.insert(new_name, existing_index);
     }
 
     /// Invoke an exported function from an instance.

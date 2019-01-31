@@ -44,6 +44,7 @@ extern crate failure_derive;
 mod action;
 mod code_memory;
 mod compiler;
+mod context;
 mod instantiate;
 mod link;
 mod namespace;
@@ -52,6 +53,7 @@ mod target_tunables;
 
 pub use crate::action::{ActionError, ActionOutcome, RuntimeValue};
 pub use crate::compiler::Compiler;
+pub use crate::context::{Context, ContextError, UnknownInstance};
 pub use crate::instantiate::{instantiate, CompiledModule, SetupError};
 pub use crate::link::link_module;
 pub use crate::namespace::{InstanceIndex, Namespace};
