@@ -15,7 +15,7 @@ version="0.28.0"
 #
 # The main Cargo.toml in the top-level directory is the cranelift-tools crate which we don't publish.
 echo "Updating crate versions to $version"
-for crate in . * cranelift-codegen/meta; do
+for crate in . cranelift-* cranelift-codegen/meta; do
     # Update the version number of this crate to $version.
     sed -i.bk -e "s/^version = .*/version = \"$version\"/" \
         "$crate/Cargo.toml"
