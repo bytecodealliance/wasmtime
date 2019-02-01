@@ -387,7 +387,7 @@ impl InstanceContents {
         };
 
         // Make the call.
-        unsafe { wasmtime_call(callee_address, callee_vmctx) }
+        unsafe { wasmtime_call(callee_vmctx, callee_address) }
             .map_err(InstantiationError::StartTrap)
     }
 
