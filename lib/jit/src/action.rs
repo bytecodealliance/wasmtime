@@ -153,13 +153,16 @@ pub fn invoke(
     };
 
     for (index, value) in args.iter().enumerate() {
-        assert_eq!(value.value_type(), signature.params[index].value_type);
+        // Add one to account for the leading vmctx argument.
+        assert_eq!(value.value_type(), signature.params[index + 1].value_type);
     }
 
     // TODO: Support values larger than u64. And pack the values into memory
     // instead of just using fixed-sized slots.
+    // Subtract one becase we don't pass the vmctx argument in `values_vec`.
     let value_size = mem::size_of::<u64>();
-    let mut values_vec: Vec<u64> = vec![0; max(signature.params.len(), signature.returns.len())];
+    let mut values_vec: Vec<u64> =
+        vec![0; max(signature.params.len() - 1, signature.returns.len())];
 
     // Store the argument values into `values_vec`.
     for (index, arg) in args.iter().enumerate() {
@@ -186,9 +189,9 @@ pub fn invoke(
     // Call the trampoline.
     if let Err(message) = unsafe {
         wasmtime_call_trampoline(
+            callee_vmctx,
             exec_code_buf,
             values_vec.as_mut_ptr() as *mut u8,
-            callee_vmctx,
         )
     } {
         return Ok(ActionOutcome::Trapped { message });

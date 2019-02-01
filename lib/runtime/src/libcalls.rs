@@ -90,9 +90,9 @@ pub extern "C" fn wasmtime_f64_nearest(x: f64) -> f64 {
 /// Implementation of memory.grow for locally-defined 32-bit memories.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_memory32_grow(
+    vmctx: *mut VMContext,
     delta: u32,
     memory_index: u32,
-    vmctx: *mut VMContext,
 ) -> u32 {
     let instance_contents = (&mut *vmctx).instance_contents();
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
@@ -105,9 +105,9 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
 /// Implementation of memory.grow for imported 32-bit memories.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_imported_memory32_grow(
+    vmctx: *mut VMContext,
     delta: u32,
     memory_index: u32,
-    vmctx: *mut VMContext,
 ) -> u32 {
     let instance_contents = (&mut *vmctx).instance_contents();
     let memory_index = MemoryIndex::from_u32(memory_index);
@@ -119,7 +119,7 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_grow(
 
 /// Implementation of memory.size for locally-defined 32-bit memories.
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_memory32_size(memory_index: u32, vmctx: *mut VMContext) -> u32 {
+pub unsafe extern "C" fn wasmtime_memory32_size(vmctx: *mut VMContext, memory_index: u32) -> u32 {
     let instance_contents = (&mut *vmctx).instance_contents();
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
 
@@ -129,8 +129,8 @@ pub unsafe extern "C" fn wasmtime_memory32_size(memory_index: u32, vmctx: *mut V
 /// Implementation of memory.size for imported 32-bit memories.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_imported_memory32_size(
-    memory_index: u32,
     vmctx: *mut VMContext,
+    memory_index: u32,
 ) -> u32 {
     let instance_contents = (&mut *vmctx).instance_contents();
     let memory_index = MemoryIndex::from_u32(memory_index);

@@ -91,9 +91,9 @@ fn push_jmp_buf(buf: jmp_buf) {
 /// return values will be written.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_call_trampoline(
+    vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
-    vmctx: *mut VMContext,
 ) -> Result<(), String> {
     // Reset JMP_BUFS if the stack is unwound through this point.
     let _guard = ScopeGuard::new();
@@ -106,8 +106,8 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
     push_jmp_buf(buf);
 
     // Call the function!
-    let func: fn(*mut u8, *mut VMContext) = mem::transmute(callee);
-    func(values_vec, vmctx);
+    let func: fn(*mut VMContext, *mut u8) = mem::transmute(callee);
+    func(vmctx, values_vec);
 
     Ok(())
 }
@@ -116,8 +116,8 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
 /// return values.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_call(
-    callee: *const VMFunctionBody,
     vmctx: *mut VMContext,
+    callee: *const VMFunctionBody,
 ) -> Result<(), String> {
     // Reset JMP_BUFS if the stack is unwound through this point.
     let _guard = ScopeGuard::new();

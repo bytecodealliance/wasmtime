@@ -108,9 +108,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn get_memory_grow_sig(&self, func: &mut Function) -> ir::SigRef {
         func.import_signature(Signature {
             params: vec![
-                AbiParam::new(I32),
-                AbiParam::new(I32),
                 AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                AbiParam::new(I32),
+                AbiParam::new(I32),
             ],
             returns: vec![AbiParam::new(I32)],
             call_conv: self.target_config.default_call_conv,
@@ -159,8 +159,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn get_memory32_size_sig(&self, func: &mut Function) -> ir::SigRef {
         func.import_signature(Signature {
             params: vec![
-                AbiParam::new(I32),
                 AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                AbiParam::new(I32),
             ],
             returns: vec![AbiParam::new(I32)],
             call_conv: self.target_config.default_call_conv,
@@ -446,9 +446,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         );
 
         let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
-        real_call_args.extend_from_slice(call_args);
 
-        // Append the callee vmctx address.
+        // First append the callee vmctx address.
         let vmctx = pos.ins().load(
             pointer_type,
             mem_flags,
@@ -456,6 +455,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             i32::from(self.offsets.vmcaller_checked_anyfunc_vmctx()),
         );
         real_call_args.push(vmctx);
+
+        // Then append the regular call arguments.
+        real_call_args.extend_from_slice(call_args);
 
         Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
     }
@@ -468,11 +470,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
-        real_call_args.extend_from_slice(call_args);
 
         // Handle direct calls to locally-defined functions.
         if !self.module.is_imported_function(callee_index) {
+            // First append the callee vmctx address.
             real_call_args.push(pos.func.special_param(ArgumentPurpose::VMContext).unwrap());
+
+            // Then append the regular call arguments.
+            real_call_args.extend_from_slice(call_args);
+
             return Ok(pos.ins().call(callee, &real_call_args));
         }
 
@@ -490,11 +496,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             cast::i32(self.offsets.vmctx_vmfunction_import_body(callee_index)).unwrap();
         let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
 
-        // Append the callee vmctx address.
+        // First append the callee vmctx address.
         let vmctx_offset =
             cast::i32(self.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
         let vmctx = pos.ins().load(pointer_type, mem_flags, base, vmctx_offset);
         real_call_args.push(vmctx);
+
+        // Then append the regular call arguments.
+        real_call_args.extend_from_slice(call_args);
 
         Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
     }
@@ -511,7 +520,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
         let call_inst = pos
             .ins()
-            .call(memory_grow_func, &[val, memory_index, vmctx]);
+            .call(memory_grow_func, &[vmctx, val, memory_index]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
@@ -524,7 +533,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let (memory_size_func, index_arg) = self.get_memory_size_func(&mut pos.func, index);
         let memory_index = pos.ins().iconst(I32, index_arg as i64);
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-        let call_inst = pos.ins().call(memory_size_func, &[memory_index, vmctx]);
+        let call_inst = pos.ins().call(memory_size_func, &[vmctx, memory_index]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 }

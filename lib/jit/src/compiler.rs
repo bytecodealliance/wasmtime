@@ -135,13 +135,13 @@ fn make_trampoline(
     let pointer_type = isa.pointer_type();
     let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
-    // Add the `values_vec` parameter.
-    wrapper_sig.params.push(ir::AbiParam::new(pointer_type));
     // Add the `vmctx` parameter.
     wrapper_sig.params.push(ir::AbiParam::special(
         pointer_type,
         ir::ArgumentPurpose::VMContext,
     ));
+    // Add the `values_vec` parameter.
+    wrapper_sig.params.push(ir::AbiParam::new(pointer_type));
 
     let mut context = Context::new();
     context.func = ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wrapper_sig);
@@ -155,7 +155,7 @@ fn make_trampoline(
         builder.seal_block(block0);
 
         let mut callee_args = Vec::new();
-        let (values_vec_ptr_val, vmctx_ptr_val) = {
+        let (vmctx_ptr_val, values_vec_ptr_val) = {
             let params = builder.func.dfg.ebb_params(block0);
             (params[0], params[1])
         };
@@ -164,11 +164,12 @@ fn make_trampoline(
         let mflags = ir::MemFlags::trusted();
         for (i, r) in signature.params.iter().enumerate() {
             let value = match r.purpose {
+                // i - 1 because vmctx isn't passed through `values_vec`.
                 ir::ArgumentPurpose::Normal => builder.ins().load(
                     r.value_type,
                     mflags,
                     values_vec_ptr_val,
-                    (i * value_size) as i32,
+                    ((i - 1) * value_size) as i32,
                 ),
                 ir::ArgumentPurpose::VMContext => vmctx_ptr_val,
                 other => panic!("unsupported argument purpose {}", other),
