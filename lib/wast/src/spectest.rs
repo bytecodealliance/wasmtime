@@ -8,38 +8,38 @@ use std::rc::Rc;
 use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, Export, MemoryPlan, Module, TablePlan};
 use wasmtime_jit::target_tunables;
-use wasmtime_runtime::{Imports, Instance, InstantiationError, VMFunctionBody};
+use wasmtime_runtime::{Imports, Instance, InstantiationError, VMContext, VMFunctionBody};
 
 extern "C" fn spectest_print() {}
 
 #[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_i32(x: i32) {
+extern "C" fn spectest_print_i32(_vmctx: &mut VMContext, x: i32) {
     println!("{}: i32", x);
 }
 
 #[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_i64(x: i64) {
+extern "C" fn spectest_print_i64(_vmctx: &mut VMContext, x: i64) {
     println!("{}: i64", x);
 }
 
 #[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_f32(x: f32) {
+extern "C" fn spectest_print_f32(_vmctx: &mut VMContext, x: f32) {
     println!("{}: f32", x);
 }
 
 #[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_f64(x: f64) {
+extern "C" fn spectest_print_f64(_vmctx: &mut VMContext, x: f64) {
     println!("{}: f64", x);
 }
 
 #[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_i32_f32(x: i32, y: f32) {
+extern "C" fn spectest_print_i32_f32(_vmctx: &mut VMContext, x: i32, y: f32) {
     println!("{}: i32", x);
     println!("{}: f32", y);
 }
 
 #[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_f64_f64(x: f64, y: f64) {
+extern "C" fn spectest_print_f64_f64(_vmctx: &mut VMContext, x: f64, y: f64) {
     println!("{}: f64", x);
     println!("{}: f64", y);
 }
