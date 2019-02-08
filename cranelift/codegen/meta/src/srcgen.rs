@@ -65,8 +65,8 @@ impl Formatter {
     }
 
     /// Add an indented line.
-    pub fn line(&mut self, contents: &str) {
-        let indented_line = format!("{}{}\n", self.get_indent(), contents);
+    pub fn line(&mut self, contents: impl AsRef<str>) {
+        let indented_line = format!("{}{}\n", self.get_indent(), contents.as_ref());
         self.lines.push(indented_line);
     }
 
@@ -77,11 +77,15 @@ impl Formatter {
     }
 
     /// Write `self.lines` to a file.
-    pub fn update_file(&self, filename: &str, directory: &str) -> Result<(), error::Error> {
+    pub fn update_file(
+        &self,
+        filename: impl AsRef<str>,
+        directory: &str,
+    ) -> Result<(), error::Error> {
         #[cfg(target_family = "windows")]
-        let path_str = format!("{}\\{}", directory, filename);
+        let path_str = format!("{}\\{}", directory, filename.as_ref());
         #[cfg(not(target_family = "windows"))]
-        let path_str = format!("{}/{}", directory, filename);
+        let path_str = format!("{}/{}", directory, filename.as_ref());
 
         let path = path::Path::new(&path_str);
         let mut f = fs::File::create(path)?;
@@ -99,14 +103,13 @@ impl Formatter {
     }
 
     /// Add a comment line.
-    pub fn comment(&mut self, s: &str) {
-        let commented_line = format!("// {}", s);
-        self.line(&commented_line);
+    pub fn comment(&mut self, s: impl AsRef<str>) {
+        self.line(format!("// {}", s.as_ref()));
     }
 
     /// Add a (multi-line) documentation comment.
-    pub fn doc_comment(&mut self, contents: &str) {
-        parse_multiline(contents)
+    pub fn doc_comment(&mut self, contents: impl AsRef<str>) {
+        parse_multiline(contents.as_ref())
             .iter()
             .map(|l| {
                 if l.len() == 0 {
@@ -120,7 +123,7 @@ impl Formatter {
 
     /// Add a match expression.
     pub fn add_match(&mut self, m: Match) {
-        self.line(&format!("match {} {{", m.expr));
+        self.line(format!("match {} {{", m.expr));
         self.indent(|fmt| {
             for (&(ref fields, ref body), ref names) in m.arms.iter() {
                 // name { fields } | name { fields } => { body }
@@ -135,7 +138,7 @@ impl Formatter {
                     })
                     .collect();
                 let lhs = conditions.join(" | ");
-                fmt.line(&format!("{} => {{", lhs));
+                fmt.line(format!("{} => {{", lhs));
                 fmt.indent(|fmt| {
                     fmt.line(body);
                 });
@@ -337,7 +340,7 @@ match x {
     #[test]
     fn fmt_can_add_type_to_lines() {
         let mut fmt = Formatter::new();
-        fmt.line(&format!("pub const {}: Type = Type({:#x});", "example", 0,));
+        fmt.line(format!("pub const {}: Type = Type({:#x});", "example", 0,));
         let expected_lines = vec!["pub const example: Type = Type(0x0);\n"];
         assert_eq!(fmt.lines, expected_lines);
     }

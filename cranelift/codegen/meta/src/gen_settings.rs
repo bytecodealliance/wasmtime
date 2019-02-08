@@ -23,34 +23,31 @@ fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatte
     };
     fmt.line("impl Flags {");
     fmt.indent(|fmt| {
-        fmt.doc_comment(&format!("Create flags {} settings group.", group.name));
+        fmt.doc_comment(format!("Create flags {} settings group.", group.name));
         fmt.line("#[allow(unused_variables)]");
-        fmt.line(&format!("pub fn new({}) -> Self {{", args));
+        fmt.line(format!("pub fn new({}) -> Self {{", args));
         fmt.indent(|fmt| {
-            fmt.line(&format!(
-                "let bvec = builder.state_for(\"{}\");",
-                group.name
-            ));
-            fmt.line(&format!(
+            fmt.line(format!("let bvec = builder.state_for(\"{}\");", group.name));
+            fmt.line(format!(
                 "let mut {} = Self {{ bytes: [0; {}] }};",
                 group.name,
                 group.byte_size()
             ));
-            fmt.line(&format!(
+            fmt.line(format!(
                 "debug_assert_eq!(bvec.len(), {});",
                 group.settings_size
             ));
-            fmt.line(&format!(
+            fmt.line(format!(
                 "{}.bytes[0..{}].copy_from_slice(&bvec);",
                 group.name, group.settings_size
             ));
 
             // Now compute the predicates.
             for p in &group.predicates {
-                fmt.comment(&format!("Precompute #{}.", p.number));
-                fmt.line(&format!("if {} {{", p.render(group)));
+                fmt.comment(format!("Precompute #{}.", p.number));
+                fmt.line(format!("if {} {{", p.render(group)));
                 fmt.indent(|fmt| {
-                    fmt.line(&format!(
+                    fmt.line(format!(
                         "{}.bytes[{}] |= 1 << {};",
                         group.name,
                         group.bool_start_byte_offset + p.number / 8,
@@ -69,14 +66,14 @@ fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatte
 
 /// Emit Display and FromStr implementations for enum settings.
 fn gen_to_and_from_str(name: &str, values: &[&'static str], fmt: &mut Formatter) {
-    fmt.line(&format!("impl fmt::Display for {} {{", name));
+    fmt.line(format!("impl fmt::Display for {} {{", name));
     fmt.indent(|fmt| {
         fmt.line("fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {");
         fmt.indent(|fmt| {
             fmt.line("f.write_str(match *self {");
             fmt.indent(|fmt| {
                 for v in values.iter() {
-                    fmt.line(&format!("{}::{} => \"{}\",", name, camel_case(v), v));
+                    fmt.line(format!("{}::{} => \"{}\",", name, camel_case(v), v));
                 }
             });
             fmt.line("})");
@@ -85,7 +82,7 @@ fn gen_to_and_from_str(name: &str, values: &[&'static str], fmt: &mut Formatter)
     });
     fmt.line("}");
 
-    fmt.line(&format!("impl str::FromStr for {} {{", name));
+    fmt.line(format!("impl str::FromStr for {} {{", name));
     fmt.indent(|fmt| {
         fmt.line("type Err = ();");
         fmt.line("fn from_str(s: &str) -> Result<Self, Self::Err> {");
@@ -93,7 +90,7 @@ fn gen_to_and_from_str(name: &str, values: &[&'static str], fmt: &mut Formatter)
             fmt.line("match s {");
             fmt.indent(|fmt| {
                 for v in values.iter() {
-                    fmt.line(&format!("\"{}\" => Ok({}::{}),", v, name, camel_case(v)));
+                    fmt.line(format!("\"{}\" => Ok({}::{}),", v, name, camel_case(v)));
                 }
                 fmt.line("_ => Err(()),");
             });
@@ -113,13 +110,13 @@ fn gen_enum_types(group: &SettingGroup, fmt: &mut Formatter) {
         };
         let name = camel_case(setting.name);
 
-        fmt.doc_comment(&format!("Values for `{}.{}`.", group.name, setting.name));
+        fmt.doc_comment(format!("Values for `{}.{}`.", group.name, setting.name));
         fmt.line("#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]");
-        fmt.line(&format!("pub enum {} {{", name));
+        fmt.line(format!("pub enum {} {{", name));
         fmt.indent(|fmt| {
             for v in values.iter() {
-                fmt.doc_comment(&format!("`{}`.", v));
-                fmt.line(&format!("{},", camel_case(v)));
+                fmt.doc_comment(format!("`{}`.", v));
+                fmt.line(format!("{},", camel_case(v)));
             }
         });
         fmt.line("}");
@@ -135,15 +132,15 @@ fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
         SpecificSetting::Bool(BoolSetting {
             predicate_number, ..
         }) => {
-            fmt.line(&format!("pub fn {}(&self) -> bool {{", setting.name));
+            fmt.line(format!("pub fn {}(&self) -> bool {{", setting.name));
             fmt.indent(|fmt| {
-                fmt.line(&format!("self.numbered_predicate({})", predicate_number));
+                fmt.line(format!("self.numbered_predicate({})", predicate_number));
             });
             fmt.line("}");
         }
         SpecificSetting::Enum(ref values) => {
             let ty = camel_case(setting.name);
-            fmt.line(&format!("pub fn {}(&self) -> {} {{", setting.name, ty));
+            fmt.line(format!("pub fn {}(&self) -> {} {{", setting.name, ty));
             fmt.indent(|fmt| {
                 let mut m = Match::new(format!("self.bytes[{}]", setting.byte_offset));
                 for (i, v) in values.iter().enumerate() {
@@ -159,9 +156,9 @@ fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
             fmt.line("}");
         }
         SpecificSetting::Num(_) => {
-            fmt.line(&format!("pub fn {}(&self) -> u8 {{", setting.name));
+            fmt.line(format!("pub fn {}(&self) -> u8 {{", setting.name));
             fmt.indent(|fmt| {
-                fmt.line(&format!("self.bytes[{}]", setting.byte_offset));
+                fmt.line(format!("self.bytes[{}]", setting.byte_offset));
             });
             fmt.line("}");
         }
@@ -169,13 +166,10 @@ fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
 }
 
 fn gen_pred_getter(predicate: &Predicate, group: &SettingGroup, fmt: &mut Formatter) {
-    fmt.doc_comment(&format!(
-        "Computed predicate `{}`.",
-        predicate.render(group)
-    ));
-    fmt.line(&format!("pub fn {}(&self) -> bool {{", predicate.name));
+    fmt.doc_comment(format!("Computed predicate `{}`.", predicate.render(group)));
+    fmt.line(format!("pub fn {}(&self) -> bool {{", predicate.name));
     fmt.indent(|fmt| {
-        fmt.line(&format!("self.numbered_predicate({})", predicate.number));
+        fmt.line(format!("self.numbered_predicate({})", predicate.number));
     });
     fmt.line("}");
 }
@@ -189,7 +183,7 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
         fmt.doc_comment("Get a view of the boolean predicates.");
         fmt.line("pub fn predicate_view(&self) -> ::settings::PredicateView {");
         fmt.indent(|fmt| {
-            fmt.line(&format!(
+            fmt.line(format!(
                 "::settings::PredicateView::new(&self.bytes[{}..])",
                 group.bool_start_byte_offset
             ));
@@ -200,7 +194,7 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
             fmt.doc_comment("Dynamic numbered predicate getter.");
             fmt.line("fn numbered_predicate(&self, p: usize) -> bool {");
             fmt.indent(|fmt| {
-                fmt.line(&format!(
+                fmt.line(format!(
                     "self.bytes[{} + p / 8] & (1 << (p % 8)) != 0",
                     group.bool_start_byte_offset
                 ));
@@ -240,7 +234,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     let mut descriptor_index_map: HashMap<SettingOrPreset, usize> = HashMap::new();
 
     // Generate descriptors.
-    fmt.line(&format!(
+    fmt.line(format!(
         "static DESCRIPTORS: [detail::Descriptor; {}] = [",
         group.settings.len() + group.presets.len()
     ));
@@ -248,18 +242,18 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
         for (idx, setting) in group.settings.iter().enumerate() {
             fmt.line("detail::Descriptor {");
             fmt.indent(|fmt| {
-                fmt.line(&format!("name: \"{}\",", setting.name));
-                fmt.line(&format!("offset: {},", setting.byte_offset));
+                fmt.line(format!("name: \"{}\",", setting.name));
+                fmt.line(format!("offset: {},", setting.byte_offset));
                 match setting.specific {
                     SpecificSetting::Bool(BoolSetting { bit_offset, .. }) => {
-                        fmt.line(&format!(
+                        fmt.line(format!(
                             "detail: detail::Detail::Bool {{ bit: {} }},",
                             bit_offset
                         ));
                     }
                     SpecificSetting::Enum(ref values) => {
                         let offset = enum_table.add(values);
-                        fmt.line(&format!(
+                        fmt.line(format!(
                             "detail: detail::Detail::Enum {{ last: {}, enumerators: {} }},",
                             values.len() - 1,
                             offset
@@ -278,8 +272,8 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
         for (idx, preset) in group.presets.iter().enumerate() {
             fmt.line("detail::Descriptor {");
             fmt.indent(|fmt| {
-                fmt.line(&format!("name: \"{}\",", preset.name));
-                fmt.line(&format!("offset: {},", (idx as u8) * group.settings_size));
+                fmt.line(format!("name: \"{}\",", preset.name));
+                fmt.line(format!("offset: {},", (idx as u8) * group.settings_size));
                 fmt.line("detail: detail::Detail::Preset,");
             });
             fmt.line("},");
@@ -290,13 +284,13 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.line("];");
 
     // Generate enumerators.
-    fmt.line(&format!(
+    fmt.line(format!(
         "static ENUMERATORS: [&str; {}] = [",
         enum_table.len()
     ));
     fmt.indent(|fmt| {
         for enum_val in enum_table.iter() {
-            fmt.line(&format!("\"{}\",", enum_val));
+            fmt.line(format!("\"{}\",", enum_val));
         }
     });
     fmt.line("];");
@@ -318,14 +312,14 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             .collect::<Vec<SettingOrPreset>>(),
     );
     let hash_table = generate_table(&hash_entries, |entry| simple_hash(entry.name()));
-    fmt.line(&format!(
+    fmt.line(format!(
         "static HASH_TABLE: [u16; {}] = [",
         hash_table.len()
     ));
     fmt.indent(|fmt| {
         for h in &hash_table {
             match *h {
-                Some(setting_or_preset) => fmt.line(&format!(
+                Some(setting_or_preset) => fmt.line(format!(
                     "{},",
                     &descriptor_index_map
                         .get(setting_or_preset)
@@ -339,7 +333,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.line("];");
 
     // Generate presets.
-    fmt.line(&format!(
+    fmt.line(format!(
         "static PRESETS: [(u8, u8); {}] = [",
         group.presets.len()
     ));
@@ -347,7 +341,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
         for preset in &group.presets {
             fmt.comment(preset.name);
             for (mask, value) in preset.layout(&group) {
-                fmt.line(&format!("(0b{:08b}, 0b{:08b}),", mask, value));
+                fmt.line(format!("(0b{:08b}, 0b{:08b}),", mask, value));
             }
         }
     });
@@ -368,16 +362,16 @@ fn gen_template(group: &SettingGroup, fmt: &mut Formatter) {
 
     fmt.line("static TEMPLATE: detail::Template = detail::Template {");
     fmt.indent(|fmt| {
-        fmt.line(&format!("name: \"{}\",", group.name));
+        fmt.line(format!("name: \"{}\",", group.name));
         fmt.line("descriptors: &DESCRIPTORS,");
         fmt.line("enumerators: &ENUMERATORS,");
         fmt.line("hash_table: &HASH_TABLE,");
-        fmt.line(&format!("defaults: &[{}],", default_bytes_str));
+        fmt.line(format!("defaults: &[{}],", default_bytes_str));
         fmt.line("presets: &PRESETS,");
     });
     fmt.line("};");
 
-    fmt.doc_comment(&format!(
+    fmt.doc_comment(format!(
         "Create a `settings::Builder` for the {} settings group.",
         group.name
     ));
@@ -393,7 +387,7 @@ fn gen_display(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.indent(|fmt| {
         fmt.line("fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {");
         fmt.indent(|fmt| {
-            fmt.line(&format!("writeln!(f, \"[{}]\")?;", group.name));
+            fmt.line(format!("writeln!(f, \"[{}]\")?;", group.name));
             fmt.line("for d in &DESCRIPTORS {");
             fmt.indent(|fmt| {
                 fmt.line("if !d.detail.is_preset() {");
@@ -417,10 +411,10 @@ fn gen_display(group: &SettingGroup, fmt: &mut Formatter) {
 fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     // Generate struct.
     fmt.line("#[derive(Clone)]");
-    fmt.doc_comment(&format!("Flags group `{}`.", group.name));
+    fmt.doc_comment(format!("Flags group `{}`.", group.name));
     fmt.line("pub struct Flags {");
     fmt.indent(|fmt| {
-        fmt.line(&format!("bytes: [u8; {}],", group.byte_size()));
+        fmt.line(format!("bytes: [u8; {}],", group.byte_size()));
     });
     fmt.line("}");
 
@@ -443,6 +437,6 @@ pub fn generate_common(filename: &str, out_dir: &str) -> Result<SettingGroup, er
 pub fn generate(isa: &TargetIsa, prefix: &str, out_dir: &str) -> Result<(), error::Error> {
     let mut fmt = Formatter::new();
     gen_group(&isa.settings, ParentGroup::Shared, &mut fmt);
-    fmt.update_file(&format!("{}-{}.rs", prefix, isa.name), out_dir)?;
+    fmt.update_file(format!("{}-{}.rs", prefix, isa.name), out_dir)?;
     Ok(())
 }
