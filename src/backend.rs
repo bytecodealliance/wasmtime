@@ -1965,6 +1965,55 @@ impl<M: ModuleContext> Context<'_, M> {
         }
     }
 
+    pub fn select(&mut self) {
+        let cond = self.pop();
+        let else_ = self.pop();
+        let then = self.pop();
+
+        match cond {
+            Value::Immediate(i) => {
+                if i == 0 {
+                    self.push(else_);
+                } else {
+                    self.push(then);
+                }
+
+                return;
+            }
+            other => {
+                let (reg, free) = self.into_reg(other);
+
+                dynasm!(self.asm
+                    ; test Rd(reg), Rd(reg)
+                );
+
+                if free {
+                    self.block_state.regs.release_scratch_gpr(reg);
+                }
+            }
+        }
+
+        let out = self.block_state.regs.take_scratch_gpr();
+
+        // TODO: Can do this better for variables on stack
+        let (reg, free) = self.into_reg(else_);
+        dynasm!(self.asm
+            ; cmovz Rq(out), Rq(reg)
+        );
+        if free {
+            self.block_state.regs.release_scratch_gpr(reg);
+        }
+        let (reg, free) = self.into_reg(then);
+        dynasm!(self.asm
+            ; cmovnz Rq(out), Rq(reg)
+        );
+        if free {
+            self.block_state.regs.release_scratch_gpr(reg);
+        }
+
+        self.push(Value::Temp(out));
+    }
+
     // TODO: This is wildly unsound, we don't actually check if the
     //       local was written first. Would be fixed by Microwasm.
     pub fn get_local(&mut self, local_idx: u32) {

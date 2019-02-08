@@ -460,6 +460,9 @@ pub fn translate<M: ModuleContext>(
             Operator::I64Load { memarg } => ctx.i64_load(memarg.offset)?,
             Operator::I32Store { memarg } => ctx.i32_store(memarg.offset)?,
             Operator::I64Store { memarg } => ctx.i64_store(memarg.offset)?,
+            Operator::Select => {
+                ctx.select();
+            }
             Operator::Call { function_index } => {
                 let callee_ty = session.module_context.func_type(function_index);
 
