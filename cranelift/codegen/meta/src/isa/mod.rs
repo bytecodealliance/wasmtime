@@ -18,7 +18,7 @@ pub enum Isa {
 
 impl Isa {
     /// Creates isa target using name.
-    pub fn new(name: &str) -> Option<Self> {
+    pub fn from_name(name: &str) -> Option<Self> {
         Isa::all()
             .iter()
             .cloned()
@@ -27,27 +27,19 @@ impl Isa {
     }
 
     /// Creates isa target from arch.
-    pub fn from_arch(arch: &str) -> Option<Isa> {
-        Isa::all()
-            .iter()
-            .cloned()
-            .filter(|isa| isa.is_arch_applicable(arch))
-            .next()
+    pub fn from_arch(arch: &str) -> Option<Self> {
+        match arch {
+            "riscv" => Some(Isa::Riscv),
+            "aarch64" => Some(Isa::Arm64),
+            x if ["x86_64", "i386", "i586", "i686"].contains(&x) => Some(Isa::X86),
+            x if x.starts_with("arm") || arch.starts_with("thumb") => Some(Isa::Arm32),
+            _ => None,
+        }
     }
 
     /// Returns all supported isa targets.
     pub fn all() -> [Isa; 4] {
         [Isa::Riscv, Isa::X86, Isa::Arm32, Isa::Arm64]
-    }
-
-    /// Checks if arch is applicable for the isa target.
-    fn is_arch_applicable(&self, arch: &str) -> bool {
-        match *self {
-            Isa::Riscv => arch == "riscv",
-            Isa::X86 => ["x86_64", "i386", "i586", "i686"].contains(&arch),
-            Isa::Arm32 => arch.starts_with("arm") || arch.starts_with("thumb"),
-            Isa::Arm64 => arch == "aarch64",
-        }
     }
 }
 
@@ -62,11 +54,13 @@ impl fmt::Display for Isa {
     }
 }
 
-pub fn define_all(shared_settings: &SettingGroup) -> Vec<TargetIsa> {
-    vec![
-        riscv::define(shared_settings),
-        arm32::define(shared_settings),
-        arm64::define(shared_settings),
-        x86::define(shared_settings),
-    ]
+pub fn define(isas: &Vec<Isa>, shared_settings: &SettingGroup) -> Vec<TargetIsa> {
+    isas.iter()
+        .map(|isa| match isa {
+            Isa::Riscv => riscv::define(shared_settings),
+            Isa::X86 => x86::define(shared_settings),
+            Isa::Arm32 => arm32::define(shared_settings),
+            Isa::Arm64 => arm64::define(shared_settings),
+        })
+        .collect()
 }
