@@ -1,4 +1,11 @@
-#![feature(plugin, test, const_slice_len, never_type, alloc_layout_extra)]
+#![feature(
+    plugin,
+    test,
+    const_slice_len,
+    never_type,
+    alloc_layout_extra,
+    try_from
+)]
 #![plugin(dynasm)]
 
 extern crate test;
@@ -6,7 +13,7 @@ extern crate test;
 extern crate arrayvec;
 extern crate capstone;
 extern crate failure;
-extern crate wasmparser;
+pub extern crate wasmparser;
 #[macro_use]
 extern crate failure_derive;
 #[macro_use]
@@ -20,6 +27,8 @@ extern crate lazy_static;
 #[macro_use]
 extern crate quickcheck;
 extern crate wabt;
+// Just so we can implement `Signature` for `cranelift_codegen::ir::Signature`
+extern crate cranelift_codegen;
 
 mod backend;
 mod disassemble;
@@ -31,4 +40,6 @@ mod translate_sections;
 #[cfg(test)]
 mod tests;
 
-pub use module::{translate, ExecutableModule, TranslatedModule};
+pub use backend::CodeGenSession;
+pub use function_body::translate as translate_function;
+pub use module::{translate, ExecutableModule, ModuleContext, Signature, TranslatedModule};

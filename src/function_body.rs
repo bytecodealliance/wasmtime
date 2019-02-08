@@ -1,6 +1,6 @@
 use backend::*;
 use error::Error;
-use module::{quickhash, FuncTyStore};
+use module::{quickhash, ModuleContext, Signature};
 use wasmparser::{FunctionBody, Operator, Type};
 
 // TODO: Use own declared `Type` enum.
@@ -77,7 +77,7 @@ struct ControlFrame {
     /// State specific to the block (free temp registers, stack etc) which should be replaced
     /// at the end of the block
     block_state: BlockState,
-    ty: Type,
+    arity: u32,
 }
 
 fn arity(ty: Type) -> u32 {
@@ -89,17 +89,17 @@ fn arity(ty: Type) -> u32 {
 }
 
 impl ControlFrame {
-    pub fn new(kind: ControlFrameKind, block_state: BlockState, ty: Type) -> ControlFrame {
+    pub fn new(kind: ControlFrameKind, block_state: BlockState, arity: u32) -> ControlFrame {
         ControlFrame {
             kind,
             block_state,
-            ty,
+            arity,
             unreachable: false,
         }
     }
 
     pub fn arity(&self) -> u32 {
-        arity(self.ty)
+        self.arity
     }
 
     /// Marks this control frame as reached stack-polymorphic state.
@@ -108,14 +108,13 @@ impl ControlFrame {
     }
 }
 
-pub fn translate(
-    session: &mut CodeGenSession,
-    translation_ctx: &FuncTyStore,
+pub fn translate<M: ModuleContext>(
+    session: &mut CodeGenSession<M>,
     func_idx: u32,
     body: &FunctionBody,
 ) -> Result<(), Error> {
-    fn break_from_control_frame_with_id(
-        ctx: &mut Context,
+    fn break_from_control_frame_with_id<_M: ModuleContext>(
+        ctx: &mut Context<_M>,
         control_frames: &mut Vec<ControlFrame>,
         idx: usize,
     ) {
@@ -149,15 +148,9 @@ pub fn translate(
 
     let locals = body.get_locals_reader()?;
 
-    let func_type = translation_ctx.func_type(func_idx);
-    let arg_count = func_type.params.len() as u32;
-    let return_ty = if func_type.returns.len() == 1 {
-        func_type.returns[0]
-    } else if func_type.returns.len() == 0 {
-        Type::EmptyBlockType
-    } else {
-        panic!("We don't support multiple returns yet");
-    };
+    let func_type = session.module_context.func_type(func_idx);
+    let arg_count = func_type.params().len() as u32;
+    let return_arity = func_type.returns().len() as u32;
 
     let mut num_locals = 0;
     for local in locals {
@@ -168,7 +161,8 @@ pub fn translate(
     let ctx = &mut session.new_context(func_idx);
     let operators = body.get_operators_reader()?;
 
-    // We must add 1 here to supply `vmctx`
+    // TODO: Do we need this `function_block_state`? If we transformed to use an arbitrary
+    //       CFG all this code would become way simpler.
     let func = ctx.start_function(arg_count, num_locals);
 
     let mut control_frames = Vec::new();
@@ -176,13 +170,16 @@ pub fn translate(
     // Upon entering the function implicit frame for function body is pushed. It has the same
     // result type as the function itself. Branching to it is equivalent to returning from the function.
     let epilogue_label = ctx.create_label();
-    let function_block_state = ctx.start_block();
+    // TODO: I want to ideally not have the concept of "returning" at all and model everything as a CFG,
+    //       with "returning" being modelled as "calling the end of the function". That means that passing
+    //       arguments in argument registers and returning values in return registers are modelled
+    //       identically.
     control_frames.push(ControlFrame::new(
         ControlFrameKind::Block {
             end_label: epilogue_label,
         },
-        function_block_state,
-        return_ty,
+        Default::default(),
+        return_arity,
     ));
 
     let mut operators = itertools::put_back(operators.into_iter());
@@ -192,24 +189,47 @@ pub fn translate(
     // TODO: Does coelescing multiple `end`s matter since at worst this really only elides a single move at
     //       the end of a function, and this is probably a no-op anyway due to register renaming.
     loop {
+        if control_frames
+            .last()
+            .map(|c| c.unreachable)
+            .unwrap_or(false)
+        {
+            use self::Operator::{Block, Else, End, If, Loop};
+
+            let mut depth = 0;
+            loop {
+                let op = if let Some(op) = operators.next() {
+                    op?
+                } else {
+                    break;
+                };
+
+                match op {
+                    If { .. } | Block { .. } | Loop { .. } => depth += 1,
+                    End => {
+                        if depth == 0 {
+                            operators.put_back(Ok(op));
+                            break;
+                        } else {
+                            depth -= 1;
+                        }
+                    }
+                    Else => {
+                        if depth == 0 {
+                            operators.put_back(Ok(op));
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         let op = if let Some(op) = operators.next() {
             op?
         } else {
             break;
         };
-
-        match op {
-            Operator::End | Operator::Else => {}
-            _ => {
-                if control_frames
-                    .last()
-                    .expect("Control stack never empty")
-                    .unreachable
-                {
-                    continue;
-                }
-            }
-        }
 
         match op {
             Operator::Unreachable => {
@@ -225,7 +245,7 @@ pub fn translate(
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Block { end_label: label },
                     state,
-                    ty,
+                    arity(ty),
                 ));
             }
             Operator::Return => {
@@ -267,7 +287,7 @@ pub fn translate(
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::IfTrue { end_label, if_not },
                     state,
-                    ty,
+                    arity(ty),
                 ));
             }
             Operator::Loop { ty } => {
@@ -279,18 +299,21 @@ pub fn translate(
                 control_frames.push(ControlFrame::new(
                     ControlFrameKind::Loop { header },
                     state,
-                    ty,
+                    arity(ty),
                 ));
             }
             Operator::Else => {
                 match control_frames.pop() {
                     Some(ControlFrame {
                         kind: ControlFrameKind::IfTrue { if_not, end_label },
-                        ty,
+                        arity,
                         block_state,
-                        ..
+                        unreachable,
                     }) => {
-                        ctx.return_from_block(arity(ty));
+                        if !unreachable {
+                            ctx.return_from_block(arity);
+                        }
+
                         ctx.reset_block(block_state.clone());
 
                         // Finalize `then` block by jumping to the `end_label`.
@@ -308,7 +331,7 @@ pub fn translate(
                         let mut frame = ControlFrame::new(
                             ControlFrameKind::IfFalse { end_label },
                             block_state,
-                            ty,
+                            arity,
                         );
                         control_frames.push(frame);
                     }
@@ -325,6 +348,7 @@ pub fn translate(
                 //       a kind of state machine.
                 let mut control_frame = control_frames.pop().expect("control stack is never empty");
                 let mut labels = control_frame.kind.end_labels().collect::<Vec<_>>();
+                let mut unreachable = control_frame.unreachable;
 
                 let mut end = control_frame.block_state.end_locals.take();
 
@@ -342,6 +366,7 @@ pub fn translate(
                                 control_frames.pop().expect("control stack is never empty");
 
                             labels.extend(control_frame.kind.end_labels());
+                            unreachable = unreachable || control_frame.unreachable;
 
                             end = control_frame.block_state.end_locals.take().or(end);
                         }
@@ -355,7 +380,7 @@ pub fn translate(
                 let arity = control_frame.arity();
 
                 // Don't bother generating this code if we're in unreachable code
-                if !control_frame.unreachable {
+                if !unreachable {
                     ctx.return_from_block(arity);
 
                     // If there are no remaining frames we've hit the end of the function - we don't need to
@@ -436,27 +461,27 @@ pub fn translate(
             Operator::I32Store { memarg } => ctx.i32_store(memarg.offset)?,
             Operator::I64Store { memarg } => ctx.i64_store(memarg.offset)?,
             Operator::Call { function_index } => {
-                let callee_ty = translation_ctx.func_type(function_index);
+                let callee_ty = session.module_context.func_type(function_index);
 
                 // TODO: this implementation assumes that this function is locally defined.
 
                 ctx.call_direct(
                     function_index,
-                    callee_ty.params.len() as u32,
-                    callee_ty.returns.len() as u32,
+                    callee_ty.params().len() as u32,
+                    callee_ty.returns().len() as u32,
                 );
             }
             Operator::CallIndirect { index, table_index } => {
                 assert_eq!(table_index, 0);
 
-                let callee_ty = translation_ctx.signature(index);
+                let callee_ty = session.module_context.signature(index);
 
                 // TODO: this implementation assumes that this function is locally defined.
 
                 ctx.call_indirect(
                     quickhash(callee_ty) as u32,
-                    callee_ty.params.len() as u32,
-                    callee_ty.returns.len() as u32,
+                    callee_ty.params().len() as u32,
+                    callee_ty.returns().len() as u32,
                 );
             }
             Operator::Nop => {}

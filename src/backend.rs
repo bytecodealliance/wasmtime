@@ -4,12 +4,13 @@
 // small maximum size and so we can consider iterating over them to be essentially constant-time.
 use arrayvec::ArrayVec;
 
+use self::registers::*;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use error::Error;
 use std::{iter, mem};
 
-use module::{RuntimeFunc, VmCtx};
+use module::{ModuleContext, RuntimeFunc};
 
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
@@ -27,23 +28,25 @@ impl GPRs {
     }
 }
 
-const RAX: u8 = 0;
-const RCX: u8 = 1;
-const RDX: u8 = 2;
-const RBX: u8 = 3;
-const RSP: u8 = 4;
-const RBP: u8 = 5;
-const RSI: u8 = 6;
-const RDI: u8 = 7;
-const R8: u8 = 8;
-const R9: u8 = 9;
-const R10: u8 = 10;
-const R11: u8 = 11;
-const R12: u8 = 12;
-const R13: u8 = 13;
-const R14: u8 = 14;
-const R15: u8 = 15;
-const NUM_GPRS: u8 = 16;
+pub mod registers {
+    pub const RAX: u8 = 0;
+    pub const RCX: u8 = 1;
+    pub const RDX: u8 = 2;
+    pub const RBX: u8 = 3;
+    pub const RSP: u8 = 4;
+    pub const RBP: u8 = 5;
+    pub const RSI: u8 = 6;
+    pub const RDI: u8 = 7;
+    pub const R8: u8 = 8;
+    pub const R9: u8 = 9;
+    pub const R10: u8 = 10;
+    pub const R11: u8 = 11;
+    pub const R12: u8 = 12;
+    pub const R13: u8 = 13;
+    pub const R14: u8 = 14;
+    pub const R15: u8 = 15;
+    pub const NUM_GPRS: u8 = 16;
+}
 
 extern "sysv64" fn println(len: u64, args: *const u8) {
     println!("{}", unsafe {
@@ -205,14 +208,14 @@ pub struct FunctionEnd {
     should_generate_epilogue: bool,
 }
 
-pub struct CodeGenSession {
+pub struct CodeGenSession<'a, M> {
     assembler: Assembler,
+    pub module_context: &'a M,
     func_starts: Vec<(Option<AssemblyOffset>, DynamicLabel)>,
-    has_memory: bool,
 }
 
-impl CodeGenSession {
-    pub fn new(func_count: u32, has_memory: bool) -> Self {
+impl<'a, M> CodeGenSession<'a, M> {
+    pub fn new(func_count: u32, module_context: &'a M) -> Self {
         let mut assembler = Assembler::new().unwrap();
         let func_starts = iter::repeat_with(|| (None, assembler.new_dynamic_label()))
             .take(func_count as usize)
@@ -221,11 +224,11 @@ impl CodeGenSession {
         CodeGenSession {
             assembler,
             func_starts,
-            has_memory,
+            module_context,
         }
     }
 
-    pub fn new_context(&mut self, func_idx: u32) -> Context {
+    pub fn new_context(&mut self, func_idx: u32) -> Context<'_, M> {
         {
             let func_start = &mut self.func_starts[func_idx as usize];
 
@@ -238,9 +241,9 @@ impl CodeGenSession {
         Context {
             asm: &mut self.assembler,
             func_starts: &self.func_starts,
-            has_memory: self.has_memory,
             trap_label: None,
             block_state: Default::default(),
+            module_context: self.module_context,
         }
     }
 
@@ -290,6 +293,24 @@ impl TranslatedCodeSection {
     pub fn func_start(&self, idx: usize) -> *const u8 {
         let offset = self.func_starts[idx];
         self.exec_buf.ptr(offset)
+    }
+
+    pub fn func_range(&self, idx: usize) -> std::ops::Range<usize> {
+        let end = self
+            .func_starts
+            .get(idx + 1)
+            .map(|i| i.0)
+            .unwrap_or(self.exec_buf.len());
+
+        self.func_starts[idx].0..end
+    }
+
+    pub fn funcs<'a>(&'a self) -> impl Iterator<Item = std::ops::Range<usize>> + 'a {
+        (0..self.func_starts.len()).map(move |i| self.func_range(i))
+    }
+
+    pub fn buffer(&self) -> &[u8] {
+        &*self.exec_buf
     }
 
     pub fn disassemble(&self) {
@@ -494,10 +515,10 @@ impl Locals {
 pub struct BlockState {
     stack: Stack,
     // TODO: `BitVec`
-    stack_map: Vec<bool>,
-    depth: StackDepth,
-    return_register: Option<GPR>,
-    regs: Registers,
+    pub stack_map: Vec<bool>,
+    pub depth: StackDepth,
+    pub return_register: Option<GPR>,
+    pub regs: Registers,
     /// This is the _current_ locals, since we can shuffle them about during function calls.
     pub locals: Locals,
     /// In non-linear control flow (ifs and loops) we have to set the locals to the state that
@@ -521,13 +542,13 @@ pub enum MemoryAccessMode {
     Unchecked,
 }
 
-pub struct Context<'a> {
+pub struct Context<'a, M> {
     asm: &'a mut Assembler,
+    module_context: &'a M,
     func_starts: &'a Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     pub block_state: BlockState,
     trap_label: Option<Label>,
-    has_memory: bool,
 }
 
 /// Label in code.
@@ -630,7 +651,11 @@ macro_rules! shift {
                             }
                         }
                         _ => {
-                            if self.block_state.regs.is_free(RCX) {
+                            if self.block_state.regs.is_free(RCX) &&
+                                !self.block_state.locals.register_locals.contains(
+                                    &ArgLoc::Register(RCX)
+                                )
+                            {
                                 None
                             } else {
                                 dynasm!(self.asm
@@ -972,38 +997,33 @@ macro_rules! commutative_binop_i64 {
 macro_rules! load {
     ($name:ident, $reg_ty:ident, $instruction_name:expr) => {
         pub fn $name(&mut self, offset: u32) -> Result<(), Error> {
-            fn load_to_reg(
-                ctx: &mut Context,
+            fn load_to_reg<_M: ModuleContext>(
+                ctx: &mut Context<_M>,
                 dst: GPR,
                 vmctx: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
-                let vmctx_mem_offset = VmCtx::offset_of_memory() as i32;
+                let vmctx_mem_ptr_offset = ctx.module_context.offset_of_memory_ptr() as i32;
+                let mem_ptr_reg = ctx.block_state.regs.take_scratch_gpr();
+                dynasm!(ctx.asm
+                    ; mov Rq(mem_ptr_reg), [Rq(vmctx) + vmctx_mem_ptr_offset]
+                );
                 match runtime_offset {
                     Ok(imm) => {
                         dynasm!(ctx.asm
-                            ; mov $reg_ty(dst), [Rq(vmctx) + offset + imm + vmctx_mem_offset]
+                            ; mov $reg_ty(dst), [Rq(mem_ptr_reg) + offset + imm]
                         );
                     }
                     Err(offset_reg) => {
                         dynasm!(ctx.asm
-                            ; mov $reg_ty(dst), [Rq(vmctx) + Rq(offset_reg) + offset + vmctx_mem_offset]
+                            ; mov $reg_ty(dst), [Rq(mem_ptr_reg) + Rq(offset_reg) + offset]
                         );
                     }
                 }
+                ctx.block_state.regs.release_scratch_gpr(mem_ptr_reg);
             }
 
             assert!(offset <= i32::max_value() as u32);
-
-            if !self.has_memory {
-                return Err(Error::Input(
-                    concat!(
-                        "Unexpected ",
-                        $instruction_name,
-                        ", this module has no memory section"
-                    ).into()
-                ));
-            }
 
             let base = self.pop();
             let vmctx_idx = self.block_state.locals.vmctx_index();
@@ -1057,40 +1077,33 @@ macro_rules! load {
 macro_rules! store {
     ($name:ident, $reg_ty:ident, $size:ident, $instruction_name:expr) => {
         pub fn $name(&mut self, offset: u32) -> Result<(), Error> {
-            fn store_from_reg(
-                ctx: &mut Context,
+            fn store_from_reg<_M: ModuleContext>(
+                ctx: &mut Context<_M>,
                 src: GPR,
                 vmctx: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
-                let vmctx_mem_offset = VmCtx::offset_of_memory() as i32;
+                let vmctx_mem_ptr_offset = ctx.module_context.offset_of_memory_ptr() as i32;
+                let mem_ptr_reg = ctx.block_state.regs.take_scratch_gpr();
+                dynasm!(ctx.asm
+                    ; mov Rq(mem_ptr_reg), [Rq(vmctx) + vmctx_mem_ptr_offset]
+                );
                 match runtime_offset {
                     Ok(imm) => {
                         dynasm!(ctx.asm
-                            ; mov [Rq(vmctx) + offset + imm + vmctx_mem_offset], $reg_ty(src)
+                            ; mov [Rq(mem_ptr_reg) + offset + imm], $reg_ty(src)
                         );
                     }
                     Err(offset_reg) => {
                         dynasm!(ctx.asm
-                            ; mov [Rq(vmctx) + Rq(offset_reg) + offset + vmctx_mem_offset], $reg_ty(src)
+                            ; mov [Rq(mem_ptr_reg) + Rq(offset_reg) + offset], $reg_ty(src)
                         );
                     }
                 }
+                ctx.block_state.regs.release_scratch_gpr(mem_ptr_reg);
             }
 
             assert!(offset <= i32::max_value() as u32);
-
-            // TODO: Is this necessary or is this ensured by the validation step?
-            //       In other places we assume the wasm is validated.
-            if !self.has_memory {
-                return Err(Error::Input(
-                    concat!(
-                        "Unexpected ",
-                        $instruction_name,
-                        ", this module has no memory section"
-                    ).into()
-                ));
-            }
 
             let src = self.pop();
             let base = self.pop();
@@ -1173,7 +1186,7 @@ impl TryInto<i32> for i64 {
     }
 }
 
-impl Context<'_> {
+impl<M: ModuleContext> Context<'_, M> {
     /// Create a new undefined label.
     pub fn create_label(&mut self) -> Label {
         Label(self.asm.new_dynamic_label())
@@ -1952,6 +1965,8 @@ impl Context<'_> {
         }
     }
 
+    // TODO: This is wildly unsound, we don't actually check if the
+    //       local was written first. Would be fixed by Microwasm.
     pub fn get_local(&mut self, local_idx: u32) {
         let index = self.adjusted_local_idx(local_idx);
         self.push(Value::Local(index));
@@ -2097,6 +2112,7 @@ impl Context<'_> {
             match self.block_state.locals.register_locals[i] {
                 ArgLoc::Register(reg) => {
                     if ARGS_IN_GPRS.contains(&reg) {
+                        // We do `- 1` because of `vmctx`
                         let offset =
                             ((self.block_state.locals.num_local_stack_slots - 1 - i as u32)
                                 * WORD_SIZE) as _;
@@ -2289,10 +2305,10 @@ impl Context<'_> {
 
         // TODO: Consider generating a single trap function and jumping to that instead.
         dynasm!(self.asm
-            ; cmp Rq(callee), [Rq(vmctx_reg) + VmCtx::offset_of_funcs_len() as i32]
+            ; cmp Rq(callee), [Rq(vmctx_reg) + self.module_context.offset_of_funcs_len() as i32]
             ; jae =>fail
             ; imul Rq(callee), Rq(callee), mem::size_of::<RuntimeFunc>() as i32
-            ; mov Rq(temp0), [Rq(vmctx_reg) + VmCtx::offset_of_funcs_ptr() as i32]
+            ; mov Rq(temp0), [Rq(vmctx_reg) + self.module_context.offset_of_funcs_ptr() as i32]
             ; mov Rd(temp1), [
                 Rq(temp0) +
                     Rq(callee) +
@@ -2379,11 +2395,19 @@ impl Context<'_> {
 
         // We need space to store the register arguments if we need to call a function
         // and overwrite these registers so we add `reg_args.len()`
+        //
+        // We do `- 1` because we don't need to store `vmctx` (TODO: I believe we actually
+        // do need to store `vmctx` when calling host functions, although we might be able
+        // to have the hidden argument/hidden return `vmctx` stuff encoded in our trampoline,
+        // which would allow the `vmctx` to be changed while we're in a host function)
         let stack_slots = locals + reg_args.len() as u32 + reg_locals.len() as u32;
-        // Align stack slots to the nearest even number. This is required
-        // by x86-64 ABI.
-        let aligned_stack_slots = (stack_slots + 1) & !1;
-        let frame_size: i32 = aligned_stack_slots as i32 * WORD_SIZE as i32;
+        // TODO: The x86_64 ABI requires that rsp be aligned to 16 bytes. Originally
+        //       we aligned stack slots to the nearest even number to support this
+        //       but this actually doesn't help, since `push` and `pop` change rsp
+        //       by 8 bytes at a time. We need a better solution if we want to support
+        //       calling functions that use SIMD (for our use-case this is mostly just
+        //       host functions).
+        let frame_size: i32 = stack_slots as i32 * WORD_SIZE as i32;
 
         self.block_state.locals.register_locals = reg_args
             .iter()
@@ -2395,8 +2419,9 @@ impl Context<'_> {
         self.block_state.locals.num_local_stack_slots = stack_slots;
         self.block_state.return_register = Some(RAX);
 
+        // TODO: This isn't enough to ensure that we're aligned when calling functions
         // self.block_state.depth.reserve(aligned_stack_slots - locals);
-        let should_generate_epilogue = frame_size > 0;
+        let should_generate_epilogue = stack_slots > 1;
         if should_generate_epilogue {
             dynasm!(self.asm
                 ; push rbp
@@ -2416,10 +2441,6 @@ impl Context<'_> {
         // We don't need to clean up the stack - RSP is restored and
         // the calling function has its own register stack and will
         // stomp on the registers from our stack if necessary.
-        // TODO: Because every function has a hidden argument this is currently
-        //       always called. We should lazily initialise the stack to avoid
-        //       this but it introduces complexity around branch points. We
-        //       should latch on to the `end_locals` code for this.
         if func.should_generate_epilogue {
             dynasm!(self.asm
                 ; mov rsp, rbp

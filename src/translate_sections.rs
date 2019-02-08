@@ -1,7 +1,7 @@
 use backend::{CodeGenSession, TranslatedCodeSection};
 use error::Error;
 use function_body;
-use module::FuncTyStore;
+use module::SimpleContext;
 #[allow(unused_imports)] // for now
 use wasmparser::{
     CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
@@ -107,13 +107,12 @@ pub fn element(elements: ElementSectionReader) -> Result<Vec<u32>, Error> {
 /// Parses the Code section of the wasm module.
 pub fn code(
     code: CodeSectionReader,
-    translation_ctx: &FuncTyStore,
-    has_memory: bool,
+    translation_ctx: &SimpleContext,
 ) -> Result<TranslatedCodeSection, Error> {
     let func_count = code.get_count();
-    let mut session = CodeGenSession::new(func_count, has_memory);
+    let mut session = CodeGenSession::new(func_count, translation_ctx);
     for (idx, body) in code.into_iter().enumerate() {
-        function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
+        function_body::translate(&mut session, idx as u32, &body?)?;
     }
     Ok(session.into_translated_code_section()?)
 }

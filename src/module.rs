@@ -1,6 +1,11 @@
 use backend::TranslatedCodeSection;
+use cranelift_codegen::{
+    ir::{self, AbiParam, Signature as CraneliftSignature},
+    isa,
+};
 use error::Error;
 use std::{
+    convert::TryInto,
     hash::{Hash, Hasher},
     mem,
 };
@@ -96,7 +101,7 @@ impl_function_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
 #[derive(Default)]
 pub struct TranslatedModule {
     translated_code_section: Option<TranslatedCodeSection>,
-    types: FuncTyStore,
+    types: SimpleContext,
     // TODO: Should we wrap this in a `Mutex` so that calling functions from multiple
     //       threads doesn't cause data races?
     table: Option<(TableType, Vec<u32>)>,
@@ -111,9 +116,7 @@ pub fn quickhash<H: Hash>(h: H) -> u64 {
 
 impl TranslatedModule {
     pub fn instantiate(mut self) -> ExecutableModule {
-        use std::alloc::{self, Layout};
-
-        let slice = {
+        let table = {
             let code_section = self
                 .translated_code_section
                 .as_ref()
@@ -123,7 +126,7 @@ impl TranslatedModule {
             self.table
                 .as_mut()
                 .map(|&mut (_, ref mut idxs)| {
-                    let mut initial = idxs
+                    let initial = idxs
                         .iter()
                         .map(|i| {
                             let start = code_section.func_start(*i as _);
@@ -135,12 +138,7 @@ impl TranslatedModule {
                             }
                         })
                         .collect::<Vec<_>>();
-                    initial.shrink_to_fit();
-                    let out = BoxSlice {
-                        ptr: initial.as_mut_ptr(),
-                        len: initial.len(),
-                    };
-                    mem::forget(initial);
+                    let out = BoxSlice::from(initial.into_boxed_slice());
                     out
                 })
                 .unwrap_or(BoxSlice {
@@ -150,25 +148,12 @@ impl TranslatedModule {
         };
 
         let mem_size = self.memory.map(|m| m.limits.initial).unwrap_or(0) as usize;
-        let (layout, _mem_offset) = Layout::new::<VmCtx>()
-            .extend(Layout::array::<u8>(mem_size * WASM_PAGE_SIZE).unwrap())
-            .unwrap();
+        let mem: BoxSlice<_> = vec![0u8; mem_size * WASM_PAGE_SIZE]
+            .into_boxed_slice()
+            .into();
 
-        let ctx = if mem_size > 0 || slice.len > 0 {
-            let ptr = unsafe { alloc::alloc_zeroed(layout) } as *mut VmCtx;
-
-            if ptr.is_null() {
-                alloc::handle_alloc_error(layout);
-            }
-
-            unsafe {
-                *ptr = VmCtx {
-                    table: slice,
-                    mem_size,
-                }
-            }
-
-            Some(Allocation { ptr, layout })
+        let ctx = if mem.len > 0 || table.len > 0 {
+            Some(Box::new(VmCtx { table, mem }))
         } else {
             None
         };
@@ -187,24 +172,6 @@ impl TranslatedModule {
     }
 }
 
-struct Allocation<T> {
-    ptr: *mut T,
-    layout: std::alloc::Layout,
-}
-
-unsafe impl<T> Send for Allocation<T> where T: Send {}
-unsafe impl<T> Sync for Allocation<T> where T: Sync {}
-
-impl<T> Drop for Allocation<T> {
-    fn drop(&mut self) {
-        if mem::needs_drop::<T>() {
-            unsafe { std::ptr::drop_in_place::<T>(self.ptr) };
-        }
-
-        unsafe { std::alloc::dealloc(self.ptr as _, self.layout) };
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecutionError {
     FuncIndexOutOfBounds,
@@ -213,7 +180,7 @@ pub enum ExecutionError {
 
 pub struct ExecutableModule {
     module: TranslatedModule,
-    context: Option<Allocation<VmCtx>>,
+    context: Option<Box<VmCtx>>,
 }
 
 impl ExecutableModule {
@@ -247,7 +214,7 @@ impl ExecutableModule {
                 Args::into_func(start_buf),
                 self.context
                     .as_ref()
-                    .map(|ctx| ctx.ptr as *const VmCtx as *const u8)
+                    .map(|ctx| (&**ctx) as *const VmCtx as *const u8)
                     .unwrap_or(std::ptr::null()),
             )
         })
@@ -265,6 +232,9 @@ pub struct RuntimeFunc {
     func_start: FuncRef,
 }
 
+unsafe impl Send for RuntimeFunc {}
+unsafe impl Sync for RuntimeFunc {}
+
 impl RuntimeFunc {
     pub fn offset_of_sig_hash() -> usize {
         offset_of!(Self, sig_hash)
@@ -280,28 +250,19 @@ struct BoxSlice<T> {
     ptr: *mut T,
 }
 
-#[repr(C)]
-pub struct VmCtx {
-    table: BoxSlice<RuntimeFunc>,
-    mem_size: usize,
-}
-
-unsafe impl Send for VmCtx {}
-unsafe impl Sync for VmCtx {}
-
-impl VmCtx {
-    pub fn offset_of_memory() -> usize {
-        mem::size_of::<Self>()
-    }
-
-    pub fn offset_of_funcs_ptr() -> usize {
-        offset_of!(Self, table.ptr)
-    }
-
-    pub fn offset_of_funcs_len() -> usize {
-        offset_of!(Self, table.len)
+impl<T> From<Box<[T]>> for BoxSlice<T> {
+    fn from(mut other: Box<[T]>) -> Self {
+        let out = BoxSlice {
+            len: other.len(),
+            ptr: other.as_mut_ptr(),
+        };
+        mem::forget(other);
+        out
     }
 }
+
+unsafe impl<T: Send> Send for BoxSlice<T> {}
+unsafe impl<T: Sync> Sync for BoxSlice<T> {}
 
 impl<T> Drop for BoxSlice<T> {
     fn drop(&mut self) {
@@ -309,26 +270,122 @@ impl<T> Drop for BoxSlice<T> {
     }
 }
 
+pub struct VmCtx {
+    table: BoxSlice<RuntimeFunc>,
+    mem: BoxSlice<u8>,
+}
+
+impl VmCtx {
+    pub fn offset_of_memory_ptr() -> u8 {
+        offset_of!(Self, mem.ptr)
+            .try_into()
+            .expect("Offset exceeded size of u8")
+    }
+
+    pub fn offset_of_memory_len() -> u8 {
+        offset_of!(Self, mem.len)
+            .try_into()
+            .expect("Offset exceeded size of u8")
+    }
+
+    pub fn offset_of_funcs_ptr() -> u8 {
+        offset_of!(Self, table.ptr)
+            .try_into()
+            .expect("Offset exceeded size of u8")
+    }
+
+    pub fn offset_of_funcs_len() -> u8 {
+        offset_of!(Self, table.len)
+            .try_into()
+            .expect("Offset exceeded size of u8")
+    }
+}
+
 #[derive(Default, Debug)]
-pub struct FuncTyStore {
+pub struct SimpleContext {
     types: Vec<FuncType>,
     func_ty_indicies: Vec<u32>,
 }
 
 const WASM_PAGE_SIZE: usize = 65_536;
 
-impl FuncTyStore {
-    pub fn func_type_index(&self, func_idx: u32) -> u32 {
+pub trait Signature {
+    type Type;
+
+    fn params(&self) -> &[Self::Type];
+    fn returns(&self) -> &[Self::Type];
+}
+
+impl Signature for CraneliftSignature {
+    type Type = AbiParam;
+
+    fn params(&self) -> &[Self::Type] {
+        // TODO: We want to instead add the `VMContext` to the signature used by
+        //       cranelift, removing the special-casing from the internals.
+        assert_eq!(self.params[0].purpose, ir::ArgumentPurpose::VMContext);
+        assert_eq!(self.call_conv, isa::CallConv::SystemV);
+        &self.params[1..]
+    }
+
+    fn returns(&self) -> &[Self::Type] {
+        assert_eq!(self.call_conv, isa::CallConv::SystemV);
+        &self.returns
+    }
+}
+
+impl Signature for FuncType {
+    type Type = wasmparser::Type;
+
+    fn params(&self) -> &[Self::Type] {
+        &*self.params
+    }
+
+    fn returns(&self) -> &[Self::Type] {
+        &*self.returns
+    }
+}
+
+pub trait ModuleContext {
+    type Signature: Signature + Hash;
+
+    fn func_type_index(&self, func_idx: u32) -> u32;
+    fn signature(&self, index: u32) -> &Self::Signature;
+    fn offset_of_memory_ptr(&self) -> u8;
+    fn offset_of_memory_len(&self) -> u8;
+    fn offset_of_funcs_ptr(&self) -> u8;
+    fn offset_of_funcs_len(&self) -> u8;
+
+    fn func_type(&self, func_idx: u32) -> &Self::Signature {
+        // TODO: This assumes that there are no imported functions.
+        self.signature(self.func_type_index(func_idx))
+    }
+}
+
+impl ModuleContext for SimpleContext {
+    type Signature = FuncType;
+
+    fn func_type_index(&self, func_idx: u32) -> u32 {
         self.func_ty_indicies[func_idx as usize]
     }
 
-    pub fn signature(&self, index: u32) -> &FuncType {
+    fn signature(&self, index: u32) -> &Self::Signature {
         &self.types[index as usize]
     }
 
-    pub fn func_type(&self, func_idx: u32) -> &FuncType {
-        // TODO: This assumes that there are no imported functions.
-        self.signature(self.func_type_index(func_idx))
+    fn offset_of_memory_ptr(&self) -> u8 {
+        VmCtx::offset_of_memory_ptr()
+    }
+
+    fn offset_of_memory_len(&self) -> u8 {
+        VmCtx::offset_of_memory_len()
+    }
+
+    fn offset_of_funcs_ptr(&self) -> u8 {
+        VmCtx::offset_of_funcs_ptr()
+    }
+
+    fn offset_of_funcs_len(&self) -> u8 {
+        VmCtx::offset_of_funcs_len()
     }
 
     // TODO: type of a global
@@ -471,11 +528,7 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Code = section.code {
         let code = section.get_code_section_reader()?;
-        output.translated_code_section = Some(translate_sections::code(
-            code,
-            &output.types,
-            output.memory.is_some(),
-        )?);
+        output.translated_code_section = Some(translate_sections::code(code, &output.types)?);
 
         reader.skip_custom_sections()?;
         if reader.eof() {
