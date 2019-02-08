@@ -1,3 +1,7 @@
 [submodule "spec_testsuite"]
 	path = spec_testsuite
 	url = https://github.com/WebAssembly/testsuite
+[submodule "lightbeam"]
+	path = lightbeam
+	url = https://github.com/CraneStation/lightbeam.git
+	branch = master

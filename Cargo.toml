@@ -41,3 +41,6 @@ file-per-thread-logger = "0.1.1"
 wabt = "0.7"
 
 [workspace]
+
+[features]
+lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam"]

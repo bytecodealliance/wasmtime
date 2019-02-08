@@ -14,8 +14,8 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
-    self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
-    WasmResult,
+    self, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex, WasmResult,
 };
 use std::vec::Vec;
 
@@ -205,6 +205,138 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             )
         }
     }
+}
+
+#[cfg(feature = "lightbeam")]
+impl lightbeam::ModuleContext for FuncEnvironment<'_> {
+    type Signature = ir::Signature;
+    type GlobalType = ir::Type;
+
+    fn func_index(&self, defined_func_index: u32) -> u32 {
+        self.module
+            .func_index(DefinedFuncIndex::from_u32(defined_func_index))
+            .as_u32()
+    }
+
+    fn defined_func_index(&self, func_index: u32) -> Option<u32> {
+        self.module
+            .defined_func_index(FuncIndex::from_u32(func_index))
+            .map(|i| i.as_u32())
+    }
+
+    fn defined_global_index(&self, global_index: u32) -> Option<u32> {
+        self.module
+            .defined_global_index(GlobalIndex::from_u32(global_index))
+            .map(|i| i.as_u32())
+    }
+
+    fn global_type(&self, global_index: u32) -> &Self::GlobalType {
+        &self.module.globals[GlobalIndex::from_u32(global_index)].ty
+    }
+
+    fn func_type_index(&self, func_idx: u32) -> u32 {
+        self.module.functions[FuncIndex::from_u32(func_idx)].as_u32()
+    }
+
+    fn signature(&self, index: u32) -> &Self::Signature {
+        &self.module.signatures[SignatureIndex::from_u32(index)]
+    }
+
+    fn defined_table_index(&self, table_index: u32) -> Option<u32> {
+        self.module
+            .defined_table_index(TableIndex::from_u32(table_index))
+            .map(|i| i.as_u32())
+    }
+
+    fn defined_memory_index(&self, memory_index: u32) -> Option<u32> {
+        self.module
+            .defined_memory_index(MemoryIndex::from_u32(memory_index))
+            .map(|i| i.as_u32())
+    }
+
+    fn vmctx_vmfunction_import_body(&self, func_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmfunction_import_body(FuncIndex::from_u32(func_index))
+    }
+    fn vmctx_vmfunction_import_vmctx(&self, func_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmfunction_import_vmctx(FuncIndex::from_u32(func_index))
+    }
+
+    fn vmctx_vmglobal_import_from(&self, global_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmglobal_import_from(GlobalIndex::from_u32(global_index))
+    }
+    fn vmctx_vmglobal_definition(&self, defined_global_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmglobal_definition(DefinedGlobalIndex::from_u32(defined_global_index))
+    }
+    fn vmctx_vmmemory_import_from(&self, memory_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmmemory_import_from(MemoryIndex::from_u32(memory_index))
+    }
+    fn vmctx_vmmemory_definition(&self, defined_memory_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmmemory_definition(DefinedMemoryIndex::from_u32(defined_memory_index))
+    }
+    fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmmemory_definition_base(DefinedMemoryIndex::from_u32(defined_memory_index))
+    }
+    fn vmctx_vmmemory_definition_current_length(&self, defined_memory_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmmemory_definition_current_length(DefinedMemoryIndex::from_u32(
+                defined_memory_index,
+            ))
+    }
+    fn vmmemory_definition_base(&self) -> u8 {
+        self.offsets.vmmemory_definition_base()
+    }
+    fn vmmemory_definition_current_length(&self) -> u8 {
+        self.offsets.vmmemory_definition_current_length()
+    }
+    fn vmctx_vmtable_import_from(&self, table_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmtable_import_from(TableIndex::from_u32(table_index))
+    }
+    fn vmctx_vmtable_definition(&self, defined_table_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmtable_definition(DefinedTableIndex::from_u32(defined_table_index))
+    }
+    fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmtable_definition_base(DefinedTableIndex::from_u32(defined_table_index))
+    }
+    fn vmctx_vmtable_definition_current_elements(&self, defined_table_index: u32) -> u32 {
+        self.offsets
+            .vmctx_vmtable_definition_current_elements(DefinedTableIndex::from_u32(
+                defined_table_index,
+            ))
+    }
+    fn vmtable_definition_base(&self) -> u8 {
+        self.offsets.vmtable_definition_base()
+    }
+    fn vmtable_definition_current_elements(&self) -> u8 {
+        self.offsets.vmtable_definition_current_elements()
+    }
+    fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {
+        self.offsets.vmcaller_checked_anyfunc_type_index()
+    }
+    fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
+        self.offsets.vmcaller_checked_anyfunc_func_ptr()
+    }
+    fn vmcaller_checked_anyfunc_vmctx(&self) -> u8 {
+        self.offsets.vmcaller_checked_anyfunc_vmctx()
+    }
+    fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
+        self.offsets.size_of_vmcaller_checked_anyfunc()
+    }
+    fn vmctx_vmshared_signature_id(&self, signature_idx: u32) -> u32 {
+        self.offsets
+            .vmctx_vmshared_signature_id(SignatureIndex::from_u32(signature_idx))
+    }
+
+    // TODO: type of a global
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {

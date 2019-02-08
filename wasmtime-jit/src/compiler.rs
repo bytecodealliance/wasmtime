@@ -17,7 +17,7 @@ use std::vec::Vec;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::cranelift;
 use wasmtime_environ::{
-    Compilation, CompileError, FunctionBodyData, Module, Relocations, Tunables,
+    Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, Relocations, Tunables,
 };
 use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
 
@@ -53,6 +53,11 @@ impl Compiler {
     }
 }
 
+#[cfg(feature = "lightbeam")]
+type DefaultCompiler = wasmtime_environ::lightbeam::Lightbeam;
+#[cfg(not(feature = "lightbeam"))]
+type DefaultCompiler = wasmtime_environ::cranelift::Cranelift;
+
 impl Compiler {
     /// Return the target's frontend configuration settings.
     pub fn frontend_config(&self) -> TargetFrontendConfig {
@@ -78,7 +83,7 @@ impl Compiler {
         ),
         SetupError,
     > {
-        let (compilation, relocations, address_transform) = cranelift::compile_module(
+        let (compilation, relocations, address_transform) = DefaultCompiler::compile_module(
             module,
             function_body_inputs,
             &*self.isa,
@@ -252,6 +257,7 @@ fn allocate_functions(
     code_memory: &mut CodeMemory,
     compilation: &Compilation,
 ) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
+<<<<<<< HEAD:wasmtime-jit/src/compiler.rs
     // Allocate code for all function in one continuous memory block.
     // First, collect all function bodies into vector to pass to the
     // allocate_copy_of_byte_slices.
@@ -266,6 +272,12 @@ fn allocate_functions(
     for i in 0..fat_ptrs.len() {
         let fat_ptr: *mut [VMFunctionBody] = fat_ptrs[i];
         result.push(fat_ptr);
+=======
+    let mut result = PrimaryMap::with_capacity(compilation.len());
+    for body in &compilation {
+        let fatptr: *mut [VMFunctionBody] = code_memory.allocate_copy_of_byte_slice(body)?;
+        result.push(fatptr);
+>>>>>>> Integrate lightbeam:lib/jit/src/compiler.rs
     }
     Ok(result)
 }
