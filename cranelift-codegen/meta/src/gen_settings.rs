@@ -1,4 +1,3 @@
-use crate::base;
 use crate::cdsl::camel_case;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::settings::{
@@ -6,6 +5,7 @@ use crate::cdsl::settings::{
 };
 use crate::constant_hash::{generate_table, simple_hash};
 use crate::error;
+use crate::shared;
 use crate::srcgen::{Formatter, Match};
 use crate::unique_table::UniqueTable;
 use std::collections::HashMap;
@@ -433,7 +433,7 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
 }
 
 pub fn generate_common(filename: &str, out_dir: &str) -> Result<SettingGroup, error::Error> {
-    let settings = base::settings::generate();
+    let settings = shared::settings::generate();
     let mut fmt = Formatter::new();
     gen_group(&settings, ParentGroup::None, &mut fmt);
     fmt.update_file(filename, out_dir)?;
