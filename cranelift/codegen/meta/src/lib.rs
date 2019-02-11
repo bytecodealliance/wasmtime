@@ -8,8 +8,8 @@ mod gen_registers;
 mod gen_settings;
 mod gen_types;
 
-mod base;
 mod constant_hash;
+mod shared;
 mod srcgen;
 mod unique_table;
 
