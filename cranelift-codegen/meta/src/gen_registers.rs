@@ -32,7 +32,7 @@ fn gen_regbank(fmt: &mut Formatter, reg_bank: &RegBank) {
 }
 
 fn gen_regclass(isa: &TargetIsa, reg_class: &RegClass, fmt: &mut Formatter) {
-    let reg_bank = isa.reg_banks.get(reg_class.bank).unwrap();
+    let reg_bank = isa.regs.banks.get(reg_class.bank).unwrap();
 
     let mask: Vec<String> = reg_class
         .mask(reg_bank.first_unit)
@@ -86,7 +86,7 @@ fn gen_isa(isa: &TargetIsa, fmt: &mut Formatter) {
         fmt.line("banks: &[");
         // Bank descriptors.
         fmt.indent(|fmt| {
-            for reg_bank in isa.reg_banks.values() {
+            for reg_bank in isa.regs.banks.values() {
                 gen_regbank(fmt, &reg_bank);
             }
         });
@@ -94,7 +94,7 @@ fn gen_isa(isa: &TargetIsa, fmt: &mut Formatter) {
         // References to register classes.
         fmt.line("classes: &[");
         fmt.indent(|fmt| {
-            for reg_class in isa.reg_classes.values() {
+            for reg_class in isa.regs.classes.values() {
                 fmt.line(&format!("&{}_DATA,", reg_class.name));
             }
         });
@@ -103,7 +103,7 @@ fn gen_isa(isa: &TargetIsa, fmt: &mut Formatter) {
     fmt.line("};");
 
     // Register class descriptors.
-    for rc in isa.reg_classes.values() {
+    for rc in isa.regs.classes.values() {
         gen_regclass(&isa, rc, fmt);
     }
 
@@ -112,7 +112,7 @@ fn gen_isa(isa: &TargetIsa, fmt: &mut Formatter) {
     fmt.line("#[derive(Clone, Copy)]");
     fmt.line("pub enum RU {");
     fmt.indent(|fmt| {
-        for reg_bank in isa.reg_banks.values() {
+        for reg_bank in isa.regs.banks.values() {
             gen_regbank_units(reg_bank, fmt);
         }
     });

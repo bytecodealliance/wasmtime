@@ -1,5 +1,5 @@
-use crate::cdsl::isa::{TargetIsa, TargetIsaBuilder};
-use crate::cdsl::regs::{RegBankBuilder, RegClassBuilder};
+use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
@@ -7,39 +7,45 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     setting.finish()
 }
 
-pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
-    let mut isa = TargetIsaBuilder::new("arm32", define_settings(shared_settings));
+fn define_regs() -> IsaRegs {
+    let mut regs = IsaRegsBuilder::new();
 
     let builder = RegBankBuilder::new("FloatRegs", "s")
         .units(64)
         .track_pressure(true);
-    let float_regs = isa.add_reg_bank(builder);
+    let float_regs = regs.add_bank(builder);
 
     let builder = RegBankBuilder::new("IntRegs", "r")
         .units(16)
         .track_pressure(true);
-    let int_regs = isa.add_reg_bank(builder);
+    let int_regs = regs.add_bank(builder);
 
     let builder = RegBankBuilder::new("FlagRegs", "")
         .units(1)
         .names(vec!["nzcv"])
         .track_pressure(false);
-    let flag_reg = isa.add_reg_bank(builder);
+    let flag_reg = regs.add_bank(builder);
 
     let builder = RegClassBuilder::new_toplevel("S", float_regs).count(32);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("D", float_regs).width(2);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("Q", float_regs).width(4);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("GPR", int_regs);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("FLAG", flag_reg);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
-    isa.finish()
+    regs.finish()
+}
+
+pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
+    let settings = define_settings(shared_settings);
+    let regs = define_regs();
+    TargetIsa::new("arm32", settings, regs)
 }

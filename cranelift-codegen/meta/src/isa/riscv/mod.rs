@@ -1,5 +1,5 @@
-use crate::cdsl::isa::{TargetIsa, TargetIsaBuilder};
-use crate::cdsl::regs::{RegBankBuilder, RegClassBuilder};
+use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 
 fn define_settings(shared: &SettingGroup) -> SettingGroup {
@@ -54,24 +54,30 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     setting.finish()
 }
 
-pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
-    let mut isa = TargetIsaBuilder::new("riscv", define_settings(shared_settings));
+fn define_registers() -> IsaRegs {
+    let mut regs = IsaRegsBuilder::new();
 
     let builder = RegBankBuilder::new("IntRegs", "x")
         .units(32)
         .track_pressure(true);
-    let int_regs = isa.add_reg_bank(builder);
+    let int_regs = regs.add_bank(builder);
 
     let builder = RegBankBuilder::new("FloatRegs", "f")
         .units(32)
         .track_pressure(true);
-    let float_regs = isa.add_reg_bank(builder);
+    let float_regs = regs.add_bank(builder);
 
     let builder = RegClassBuilder::new_toplevel("GPR", int_regs);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("FPR", float_regs);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
-    isa.finish()
+    regs.finish()
+}
+
+pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
+    let settings = define_settings(shared_settings);
+    let regs = define_registers();
+    TargetIsa::new("riscv", settings, regs)
 }
