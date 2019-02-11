@@ -1,8 +1,8 @@
-use crate::cdsl::isa::{TargetIsa, TargetIsaBuilder};
-use crate::cdsl::regs::{RegBankBuilder, RegClassBuilder};
+use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 
-pub fn define_settings(_shared: &SettingGroup) -> SettingGroup {
+fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("x86");
 
     // CPUID.01H:ECX
@@ -68,49 +68,49 @@ pub fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     settings.finish()
 }
 
-fn define_registers(isa: &mut TargetIsaBuilder) {
+fn define_registers() -> IsaRegs {
+    let mut regs = IsaRegsBuilder::new();
+
     let builder = RegBankBuilder::new("IntRegs", "r")
         .units(16)
         .names(vec!["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi"])
         .track_pressure(true);
-    let int_regs = isa.add_reg_bank(builder);
+    let int_regs = regs.add_bank(builder);
 
     let builder = RegBankBuilder::new("FloatRegs", "xmm")
         .units(16)
         .track_pressure(true);
-    let float_regs = isa.add_reg_bank(builder);
+    let float_regs = regs.add_bank(builder);
 
     let builder = RegBankBuilder::new("FlagRegs", "")
         .units(1)
         .names(vec!["rflags"])
         .track_pressure(false);
-    let flag_reg = isa.add_reg_bank(builder);
+    let flag_reg = regs.add_bank(builder);
 
     let builder = RegClassBuilder::new_toplevel("GPR", int_regs);
-    let gpr = isa.add_reg_class(builder);
+    let gpr = regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("FPR", float_regs);
-    let fpr = isa.add_reg_class(builder);
+    let fpr = regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("FLAG", flag_reg);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
     let builder = RegClassBuilder::subclass_of("GPR8", gpr, 0, 8);
-    let gpr8 = isa.add_reg_class(builder);
+    let gpr8 = regs.add_class(builder);
 
     let builder = RegClassBuilder::subclass_of("ABCD", gpr8, 0, 4);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
 
     let builder = RegClassBuilder::subclass_of("FPR8", fpr, 0, 8);
-    isa.add_reg_class(builder);
+    regs.add_class(builder);
+
+    regs.finish()
 }
 
 pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
     let settings = define_settings(shared_settings);
-
-    let mut isa = TargetIsaBuilder::new("x86", settings);
-
-    define_registers(&mut isa);
-
-    isa.finish()
+    let regs = define_registers();
+    TargetIsa::new("x86", settings, regs)
 }
