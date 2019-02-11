@@ -29,15 +29,23 @@ log = { version = "0.4.6", default-features = false }
 cranelift-codegen-meta = { path = "meta", version = "0.28.0" }
 
 [features]
+default = ["std", "x86", "arm32", "arm64", "riscv"]
+
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
-default = ["std"]
 std = ["cranelift-entity/std", "cranelift-bforest/std", "target-lexicon/std"]
 core = ["hashmap_core"]
+
 # This enables some additional functions useful for writing tests, but which
 # can significantly increase the size of the library.
 testing_hooks = []
+
+# ISA targets for which we should build.
+x86 = []
+arm32 = []
+arm64 = []
+riscv = []
 
 [badges]
 maintenance = { status = "experimental" }

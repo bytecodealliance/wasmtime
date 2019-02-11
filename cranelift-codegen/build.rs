@@ -11,10 +11,6 @@
 // TARGET
 //     Target triple provided by Cargo.
 //
-// CRANELIFT_TARGETS (Optional)
-//     A setting for conditional compilation of isa targets. Possible values can be "native" or
-//     known isa targets separated by ','.
-//
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
@@ -31,22 +27,24 @@ fn main() {
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
 
     // Configure isa targets cfg.
-    let cranelift_targets = env::var("CRANELIFT_TARGETS").ok();
-    let cranelift_targets = cranelift_targets
-        .as_ref()
-        .map(|s| s.as_ref())
-        .filter(|s: &&str| s.len() > 0);
+    let isa_targets = meta::isa::Isa::all()
+        .into_iter()
+        .cloned()
+        .filter(|isa| {
+            let env_key = format!("CARGO_FEATURE_{}", isa.to_string().to_uppercase());
+            env::var(env_key).is_ok()
+        })
+        .collect::<Vec<_>>();
 
-    let isas = match cranelift_targets {
-        Some("native") => meta::isa_from_arch(&target_triple.split('-').next().unwrap()),
-        Some(targets) => meta::isas_from_targets(targets.split(',').collect::<Vec<_>>()),
-        None => meta::all_isas(),
-    }
-    .expect("Error when identifying CRANELIFT_TARGETS and TARGET");
-
-    for isa in &isas {
-        println!("cargo:rustc-cfg=build_{}", isa.to_string());
-    }
+    let isas = if isa_targets.is_empty() {
+        // Try to match native target.
+        let target_name = target_triple.split('-').next().unwrap();
+        let isa = meta::isa_from_arch(&target_name).expect("error when identifying target");
+        println!("cargo:rustc-cfg=feature=\"{}\"", isa);
+        vec![isa]
+    } else {
+        isa_targets
+    };
 
     let cur_dir = env::current_dir().expect("Can't access current working directory");
     let crate_dir = cur_dir.as_path();

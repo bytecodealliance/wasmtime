@@ -270,7 +270,7 @@ impl fmt::Display for Pressure {
 }
 
 #[cfg(test)]
-#[cfg(build_arm32)]
+#[cfg(feature = "arm32")]
 mod tests {
     use super::Pressure;
     use crate::isa::{RegClass, TargetIsa};

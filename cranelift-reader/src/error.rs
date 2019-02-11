@@ -19,6 +19,8 @@ pub struct ParseError {
     pub location: Location,
     /// Error message.
     pub message: String,
+    /// Whether it's a warning or a plain error.
+    pub is_warning: bool,
 }
 
 impl fmt::Display for ParseError {
@@ -40,6 +42,7 @@ macro_rules! err {
         Err($crate::ParseError {
             location: $loc.clone(),
             message: $msg.to_string(),
+            is_warning: false,
         })
     };
 
@@ -47,6 +50,17 @@ macro_rules! err {
         Err($crate::ParseError {
             location: $loc.clone(),
             message: format!( $fmt, $( $arg ),+ ),
+            is_warning: false,
+        })
+    };
+}
+
+macro_rules! warn {
+    ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
+        Err($crate::ParseError {
+            location: $loc.clone(),
+            message: format!($fmt, $( $arg ),+ ),
+            is_warning: true,
         })
     };
 }
