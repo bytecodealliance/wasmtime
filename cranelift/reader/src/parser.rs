@@ -530,6 +530,7 @@ impl<'a> Parser<'a> {
         ParseError {
             location: self.loc,
             message: message.to_string(),
+            is_warning: false,
         }
     }
 
@@ -778,10 +779,7 @@ impl<'a> Parser<'a> {
     ///
     /// Accept the target from the command line for pass command.
     ///
-    pub fn parse_cmdline_target(
-        &mut self,
-        target_pass: Option<&str>,
-    ) -> ParseResult<isaspec::IsaSpec> {
+    fn parse_cmdline_target(&mut self, target_pass: Option<&str>) -> ParseResult<isaspec::IsaSpec> {
         // Were there any `target` commands specified?
         let mut specified_target = false;
 
@@ -799,7 +797,7 @@ impl<'a> Parser<'a> {
                     return err!(loc, "support disabled target '{}'", targ);
                 }
                 Err(isa::LookupError::Unsupported) => {
-                    return err!(loc, "unsupported target '{}'", targ);
+                    return warn!(loc, "unsupported target '{}'", targ);
                 }
                 Ok(b) => b,
             };
@@ -821,7 +819,7 @@ impl<'a> Parser<'a> {
     ///
     /// Accept a mix of `target` and `set` command lines. The `set` commands are cumulative.
     ///
-    pub fn parse_target_specs(&mut self) -> ParseResult<isaspec::IsaSpec> {
+    fn parse_target_specs(&mut self) -> ParseResult<isaspec::IsaSpec> {
         // Were there any `target` commands?
         let mut seen_target = false;
         // Location of last `set` command since the last `target`.
@@ -859,7 +857,7 @@ impl<'a> Parser<'a> {
                             continue;
                         }
                         Err(isa::LookupError::Unsupported) => {
-                            return err!(loc, "unsupported target '{}'", target_name);
+                            return warn!(loc, "unsupported target '{}'", target_name);
                         }
                         Ok(b) => b,
                     };
@@ -874,6 +872,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             }
         }
+
         if !seen_target {
             // No `target` commands, but we allow for `set` commands.
             Ok(isaspec::IsaSpec::None(settings::Flags::new(flag_builder)))
@@ -2588,9 +2587,14 @@ mod tests {
         assert_eq!(arg.value_type, types::I32);
         assert_eq!(arg.extension, ArgumentExtension::Sext);
         assert_eq!(arg.purpose, ArgumentPurpose::Normal);
-        let ParseError { location, message } = p.parse_abi_param(None).unwrap_err();
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = p.parse_abi_param(None).unwrap_err();
         assert_eq!(location.line_number, 1);
         assert_eq!(message, "expected parameter type");
+        assert!(!is_warning);
     }
 
     #[test]
@@ -2736,7 +2740,11 @@ mod tests {
 
     #[test]
     fn duplicate_ebb() {
-        let ParseError { location, message } = Parser::new(
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = Parser::new(
             "function %ebbs() system_v {
                 ebb0:
                 ebb0:
@@ -2747,11 +2755,16 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: ebb0");
+        assert!(!is_warning);
     }
 
     #[test]
     fn duplicate_jt() {
-        let ParseError { location, message } = Parser::new(
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = Parser::new(
             "function %ebbs() system_v {
                 jt0 = jump_table []
                 jt0 = jump_table []",
@@ -2761,11 +2774,16 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: jt0");
+        assert!(!is_warning);
     }
 
     #[test]
     fn duplicate_ss() {
-        let ParseError { location, message } = Parser::new(
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = Parser::new(
             "function %ebbs() system_v {
                 ss0 = explicit_slot 8
                 ss0 = explicit_slot 8",
@@ -2775,11 +2793,16 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: ss0");
+        assert!(!is_warning);
     }
 
     #[test]
     fn duplicate_gv() {
-        let ParseError { location, message } = Parser::new(
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = Parser::new(
             "function %ebbs() system_v {
                 gv0 = vmctx
                 gv0 = vmctx",
@@ -2789,11 +2812,16 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: gv0");
+        assert!(!is_warning);
     }
 
     #[test]
     fn duplicate_heap() {
-        let ParseError { location, message } = Parser::new(
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = Parser::new(
             "function %ebbs() system_v {
                 heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000
                 heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000",
@@ -2803,11 +2831,16 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: heap0");
+        assert!(!is_warning);
     }
 
     #[test]
     fn duplicate_sig() {
-        let ParseError { location, message } = Parser::new(
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = Parser::new(
             "function %ebbs() system_v {
                 sig0 = ()
                 sig0 = ()",
@@ -2817,11 +2850,16 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: sig0");
+        assert!(!is_warning);
     }
 
     #[test]
     fn duplicate_fn() {
-        let ParseError { location, message } = Parser::new(
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = Parser::new(
             "function %ebbs() system_v {
                 sig0 = ()
                 fn0 = %foo sig0
@@ -2832,6 +2870,7 @@ mod tests {
 
         assert_eq!(location.line_number, 4);
         assert_eq!(message, "duplicate entity: fn0");
+        assert!(!is_warning);
     }
 
     #[test]
@@ -2905,7 +2944,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(build_riscv)]
+    #[cfg(feature = "riscv")]
     fn isa_spec() {
         assert!(parse_test(
             "target

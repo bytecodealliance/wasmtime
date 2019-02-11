@@ -17,7 +17,7 @@ pub enum IsaSpec {
     /// which are reflected in the finished `Flags` object.
     None(Flags),
 
-    /// The parsed file does contains `isa` commands.
+    /// The parsed file does contain `isa` commands.
     /// Each `isa` command is used to configure a `TargetIsa` trait object.
     Some(Vec<Box<TargetIsa>>),
 }

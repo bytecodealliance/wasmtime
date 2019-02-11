@@ -33,7 +33,21 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
     info!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
     let buffer = read_to_string(path).map_err(|e| e.to_string())?;
-    let testfile = parse_test(&buffer, passes, target).map_err(|e| e.to_string())?;
+
+    let testfile = match parse_test(&buffer, passes, target) {
+        Ok(testfile) => testfile,
+        Err(e) => {
+            if e.is_warning {
+                println!(
+                    "skipping test {:?} (line {}): {}",
+                    path, e.location.line_number, e.message
+                );
+                return Ok(started.elapsed());
+            }
+            return Err(e.to_string());
+        }
+    };
+
     if testfile.functions.is_empty() {
         return Err("no functions found".to_string());
     }

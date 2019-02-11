@@ -83,7 +83,7 @@ pub struct TestRunner {
 }
 
 impl TestRunner {
-    /// Create a new blank TrstRunner.
+    /// Create a new blank TestRunner.
     pub fn new(verbose: bool, report_times: bool) -> Self {
         Self {
             verbose,

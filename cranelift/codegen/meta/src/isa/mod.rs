@@ -44,6 +44,7 @@ impl Isa {
 }
 
 impl fmt::Display for Isa {
+    // These names should be kept in sync with the crate features.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Isa::Riscv => write!(f, "riscv"),

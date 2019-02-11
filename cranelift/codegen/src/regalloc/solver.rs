@@ -1127,7 +1127,7 @@ impl fmt::Display for Solver {
 }
 
 #[cfg(test)]
-#[cfg(build_arm32)]
+#[cfg(feature = "arm32")]
 mod tests {
     use super::{Move, Solver};
     use crate::entity::EntityRef;
