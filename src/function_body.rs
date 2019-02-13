@@ -1,499 +1,367 @@
-use backend::*;
-use error::Error;
-use module::{quickhash, ModuleContext, Signature};
-use wasmparser::{FunctionBody, Operator, Type};
+use crate::backend::*;
+use crate::error::Error;
+use crate::microwasm::*;
+use crate::module::{quickhash, ModuleContext, SigType, Signature};
+use either::{Either, Left, Right};
+use multi_mut::HashMapMultiMut;
+use std::collections::HashMap;
+use std::hash::Hash;
 
-// TODO: Use own declared `Type` enum.
-
-/// Type of a control frame.
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum ControlFrameKind {
-    /// A regular block frame.
-    ///
-    /// Can be used for an implicit function block.
-    Block { end_label: Label },
-    /// Loop frame (branching to the beginning of block).
-    Loop { header: Label },
-    /// True-subblock of if expression.
-    IfTrue {
-        /// If jump happens inside the if-true block then control will
-        /// land on this label.
-        end_label: Label,
-
-        /// If the condition of the `if` statement is unsatisfied, control
-        /// will land on this label. This label might point to `else` block if it
-        /// exists. Otherwise it equal to `end_label`.
-        if_not: Label,
-    },
-    /// False-subblock of if expression.
-    IfFalse { end_label: Label },
+#[derive(Debug)]
+struct Block {
+    label: BrTarget<Label>,
+    calling_convention: Option<Either<CallingConvention, VirtualCallingConvention>>,
+    params: u32,
+    // TODO: Is there a cleaner way to do this? `has_backwards_callers` should always be set if `is_next`
+    //       is false, so we should probably use an `enum` here.
+    is_next: bool,
+    num_callers: Option<u32>,
+    actual_num_callers: u32,
+    has_backwards_callers: bool,
 }
 
-impl ControlFrameKind {
-    /// Returns a label which should be used as a branch destination.
-    fn block_end(&self) -> Option<Label> {
-        match *self {
-            ControlFrameKind::Block { end_label } => Some(end_label),
-            ControlFrameKind::IfTrue { end_label, .. } => Some(end_label),
-            ControlFrameKind::IfFalse { end_label } => Some(end_label),
-            ControlFrameKind::Loop { .. } => None,
-        }
-    }
-
-    fn end_labels(&self) -> impl Iterator<Item = Label> {
-        self.block_end()
-            .into_iter()
-            .chain(if let ControlFrameKind::IfTrue { if_not, .. } = self {
-                // this is `if .. end` construction. Define the `if_not` label.
-                Some(*if_not)
-            } else {
-                None
-            })
-    }
-
-    fn is_loop(&self) -> bool {
-        match *self {
-            ControlFrameKind::Loop { .. } => true,
-            _ => false,
-        }
-    }
-
-    fn branch_target(&self) -> Label {
-        match *self {
-            ControlFrameKind::Block { end_label } => end_label,
-            ControlFrameKind::IfTrue { end_label, .. } => end_label,
-            ControlFrameKind::IfFalse { end_label } => end_label,
-            ControlFrameKind::Loop { header } => header,
-        }
+impl Block {
+    fn should_serialize_args(&self) -> bool {
+        self.calling_convention.is_none()
+            && (self.num_callers != Some(1) || self.has_backwards_callers)
     }
 }
 
-struct ControlFrame {
-    kind: ControlFrameKind,
-    /// Boolean which signals whether value stack became polymorphic. Value stack starts in non-polymorphic state and
-    /// becomes polymorphic only after an instruction that never passes control further is executed,
-    /// i.e. `unreachable`, `br` (but not `br_if`!), etc.
-    unreachable: bool,
-    /// State specific to the block (free temp registers, stack etc) which should be replaced
-    /// at the end of the block
-    block_state: BlockState,
-    arity: u32,
-}
-
-fn arity(ty: Type) -> u32 {
-    if ty == Type::EmptyBlockType {
-        0
-    } else {
-        1
-    }
-}
-
-impl ControlFrame {
-    pub fn new(kind: ControlFrameKind, block_state: BlockState, arity: u32) -> ControlFrame {
-        ControlFrame {
-            kind,
-            block_state,
-            arity,
-            unreachable: false,
-        }
-    }
-
-    pub fn arity(&self) -> u32 {
-        self.arity
-    }
-
-    /// Marks this control frame as reached stack-polymorphic state.
-    pub fn mark_unreachable(&mut self) {
-        self.unreachable = true;
-    }
-}
-
-pub fn translate<M: ModuleContext>(
+pub fn translate<M: ModuleContext, I, L>(
     session: &mut CodeGenSession<M>,
     func_idx: u32,
-    body: &FunctionBody,
-) -> Result<(), Error> {
-    fn break_from_control_frame_with_id<_M: ModuleContext>(
-        ctx: &mut Context<_M>,
-        control_frames: &mut Vec<ControlFrame>,
-        idx: usize,
-    ) {
-        let control_frame = control_frames.get_mut(idx).expect("wrong depth");
-
-        if control_frame.kind.is_loop() {
-            ctx.restore_locals_to(&control_frame.block_state.locals);
-        } else {
-            // We can't do any execution after the function end so we just skip this logic
-            // if we're breaking out of the whole function.
-            if idx != 0 {
-                // Workaround for borrowck limitations
-                let should_set = if let Some(locals) = control_frame.block_state.end_locals.as_ref()
-                {
-                    ctx.restore_locals_to(locals);
-                    false
-                } else {
-                    true
-                };
-
-                if should_set {
-                    control_frame.block_state.end_locals = Some(ctx.block_state.locals.clone());
-                }
-            }
-
-            ctx.return_from_block(control_frame.arity());
-        }
-
-        ctx.br(control_frame.kind.branch_target());
-    }
-
-    let locals = body.get_locals_reader()?;
-
-    let func_type = session.module_context.func_type(func_idx);
-    let arg_count = func_type.params().len() as u32;
-    let return_arity = func_type.returns().len() as u32;
-
-    let mut num_locals = 0;
-    for local in locals {
-        let (count, _ty) = local?;
-        num_locals += count;
-    }
+    body: I,
+) -> Result<(), Error>
+where
+    I: IntoIterator<Item = Operator<L>>,
+    L: Hash + Clone + Eq,
+    Operator<L>: std::fmt::Display,
+{
+    let func_type = session.module_context.defined_func_type(func_idx);
+    let mut body = body.into_iter().peekable();
 
     let ctx = &mut session.new_context(func_idx);
-    let operators = body.get_operators_reader()?;
 
-    // TODO: Do we need this `function_block_state`? If we transformed to use an arbitrary
-    //       CFG all this code would become way simpler.
-    let func = ctx.start_function(arg_count, num_locals);
+    let params = func_type
+        .params()
+        .iter()
+        .map(|t| t.to_microwasm_type())
+        .collect::<Vec<_>>();
 
-    let mut control_frames = Vec::new();
+    ctx.start_function(params.iter().cloned());
 
-    // Upon entering the function implicit frame for function body is pushed. It has the same
-    // result type as the function itself. Branching to it is equivalent to returning from the function.
-    let epilogue_label = ctx.create_label();
-    // TODO: I want to ideally not have the concept of "returning" at all and model everything as a CFG,
-    //       with "returning" being modelled as "calling the end of the function". That means that passing
-    //       arguments in argument registers and returning values in return registers are modelled
-    //       identically.
-    control_frames.push(ControlFrame::new(
-        ControlFrameKind::Block {
-            end_label: epilogue_label,
+    let mut blocks = HashMap::<BrTarget<L>, Block>::new();
+
+    let num_returns = func_type.returns().len();
+
+    blocks.insert(
+        BrTarget::Return,
+        Block {
+            label: BrTarget::Return,
+            params: num_returns as u32,
+            // TODO: This only works for integers
+            //
+            calling_convention: Some(Left(CallingConvention::function_start(ret_locs(
+                func_type.returns().iter().map(|t| t.to_microwasm_type()),
+            )))),
+            is_next: false,
+            has_backwards_callers: false,
+            actual_num_callers: 0,
+            num_callers: None,
         },
-        Default::default(),
-        return_arity,
-    ));
+    );
 
-    let mut operators = itertools::put_back(operators.into_iter());
-
-    // TODO: We want to make this a state machine (maybe requires 1-element lookahead? Not sure) so that we
-    //       can coelesce multiple `end`s and optimise break-at-end-of-block into noop.
-    // TODO: Does coelescing multiple `end`s matter since at worst this really only elides a single move at
-    //       the end of a function, and this is probably a no-op anyway due to register renaming.
     loop {
-        if control_frames
-            .last()
-            .map(|c| c.unreachable)
-            .unwrap_or(false)
-        {
-            use self::Operator::{Block, Else, End, If, Loop};
-
-            let mut depth = 0;
-            loop {
-                let op = if let Some(op) = operators.next() {
-                    op?
-                } else {
-                    break;
-                };
-
-                match op {
-                    If { .. } | Block { .. } | Loop { .. } => depth += 1,
-                    End => {
-                        if depth == 0 {
-                            operators.put_back(Ok(op));
-                            break;
-                        } else {
-                            depth -= 1;
-                        }
-                    }
-                    Else => {
-                        if depth == 0 {
-                            operators.put_back(Ok(op));
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        let op = if let Some(op) = operators.next() {
-            op?
+        let op = if let Some(op) = body.next() {
+            op
         } else {
             break;
         };
 
+        if let Some(Operator::Label(label)) = body.peek() {
+            let block = blocks
+                .get_mut(&BrTarget::Label(label.clone()))
+                .expect("Block definition should be before label definition");
+            block.is_next = true;
+        }
+
         match op {
             Operator::Unreachable => {
-                control_frames
-                    .last_mut()
-                    .expect("control stack is never empty")
-                    .mark_unreachable();
                 ctx.trap();
             }
-            Operator::Block { ty } => {
-                let label = ctx.create_label();
-                let state = ctx.start_block();
-                control_frames.push(ControlFrame::new(
-                    ControlFrameKind::Block { end_label: label },
-                    state,
-                    arity(ty),
-                ));
-            }
-            Operator::Return => {
-                control_frames
-                    .last_mut()
-                    .expect("Control stack is empty!")
-                    .mark_unreachable();
+            Operator::Label(label) => {
+                use std::collections::hash_map::Entry;
 
-                break_from_control_frame_with_id(ctx, &mut control_frames, 0);
-            }
-            Operator::Br { relative_depth } => {
-                control_frames
-                    .last_mut()
-                    .expect("Control stack is empty!")
-                    .mark_unreachable();
+                if let Entry::Occupied(mut entry) = blocks.entry(BrTarget::Label(label)) {
+                    let has_backwards_callers = {
+                        let block = entry.get_mut();
 
-                let idx = control_frames.len() - 1 - relative_depth as usize;
+                        // TODO: Is it possible with arbitrary CFGs that a block will have _only_ backwards callers?
+                        //       Certainly for Wasm that is currently impossible.
+                        if block.actual_num_callers == 0 {
+                            loop {
+                                let done = match body.peek() {
+                                    Some(Operator::Label(_)) | None => true,
+                                    Some(_) => false,
+                                };
 
-                break_from_control_frame_with_id(ctx, &mut control_frames, idx);
-            }
-            Operator::BrIf { relative_depth } => {
-                let idx = control_frames.len() - 1 - relative_depth as usize;
+                                if done {
+                                    break;
+                                }
 
-                let if_not = ctx.create_label();
+                                body.next();
+                            }
 
-                ctx.jump_if_false(if_not);
-
-                break_from_control_frame_with_id(ctx, &mut control_frames, idx);
-
-                ctx.define_label(if_not);
-            }
-            Operator::If { ty } => {
-                let end_label = ctx.create_label();
-                let if_not = ctx.create_label();
-
-                ctx.jump_if_false(if_not);
-                let state = ctx.start_block();
-
-                control_frames.push(ControlFrame::new(
-                    ControlFrameKind::IfTrue { end_label, if_not },
-                    state,
-                    arity(ty),
-                ));
-            }
-            Operator::Loop { ty } => {
-                let header = ctx.create_label();
-
-                ctx.define_label(header);
-                let state = ctx.start_block();
-
-                control_frames.push(ControlFrame::new(
-                    ControlFrameKind::Loop { header },
-                    state,
-                    arity(ty),
-                ));
-            }
-            Operator::Else => {
-                match control_frames.pop() {
-                    Some(ControlFrame {
-                        kind: ControlFrameKind::IfTrue { if_not, end_label },
-                        arity,
-                        block_state,
-                        unreachable,
-                    }) => {
-                        if !unreachable {
-                            ctx.return_from_block(arity);
+                            continue;
                         }
 
-                        ctx.reset_block(block_state.clone());
+                        block.is_next = false;
 
-                        // Finalize `then` block by jumping to the `end_label`.
-                        ctx.br(end_label);
+                        // TODO: We can `take` this if it's a `Right`
+                        match block.calling_convention.as_ref() {
+                            Some(Left(cc)) => {
+                                ctx.apply_cc(cc);
+                            }
+                            Some(Right(virt)) => {
+                                ctx.set_state(virt.clone());
+                            }
+                            _ => {}
+                        }
 
-                        // Define `if_not` label here, so if the corresponding `if` block receives
-                        // 0 it will branch here.
-                        // After that reset stack depth to the value before entering `if` block.
-                        ctx.define_label(if_not);
+                        ctx.define_label(block.label.label().unwrap().clone());
 
-                        // Carry over the `end_label`, so it will be resolved when the corresponding `end`
-                        // is encountered.
-                        //
-                        // Also note that we reset `stack_depth` to the value before entering `if` block.
-                        let mut frame = ControlFrame::new(
-                            ControlFrameKind::IfFalse { end_label },
-                            block_state,
-                            arity,
-                        );
-                        control_frames.push(frame);
-                    }
-                    Some(_) => panic!("else expects if block"),
-                    None => panic!("control stack is never empty"),
-                };
-            }
-            Operator::End => {
-                // TODO: Merge `End`s so that we can
-                //       A) Move values directly into RAX when returning from deeply-nested blocks.
-                //       B) Avoid restoring locals when not necessary.
-                //
-                //       This doesn't require lookahead but it does require turning this loop into
-                //       a kind of state machine.
-                let mut control_frame = control_frames.pop().expect("control stack is never empty");
-                let mut labels = control_frame.kind.end_labels().collect::<Vec<_>>();
-                let mut unreachable = control_frame.unreachable;
-
-                let mut end = control_frame.block_state.end_locals.take();
-
-                // Fold `End`s together to prevent unnecessary shuffling of locals
-                loop {
-                    let op = if let Some(op) = operators.next() {
-                        op?
-                    } else {
-                        break;
+                        block.has_backwards_callers
                     };
 
-                    match op {
-                        Operator::End => {
-                            control_frame =
-                                control_frames.pop().expect("control stack is never empty");
-
-                            labels.extend(control_frame.kind.end_labels());
-                            unreachable = unreachable || control_frame.unreachable;
-
-                            end = control_frame.block_state.end_locals.take().or(end);
-                        }
-                        other => {
-                            operators.put_back(Ok(other));
-                            break;
-                        }
+                    // To reduce memory overhead
+                    if !has_backwards_callers {
+                        entry.remove_entry();
                     }
+                } else {
+                    panic!("Label defined before being declared");
                 }
-
-                let arity = control_frame.arity();
-
-                // Don't bother generating this code if we're in unreachable code
-                if !unreachable {
-                    ctx.return_from_block(arity);
-
-                    // If there are no remaining frames we've hit the end of the function - we don't need to
-                    // restore locals since no execution will happen after this point.
-                    if !control_frames.is_empty() {
-                        if let Some(end) = end {
-                            ctx.restore_locals_to(&end);
-                        }
-                    }
-                }
-
-                // TODO: What is the correct order of this and the `define_label`? It's clear for `block`s
-                //       but I'm not certain for `if..then..else..end`.
-                ctx.end_block(control_frame.block_state, |ctx| {
-                    for label in labels {
-                        ctx.define_label(label);
-                    }
-                });
             }
-            Operator::I32Eq => ctx.i32_eq(),
-            Operator::I32Eqz => ctx.i32_eqz(),
-            Operator::I32Ne => ctx.i32_neq(),
-            Operator::I32LtS => ctx.i32_lt_s(),
-            Operator::I32LeS => ctx.i32_le_s(),
-            Operator::I32GtS => ctx.i32_gt_s(),
-            Operator::I32GeS => ctx.i32_ge_s(),
-            Operator::I32LtU => ctx.i32_lt_u(),
-            Operator::I32LeU => ctx.i32_le_u(),
-            Operator::I32GtU => ctx.i32_gt_u(),
-            Operator::I32GeU => ctx.i32_ge_u(),
-            Operator::I32Add => ctx.i32_add(),
-            Operator::I32Sub => ctx.i32_sub(),
-            Operator::I32And => ctx.i32_and(),
-            Operator::I32Or => ctx.i32_or(),
-            Operator::I32Xor => ctx.i32_xor(),
-            Operator::I32Mul => ctx.i32_mul(),
-            Operator::I32Shl => ctx.i32_shl(),
-            Operator::I32ShrS => ctx.i32_shr_s(),
-            Operator::I32ShrU => ctx.i32_shr_u(),
-            Operator::I32Rotl => ctx.i32_rotl(),
-            Operator::I32Rotr => ctx.i32_rotr(),
-            Operator::I32Clz => ctx.i32_clz(),
-            Operator::I32Ctz => ctx.i32_ctz(),
-            Operator::I32Popcnt => ctx.i32_popcnt(),
-            Operator::I64Eq => ctx.i64_eq(),
-            Operator::I64Eqz => ctx.i64_eqz(),
-            Operator::I64Ne => ctx.i64_neq(),
-            Operator::I64LtS => ctx.i64_lt_s(),
-            Operator::I64LeS => ctx.i64_le_s(),
-            Operator::I64GtS => ctx.i64_gt_s(),
-            Operator::I64GeS => ctx.i64_ge_s(),
-            Operator::I64LtU => ctx.i64_lt_u(),
-            Operator::I64LeU => ctx.i64_le_u(),
-            Operator::I64GtU => ctx.i64_gt_u(),
-            Operator::I64GeU => ctx.i64_ge_u(),
-            Operator::I64Add => ctx.i64_add(),
-            Operator::I64Sub => ctx.i64_sub(),
-            Operator::I64And => ctx.i64_and(),
-            Operator::I64Or => ctx.i64_or(),
-            Operator::I64Xor => ctx.i64_xor(),
-            Operator::I64Mul => ctx.i64_mul(),
-            Operator::I64Shl => ctx.i64_shl(),
-            Operator::I64ShrS => ctx.i64_shr_s(),
-            Operator::I64ShrU => ctx.i64_shr_u(),
-            Operator::I64Rotl => ctx.i64_rotl(),
-            Operator::I64Rotr => ctx.i64_rotr(),
-            Operator::I64Clz => ctx.i64_clz(),
-            Operator::I64Ctz => ctx.i64_ctz(),
-            Operator::I64Popcnt => ctx.i64_popcnt(),
-            Operator::Drop => ctx.drop(),
-            Operator::SetLocal { local_index } => ctx.set_local(local_index),
-            Operator::GetLocal { local_index } => ctx.get_local(local_index),
-            Operator::TeeLocal { local_index } => ctx.tee_local(local_index),
-            Operator::I32Const { value } => ctx.i32_literal(value),
-            Operator::I64Const { value } => ctx.i64_literal(value),
-            Operator::I32Load { memarg } => ctx.i32_load(memarg.offset)?,
-            Operator::I64Load { memarg } => ctx.i64_load(memarg.offset)?,
-            Operator::I32Store { memarg } => ctx.i32_store(memarg.offset)?,
-            Operator::I64Store { memarg } => ctx.i64_store(memarg.offset)?,
+            Operator::Block {
+                label,
+                has_backwards_callers,
+                params,
+                num_callers,
+            } => {
+                let asm_label = ctx.create_label();
+                blocks.insert(
+                    BrTarget::Label(label),
+                    Block {
+                        label: BrTarget::Label(asm_label),
+                        params: params.len() as _,
+                        calling_convention: None,
+                        is_next: false,
+                        has_backwards_callers,
+                        actual_num_callers: 0,
+                        num_callers,
+                    },
+                );
+            }
+            Operator::Br { target } => {
+                // TODO: We should add the block to the hashmap if we don't have it already
+                let block = blocks.get_mut(&target).unwrap();
+                block.actual_num_callers += 1;
+
+                let should_serialize_args = block.should_serialize_args();
+
+                match block {
+                    Block {
+                        is_next,
+                        label: BrTarget::Label(l),
+                        calling_convention,
+                        ..
+                    } => {
+                        let cc = if should_serialize_args {
+                            *calling_convention = Some(Left(ctx.serialize_args(block.params)));
+                            None
+                        } else {
+                            calling_convention
+                                .as_ref()
+                                .map(Either::as_ref)
+                                .and_then(Either::left)
+                        };
+
+                        if let Some(cc) = cc {
+                            ctx.pass_block_args(cc);
+                        }
+
+                        if !*is_next {
+                            ctx.br(*l);
+                        }
+                    }
+                    Block {
+                        label: BrTarget::Return,
+                        calling_convention: Some(Left(cc)),
+                        ..
+                    } => {
+                        ctx.pass_block_args(cc);
+                        ctx.ret();
+                    }
+                    _ => unimplemented!(),
+                }
+            }
+            Operator::BrIf { then, else_ } => {
+                // TODO: We should add the block to the hashmap if we don't have it already
+                let (then_block, else_block) = blocks.pair_mut(&then, &else_);
+                then_block.actual_num_callers += 1;
+                else_block.actual_num_callers += 1;
+
+                let then_block_parts = (then_block.is_next, then_block.label);
+                let else_block_parts = (else_block.is_next, else_block.label);
+
+                // TODO: Use "compatible" cc
+                assert_eq!(then_block.params, else_block.params);
+
+                // TODO: The blocks should have compatible (one must be subset of other?) calling
+                //       conventions or else at least one must have no calling convention. This
+                //       should always be true for converting from WebAssembly AIUI.
+                let f = |ctx: &mut Context<_>| {
+                    let then_block_should_serialize_args = then_block.should_serialize_args();
+                    let else_block_should_serialize_args = else_block.should_serialize_args();
+
+                    match (
+                        &mut then_block.calling_convention,
+                        &mut else_block.calling_convention,
+                    ) {
+                        (Some(Left(ref cc)), ref mut other @ None)
+                        | (ref mut other @ None, Some(Left(ref cc))) => {
+                            **other = Some(Left(cc.clone()));
+
+                            ctx.pass_block_args(cc);
+                        }
+                        (ref mut then_cc @ None, ref mut else_cc @ None) => {
+                            let cc = if then_block_should_serialize_args {
+                                Some(Left(ctx.serialize_args(then_block.params)))
+                            } else if else_block_should_serialize_args {
+                                Some(Left(ctx.serialize_args(else_block.params)))
+                            } else {
+                                Some(Right(ctx.virtual_calling_convention()))
+                            };
+
+                            **then_cc = cc.clone();
+                            **else_cc = cc;
+                        }
+                        _ => unimplemented!(),
+                    }
+                };
+
+                match (then_block_parts, else_block_parts) {
+                    ((true, _), (false, BrTarget::Label(else_))) => {
+                        ctx.br_if_false(else_, f);
+                    }
+                    ((false, BrTarget::Label(then)), (true, _)) => {
+                        ctx.br_if_true(then, f);
+                    }
+                    ((false, BrTarget::Label(then)), (false, BrTarget::Label(else_))) => {
+                        ctx.br_if_true(then, f);
+                        ctx.br(else_);
+                    }
+                    other => unimplemented!("{:#?}", other),
+                }
+            }
+            Operator::Swap { depth } => ctx.swap(depth),
+            Operator::Pick { depth } => ctx.pick(depth),
+            Operator::Eq(I32) => ctx.i32_eq(),
+            Operator::Eqz(Size::_32) => ctx.i32_eqz(),
+            Operator::Ne(I32) => ctx.i32_neq(),
+            Operator::Lt(SI32) => ctx.i32_lt_s(),
+            Operator::Le(SI32) => ctx.i32_le_s(),
+            Operator::Gt(SI32) => ctx.i32_gt_s(),
+            Operator::Ge(SI32) => ctx.i32_ge_s(),
+            Operator::Lt(SU32) => ctx.i32_lt_u(),
+            Operator::Le(SU32) => ctx.i32_le_u(),
+            Operator::Gt(SU32) => ctx.i32_gt_u(),
+            Operator::Ge(SU32) => ctx.i32_ge_u(),
+            Operator::Add(I32) => ctx.i32_add(),
+            Operator::Sub(I32) => ctx.i32_sub(),
+            Operator::And(Size::_32) => ctx.i32_and(),
+            Operator::Or(Size::_32) => ctx.i32_or(),
+            Operator::Xor(Size::_32) => ctx.i32_xor(),
+            Operator::Mul(I32) => ctx.i32_mul(),
+            Operator::Shl(Size::_32) => ctx.i32_shl(),
+            Operator::Shr(sint::I32) => ctx.i32_shr_s(),
+            Operator::Shr(sint::U32) => ctx.i32_shr_u(),
+            Operator::Rotl(Size::_32) => ctx.i32_rotl(),
+            Operator::Rotr(Size::_32) => ctx.i32_rotr(),
+            Operator::Clz(Size::_32) => ctx.i32_clz(),
+            Operator::Ctz(Size::_32) => ctx.i32_ctz(),
+            Operator::Popcnt(Size::_32) => ctx.i32_popcnt(),
+            Operator::Eq(I64) => ctx.i64_eq(),
+            Operator::Eqz(Size::_64) => ctx.i64_eqz(),
+            Operator::Ne(I64) => ctx.i64_neq(),
+            Operator::Lt(SI64) => ctx.i64_lt_s(),
+            Operator::Le(SI64) => ctx.i64_le_s(),
+            Operator::Gt(SI64) => ctx.i64_gt_s(),
+            Operator::Ge(SI64) => ctx.i64_ge_s(),
+            Operator::Lt(SU64) => ctx.i64_lt_u(),
+            Operator::Le(SU64) => ctx.i64_le_u(),
+            Operator::Gt(SU64) => ctx.i64_gt_u(),
+            Operator::Ge(SU64) => ctx.i64_ge_u(),
+            Operator::Add(I64) => ctx.i64_add(),
+            Operator::Sub(I64) => ctx.i64_sub(),
+            Operator::And(Size::_64) => ctx.i64_and(),
+            Operator::Or(Size::_64) => ctx.i64_or(),
+            Operator::Xor(Size::_64) => ctx.i64_xor(),
+            Operator::Mul(I64) => ctx.i64_mul(),
+            Operator::Shl(Size::_64) => ctx.i64_shl(),
+            Operator::Shr(sint::I64) => ctx.i64_shr_s(),
+            Operator::Shr(sint::U64) => ctx.i64_shr_u(),
+            Operator::Rotl(Size::_64) => ctx.i64_rotl(),
+            Operator::Rotr(Size::_64) => ctx.i64_rotr(),
+            Operator::Clz(Size::_64) => ctx.i64_clz(),
+            Operator::Ctz(Size::_64) => ctx.i64_ctz(),
+            Operator::Popcnt(Size::_64) => ctx.i64_popcnt(),
+            Operator::Drop(range) => ctx.drop(range),
+            Operator::Const(Value::I32(value)) => ctx.i32_literal(value),
+            Operator::Const(Value::I64(value)) => ctx.i64_literal(value),
+            Operator::Load { ty: I32, memarg } => ctx.i32_load(memarg.offset)?,
+            Operator::Load { ty: I64, memarg } => ctx.i64_load(memarg.offset)?,
+            Operator::Store { ty: I32, memarg } => ctx.i32_store(memarg.offset)?,
+            Operator::Store { ty: I64, memarg } => ctx.i64_store(memarg.offset)?,
             Operator::Select => {
                 ctx.select();
             }
             Operator::Call { function_index } => {
+                let function_index = session
+                    .module_context
+                    .defined_func_index(function_index)
+                    .expect("We don't support host calls yet");
                 let callee_ty = session.module_context.func_type(function_index);
 
                 // TODO: this implementation assumes that this function is locally defined.
-
                 ctx.call_direct(
                     function_index,
-                    callee_ty.params().len() as u32,
+                    callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                     callee_ty.returns().len() as u32,
                 );
             }
-            Operator::CallIndirect { index, table_index } => {
+            Operator::CallIndirect {
+                type_index,
+                table_index,
+            } => {
                 assert_eq!(table_index, 0);
 
-                let callee_ty = session.module_context.signature(index);
+                let callee_ty = session.module_context.signature(type_index);
 
                 // TODO: this implementation assumes that this function is locally defined.
 
                 ctx.call_indirect(
                     quickhash(callee_ty) as u32,
-                    callee_ty.params().len() as u32,
+                    callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                     callee_ty.returns().len() as u32,
                 );
             }
-            Operator::Nop => {}
             op => {
-                unimplemented!("{:?}", op);
+                unimplemented!("{}", op);
             }
         }
     }
-    ctx.epilogue(func);
+
+    ctx.epilogue();
 
     Ok(())
 }

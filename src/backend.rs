@@ -1,14 +1,16 @@
 #![allow(dead_code)] // for now
 
-// Since we want this to be linear-time, we never want to iterate over a `Vec`. `ArrayVec`s have a hard,
-// small maximum size and so we can consider iterating over them to be essentially constant-time.
-use arrayvec::ArrayVec;
+use microwasm::{SignlessType, I32, I64};
 
 use self::registers::*;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use error::Error;
-use std::{iter, mem};
+use std::{
+    iter::{self, FromIterator},
+    mem,
+    ops::RangeInclusive,
+};
 
 use module::{ModuleContext, RuntimeFunc};
 
@@ -16,6 +18,49 @@ use module::{ModuleContext, RuntimeFunc};
 const WORD_SIZE: u32 = 8;
 
 type GPR = u8;
+
+pub fn arg_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
+    let types = types.into_iter();
+    let mut out = Vec::with_capacity(types.size_hint().0);
+    // TODO: VmCtx is in the first register
+    let mut int_gpr_iter = INTEGER_ARGS_IN_GPRS.into_iter();
+    let mut stack_idx = 0;
+
+    for ty in types {
+        match ty {
+            I32 | I64 => out.push(int_gpr_iter.next().map(|&r| CCLoc::Reg(r)).unwrap_or_else(
+                || {
+                    let out = CCLoc::Stack(stack_idx);
+                    stack_idx += 1;
+                    out
+                },
+            )),
+            _ => {}
+        }
+    }
+
+    out
+}
+
+pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
+    let types = types.into_iter();
+    let mut out = Vec::with_capacity(types.size_hint().0);
+    // TODO: VmCtx is in the first register
+    let mut int_gpr_iter = INTEGER_RETURN_GPRS.into_iter();
+
+    for ty in types {
+        match ty {
+            I32 | I64 => out.push(CCLoc::Reg(
+                *int_gpr_iter
+                    .next()
+                    .expect("We don't support stack returns yet"),
+            )),
+            _ => panic!("We don't support floats yet"),
+        }
+    }
+
+    out
+}
 
 #[derive(Debug, Copy, Clone)]
 struct GPRs {
@@ -56,6 +101,7 @@ extern "sysv64" fn println(len: u64, args: *const u8) {
 
 #[allow(unused_macros)]
 macro_rules! asm_println {
+    ($asm:expr) => {asm_println!($asm,)};
     ($asm:expr, $($args:tt)*) => {{
         use std::mem;
 
@@ -137,6 +183,7 @@ impl GPRs {
 #[derive(Debug, Copy, Clone)]
 pub struct Registers {
     scratch: GPRs,
+    counts: [u8; NUM_GPRS as usize],
 }
 
 impl Default for Registers {
@@ -149,7 +196,9 @@ impl Registers {
     pub fn new() -> Self {
         let mut result = Self {
             scratch: GPRs::new(),
+            counts: [1; NUM_GPRS as _],
         };
+
         // Give ourselves a few scratch registers to work with, for now.
         for &scratch in SCRATCH_REGS {
             result.release_scratch_gpr(scratch);
@@ -160,16 +209,27 @@ impl Registers {
 
     pub fn mark_used(&mut self, gpr: GPR) {
         self.scratch.mark_used(gpr);
+        self.counts[gpr as usize] += 1;
+    }
+
+    pub fn num_usages(&self, gpr: GPR) -> u8 {
+        self.counts[gpr as usize]
     }
 
     // TODO: Add function that takes a scratch register if possible
     //       but otherwise gives a fresh stack location.
     pub fn take_scratch_gpr(&mut self) -> GPR {
-        self.scratch.take()
+        let out = self.scratch.take();
+        self.counts[out as usize] += 1;
+        out
     }
 
     pub fn release_scratch_gpr(&mut self, gpr: GPR) {
-        self.scratch.release(gpr);
+        let c = &mut self.counts[gpr as usize];
+        *c -= 1;
+        if *c == 0 {
+            self.scratch.release(gpr);
+        }
     }
 
     pub fn is_free(&self, gpr: GPR) -> bool {
@@ -181,29 +241,75 @@ impl Registers {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CallingConvention {
+    stack_depth: StackDepth,
+    arguments: Vec<CCLoc>,
+}
+
+impl CallingConvention {
+    pub fn function_start(args: impl IntoIterator<Item = CCLoc>) -> Self {
+        CallingConvention {
+            // We start and return the function with stack depth 1 since we must
+            // allow space for the saved return address.
+            stack_depth: StackDepth(1),
+            arguments: Vec::from_iter(args),
+        }
+    }
+}
+
+// TODO: Combine this with `ValueLocation`?
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CCLoc {
+    /// Value exists in a register.
+    Reg(GPR),
+    /// Value exists on the stack.
+    Stack(i32),
+}
+
 // TODO: Allow pushing condition codes to stack? We'd have to immediately
 //       materialise them into a register if anything is pushed above them.
 /// Describes location of a value.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum ValueLocation {
+pub enum ValueLocation {
     /// Value exists in a register.
     Reg(GPR),
-    /// Value exists on the stack. This is an offset relative to the
-    /// first local, and so will have to be adjusted with `adjusted_offset`
-    /// before reading (as RSP may have been changed by `push`/`pop`).
+    /// Value exists on the stack. Note that this offset is from the rsp as it
+    /// was when we entered the function.
     Stack(i32),
     /// Value is a literal (TODO: Support more than just `i32`)
     Immediate(i64),
 }
 
+impl From<CCLoc> for ValueLocation {
+    fn from(other: CCLoc) -> Self {
+        match other {
+            CCLoc::Reg(r) => ValueLocation::Reg(r),
+            CCLoc::Stack(o) => ValueLocation::Stack(o),
+        }
+    }
+}
+
+impl ValueLocation {
+    fn immediate(&self) -> Option<i64> {
+        match self {
+            ValueLocation::Immediate(i) => Some(*i),
+            _ => None,
+        }
+    }
+}
+
 // TODO: This assumes only system-v calling convention.
 // In system-v calling convention the first 6 arguments are passed via registers.
 // All rest arguments are passed on the stack.
-const ARGS_IN_GPRS: &[GPR] = &[RDI, RSI, RDX, RCX, R8, R9];
+const INTEGER_ARGS_IN_GPRS: &[GPR] = &[RSI, RDX, RCX, R8, R9];
+const INTEGER_RETURN_GPRS: &[GPR] = &[RAX, RDX];
 // List of scratch registers taken from https://wiki.osdev.org/System_V_ABI
-const SCRATCH_REGS: &[GPR] = &[RAX, R10, R11];
+const SCRATCH_REGS: &[GPR] = &[RSI, RDX, RCX, R8, R9, RAX, R10, R11];
+const VMCTX: GPR = RDI;
 
 #[must_use]
+#[derive(Debug, Clone)]
 pub struct FunctionEnd {
     should_generate_epilogue: bool,
 }
@@ -318,45 +424,17 @@ impl TranslatedCodeSection {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum Value {
-    Local(u32),
-    Temp(GPR),
-    Immediate(i64),
-}
-
-impl Value {
-    fn immediate(&self) -> Option<i64> {
-        match *self {
-            Value::Immediate(i) => Some(i),
-            _ => None,
-        }
-    }
-
-    fn location(&self, locals: &Locals) -> ValueLocation {
-        match *self {
-            Value::Local(loc) => locals.get(loc),
-            Value::Temp(reg) => ValueLocation::Reg(reg),
-            Value::Immediate(reg) => ValueLocation::Immediate(reg),
-        }
-    }
-}
-
 /// A value on the logical stack. The logical stack is the value stack as it
 /// is visible to the WebAssembly, whereas the physical stack is the stack as
 /// it exists on the machine (i.e. as offsets in memory relative to `rsp`).
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum StackValue {
-    /// A local (arguments are also locals). Note that when setting a local
-    /// any values of this local stored on the stack are rendered invalid.
-    /// See `manifest_local` for how we manage this.
-    Local(u32),
-    /// A temporary, stored in a register
-    Temp(GPR),
-    /// An immediate value, created with `i32.const`/`i64.const` etc.
-    Immediate(i64),
+    /// This value has a "real" location, either in a register, on the stack,
+    /// in an immediate, etc.
+    Value(ValueLocation),
     /// This value is on the physical stack and so should be accessed
     /// with the `pop` instruction.
+    // TODO: This complicates a lot of our code, it'd be great if we could get rid of it.
     Pop,
 }
 
@@ -368,165 +446,22 @@ impl StackValue {
     /// Of course, we could calculate the location of the value on the
     /// physical stack, but that would be unncessary computation for
     /// our usecases.
-    fn location(&self, locals: &Locals) -> Option<ValueLocation> {
+    fn location(&self) -> Option<ValueLocation> {
         match *self {
-            StackValue::Local(loc) => Some(locals.get(loc)),
-            StackValue::Immediate(i) => Some(ValueLocation::Immediate(i)),
-            StackValue::Temp(reg) => Some(ValueLocation::Reg(reg)),
+            StackValue::Value(loc) => Some(loc),
             StackValue::Pop => None,
         }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum ArgLoc {
-    Register(GPR),
-    Stack(i32),
-    Both(GPR, i32),
-}
-
-impl ArgLoc {
-    fn from_loc(loc: ValueLocation) -> Self {
-        match loc {
-            ValueLocation::Stack(offset) => ArgLoc::Stack(offset),
-            ValueLocation::Reg(gpr) => ArgLoc::Register(gpr),
-            _ => panic!("Unsupported local location"),
-        }
-    }
-
-    fn union(&mut self, other: ArgLoc) {
-        for l in other.locs() {
-            self.add_loc(l);
-        }
-    }
-
-    fn locs(&self) -> impl Iterator<Item = ValueLocation> {
-        self.reg()
-            .map(ValueLocation::Reg)
-            .into_iter()
-            .chain(self.stack().map(ValueLocation::Stack))
-    }
-
-    fn reg(&self) -> Option<GPR> {
-        match *self {
-            ArgLoc::Register(gpr) | ArgLoc::Both(gpr, _) => Some(gpr),
-            ArgLoc::Stack(_) => None,
-        }
-    }
-
-    fn stack(&self) -> Option<i32> {
-        match *self {
-            ArgLoc::Stack(o) | ArgLoc::Both(_, o) => Some(o),
-            ArgLoc::Register(_) => None,
-        }
-    }
-
-    fn add_loc(&mut self, loc: ValueLocation) {
-        match loc {
-            ValueLocation::Stack(offset) => self.add_stack(offset),
-            ValueLocation::Reg(gpr) => self.add_reg(gpr),
-            _ => panic!("Unsupported local location"),
-        }
-    }
-
-    fn add_stack(&mut self, offset: i32) {
-        *self = match *self {
-            ArgLoc::Register(gpr) | ArgLoc::Both(gpr, _) => ArgLoc::Both(gpr, offset),
-            ArgLoc::Stack(_) => ArgLoc::Stack(offset),
-        };
-    }
-
-    fn add_reg(&mut self, gpr: GPR) {
-        *self = match *self {
-            ArgLoc::Stack(offset) | ArgLoc::Both(_, offset) => ArgLoc::Both(gpr, offset),
-            ArgLoc::Register(_) => ArgLoc::Register(gpr),
-        };
-    }
-
-    fn best_loc(&self) -> ValueLocation {
-        match *self {
-            ArgLoc::Register(gpr) | ArgLoc::Both(gpr, _) => ValueLocation::Reg(gpr),
-            ArgLoc::Stack(offset) => ValueLocation::Stack(offset),
-        }
-    }
-}
-
-/// A store for the local values for our function, including arguments.
-#[derive(Debug, Default, Clone)]
-pub struct Locals {
-    // TODO: Store all places that the value can be read, so we can optimise
-    //       passing (register) arguments along into a noop after saving their
-    //       values.
-    /// All arguments in registers, check `ARGS_IN_GPRS` for the list of
-    /// registers that this can contain. If we need to move the argument
-    /// out of a register (for example, because we're calling a function)
-    /// we note that down here, so we don't have to move it back afterwards.
-    register_locals: ArrayVec<[ArgLoc; ARGS_IN_GPRS.len()]>,
-    /// The number of arguments stored on the stack.
-    num_stack_args: u32,
-    /// The number of local stack slots, i.e. the amount of stack space reserved for locals.
-    num_local_stack_slots: u32,
-}
-
-impl Locals {
-    fn register(&self, index: u32) -> Option<GPR> {
-        if index < self.register_locals.len() as u32 {
-            Some(ARGS_IN_GPRS[index as usize])
-        } else {
-            None
-        }
-    }
-
-    fn add_pos(&mut self, index: u32, loc: ValueLocation) {
-        self.register_locals[index as usize].add_loc(loc);
-    }
-
-    fn set_pos(&mut self, index: u32, loc: ValueLocation) {
-        self.register_locals[index as usize] = ArgLoc::from_loc(loc);
-    }
-
-    fn get(&self, index: u32) -> ValueLocation {
-        self.register_locals
-            .get(index as usize)
-            .map(ArgLoc::best_loc)
-            .unwrap_or_else(|| {
-                let stack_index = index - self.register_locals.len() as u32;
-                if stack_index < self.num_stack_args {
-                    ValueLocation::Stack(
-                        ((stack_index + self.num_local_stack_slots + 2) * WORD_SIZE) as _,
-                    )
-                } else {
-                    let stack_index = stack_index - self.num_stack_args;
-                    ValueLocation::Stack((stack_index * WORD_SIZE) as _)
-                }
-            })
-    }
-
-    fn num_args(&self) -> u32 {
-        self.register_locals.len() as u32 + self.num_stack_args
-    }
-
-    fn vmctx_index(&self) -> u32 {
-        0
     }
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct BlockState {
     stack: Stack,
-    // TODO: `BitVec`
-    pub stack_map: Vec<bool>,
-    pub depth: StackDepth,
-    pub return_register: Option<GPR>,
-    pub regs: Registers,
-    /// This is the _current_ locals, since we can shuffle them about during function calls.
-    pub locals: Locals,
-    /// In non-linear control flow (ifs and loops) we have to set the locals to the state that
-    /// the next block that we enter will expect them in.
-    pub end_locals: Option<Locals>,
+    depth: StackDepth,
+    regs: Registers,
 }
 
-type Stack = Vec<StackValue>;
+type Stack = Vec<ValueLocation>;
 
 pub enum MemoryAccessMode {
     /// This is slower than using `Unchecked` mode, but works in
@@ -574,22 +509,22 @@ macro_rules! unop {
         pub fn $name(&mut self) {
             let val = self.pop();
 
-            let out_val = match val.location(&self.block_state.locals) {
-                ValueLocation::Immediate(imm) => Value::Immediate($const_fallback(imm as $typ) as _),
+            let out_val = match val {
+                ValueLocation::Immediate(imm) => ValueLocation::Immediate($const_fallback(imm as $typ) as _),
                 ValueLocation::Stack(offset) => {
                     let offset = self.adjusted_offset(offset);
                     let temp = self.block_state.regs.take_scratch_gpr();
                     dynasm!(self.asm
                         ; $instr $reg_ty(temp), [rsp + offset]
                     );
-                    Value::Temp(temp)
+                    ValueLocation::Reg(temp)
                 }
                 ValueLocation::Reg(reg) => {
                     let temp = self.block_state.regs.take_scratch_gpr();
                     dynasm!(self.asm
                         ; $instr $reg_ty(temp), $reg_ty(reg)
                     );
-                    Value::Temp(temp)
+                    ValueLocation::Reg(temp)
                 }
             };
 
@@ -607,66 +542,30 @@ macro_rules! shift {
                 PopRcx,
             }
 
-            let count = self.pop();
+            let mut count = self.pop();
             let mut val = self.pop();
 
-            let (free_count, restore_rcx) = match count.location(&self.block_state.locals) {
-                // TODO: What if count is `Value::Temp(RCX)`? How do we correctly free it?
-                ValueLocation::Reg(RCX) => { (true, None) }
-                count_loc => {
-                    let out = match val {
-                        Value::Temp(RCX) => {
-                            let new_val = self.block_state.regs.take_scratch_gpr();
-                            self.copy_value(&ValueLocation::Reg(RCX), &mut ValueLocation::Reg(new_val));
-                            self.free_value(val);
-                            val = Value::Temp(new_val);
+            if val == ValueLocation::Reg(RCX) {
+                val = ValueLocation::Reg(self.into_temp_reg(val));
+            }
 
-                            None
-                        }
-                        Value::Local(i) => {
-                            let val_loc = self.block_state.locals.get(i);
-                            if val_loc == ValueLocation::Reg(RCX) {
-                                let unshifted_reg = self.block_state.regs.take_scratch_gpr();
-                                let shifted_reg = self.block_state.regs.take_scratch_gpr();
-
-                                let unshifted = ValueLocation::Reg(unshifted_reg);
-                                let shifted = ValueLocation::Reg(shifted_reg);
-
-                                self.copy_value(&val_loc, &mut {unshifted});
-                                self.free_value(val);
-                                self.copy_value(&unshifted, &mut {shifted});
-
-                                val = Value::Temp(shifted_reg);
-
-                                Some(RestoreRcx::MoveValBack(unshifted_reg))
-                            } else {
-                                if self.block_state.regs.is_free(RCX) {
-                                    None
-                                } else {
-                                    dynasm!(self.asm
-                                        ; push rcx
-                                    );
-                                    Some(RestoreRcx::PopRcx)
-                                }
-                            }
-                        }
-                        _ => {
-                            if self.block_state.regs.is_free(RCX) &&
-                                !self.block_state.locals.register_locals.contains(
-                                    &ArgLoc::Register(RCX)
-                                )
-                            {
-                                None
-                            } else {
-                                dynasm!(self.asm
-                                    ; push rcx
-                                );
-                                Some(RestoreRcx::PopRcx)
-                            }
-                        }
+            // TODO: Maybe allocate `RCX`, write `count` to it and then free `count`.
+            //       Once we've implemented refcounting this will do the right thing
+            //       for free.
+            let temp_rcx = match count {
+                ValueLocation::Reg(RCX) => {None}
+                other => {
+                    let out = if self.block_state.regs.is_free(RCX) {
+                        None
+                    } else {
+                        let new_reg = self.block_state.regs.take_scratch_gpr();
+                        dynasm!(self.asm
+                            ; mov Rq(new_reg), rcx
+                        );
+                        Some(new_reg)
                     };
 
-                    match count_loc {
+                    match other {
                         ValueLocation::Reg(gpr) => {
                             dynasm!(self.asm
                                 ; mov cl, Rb(gpr)
@@ -685,40 +584,30 @@ macro_rules! shift {
                         }
                     }
 
-                    self.free_value(count);
-
-                    (false, out)
+                    out
                 }
             };
 
-            let reg = self.into_temp_reg(val);
-            assert_ne!(reg, RCX);
+            self.free_value(count);
+            self.block_state.regs.mark_used(RCX);
+            count = ValueLocation::Reg(RCX);
+
+            let reg = self.into_reg(val);
 
             dynasm!(self.asm
                 ; $instr $reg_ty(reg), cl
             );
 
-            self.free_value(val);
-            if free_count {
-                self.free_value(count);
+            self.free_value(count);
+
+            if let Some(gpr) = temp_rcx {
+                dynasm!(self.asm
+                    ; mov rcx, Rq(gpr)
+                );
+                self.block_state.regs.release_scratch_gpr(gpr);
             }
 
-            match restore_rcx {
-                Some(RestoreRcx::MoveValBack(gpr)) => {
-                    dynasm!(self.asm
-                        ; mov rcx, Rq(gpr)
-                    );
-                    self.block_state.regs.release_scratch_gpr(gpr);
-                }
-                Some(RestoreRcx::PopRcx) => {
-                    dynasm!(self.asm
-                        ; pop rcx
-                    );
-                }
-                None => {}
-            }
-
-            self.push(Value::Temp(reg));
+            self.push(ValueLocation::Reg(reg));
         }
     }
 }
@@ -727,19 +616,20 @@ macro_rules! cmp_i32 {
     ($name:ident, $instr:ident, $reverse_instr:ident, $const_fallback:expr) => {
         pub fn $name(&mut self) {
             let right = self.pop();
-            let left = self.pop();
+            let mut left = self.pop();
 
             let out = if let Some(i) = left.immediate() {
-                match right.location(&self.block_state.locals) {
+                match right {
                     ValueLocation::Stack(offset) => {
                         let result = self.block_state.regs.take_scratch_gpr();
                         let offset = self.adjusted_offset(offset);
+
                         dynasm!(self.asm
                             ; xor Rd(result), Rd(result)
                             ; cmp DWORD [rsp + offset], i as i32
                             ; $reverse_instr Rb(result)
                         );
-                        Value::Temp(result)
+                        ValueLocation::Reg(result)
                     }
                     ValueLocation::Reg(rreg) => {
                         let result = self.block_state.regs.take_scratch_gpr();
@@ -748,17 +638,19 @@ macro_rules! cmp_i32 {
                             ; cmp Rd(rreg), i as i32
                             ; $reverse_instr Rb(result)
                         );
-                        Value::Temp(result)
+                        ValueLocation::Reg(result)
                     }
                     ValueLocation::Immediate(right) => {
-                        Value::Immediate(if $const_fallback(i as i32, right as i32) { 1 } else { 0 })
+                        ValueLocation::Immediate(if $const_fallback(i as i32, right as i32) { 1 } else { 0 })
                     }
                 }
             } else {
-                let (lreg, lreg_needs_free) = self.into_reg(left);
+                let lreg = self.into_reg(left);
+                // TODO: Make `into_reg` take an `&mut`?
+                left = ValueLocation::Reg(lreg);
                 let result = self.block_state.regs.take_scratch_gpr();
 
-                match right.location(&self.block_state.locals) {
+                match right {
                     ValueLocation::Stack(offset) => {
                         let offset = self.adjusted_offset(offset);
                         dynasm!(self.asm
@@ -783,11 +675,7 @@ macro_rules! cmp_i32 {
                     }
                 }
 
-                if left != Value::Temp(lreg) && lreg_needs_free {
-                    self.block_state.regs.release_scratch_gpr(lreg);
-                }
-
-                Value::Temp(result)
+                ValueLocation::Reg(result)
             };
 
             self.free_value(left);
@@ -802,10 +690,10 @@ macro_rules! cmp_i64 {
     ($name:ident, $instr:ident, $reverse_instr:ident, $const_fallback:expr) => {
         pub fn $name(&mut self) {
             let right = self.pop();
-            let left = self.pop();
+            let mut left = self.pop();
 
             let out = if let Some(i) = left.immediate() {
-                match right.location(&self.block_state.locals) {
+                match right {
                     ValueLocation::Stack(offset) => {
                         let result = self.block_state.regs.take_scratch_gpr();
                         let offset = self.adjusted_offset(offset);
@@ -818,7 +706,7 @@ macro_rules! cmp_i64 {
                         } else {
                             unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
                         }
-                        Value::Temp(result)
+                        ValueLocation::Reg(result)
                     }
                     ValueLocation::Reg(rreg) => {
                         let result = self.block_state.regs.take_scratch_gpr();
@@ -831,17 +719,19 @@ macro_rules! cmp_i64 {
                         } else {
                             unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
                         }
-                        Value::Temp(result)
+                        ValueLocation::Reg(result)
                     }
                     ValueLocation::Immediate(right) => {
-                        Value::Immediate(if $const_fallback(i, right) { 1 } else { 0 })
+                        ValueLocation::Immediate(if $const_fallback(i, right) { 1 } else { 0 })
                     }
                 }
             } else {
-                let (lreg, lreg_needs_free) = self.into_reg(left);
+                let lreg = self.into_reg(left);
+                left = ValueLocation::Reg(lreg);
+
                 let result = self.block_state.regs.take_scratch_gpr();
 
-                match right.location(&self.block_state.locals) {
+                match right {
                     ValueLocation::Stack(offset) => {
                         let offset = self.adjusted_offset(offset);
                         dynasm!(self.asm
@@ -870,11 +760,7 @@ macro_rules! cmp_i64 {
                     }
                 }
 
-                if left != Value::Temp(lreg) && lreg_needs_free {
-                    self.block_state.regs.release_scratch_gpr(lreg);
-                }
-
-                Value::Temp(result)
+                ValueLocation::Reg(result)
             };
 
             self.free_value(left);
@@ -882,11 +768,6 @@ macro_rules! cmp_i64 {
             self.push(out);
         }
     }
-}
-
-#[must_use]
-pub struct CallCleanup {
-    stack_depth: i32,
 }
 
 macro_rules! commutative_binop_i32 {
@@ -897,13 +778,13 @@ macro_rules! commutative_binop_i32 {
 
             if let Some(i1) = op1.immediate() {
                 if let Some(i0) = op0.immediate() {
-                    self.block_state.stack.push(StackValue::Immediate($const_fallback(i1 as i32, i0 as i32) as _));
+                    self.push(ValueLocation::Immediate($const_fallback(i1 as i32, i0 as i32) as _));
                     return;
                 }
             }
 
             let (op1, op0) = match op1 {
-                Value::Temp(reg) => (reg, op0),
+                ValueLocation::Reg(_) => (self.into_temp_reg(op1), op0),
                 _ => if op0.immediate().is_some() {
                     (self.into_temp_reg(op1), op0)
                 } else {
@@ -911,7 +792,7 @@ macro_rules! commutative_binop_i32 {
                 }
             };
 
-            match op0.location(&self.block_state.locals) {
+            match op0 {
                 ValueLocation::Reg(reg) => {
                     dynasm!(self.asm
                         ; $instr Rd(op1), Rd(reg)
@@ -931,7 +812,7 @@ macro_rules! commutative_binop_i32 {
             }
 
             self.free_value(op0);
-            self.push(Value::Temp(op1));
+            self.push(ValueLocation::Reg(op1));
         }
     }
 }
@@ -944,13 +825,13 @@ macro_rules! commutative_binop_i64 {
 
             if let Some(i1) = op1.immediate() {
                 if let Some(i0) = op0.immediate() {
-                    self.block_state.stack.push(StackValue::Immediate($const_fallback(i1, i0)));
+                    self.block_state.stack.push(ValueLocation::Immediate($const_fallback(i1, i0)));
                     return;
                 }
             }
 
             let (op1, op0) = match op1 {
-                Value::Temp(reg) => (reg, op0),
+                ValueLocation::Reg(reg) => (reg, op0),
                 _ => if op0.immediate().is_some() {
                     (self.into_temp_reg(op1), op0)
                 } else {
@@ -958,7 +839,7 @@ macro_rules! commutative_binop_i64 {
                 }
             };
 
-            match op0.location(&self.block_state.locals) {
+            match op0 {
                 ValueLocation::Reg(reg) => {
                     dynasm!(self.asm
                         ; $instr Rq(op1), Rq(reg)
@@ -989,7 +870,7 @@ macro_rules! commutative_binop_i64 {
             }
 
             self.free_value(op0);
-            self.push(Value::Temp(op1));
+            self.push(ValueLocation::Reg(op1));
         }
     }
 }
@@ -1000,13 +881,12 @@ macro_rules! load {
             fn load_to_reg<_M: ModuleContext>(
                 ctx: &mut Context<_M>,
                 dst: GPR,
-                vmctx: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
                 let vmctx_mem_ptr_offset = ctx.module_context.offset_of_memory_ptr() as i32;
                 let mem_ptr_reg = ctx.block_state.regs.take_scratch_gpr();
                 dynasm!(ctx.asm
-                    ; mov Rq(mem_ptr_reg), [Rq(vmctx) + vmctx_mem_ptr_offset]
+                    ; mov Rq(mem_ptr_reg), [Rq(VMCTX) + vmctx_mem_ptr_offset]
                 );
                 match runtime_offset {
                     Ok(imm) => {
@@ -1026,16 +906,10 @@ macro_rules! load {
             assert!(offset <= i32::max_value() as u32);
 
             let base = self.pop();
-            let vmctx_idx = self.block_state.locals.vmctx_index();
-
-            let (vmctx, needs_release) = self.into_reg(Value::Local(vmctx_idx));
 
             let temp = self.block_state.regs.take_scratch_gpr();
 
-            match base.location(&self.block_state.locals) {
-                // TODO: Do compilers (to wasm) actually emit load-with-immediate when doing
-                //       constant loads? There isn't a `load` variant that _doesn't_ take a
-                //       runtime parameter.
+            match base {
                 ValueLocation::Immediate(i) => {
                     let val = if let Some(i) = i.try_into() {
                         Ok(i)
@@ -1043,31 +917,20 @@ macro_rules! load {
                         Err(self.into_temp_reg(base))
                     };
 
-                    load_to_reg(self, temp, vmctx, (offset as _, val));
+                    load_to_reg(self, temp, (offset as _, val));
 
                     if let Err(r) = val {
                         self.block_state.regs.release_scratch_gpr(r);
                     }
-
-                    // TODO: Push relocation
                 }
-                ValueLocation::Reg(gpr) => {
-                    load_to_reg(self, temp, vmctx, (offset as _, Err(gpr)));
-                    // TODO: Push relocation
-                }
-                ValueLocation::Stack(_) => {
-                    let gpr = self.into_temp_reg(base);
-                    load_to_reg(self, temp, vmctx, (offset as _, Err(gpr)));
+                base => {
+                    let gpr = self.into_reg(base);
+                    load_to_reg(self, temp, (offset as _, Err(gpr)));
                     self.block_state.regs.release_scratch_gpr(gpr);
-                    // TODO: Push relocation
                 }
             }
 
-            self.free_value(base);
-            if needs_release {
-                self.block_state.regs.release_scratch_gpr(vmctx);
-            }
-            self.push(Value::Temp(temp));
+            self.push(ValueLocation::Reg(temp));
 
             Ok(())
         }
@@ -1080,13 +943,12 @@ macro_rules! store {
             fn store_from_reg<_M: ModuleContext>(
                 ctx: &mut Context<_M>,
                 src: GPR,
-                vmctx: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
                 let vmctx_mem_ptr_offset = ctx.module_context.offset_of_memory_ptr() as i32;
                 let mem_ptr_reg = ctx.block_state.regs.take_scratch_gpr();
                 dynasm!(ctx.asm
-                    ; mov Rq(mem_ptr_reg), [Rq(vmctx) + vmctx_mem_ptr_offset]
+                    ; mov Rq(mem_ptr_reg), [Rq(VMCTX) + vmctx_mem_ptr_offset]
                 );
                 match runtime_offset {
                     Ok(imm) => {
@@ -1107,16 +969,10 @@ macro_rules! store {
 
             let src = self.pop();
             let base = self.pop();
-            let vmctx_idx = self.block_state.locals.vmctx_index();
 
-            let (vmctx, needs_release) = self.into_reg(Value::Local(vmctx_idx));
+            let src_reg = self.into_reg(src);
 
-            let (src_reg, src_needs_free) = self.into_reg(src);
-
-            match base.location(&self.block_state.locals) {
-                // TODO: Do compilers (to wasm) actually emit load-with-immediate when doing
-                //       constant loads? There isn't a `load` variant that _doesn't_ take a
-                //       runtime parameter.
+            match base {
                 ValueLocation::Immediate(i) => {
                     let val = if let Some(i) = i.try_into() {
                         Ok(i)
@@ -1124,33 +980,20 @@ macro_rules! store {
                         Err(self.into_temp_reg(base))
                     };
 
-                    store_from_reg(self, src_reg, vmctx, (offset as i32, val));
+                    store_from_reg(self, src_reg, (offset as i32, val));
 
                     if let Err(r) = val {
                         self.block_state.regs.release_scratch_gpr(r);
                     }
-
-                    // TODO: Push relocation
                 }
-                ValueLocation::Reg(gpr) => {
-                    store_from_reg(self, src_reg, vmctx, (offset as i32, Err(gpr)));
-                    // TODO: Push relocation
-                }
-                ValueLocation::Stack(_) => {
-                    let gpr = self.into_temp_reg(base);
-                    store_from_reg(self, src_reg, vmctx, (offset as i32, Err(gpr)));
+                base => {
+                    let gpr = self.into_reg(base);
+                    store_from_reg(self, src_reg, (offset as i32, Err(gpr)));
                     self.block_state.regs.release_scratch_gpr(gpr);
-                    // TODO: Push relocation
                 }
             }
 
-            self.free_value(base);
-            if src_needs_free {
-                self.block_state.regs.release_scratch_gpr(src_reg);
-            }
-            if needs_release {
-                self.block_state.regs.release_scratch_gpr(vmctx);
-            }
+            self.block_state.regs.release_scratch_gpr(src_reg);
 
             Ok(())
         }
@@ -1186,7 +1029,24 @@ impl TryInto<i32> for i64 {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct VirtualCallingConvention {
+    stack: Stack,
+    depth: StackDepth,
+}
+
 impl<M: ModuleContext> Context<'_, M> {
+    pub fn debug(&mut self, d: std::fmt::Arguments) {
+        asm_println!(self.asm, "{}", d);
+    }
+
+    pub fn virtual_calling_convention(&self) -> VirtualCallingConvention {
+        VirtualCallingConvention {
+            stack: self.block_state.stack.clone(),
+            depth: self.block_state.depth,
+        }
+    }
+
     /// Create a new undefined label.
     pub fn create_label(&mut self) -> Label {
         Label(self.asm.new_dynamic_label())
@@ -1201,7 +1061,7 @@ impl<M: ModuleContext> Context<'_, M> {
     }
 
     fn adjusted_offset(&self, offset: i32) -> i32 {
-        (self.block_state.depth.0 * WORD_SIZE) as i32 + offset
+        (self.block_state.depth.0 as i32 + offset) * WORD_SIZE as i32
     }
 
     cmp_i32!(i32_eq, sete, sete, |a, b| a == b);
@@ -1230,16 +1090,17 @@ impl<M: ModuleContext> Context<'_, M> {
 
     // TODO: Should we do this logic in `eq` and just have this delegate to `eq`?
     //       That would mean that `eqz` and `eq` with a const 0 argument don't
-    //       result in different code.
+    //       result in different code. It would also allow us to generate better
+    //       code for `neq` and `gt_u` with const 0 operand
     pub fn i32_eqz(&mut self) {
         let val = self.pop();
 
-        if let Value::Immediate(i) = val {
-            self.push(Value::Immediate(if i == 0 { 1 } else { 0 }));
+        if let ValueLocation::Immediate(i) = val {
+            self.push(ValueLocation::Immediate(if i == 0 { 1 } else { 0 }));
             return;
         }
 
-        let (reg, needs_release) = self.into_reg(val);
+        let reg = self.into_reg(val);
         let out = self.block_state.regs.take_scratch_gpr();
 
         dynasm!(self.asm
@@ -1248,22 +1109,20 @@ impl<M: ModuleContext> Context<'_, M> {
             ; setz Rb(out)
         );
 
-        if needs_release {
-            self.block_state.regs.release_scratch_gpr(reg);
-        }
+        self.block_state.regs.release_scratch_gpr(reg);
 
-        self.push(Value::Temp(out));
+        self.push(ValueLocation::Reg(out));
     }
 
     pub fn i64_eqz(&mut self) {
         let val = self.pop();
 
-        if let Value::Immediate(i) = val {
-            self.push(Value::Immediate(if i == 0 { 1 } else { 0 }));
+        if let ValueLocation::Immediate(i) = val {
+            self.push(ValueLocation::Immediate(if i == 0 { 1 } else { 0 }));
             return;
         }
 
-        let (reg, needs_release) = self.into_reg(val);
+        let reg = self.into_reg(val);
         let out = self.block_state.regs.take_scratch_gpr();
 
         dynasm!(self.asm
@@ -1272,22 +1131,42 @@ impl<M: ModuleContext> Context<'_, M> {
             ; setz Rb(out)
         );
 
-        if needs_release {
-            self.block_state.regs.release_scratch_gpr(reg);
-        }
+        self.block_state.regs.release_scratch_gpr(reg);
 
-        self.push(Value::Temp(out));
+        self.push(ValueLocation::Reg(out));
     }
 
     /// Pops i32 predicate and branches to the specified label
     /// if the predicate is equal to zero.
-    pub fn jump_if_false(&mut self, label: Label) {
+    pub fn br_if_false(&mut self, label: Label, f: impl FnOnce(&mut Self)) {
         let val = self.pop();
-        let predicate = self.into_temp_reg(val);
+
+        f(self);
+
+        let predicate = self.into_reg(val);
+
         dynasm!(self.asm
             ; test Rd(predicate), Rd(predicate)
-            ; je =>label.0
+            ; jz =>label.0
         );
+
+        self.block_state.regs.release_scratch_gpr(predicate);
+    }
+
+    /// Pops i32 predicate and branches to the specified label
+    /// if the predicate is not equal to zero.
+    pub fn br_if_true(&mut self, label: Label, f: impl FnOnce(&mut Self)) {
+        let val = self.pop();
+
+        f(self);
+
+        let predicate = self.into_reg(val);
+
+        dynasm!(self.asm
+            ; test Rd(predicate), Rd(predicate)
+            ; jnz =>label.0
+        );
+
         self.block_state.regs.release_scratch_gpr(predicate);
     }
 
@@ -1296,6 +1175,86 @@ impl<M: ModuleContext> Context<'_, M> {
         dynasm!(self.asm
             ; jmp =>label.0
         );
+    }
+
+    fn set_stack_depth_preserve_flags(&mut self, depth: StackDepth) {
+        if self.block_state.depth.0 < depth.0 {
+            // TODO: We need to preserve ZF on `br_if` so we use `push`/`pop` but that isn't
+            //       necessary on (for example) `br`.
+            for _ in 0..depth.0 - self.block_state.depth.0 {
+                dynasm!(self.asm
+                    ; push rax
+                );
+            }
+        } else if self.block_state.depth.0 > depth.0 {
+            let trash = self.block_state.regs.take_scratch_gpr();
+            // TODO: We need to preserve ZF on `br_if` so we use `push`/`pop` but that isn't
+            //       necessary on (for example) `br`.
+            for _ in 0..self.block_state.depth.0 - depth.0 {
+                dynasm!(self.asm
+                    ; pop Rq(trash)
+                );
+            }
+        }
+
+        self.block_state.depth = depth;
+    }
+
+    fn set_stack_depth(&mut self, depth: StackDepth) {
+        if self.block_state.depth.0 != depth.0 {
+            let diff = depth.0 as i32 - self.block_state.depth.0 as i32;
+            if diff.abs() == 1 {
+                self.set_stack_depth_preserve_flags(depth);
+            } else {
+                dynasm!(self.asm
+                    ; add rsp, (self.block_state.depth.0 as i32 - depth.0 as i32) * WORD_SIZE as i32
+                );
+
+                self.block_state.depth = depth;
+            }
+        }
+    }
+
+    pub fn pass_block_args(&mut self, cc: &CallingConvention) {
+        let args = &cc.arguments;
+        for (remaining, &dst) in args.iter().enumerate().rev() {
+            if let CCLoc::Reg(r) = dst {
+                if !self.block_state.regs.is_free(r)
+                    && *self.block_state.stack.last().unwrap() != ValueLocation::Reg(r)
+                {
+                    // TODO: This would be made simpler and more efficient with a proper SSE
+                    //       representation.
+                    self.save_regs(&[r], ..=remaining);
+                }
+
+                self.block_state.regs.mark_used(r);
+            }
+            self.pop_into(dst.into());
+        }
+
+        self.set_stack_depth(cc.stack_depth);
+    }
+
+    /// Puts all stack values into "real" locations so that they can i.e. be set to different
+    /// values on different iterations of a loop
+    pub fn serialize_args(&mut self, count: u32) -> CallingConvention {
+        let mut out = Vec::with_capacity(count as _);
+
+        for _ in 0..count {
+            let val = self.pop();
+            // TODO: We can use stack slots for values already on the stack but we
+            //       don't refcount stack slots right now
+            let loc = CCLoc::Reg(self.into_temp_reg(val));
+
+            out.push(loc);
+        }
+
+        out.reverse();
+
+        CallingConvention {
+            stack_depth: self.block_state.depth,
+            arguments: out,
+        }
     }
 
     fn immediate_to_reg(&mut self, reg: GPR, val: i64) {
@@ -1379,191 +1338,32 @@ impl<M: ModuleContext> Context<'_, M> {
         self.asm.dynamic_label(label.0);
     }
 
-    fn expand_stack(&mut self, by: u32) {
-        use std::iter;
-
-        if by == 0 {
-            return;
-        }
-
-        let new_stack_size = (self.block_state.stack_map.len() + by as usize).next_power_of_two();
-        let additional_elements = new_stack_size - self.block_state.stack_map.len();
-        self.block_state
-            .stack_map
-            .extend(iter::repeat(false).take(additional_elements));
-
-        dynasm!(self.asm
-            ; sub rsp, additional_elements as i32
-        );
-    }
-
-    // TODO: Make this generic over `Vec` or `ArrayVec`?
-    fn stack_slots(&mut self, count: u32) -> Vec<i32> {
-        let mut out = Vec::with_capacity(count as usize);
-
-        let offset_if_taken = |(i, is_taken): (usize, bool)| {
-            if !is_taken {
-                Some(i as i32 * WORD_SIZE as i32)
-            } else {
-                None
+    pub fn set_state(&mut self, state: VirtualCallingConvention) {
+        self.block_state.regs = Registers::new();
+        for elem in &state.stack {
+            if let ValueLocation::Reg(r) = elem {
+                self.block_state.regs.mark_used(*r);
             }
-        };
-
-        out.extend(
-            self.block_state
-                .stack_map
-                .iter()
-                .cloned()
-                .enumerate()
-                .filter_map(offset_if_taken),
-        );
-
-        let remaining = count as usize - out.len();
-
-        if remaining > 0 {
-            self.expand_stack(remaining as u32);
-            out.extend(
-                self.block_state
-                    .stack_map
-                    .iter()
-                    .cloned()
-                    .enumerate()
-                    .filter_map(offset_if_taken),
-            );
         }
-
-        out
+        self.block_state.stack = state.stack;
+        self.block_state.depth = state.depth;
     }
 
-    fn stack_slot(&mut self) -> i32 {
-        if let Some(pos) = self
-            .block_state
-            .stack_map
-            .iter()
-            .position(|is_taken| !is_taken)
-        {
-            self.block_state.stack_map[pos] = true;
-            pos as i32 * WORD_SIZE as i32
-        } else {
-            self.expand_stack(1);
-            self.stack_slot()
-        }
-    }
+    pub fn apply_cc(&mut self, cc: &CallingConvention) {
+        let stack = cc.arguments.iter();
 
-    // We use `put` instead of `pop` since with `BrIf` it's possible
-    // that the block will continue after returning.
-    pub fn return_from_block(&mut self, arity: u32) {
-        if arity == 0 {
-            return;
+        self.block_state.stack = Vec::with_capacity(stack.size_hint().0);
+        self.block_state.regs = Registers::new();
+
+        for &elem in stack {
+            if let CCLoc::Reg(r) = elem {
+                self.block_state.regs.mark_used(r);
+            }
+
+            self.block_state.stack.push(elem.into());
         }
 
-        let stack_top = *self.block_state.stack.last().expect("Stack is empty");
-        if let Some(reg) = self.block_state.return_register {
-            self.put_stack_val_into(stack_top, ValueLocation::Reg(reg));
-        } else {
-            let out_reg = match stack_top {
-                StackValue::Temp(r) => r,
-                other => {
-                    let new_scratch = self.block_state.regs.take_scratch_gpr();
-                    self.put_stack_val_into(other, ValueLocation::Reg(new_scratch));
-                    new_scratch
-                }
-            };
-
-            self.block_state.return_register = Some(out_reg);
-        }
-    }
-
-    pub fn start_block(&mut self) -> BlockState {
-        use std::mem;
-
-        // OPTIMISATION: We cannot use the parent's stack values (it is disallowed by the spec)
-        //               so we start a new stack, using `mem::replace` to ensure that we never
-        //               clone or deallocate anything.
-        //
-        //               I believe that it would be possible to cause a compiler bomb if we did
-        //               not do this, since cloning iterates over the whole `Vec`.
-        let out_stack = mem::replace(&mut self.block_state.stack, vec![]);
-        let mut current_state = self.block_state.clone();
-        current_state.stack = out_stack;
-
-        self.block_state.return_register = None;
-        current_state
-    }
-
-    // To start the next subblock of a block (for `if..then..else..end`).
-    // The only difference is that choices we made in the first subblock
-    // (for now only the return register) must be maintained in the next
-    // subblocks.
-    pub fn reset_block(&mut self, parent_block_state: BlockState) {
-        let return_reg = self.block_state.return_register;
-        let locals = mem::replace(&mut self.block_state.locals, Default::default());
-
-        self.block_state = parent_block_state;
-        self.block_state.end_locals = Some(locals);
-
-        self.block_state.return_register = return_reg;
-    }
-
-    pub fn end_block(
-        &mut self,
-        parent_block_state: BlockState,
-        before_push_return: impl FnOnce(&mut Self),
-    ) {
-        debug_assert_eq!(
-            self.block_state.depth, parent_block_state.depth,
-            "Imbalanced pushes and pops"
-        );
-        // TODO: This should currently never be called, but is important for if we want to
-        //       have a more complex stack spilling scheme.
-        // TODO: This should use an `end_locals`-style system where we only do this when
-        //       control flow splits.
-        if self.block_state.depth != parent_block_state.depth {
-            dynasm!(self.asm
-                ; add rsp, ((self.block_state.depth.0 - parent_block_state.depth.0) * WORD_SIZE) as i32
-            );
-        }
-
-        let return_reg = self.block_state.return_register;
-        let locals = mem::replace(&mut self.block_state.locals, Default::default());
-        self.block_state = parent_block_state;
-        self.block_state.locals = locals;
-
-        before_push_return(self);
-
-        if let Some(reg) = return_reg {
-            self.block_state.regs.mark_used(reg);
-            self.block_state.stack.push(StackValue::Temp(reg));
-        }
-    }
-
-    pub fn restore_locals(&mut self) {
-        if let Some(end_locals) = self.block_state.end_locals.clone() {
-            self.restore_locals_to(&end_locals);
-        }
-    }
-
-    pub fn restore_locals_to(&mut self, locals: &Locals) {
-        for (src, dst) in self
-            .block_state
-            .locals
-            .register_locals
-            .clone()
-            .iter()
-            .zip(&locals.register_locals)
-        {
-            self.copy_value(&src.best_loc(), &mut dst.best_loc());
-        }
-
-        for (src, dst) in self
-            .block_state
-            .locals
-            .register_locals
-            .iter_mut()
-            .zip(&locals.register_locals)
-        {
-            src.union(*dst);
-        }
+        self.block_state.depth = cc.stack_depth;
     }
 
     load!(i32_load, Rd, "i32.load");
@@ -1571,172 +1371,106 @@ impl<M: ModuleContext> Context<'_, M> {
     store!(i32_store, Rd, DWORD, "i32.store");
     store!(i64_store, Rq, QWORD, "i64.store");
 
-    fn push(&mut self, value: Value) {
-        let stack_loc = match value {
-            Value::Local(loc) => StackValue::Local(loc),
-            Value::Immediate(i) => StackValue::Immediate(i),
-            Value::Temp(gpr) => {
-                if self.block_state.regs.free_scratch() >= 3 {
-                    StackValue::Temp(gpr)
-                } else {
-                    self.block_state.depth.reserve(1);
-                    // TODO: Proper stack allocation scheme
-                    dynasm!(self.asm
-                        ; push Rq(gpr)
-                    );
-                    self.block_state.regs.release_scratch_gpr(gpr);
-                    StackValue::Pop
-                }
-            }
-        };
-
-        self.block_state.stack.push(stack_loc);
-    }
-
-    fn pop(&mut self) -> Value {
-        match self.block_state.stack.pop().expect("Stack is empty") {
-            StackValue::Local(loc) => Value::Local(loc),
-            StackValue::Immediate(i) => Value::Immediate(i),
-            StackValue::Temp(reg) => Value::Temp(reg),
-            StackValue::Pop => {
-                self.block_state.depth.free(1);
-                let gpr = self.block_state.regs.take_scratch_gpr();
+    fn push_physical(&mut self, value: ValueLocation) -> ValueLocation {
+        match value {
+            ValueLocation::Reg(gpr) => {
+                self.block_state.depth.reserve(1);
+                // TODO: Proper stack allocation scheme
                 dynasm!(self.asm
-                    ; pop Rq(gpr)
+                    ; push Rq(gpr)
                 );
-                Value::Temp(gpr)
+                self.block_state.regs.release_scratch_gpr(gpr);
+
+                ValueLocation::Stack(-(self.block_state.depth.0 as i32))
             }
+            value => value,
         }
     }
 
-    /// Warning: this _will_ pop the runtime stack, but will _not_ pop the compile-time
-    ///          stack. It's specifically for mid-block breaks like `Br` and `BrIf`.
-    fn put_stack_val_into(&mut self, val: StackValue, dst: ValueLocation) {
-        let to_move = match val {
-            StackValue::Local(loc) => Value::Local(loc),
-            StackValue::Immediate(i) => Value::Immediate(i),
-            StackValue::Temp(reg) => Value::Temp(reg),
-            StackValue::Pop => {
-                self.block_state.depth.free(1);
-                match dst {
-                    ValueLocation::Reg(r) => dynasm!(self.asm
-                        ; pop Rq(r)
-                    ),
-                    ValueLocation::Stack(offset) => {
-                        let offset = self.adjusted_offset(offset);
-                        dynasm!(self.asm
-                            ; pop QWORD [rsp + offset]
-                        )
-                    }
-                    ValueLocation::Immediate(_) => panic!("Tried to write to literal!"),
-                }
-
-                // DO NOT DO A `copy_val`
-                return;
-            }
-        };
-
-        let src = to_move.location(&self.block_state.locals);
-        self.copy_value(&src, &mut { dst });
-        if src != dst {
-            self.free_value(to_move);
-        }
+    fn push(&mut self, value: ValueLocation) {
+        self.block_state.stack.push(value);
     }
 
-    pub fn drop(&mut self) {
-        match self.block_state.stack.pop().expect("Stack is empty") {
-            StackValue::Pop => {
-                self.block_state.depth.free(1);
-                dynasm!(self.asm
-                    ; add rsp, WORD_SIZE as i32
-                );
-            }
-            StackValue::Temp(gpr) => self.free_value(Value::Temp(gpr)),
-            StackValue::Local(loc) => self.free_value(Value::Local(loc)),
-            StackValue::Immediate(imm) => self.free_value(Value::Immediate(imm)),
+    fn pop(&mut self) -> ValueLocation {
+        self.block_state.stack.pop().expect("Stack is empty")
+    }
+
+    pub fn drop(&mut self, range: RangeInclusive<u32>) {
+        let mut repush = Vec::with_capacity(*range.start() as _);
+
+        for _ in 0..*range.start() {
+            repush.push(self.pop());
+        }
+
+        for _ in range {
+            let val = self.pop();
+            self.free_value(val);
+        }
+
+        for v in repush.into_iter().rev() {
+            self.push(v);
         }
     }
 
     fn pop_into(&mut self, dst: ValueLocation) {
-        let val = self.block_state.stack.pop().expect("Stack is empty");
-        self.put_stack_val_into(val, dst);
+        let val = self.pop();
+        self.copy_value(&val, &mut { dst });
+        self.free_value(val);
     }
 
-    fn free_value(&mut self, val: Value) {
+    fn free_value(&mut self, val: ValueLocation) {
         match val {
-            Value::Temp(reg) => self.block_state.regs.release_scratch_gpr(reg),
-            Value::Local(_) | Value::Immediate(_) => {}
+            ValueLocation::Reg(r) => {
+                self.block_state.regs.release_scratch_gpr(r);
+            }
+            // TODO: Refcounted stack slots
+            _ => {}
         }
     }
 
     /// Puts this value into a register so that it can be efficiently read
-    fn into_reg(&mut self, val: Value) -> (GPR, bool) {
+    fn into_reg(&mut self, val: ValueLocation) -> GPR {
         match val {
-            Value::Local(idx) => match self.block_state.locals.get(idx) {
-                ValueLocation::Stack(offset) => {
-                    let offset = self.adjusted_offset(offset);
-                    let (reg, needs_release) =
-                        if let Some(reg) = self.block_state.locals.register(idx) {
-                            self.block_state
-                                .locals
-                                .set_pos(idx, ValueLocation::Reg(reg));
-                            (reg, false)
-                        } else {
-                            (self.block_state.regs.take_scratch_gpr(), true)
-                        };
-                    dynasm!(self.asm
-                        ; mov Rq(reg), [rsp + offset]
-                    );
-                    (reg, needs_release)
-                }
-                ValueLocation::Reg(reg) => (reg, false),
-                ValueLocation::Immediate(..) => {
-                    panic!("Currently immediates in locals are unsupported")
-                }
-            },
-            Value::Immediate(i) => {
+            ValueLocation::Reg(r) => r,
+            ValueLocation::Immediate(i) => {
                 let scratch = self.block_state.regs.take_scratch_gpr();
                 self.immediate_to_reg(scratch, i);
-                (scratch, true)
+                scratch
             }
-            Value::Temp(reg) => (reg, true),
+            ValueLocation::Stack(offset) => {
+                // TODO: We can use `pop` if the number of usages is 1
+                //       Even better, with an SSE-like `Value` abstraction
+                //       we can make it so we only load it once.
+                let offset = self.adjusted_offset(offset);
+                let scratch = self.block_state.regs.take_scratch_gpr();
+
+                dynasm!(self.asm
+                    ; mov Rq(scratch), [rsp + offset]
+                );
+
+                scratch
+            }
         }
     }
 
     /// Puts this value into a temporary register so that operations
     /// on that register don't write to a local.
-    fn into_temp_reg(&mut self, val: Value) -> GPR {
+    fn into_temp_reg(&mut self, val: ValueLocation) -> GPR {
         match val {
-            Value::Local(loc) => {
-                let scratch = self.block_state.regs.take_scratch_gpr();
-
-                match self.block_state.locals.get(loc) {
-                    ValueLocation::Stack(offset) => {
-                        let offset = self.adjusted_offset(offset);
-                        dynasm!(self.asm
-                            ; mov Rq(scratch), [rsp + offset]
-                        );
-                    }
-                    ValueLocation::Reg(reg) => {
-                        dynasm!(self.asm
-                            ; mov Rq(scratch), Rq(reg)
-                        );
-                    }
-                    ValueLocation::Immediate(_) => {
-                        panic!("We shouldn't be storing immediates in locals for now")
-                    }
+            ValueLocation::Reg(r) => {
+                if self.block_state.regs.num_usages(r) <= 1 {
+                    assert_eq!(self.block_state.regs.num_usages(r), 1);
+                    r
+                } else {
+                    let new_reg = self.block_state.regs.take_scratch_gpr();
+                    self.block_state.regs.release_scratch_gpr(r);
+                    dynasm!(self.asm
+                        ; mov Rq(new_reg), Rq(r)
+                    );
+                    new_reg
                 }
-
-                scratch
             }
-            Value::Immediate(i) => {
-                let scratch = self.block_state.regs.take_scratch_gpr();
-
-                self.immediate_to_reg(scratch, i);
-
-                scratch
-            }
-            Value::Temp(reg) => reg,
+            val => self.into_reg(val),
         }
     }
 
@@ -1779,13 +1513,13 @@ impl<M: ModuleContext> Context<'_, M> {
 
         if let Some(i1) = op1.immediate() {
             if let Some(i0) = op0.immediate() {
-                self.block_state.stack.push(StackValue::Immediate(i1 - i0));
+                self.push(ValueLocation::Immediate(i1 - i0));
                 return;
             }
         }
 
         let op1 = self.into_temp_reg(op1);
-        match op0.location(&self.block_state.locals) {
+        match op0 {
             ValueLocation::Reg(reg) => {
                 dynasm!(self.asm
                     ; sub Rq(op1), Rq(reg)
@@ -1810,7 +1544,7 @@ impl<M: ModuleContext> Context<'_, M> {
             }
         }
 
-        self.push(Value::Temp(op1));
+        self.push(ValueLocation::Reg(op1));
         self.free_value(op0);
     }
 
@@ -1824,13 +1558,13 @@ impl<M: ModuleContext> Context<'_, M> {
             if let Some(i0) = op0.immediate() {
                 self.block_state
                     .stack
-                    .push(StackValue::Immediate(i64::wrapping_mul(i1, i0)));
+                    .push(ValueLocation::Immediate(i64::wrapping_mul(i1, i0)));
                 return;
             }
         }
 
         let (op1, op0) = match op1 {
-            Value::Temp(reg) => (reg, op0),
+            ValueLocation::Reg(_) => (self.into_temp_reg(op1), op0),
             _ => {
                 if op0.immediate().is_some() {
                     (self.into_temp_reg(op1), op0)
@@ -1840,7 +1574,7 @@ impl<M: ModuleContext> Context<'_, M> {
             }
         };
 
-        match op0.location(&self.block_state.locals) {
+        match op0 {
             ValueLocation::Reg(reg) => {
                 dynasm!(self.asm
                     ; imul Rq(op1), Rq(reg)
@@ -1865,7 +1599,7 @@ impl<M: ModuleContext> Context<'_, M> {
             }
         }
 
-        self.push(Value::Temp(op1));
+        self.push(ValueLocation::Reg(op1));
         self.free_value(op0);
     }
 
@@ -1877,13 +1611,15 @@ impl<M: ModuleContext> Context<'_, M> {
 
         if let Some(i1) = op1.immediate() {
             if let Some(i0) = op0.immediate() {
-                self.block_state.stack.push(StackValue::Immediate(i1 - i0));
+                self.block_state
+                    .stack
+                    .push(ValueLocation::Immediate(i1 - i0));
                 return;
             }
         }
 
         let op1 = self.into_temp_reg(op1);
-        match op0.location(&self.block_state.locals) {
+        match op0 {
             ValueLocation::Reg(reg) => {
                 dynasm!(self.asm
                     ; sub Rd(op1), Rd(reg)
@@ -1902,7 +1638,7 @@ impl<M: ModuleContext> Context<'_, M> {
             }
         }
 
-        self.push(Value::Temp(op1));
+        self.push(ValueLocation::Reg(op1));
         self.free_value(op0);
     }
 
@@ -1914,17 +1650,15 @@ impl<M: ModuleContext> Context<'_, M> {
 
         if let Some(i1) = op1.immediate() {
             if let Some(i0) = op0.immediate() {
-                self.block_state
-                    .stack
-                    .push(StackValue::Immediate(
-                        i32::wrapping_mul(i1 as i32, i0 as i32) as _,
-                    ));
+                self.push(ValueLocation::Immediate(
+                    i32::wrapping_mul(i1 as i32, i0 as i32) as _,
+                ));
                 return;
             }
         }
 
         let (op1, op0) = match op1 {
-            Value::Temp(reg) => (reg, op0),
+            ValueLocation::Reg(_) => (self.into_temp_reg(op1), op0),
             _ => {
                 if op0.immediate().is_some() {
                     (self.into_temp_reg(op1), op0)
@@ -1934,7 +1668,7 @@ impl<M: ModuleContext> Context<'_, M> {
             }
         };
 
-        match op0.location(&self.block_state.locals) {
+        match op0 {
             ValueLocation::Reg(reg) => {
                 dynasm!(self.asm
                     ; imul Rd(op1), Rd(reg)
@@ -1953,16 +1687,8 @@ impl<M: ModuleContext> Context<'_, M> {
             }
         }
 
-        self.push(Value::Temp(op1));
+        self.push(ValueLocation::Reg(op1));
         self.free_value(op0);
-    }
-
-    fn adjusted_local_idx(&self, index: u32) -> u32 {
-        if index >= self.block_state.locals.vmctx_index() {
-            index + 1
-        } else {
-            index
-        }
     }
 
     pub fn select(&mut self) {
@@ -1971,7 +1697,7 @@ impl<M: ModuleContext> Context<'_, M> {
         let then = self.pop();
 
         match cond {
-            Value::Immediate(i) => {
+            ValueLocation::Immediate(i) => {
                 if i == 0 {
                     self.push(else_);
                 } else {
@@ -1981,403 +1707,233 @@ impl<M: ModuleContext> Context<'_, M> {
                 return;
             }
             other => {
-                let (reg, free) = self.into_reg(other);
+                let reg = self.into_reg(other);
 
                 dynasm!(self.asm
                     ; test Rd(reg), Rd(reg)
                 );
 
-                if free {
-                    self.block_state.regs.release_scratch_gpr(reg);
-                }
+                self.block_state.regs.release_scratch_gpr(reg);
             }
         }
 
         let out = self.block_state.regs.take_scratch_gpr();
 
         // TODO: Can do this better for variables on stack
-        let (reg, free) = self.into_reg(else_);
+        let reg = self.into_reg(else_);
         dynasm!(self.asm
             ; cmovz Rq(out), Rq(reg)
         );
-        if free {
-            self.block_state.regs.release_scratch_gpr(reg);
-        }
-        let (reg, free) = self.into_reg(then);
+        self.block_state.regs.release_scratch_gpr(reg);
+        let reg = self.into_reg(then);
         dynasm!(self.asm
             ; cmovnz Rq(out), Rq(reg)
         );
-        if free {
-            self.block_state.regs.release_scratch_gpr(reg);
-        }
+        self.block_state.regs.release_scratch_gpr(reg);
 
-        self.push(Value::Temp(out));
+        self.push(ValueLocation::Reg(out));
     }
 
-    // TODO: This is wildly unsound, we don't actually check if the
-    //       local was written first. Would be fixed by Microwasm.
-    pub fn get_local(&mut self, local_idx: u32) {
-        let index = self.adjusted_local_idx(local_idx);
-        self.push(Value::Local(index));
-    }
+    pub fn pick(&mut self, depth: u32) {
+        let idx = self.block_state.stack.len() - 1 - depth as usize;
+        let v = self.block_state.stack[idx];
 
-    fn local_write_loc(&self, local_idx: u32) -> ValueLocation {
-        self.block_state
-            .end_locals
-            .as_ref()
-            .map(|l| l.get(local_idx))
-            .or_else(|| {
-                self.block_state
-                    .locals
-                    .register(local_idx)
-                    .map(ValueLocation::Reg)
-            })
-            .unwrap_or_else(|| self.block_state.locals.get(local_idx))
-    }
-
-    // TODO: We can put locals that were spilled to the stack
-    //       back into registers here.
-    pub fn set_local(&mut self, local_idx: u32) {
-        let local_idx = self.adjusted_local_idx(local_idx);
-        let val = self.pop();
-        let val_loc = val.location(&self.block_state.locals);
-        let dst_loc = self.local_write_loc(local_idx);
-
-        self.materialize_local(local_idx);
-
-        // TODO: Abstract this somehow
-        if let Some(cur) = self
-            .block_state
-            .locals
-            .register_locals
-            .get_mut(local_idx as usize)
-        {
-            *cur = ArgLoc::from_loc(dst_loc);
-        }
-
-        self.copy_value(&val_loc, &mut { dst_loc });
-        self.free_value(val);
-    }
-
-    pub fn tee_local(&mut self, local_idx: u32) {
-        let local_idx = self.adjusted_local_idx(local_idx);
-        let val = self.pop();
-        let val_loc = val.location(&self.block_state.locals);
-        let dst_loc = self.local_write_loc(local_idx);
-
-        self.materialize_local(local_idx);
-
-        if let Some(cur) = self
-            .block_state
-            .locals
-            .register_locals
-            .get_mut(local_idx as usize)
-        {
-            *cur = ArgLoc::from_loc(dst_loc);
-        }
-
-        self.copy_value(&val_loc, &mut { dst_loc });
-
-        match (val_loc, dst_loc) {
-            (ValueLocation::Stack(_), ValueLocation::Reg(_)) => {
-                self.free_value(val);
-                self.block_state.stack.push(StackValue::Local(local_idx))
+        match v {
+            ValueLocation::Reg(r) => {
+                self.block_state.regs.mark_used(r);
             }
-            _ => self.push(val),
-        }
-    }
-
-    fn materialize_local(&mut self, local_idx: u32) {
-        // TODO: With real stack allocation we can make this constant-time. We can have a kind of
-        //       on-the-fly SSA transformation where we mark each `StackValue::Local` with an ID
-        //       that increases with each assignment (this can be stored in block state and so
-        //       is reset when the block ends). We then refcount the storage associated with each
-        //       "value ID" and in `pop` we free up slots whose refcount hits 0. This means we
-        //       can have even cleaner assembly than we currently do while giving us back
-        //       linear runtime.
-        let mut highest_stack_index = None;
-        let mut highest_pop_index = None;
-
-        for index in (0..self.block_state.stack.len()).rev() {
-            match self.block_state.stack[index] {
-                // For now it's impossible for a local to be in RAX but that might be
-                // possible in the future, so we check both cases.
-                StackValue::Local(i) if i == local_idx => {
-                    if highest_stack_index.is_none() {
-                        highest_stack_index = Some(index);
-                    }
-
-                    self.block_state.depth.reserve(1);
-                    self.block_state.stack[index] = StackValue::Pop;
-                    match self.block_state.locals.get(local_idx) {
-                        ValueLocation::Reg(r) => dynasm!(self.asm
-                            ; push Rq(r)
-                        ),
-                        ValueLocation::Stack(offset) => {
-                            let offset = self.adjusted_offset(offset);
-                            dynasm!(self.asm
-                                ; push QWORD [rsp + offset]
-                            )
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                StackValue::Pop => {
-                    if highest_pop_index.is_none() {
-                        highest_pop_index = Some(index);
-                    }
-                }
-                _ => {}
-            }
+            _ => {}
         }
 
-        if let (Some(stack), Some(pop)) = (highest_stack_index, highest_pop_index) {
-            if stack < pop {
-                panic!("Tried to materialize local but the stack already contains elements");
-            }
-        }
+        self.block_state.stack.push(v);
     }
 
     pub fn i32_literal(&mut self, imm: i32) {
-        self.push(Value::Immediate(imm as _));
+        self.push(ValueLocation::Immediate(imm as _));
     }
 
     pub fn i64_literal(&mut self, imm: i64) {
-        self.push(Value::Immediate(imm));
-    }
-
-    /// Make sure that any argument registers that will be used by the call are free
-    /// by storing them to the stack.
-    ///
-    /// Unfortunately, we can't elide this store if we're just passing arguments on
-    /// because these registers are caller-saved and so the callee can use them as
-    /// scratch space.
-    fn free_arg_registers(&mut self, exclude: Option<u32>) {
-        // This is bound to the maximum size of the `ArrayVec` amd so can be considered to have constant
-        // runtime
-        for i in (0..self.block_state.locals.register_locals.len())
-            .filter(|i| exclude != Some(*i as u32))
-        {
-            match self.block_state.locals.register_locals[i] {
-                ArgLoc::Register(reg) => {
-                    if ARGS_IN_GPRS.contains(&reg) {
-                        // We do `- 1` because of `vmctx`
-                        let offset =
-                            ((self.block_state.locals.num_local_stack_slots - 1 - i as u32)
-                                * WORD_SIZE) as _;
-                        let dst = ValueLocation::Stack(offset);
-                        self.copy_value(&ValueLocation::Reg(reg), &mut { dst });
-                        self.block_state.locals.register_locals[i].add_stack(offset);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn free_return_register(&mut self, count: u32) {
-        if count == 0 {
-            return;
-        }
-
-        self.free_register(RAX);
-    }
-
-    fn free_register(&mut self, reg: GPR) {
-        let mut to_repush = 0;
-        let mut out = None;
-
-        if self.block_state.regs.is_free(reg) {
-            return;
-        }
-
-        // TODO: With real stack allocation we can make this constant-time
-        for stack_val in self.block_state.stack.iter_mut().rev() {
-            match stack_val.location(&self.block_state.locals) {
-                // For now it's impossible for a local to be in RAX but that might be
-                // possible in the future, so we check both cases.
-                Some(ValueLocation::Reg(r)) if r == reg => {
-                    *stack_val = StackValue::Pop;
-
-                    out = Some(*stack_val);
-
-                    break;
-                }
-                Some(_) => {}
-                None => {
-                    to_repush += 1;
-                }
-            }
-        }
-
-        if let Some(out) = out {
-            match out {
-                StackValue::Temp(gpr) => {
-                    dynasm!(self.asm
-                        ; mov Rq(gpr), rax
-                    );
-                }
-                StackValue::Pop => {
-                    self.block_state.depth.reserve(1);
-                    // TODO: Ideally we should do proper stack allocation so we
-                    //       don't have to check this at all (i.e. order on the
-                    //       physical stack and order on the logical stack should
-                    //       be independent).
-                    debug_assert_eq!(to_repush, 0);
-                    dynasm!(self.asm
-                        ; push Rq(reg)
-                    );
-                }
-                _ => unreachable!(),
-            }
-            self.block_state.regs.release_scratch_gpr(reg);
-        }
+        self.push(ValueLocation::Immediate(imm));
     }
 
     // TODO: Use `ArrayVec`?
+    // TODO: This inefficiently duplicates registers but it's not really possible
+    //       to double up stack space right now.
     /// Saves volatile (i.e. caller-saved) registers before a function call, if they are used.
-    fn save_volatile(&mut self) {
-        let mut reserved = 0;
-        for val in self.block_state.stack.iter_mut().rev() {
-            let reassign = if let StackValue::Temp(r) = val {
-                dynasm!(self.asm
-                    ; push Rq(*r)
-                );
-                true
-            } else {
-                false
-            };
+    fn save_volatile(&mut self, bounds: impl std::ops::RangeBounds<usize>) {
+        self.save_regs(SCRATCH_REGS, bounds);
+    }
 
-            if reassign {
-                *val = StackValue::Pop;
-                reserved += 1;
+    fn save_regs<I>(&mut self, regs: &I, bounds: impl std::ops::RangeBounds<usize>)
+    where
+        for<'a> &'a I: IntoIterator<Item = &'a GPR>,
+        I: ?Sized,
+    {
+        use std::ops::Bound::*;
+
+        let mut stack = mem::replace(&mut self.block_state.stack, vec![]);
+        let (start, end) = (
+            match bounds.end_bound() {
+                Unbounded => 0,
+                Included(v) => stack.len() - 1 - v,
+                Excluded(v) => stack.len() - v,
+            },
+            match bounds.start_bound() {
+                Unbounded => stack.len(),
+                Included(v) => stack.len() - v,
+                Excluded(v) => stack.len() - 1 - v,
+            },
+        );
+        for val in stack[start..end].iter_mut() {
+            if let ValueLocation::Reg(vreg) = *val {
+                if regs.into_iter().any(|r| *r == vreg) {
+                    *val = self.push_physical(*val);
+                }
             }
         }
 
-        self.block_state.depth.reserve(reserved);
+        mem::replace(&mut self.block_state.stack, stack);
     }
 
     /// Write the arguments to the callee to the registers and the stack using the SystemV
     /// calling convention.
-    fn pass_outgoing_args(&mut self, arity: u32, has_vmctx: bool) -> CallCleanup {
-        let num_stack_args = (arity as usize).saturating_sub(ARGS_IN_GPRS.len()) as i32;
+    fn pass_outgoing_args(&mut self, out_locs: &[CCLoc]) {
+        self.save_volatile(out_locs.len()..);
 
-        self.free_arg_registers(if has_vmctx { Some(0) } else { None });
-
-        // We pop stack arguments first - arguments are RTL
-        if num_stack_args > 0 {
-            let size = num_stack_args * WORD_SIZE as i32;
-
-            // Reserve space for the outgoing stack arguments (so we don't
-            // stomp on any locals or the value stack).
-            dynasm!(self.asm
-                ; sub rsp, size
-            );
-            self.block_state.depth.reserve(num_stack_args as u32);
-
-            for stack_slot in (0..num_stack_args).rev() {
-                // Since the stack offset is from the bottom of the locals
-                // and we want to start from the actual RSP (so `offset = 0`
-                // writes to `[rsp]`), we subtract our current depth.
-                //
-                // We might want to do this in the future by having a separate
-                // `AbsoluteValueLocation` and `RelativeValueLocation`.
-                let offset = stack_slot * WORD_SIZE as i32
-                    - self.block_state.depth.0 as i32 * WORD_SIZE as i32;
-                self.pop_into(ValueLocation::Stack(offset));
-            }
-        }
-
-        for reg in ARGS_IN_GPRS[..(arity as usize).min(ARGS_IN_GPRS.len())]
+        // TODO: Do alignment here
+        let total_stack_space = out_locs
             .iter()
-            .rev()
-        {
-            self.pop_into(ValueLocation::Reg(*reg));
-        }
+            .flat_map(|&l| {
+                if let CCLoc::Stack(offset) = l {
+                    if offset > 0 {
+                        Some(offset as u32)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .max()
+            .unwrap_or(0);
+        let depth = self.block_state.depth.0 + total_stack_space;
 
-        // TODO: This will stomp on stack arguments. We want to do this beforehand
-        //       but then not actually change the recorded positions in the stack
-        //       until `post_call_cleanup`.
-        self.save_volatile();
+        let mut pending = Vec::<(ValueLocation, ValueLocation)>::new();
 
-        CallCleanup {
-            stack_depth: num_stack_args,
-        }
-    }
+        for &loc in out_locs.iter().rev() {
+            let val = self.pop();
 
-    /// Frees up the stack space used for stack-passed arguments and restores the value
-    /// of volatile (i.e. caller-saved) registers to the state that they were in before
-    /// the call.
-    fn post_call_cleanup(&mut self, cleanup: CallCleanup) {
-        if cleanup.stack_depth > 0 {
-            let size = cleanup.stack_depth * WORD_SIZE as i32;
-            self.block_state.depth.free(cleanup.stack_depth as _);
-            dynasm!(self.asm
-                ; add rsp, size
-            );
-        }
+            println!("{:?}", loc);
 
-        // If these values were in register they've now been invalidated, since
-        // the callee can use them as scratch.
-        for loc in self.block_state.locals.register_locals.iter_mut() {
-            if let Some(offset) = loc.stack() {
-                *loc = ArgLoc::Stack(offset);
+            match loc {
+                CCLoc::Stack(offset) => {
+                    let offset = self.adjusted_offset(offset as i32 - depth as i32);
+
+                    if offset == -1 {
+                        self.push_physical(val);
+                    } else {
+                        let gpr = self.into_reg(val);
+                        dynasm!(self.asm
+                            ; mov [rsp + offset], Rq(gpr)
+                        );
+                        self.block_state.regs.release_scratch_gpr(gpr);
+                    }
+                }
+                CCLoc::Reg(r) => {
+                    if val == ValueLocation::Reg(r) {
+                        self.free_value(val);
+                    } else if self.block_state.regs.is_free(r) {
+                        self.copy_value(&val, &mut loc.into());
+                        self.free_value(val);
+                    } else {
+                        pending.push((val, loc.into()));
+                    }
+                }
             }
         }
+
+        let mut try_count = 10;
+        while !pending.is_empty() {
+            try_count -= 1;
+
+            println!("{:?}", self.block_state);
+
+            if try_count == 0 {
+                unimplemented!("We can't handle cycles in the register allocation right now");
+            }
+
+            for (src, dst) in mem::replace(&mut pending, vec![]) {
+                if let ValueLocation::Reg(r) = dst {
+                    if !self.block_state.regs.is_free(r) {
+                        pending.push((src, dst));
+                        continue;
+                    }
+                }
+                self.copy_value(&src, &mut { dst });
+                self.free_value(src);
+            }
+        }
+
+        self.set_stack_depth(StackDepth(depth));
     }
 
+    // TODO: Multiple returns
     fn push_function_return(&mut self, arity: u32) {
         if arity == 0 {
             return;
         }
         debug_assert_eq!(arity, 1);
         self.block_state.regs.mark_used(RAX);
-        self.push(Value::Temp(RAX));
+        self.push(ValueLocation::Reg(RAX));
     }
 
-    pub fn call_indirect(&mut self, signature_hash: u32, arg_arity: u32, return_arity: u32) {
+    // TODO: Do return types properly
+    pub fn call_indirect(
+        &mut self,
+        signature_hash: u32,
+        arg_types: impl IntoIterator<Item = SignlessType>,
+        return_arity: u32,
+    ) {
         debug_assert!(
             return_arity == 0 || return_arity == 1,
             "We don't support multiple return yet"
         );
 
+        let locs = arg_locs(arg_types);
+
+        for &loc in &locs {
+            if let CCLoc::Reg(r) = loc {
+                self.block_state.regs.mark_used(r);
+            }
+        }
+
         let callee = self.pop();
         let callee = self.into_temp_reg(callee);
-
-        let vmctx_idx = self.block_state.locals.vmctx_index();
-        let (vmctx_reg, should_release_vmctx_reg) = self.into_reg(Value::Local(vmctx_idx));
-
         let temp0 = self.block_state.regs.take_scratch_gpr();
-        let temp1 = self.block_state.regs.take_scratch_gpr();
+
+        for &loc in &locs {
+            if let CCLoc::Reg(r) = loc {
+                self.block_state.regs.release_scratch_gpr(r);
+            }
+        }
+
+        self.pass_outgoing_args(&locs);
 
         let fail = self.trap_label().0;
 
         // TODO: Consider generating a single trap function and jumping to that instead.
         dynasm!(self.asm
-            ; cmp Rq(callee), [Rq(vmctx_reg) + self.module_context.offset_of_funcs_len() as i32]
+            ; cmp Rd(callee), [Rq(VMCTX) + self.module_context.offset_of_funcs_len() as i32]
             ; jae =>fail
-            ; imul Rq(callee), Rq(callee), mem::size_of::<RuntimeFunc>() as i32
-            ; mov Rq(temp0), [Rq(vmctx_reg) + self.module_context.offset_of_funcs_ptr() as i32]
-            ; mov Rd(temp1), [
+            ; imul Rd(callee), Rd(callee), mem::size_of::<RuntimeFunc>() as i32
+            ; mov Rq(temp0), [Rq(VMCTX) + self.module_context.offset_of_funcs_ptr() as i32]
+            ; cmp DWORD [
                 Rq(temp0) +
                     Rq(callee) +
                     RuntimeFunc::offset_of_sig_hash() as i32
-            ]
-            ; cmp Rd(temp1), signature_hash as i32
+            ], signature_hash as i32
             ; jne =>fail
         );
-
-        self.block_state.regs.release_scratch_gpr(temp1);
-
-        // TODO: I believe that this can't cause quadratic runtime but I'm not
-        //       certain.
-        let vmctx = StackValue::Local(vmctx_idx);
-
-        let count = self.block_state.stack.len();
-        self.block_state
-            .stack
-            .insert(count - arg_arity as usize, vmctx);
-        let cleanup = self.pass_outgoing_args(arg_arity + 1, true);
 
         dynasm!(self.asm
             ; call QWORD [
@@ -2390,37 +1946,33 @@ impl<M: ModuleContext> Context<'_, M> {
         self.block_state.regs.release_scratch_gpr(temp0);
         self.block_state.regs.release_scratch_gpr(callee);
 
-        if should_release_vmctx_reg {
-            self.block_state.regs.release_scratch_gpr(vmctx_reg);
-        }
-
-        self.post_call_cleanup(cleanup);
         self.push_function_return(return_arity);
     }
 
+    pub fn swap(&mut self, depth: u32) {
+        let last = self.block_state.stack.len() - 1;
+        self.block_state.stack.swap(last, last - depth as usize);
+    }
+
     /// Call a function with the given index
-    pub fn call_direct(&mut self, index: u32, arg_arity: u32, return_arity: u32) {
+    pub fn call_direct(
+        &mut self,
+        index: u32,
+        arg_types: impl IntoIterator<Item = SignlessType>,
+        return_arity: u32,
+    ) {
         debug_assert!(
             return_arity == 0 || return_arity == 1,
             "We don't support multiple return yet"
         );
 
-        let vmctx = StackValue::Local(self.block_state.locals.vmctx_index());
-        let count = self.block_state.stack.len();
-
-        // TODO: I believe that this can't cause quadratic runtime but I'm not
-        //       certain.
-        self.block_state
-            .stack
-            .insert(count - arg_arity as usize, vmctx);
-        let cleanup = self.pass_outgoing_args(arg_arity + 1, true);
+        self.pass_outgoing_args(&arg_locs(arg_types));
 
         let label = &self.func_starts[index as usize].1;
         dynasm!(self.asm
             ; call =>*label
         );
 
-        self.post_call_cleanup(cleanup);
         self.push_function_return(return_arity);
     }
 
@@ -2428,79 +1980,20 @@ impl<M: ModuleContext> Context<'_, M> {
     //       as scratch registers
     // TODO: Allow use of unused argument registers as scratch registers.
     /// Writes the function prologue and stores the arguments as locals
-    pub fn start_function(&mut self, arguments: u32, locals: u32) -> FunctionEnd {
-        // To support `vmctx`
-        let arguments = arguments + 1;
-        let (reg_args, locals_in_gprs) =
-            ARGS_IN_GPRS.split_at((arguments as usize).min(ARGS_IN_GPRS.len()));
-        let (reg_locals, temps) =
-            locals_in_gprs.split_at((locals as usize).min(locals_in_gprs.len()));
-
-        // TODO: If we have less than some amount of extra scratch here, free
-        //       up some callee-saved regs.
-        for temp in temps {
-            self.block_state.regs.release_scratch_gpr(*temp);
-        }
-
-        // We need space to store the register arguments if we need to call a function
-        // and overwrite these registers so we add `reg_args.len()`
-        //
-        // We do `- 1` because we don't need to store `vmctx` (TODO: I believe we actually
-        // do need to store `vmctx` when calling host functions, although we might be able
-        // to have the hidden argument/hidden return `vmctx` stuff encoded in our trampoline,
-        // which would allow the `vmctx` to be changed while we're in a host function)
-        let stack_slots = locals + reg_args.len() as u32 + reg_locals.len() as u32;
-        // TODO: The x86_64 ABI requires that rsp be aligned to 16 bytes. Originally
-        //       we aligned stack slots to the nearest even number to support this
-        //       but this actually doesn't help, since `push` and `pop` change rsp
-        //       by 8 bytes at a time. We need a better solution if we want to support
-        //       calling functions that use SIMD (for our use-case this is mostly just
-        //       host functions).
-        let frame_size: i32 = stack_slots as i32 * WORD_SIZE as i32;
-
-        self.block_state.locals.register_locals = reg_args
-            .iter()
-            .chain(reg_locals)
-            .cloned()
-            .map(ArgLoc::Register)
-            .collect();
-        self.block_state.locals.num_stack_args = arguments.saturating_sub(ARGS_IN_GPRS.len() as _);
-        self.block_state.locals.num_local_stack_slots = stack_slots;
-        self.block_state.return_register = Some(RAX);
-
-        // TODO: This isn't enough to ensure that we're aligned when calling functions
-        // self.block_state.depth.reserve(aligned_stack_slots - locals);
-        let should_generate_epilogue = stack_slots > 1;
-        if should_generate_epilogue {
-            dynasm!(self.asm
-                ; push rbp
-                ; mov rbp, rsp
-                ; sub rsp, frame_size
-            );
-        }
-
-        FunctionEnd {
-            should_generate_epilogue,
-        }
+    pub fn start_function(&mut self, params: impl IntoIterator<Item = SignlessType>) {
+        let locs = Vec::from_iter(arg_locs(params));
+        self.apply_cc(&CallingConvention::function_start(locs));
     }
 
-    /// Writes the function epilogue, restoring the stack pointer and returning to the
-    /// caller.
-    pub fn epilogue(&mut self, func: FunctionEnd) {
-        // We don't need to clean up the stack - RSP is restored and
-        // the calling function has its own register stack and will
-        // stomp on the registers from our stack if necessary.
-        if func.should_generate_epilogue {
-            dynasm!(self.asm
-                ; mov rsp, rbp
-                ; pop rbp
-            );
-        }
-
+    pub fn ret(&mut self) {
         dynasm!(self.asm
             ; ret
         );
+    }
 
+    /// Writes the function epilogue (right now all this does is add the trap label that the
+    /// conditional traps in `call_indirect` use)
+    pub fn epilogue(&mut self) {
         if let Some(l) = self.trap_label {
             self.define_label(l);
             dynasm!(self.asm
@@ -2510,9 +2003,8 @@ impl<M: ModuleContext> Context<'_, M> {
     }
 
     pub fn trap(&mut self) {
-        let trap_label = self.trap_label();
         dynasm!(self.asm
-            ; jmp =>trap_label.0
+            ; ud2
         );
     }
 
@@ -2522,8 +2014,9 @@ impl<M: ModuleContext> Context<'_, M> {
             return l;
         }
 
-        self.trap_label = Some(self.create_label());
-        self.trap_label()
+        let label = self.create_label();
+        self.trap_label = Some(label);
+        label
     }
 }
 

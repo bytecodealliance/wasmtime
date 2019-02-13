@@ -1,3 +1,4 @@
+use crate::microwasm;
 use backend::TranslatedCodeSection;
 use cranelift_codegen::{
     ir::{self, AbiParam, Signature as CraneliftSignature},
@@ -184,18 +185,35 @@ pub struct ExecutableModule {
 }
 
 impl ExecutableModule {
-    // For testing only.
-    // TODO: Handle generic signatures.
+    /// Executes the function _without checking types_. This can cause undefined
+    /// memory to be accessed.
+    pub unsafe fn execute_func_unchecked<Args: FunctionArgs<T>, T>(
+        &self,
+        func_idx: u32,
+        args: Args,
+    ) -> T {
+        let code_section = self
+            .module
+            .translated_code_section
+            .as_ref()
+            .expect("no code section");
+        let start_buf = code_section.func_start(func_idx as usize);
+
+        args.call(
+            Args::into_func(start_buf),
+            self.context
+                .as_ref()
+                .map(|ctx| (&**ctx) as *const VmCtx as *const u8)
+                .unwrap_or(std::ptr::null()),
+        )
+    }
+
     pub fn execute_func<Args: FunctionArgs<T> + TypeList, T: TypeList>(
         &self,
         func_idx: u32,
         args: Args,
     ) -> Result<T, ExecutionError> {
         let module = &self.module;
-        let code_section = module
-            .translated_code_section
-            .as_ref()
-            .expect("no code section");
 
         if func_idx as usize >= module.types.func_ty_indicies.len() {
             return Err(ExecutionError::FuncIndexOutOfBounds);
@@ -203,21 +221,12 @@ impl ExecutableModule {
 
         let type_ = module.types.func_type(func_idx);
 
+        // TODO: Handle "compatible" types (i.e. f32 and i32)
         if (&type_.params[..], &type_.returns[..]) != (Args::TYPE_LIST, T::TYPE_LIST) {
             return Err(ExecutionError::TypeMismatch);
         }
 
-        let start_buf = code_section.func_start(func_idx as usize);
-
-        Ok(unsafe {
-            args.call(
-                Args::into_func(start_buf),
-                self.context
-                    .as_ref()
-                    .map(|ctx| (&**ctx) as *const VmCtx as *const u8)
-                    .unwrap_or(std::ptr::null()),
-            )
-        })
+        Ok(unsafe { self.execute_func_unchecked(func_idx, args) })
     }
 
     pub fn disassemble(&self) {
@@ -310,10 +319,33 @@ pub struct SimpleContext {
 const WASM_PAGE_SIZE: usize = 65_536;
 
 pub trait Signature {
-    type Type;
+    type Type: SigType;
 
     fn params(&self) -> &[Self::Type];
     fn returns(&self) -> &[Self::Type];
+}
+
+pub trait SigType {
+    fn to_microwasm_type(&self) -> microwasm::SignlessType;
+    fn is_float(&self) -> bool;
+}
+
+impl SigType for AbiParam {
+    fn to_microwasm_type(&self) -> microwasm::SignlessType {
+        use microwasm::{Size::*, Type::*};
+
+        if self.value_type == ir::Type::int(32).unwrap() {
+            Int(_32)
+        } else if self.value_type == ir::Type::int(64).unwrap() {
+            Int(_64)
+        } else {
+            unimplemented!()
+        }
+    }
+
+    fn is_float(&self) -> bool {
+        self.value_type.is_float()
+    }
 }
 
 impl Signature for CraneliftSignature {
@@ -330,6 +362,19 @@ impl Signature for CraneliftSignature {
     fn returns(&self) -> &[Self::Type] {
         assert_eq!(self.call_conv, isa::CallConv::SystemV);
         &self.returns
+    }
+}
+
+impl SigType for wasmparser::Type {
+    fn to_microwasm_type(&self) -> microwasm::SignlessType {
+        microwasm::Type::from_wasm(*self).unwrap()
+    }
+
+    fn is_float(&self) -> bool {
+        match self {
+            wasmparser::Type::F32 | wasmparser::Type::F64 => true,
+            _ => false,
+        }
     }
 }
 
@@ -355,6 +400,14 @@ pub trait ModuleContext {
     fn offset_of_funcs_ptr(&self) -> u8;
     fn offset_of_funcs_len(&self) -> u8;
 
+    fn func_index(&self, defined_func_index: u32) -> u32;
+    fn defined_func_index(&self, func_index: u32) -> Option<u32>;
+
+    fn defined_func_type(&self, func_idx: u32) -> &Self::Signature {
+        // TODO: This assumes that there are no imported functions.
+        self.func_type(self.func_index(func_idx))
+    }
+
     fn func_type(&self, func_idx: u32) -> &Self::Signature {
         // TODO: This assumes that there are no imported functions.
         self.signature(self.func_type_index(func_idx))
@@ -363,6 +416,15 @@ pub trait ModuleContext {
 
 impl ModuleContext for SimpleContext {
     type Signature = FuncType;
+
+    // TODO: We don't support external functions yet
+    fn func_index(&self, func_idx: u32) -> u32 {
+        func_idx
+    }
+
+    fn defined_func_index(&self, func_idx: u32) -> Option<u32> {
+        Some(func_idx)
+    }
 
     fn func_type_index(&self, func_idx: u32) -> u32 {
         self.func_ty_indicies[func_idx as usize]

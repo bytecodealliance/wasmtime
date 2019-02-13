@@ -12,6 +12,7 @@ extern crate test;
 
 extern crate arrayvec;
 extern crate capstone;
+extern crate either;
 extern crate failure;
 pub extern crate wasmparser;
 #[macro_use]
@@ -29,11 +30,13 @@ extern crate quickcheck;
 extern crate wabt;
 // Just so we can implement `Signature` for `cranelift_codegen::ir::Signature`
 extern crate cranelift_codegen;
+extern crate multi_mut;
 
 mod backend;
 mod disassemble;
 mod error;
 mod function_body;
+mod microwasm;
 mod module;
 mod translate_sections;
 

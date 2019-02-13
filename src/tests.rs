@@ -153,7 +153,6 @@ mod op64 {
         ($op:ident, $func:expr, $retty:ident) => {
             mod $op {
                 use super::{translate_wat, ExecutableModule};
-                use std::sync::Once;
 
                 const RETTY: &str = stringify!($retty);
                 const OP: &str = stringify!($op);
@@ -191,10 +190,16 @@ mod op64 {
                     }
 
                     fn reg_lit(a: i64, b: i64) -> bool {
-                        translate_wat(&format!("
+                        use std::sync::Once;
+
+                        let translated = translate_wat(&format!("
                             (module (func (param i64) (result {retty})
                                 (i64.{op} (get_local 0) (i64.const {right}))))
-                        ", retty = RETTY, op = OP, right = b)).execute_func::<(i64,), $retty>(0, (a,)) == Ok($func(a, b) as $retty)
+                        ", retty = RETTY, op = OP, right = b));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+
+                        translated.execute_func::<(i64,), $retty>(0, (a,)) == Ok($func(a, b) as $retty)
                     }
                 }
             }
@@ -303,7 +308,7 @@ quickcheck! {
         "#;
 
         lazy_static! {
-            static ref TRANSLATED: ExecutableModule = translate_wat(CODE);
+            static ref TRANSLATED: ExecutableModule = {let out = translate_wat(CODE); out.disassemble(); out};
         }
 
         let out = TRANSLATED.execute_func::<(u32, u32), u32>(0, (a, b));
@@ -698,7 +703,8 @@ quickcheck! {
 
         let n = n as i32;
 
-        assert_eq!(TRANSLATED.execute_func::<(i32,), i32>(0, (n,)), Ok(fac(n)));
+        assert_eq!(TRANSLATED.execute_func::<(i32,), i32>(2, (n,)), Ok(fac(n)));
+        assert_eq!(TRANSLATED.execute_func::<(i32,), i32>(3, (n,)), Ok(fac(n)));
         true
     }
 }
@@ -832,7 +838,7 @@ const FIBONACCI: &str = r#"
     "#;
 
 #[test]
-fn fib() {
+fn fib_unopt() {
     let translated = translate_wat(FIBONACCI);
     translated.disassemble();
 
@@ -893,7 +899,7 @@ fn fib_opt() {
 }
 
 #[test]
-fn storage() {
+fn just_storage() {
     const CODE: &str = r#"
 (module
   (memory 1 1)
@@ -1066,9 +1072,10 @@ macro_rules! test_select {
         mod $name {
             use super::{translate_wat, ExecutableModule};
             use std::sync::Once;
-        
+
             lazy_static! {
-                static ref AS_PARAMS: ExecutableModule = translate_wat(&format!("
+                static ref AS_PARAMS: ExecutableModule = translate_wat(&format!(
+                    "
                     (module
                         (func (param {ty}) (param {ty}) (param i32) (result {ty})
                             (select (get_local 0) (get_local 1) (get_local 2))
@@ -1077,17 +1084,17 @@ macro_rules! test_select {
                     ty = stringify!($ty)
                 ));
             }
-        
+
             quickcheck! {
                 fn as_param(cond: bool, then: $ty, else_: $ty) -> bool {
                      let icond: i32 = if cond { 1 } else { 0 };
                      AS_PARAMS.execute_func::<($ty, $ty, i32), $ty>(0, (then, else_, icond)) ==
                         Ok(if cond { then } else { else_ })
                 }
-        
+
                 fn lit(cond: bool, then: $ty, else_: $ty) -> bool {
                     let icond: i32 = if cond { 1 } else { 0 };
-                    let translated = translate_wat(&format!("
+                            let translated = translate_wat(&format!("
                             (module (func (param {ty}) (param {ty}) (result {ty})
                                 (select (get_local 0) (get_local 1) (i32.const {val}))))
                         ",
@@ -1096,13 +1103,13 @@ macro_rules! test_select {
                     ));
                     static ONCE: Once = Once::new();
                     ONCE.call_once(|| translated.disassemble());
-        
+
                     translated.execute_func::<($ty, $ty), $ty>(0, (then, else_)) ==
                         Ok(if cond { then } else { else_ })
                 }
             }
         }
-    }
+    };
 }
 
 test_select!(select32, i32);

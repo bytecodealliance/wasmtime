@@ -1,7 +1,8 @@
 use backend::{CodeGenSession, TranslatedCodeSection};
 use error::Error;
 use function_body;
-use module::SimpleContext;
+use microwasm::{MicrowasmConv, Type as MWType};
+use module::{ModuleContext, SimpleContext};
 #[allow(unused_imports)] // for now
 use wasmparser::{
     CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
@@ -112,7 +113,52 @@ pub fn code(
     let func_count = code.get_count();
     let mut session = CodeGenSession::new(func_count, translation_ctx);
     for (idx, body) in code.into_iter().enumerate() {
-        function_body::translate(&mut session, idx as u32, &body?)?;
+        let body = body?;
+        let mut microwasm_conv = MicrowasmConv::new(
+            translation_ctx,
+            translation_ctx
+                .func_type(idx as _)
+                .params
+                .iter()
+                .map(|t| MWType::from_wasm(*t).unwrap()),
+            translation_ctx
+                .func_type(idx as _)
+                .returns
+                .iter()
+                .map(|t| MWType::from_wasm(*t).unwrap()),
+            &body,
+        );
+
+        if true {
+            let mut microwasm = vec![];
+
+            let mut microwasm_conv = MicrowasmConv::new(
+                translation_ctx,
+                translation_ctx
+                    .func_type(idx as _)
+                    .params
+                    .iter()
+                    .map(|t| MWType::from_wasm(*t).unwrap()),
+                translation_ctx
+                    .func_type(idx as _)
+                    .returns
+                    .iter()
+                    .map(|t| MWType::from_wasm(*t).unwrap()),
+                &body,
+            );
+
+            for ops in microwasm_conv {
+                microwasm.extend(ops?);
+            }
+
+            println!("{}", crate::microwasm::dis(idx, &microwasm));
+        }
+
+        function_body::translate(
+            &mut session,
+            idx as u32,
+            microwasm_conv.flat_map(|i| i.expect("TODO: Make this not panic")),
+        )?;
     }
     Ok(session.into_translated_code_section()?)
 }
