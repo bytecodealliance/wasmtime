@@ -10,25 +10,26 @@ fn gen_regbank(fmt: &mut Formatter, reg_bank: &RegBank) {
     } else {
         "".to_string()
     };
-    fmt.line("RegBank {");
+    fmtln!(fmt, "RegBank {");
     fmt.indent(|fmt| {
-        fmt.line(format!(r#"name: "{}","#, reg_bank.name));
-        fmt.line(format!("first_unit: {},", reg_bank.first_unit));
-        fmt.line(format!("units: {},", reg_bank.units));
-        fmt.line(format!("names: &[{}],", names));
-        fmt.line(format!(r#"prefix: "{}","#, reg_bank.prefix));
-        fmt.line(format!("first_toprc: {},", reg_bank.toprcs[0].index()));
-        fmt.line(format!("num_toprcs: {},", reg_bank.toprcs.len()));
-        fmt.line(format!(
+        fmtln!(fmt, r#"name: "{}","#, reg_bank.name);
+        fmtln!(fmt, "first_unit: {},", reg_bank.first_unit);
+        fmtln!(fmt, "units: {},", reg_bank.units);
+        fmtln!(fmt, "names: &[{}],", names);
+        fmtln!(fmt, r#"prefix: "{}","#, reg_bank.prefix);
+        fmtln!(fmt, "first_toprc: {},", reg_bank.toprcs[0].index());
+        fmtln!(fmt, "num_toprcs: {},", reg_bank.toprcs.len());
+        fmtln!(
+            fmt,
             "pressure_tracking: {},",
             if reg_bank.pressure_tracking {
                 "true"
             } else {
                 "false"
             }
-        ));
+        );
     });
-    fmt.line("},");
+    fmtln!(fmt, "},");
 }
 
 fn gen_regclass(isa: &TargetIsa, reg_class: &RegClass, fmt: &mut Formatter) {
@@ -41,63 +42,67 @@ fn gen_regclass(isa: &TargetIsa, reg_class: &RegClass, fmt: &mut Formatter) {
         .collect();
     let mask = mask.join(", ");
 
-    fmt.line(format!(
+    fmtln!(
+        fmt,
         "pub static {}_DATA: RegClassData = RegClassData {{",
         reg_class.name
-    ));
+    );
     fmt.indent(|fmt| {
-        fmt.line(format!(r#"name: "{}","#, reg_class.name));
-        fmt.line(format!("index: {},", reg_class.index.index()));
-        fmt.line(format!("width: {},", reg_class.width));
-        fmt.line(format!("bank: {},", reg_class.bank.index()));
-        fmt.line(format!("toprc: {},", reg_class.toprc.index()));
-        fmt.line(format!("first: {},", reg_bank.first_unit + reg_class.start));
-        fmt.line(format!("subclasses: {:#x},", reg_class.subclass_mask()));
-        fmt.line(format!("mask: [{}],", mask));
-        fmt.line("info: &INFO,");
+        fmtln!(fmt, r#"name: "{}","#, reg_class.name);
+        fmtln!(fmt, "index: {},", reg_class.index.index());
+        fmtln!(fmt, "width: {},", reg_class.width);
+        fmtln!(fmt, "bank: {},", reg_class.bank.index());
+        fmtln!(fmt, "toprc: {},", reg_class.toprc.index());
+        fmtln!(fmt, "first: {},", reg_bank.first_unit + reg_class.start);
+        fmtln!(fmt, "subclasses: {:#x},", reg_class.subclass_mask());
+        fmtln!(fmt, "mask: [{}],", mask);
+        fmtln!(fmt, "info: &INFO,");
     });
-    fmt.line("};");
-    fmt.line("#[allow(dead_code)]");
-    fmt.line(format!(
+    fmtln!(fmt, "};");
+
+    fmtln!(fmt, "#[allow(dead_code)]");
+    fmtln!(
+        fmt,
         "pub static {}: RegClass = &{}_DATA;",
-        reg_class.name, reg_class.name
-    ));
+        reg_class.name,
+        reg_class.name
+    );
 }
 
 fn gen_regbank_units(reg_bank: &RegBank, fmt: &mut Formatter) {
     for unit in 0..reg_bank.units {
         let v = unit + reg_bank.first_unit;
         if (unit as usize) < reg_bank.names.len() {
-            fmt.line(format!("{} = {},", reg_bank.names[unit as usize], v));
+            fmtln!(fmt, "{} = {},", reg_bank.names[unit as usize], v);
             continue;
         }
-        fmt.line(format!("{}{} = {},", reg_bank.prefix, unit, v));
+        fmtln!(fmt, "{}{} = {},", reg_bank.prefix, unit, v);
     }
 }
 
 fn gen_isa(isa: &TargetIsa, fmt: &mut Formatter) {
     // Emit RegInfo.
-    fmt.line("pub static INFO: RegInfo = RegInfo {");
+    fmtln!(fmt, "pub static INFO: RegInfo = RegInfo {");
 
     fmt.indent(|fmt| {
-        fmt.line("banks: &[");
+        fmtln!(fmt, "banks: &[");
         // Bank descriptors.
         fmt.indent(|fmt| {
             for reg_bank in isa.regs.banks.values() {
                 gen_regbank(fmt, &reg_bank);
             }
         });
-        fmt.line("],");
+        fmtln!(fmt, "],");
         // References to register classes.
-        fmt.line("classes: &[");
+        fmtln!(fmt, "classes: &[");
         fmt.indent(|fmt| {
             for reg_class in isa.regs.classes.values() {
-                fmt.line(format!("&{}_DATA,", reg_class.name));
+                fmtln!(fmt, "&{}_DATA,", reg_class.name);
             }
         });
-        fmt.line("],");
+        fmtln!(fmt, "],");
     });
-    fmt.line("};");
+    fmtln!(fmt, "};");
 
     // Register class descriptors.
     for rc in isa.regs.classes.values() {
@@ -105,26 +110,26 @@ fn gen_isa(isa: &TargetIsa, fmt: &mut Formatter) {
     }
 
     // Emit constants for all the register units.
-    fmt.line("#[allow(dead_code, non_camel_case_types)]");
-    fmt.line("#[derive(Clone, Copy)]");
-    fmt.line("pub enum RU {");
+    fmtln!(fmt, "#[allow(dead_code, non_camel_case_types)]");
+    fmtln!(fmt, "#[derive(Clone, Copy)]");
+    fmtln!(fmt, "pub enum RU {");
     fmt.indent(|fmt| {
         for reg_bank in isa.regs.banks.values() {
             gen_regbank_units(reg_bank, fmt);
         }
     });
-    fmt.line("}");
+    fmtln!(fmt, "}");
 
     // Emit Into conversion for the RU class.
-    fmt.line("impl Into<RegUnit> for RU {");
+    fmtln!(fmt, "impl Into<RegUnit> for RU {");
     fmt.indent(|fmt| {
-        fmt.line("fn into(self) -> RegUnit {");
+        fmtln!(fmt, "fn into(self) -> RegUnit {");
         fmt.indent(|fmt| {
-            fmt.line("self as RegUnit");
+            fmtln!(fmt, "self as RegUnit");
         });
-        fmt.line("}")
+        fmtln!(fmt, "}");
     });
-    fmt.line("}");
+    fmtln!(fmt, "}");
 }
 
 pub fn generate(isa: &TargetIsa, base_filename: &str, out_dir: &str) -> Result<(), error::Error> {

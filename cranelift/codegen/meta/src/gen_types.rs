@@ -22,7 +22,7 @@ fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut srcgen::Formatter) -> Result<
     })?;
 
     fmt.doc_comment(&ty.doc());
-    fmt.line(format!("pub const {}: Type = Type({:#x});\n", name, number));
+    fmtln!(fmt, "pub const {}: Type = Type({:#x});\n", name, number);
 
     Ok(())
 }

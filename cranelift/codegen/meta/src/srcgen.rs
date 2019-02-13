@@ -3,6 +3,8 @@
 //! The `srcgen` module contains generic helper routines and classes for
 //! generating source code.
 
+#![macro_use]
+
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -12,6 +14,18 @@ use std::path;
 use crate::error;
 
 static SHIFTWIDTH: usize = 4;
+
+/// A macro that simplifies the usage of the Formatter by allowing format
+/// strings.
+macro_rules! fmtln {
+    ($fmt:ident, $fmtstring:expr, $($fmtargs:expr),*) => {
+        $fmt.line(format!($fmtstring, $($fmtargs),*));
+    };
+
+    ($fmt:ident, $arg:expr) => {
+        $fmt.line($arg);
+    };
+}
 
 pub struct Formatter {
     indent: usize,
@@ -104,7 +118,7 @@ impl Formatter {
 
     /// Add a comment line.
     pub fn comment(&mut self, s: impl AsRef<str>) {
-        self.line(format!("// {}", s.as_ref()));
+        fmtln!(self, "// {}", s.as_ref());
     }
 
     /// Add a (multi-line) documentation comment.
@@ -123,7 +137,7 @@ impl Formatter {
 
     /// Add a match expression.
     pub fn add_match(&mut self, m: Match) {
-        self.line(format!("match {} {{", m.expr));
+        fmtln!(self, "match {} {{", m.expr);
         self.indent(|fmt| {
             for (&(ref fields, ref body), ref names) in m.arms.iter() {
                 // name { fields } | name { fields } => { body }
@@ -138,7 +152,7 @@ impl Formatter {
                     })
                     .collect();
                 let lhs = conditions.join(" | ");
-                fmt.line(format!("{} => {{", lhs));
+                fmtln!(fmt, "{} => {{", lhs);
                 fmt.indent(|fmt| {
                     fmt.line(body);
                 });

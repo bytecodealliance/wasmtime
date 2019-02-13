@@ -1,5 +1,6 @@
 #[macro_use]
 mod cdsl;
+mod srcgen;
 
 pub mod error;
 pub mod isa;
@@ -10,7 +11,6 @@ mod gen_types;
 
 mod constant_hash;
 mod shared;
-mod srcgen;
 mod unique_table;
 
 pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
