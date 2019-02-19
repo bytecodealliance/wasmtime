@@ -665,6 +665,12 @@ impl FromStr for Ieee32 {
     }
 }
 
+impl From<f32> for Ieee32 {
+    fn from(x: f32) -> Self {
+        Ieee32::with_float(x)
+    }
+}
+
 impl Ieee64 {
     /// Create a new `Ieee64` containing the bits of `x`.
     pub fn with_bits(x: u64) -> Self {
@@ -723,6 +729,12 @@ impl FromStr for Ieee64 {
             Ok(b) => Ok(Ieee64(b)),
             Err(s) => Err(s),
         }
+    }
+}
+
+impl From<f64> for Ieee64 {
+    fn from(x: f64) -> Self {
+        Ieee64::with_float(x)
     }
 }
 
