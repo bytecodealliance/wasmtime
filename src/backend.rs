@@ -1372,19 +1372,31 @@ impl<M: ModuleContext> Context<'_, M> {
     store!(i64_store, Rq, QWORD, "i64.store");
 
     fn push_physical(&mut self, value: ValueLocation) -> ValueLocation {
+        self.block_state.depth.reserve(1);
         match value {
             ValueLocation::Reg(gpr) => {
-                self.block_state.depth.reserve(1);
                 // TODO: Proper stack allocation scheme
                 dynasm!(self.asm
                     ; push Rq(gpr)
                 );
                 self.block_state.regs.release_scratch_gpr(gpr);
-
-                ValueLocation::Stack(-(self.block_state.depth.0 as i32))
             }
-            value => value,
+            ValueLocation::Stack(o) => {
+                let offset = self.adjusted_offset(o);
+                dynasm!(self.asm
+                    ; push QWORD [rsp + offset]
+                );
+            }
+            ValueLocation::Immediate(imm) => {
+                let gpr = self.block_state.regs.take_scratch_gpr();
+                dynasm!(self.asm
+                    ; mov Rq(gpr), QWORD imm
+                    ; push Rq(gpr)
+                );
+                self.block_state.regs.release_scratch_gpr(gpr);
+            }
         }
+        ValueLocation::Stack(-(self.block_state.depth.0 as i32))
     }
 
     fn push(&mut self, value: ValueLocation) {
@@ -1823,13 +1835,11 @@ impl<M: ModuleContext> Context<'_, M> {
         for &loc in out_locs.iter().rev() {
             let val = self.pop();
 
-            println!("{:?}", loc);
-
             match loc {
                 CCLoc::Stack(offset) => {
                     let offset = self.adjusted_offset(offset as i32 - depth as i32);
 
-                    if offset == -1 {
+                    if offset == -(WORD_SIZE as i32) {
                         self.push_physical(val);
                     } else {
                         let gpr = self.into_reg(val);
@@ -1855,8 +1865,6 @@ impl<M: ModuleContext> Context<'_, M> {
         let mut try_count = 10;
         while !pending.is_empty() {
             try_count -= 1;
-
-            println!("{:?}", self.block_state);
 
             if try_count == 0 {
                 unimplemented!("We can't handle cycles in the register allocation right now");

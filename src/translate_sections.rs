@@ -129,7 +129,7 @@ pub fn code(
             &body,
         );
 
-        if true {
+        if false {
             let mut microwasm = vec![];
 
             let mut microwasm_conv = MicrowasmConv::new(
