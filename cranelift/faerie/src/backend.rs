@@ -334,26 +334,19 @@ impl FaerieProduct {
 
 fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
     match linkage {
-        Linkage::Import => faerie::Decl::FunctionImport,
-        Linkage::Local => faerie::Decl::Function { global: false },
-        Linkage::Preemptible | Linkage::Export => faerie::Decl::Function { global: true },
+        Linkage::Import => faerie::Decl::function_import().into(),
+        Linkage::Local => faerie::Decl::function().into(),
+        Linkage::Export => faerie::Decl::function().global().into(),
+        Linkage::Preemptible => faerie::Decl::function().weak().into(),
     }
 }
 
 fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
     match linkage {
-        Linkage::Import => faerie::Decl::DataImport,
-        Linkage::Local => faerie::Decl::Data {
-            global: false,
-            writable,
-        },
-        Linkage::Export => faerie::Decl::Data {
-            global: true,
-            writable,
-        },
-        Linkage::Preemptible => {
-            unimplemented!("faerie doesn't support preemptible globals yet");
-        }
+        Linkage::Import => faerie::Decl::data_import().into(),
+        Linkage::Local => faerie::Decl::data().with_writable(writable).into(),
+        Linkage::Export => faerie::Decl::data().global().with_writable(writable).into(),
+        Linkage::Preemptible => faerie::Decl::data().weak().with_writable(writable).into(),
     }
 }
 
@@ -388,7 +381,7 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
             ir::ExternalName::LibCall(ref libcall) => {
                 let sym = (self.libcall_names)(*libcall);
                 self.artifact
-                    .declare(sym.clone(), faerie::Decl::FunctionImport)
+                    .declare(sym.clone(), faerie::Decl::function_import())
                     .expect("faerie declaration of libcall");
                 sym
             }
