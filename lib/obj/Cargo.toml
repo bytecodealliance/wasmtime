@@ -15,4 +15,4 @@ edition = "2018"
 cranelift-codegen = "0.28.0"
 cranelift-entity = "0.28.0"
 wasmtime-environ = { path = "../environ" }
-faerie = "0.6.0"
+faerie = "0.7.1"
