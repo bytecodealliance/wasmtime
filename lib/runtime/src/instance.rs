@@ -184,6 +184,9 @@ fn global_mut<'vmctx>(
 /// FIXME: Should this be pub(crate)?
 #[repr(C)]
 pub struct InstanceContents {
+    /// The `Module` this `Instance` was instantiated from.
+    module: Rc<Module>,
+
     /// Offsets in the `vmctx` region.
     offsets: VMOffsets,
 
@@ -204,7 +207,7 @@ pub struct InstanceContents {
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
 
-    /// Context pointer used by compiled wasm code. This field is last, and
+    /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
@@ -364,14 +367,10 @@ impl InstanceContents {
         self.vmctx_mut()
     }
 
-    fn invoke_function(
-        &mut self,
-        module: &Module,
-        index: FuncIndex,
-    ) -> Result<(), InstantiationError> {
+    fn invoke_function(&mut self, index: FuncIndex) -> Result<(), InstantiationError> {
         // TODO: Check that the callee's calling convention matches what we expect.
 
-        let (callee_address, callee_vmctx) = match module.defined_func_index(index) {
+        let (callee_address, callee_vmctx) = match self.module.defined_func_index(index) {
             Some(defined_index) => {
                 let body = *self
                     .finished_functions
@@ -380,7 +379,7 @@ impl InstanceContents {
                 (body, self.vmctx_mut() as *mut VMContext)
             }
             None => {
-                assert!(index.index() < module.imported_funcs.len());
+                assert!(index.index() < self.module.imported_funcs.len());
                 let import = self.imported_function(index);
                 (import.body, import.vmctx)
             }
@@ -392,34 +391,34 @@ impl InstanceContents {
     }
 
     /// Invoke the WebAssembly start function of the instance, if one is present.
-    fn invoke_start_function(&mut self, module: &Module) -> Result<(), InstantiationError> {
-        if let Some(start_index) = module.start_func {
-            self.invoke_function(module, start_index)
-        } else if let Some(start_export) = module.exports.get("_start") {
+    fn invoke_start_function(&mut self) -> Result<(), InstantiationError> {
+        if let Some(start_index) = self.module.start_func {
+            self.invoke_function(start_index)
+        } else if let Some(start_export) = self.module.exports.get("_start") {
             // As a compatibility measure, if the module doesn't have a start
             // function but does have a _start function exported, call that.
             match start_export {
                 wasmtime_environ::Export::Function(func_index) => {
-                    let sig = &module.signatures[module.functions[*func_index]];
+                    let sig = &self.module.signatures[self.module.functions[*func_index]];
                     // No wasm params or returns; just the vmctx param.
                     if sig.params.len() == 1 && sig.returns.is_empty() {
-                        self.invoke_function(module, *func_index)
+                        self.invoke_function(*func_index)
                     } else {
                         Ok(())
                     }
                 }
                 _ => Ok(()),
             }
-        } else if let Some(main_export) = module.exports.get("main") {
+        } else if let Some(main_export) = self.module.exports.get("main") {
             // As a further compatibility measure, if the module doesn't have a
             // start function or a _start function exported, but does have a main
             // function exported, call that.
             match main_export {
                 wasmtime_environ::Export::Function(func_index) => {
-                    let sig = &module.signatures[module.functions[*func_index]];
+                    let sig = &self.module.signatures[self.module.functions[*func_index]];
                     // No wasm params or returns; just the vmctx param.
                     if sig.params.len() == 1 && sig.returns.is_empty() {
-                        self.invoke_function(module, *func_index)
+                        self.invoke_function(*func_index)
                     } else {
                         Ok(())
                     }
@@ -584,9 +583,6 @@ impl Drop for MmapField {
 /// Note that compiled wasm code passes around raw pointers to `Instance`, so
 /// this shouldn't be moved.
 pub struct Instance {
-    /// The `Module` this `Instance` was instantiated from.
-    module: Rc<Module>,
-
     /// The `Mmap` containing the contents of the instance.
     mmap_field: MmapField,
 }
@@ -632,6 +628,7 @@ impl Instance {
             #[allow(clippy::cast_ptr_alignment)]
             let contents_ptr = contents_mmap.as_mut_ptr() as *mut InstanceContents;
             let contents = InstanceContents {
+                module,
                 global_exports,
                 offsets,
                 memories,
@@ -690,16 +687,16 @@ impl Instance {
         }
 
         // Check initializer bounds before initializing anything.
-        check_table_init_bounds(&*module, contents)?;
-        check_memory_init_bounds(&*module, contents, data_initializers)?;
+        check_table_init_bounds(contents)?;
+        check_memory_init_bounds(contents, data_initializers)?;
 
         // Apply the initializers.
-        initialize_tables(&*module, contents)?;
-        initialize_memories(&*module, contents, data_initializers)?;
-        initialize_globals(&*module, contents);
+        initialize_tables(contents)?;
+        initialize_memories(contents, data_initializers)?;
+        initialize_globals(contents);
 
         // Collect the exports for the global export map.
-        for (field, decl) in &module.exports {
+        for (field, decl) in &contents.module.exports {
             use std::collections::hash_map::Entry::*;
             let cell: &RefCell<HashMap<std::string::String, core::option::Option<Export>>> =
                 contents.global_exports.borrow();
@@ -708,7 +705,7 @@ impl Instance {
             match map.entry(field.to_string()) {
                 Vacant(entry) => {
                     entry.insert(Some(lookup_by_declaration(
-                        &module,
+                        &contents.module,
                         &mut contents.vmctx,
                         &contents.offsets,
                         &contents.finished_functions,
@@ -726,10 +723,9 @@ impl Instance {
 
         // The WebAssembly spec specifies that the start function is
         // invoked automatically at instantiation time.
-        contents.invoke_start_function(&*module)?;
+        contents.invoke_start_function()?;
 
         Ok(Self {
-            module,
             mmap_field: MmapField {
                 mmap: contents_mmap,
             },
@@ -758,7 +754,7 @@ impl Instance {
 
     /// Lookup an export with the given name.
     pub fn lookup(&mut self, field: &str) -> Option<Export> {
-        let export = if let Some(export) = self.module.exports.get(field) {
+        let export = if let Some(export) = self.mmap_field.contents().module.exports.get(field) {
             export.clone()
         } else {
             return None;
@@ -784,7 +780,7 @@ impl Instance {
     pub fn lookup_by_declaration(&mut self, export: &wasmtime_environ::Export) -> Export {
         let contents = self.mmap_field.contents_mut();
         lookup_by_declaration(
-            &self.module,
+            &contents.module,
             &mut contents.vmctx,
             &contents.offsets,
             &contents.finished_functions,
@@ -810,7 +806,7 @@ impl Instance {
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> indexmap::map::Iter<String, wasmtime_environ::Export> {
-        self.module.exports.iter()
+        self.mmap_field.contents().module.exports.iter()
     }
 }
 
@@ -879,15 +875,13 @@ fn lookup_by_declaration(
     }
 }
 
-fn check_table_init_bounds(
-    module: &Module,
-    contents: &mut InstanceContents,
-) -> Result<(), InstantiationError> {
+fn check_table_init_bounds(contents: &mut InstanceContents) -> Result<(), InstantiationError> {
+    let module = Rc::clone(&contents.module);
     for init in &module.table_elements {
-        let start = get_table_init_start(init, module, contents);
+        let start = get_table_init_start(init, contents);
         let slice = get_table_slice(
             init,
-            module,
+            &contents.module,
             &mut contents.tables,
             &contents.vmctx,
             &contents.offsets,
@@ -904,15 +898,11 @@ fn check_table_init_bounds(
 }
 
 /// Compute the offset for a memory data initializer.
-fn get_memory_init_start(
-    init: &DataInitializer<'_>,
-    module: &Module,
-    contents: &mut InstanceContents,
-) -> usize {
+fn get_memory_init_start(init: &DataInitializer<'_>, contents: &mut InstanceContents) -> usize {
     let mut start = init.location.offset;
 
     if let Some(base) = init.location.base {
-        let global = if let Some(def_index) = module.defined_global_index(base) {
+        let global = if let Some(def_index) = contents.module.defined_global_index(base) {
             contents.global_mut(def_index)
         } else {
             contents.imported_global(base).from
@@ -926,11 +916,11 @@ fn get_memory_init_start(
 /// Return a byte-slice view of a memory's data.
 fn get_memory_slice<'contents>(
     init: &DataInitializer<'_>,
-    module: &Module,
     contents: &'contents mut InstanceContents,
 ) -> &'contents mut [u8] {
-    let memory = if let Some(defined_memory_index) =
-        module.defined_memory_index(init.location.memory_index)
+    let memory = if let Some(defined_memory_index) = contents
+        .module
+        .defined_memory_index(init.location.memory_index)
     {
         contents.memory(defined_memory_index)
     } else {
@@ -944,13 +934,12 @@ fn get_memory_slice<'contents>(
 }
 
 fn check_memory_init_bounds(
-    module: &Module,
     contents: &mut InstanceContents,
     data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
-        let start = get_memory_init_start(init, module, contents);
-        let mem_slice = get_memory_slice(init, module, contents);
+        let start = get_memory_init_start(init, contents);
+        let mem_slice = get_memory_slice(init, contents);
 
         if mem_slice.get_mut(start..start + init.data.len()).is_none() {
             return Err(InstantiationError::Link(LinkError(
@@ -974,15 +963,11 @@ fn create_tables(module: &Module) -> BoxedSlice<DefinedTableIndex, Table> {
 }
 
 /// Compute the offset for a table element initializer.
-fn get_table_init_start(
-    init: &TableElements,
-    module: &Module,
-    contents: &mut InstanceContents,
-) -> usize {
+fn get_table_init_start(init: &TableElements, contents: &mut InstanceContents) -> usize {
     let mut start = init.offset;
 
     if let Some(base) = init.base {
-        let global = if let Some(def_index) = module.defined_global_index(base) {
+        let global = if let Some(def_index) = contents.module.defined_global_index(base) {
             contents.global_mut(def_index)
         } else {
             contents.imported_global(base).from
@@ -1013,16 +998,14 @@ fn get_table_slice<'contents>(
 }
 
 /// Initialize the table memory from the provided initializers.
-fn initialize_tables(
-    module: &Module,
-    contents: &mut InstanceContents,
-) -> Result<(), InstantiationError> {
+fn initialize_tables(contents: &mut InstanceContents) -> Result<(), InstantiationError> {
     let vmctx: *mut VMContext = contents.vmctx_mut();
+    let module = Rc::clone(&contents.module);
     for init in &module.table_elements {
-        let start = get_table_init_start(init, module, contents);
+        let start = get_table_init_start(init, contents);
         let slice = get_table_slice(
             init,
-            module,
+            &contents.module,
             &mut contents.tables,
             &contents.vmctx,
             &contents.offsets,
@@ -1030,9 +1013,9 @@ fn initialize_tables(
 
         let subslice = &mut slice[start..start + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
-            let callee_sig = module.functions[*func_idx];
+            let callee_sig = contents.module.functions[*func_idx];
             let (callee_ptr, callee_vmctx) =
-                if let Some(index) = module.defined_func_index(*func_idx) {
+                if let Some(index) = contents.module.defined_func_index(*func_idx) {
                     (contents.finished_functions[index], vmctx)
                 } else {
                     let imported_func =
@@ -1066,13 +1049,12 @@ fn create_memories(
 
 /// Initialize the table memory from the provided initializers.
 fn initialize_memories(
-    module: &Module,
     contents: &mut InstanceContents,
     data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
-        let start = get_memory_init_start(init, module, contents);
-        let mem_slice = get_memory_slice(init, module, contents);
+        let start = get_memory_init_start(init, contents);
+        let mem_slice = get_memory_slice(init, contents);
 
         let to_init = &mut mem_slice[start..start + init.data.len()];
         to_init.copy_from_slice(init.data);
@@ -1094,7 +1076,8 @@ fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDef
     vmctx_globals.into_boxed_slice()
 }
 
-fn initialize_globals(module: &Module, contents: &mut InstanceContents) {
+fn initialize_globals(contents: &mut InstanceContents) {
+    let module = Rc::clone(&contents.module);
     let num_imports = module.imported_globals.len();
     for (index, global) in module.globals.iter().skip(num_imports) {
         let def_index = module.defined_global_index(index).unwrap();
