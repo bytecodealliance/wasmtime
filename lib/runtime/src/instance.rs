@@ -843,7 +843,7 @@ impl InstanceHandle {
 impl Clone for InstanceHandle {
     fn clone(&self) -> Self {
         unsafe { &mut *(self.instance as *mut Instance) }.refcount += 1;
-        InstanceHandle {
+        Self {
             instance: self.instance,
         }
     }
