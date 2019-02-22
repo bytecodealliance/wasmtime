@@ -12,7 +12,7 @@ pub struct VMFunctionImport {
     /// A pointer to the imported function body.
     pub body: *const VMFunctionBody,
 
-    /// A pointer to the VMContext that owns the function.
+    /// A pointer to the `VMContext` that owns the function.
     pub vmctx: *mut VMContext,
 }
 
@@ -67,7 +67,7 @@ pub struct VMTableImport {
     /// A pointer to the imported table description.
     pub from: *mut VMTableDefinition,
 
-    /// A pointer to the VMContext that owns the table description.
+    /// A pointer to the `VMContext` that owns the table description.
     pub vmctx: *mut VMContext,
 }
 
@@ -104,7 +104,7 @@ pub struct VMMemoryImport {
     /// A pointer to the imported memory description.
     pub from: *mut VMMemoryDefinition,
 
-    /// A pointer to the VMContext that owns the memory description.
+    /// A pointer to the `VMContext` that owns the memory description.
     pub vmctx: *mut VMContext,
 }
 

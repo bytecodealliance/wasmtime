@@ -14,7 +14,7 @@ pub enum Export {
         address: *const VMFunctionBody,
         /// The function signature declaration, used for compatibilty checking.
         signature: ir::Signature,
-        /// Pointer to the containing VMContext.
+        /// Pointer to the containing `VMContext`.
         vmctx: *mut VMContext,
     },
 
@@ -22,7 +22,7 @@ pub enum Export {
     Table {
         /// The address of the table descriptor.
         definition: *mut VMTableDefinition,
-        /// Pointer to the containing VMContext.
+        /// Pointer to the containing `VMContext`.
         vmctx: *mut VMContext,
         /// The table declaration, used for compatibilty checking.
         table: TablePlan,
@@ -32,7 +32,7 @@ pub enum Export {
     Memory {
         /// The address of the memory descriptor.
         definition: *mut VMMemoryDefinition,
-        /// Pointer to the containing VMContext.
+        /// Pointer to the containing `VMContext`.
         vmctx: *mut VMContext,
         /// The memory declaration, used for compatibilty checking.
         memory: MemoryPlan,
@@ -42,7 +42,7 @@ pub enum Export {
     Global {
         /// The address of the global storage.
         definition: *mut VMGlobalDefinition,
-        /// Pointer to the containing VMContext.
+        /// Pointer to the containing `VMContext`.
         vmctx: *mut VMContext,
         /// The global declaration, used for compatibilty checking.
         global: Global,
