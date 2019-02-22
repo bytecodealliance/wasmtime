@@ -755,7 +755,7 @@ impl InstanceHandle {
         // invoked automatically at instantiation time.
         instance.invoke_start_function()?;
 
-        Ok(Self { instance: instance })
+        Ok(Self { instance })
     }
 
     /// Create a new `InstanceHandle` pointing at the instance
