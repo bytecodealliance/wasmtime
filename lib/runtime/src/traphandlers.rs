@@ -53,7 +53,7 @@ struct ScopeGuard {
 impl ScopeGuard {
     fn new() -> Self {
         assert_eq!(
-            TRAP_PC.with(|data| data.get()),
+            TRAP_PC.with(Cell::get),
             ptr::null(),
             "unfinished trap detected"
         );
