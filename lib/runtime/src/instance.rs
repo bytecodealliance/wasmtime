@@ -27,7 +27,7 @@ use cranelift_wasm::{
 use indexmap;
 use std::borrow::ToOwned;
 use std::boxed::Box;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::string::{String, ToString};
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
@@ -184,6 +184,17 @@ fn global_mut<'vmctx>(
 /// FIXME: Should this be pub(crate)?
 #[repr(C)]
 pub struct InstanceContents {
+    /// The number of references to this `InstanceContents`.
+    refcount: usize,
+
+    /// Instances from which this `InstanceContents` imports. These won't
+    /// create reference cycles because wasm instances can't cyclically
+    /// import from each other.
+    dependencies: HashSet<Instance>,
+
+    /// The allocated contents.
+    mmap: Mmap,
+
     /// The `Module` this `Instance` was instantiated from.
     module: Rc<Module>,
 
@@ -600,42 +611,13 @@ impl InstanceContents {
     }
 }
 
-/// A wrapper around an `Mmap` holding an `InstanceContents`.
-struct MmapField {
-    /// The allocated contents.
-    mmap: Mmap,
-}
-
-#[allow(clippy::cast_ptr_alignment)]
-impl MmapField {
-    /// Return the contained contents.
-    fn contents(&self) -> &InstanceContents {
-        assert!(self.mmap.len() >= mem::size_of::<InstanceContents>());
-        unsafe { &*(self.mmap.as_ptr() as *const InstanceContents) }
-    }
-
-    /// Return the contained contents.
-    fn contents_mut(&mut self) -> &mut InstanceContents {
-        assert!(self.mmap.len() >= mem::size_of::<InstanceContents>());
-        unsafe { &mut *(self.mmap.as_mut_ptr() as *mut InstanceContents) }
-    }
-}
-
-impl Drop for MmapField {
-    fn drop(&mut self) {
-        /// Drop the `InstanceContents`.
-        assert!(self.mmap.len() >= mem::size_of::<InstanceContents>());
-        mem::drop(mem::replace(self.contents_mut(), unsafe { mem::zeroed() }));
-    }
-}
-
 /// An Instance of a WebAssembly module.
 ///
 /// Note that compiled wasm code passes around raw pointers to `Instance`, so
 /// this shouldn't be moved.
+#[derive(Hash, PartialEq, Eq)]
 pub struct Instance {
-    /// The `Mmap` containing the contents of the instance.
-    mmap_field: MmapField,
+    instance: *mut InstanceContents,
 }
 
 impl Instance {
@@ -679,6 +661,9 @@ impl Instance {
             #[allow(clippy::cast_ptr_alignment)]
             let contents_ptr = contents_mmap.as_mut_ptr() as *mut InstanceContents;
             let contents = InstanceContents {
+                refcount: 1,
+                dependencies: imports.dependencies,
+                mmap: contents_mmap,
                 module,
                 global_exports,
                 offsets,
@@ -776,48 +761,52 @@ impl Instance {
         // invoked automatically at instantiation time.
         contents.invoke_start_function()?;
 
-        Ok(Self {
-            mmap_field: MmapField {
-                mmap: contents_mmap,
-            },
-        })
+        Ok(Self { instance: contents })
+    }
+
+    /// Create a new `InstanceHandle` pointing at the instance
+    /// pointed to by the given `VMContext` pointer.
+    pub fn from_vmctx(vmctx: *mut VMContext) -> Self {
+        let instance = unsafe { (&mut *vmctx).instance_contents() };
+        instance.refcount += 1;
+        Self { instance }
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
     pub fn vmctx(&self) -> &VMContext {
-        self.mmap_field.contents().vmctx()
+        self.contents().vmctx()
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
     pub fn vmctx_ptr(&self) -> *const VMContext {
-        self.mmap_field.contents().vmctx_ptr()
+        self.contents().vmctx_ptr()
     }
 
     /// Return a mutable reference to the vmctx used by compiled wasm code.
     pub fn vmctx_mut(&mut self) -> &mut VMContext {
-        self.mmap_field.contents_mut().vmctx_mut()
+        self.contents_mut().vmctx_mut()
     }
 
     /// Return a mutable raw pointer to the vmctx used by compiled wasm code.
     pub fn vmctx_mut_ptr(&mut self) -> *mut VMContext {
-        self.mmap_field.contents_mut().vmctx_mut_ptr()
+        self.contents_mut().vmctx_mut_ptr()
     }
 
     /// Lookup an export with the given name.
     pub fn lookup(&mut self, field: &str) -> Option<Export> {
-        self.mmap_field.contents_mut().lookup(field)
+        self.contents_mut().lookup(field)
     }
 
     /// Lookup an export with the given name. This takes an immutable reference,
     /// and the result is an `Export` that the type system doesn't prevent from
     /// being used to mutate the instance, so this function is unsafe.
     pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
-        self.mmap_field.contents().lookup_immutable(field)
+        self.contents().lookup_immutable(field)
     }
 
     /// Lookup an export with the given export declaration.
     pub fn lookup_by_declaration(&mut self, export: &wasmtime_environ::Export) -> Export {
-        self.mmap_field.contents_mut().lookup_by_declaration(export)
+        self.contents_mut().lookup_by_declaration(export)
     }
 
     /// Lookup an export with the given export declaration. This takes an immutable
@@ -827,9 +816,7 @@ impl Instance {
         &self,
         export: &wasmtime_environ::Export,
     ) -> Export {
-        self.mmap_field
-            .contents()
-            .lookup_immutable_by_declaration(export)
+        self.contents().lookup_immutable_by_declaration(export)
     }
 
     /// Return an iterator over the exports of this instance.
@@ -838,12 +825,45 @@ impl Instance {
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> indexmap::map::Iter<String, wasmtime_environ::Export> {
-        self.mmap_field.contents().exports()
+        self.contents().exports()
     }
 
     /// Return a reference to the custom state attached to this instance.
     pub fn host_state(&mut self) -> &mut Any {
-        self.mmap_field.contents_mut().host_state()
+        self.contents_mut().host_state()
+    }
+}
+
+impl Instance {
+    /// Return the contained contents.
+    pub fn contents(&self) -> &InstanceContents {
+        unsafe { &*(self.instance as *const InstanceContents) }
+    }
+
+    /// Return the contained contents.
+    pub fn contents_mut(&mut self) -> &mut InstanceContents {
+        unsafe { &mut *(self.instance as *mut InstanceContents) }
+    }
+}
+
+impl Clone for Instance {
+    fn clone(&self) -> Self {
+        unsafe { &mut *(self.instance as *mut InstanceContents) }.refcount += 1;
+        Instance {
+            instance: self.instance,
+        }
+    }
+}
+
+impl Drop for Instance {
+    fn drop(&mut self) {
+        let contents = self.contents_mut();
+        contents.refcount -= 1;
+        if contents.refcount == 0 {
+            let mmap = mem::replace(&mut contents.mmap, Mmap::new());
+            unsafe { ptr::drop_in_place(contents) };
+            mem::drop(mmap);
+        }
     }
 }
 
@@ -907,6 +927,7 @@ fn lookup_by_declaration(
             } else {
                 imported_global(vmctx, offsets, *index).from
             },
+            vmctx,
             global: module.globals[*index],
         },
     }

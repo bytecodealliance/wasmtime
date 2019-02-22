@@ -5,14 +5,15 @@ use core::ptr::write_unaligned;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
+use std::collections::HashSet;
 use std::vec::Vec;
 use wasmtime_environ::{
     MemoryPlan, MemoryStyle, Module, Relocation, RelocationTarget, Relocations, TablePlan,
 };
 use wasmtime_runtime::libcalls;
 use wasmtime_runtime::{
-    Export, Imports, LinkError, VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport,
-    VMTableImport,
+    Export, Imports, Instance, LinkError, VMFunctionBody, VMFunctionImport, VMGlobalImport,
+    VMMemoryImport, VMTableImport,
 };
 
 /// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
@@ -22,6 +23,8 @@ pub fn link_module(
     relocations: Relocations,
     resolver: &mut dyn Resolver,
 ) -> Result<Imports, LinkError> {
+    let mut dependencies = HashSet::new();
+
     let mut function_imports = PrimaryMap::with_capacity(module.imported_funcs.len());
     for (index, (ref module_name, ref field)) in module.imported_funcs.iter() {
         match resolver.resolve(module_name, field) {
@@ -41,6 +44,7 @@ pub fn link_module(
                             signature, import_signature)
                         ));
                     }
+                    dependencies.insert(Instance::from_vmctx(vmctx));
                     function_imports.push(VMFunctionImport {
                         body: address,
                         vmctx,
@@ -78,6 +82,7 @@ pub fn link_module(
                             module_name, field,
                         )));
                     }
+                    dependencies.insert(Instance::from_vmctx(vmctx));
                     table_imports.push(VMTableImport {
                         from: definition,
                         vmctx,
@@ -131,6 +136,7 @@ pub fn link_module(
                     }
                     assert!(memory.offset_guard_size >= import_memory.offset_guard_size);
 
+                    dependencies.insert(Instance::from_vmctx(vmctx));
                     memory_imports.push(VMMemoryImport {
                         from: definition,
                         vmctx,
@@ -156,7 +162,17 @@ pub fn link_module(
     for (index, (ref module_name, ref field)) in module.imported_globals.iter() {
         match resolver.resolve(module_name, field) {
             Some(export_value) => match export_value {
-                Export::Global { definition, global } => {
+                Export::Table { .. } | Export::Memory { .. } | Export::Function { .. } => {
+                    return Err(LinkError(format!(
+                        "{}/{}: exported global incompatible with global import",
+                        module_name, field
+                    )));
+                }
+                Export::Global {
+                    definition,
+                    vmctx,
+                    global,
+                } => {
                     let imported_global = module.globals[index];
                     if !is_global_compatible(&global, &imported_global) {
                         return Err(LinkError(format!(
@@ -164,13 +180,8 @@ pub fn link_module(
                             module_name, field
                         )));
                     }
+                    dependencies.insert(Instance::from_vmctx(vmctx));
                     global_imports.push(VMGlobalImport { from: definition });
-                }
-                Export::Table { .. } | Export::Memory { .. } | Export::Function { .. } => {
-                    return Err(LinkError(format!(
-                        "{}/{}: exported global incompatible with global import",
-                        module_name, field
-                    )));
                 }
             },
             None => {
@@ -186,6 +197,7 @@ pub fn link_module(
     relocate(allocated_functions, relocations, module);
 
     Ok(Imports::new(
+        dependencies,
         function_imports,
         table_imports,
         memory_imports,

@@ -56,7 +56,7 @@ pub use crate::compiler::Compiler;
 pub use crate::context::{Context, ContextError, UnknownInstance};
 pub use crate::instantiate::{instantiate, CompiledModule, SetupError};
 pub use crate::link::link_module;
-pub use crate::namespace::{InstanceIndex, Namespace};
+pub use crate::namespace::Namespace;
 pub use crate::resolver::{NullResolver, Resolver};
 pub use crate::target_tunables::target_tunables;
 

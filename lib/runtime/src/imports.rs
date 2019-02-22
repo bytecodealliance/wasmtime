@@ -1,10 +1,15 @@
+use crate::instance::Instance;
 use crate::vmcontext::{VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport};
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
+use std::collections::HashSet;
 
 /// Resolved import pointers.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Imports {
+    /// The set of instances that the imports depend on.
+    pub dependencies: HashSet<Instance>,
+
     /// Resolved addresses for imported functions.
     pub functions: BoxedSlice<FuncIndex, VMFunctionImport>,
 
@@ -21,12 +26,14 @@ pub struct Imports {
 impl Imports {
     /// Construct a new `Imports` instance.
     pub fn new(
+        dependencies: HashSet<Instance>,
         function_imports: PrimaryMap<FuncIndex, VMFunctionImport>,
         table_imports: PrimaryMap<TableIndex, VMTableImport>,
         memory_imports: PrimaryMap<MemoryIndex, VMMemoryImport>,
         global_imports: PrimaryMap<GlobalIndex, VMGlobalImport>,
     ) -> Self {
         Self {
+            dependencies,
             functions: function_imports.into_boxed_slice(),
             tables: table_imports.into_boxed_slice(),
             memories: memory_imports.into_boxed_slice(),
@@ -37,6 +44,7 @@ impl Imports {
     /// Construct a new `Imports` instance with no imports.
     pub fn none() -> Self {
         Self {
+            dependencies: HashSet::new(),
             functions: PrimaryMap::new().into_boxed_slice(),
             tables: PrimaryMap::new().into_boxed_slice(),
             memories: PrimaryMap::new().into_boxed_slice(),

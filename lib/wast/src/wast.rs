@@ -4,7 +4,7 @@ use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
 use wasmtime_jit::{
-    ActionError, ActionOutcome, Compiler, Context, InstanceIndex, InstantiationError, RuntimeValue,
+    ActionError, ActionOutcome, Compiler, Context, Instance, InstantiationError, RuntimeValue,
     UnknownInstance,
 };
 
@@ -71,7 +71,7 @@ pub struct WastFileError {
 pub struct WastContext {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
-    current: Option<InstanceIndex>,
+    current: Option<Instance>,
 
     context: Context,
 }
@@ -85,28 +85,24 @@ impl WastContext {
         }
     }
 
-    fn get_instance_index(
-        &mut self,
-        instance_name: Option<&str>,
-    ) -> Result<InstanceIndex, WastError> {
-        let index = if let Some(instance_name) = instance_name {
+    fn get_instance(&mut self, instance_name: Option<&str>) -> Result<&mut Instance, WastError> {
+        let instance = if let Some(instance_name) = instance_name {
             self.context
-                .get_instance_index(instance_name)
+                .get_instance(instance_name)
                 .map_err(WastError::Instance)
         } else {
             self.current
                 .as_mut()
-                .cloned()
                 .ok_or_else(|| WastError::NoDefaultInstance)
         }?;
 
-        Ok(index)
+        Ok(instance)
     }
 
     /// Register "spectest" which is used by the spec testsuite.
     pub fn register_spectest(&mut self) -> Result<(), InstantiationError> {
         let instance = instantiate_spectest()?;
-        self.context.instance(Some("spectest".to_owned()), instance);
+        self.context.name_instance("spectest".to_owned(), instance);
         Ok(())
     }
 
@@ -140,8 +136,8 @@ impl WastContext {
 
     /// Register an instance to make it available for performing actions.
     fn register(&mut self, name: Option<String>, as_name: String) -> Result<(), WastError> {
-        let index = self.get_instance_index(name.as_ref().map(|x| &**x))?;
-        self.context.alias_for_indexed(index, as_name);
+        let instance = self.get_instance(name.as_ref().map(|x| &**x))?.clone();
+        self.context.name_instance(as_name, instance);
         Ok(())
     }
 
@@ -156,9 +152,11 @@ impl WastContext {
             .iter()
             .map(|arg| runtime_value(*arg))
             .collect::<Vec<_>>();
-        let index = self.get_instance_index(instance_name.as_ref().map(|x| &**x))?;
+        let mut instance = self
+            .get_instance(instance_name.as_ref().map(|x| &**x))?
+            .clone();
         self.context
-            .invoke_indexed(index, field, &value_args)
+            .invoke(&mut instance, field, &value_args)
             .map_err(WastError::Action)
     }
 
@@ -168,9 +166,11 @@ impl WastContext {
         instance_name: Option<String>,
         field: &str,
     ) -> Result<ActionOutcome, WastError> {
-        let index = self.get_instance_index(instance_name.as_ref().map(|x| &**x))?;
+        let instance = self
+            .get_instance(instance_name.as_ref().map(|x| &**x))?
+            .clone();
         self.context
-            .get_indexed(index, field)
+            .get(&instance, field)
             .map_err(WastError::Action)
     }
 

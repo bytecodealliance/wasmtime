@@ -46,7 +46,7 @@ pub mod libcalls;
 
 pub use crate::export::Export;
 pub use crate::imports::Imports;
-pub use crate::instance::{Instance, InstantiationError, LinkError};
+pub use crate::instance::{Instance, InstanceContents, InstantiationError, LinkError};
 pub use crate::mmap::Mmap;
 pub use crate::sig_registry::SignatureRegistry;
 pub use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
