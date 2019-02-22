@@ -5,7 +5,7 @@
 use super::HashMap;
 use crate::resolver::Resolver;
 use std::string::String;
-use wasmtime_runtime::{Export, Instance};
+use wasmtime_runtime::{Export, InstanceHandle};
 
 /// A namespace containing instances keyed by name.
 ///
@@ -13,7 +13,7 @@ use wasmtime_runtime::{Export, Instance};
 /// imports using defined exports.
 pub struct Namespace {
     /// Mapping from identifiers to indices in `self.instances`.
-    names: HashMap<String, Instance>,
+    names: HashMap<String, InstanceHandle>,
 }
 
 impl Namespace {
@@ -24,14 +24,14 @@ impl Namespace {
         }
     }
 
-    /// Install a new `Instance` in this `Namespace`, optionally with the
-    /// given name, and return its index.
-    pub fn name_instance(&mut self, name: String, instance: Instance) {
+    /// Install a new `InstanceHandle` in this `Namespace`, optionally with the
+    /// given name.
+    pub fn name_instance(&mut self, name: String, instance: InstanceHandle) {
         self.names.insert(name, instance);
     }
 
-    /// Get the instance index registered with the given `instance_name`.
-    pub fn get_instance(&mut self, name: &str) -> Option<&mut Instance> {
+    /// Get the instance registered with the given `instance_name`.
+    pub fn get_instance(&mut self, name: &str) -> Option<&mut InstanceHandle> {
         self.names.get_mut(name)
     }
 }

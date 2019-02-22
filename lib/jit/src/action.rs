@@ -7,7 +7,7 @@ use core::{fmt, mem, ptr, slice};
 use cranelift_codegen::ir;
 use std::string::String;
 use std::vec::Vec;
-use wasmtime_runtime::{wasmtime_call_trampoline, Export, Instance};
+use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle};
 
 /// A runtime value.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -125,10 +125,10 @@ pub enum ActionError {
     Type(String),
 }
 
-/// Invoke a function in an `Instance` identified by an export name.
+/// Invoke a function through an `InstanceHandle` identified by an export name.
 pub fn invoke(
     compiler: &mut Compiler,
-    instance: &mut Instance,
+    instance: &mut InstanceHandle,
     function_name: &str,
     args: &[RuntimeValue],
 ) -> Result<ActionOutcome, ActionError> {
@@ -220,7 +220,7 @@ pub fn invoke(
 
 /// Returns a slice of the contents of allocated linear memory.
 pub fn inspect_memory<'instance>(
-    instance: &'instance Instance,
+    instance: &'instance InstanceHandle,
     memory_name: &str,
     start: usize,
     len: usize,
@@ -251,8 +251,8 @@ pub fn inspect_memory<'instance>(
     })
 }
 
-/// Read a global in this `Instance` identified by an export name.
-pub fn get(instance: &Instance, global_name: &str) -> Result<RuntimeValue, ActionError> {
+/// Read a global in the given instance identified by an export name.
+pub fn get(instance: &InstanceHandle, global_name: &str) -> Result<RuntimeValue, ActionError> {
     let (definition, global) = match unsafe { instance.lookup_immutable(global_name) } {
         Some(Export::Global {
             definition,

@@ -37,8 +37,6 @@ use hashbrown::{hash_map, HashMap};
 use std::collections::{hash_map, HashMap};
 
 #[macro_use]
-extern crate cranelift_entity;
-#[macro_use]
 extern crate failure_derive;
 
 mod action;
@@ -60,9 +58,9 @@ pub use crate::namespace::Namespace;
 pub use crate::resolver::{NullResolver, Resolver};
 pub use crate::target_tunables::target_tunables;
 
-// Re-export `Instance` so that users won't need to separately depend on
+// Re-export `InstanceHandle` so that users won't need to separately depend on
 // wasmtime-runtime in common cases.
-pub use wasmtime_runtime::{Instance, InstantiationError};
+pub use wasmtime_runtime::{InstanceHandle, InstantiationError};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

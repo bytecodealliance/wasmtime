@@ -1,5 +1,6 @@
-//! An `Instance` contains all the runtime state used by execution of a wasm
-//! module.
+//! An `InstanceContents` contains all the runtime state used by execution
+//! of a wasm module. An `InstanceHandle` is a reference-counting handle
+//! for an `InstanceContents`.
 
 use crate::export::Export;
 use crate::imports::Imports;
@@ -177,25 +178,23 @@ fn global_mut<'vmctx>(
 
 /// The actual contents of an instance.
 ///
-/// `Instance` is just a handle containing a pointer to an `InstanceContents`,
-/// which is specially allocated.
+/// `InstanceContents` instances are specially allocated.
 ///
 /// This is repr(C) to ensure that the vmctx field is last.
-/// FIXME: Should this be pub(crate)?
 #[repr(C)]
-pub struct InstanceContents {
+pub(crate) struct InstanceContents {
     /// The number of references to this `InstanceContents`.
     refcount: usize,
 
     /// Instances from which this `InstanceContents` imports. These won't
     /// create reference cycles because wasm instances can't cyclically
     /// import from each other.
-    dependencies: HashSet<Instance>,
+    dependencies: HashSet<InstanceHandle>,
 
     /// The allocated contents.
     mmap: Mmap,
 
-    /// The `Module` this `Instance` was instantiated from.
+    /// The `Module` this `InstanceContents` was instantiated from.
     module: Rc<Module>,
 
     /// Offsets in the `vmctx` region.
@@ -497,7 +496,7 @@ impl InstanceContents {
         }
     }
 
-    /// Return the offset from the vmctx pointer to its containing Instance.
+    /// Return the offset from the vmctx pointer to its containing InstanceContents.
     pub(crate) fn vmctx_offset() -> isize {
         offset_of!(Self, vmctx) as isize
     }
@@ -611,17 +610,14 @@ impl InstanceContents {
     }
 }
 
-/// An Instance of a WebAssembly module.
-///
-/// Note that compiled wasm code passes around raw pointers to `Instance`, so
-/// this shouldn't be moved.
+/// A handle holding an `InstanceContents` of a WebAssembly module.
 #[derive(Hash, PartialEq, Eq)]
-pub struct Instance {
+pub struct InstanceHandle {
     instance: *mut InstanceContents,
 }
 
-impl Instance {
-    /// Create a new `Instance`.
+impl InstanceHandle {
+    /// Create a new `InstanceHandle` pointing at a new `InstanceContents`.
     pub fn new(
         module: Rc<Module>,
         global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
@@ -753,7 +749,7 @@ impl Instance {
         }
 
         // Ensure that our signal handlers are ready for action.
-        // TODO: Move these calls out of `Instance`.
+        // TODO: Move these calls out of `InstanceHandle`.
         wasmtime_init_eager();
         wasmtime_init_finish(contents.vmctx_mut());
 
@@ -834,28 +830,28 @@ impl Instance {
     }
 }
 
-impl Instance {
+impl InstanceHandle {
     /// Return the contained contents.
-    pub fn contents(&self) -> &InstanceContents {
+    fn contents(&self) -> &InstanceContents {
         unsafe { &*(self.instance as *const InstanceContents) }
     }
 
     /// Return the contained contents.
-    pub fn contents_mut(&mut self) -> &mut InstanceContents {
+    fn contents_mut(&mut self) -> &mut InstanceContents {
         unsafe { &mut *(self.instance as *mut InstanceContents) }
     }
 }
 
-impl Clone for Instance {
+impl Clone for InstanceHandle {
     fn clone(&self) -> Self {
         unsafe { &mut *(self.instance as *mut InstanceContents) }.refcount += 1;
-        Instance {
+        InstanceHandle {
             instance: self.instance,
         }
     }
 }
 
-impl Drop for Instance {
+impl Drop for InstanceHandle {
     fn drop(&mut self) {
         let contents = self.contents_mut();
         contents.refcount -= 1;

@@ -154,7 +154,7 @@ fn handle_module(context: &mut Context, args: &Args, path: &Path) -> Result<(), 
     // Read the wasm module binary.
     let data = read_wasm(path.to_path_buf())?;
 
-    // Create a new `Instance` by compiling and instantiating a wasm module.
+    // Compile and instantiating a wasm module.
     let mut instance = context
         .instantiate_module(None, &data)
         .map_err(|e| e.to_string())?;
