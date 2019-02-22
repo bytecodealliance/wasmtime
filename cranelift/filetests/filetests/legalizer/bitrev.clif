@@ -32,7 +32,7 @@ ebb0(v0: i8):
 ; check: v32 = band_imm v31, 51
 ; check: v9 = ireduce.i8 v32
 ; check: v33 = uextend.i32 v9
-; check: v34 = ushr_imm v33, 2
+; check: v34 = ishl_imm v33, 2
 ; check: v10 = ireduce.i8 v34
 ; check: v35 = uextend.i32 v8
 ; check: v36 = uextend.i32 v10
@@ -87,7 +87,7 @@ ebb0(v0: i16):
 ; check: v37 = band_imm v36, 0x3333
 ; check: v9 = ireduce.i16 v37
 ; check: v38 = uextend.i32 v9
-; check: v39 = ushr_imm v38, 2
+; check: v39 = ishl_imm v38, 2
 ; check: v10 = ireduce.i16 v39
 ; check: v40 = uextend.i32 v8
 ; check: v41 = uextend.i32 v10
@@ -142,7 +142,7 @@ ebb0(v0: i32):
 ; check: v7 = band v6, v25
 ; check: v8 = ushr_imm v7, 2
 ; check: v9 = band_imm v6, 0x3333_3333
-; check: v10 = ushr_imm v9, 2
+; check: v10 = ishl_imm v9, 2
 ; check: v11 = bor v8, v10
 ; check: v26 = iconst.i32 0xf0f0_f0f0
 ; check: v12 = band v11, v26
@@ -178,7 +178,7 @@ ebb0(v0: i64):
 ; check: v8 = ushr_imm v7, 2
 ; check: v32 = iconst.i64 0x3333_3333_3333_3333
 ; check: v9 = band v6, v32
-; check: v10 = ushr_imm v9, 2
+; check: v10 = ishl_imm v9, 2
 ; check: v11 = bor v8, v10
 ; check: v33 = iconst.i64 0xf0f0_f0f0_f0f0_f0f0
 ; check: v12 = band v11, v33
