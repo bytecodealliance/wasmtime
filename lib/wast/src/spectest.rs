@@ -8,7 +8,7 @@ use std::rc::Rc;
 use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, Export, MemoryPlan, Module, TablePlan};
 use wasmtime_jit::target_tunables;
-use wasmtime_runtime::{Imports, Instance, InstantiationError, VMContext, VMFunctionBody};
+use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMContext, VMFunctionBody};
 
 extern "C" fn spectest_print() {}
 
@@ -46,7 +46,7 @@ extern "C" fn spectest_print_f64_f64(_vmctx: &mut VMContext, x: f64, y: f64) {
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
-pub fn instantiate_spectest() -> Result<Instance, InstantiationError> {
+pub fn instantiate_spectest() -> Result<InstanceHandle, InstantiationError> {
     let call_conv = isa::CallConv::triple_default(&HOST);
     let pointer_type = types::Type::triple_pointer_type(&HOST);
     let mut module = Module::new();
@@ -216,7 +216,7 @@ pub fn instantiate_spectest() -> Result<Instance, InstantiationError> {
     let data_initializers = Vec::new();
     let signatures = PrimaryMap::new();
 
-    Instance::new(
+    InstanceHandle::new(
         Rc::new(module),
         Rc::new(RefCell::new(HashMap::new())),
         finished_functions.into_boxed_slice(),

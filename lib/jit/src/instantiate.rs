@@ -18,7 +18,7 @@ use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
 };
 use wasmtime_runtime::{
-    Export, Imports, Instance, InstantiationError, VMFunctionBody, VMSharedSignatureIndex,
+    Export, Imports, InstanceHandle, InstantiationError, VMFunctionBody, VMSharedSignatureIndex,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -160,12 +160,12 @@ impl CompiledModule {
         }
     }
 
-    /// Crate an `Instance` from this `CompiledModule`.
+    /// Crate an `InstanceContents` from this `CompiledModule`.
     ///
     /// Note that if only one instance of this module is needed, it may be more
     /// efficient to call the top-level `instantiate`, since that avoids copying
     /// the data initializers.
-    pub fn instantiate(&mut self) -> Result<Instance, InstantiationError> {
+    pub fn instantiate(&mut self) -> Result<InstanceHandle, InstantiationError> {
         let data_initializers = self
             .data_initializers
             .iter()
@@ -174,7 +174,7 @@ impl CompiledModule {
                 data: &*init.data,
             })
             .collect::<Vec<_>>();
-        Instance::new(
+        InstanceHandle::new(
             Rc::clone(&self.module),
             Rc::clone(&self.global_exports),
             self.finished_functions.clone(),
@@ -205,7 +205,7 @@ impl OwnedDataInitializer {
     }
 }
 
-/// Create a new `Instance` by compiling the wasm module in `data` and instatiating it.
+/// Create a new wasm instance by compiling the wasm module in `data` and instatiating it.
 ///
 /// This is equivalent to createing a `CompiledModule` and calling `instantiate()` on it,
 /// but avoids creating an intermediate copy of the data initializers.
@@ -214,10 +214,10 @@ pub fn instantiate(
     data: &[u8],
     resolver: &mut dyn Resolver,
     global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
-) -> Result<Instance, SetupError> {
+) -> Result<InstanceHandle, SetupError> {
     let raw = RawCompiledModule::new(compiler, data, resolver)?;
 
-    Instance::new(
+    InstanceHandle::new(
         Rc::new(raw.module),
         global_exports,
         raw.finished_functions,

@@ -4,8 +4,8 @@ use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
 use wasmtime_jit::{
-    ActionError, ActionOutcome, Compiler, Context, Instance, InstantiationError, RuntimeValue,
-    UnknownInstance,
+    ActionError, ActionOutcome, Compiler, Context, InstanceHandle, InstantiationError,
+    RuntimeValue, UnknownInstance,
 };
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
@@ -71,7 +71,7 @@ pub struct WastFileError {
 pub struct WastContext {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
-    current: Option<Instance>,
+    current: Option<InstanceHandle>,
 
     context: Context,
 }
@@ -85,7 +85,10 @@ impl WastContext {
         }
     }
 
-    fn get_instance(&mut self, instance_name: Option<&str>) -> Result<&mut Instance, WastError> {
+    fn get_instance(
+        &mut self,
+        instance_name: Option<&str>,
+    ) -> Result<&mut InstanceHandle, WastError> {
         let instance = if let Some(instance_name) = instance_name {
             self.context
                 .get_instance(instance_name)
