@@ -160,7 +160,7 @@ impl CompiledModule {
         }
     }
 
-    /// Crate an `InstanceContents` from this `CompiledModule`.
+    /// Crate an `Instance` from this `CompiledModule`.
     ///
     /// Note that if only one instance of this module is needed, it may be more
     /// efficient to call the top-level `instantiate`, since that avoids copying
