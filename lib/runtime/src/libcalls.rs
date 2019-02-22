@@ -94,10 +94,10 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
     delta: u32,
     memory_index: u32,
 ) -> u32 {
-    let instance_contents = (&mut *vmctx).instance_contents();
+    let instance = (&mut *vmctx).instance();
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
 
-    instance_contents
+    instance
         .memory_grow(memory_index, delta)
         .unwrap_or(u32::max_value())
 }
@@ -109,10 +109,10 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_grow(
     delta: u32,
     memory_index: u32,
 ) -> u32 {
-    let instance_contents = (&mut *vmctx).instance_contents();
+    let instance = (&mut *vmctx).instance();
     let memory_index = MemoryIndex::from_u32(memory_index);
 
-    instance_contents
+    instance
         .imported_memory_grow(memory_index, delta)
         .unwrap_or(u32::max_value())
 }
@@ -120,10 +120,10 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_grow(
 /// Implementation of memory.size for locally-defined 32-bit memories.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_memory32_size(vmctx: *mut VMContext, memory_index: u32) -> u32 {
-    let instance_contents = (&mut *vmctx).instance_contents();
+    let instance = (&mut *vmctx).instance();
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
 
-    instance_contents.memory_size(memory_index)
+    instance.memory_size(memory_index)
 }
 
 /// Implementation of memory.size for imported 32-bit memories.
@@ -132,8 +132,8 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
     vmctx: *mut VMContext,
     memory_index: u32,
 ) -> u32 {
-    let instance_contents = (&mut *vmctx).instance_contents();
+    let instance = (&mut *vmctx).instance();
     let memory_index = MemoryIndex::from_u32(memory_index);
 
-    instance_contents.imported_memory_size(memory_index)
+    instance.imported_memory_size(memory_index)
 }

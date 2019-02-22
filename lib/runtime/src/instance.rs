@@ -1,6 +1,6 @@
-//! An `InstanceContents` contains all the runtime state used by execution
-//! of a wasm module. An `InstanceHandle` is a reference-counting handle
-//! for an `InstanceContents`.
+//! An `Instance` contains all the runtime state used by execution of a
+//! wasm module (except its callstack and register state). An
+//! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
 use crate::export::Export;
 use crate::imports::Imports;
@@ -176,25 +176,23 @@ fn global_mut<'vmctx>(
     }
 }
 
-/// The actual contents of an instance.
-///
-/// `InstanceContents` instances are specially allocated.
+/// A WebAssembly instance.
 ///
 /// This is repr(C) to ensure that the vmctx field is last.
 #[repr(C)]
-pub(crate) struct InstanceContents {
-    /// The number of references to this `InstanceContents`.
+pub(crate) struct Instance {
+    /// The number of references to this `Instance`.
     refcount: usize,
 
-    /// Instances from which this `InstanceContents` imports. These won't
+    /// `Instance`s from which this `Instance` imports. These won't
     /// create reference cycles because wasm instances can't cyclically
     /// import from each other.
     dependencies: HashSet<InstanceHandle>,
 
-    /// The allocated contents.
+    /// The underlying mmap that holds this `Instance`.
     mmap: Mmap,
 
-    /// The `Module` this `InstanceContents` was instantiated from.
+    /// The `Module` this `Instance` was instantiated from.
     module: Rc<Module>,
 
     /// Offsets in the `vmctx` region.
@@ -224,7 +222,7 @@ pub(crate) struct InstanceContents {
 }
 
 #[allow(clippy::cast_ptr_alignment)]
-impl InstanceContents {
+impl Instance {
     /// Return the indexed `VMSharedSignatureIndex`.
     #[allow(dead_code)]
     fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
@@ -496,7 +494,7 @@ impl InstanceContents {
         }
     }
 
-    /// Return the offset from the vmctx pointer to its containing InstanceContents.
+    /// Return the offset from the vmctx pointer to its containing Instance.
     pub(crate) fn vmctx_offset() -> isize {
         offset_of!(Self, vmctx) as isize
     }
@@ -573,11 +571,11 @@ impl InstanceContents {
         delta: u32,
     ) -> Option<u32> {
         let import = self.imported_memory(memory_index);
-        let foreign_instance_contents = (&mut *import.vmctx).instance_contents();
+        let foreign_instance = (&mut *import.vmctx).instance();
         let foreign_memory = &mut *import.from;
-        let foreign_index = foreign_instance_contents.memory_index(foreign_memory);
+        let foreign_index = foreign_instance.memory_index(foreign_memory);
 
-        foreign_instance_contents.memory_grow(foreign_index, delta)
+        foreign_instance.memory_grow(foreign_index, delta)
     }
 
     /// Returns the number of allocated wasm pages.
@@ -591,11 +589,11 @@ impl InstanceContents {
     /// Returns the number of allocated wasm pages in an imported memory.
     pub(crate) unsafe fn imported_memory_size(&mut self, memory_index: MemoryIndex) -> u32 {
         let import = self.imported_memory(memory_index);
-        let foreign_instance_contents = (&mut *import.vmctx).instance_contents();
+        let foreign_instance = (&mut *import.vmctx).instance();
         let foreign_memory = &mut *import.from;
-        let foreign_index = foreign_instance_contents.memory_index(foreign_memory);
+        let foreign_index = foreign_instance.memory_index(foreign_memory);
 
-        foreign_instance_contents.memory_size(foreign_index)
+        foreign_instance.memory_size(foreign_index)
     }
 
     pub(crate) fn lookup_global_export(&self, field: &str) -> Option<Export> {
@@ -610,14 +608,14 @@ impl InstanceContents {
     }
 }
 
-/// A handle holding an `InstanceContents` of a WebAssembly module.
+/// A handle holding an `Instance` of a WebAssembly module.
 #[derive(Hash, PartialEq, Eq)]
 pub struct InstanceHandle {
-    instance: *mut InstanceContents,
+    instance: *mut Instance,
 }
 
 impl InstanceHandle {
-    /// Create a new `InstanceHandle` pointing at a new `InstanceContents`.
+    /// Create a new `InstanceHandle` pointing at a new `Instance`.
     pub fn new(
         module: Rc<Module>,
         global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
@@ -646,20 +644,20 @@ impl InstanceHandle {
 
         let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module);
 
-        let mut contents_mmap = Mmap::with_at_least(
-            mem::size_of::<InstanceContents>()
+        let mut instance_mmap = Mmap::with_at_least(
+            mem::size_of::<Instance>()
                 .checked_add(cast::usize(offsets.size_of_vmctx()))
                 .unwrap(),
         )
         .map_err(InstantiationError::Resource)?;
 
-        let contents = {
+        let instance = {
             #[allow(clippy::cast_ptr_alignment)]
-            let contents_ptr = contents_mmap.as_mut_ptr() as *mut InstanceContents;
-            let contents = InstanceContents {
+            let instance_ptr = instance_mmap.as_mut_ptr() as *mut Instance;
+            let instance = Instance {
                 refcount: 1,
                 dependencies: imports.dependencies,
-                mmap: contents_mmap,
+                mmap: instance_mmap,
                 module,
                 global_exports,
                 offsets,
@@ -670,77 +668,77 @@ impl InstanceHandle {
                 vmctx: VMContext {},
             };
             unsafe {
-                ptr::write(contents_ptr, contents);
-                &mut *contents_ptr
+                ptr::write(instance_ptr, instance);
+                &mut *instance_ptr
             }
         };
 
         unsafe {
             ptr::copy(
                 vmshared_signatures.values().as_slice().as_ptr(),
-                contents.signature_ids_ptr() as *mut VMSharedSignatureIndex,
+                instance.signature_ids_ptr() as *mut VMSharedSignatureIndex,
                 vmshared_signatures.len(),
             );
             ptr::copy(
                 imports.functions.values().as_slice().as_ptr(),
-                contents.imported_functions_ptr() as *mut VMFunctionImport,
+                instance.imported_functions_ptr() as *mut VMFunctionImport,
                 imports.functions.len(),
             );
             ptr::copy(
                 imports.tables.values().as_slice().as_ptr(),
-                contents.imported_tables_ptr() as *mut VMTableImport,
+                instance.imported_tables_ptr() as *mut VMTableImport,
                 imports.tables.len(),
             );
             ptr::copy(
                 imports.memories.values().as_slice().as_ptr(),
-                contents.imported_memories_ptr() as *mut VMMemoryImport,
+                instance.imported_memories_ptr() as *mut VMMemoryImport,
                 imports.memories.len(),
             );
             ptr::copy(
                 imports.globals.values().as_slice().as_ptr(),
-                contents.imported_globals_ptr() as *mut VMGlobalImport,
+                instance.imported_globals_ptr() as *mut VMGlobalImport,
                 imports.globals.len(),
             );
             ptr::copy(
                 vmctx_tables.values().as_slice().as_ptr(),
-                contents.tables_ptr() as *mut VMTableDefinition,
+                instance.tables_ptr() as *mut VMTableDefinition,
                 vmctx_tables.len(),
             );
             ptr::copy(
                 vmctx_memories.values().as_slice().as_ptr(),
-                contents.memories_ptr() as *mut VMMemoryDefinition,
+                instance.memories_ptr() as *mut VMMemoryDefinition,
                 vmctx_memories.len(),
             );
             ptr::copy(
                 vmctx_globals.values().as_slice().as_ptr(),
-                contents.globals_ptr() as *mut VMGlobalDefinition,
+                instance.globals_ptr() as *mut VMGlobalDefinition,
                 vmctx_globals.len(),
             );
         }
 
         // Check initializer bounds before initializing anything.
-        check_table_init_bounds(contents)?;
-        check_memory_init_bounds(contents, data_initializers)?;
+        check_table_init_bounds(instance)?;
+        check_memory_init_bounds(instance, data_initializers)?;
 
         // Apply the initializers.
-        initialize_tables(contents)?;
-        initialize_memories(contents, data_initializers)?;
-        initialize_globals(contents);
+        initialize_tables(instance)?;
+        initialize_memories(instance, data_initializers)?;
+        initialize_globals(instance);
 
         // Collect the exports for the global export map.
-        for (field, decl) in &contents.module.exports {
+        for (field, decl) in &instance.module.exports {
             use std::collections::hash_map::Entry::*;
             let cell: &RefCell<HashMap<std::string::String, core::option::Option<Export>>> =
-                contents.global_exports.borrow();
+                instance.global_exports.borrow();
             let map: &mut HashMap<std::string::String, core::option::Option<Export>> =
                 &mut cell.borrow_mut();
             match map.entry(field.to_string()) {
                 Vacant(entry) => {
                     entry.insert(Some(lookup_by_declaration(
-                        &contents.module,
-                        &mut contents.vmctx,
-                        &contents.offsets,
-                        &contents.finished_functions,
+                        &instance.module,
+                        &mut instance.vmctx,
+                        &instance.offsets,
+                        &instance.finished_functions,
                         &decl,
                     )));
                 }
@@ -751,58 +749,58 @@ impl InstanceHandle {
         // Ensure that our signal handlers are ready for action.
         // TODO: Move these calls out of `InstanceHandle`.
         wasmtime_init_eager();
-        wasmtime_init_finish(contents.vmctx_mut());
+        wasmtime_init_finish(instance.vmctx_mut());
 
         // The WebAssembly spec specifies that the start function is
         // invoked automatically at instantiation time.
-        contents.invoke_start_function()?;
+        instance.invoke_start_function()?;
 
-        Ok(Self { instance: contents })
+        Ok(Self { instance: instance })
     }
 
     /// Create a new `InstanceHandle` pointing at the instance
     /// pointed to by the given `VMContext` pointer.
     pub fn from_vmctx(vmctx: *mut VMContext) -> Self {
-        let instance = unsafe { (&mut *vmctx).instance_contents() };
+        let instance = unsafe { (&mut *vmctx).instance() };
         instance.refcount += 1;
         Self { instance }
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
     pub fn vmctx(&self) -> &VMContext {
-        self.contents().vmctx()
+        self.instance().vmctx()
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
     pub fn vmctx_ptr(&self) -> *const VMContext {
-        self.contents().vmctx_ptr()
+        self.instance().vmctx_ptr()
     }
 
     /// Return a mutable reference to the vmctx used by compiled wasm code.
     pub fn vmctx_mut(&mut self) -> &mut VMContext {
-        self.contents_mut().vmctx_mut()
+        self.instance_mut().vmctx_mut()
     }
 
     /// Return a mutable raw pointer to the vmctx used by compiled wasm code.
     pub fn vmctx_mut_ptr(&mut self) -> *mut VMContext {
-        self.contents_mut().vmctx_mut_ptr()
+        self.instance_mut().vmctx_mut_ptr()
     }
 
     /// Lookup an export with the given name.
     pub fn lookup(&mut self, field: &str) -> Option<Export> {
-        self.contents_mut().lookup(field)
+        self.instance_mut().lookup(field)
     }
 
     /// Lookup an export with the given name. This takes an immutable reference,
     /// and the result is an `Export` that the type system doesn't prevent from
     /// being used to mutate the instance, so this function is unsafe.
     pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
-        self.contents().lookup_immutable(field)
+        self.instance().lookup_immutable(field)
     }
 
     /// Lookup an export with the given export declaration.
     pub fn lookup_by_declaration(&mut self, export: &wasmtime_environ::Export) -> Export {
-        self.contents_mut().lookup_by_declaration(export)
+        self.instance_mut().lookup_by_declaration(export)
     }
 
     /// Lookup an export with the given export declaration. This takes an immutable
@@ -812,7 +810,7 @@ impl InstanceHandle {
         &self,
         export: &wasmtime_environ::Export,
     ) -> Export {
-        self.contents().lookup_immutable_by_declaration(export)
+        self.instance().lookup_immutable_by_declaration(export)
     }
 
     /// Return an iterator over the exports of this instance.
@@ -821,30 +819,30 @@ impl InstanceHandle {
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> indexmap::map::Iter<String, wasmtime_environ::Export> {
-        self.contents().exports()
+        self.instance().exports()
     }
 
     /// Return a reference to the custom state attached to this instance.
     pub fn host_state(&mut self) -> &mut Any {
-        self.contents_mut().host_state()
+        self.instance_mut().host_state()
     }
 }
 
 impl InstanceHandle {
-    /// Return the contained contents.
-    fn contents(&self) -> &InstanceContents {
-        unsafe { &*(self.instance as *const InstanceContents) }
+    /// Return a reference to the contained `Instance`.
+    fn instance(&self) -> &Instance {
+        unsafe { &*(self.instance as *const Instance) }
     }
 
-    /// Return the contained contents.
-    fn contents_mut(&mut self) -> &mut InstanceContents {
-        unsafe { &mut *(self.instance as *mut InstanceContents) }
+    /// Return a mutable reference to the contained `Instance`.
+    fn instance_mut(&mut self) -> &mut Instance {
+        unsafe { &mut *(self.instance as *mut Instance) }
     }
 }
 
 impl Clone for InstanceHandle {
     fn clone(&self) -> Self {
-        unsafe { &mut *(self.instance as *mut InstanceContents) }.refcount += 1;
+        unsafe { &mut *(self.instance as *mut Instance) }.refcount += 1;
         InstanceHandle {
             instance: self.instance,
         }
@@ -853,11 +851,11 @@ impl Clone for InstanceHandle {
 
 impl Drop for InstanceHandle {
     fn drop(&mut self) {
-        let contents = self.contents_mut();
-        contents.refcount -= 1;
-        if contents.refcount == 0 {
-            let mmap = mem::replace(&mut contents.mmap, Mmap::new());
-            unsafe { ptr::drop_in_place(contents) };
+        let instance = self.instance_mut();
+        instance.refcount -= 1;
+        if instance.refcount == 0 {
+            let mmap = mem::replace(&mut instance.mmap, Mmap::new());
+            unsafe { ptr::drop_in_place(instance) };
             mem::drop(mmap);
         }
     }
@@ -929,16 +927,16 @@ fn lookup_by_declaration(
     }
 }
 
-fn check_table_init_bounds(contents: &mut InstanceContents) -> Result<(), InstantiationError> {
-    let module = Rc::clone(&contents.module);
+fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationError> {
+    let module = Rc::clone(&instance.module);
     for init in &module.table_elements {
-        let start = get_table_init_start(init, contents);
+        let start = get_table_init_start(init, instance);
         let slice = get_table_slice(
             init,
-            &contents.module,
-            &mut contents.tables,
-            &contents.vmctx,
-            &contents.offsets,
+            &instance.module,
+            &mut instance.tables,
+            &instance.vmctx,
+            &instance.offsets,
         );
 
         if slice.get_mut(start..start + init.elements.len()).is_none() {
@@ -952,14 +950,14 @@ fn check_table_init_bounds(contents: &mut InstanceContents) -> Result<(), Instan
 }
 
 /// Compute the offset for a memory data initializer.
-fn get_memory_init_start(init: &DataInitializer<'_>, contents: &mut InstanceContents) -> usize {
+fn get_memory_init_start(init: &DataInitializer<'_>, instance: &mut Instance) -> usize {
     let mut start = init.location.offset;
 
     if let Some(base) = init.location.base {
-        let global = if let Some(def_index) = contents.module.defined_global_index(base) {
-            contents.global_mut(def_index)
+        let global = if let Some(def_index) = instance.module.defined_global_index(base) {
+            instance.global_mut(def_index)
         } else {
-            contents.imported_global(base).from
+            instance.imported_global(base).from
         };
         start += cast::usize(*unsafe { (*global).as_u32() });
     }
@@ -968,32 +966,32 @@ fn get_memory_init_start(init: &DataInitializer<'_>, contents: &mut InstanceCont
 }
 
 /// Return a byte-slice view of a memory's data.
-fn get_memory_slice<'contents>(
+fn get_memory_slice<'instance>(
     init: &DataInitializer<'_>,
-    contents: &'contents mut InstanceContents,
-) -> &'contents mut [u8] {
-    let memory = if let Some(defined_memory_index) = contents
+    instance: &'instance mut Instance,
+) -> &'instance mut [u8] {
+    let memory = if let Some(defined_memory_index) = instance
         .module
         .defined_memory_index(init.location.memory_index)
     {
-        contents.memory(defined_memory_index)
+        instance.memory(defined_memory_index)
     } else {
-        let import = contents.imported_memory(init.location.memory_index);
-        let foreign_contents = unsafe { (&mut *(import).vmctx).instance_contents() };
+        let import = instance.imported_memory(init.location.memory_index);
+        let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
         let foreign_memory = unsafe { &mut *(import).from };
-        let foreign_index = foreign_contents.memory_index(foreign_memory);
-        foreign_contents.memory(foreign_index)
+        let foreign_index = foreign_instance.memory_index(foreign_memory);
+        foreign_instance.memory(foreign_index)
     };
     unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) }
 }
 
 fn check_memory_init_bounds(
-    contents: &mut InstanceContents,
+    instance: &mut Instance,
     data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
-        let start = get_memory_init_start(init, contents);
-        let mem_slice = get_memory_slice(init, contents);
+        let start = get_memory_init_start(init, instance);
+        let mem_slice = get_memory_slice(init, instance);
 
         if mem_slice.get_mut(start..start + init.data.len()).is_none() {
             return Err(InstantiationError::Link(LinkError(
@@ -1017,14 +1015,14 @@ fn create_tables(module: &Module) -> BoxedSlice<DefinedTableIndex, Table> {
 }
 
 /// Compute the offset for a table element initializer.
-fn get_table_init_start(init: &TableElements, contents: &mut InstanceContents) -> usize {
+fn get_table_init_start(init: &TableElements, instance: &mut Instance) -> usize {
     let mut start = init.offset;
 
     if let Some(base) = init.base {
-        let global = if let Some(def_index) = contents.module.defined_global_index(base) {
-            contents.global_mut(def_index)
+        let global = if let Some(def_index) = instance.module.defined_global_index(base) {
+            instance.global_mut(def_index)
         } else {
-            contents.imported_global(base).from
+            instance.imported_global(base).from
         };
         start += cast::usize(*unsafe { (*global).as_u32() });
     }
@@ -1033,50 +1031,50 @@ fn get_table_init_start(init: &TableElements, contents: &mut InstanceContents) -
 }
 
 /// Return a byte-slice view of a table's data.
-fn get_table_slice<'contents>(
+fn get_table_slice<'instance>(
     init: &TableElements,
     module: &Module,
-    tables: &'contents mut BoxedSlice<DefinedTableIndex, Table>,
+    tables: &'instance mut BoxedSlice<DefinedTableIndex, Table>,
     vmctx: &VMContext,
     offsets: &VMOffsets,
-) -> &'contents mut [VMCallerCheckedAnyfunc] {
+) -> &'instance mut [VMCallerCheckedAnyfunc] {
     if let Some(defined_table_index) = module.defined_table_index(init.table_index) {
         tables[defined_table_index].as_mut()
     } else {
         let import = imported_table(vmctx, offsets, init.table_index);
-        let foreign_contents = unsafe { (&mut *(import).vmctx).instance_contents() };
+        let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
         let foreign_table = unsafe { &mut *(import).from };
-        let foreign_index = foreign_contents.table_index(foreign_table);
-        foreign_contents.tables[foreign_index].as_mut()
+        let foreign_index = foreign_instance.table_index(foreign_table);
+        foreign_instance.tables[foreign_index].as_mut()
     }
 }
 
 /// Initialize the table memory from the provided initializers.
-fn initialize_tables(contents: &mut InstanceContents) -> Result<(), InstantiationError> {
-    let vmctx: *mut VMContext = contents.vmctx_mut();
-    let module = Rc::clone(&contents.module);
+fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> {
+    let vmctx: *mut VMContext = instance.vmctx_mut();
+    let module = Rc::clone(&instance.module);
     for init in &module.table_elements {
-        let start = get_table_init_start(init, contents);
+        let start = get_table_init_start(init, instance);
         let slice = get_table_slice(
             init,
-            &contents.module,
-            &mut contents.tables,
-            &contents.vmctx,
-            &contents.offsets,
+            &instance.module,
+            &mut instance.tables,
+            &instance.vmctx,
+            &instance.offsets,
         );
 
         let subslice = &mut slice[start..start + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
-            let callee_sig = contents.module.functions[*func_idx];
+            let callee_sig = instance.module.functions[*func_idx];
             let (callee_ptr, callee_vmctx) =
-                if let Some(index) = contents.module.defined_func_index(*func_idx) {
-                    (contents.finished_functions[index], vmctx)
+                if let Some(index) = instance.module.defined_func_index(*func_idx) {
+                    (instance.finished_functions[index], vmctx)
                 } else {
                     let imported_func =
-                        imported_function(&contents.vmctx, &contents.offsets, *func_idx);
+                        imported_function(&instance.vmctx, &instance.offsets, *func_idx);
                     (imported_func.body, imported_func.vmctx)
                 };
-            let type_index = signature_id(&contents.vmctx, &contents.offsets, callee_sig);
+            let type_index = signature_id(&instance.vmctx, &instance.offsets, callee_sig);
             subslice[i] = VMCallerCheckedAnyfunc {
                 func_ptr: callee_ptr,
                 type_index,
@@ -1103,12 +1101,12 @@ fn create_memories(
 
 /// Initialize the table memory from the provided initializers.
 fn initialize_memories(
-    contents: &mut InstanceContents,
+    instance: &mut Instance,
     data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
-        let start = get_memory_init_start(init, contents);
-        let mem_slice = get_memory_slice(init, contents);
+        let start = get_memory_init_start(init, instance);
+        let mem_slice = get_memory_slice(init, instance);
 
         let to_init = &mut mem_slice[start..start + init.data.len()];
         to_init.copy_from_slice(init.data);
@@ -1130,12 +1128,12 @@ fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDef
     vmctx_globals.into_boxed_slice()
 }
 
-fn initialize_globals(contents: &mut InstanceContents) {
-    let module = Rc::clone(&contents.module);
+fn initialize_globals(instance: &mut Instance) {
+    let module = Rc::clone(&instance.module);
     let num_imports = module.imported_globals.len();
     for (index, global) in module.globals.iter().skip(num_imports) {
         let def_index = module.defined_global_index(index).unwrap();
-        let to: *mut VMGlobalDefinition = contents.global_mut(def_index);
+        let to: *mut VMGlobalDefinition = instance.global_mut(def_index);
         match global.initializer {
             GlobalInit::I32Const(x) => *unsafe { (*to).as_i32_mut() } = x,
             GlobalInit::I64Const(x) => *unsafe { (*to).as_i64_mut() } = x,
@@ -1143,9 +1141,9 @@ fn initialize_globals(contents: &mut InstanceContents) {
             GlobalInit::F64Const(x) => *unsafe { (*to).as_f64_bits_mut() } = x,
             GlobalInit::GetGlobal(x) => {
                 let from = if let Some(def_x) = module.defined_global_index(x) {
-                    contents.global_mut(def_x)
+                    instance.global_mut(def_x)
                 } else {
-                    contents.imported_global(x).from
+                    instance.imported_global(x).from
                 };
                 unsafe { *to = *from };
             }

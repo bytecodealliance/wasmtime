@@ -1,7 +1,7 @@
 //! This file declares `VMContext` and several related structs which contain
 //! fields that compiled wasm code accesses directly.
 
-use crate::instance::InstanceContents;
+use crate::instance::Instance;
 use core::any::Any;
 use core::{ptr, u32};
 
@@ -478,26 +478,25 @@ impl Default for VMCallerCheckedAnyfunc {
 pub struct VMContext {}
 
 impl VMContext {
-    /// Return a mutable reference to the associated `InstanceContents`.
+    /// Return a mutable reference to the associated `Instance`.
     ///
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `InstanceContents`.
+    /// be a `VMContext` allocated as part of an `Instance`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub(crate) unsafe fn instance_contents(&mut self) -> &mut InstanceContents {
-        &mut *((self as *mut Self as *mut u8).offset(-InstanceContents::vmctx_offset())
-            as *mut InstanceContents)
+    pub(crate) unsafe fn instance(&mut self) -> &mut Instance {
+        &mut *((self as *mut Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
     }
 
-    /// Return a mutable reference to the host state associated with `InstanceContents`.
+    /// Return a mutable reference to the host state associated with this `Instance`.
     ///
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `InstanceContents`.
+    /// be a `VMContext` allocated as part of an `Instance`.
     pub unsafe fn host_state(&mut self) -> &mut Any {
-        self.instance_contents().host_state()
+        self.instance().host_state()
     }
 
     /// Lookup an export in the global exports namespace.
     pub unsafe fn lookup_global_export(&mut self, field: &str) -> Option<crate::export::Export> {
-        self.instance_contents().lookup_global_export(field)
+        self.instance().lookup_global_export(field)
     }
 }
