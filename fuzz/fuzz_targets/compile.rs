@@ -26,7 +26,7 @@ fuzz_target!(|data: &[u8]| {
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     let mut compiler = Compiler::new(isa);
     let mut resolver = NullResolver {};
-    let mut global_exports = Rc::new(RefCell::new(HashMap::new()));
+    let global_exports = Rc::new(RefCell::new(HashMap::new()));
     let _compiled = match CompiledModule::new(&mut compiler, data, &mut resolver, global_exports) {
         Ok(x) => x,
         Err(_) => return,
