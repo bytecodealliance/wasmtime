@@ -69,6 +69,8 @@ impl Context {
             operator_config: OperatorValidatorConfig {
                 enable_threads: false,
                 enable_reference_types: false,
+                enable_bulk_memory: false,
+                enable_simd: false,
             },
             mutable_global_imports: true,
         };
