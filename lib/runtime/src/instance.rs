@@ -367,6 +367,62 @@ impl InstanceContents {
         self.vmctx_mut()
     }
 
+    /// Lookup an export with the given name.
+    pub fn lookup(&mut self, field: &str) -> Option<Export> {
+        let export = if let Some(export) = self.module.exports.get(field) {
+            export.clone()
+        } else {
+            return None;
+        };
+        Some(self.lookup_by_declaration(&export))
+    }
+
+    /// Lookup an export with the given name. This takes an immutable reference,
+    /// and the result is an `Export` that the type system doesn't prevent from
+    /// being used to mutate the instance, so this function is unsafe.
+    pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
+        #[allow(clippy::cast_ref_to_mut)]
+        let temporary_mut = &mut *(self as *const Self as *mut Self);
+        temporary_mut.lookup(field)
+    }
+
+    /// Lookup an export with the given export declaration.
+    pub fn lookup_by_declaration(&mut self, export: &wasmtime_environ::Export) -> Export {
+        lookup_by_declaration(
+            &self.module,
+            &mut self.vmctx,
+            &self.offsets,
+            &self.finished_functions,
+            export,
+        )
+    }
+
+    /// Lookup an export with the given export declaration. This takes an immutable
+    /// reference, and the result is an `Export` that the type system doesn't prevent
+    /// from being used to mutate the instance, so this function is unsafe.
+    pub unsafe fn lookup_immutable_by_declaration(
+        &self,
+        export: &wasmtime_environ::Export,
+    ) -> Export {
+        #[allow(clippy::cast_ref_to_mut)]
+        let temporary_mut = &mut *(self as *const Self as *mut Self);
+        temporary_mut.lookup_by_declaration(export)
+    }
+
+    /// Return an iterator over the exports of this instance.
+    ///
+    /// Specifically, it provides access to the key-value pairs, where they keys
+    /// are export names, and the values are export declarations which can be
+    /// resolved `lookup_by_declaration`.
+    pub fn exports(&self) -> indexmap::map::Iter<String, wasmtime_environ::Export> {
+        self.module.exports.iter()
+    }
+
+    /// Return a reference to the custom state attached to this instance.
+    pub fn host_state(&mut self) -> &mut Any {
+        &mut *self.host_state
+    }
+
     fn invoke_function(&mut self, index: FuncIndex) -> Result<(), InstantiationError> {
         // TODO: Check that the callee's calling convention matches what we expect.
 
@@ -530,11 +586,6 @@ impl InstanceContents {
         let foreign_index = foreign_instance_contents.memory_index(foreign_memory);
 
         foreign_instance_contents.memory_size(foreign_index)
-    }
-
-    /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&mut self) -> &mut Any {
-        &mut *self.host_state
     }
 
     pub(crate) fn lookup_global_export(&self, field: &str) -> Option<Export> {
@@ -754,38 +805,19 @@ impl Instance {
 
     /// Lookup an export with the given name.
     pub fn lookup(&mut self, field: &str) -> Option<Export> {
-        let export = if let Some(export) = self.mmap_field.contents().module.exports.get(field) {
-            export.clone()
-        } else {
-            return None;
-        };
-        Some(self.lookup_by_declaration(&export))
+        self.mmap_field.contents_mut().lookup(field)
     }
 
     /// Lookup an export with the given name. This takes an immutable reference,
     /// and the result is an `Export` that the type system doesn't prevent from
     /// being used to mutate the instance, so this function is unsafe.
     pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
-        #[allow(clippy::cast_ref_to_mut)]
-        let temporary_mut = &mut *(self as *const Self as *mut Self);
-        temporary_mut.lookup(field)
-    }
-
-    /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&mut self) -> &mut Any {
-        self.mmap_field.contents_mut().host_state()
+        self.mmap_field.contents().lookup_immutable(field)
     }
 
     /// Lookup an export with the given export declaration.
     pub fn lookup_by_declaration(&mut self, export: &wasmtime_environ::Export) -> Export {
-        let contents = self.mmap_field.contents_mut();
-        lookup_by_declaration(
-            &contents.module,
-            &mut contents.vmctx,
-            &contents.offsets,
-            &contents.finished_functions,
-            export,
-        )
+        self.mmap_field.contents_mut().lookup_by_declaration(export)
     }
 
     /// Lookup an export with the given export declaration. This takes an immutable
@@ -795,9 +827,9 @@ impl Instance {
         &self,
         export: &wasmtime_environ::Export,
     ) -> Export {
-        #[allow(clippy::cast_ref_to_mut)]
-        let temporary_mut = &mut *(self as *const Self as *mut Self);
-        temporary_mut.lookup_by_declaration(export)
+        self.mmap_field
+            .contents()
+            .lookup_immutable_by_declaration(export)
     }
 
     /// Return an iterator over the exports of this instance.
@@ -806,7 +838,12 @@ impl Instance {
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> indexmap::map::Iter<String, wasmtime_environ::Export> {
-        self.mmap_field.contents().module.exports.iter()
+        self.mmap_field.contents().exports()
+    }
+
+    /// Return a reference to the custom state attached to this instance.
+    pub fn host_state(&mut self) -> &mut Any {
+        self.mmap_field.contents_mut().host_state()
     }
 }
 
