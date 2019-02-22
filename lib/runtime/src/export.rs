@@ -42,6 +42,8 @@ pub enum Export {
     Global {
         /// The address of the global storage.
         definition: *mut VMGlobalDefinition,
+        /// Pointer to the containing VMContext.
+        vmctx: *mut VMContext,
         /// The global declaration, used for compatibilty checking.
         global: Global,
     },
@@ -88,7 +90,15 @@ impl Export {
     }
 
     /// Construct a global export value.
-    pub fn global(definition: *mut VMGlobalDefinition, global: Global) -> Self {
-        Export::Global { definition, global }
+    pub fn global(
+        definition: *mut VMGlobalDefinition,
+        vmctx: *mut VMContext,
+        global: Global,
+    ) -> Self {
+        Export::Global {
+            definition,
+            vmctx,
+            global,
+        }
     }
 }

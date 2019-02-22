@@ -254,7 +254,11 @@ pub fn inspect_memory<'instance>(
 /// Read a global in this `Instance` identified by an export name.
 pub fn get(instance: &Instance, global_name: &str) -> Result<RuntimeValue, ActionError> {
     let (definition, global) = match unsafe { instance.lookup_immutable(global_name) } {
-        Some(Export::Global { definition, global }) => (definition, global),
+        Some(Export::Global {
+            definition,
+            vmctx: _,
+            global,
+        }) => (definition, global),
         Some(_) => {
             return Err(ActionError::Kind(format!(
                 "exported item \"{}\" is not a global variable",

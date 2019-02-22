@@ -132,8 +132,8 @@ fn main() {
     let mut context = Context::with_isa(isa);
 
     // Make spectest available by default.
-    context.instance(
-        Some("spectest".to_owned()),
+    context.name_instance(
+        "spectest".to_owned(),
         instantiate_spectest().expect("instantiating spectest"),
     );
 
@@ -155,14 +155,14 @@ fn handle_module(context: &mut Context, args: &Args, path: &Path) -> Result<(), 
     let data = read_wasm(path.to_path_buf())?;
 
     // Create a new `Instance` by compiling and instantiating a wasm module.
-    let index = context
+    let mut instance = context
         .instantiate_module(None, &data)
         .map_err(|e| e.to_string())?;
 
     // If a function to invoke was given, invoke it.
     if let Some(ref f) = args.flag_invoke {
         match context
-            .invoke_indexed(index, f, &[])
+            .invoke(&mut instance, f, &[])
             .map_err(|e| e.to_string())?
         {
             ActionOutcome::Returned { .. } => {}

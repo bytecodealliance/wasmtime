@@ -1,6 +1,7 @@
+use crate::action::{get, inspect_memory, invoke};
 use crate::{
-    instantiate, ActionError, ActionOutcome, Compiler, Instance, InstanceIndex, Namespace,
-    RuntimeValue, SetupError,
+    instantiate, ActionError, ActionOutcome, Compiler, Instance, Namespace, RuntimeValue,
+    SetupError,
 };
 use cranelift_codegen::isa::TargetIsa;
 use std::borrow::ToOwned;
@@ -96,13 +97,10 @@ impl Context {
         )
     }
 
-    /// Return the instance index for the instance with the given name.
-    pub fn get_instance_index(
-        &mut self,
-        instance_name: &str,
-    ) -> Result<InstanceIndex, UnknownInstance> {
+    /// Return the instance associated with the given name.
+    pub fn get_instance(&mut self, instance_name: &str) -> Result<&mut Instance, UnknownInstance> {
         self.namespace
-            .get_instance_index(instance_name)
+            .get_instance(instance_name)
             .ok_or_else(|| UnknownInstance {
                 instance_name: instance_name.to_string(),
             })
@@ -113,72 +111,84 @@ impl Context {
         &mut self,
         instance_name: Option<String>,
         data: &[u8],
-    ) -> Result<InstanceIndex, ActionError> {
+    ) -> Result<Instance, ActionError> {
         let instance = self.instantiate(data).map_err(ActionError::Setup)?;
-        Ok(self.instance(instance_name, instance))
+        self.optionally_name_instance(instance_name, instance.clone());
+        Ok(instance)
     }
 
-    /// Install a new `Instance` in this `Namespace`, optionally with the
-    /// given name, and return its index.
-    pub fn instance(&mut self, instance_name: Option<String>, instance: Instance) -> InstanceIndex {
-        self.namespace.instance(instance_name, instance)
+    /// If `name` isn't None, register it for the given instance.
+    pub fn optionally_name_instance(&mut self, name: Option<String>, instance: Instance) {
+        if let Some(name) = name {
+            self.namespace.name_instance(name, instance);
+        }
+    }
+
+    /// Register a name for the given instance.
+    pub fn name_instance(&mut self, name: String, instance: Instance) {
+        self.namespace.name_instance(name, instance);
     }
 
     /// Register an additional name for an existing registered instance.
     pub fn alias(&mut self, name: &str, as_name: String) -> Result<(), UnknownInstance> {
-        let index = self.get_instance_index(&name)?;
-        self.alias_for_indexed(index, as_name);
+        let instance = self.get_instance(&name)?.clone();
+        self.name_instance(as_name, instance);
         Ok(())
     }
 
-    /// Register an additional name for an existing registered instance.
-    pub fn alias_for_indexed(&mut self, index: InstanceIndex, as_name: String) {
-        self.namespace.alias_for_indexed(index, as_name)
-    }
-
-    /// Invoke an exported function from an instance.
-    pub fn invoke(
+    /// Invoke an exported function from a named instance.
+    pub fn invoke_named(
         &mut self,
         instance_name: &str,
         field: &str,
         args: &[RuntimeValue],
     ) -> Result<ActionOutcome, ContextError> {
-        let index = self
-            .get_instance_index(&instance_name)
-            .map_err(ContextError::Instance)?;
-        self.invoke_indexed(index, field, args)
+        let mut instance = self
+            .get_instance(&instance_name)
+            .map_err(ContextError::Instance)?
+            .clone();
+        self.invoke(&mut instance, field, args)
             .map_err(ContextError::Action)
     }
 
     /// Invoke an exported function from an instance.
-    pub fn invoke_indexed(
+    pub fn invoke(
         &mut self,
-        index: InstanceIndex,
+        instance: &mut Instance,
         field: &str,
         args: &[RuntimeValue],
     ) -> Result<ActionOutcome, ActionError> {
-        self.namespace
-            .invoke(&mut *self.compiler, index, field, &args)
+        invoke(&mut *self.compiler, instance, field, &args)
     }
 
     /// Get the value of an exported global variable from an instance.
-    pub fn get(&mut self, instance_name: &str, field: &str) -> Result<ActionOutcome, ContextError> {
-        let index = self
-            .get_instance_index(&instance_name)
-            .map_err(ContextError::Instance)?;
-        self.get_indexed(index, field).map_err(ContextError::Action)
-    }
-
-    /// Get the value of an exported global variable from an instance.
-    pub fn get_indexed(
+    pub fn get_named(
         &mut self,
-        index: InstanceIndex,
+        instance_name: &str,
         field: &str,
-    ) -> Result<ActionOutcome, ActionError> {
-        self.namespace
-            .get(index, field)
-            .map(|value| ActionOutcome::Returned {
-                values: vec![value],
-            })
+    ) -> Result<ActionOutcome, ContextError> {
+        let mut instance = self
+            .get_instance(&instance_name)
+            .map_err(ContextError::Instance)?
+            .clone();
+        self.get(&mut instance, field).map_err(ContextError::Action)
+    }
+
+    /// Get the value of an exported global variable from an instance.
+    pub fn get(&mut self, instance: &Instance, field: &str) -> Result<ActionOutcome, ActionError> {
+        get(instance, field).map(|value| ActionOutcome::Returned {
+            values: vec![value],
+        })
+    }
+
+    /// Get a slice of memory from an instance.
+    pub fn inspect_memory<'instance>(
+        &self,
+        instance: &'instance Instance,
+        field_name: &str,
+        start: usize,
+        len: usize,
+    ) -> Result<&'instance [u8], ActionError> {
+        inspect_memory(instance, field_name, start, len)
     }
 }
