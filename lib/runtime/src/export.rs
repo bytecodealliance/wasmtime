@@ -12,10 +12,10 @@ pub enum Export {
     Function {
         /// The address of the native-code function.
         address: *const VMFunctionBody,
-        /// The function signature declaration, used for compatibilty checking.
-        signature: ir::Signature,
         /// Pointer to the containing `VMContext`.
         vmctx: *mut VMContext,
+        /// The function signature declaration, used for compatibilty checking.
+        signature: ir::Signature,
     },
 
     /// A table export value.
@@ -53,13 +53,13 @@ impl Export {
     /// Construct a function export value.
     pub fn function(
         address: *const VMFunctionBody,
-        signature: ir::Signature,
         vmctx: *mut VMContext,
+        signature: ir::Signature,
     ) -> Self {
         Export::Function {
             address,
-            signature,
             vmctx,
+            signature,
         }
     }
 
