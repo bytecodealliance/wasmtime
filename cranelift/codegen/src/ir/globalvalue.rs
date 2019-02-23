@@ -114,10 +114,12 @@ impl fmt::Display for GlobalValueData {
                 offset,
                 colocated,
             } => {
-                if colocated {
-                    write!(f, "colocated ")?;
-                }
-                write!(f, "symbol {}", name)?;
+                write!(
+                    f,
+                    "symbol {}{}",
+                    if colocated { "colocated " } else { "" },
+                    name
+                )?;
                 let offset_val: i64 = offset.into();
                 if offset_val > 0 {
                     write!(f, "+")?;
