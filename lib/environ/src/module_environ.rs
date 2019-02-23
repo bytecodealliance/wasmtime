@@ -160,6 +160,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn reserve_func_types(&mut self, num: u32) {
         self.result.module.functions.reserve_exact(cast::usize(num));
+        self.result
+            .function_body_inputs
+            .reserve_exact(cast::usize(num));
     }
 
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {

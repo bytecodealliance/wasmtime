@@ -154,7 +154,6 @@ fn make_trampoline(
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
-        let mut callee_args = Vec::new();
         let (vmctx_ptr_val, values_vec_ptr_val) = {
             let params = builder.func.dfg.ebb_params(block0);
             (params[0], params[1])
@@ -162,20 +161,24 @@ fn make_trampoline(
 
         // Load the argument values out of `values_vec`.
         let mflags = ir::MemFlags::trusted();
-        for (i, r) in signature.params.iter().enumerate() {
-            let value = match r.purpose {
-                // i - 1 because vmctx isn't passed through `values_vec`.
-                ir::ArgumentPurpose::Normal => builder.ins().load(
-                    r.value_type,
-                    mflags,
-                    values_vec_ptr_val,
-                    ((i - 1) * value_size) as i32,
-                ),
-                ir::ArgumentPurpose::VMContext => vmctx_ptr_val,
-                other => panic!("unsupported argument purpose {}", other),
-            };
-            callee_args.push(value);
-        }
+        let callee_args = signature
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                match r.purpose {
+                    // i - 1 because vmctx isn't passed through `values_vec`.
+                    ir::ArgumentPurpose::Normal => builder.ins().load(
+                        r.value_type,
+                        mflags,
+                        values_vec_ptr_val,
+                        ((i - 1) * value_size) as i32,
+                    ),
+                    ir::ArgumentPurpose::VMContext => vmctx_ptr_val,
+                    other => panic!("unsupported argument purpose {}", other),
+                }
+            })
+            .collect::<Vec<_>>();
 
         let new_sig = builder.import_signature(signature.clone());
 
