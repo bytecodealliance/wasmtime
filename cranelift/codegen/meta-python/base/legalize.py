@@ -375,7 +375,7 @@ for int_ty in [types.i8, types.i16]:
     )
 
 for int_ty in [types.i8, types.i16]:
-    for op in [ushr_imm, ishl_imm]:
+    for op in [ishl, ishl_imm, ushr, ushr_imm]:
         widen.legalize(
             a << op.bind(int_ty)(b, c),
             Rtl(
@@ -384,29 +384,14 @@ for int_ty in [types.i8, types.i16]:
                 a << ireduce.bind(int_ty)(z)
             ))
 
-    widen.legalize(
-        a << ishl.bind(int_ty)(b, c),
-        Rtl(
-            x << uextend.i32(b),
-            z << ishl.i32(x, c),
-            a << ireduce.bind(int_ty)(z)
-        ))
-
-    widen.legalize(
-        a << ushr.bind(int_ty)(b, c),
-        Rtl(
-            x << uextend.i32(b),
-            z << ushr.i32(x, c),
-            a << ireduce.bind(int_ty)(z)
-        ))
-
-    widen.legalize(
-        a << sshr.bind(int_ty)(b, c),
-        Rtl(
-            x << sextend.i32(b),
-            z << sshr.i32(x, c),
-            a << ireduce.bind(int_ty)(z)
-        ))
+    for op in [sshr, sshr_imm]:
+        widen.legalize(
+            a << op.bind(int_ty)(b, c),
+            Rtl(
+                x << sextend.i32(b),
+                z << op.i32(x, c),
+                a << ireduce.bind(int_ty)(z)
+            ))
 
     for w_cc in [
         intcc.eq, intcc.ne, intcc.ugt, intcc.ult, intcc.uge, intcc.ule
