@@ -9,8 +9,8 @@
 #![plugin(dynasm)]
 
 extern crate test;
-
-extern crate arrayvec;
+#[macro_use]
+extern crate smallvec;
 extern crate capstone;
 extern crate either;
 extern crate failure;

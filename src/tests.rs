@@ -729,19 +729,70 @@ fn brif_block_passthru() {
     assert_eq!(execute_wat(code, 0, 3), 6);
 }
 
-#[test]
-fn literals() {
-    let code = r#"
-(module
-  (func (param i32) (param i32) (result i32)
-    (i32.const 228)
-  )
-)
-    "#;
+quickcheck! {
+    #[test]
+    fn literals(a: i32, b: i64, c: i32, d: i64) -> bool {
+        let code = format!(r#"
+            (module
+              (func (result i32)
+                (i32.const {})
+              )
+              (func (result i64)
+                (i64.const {})
+              )
+              (func (result f32)
+                (f32.const {})
+              )
+              (func (result f64)
+                (f64.const {})
+              )
+            )
+        "#, a, b, c, d);
+    
+        let translated = translate_wat(&code);
+    
+        assert_eq!(translated.execute_func::<(), i32>(0, ()), Ok(a));
+        assert_eq!(translated.execute_func::<(), i64>(1, ()), Ok(b));
+        assert_eq!(translated.execute_func::<(), f32>(2, ()), Ok(c as _));
+        assert_eq!(translated.execute_func::<(), f64>(3, ()), Ok(d as _));
 
-    assert_eq!(execute_wat(code, 0, 0), 228);
+        true
+    }
 }
 
+quickcheck! {
+    #[test]
+    fn params(a: i32, b: i64, c: i32, d: i64) -> bool {
+        let code = r#"
+            (module
+              (func (param i32) (param i64) (param f32) (param f64) (result i32)
+                (get_local 0)
+              )
+              (func (param i32) (param i64) (param f32) (param f64) (result i64)
+                (get_local 1)
+              )
+              (func (param i32) (param i64) (param f32) (param f64) (result f32)
+                (get_local 2)
+              )
+              (func (param i32) (param i64) (param f32) (param f64) (result f64)
+                (get_local 3)
+              )
+            )
+        "#;
+
+        let c = c as f32;
+        let d = d as f64;
+    
+        let translated = translate_wat(&code);
+    
+        assert_eq!(translated.execute_func::<(i32, i64, f32, f64), i32>(0, (a, b, c, d)), Ok(a));
+        assert_eq!(translated.execute_func::<(i32, i64, f32, f64), i64>(1, (a, b, c, d)), Ok(b));
+        assert_eq!(translated.execute_func::<(i32, i64, f32, f64), f32>(2, (a, b, c, d)), Ok(c));
+        assert_eq!(translated.execute_func::<(i32, i64, f32, f64), f64>(3, (a, b, c, d)), Ok(d));
+
+        true
+    }
+}
 #[test]
 fn wrong_type() {
     let code = r#"
@@ -1094,7 +1145,7 @@ macro_rules! test_select {
 
                 fn lit(cond: bool, then: $ty, else_: $ty) -> bool {
                     let icond: i32 = if cond { 1 } else { 0 };
-                            let translated = translate_wat(&format!("
+                                    let translated = translate_wat(&format!("
                             (module (func (param {ty}) (param {ty}) (result {ty})
                                 (select (get_local 0) (get_local 1) (i32.const {val}))))
                         ",
@@ -1131,6 +1182,13 @@ fn bench_fibonacci_run(b: &mut test::Bencher) {
 }
 
 #[bench]
+fn bench_fibonacci_compile_run(b: &mut test::Bencher) {
+    let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
+
+    b.iter(|| translate(&wasm).unwrap().execute_func::<_, u32>(0, (20,)));
+}
+
+#[bench]
 fn bench_fibonacci_baseline(b: &mut test::Bencher) {
     fn fib(n: i32) -> i32 {
         if n == 0 || n == 1 {
@@ -1141,4 +1199,350 @@ fn bench_fibonacci_baseline(b: &mut test::Bencher) {
     }
 
     b.iter(|| test::black_box(fib(test::black_box(20))));
+}
+
+// #[test]
+#[allow(dead_code)]
+fn sieve() {
+    const CODE: &str = r#"
+(module
+  (type $t0 (func (param i32 i32)))
+  (type $t1 (func (param i32 i32 i32) (result i32)))
+  (type $t2 (func (param i32 i32 i32)))
+  (type $t3 (func (param i32)))
+  (type $t4 (func (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)))
+  (type $t5 (func (param i32 i32) (result i32)))
+  (func $optimized_sieve (export "optimized_sieve") (type $t0) (param $p0 i32) (param $p1 i32)
+    (local $l0 i32) (local $l1 i32) (local $l2 i32) (local $l3 i32) (local $l4 i32) (local $l5 i32) (local $l6 i32) (local $l7 i32) (local $l8 i32) (local $l9 i32) (local $l10 i32) (local $l11 i32) (local $l12 i32) (local $l13 i32) (local $l14 i32) (local $l15 i32) (local $l16 i32) (local $l17 i32) (local $l18 f64)
+    get_global $g0
+    i32.const 64
+    i32.sub
+    tee_local $l0
+    set_global $g0
+    i32.const 0
+    set_local $l1
+    get_local $l0
+    i32.const 0
+    i32.const 64
+    call $memset
+    set_local $l0
+    block $B0
+      block $B1
+        block $B2
+          block $B3
+            get_local $p1
+            i32.const 2
+            i32.gt_u
+            br_if $B3
+            i32.const -1
+            i32.const 0
+            get_local $p1
+            i32.const 2
+            i32.eq
+            select
+            set_local $p1
+            i32.const 0
+            set_local $l2
+            i32.const 0
+            set_local $l3
+            i32.const 0
+            set_local $l4
+            i32.const 0
+            set_local $l5
+            i32.const 0
+            set_local $l6
+            i32.const 0
+            set_local $l7
+            i32.const 0
+            set_local $l8
+            i32.const 0
+            set_local $l9
+            i32.const 0
+            set_local $l10
+            i32.const 0
+            set_local $l11
+            i32.const 0
+            set_local $l12
+            i32.const 0
+            set_local $l13
+            i32.const 0
+            set_local $l14
+            i32.const 0
+            set_local $l15
+            i32.const 0
+            set_local $l16
+            i32.const 0
+            set_local $l17
+            br $B2
+          end
+          get_local $p1
+          i32.const -3
+          i32.add
+          i32.const 1
+          i32.shr_u
+          set_local $l3
+          block $B4
+            block $B5
+              get_local $p1
+              f64.convert_u/i32
+              f64.sqrt
+              tee_local $l18
+              f64.const 0x1p+32 (;=4.29497e+09;)
+              f64.lt
+              get_local $l18
+              f64.const 0x0p+0 (;=0;)
+              f64.ge
+              i32.and
+              br_if $B5
+              i32.const 0
+              set_local $p1
+              br $B4
+            end
+            get_local $l18
+            i32.trunc_u/f64
+            set_local $p1
+          end
+          get_local $l3
+          i32.const 1
+          i32.add
+          set_local $l17
+          get_local $p1
+          i32.const -3
+          i32.add
+          i32.const 1
+          i32.shr_u
+          set_local $l5
+          i32.const 0
+          set_local $p1
+          loop $L6
+            get_local $p1
+            tee_local $l4
+            i32.const 5
+            i32.shr_u
+            set_local $p1
+            get_local $l4
+            i32.const 511
+            i32.gt_u
+            br_if $B0
+            block $B7
+              get_local $l0
+              get_local $p1
+              i32.const 2
+              i32.shl
+              i32.add
+              i32.load
+              i32.const 1
+              get_local $l4
+              i32.const 31
+              i32.and
+              i32.shl
+              i32.and
+              br_if $B7
+              get_local $l4
+              i32.const 1
+              i32.shl
+              i32.const 3
+              i32.add
+              tee_local $l2
+              get_local $l2
+              i32.mul
+              i32.const -3
+              i32.add
+              i32.const 1
+              i32.shr_u
+              tee_local $p1
+              get_local $l3
+              i32.gt_u
+              br_if $B7
+              loop $L8
+                get_local $p1
+                i32.const 5
+                i32.shr_u
+                set_local $l1
+                get_local $p1
+                i32.const 511
+                i32.gt_u
+                br_if $B1
+                get_local $l0
+                get_local $l1
+                i32.const 2
+                i32.shl
+                i32.add
+                tee_local $l1
+                get_local $l1
+                i32.load
+                i32.const 1
+                get_local $p1
+                i32.const 31
+                i32.and
+                i32.shl
+                i32.or
+                i32.store
+                get_local $p1
+                get_local $l2
+                i32.add
+                tee_local $p1
+                get_local $l3
+                i32.le_u
+                br_if $L8
+              end
+            end
+            get_local $l4
+            i32.const 1
+            i32.add
+            set_local $p1
+            get_local $l4
+            get_local $l5
+            i32.lt_u
+            br_if $L6
+          end
+          i32.const -1
+          set_local $p1
+          get_local $l0
+          i32.load offset=60
+          set_local $l1
+          get_local $l0
+          i32.load offset=56
+          set_local $l2
+          get_local $l0
+          i32.load offset=52
+          set_local $l3
+          get_local $l0
+          i32.load offset=48
+          set_local $l4
+          get_local $l0
+          i32.load offset=44
+          set_local $l5
+          get_local $l0
+          i32.load offset=40
+          set_local $l6
+          get_local $l0
+          i32.load offset=36
+          set_local $l7
+          get_local $l0
+          i32.load offset=32
+          set_local $l8
+          get_local $l0
+          i32.load offset=28
+          set_local $l9
+          get_local $l0
+          i32.load offset=24
+          set_local $l10
+          get_local $l0
+          i32.load offset=20
+          set_local $l11
+          get_local $l0
+          i32.load offset=16
+          set_local $l12
+          get_local $l0
+          i32.load offset=12
+          set_local $l13
+          get_local $l0
+          i32.load offset=8
+          set_local $l14
+          get_local $l0
+          i32.load offset=4
+          set_local $l15
+          get_local $l0
+          i32.load
+          set_local $l16
+        end
+        get_local $p0
+        get_local $l1
+        i32.store offset=68
+        get_local $p0
+        get_local $l2
+        i32.store offset=64
+        get_local $p0
+        get_local $l3
+        i32.store offset=60
+        get_local $p0
+        get_local $l4
+        i32.store offset=56
+        get_local $p0
+        get_local $l5
+        i32.store offset=52
+        get_local $p0
+        get_local $l6
+        i32.store offset=48
+        get_local $p0
+        get_local $l7
+        i32.store offset=44
+        get_local $p0
+        get_local $l8
+        i32.store offset=40
+        get_local $p0
+        get_local $l9
+        i32.store offset=36
+        get_local $p0
+        get_local $l10
+        i32.store offset=32
+        get_local $p0
+        get_local $l11
+        i32.store offset=28
+        get_local $p0
+        get_local $l12
+        i32.store offset=24
+        get_local $p0
+        get_local $l13
+        i32.store offset=20
+        get_local $p0
+        get_local $l14
+        i32.store offset=16
+        get_local $p0
+        get_local $l15
+        i32.store offset=12
+        get_local $p0
+        get_local $l16
+        i32.store offset=8
+        get_local $p0
+        get_local $l17
+        i32.store offset=4
+        get_local $p0
+        get_local $p1
+        i32.store
+        get_local $l0
+        i32.const 64
+        i32.add
+        set_global $g0
+        return
+      end
+      i32.const 1396
+      get_local $l1
+      i32.const 16
+      unreachable
+    end
+    i32.const 1380
+    get_local $p1
+    i32.const 16
+    unreachable)
+  (func $memset (type $t1) (param $p0 i32) (param $p1 i32) (param $p2 i32) (result i32)
+    (local $l0 i32)
+    block $B0
+      get_local $p2
+      i32.eqz
+      br_if $B0
+      get_local $p0
+      set_local $l0
+      loop $L1
+        get_local $l0
+        get_local $p1
+        i32.store8
+        get_local $l0
+        i32.const 1
+        i32.add
+        set_local $l0
+        get_local $p2
+        i32.const -1
+        i32.add
+        tee_local $p2
+        br_if $L1
+      end
+    end
+    get_local $p0)
+  (memory $memory (export "memory") 17 17)
+  (global $g0 (mut i32) (i32.const 1050032)))
+"#;
+
+    translate(&wabt::wat2wasm(CODE).unwrap()).unwrap();
 }
