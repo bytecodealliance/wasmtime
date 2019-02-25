@@ -334,10 +334,18 @@ impl SigType for AbiParam {
     fn to_microwasm_type(&self) -> microwasm::SignlessType {
         use microwasm::{Size::*, Type::*};
 
-        if self.value_type == ir::Type::int(32).unwrap() {
-            Int(_32)
-        } else if self.value_type == ir::Type::int(64).unwrap() {
-            Int(_64)
+        if self.value_type.is_int() {
+            match self.value_type.bits() {
+                32 => Int(_32),
+                64 => Int(_64),
+                _ => unimplemented!(),
+            }
+        } else if self.value_type.is_float() {
+            match self.value_type.bits() {
+                32 => Float(_32),
+                64 => Float(_64),
+                _ => unimplemented!(),
+            }
         } else {
             unimplemented!()
         }

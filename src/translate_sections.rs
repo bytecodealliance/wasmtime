@@ -114,20 +114,6 @@ pub fn code(
     let mut session = CodeGenSession::new(func_count, translation_ctx);
     for (idx, body) in code.into_iter().enumerate() {
         let body = body?;
-        let mut microwasm_conv = MicrowasmConv::new(
-            translation_ctx,
-            translation_ctx
-                .func_type(idx as _)
-                .params
-                .iter()
-                .map(|t| MWType::from_wasm(*t).unwrap()),
-            translation_ctx
-                .func_type(idx as _)
-                .returns
-                .iter()
-                .map(|t| MWType::from_wasm(*t).unwrap()),
-            &body,
-        );
 
         if true {
             let mut microwasm = vec![];
@@ -154,10 +140,10 @@ pub fn code(
             println!("{}", crate::microwasm::dis(idx, &microwasm));
         }
 
-        function_body::translate(
+        function_body::translate_wasm(
             &mut session,
             idx as u32,
-            microwasm_conv.flat_map(|i| i.expect("TODO: Make this not panic")),
+            &body,
         )?;
     }
     Ok(session.into_translated_code_section()?)

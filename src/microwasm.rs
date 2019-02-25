@@ -1,9 +1,12 @@
-use crate::module::ModuleContext;
+use crate::module::{ModuleContext, SigType, Signature};
+use cranelift_codegen::ir::Signature as CraneliftSignature;
 use smallvec::SmallVec;
 use std::{
+    convert::TryFrom,
     fmt,
     iter::{self, FromIterator},
     ops::RangeInclusive,
+    option::NoneError,
 };
 use wasmparser::{
     FunctionBody, Ieee32, Ieee64, MemoryImmediate, Operator as WasmOperator, OperatorsReader,
@@ -180,6 +183,52 @@ pub enum Type<I> {
     Float(Size),
 }
 
+pub trait IntoType<T> {
+    fn into_type() -> T;
+}
+
+impl IntoType<SignlessType> for i32 {
+    fn into_type() -> SignlessType {
+        I32
+    }
+}
+
+impl IntoType<SignlessType> for i64 {
+    fn into_type() -> SignlessType {
+        I64
+    }
+}
+
+impl IntoType<SignlessType> for u32 {
+    fn into_type() -> SignlessType {
+        I32
+    }
+}
+
+impl IntoType<SignlessType> for u64 {
+    fn into_type() -> SignlessType {
+        I64
+    }
+}
+
+impl IntoType<SignlessType> for f32 {
+    fn into_type() -> SignlessType {
+        F32
+    }
+}
+
+impl IntoType<SignlessType> for f64 {
+    fn into_type() -> SignlessType {
+        F64
+    }
+}
+
+impl<I> Type<I> {
+    pub fn for_<T: IntoType<Self>>() -> Self {
+        T::into_type()
+    }
+}
+
 impl fmt::Display for SignfulType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -248,6 +297,14 @@ impl SignlessType {
             Type::EmptyBlockType => None,
             _ => unimplemented!(),
         }
+    }
+}
+
+impl TryFrom<wasmparser::Type> for SignlessType {
+    type Error = NoneError;
+
+    fn try_from(other: wasmparser::Type) -> Result<SignlessType, NoneError> {
+        Ok(SignlessType::from_wasm(other)?)
     }
 }
 
@@ -713,8 +770,10 @@ enum ControlFrameKind {
     },
 }
 
+#[derive(Debug, Clone, PartialEq)]
 struct ControlFrame {
     id: u32,
+    arguments: u32,
     returns: u32,
     kind: ControlFrameKind,
 }
@@ -760,7 +819,6 @@ pub struct MicrowasmConv<'a, 'b, M> {
     internal: OperatorsReader<'a>,
     module: &'b M,
     current_id: u32,
-    num_locals: u32,
     control_frames: Vec<ControlFrame>,
     unreachable: bool,
 }
@@ -801,17 +859,20 @@ impl OpSig {
     }
 }
 
-impl From<&'_ wasmparser::FuncType> for OpSig {
-    fn from(other: &wasmparser::FuncType) -> Self {
+impl<T> From<&'_ T> for OpSig
+where
+    T: Signature,
+{
+    fn from(other: &T) -> Self {
         OpSig::new(
             other
-                .params
+                .params()
                 .iter()
-                .map(|t| SigT::Concrete(Type::from_wasm(*t).unwrap())),
+                .map(|t| SigT::Concrete(t.to_microwasm_type())),
             other
-                .returns
+                .returns()
                 .iter()
-                .map(|t| SigT::Concrete(Type::from_wasm(*t).unwrap())),
+                .map(|t| SigT::Concrete(t.to_microwasm_type())),
         )
     }
 }
@@ -820,6 +881,56 @@ impl<'a, 'b, M: ModuleContext> MicrowasmConv<'a, 'b, M>
 where
     for<'any> &'any M::Signature: Into<OpSig>,
 {
+    pub fn new(
+        context: &'b M,
+        params: impl IntoIterator<Item = SignlessType>,
+        returns: impl IntoIterator<Item = SignlessType>,
+        reader: &'a FunctionBody,
+    ) -> Self {
+        // TODO: Don't panic!
+        let locals_reader = reader
+            .get_locals_reader()
+            .expect("Failed to get locals reader");
+        let mut locals = Vec::from_iter(params);
+        let mut consts = Vec::new();
+
+        for loc in locals_reader {
+            let (count, ty) = loc.expect("Getting local failed");
+            let ty = Type::from_wasm(ty).expect("Invalid local type");
+            locals.extend(std::iter::repeat(ty).take(count as _));
+            consts.extend(
+                std::iter::repeat(ty)
+                    .map(Value::default_for_type)
+                    .take(count as _),
+            )
+        }
+
+        let num_locals = locals.len() as _;
+
+        let mut out = Self {
+            is_done: false,
+            stack: locals,
+            module: context,
+            consts_to_emit: Some(consts),
+            internal: reader
+                .get_operators_reader()
+                .expect("Failed to get operators reader"),
+            current_id: 0,
+            control_frames: vec![],
+            unreachable: false,
+        };
+
+        let id = out.next_id();
+        out.control_frames.push(ControlFrame {
+            id,
+            arguments: num_locals,
+            returns: returns.into_iter().count() as _,
+            kind: ControlFrameKind::Function,
+        });
+
+        out
+    }
+
     fn op_sig(&self, op: &WasmOperator) -> OpSig {
         use self::SigT::T;
         use std::iter::{empty as none, once};
@@ -1111,8 +1222,12 @@ where
     fn apply_op(&mut self, sig: OpSig) {
         let mut ty_param = None;
 
-        for p in sig.input.into_iter().rev() {
-            let stack_ty = self.stack.pop().expect("Stack is empty");
+        for p in sig.input.iter().rev() {
+            let stack_ty = self
+                .stack
+                .pop()
+                .unwrap_or_else(|| panic!("Stack is empty (while processing {:?})", sig));
+
             let ty = match p {
                 SigT::T => {
                     if let Some(t) = ty_param {
@@ -1122,7 +1237,7 @@ where
                         stack_ty
                     }
                 }
-                SigT::Concrete(ty) => ty,
+                SigT::Concrete(ty) => *ty,
             };
 
             debug_assert_eq!(ty, stack_ty);
@@ -1153,57 +1268,6 @@ where
 
         for _ in self.stack.drain(internal_range) {}
     }
-
-    // I don't know if we need to know the return type
-    pub fn new(
-        context: &'b M,
-        params: impl IntoIterator<Item = SignlessType>,
-        returns: impl IntoIterator<Item = SignlessType>,
-        reader: &'a FunctionBody,
-    ) -> Self {
-        // TODO: Don't panic!
-        let locals_reader = reader
-            .get_locals_reader()
-            .expect("Failed to get locals reader");
-        let mut locals = Vec::from_iter(params);
-        let mut consts = Vec::new();
-
-        for loc in locals_reader {
-            let (count, ty) = loc.expect("Getting local failed");
-            let ty = Type::from_wasm(ty).expect("Invalid local type");
-            locals.extend(std::iter::repeat(ty).take(count as _));
-            consts.extend(
-                std::iter::repeat(ty)
-                    .map(Value::default_for_type)
-                    .take(count as _),
-            )
-        }
-
-        let num_locals = locals.len() as _;
-
-        let mut out = Self {
-            is_done: false,
-            stack: locals,
-            module: context,
-            num_locals,
-            consts_to_emit: Some(consts),
-            internal: reader
-                .get_operators_reader()
-                .expect("Failed to get operators reader"),
-            current_id: 0,
-            control_frames: vec![],
-            unreachable: false,
-        };
-
-        let id = out.next_id();
-        out.control_frames.push(ControlFrame {
-            id,
-            returns: returns.into_iter().count() as _,
-            kind: ControlFrameKind::Function,
-        });
-
-        out
-    }
 }
 
 impl<'a, 'b, M: ModuleContext> Iterator for MicrowasmConv<'a, 'b, M>
@@ -1215,12 +1279,13 @@ where
     fn next(&mut self) -> Option<wasmparser::Result<SmallVec<[OperatorFromWasm; 1]>>> {
         macro_rules! to_drop {
             ($block:expr) => {{
-                let first_non_local_depth = $block.returns;
+                let block = &$block;
+                let first_non_local_depth = block.returns;
 
                 (|| {
                     let last_non_local_depth = (self.stack.len() as u32)
                         .checked_sub(1)?
-                        .checked_sub(self.num_locals + 1)?;
+                        .checked_sub(block.arguments)?;
 
                     if first_non_local_depth <= last_non_local_depth {
                         Some(first_non_local_depth..=last_non_local_depth)
@@ -1265,6 +1330,8 @@ where
                     WasmOperator::Else => {
                         if depth == 0 {
                             let block = self.control_frames.last_mut().expect("Failed");
+
+                            self.stack = block.params().unwrap().to_vec();
 
                             if let ControlFrameKind::If { has_else, .. } = &mut block.kind {
                                 *has_else = true;
@@ -1332,6 +1399,7 @@ where
                 let id = self.next_id();
                 self.control_frames.push(ControlFrame {
                     id,
+                    arguments: self.stack.len() as u32,
                     returns: if ty == wasmparser::Type::EmptyBlockType {
                         0
                     } else {
@@ -1350,6 +1418,7 @@ where
                 let id = self.next_id();
                 self.control_frames.push(ControlFrame {
                     id,
+                    arguments: self.stack.len() as u32,
                     returns: if ty == wasmparser::Type::EmptyBlockType {
                         0
                     } else {
@@ -1372,6 +1441,7 @@ where
                 let params = self.block_params();
                 self.control_frames.push(ControlFrame {
                     id,
+                    arguments: self.stack.len() as u32,
                     returns: if ty == wasmparser::Type::EmptyBlockType {
                         0
                     } else {
@@ -1507,7 +1577,11 @@ where
                 if let Some(_to_drop) = to_drop {
                     // TODO: We want to generate an intermediate block here, but that might cause
                     //       us to generate a spurious `jmp`.
-                    unimplemented!()
+                    unimplemented!(
+                        "We don't yet support passing different numbers of arguments \
+                         to each half of a `br_if` - supporting this efficiently without \
+                         complicating the backend might be difficult"
+                    );
                 } else {
                     smallvec![
                         Operator::block(params, label),
@@ -1519,7 +1593,7 @@ where
                     ]
                 }
             }
-            WasmOperator::BrTable { .. } => unimplemented!(),
+            WasmOperator::BrTable { .. } => unimplemented!("{:?}", op),
             WasmOperator::Return => {
                 self.unreachable = true;
 
@@ -1634,8 +1708,8 @@ where
             WasmOperator::I64Const { value } => smallvec![Operator::Const(Value::I64(value))],
             WasmOperator::F32Const { value } => smallvec![Operator::Const(Value::F32(value))],
             WasmOperator::F64Const { value } => smallvec![Operator::Const(Value::F64(value))],
-            WasmOperator::RefNull => unimplemented!(),
-            WasmOperator::RefIsNull => unimplemented!(),
+            WasmOperator::RefNull => unimplemented!("{:?}", op),
+            WasmOperator::RefIsNull => unimplemented!("{:?}", op),
             WasmOperator::I32Eqz => smallvec![Operator::Eqz(Size::_32)],
             WasmOperator::I32Eq => smallvec![Operator::Eq(I32)],
             WasmOperator::I32Ne => smallvec![Operator::Ne(I32)],
@@ -1734,49 +1808,49 @@ where
             WasmOperator::F64Min => smallvec![Operator::Min(Size::_64)],
             WasmOperator::F64Max => smallvec![Operator::Max(Size::_64)],
             WasmOperator::F64Copysign => smallvec![Operator::Copysign(Size::_64)],
-            WasmOperator::I32WrapI64 => unimplemented!(),
-            WasmOperator::I32TruncSF32 => unimplemented!(),
-            WasmOperator::I32TruncUF32 => unimplemented!(),
-            WasmOperator::I32TruncSF64 => unimplemented!(),
-            WasmOperator::I32TruncUF64 => unimplemented!(),
-            WasmOperator::I64ExtendSI32 => unimplemented!(),
-            WasmOperator::I64ExtendUI32 => unimplemented!(),
-            WasmOperator::I64TruncSF32 => unimplemented!(),
-            WasmOperator::I64TruncUF32 => unimplemented!(),
-            WasmOperator::I64TruncSF64 => unimplemented!(),
-            WasmOperator::I64TruncUF64 => unimplemented!(),
-            WasmOperator::F32ConvertSI32 => unimplemented!(),
-            WasmOperator::F32ConvertUI32 => unimplemented!(),
-            WasmOperator::F32ConvertSI64 => unimplemented!(),
-            WasmOperator::F32ConvertUI64 => unimplemented!(),
-            WasmOperator::F32DemoteF64 => unimplemented!(),
-            WasmOperator::F64ConvertSI32 => unimplemented!(),
-            WasmOperator::F64ConvertUI32 => unimplemented!(),
-            WasmOperator::F64ConvertSI64 => unimplemented!(),
-            WasmOperator::F64ConvertUI64 => unimplemented!(),
-            WasmOperator::F64PromoteF32 => unimplemented!(),
-            WasmOperator::I32ReinterpretF32 => unimplemented!(),
-            WasmOperator::I64ReinterpretF64 => unimplemented!(),
-            WasmOperator::F32ReinterpretI32 => unimplemented!(),
-            WasmOperator::F64ReinterpretI64 => unimplemented!(),
-            WasmOperator::I32Extend8S => unimplemented!(),
-            WasmOperator::I32Extend16S => unimplemented!(),
-            WasmOperator::I64Extend8S => unimplemented!(),
-            WasmOperator::I64Extend16S => unimplemented!(),
-            WasmOperator::I64Extend32S => unimplemented!(),
+            WasmOperator::I32WrapI64 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncSF32 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncUF32 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncSF64 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncUF64 => unimplemented!("{:?}", op),
+            WasmOperator::I64ExtendSI32 => unimplemented!("{:?}", op),
+            WasmOperator::I64ExtendUI32 => unimplemented!("{:?}", op),
+            WasmOperator::I64TruncSF32 => unimplemented!("{:?}", op),
+            WasmOperator::I64TruncUF32 => unimplemented!("{:?}", op),
+            WasmOperator::I64TruncSF64 => unimplemented!("{:?}", op),
+            WasmOperator::I64TruncUF64 => unimplemented!("{:?}", op),
+            WasmOperator::F32ConvertSI32 => unimplemented!("{:?}", op),
+            WasmOperator::F32ConvertUI32 => unimplemented!("{:?}", op),
+            WasmOperator::F32ConvertSI64 => unimplemented!("{:?}", op),
+            WasmOperator::F32ConvertUI64 => unimplemented!("{:?}", op),
+            WasmOperator::F32DemoteF64 => unimplemented!("{:?}", op),
+            WasmOperator::F64ConvertSI32 => unimplemented!("{:?}", op),
+            WasmOperator::F64ConvertUI32 => unimplemented!("{:?}", op),
+            WasmOperator::F64ConvertSI64 => unimplemented!("{:?}", op),
+            WasmOperator::F64ConvertUI64 => unimplemented!("{:?}", op),
+            WasmOperator::F64PromoteF32 => unimplemented!("{:?}", op),
+            WasmOperator::I32ReinterpretF32 => unimplemented!("{:?}", op),
+            WasmOperator::I64ReinterpretF64 => unimplemented!("{:?}", op),
+            WasmOperator::F32ReinterpretI32 => unimplemented!("{:?}", op),
+            WasmOperator::F64ReinterpretI64 => unimplemented!("{:?}", op),
+            WasmOperator::I32Extend8S => unimplemented!("{:?}", op),
+            WasmOperator::I32Extend16S => unimplemented!("{:?}", op),
+            WasmOperator::I64Extend8S => unimplemented!("{:?}", op),
+            WasmOperator::I64Extend16S => unimplemented!("{:?}", op),
+            WasmOperator::I64Extend32S => unimplemented!("{:?}", op),
 
             // 0xFC operators
             // Non-trapping Float-to-int Conversions
-            WasmOperator::I32TruncSSatF32 => unimplemented!(),
-            WasmOperator::I32TruncUSatF32 => unimplemented!(),
-            WasmOperator::I32TruncSSatF64 => unimplemented!(),
-            WasmOperator::I32TruncUSatF64 => unimplemented!(),
-            WasmOperator::I64TruncSSatF32 => unimplemented!(),
-            WasmOperator::I64TruncUSatF32 => unimplemented!(),
-            WasmOperator::I64TruncSSatF64 => unimplemented!(),
-            WasmOperator::I64TruncUSatF64 => unimplemented!(),
+            WasmOperator::I32TruncSSatF32 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncUSatF32 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncSSatF64 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncUSatF64 => unimplemented!("{:?}", op),
+            WasmOperator::I64TruncSSatF32 => unimplemented!("{:?}", op),
+            WasmOperator::I64TruncUSatF32 => unimplemented!("{:?}", op),
+            WasmOperator::I64TruncSSatF64 => unimplemented!("{:?}", op),
+            WasmOperator::I64TruncUSatF64 => unimplemented!("{:?}", op),
 
-            _ => unimplemented!(),
+            other => unimplemented!("{:?}", other),
         }))
     }
 }

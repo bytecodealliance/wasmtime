@@ -4,8 +4,7 @@ use crate::microwasm::*;
 use crate::module::{quickhash, ModuleContext, SigType, Signature};
 use either::{Either, Left, Right};
 use multi_mut::HashMapMultiMut;
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{collections::HashMap, convert::TryInto, hash::Hash};
 
 #[derive(Debug)]
 struct Block {
@@ -25,6 +24,47 @@ impl Block {
         self.calling_convention.is_none()
             && (self.num_callers != Some(1) || self.has_backwards_callers)
     }
+}
+
+pub fn translate_wasm<M: ModuleContext>(
+    session: &mut CodeGenSession<M>,
+    func_idx: u32,
+    body: &wasmparser::FunctionBody,
+) -> Result<(), Error>
+where
+    for<'any> &'any M::Signature: Into<OpSig>,
+{
+    let ty = session.module_context.func_type(func_idx);
+
+    if false {
+        let mut microwasm = vec![];
+
+        let microwasm_conv = MicrowasmConv::new(
+            session.module_context,
+            ty.params().iter().map(SigType::to_microwasm_type),
+            ty.returns().iter().map(SigType::to_microwasm_type),
+            body,
+        );
+
+        for ops in microwasm_conv {
+            microwasm.extend(ops?);
+        }
+
+        println!("{}", crate::microwasm::dis(func_idx, &microwasm));
+    }
+
+    let microwasm_conv = MicrowasmConv::new(
+        session.module_context,
+        ty.params().iter().map(SigType::to_microwasm_type),
+        ty.returns().iter().map(SigType::to_microwasm_type),
+        body,
+    );
+
+    translate(
+        session,
+        func_idx,
+        microwasm_conv.flat_map(|i| i.expect("TODO: Make this not panic")),
+    )
 }
 
 pub fn translate<M: ModuleContext, I, L>(
@@ -315,8 +355,10 @@ where
             Operator::Clz(Size::_64) => ctx.i64_clz(),
             Operator::Ctz(Size::_64) => ctx.i64_ctz(),
             Operator::Popcnt(Size::_64) => ctx.i64_popcnt(),
+            Operator::Add(F64) => ctx.f64_add(),
+            Operator::Add(F32) => ctx.f32_add(),
             Operator::Drop(range) => ctx.drop(range),
-            Operator::Const(val) => ctx.literal(val),
+            Operator::Const(val) => ctx.const_(val),
             Operator::Load { ty: I32, memarg } => ctx.i32_load(memarg.offset)?,
             Operator::Load { ty: I64, memarg } => ctx.i64_load(memarg.offset)?,
             Operator::Store { ty: I32, memarg } => ctx.i32_store(memarg.offset)?,

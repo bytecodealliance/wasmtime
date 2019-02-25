@@ -4,7 +4,8 @@
     const_slice_len,
     never_type,
     alloc_layout_extra,
-    try_from
+    try_from,
+    try_trait,
 )]
 #![plugin(dynasm)]
 
@@ -44,5 +45,5 @@ mod translate_sections;
 mod tests;
 
 pub use backend::CodeGenSession;
-pub use function_body::translate as translate_function;
+pub use function_body::translate_wasm as translate_function;
 pub use module::{translate, ExecutableModule, ModuleContext, Signature, TranslatedModule};

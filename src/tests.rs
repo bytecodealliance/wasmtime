@@ -290,6 +290,53 @@ mod op64 {
     binop_test!(rotr, |a, b| (a as u64).rotate_right(b as _) as i64);
 }
 
+mod opf32 {
+    use super::translate_wat;
+
+    quickcheck! {
+        fn as_params(a: f64, b: f64) -> bool {
+            const CODE: &str = r#"(module
+                (func (param f64) (param f64) (result f64)
+                    (f64.add (get_local 0) (get_local 1))))
+            "#;
+            translate_wat(CODE).execute_func::<(f64, f64), f64>(0, (a, b)) == Ok(a + b)
+        }
+    
+        fn lit_lit(a: f64, b: f64) -> bool {
+            translate_wat(&format!("
+                (module (func (result f64)
+                    (f64.add (f64.const {left}) (f64.const {right}))))
+            ", left = a, right = b)).execute_func::<(), f64>(0, ()) == Ok(a + b)
+        }
+    
+        fn lit_reg(a: f64, b: f64) -> bool {
+            use std::sync::Once;
+    
+            let translated = translate_wat(&format!("
+                (module (func (param f64) (result f64)
+                    (f64.add (f64.const {left}) (get_local 0))))
+            ", left = a));
+            static ONCE: Once = Once::new();
+            ONCE.call_once(|| translated.disassemble());
+    
+            translated.execute_func::<(f64,), f64>(0, (b,)) == Ok(a + b)
+        }
+    
+        fn reg_lit(a: f64, b: f64) -> bool {
+            use std::sync::Once;
+    
+            let translated = translate_wat(&format!("
+                (module (func (param f64) (result f64)
+                    (f64.add (get_local 0) (f64.const {right}))))
+            ", right = b));
+            static ONCE: Once = Once::new();
+            ONCE.call_once(|| translated.disassemble());
+    
+            translated.execute_func::<(f64,), f64>(0, (a,)) == Ok(a + b)
+        }
+    }
+}
+
 quickcheck! {
     fn if_then_else(a: u32, b: u32) -> bool {
         const CODE: &str = r#"
@@ -748,9 +795,9 @@ quickcheck! {
               )
             )
         "#, a, b, c, d);
-    
+
         let translated = translate_wat(&code);
-    
+
         assert_eq!(translated.execute_func::<(), i32>(0, ()), Ok(a));
         assert_eq!(translated.execute_func::<(), i64>(1, ()), Ok(b));
         assert_eq!(translated.execute_func::<(), f32>(2, ()), Ok(c as _));
@@ -782,9 +829,9 @@ quickcheck! {
 
         let c = c as f32;
         let d = d as f64;
-    
+
         let translated = translate_wat(&code);
-    
+
         assert_eq!(translated.execute_func::<(i32, i64, f32, f64), i32>(0, (a, b, c, d)), Ok(a));
         assert_eq!(translated.execute_func::<(i32, i64, f32, f64), i64>(1, (a, b, c, d)), Ok(b));
         assert_eq!(translated.execute_func::<(i32, i64, f32, f64), f32>(2, (a, b, c, d)), Ok(c));
@@ -1145,7 +1192,7 @@ macro_rules! test_select {
 
                 fn lit(cond: bool, then: $ty, else_: $ty) -> bool {
                     let icond: i32 = if cond { 1 } else { 0 };
-                                    let translated = translate_wat(&format!("
+                                            let translated = translate_wat(&format!("
                             (module (func (param {ty}) (param {ty}) (result {ty})
                                 (select (get_local 0) (get_local 1) (i32.const {val}))))
                         ",
