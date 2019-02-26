@@ -48,8 +48,8 @@ def verify_semantics(inst, src, xforms):
             arg = rtl_var.rtl[0].expr.args[i]
             assert isinstance(arg, Var)
             for val in op.kind.possible_values():
-                    s[arg] = val
-                    new_variants.append(rtl_var.copy(s))
+                s[arg] = val
+                new_variants.append(rtl_var.copy(s))
         variants = new_variants
 
     # For any possible version of the src with concrete enumerated immediates
@@ -65,7 +65,7 @@ def verify_semantics(inst, src, xforms):
             matching_xforms = []  # type: List[XForm]
             for x in xforms:
                 if src.substitution(x.src, {}) is None:
-                        continue
+                    continue
 
                 # Translate t using x.symtab
                 t = {x.symtab[str(v)]:  tv for (v, tv) in t.items()}
