@@ -409,7 +409,7 @@ mod test_vmshared_signature_index {
 impl VMSharedSignatureIndex {
     /// Create a new `VMSharedSignatureIndex`.
     pub fn new(value: u32) -> Self {
-        Self(value)
+        VMSharedSignatureIndex(value)
     }
 }
 
