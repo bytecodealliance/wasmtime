@@ -1,6 +1,6 @@
 #![allow(dead_code)] // for now
 
-use microwasm::{SignlessType, Type, F32, F64, I32, I64};
+use microwasm::{BrTarget, SignlessType, Type, F32, F64, I32, I64};
 
 use self::registers::*;
 use dynasmrt::x64::Assembler;
@@ -631,6 +631,7 @@ pub enum MemoryAccessMode {
 #[derive(Default)]
 struct Labels {
     trap: Option<Label>,
+    ret: Option<Label>,
     neg_const_f32: Option<Label>,
     neg_const_f64: Option<Label>,
 }
@@ -1564,6 +1565,73 @@ impl<M: ModuleContext> Context<'_, M> {
         );
     }
 
+    /// If `default` is `None` then the default is just continuing execution
+    pub fn br_table<I>(
+        &mut self,
+        targets: I,
+        default: Option<BrTarget<Label>>,
+        mut pass_args: impl FnOnce(&mut Self),
+    ) where
+        I: IntoIterator<Item = BrTarget<Label>>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let mut targets = targets.into_iter();
+        let count = targets.len();
+
+        let mut selector = self.pop();
+
+        pass_args(self);
+
+        if count == 0 {
+            if let Some(default) = default {
+                match default {
+                    BrTarget::Label(label) => self.br(label),
+                    BrTarget::Return => {
+                        dynasm!(self.asm
+                            ; ret
+                        );
+                    }
+                }
+            }
+        } else if let Some(imm) = selector.imm_i32() {
+            if let Some(target) = targets.nth(imm as _).or(default) {
+                match target {
+                    BrTarget::Label(label) => self.br(label),
+                    BrTarget::Return => {
+                        dynasm!(self.asm
+                            ; ret
+                        );
+                    }
+                }
+            }
+        } else {
+            let selector_reg = self.into_reg(GPRType::Rq, selector);
+            selector = ValueLocation::Reg(selector_reg);
+
+            // TODO: Jump table (wrestling with dynasm to implement it is too much work)
+            for (i, target) in targets.enumerate() {
+                let label = self.target_to_label(target);
+                dynasm!(self.asm
+                    ; cmp Rq(selector_reg.rq().unwrap()), i as i32
+                    ; je =>label.0
+                );
+            }
+
+            if let Some(def) = default {
+                match def {
+                    BrTarget::Label(label) => dynasm!(self.asm
+                        ; jmp =>label.0
+                    ),
+                    BrTarget::Return => dynasm!(self.asm
+                        ; ret
+                    ),
+                }
+            }
+        }
+
+        self.free_value(selector);
+    }
+
     fn set_stack_depth_preserve_flags(&mut self, depth: StackDepth) {
         if self.block_state.depth.0 < depth.0 {
             // TODO: We need to preserve ZF on `br_if` so we use `push`/`pop` but that isn't
@@ -1604,7 +1672,12 @@ impl<M: ModuleContext> Context<'_, M> {
 
     pub fn pass_block_args(&mut self, cc: &CallingConvention) {
         let args = &cc.arguments;
-        for (remaining, &dst) in args.iter().enumerate().rev() {
+        for (remaining, &dst) in args
+            .iter()
+            .enumerate()
+            .rev()
+            .take(self.block_state.stack.len())
+        {
             if let CCLoc::Reg(r) = dst {
                 if !self.block_state.regs.is_free(r)
                     && *self.block_state.stack.last().unwrap() != ValueLocation::Reg(r)
@@ -2482,11 +2555,9 @@ impl<M: ModuleContext> Context<'_, M> {
     }
 
     fn align(&mut self, align_to: u32) {
-        while self.asm.offset().0 % align_to as usize != 0 {
-            dynasm!(self.asm
-                ; .byte 0
-            );
-        }
+        dynasm!(self.asm
+            ; .align align_to as usize
+        );
     }
 
     /// Writes the function epilogue (right now all this does is add the trap label that the
@@ -2497,6 +2568,13 @@ impl<M: ModuleContext> Context<'_, M> {
             self.define_label(l);
             dynasm!(self.asm
                 ; ud2
+            );
+        }
+
+        if let Some(l) = self.labels.ret {
+            self.define_label(l);
+            dynasm!(self.asm
+                ; ret
             );
         }
 
@@ -2529,6 +2607,13 @@ impl<M: ModuleContext> Context<'_, M> {
         );
     }
 
+    fn target_to_label(&mut self, target: BrTarget<Label>) -> Label {
+        match target {
+            BrTarget::Label(label) => label,
+            BrTarget::Return => self.ret_label(),
+        }
+    }
+
     #[must_use]
     fn trap_label(&mut self) -> Label {
         if let Some(l) = self.labels.trap {
@@ -2537,6 +2622,17 @@ impl<M: ModuleContext> Context<'_, M> {
 
         let label = self.create_label();
         self.labels.trap = Some(label);
+        label
+    }
+
+    #[must_use]
+    fn ret_label(&mut self) -> Label {
+        if let Some(l) = self.labels.ret {
+            return l;
+        }
+
+        let label = self.create_label();
+        self.labels.ret = Some(label);
         label
     }
 

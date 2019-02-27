@@ -310,7 +310,8 @@ impl TryFrom<wasmparser::Type> for SignlessType {
 
 #[derive(Debug, Clone)]
 pub struct BrTable<L> {
-    targets: Vec<L>,
+    pub targets: Vec<BrTarget<L>>,
+    pub default: BrTarget<L>,
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -371,8 +372,8 @@ impl fmt::Display for BrTarget<&str> {
 pub enum Operator<Label> {
     /// Explicit trap instruction
     Unreachable,
-    /// Start a new block. It is an error if the previous block has not been closed by emitting a `Br` or
-    /// `BrTable`.
+    /// Define metadata for a block - its label, its signature, whether it has backwards callers etc. It
+    /// is an error to branch to a block that has yet to be defined.
     Block {
         label: Label,
         // TODO: Do we need this?
@@ -381,6 +382,8 @@ pub enum Operator<Label> {
         has_backwards_callers: bool,
         num_callers: Option<u32>,
     },
+    /// Start a new block. It is an error if the previous block has not been closed by emitting a `Br` or
+    /// `BrTable`.
     Label(Label),
     /// Unconditionally break to a new block. This the parameters off the stack and passes them into
     /// the new block. Any remaining elements on the stack are discarded.
@@ -398,10 +401,10 @@ pub enum Operator<Label> {
     },
     /// Pop a value off the top of the stack, jump to `table[value.min(table.len() - 1)]`. All elements
     /// in the table must have the same parameters.
-    BrTable {
+    BrTable(
         /// The table of labels to jump to - the index should be clamped to the length of the table
-        table: BrTable<Label>,
-    },
+        BrTable<Label>,
+    ),
     /// Call a function
     Call {
         function_index: u32,
@@ -643,6 +646,18 @@ where
             }
             Operator::Br { target } => write!(f, "br {}", target),
             Operator::BrIf { then, else_ } => write!(f, "br_if {}, {}", then, else_),
+            Operator::BrTable(BrTable { targets, default }) => {
+                write!(f, "br_table [")?;
+                let mut iter = targets.iter();
+                if let Some(p) = iter.next() {
+                    write!(f, "{}", p)?;
+                    for p in iter {
+                        write!(f, ", {}", p)?;
+                    }
+                }
+
+                write!(f, "], {}", default)
+            },
             Operator::Call { function_index } => write!(f, "call {}", function_index),
             Operator::CallIndirect { .. } => write!(f, "call_indirect"),
             Operator::Drop(range) => {
@@ -798,7 +813,9 @@ impl ControlFrame {
         match self.kind {
             ControlFrameKind::Loop => BrTarget::Label((self.id, NameTag::Header)),
             ControlFrameKind::Function => BrTarget::Return,
-            _ => BrTarget::Label((self.id, NameTag::End)),
+            ControlFrameKind::Block { .. } | ControlFrameKind::If { .. } => {
+                BrTarget::Label((self.id, NameTag::End))
+            }
         }
     }
 
@@ -1593,7 +1610,26 @@ where
                     ]
                 }
             }
-            WasmOperator::BrTable { .. } => unimplemented!("{:?}", op),
+            WasmOperator::BrTable { table } => {
+                self.unreachable = true;
+                let (entries, default) = match table.read_table() {
+                    Ok(o) => o,
+                    Err(e) => return Some(Err(e)),
+                };
+                let targets = entries
+                    .into_iter()
+                    .map(|depth| {
+                        let block = self.nth_block_mut(*depth as _);
+                        block.mark_branched_to();
+                        block.br_target()
+                    })
+                    .collect();
+                let default = self.nth_block_mut(default as _);
+                default.mark_branched_to();
+                let default = default.br_target();
+
+                smallvec![Operator::BrTable(BrTable { targets, default })]
+            }
             WasmOperator::Return => {
                 self.unreachable = true;
 

@@ -1182,7 +1182,44 @@ fn fib_opt() {
 }
 
 #[test]
-fn just_storage() {
+fn br_table() {
+    const CODE: &str = r"
+(module
+  (func
+    (block (br_table 0 0 0 (i32.const 0)) (call $dummy))
+  )
+  (func
+    (block (call $dummy) (br_table 0 0 0 (i32.const 0)) (call $dummy))
+  )
+  (func
+    (block (nop) (call $dummy) (br_table 0 0 0 (i32.const 0)))
+  )
+  (func $dummy)
+)
+";
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    println!("as-block-first");
+    assert_eq!(
+        translated.execute_func::<_, ()>(0, ()),
+        Ok(()),
+    );
+    println!("as-block-mid");
+    assert_eq!(
+        translated.execute_func::<_, ()>(1, ()),
+        Ok(()),
+    );
+    println!("as-block-last");
+    assert_eq!(
+        translated.execute_func::<_, ()>(2, ()),
+        Ok(()),
+    );
+}
+
+#[test]
+fn storage() {
     const CODE: &str = r#"
 (module
   (memory 1 1)
@@ -1283,8 +1320,8 @@ fn nested_storage_calls() {
     assert_eq!(translated.execute_func::<(), i32>(0, ()), Ok(1));
 }
 
-// TODO: Signature mismatches correctly fail, but we can't add a test
-//       for that until we implement traps properly.
+// TODO: Signature mismatches correctly fail at time of writing this comment,
+//       but we can't add a test for that until we implement traps properly.
 #[test]
 fn call_indirect() {
     const CODE: &str = r#"
@@ -1377,7 +1414,7 @@ macro_rules! test_select {
 
                 fn lit(cond: bool, then: $ty, else_: $ty) -> bool {
                     let icond: i32 = if cond { 1 } else { 0 };
-                                            let translated = translate_wat(&format!("
+                                                    let translated = translate_wat(&format!("
                             (module (func (param {ty}) (param {ty}) (result {ty})
                                 (select (get_local 0) (get_local 1) (i32.const {val}))))
                         ",
@@ -1778,3 +1815,4 @@ fn sieve() {
 
     translate(&wabt::wat2wasm(CODE).unwrap()).unwrap();
 }
+

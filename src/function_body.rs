@@ -36,7 +36,7 @@ where
 {
     let ty = session.module_context.func_type(func_idx);
 
-    if false {
+    if true {
         let mut microwasm = vec![];
 
         let microwasm_conv = MicrowasmConv::new(
@@ -285,7 +285,9 @@ where
                             **then_cc = cc.clone();
                             **else_cc = cc;
                         }
-                        _ => unimplemented!(),
+                        _ => unimplemented!(
+                            "Can't pass different params to different sides of `br_if` yet"
+                        ),
                     }
                 };
 
@@ -302,6 +304,61 @@ where
                     }
                     other => unimplemented!("{:#?}", other),
                 }
+            }
+            Operator::BrTable(BrTable { targets, default }) => {
+                use itertools::Itertools;
+
+                let (def, params) = {
+                    let def = blocks.get(&default).unwrap();
+                    (
+                        if def.is_next {
+                            None
+                        } else {
+                            Some(def.label)
+                        },
+                        def.params.clone()
+                    )
+                };
+
+                let target_labels = targets.iter()
+                    .map(|target| blocks.get(target).unwrap().label)
+                    .collect::<Vec<_>>();
+
+                ctx.br_table(target_labels, def, |ctx| {
+                    let mut cc = None;
+                    let mut max_num_callers = Some(0);
+
+                    for target in targets.iter().chain(std::iter::once(&default)).unique() {
+                        let block = blocks.get_mut(target).unwrap();
+                        block.actual_num_callers += 1;
+
+                        if block.calling_convention.is_some() {
+                            assert!(cc.is_none(), "Can't pass different params to different elements of `br_table` yet");
+                            cc = block.calling_convention.clone();
+                        }
+
+                        if let Some(max) = max_num_callers {
+                            max_num_callers = block.num_callers.map(|n| max.max(n));
+                        }
+                    }
+
+                    if let Some(Left(cc)) = &cc {
+                        ctx.pass_block_args(cc);
+                    }
+       
+                    let cc = cc.unwrap_or_else(||
+                        if max_num_callers == Some(1) {
+                            Right(ctx.virtual_calling_convention())
+                        } else {
+                            Left(ctx.serialize_args(params))
+                        }
+                    );
+
+                    for target in targets.iter().chain(std::iter::once(&default)).unique() {
+                        let block = blocks.get_mut(target).unwrap();
+                        block.calling_convention = Some(cc.clone());
+                    }
+                });
             }
             Operator::Swap { depth } => ctx.swap(depth),
             Operator::Pick { depth } => ctx.pick(depth),
