@@ -291,50 +291,235 @@ mod op64 {
 }
 
 mod opf32 {
-    use super::translate_wat;
+    use super::{translate_wat, ExecutableModule};
 
-    quickcheck! {
-        fn as_params(a: f64, b: f64) -> bool {
-            const CODE: &str = r#"(module
-                (func (param f64) (param f64) (result f64)
-                    (f64.add (get_local 0) (get_local 1))))
-            "#;
-            translate_wat(CODE).execute_func::<(f64, f64), f64>(0, (a, b)) == Ok(a + b)
-        }
-    
-        fn lit_lit(a: f64, b: f64) -> bool {
-            translate_wat(&format!("
-                (module (func (result f64)
-                    (f64.add (f64.const {left}) (f64.const {right}))))
-            ", left = a, right = b)).execute_func::<(), f64>(0, ()) == Ok(a + b)
-        }
-    
-        fn lit_reg(a: f64, b: f64) -> bool {
-            use std::sync::Once;
-    
-            let translated = translate_wat(&format!("
-                (module (func (param f64) (result f64)
-                    (f64.add (f64.const {left}) (get_local 0))))
-            ", left = a));
-            static ONCE: Once = Once::new();
-            ONCE.call_once(|| translated.disassemble());
-    
-            translated.execute_func::<(f64,), f64>(0, (b,)) == Ok(a + b)
-        }
-    
-        fn reg_lit(a: f64, b: f64) -> bool {
-            use std::sync::Once;
-    
-            let translated = translate_wat(&format!("
-                (module (func (param f64) (result f64)
-                    (f64.add (get_local 0) (f64.const {right}))))
-            ", right = b));
-            static ONCE: Once = Once::new();
-            ONCE.call_once(|| translated.disassemble());
-    
-            translated.execute_func::<(f64,), f64>(0, (a,)) == Ok(a + b)
-        }
+    macro_rules! binop_test {
+        ($op:ident, $func:expr) => {
+            binop_test!($op, $func, f32);
+        };
+        ($op:ident, $func:expr, $retty:ident) => {
+            mod $op {
+                use super::{translate_wat, ExecutableModule};
+
+                const RETTY: &str = stringify!($retty);
+                const OP: &str = stringify!($op);
+
+                lazy_static! {
+                    static ref AS_PARAMS: ExecutableModule = translate_wat(&format!("
+                        (module (func (param f32) (param f32) (result {retty})
+                            (f32.{op} (get_local 0) (get_local 1))))
+                    ", retty = RETTY, op = OP));
+                }
+
+                quickcheck! {
+                    fn as_params(a: f32, b: f32) -> bool {
+                        AS_PARAMS.execute_func::<(f32, f32), $retty>(0, (a, b)) == Ok($func(a, b) as $retty)
+                    }
+
+                    fn lit_lit(a: f32, b: f32) -> bool {
+                        translate_wat(&format!("
+                            (module (func (result {retty})
+                                (f32.{op} (f32.const {left}) (f32.const {right}))))
+                        ", retty = RETTY, op = OP, left = a, right = b)).execute_func::<(), $retty>(0, ()) == Ok($func(a, b) as $retty)
+                    }
+
+                    fn lit_reg(a: f32, b: f32) -> bool {
+                        use std::sync::Once;
+
+                        let translated = translate_wat(&format!("
+                            (module (func (param f32) (result {retty})
+                                (f32.{op} (f32.const {left}) (get_local 0))))
+                        ", retty = RETTY, op = OP, left = a));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+
+                        translated.execute_func::<(f32,), $retty>(0, (b,)) == Ok($func(a, b) as $retty)
+                    }
+
+                    fn reg_lit(a: f32, b: f32) -> bool {
+                        use std::sync::Once;
+
+                        let translated = translate_wat(&format!("
+                            (module (func (param f32) (result {retty})
+                                (f32.{op} (get_local 0) (f32.const {right}))))
+                        ", retty = RETTY, op = OP, right = b));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+
+                        translated.execute_func::<(f32,), $retty>(0, (a,)) == Ok($func(a, b) as $retty)
+                    }
+                }
+            }
+        };
     }
+
+    macro_rules! unop_test {
+        ($name:ident, $func:expr) => {
+            unop_test!($name, $func, f32);
+        };
+        ($name:ident, $func:expr, $out_ty:ty) => {
+            mod $name {
+                use super::{translate_wat, ExecutableModule};
+                use std::sync::Once;
+
+                lazy_static! {
+                    static ref AS_PARAM: ExecutableModule = translate_wat(concat!(
+                        "(module (func (param f32) (result ",
+                        stringify!($out_ty),
+                        ")
+                            (f32.",
+                        stringify!($name),
+                        " (get_local 0))))"
+                    ),);
+                }
+
+                quickcheck! {
+                    fn as_param(a: f32) -> bool {
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| AS_PARAM.disassemble());
+                        AS_PARAM.execute_func::<(f32,), $out_ty>(0, (a,)) == Ok($func(a))
+                    }
+
+                    fn lit(a: f32) -> bool {
+                                                let translated = translate_wat(&format!(concat!("
+                            (module (func (result ",stringify!($out_ty),")
+                                (f32.",stringify!($name)," (f32.const {val}))))
+                        "), val = a));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+
+                        translated.execute_func::<(), $out_ty>(0, ()) == Ok($func(a))
+                    }
+                }
+            }
+        };
+    }
+
+    binop_test!(add, |a, b| a + b);
+    binop_test!(mul, |a, b| a * b);
+    binop_test!(sub, |a, b| a - b);
+    binop_test!(gt, |a, b| a > b, i32);
+    binop_test!(lt, |a, b| a < b, i32);
+    binop_test!(ge, |a, b| a >= b, i32);
+    binop_test!(le, |a, b| a <= b, i32);
+
+    unop_test!(neg, |a: f32| -a);
+}
+
+mod opf64 {
+    use super::{translate_wat, ExecutableModule};
+
+    macro_rules! binop_test {
+        ($op:ident, $func:expr) => {
+            binop_test!($op, $func, f64);
+        };
+        ($op:ident, $func:expr, $retty:ident) => {
+            mod $op {
+                use super::{translate_wat, ExecutableModule};
+
+                const RETTY: &str = stringify!($retty);
+                const OP: &str = stringify!($op);
+
+                lazy_static! {
+                    static ref AS_PARAMS: ExecutableModule = translate_wat(&format!("
+                        (module (func (param f64) (param f64) (result {retty})
+                            (f64.{op} (get_local 0) (get_local 1))))
+                    ", retty = RETTY, op = OP));
+                }
+
+                quickcheck! {
+                    fn as_params(a: f64, b: f64) -> bool {
+                        AS_PARAMS.execute_func::<(f64, f64), $retty>(0, (a, b)) == Ok($func(a, b) as $retty)
+                    }
+
+                    fn lit_lit(a: f64, b: f64) -> bool {
+                        translate_wat(&format!("
+                            (module (func (result {retty})
+                                (f64.{op} (f64.const {left}) (f64.const {right}))))
+                        ", retty = RETTY, op = OP, left = a, right = b)).execute_func::<(), $retty>(0, ()) == Ok($func(a, b) as $retty)
+                    }
+
+                    fn lit_reg(a: f64, b: f64) -> bool {
+                        use std::sync::Once;
+
+                        let translated = translate_wat(&format!("
+                            (module (func (param f64) (result {retty})
+                                (f64.{op} (f64.const {left}) (get_local 0))))
+                        ", retty = RETTY, op = OP, left = a));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+
+                        translated.execute_func::<(f64,), $retty>(0, (b,)) == Ok($func(a, b) as $retty)
+                    }
+
+                    fn reg_lit(a: f64, b: f64) -> bool {
+                        use std::sync::Once;
+
+                        let translated = translate_wat(&format!("
+                            (module (func (param f64) (result {retty})
+                                (f64.{op} (get_local 0) (f64.const {right}))))
+                        ", retty = RETTY, op = OP, right = b));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+
+                        translated.execute_func::<(f64,), $retty>(0, (a,)) == Ok($func(a, b) as $retty)
+                    }
+                }
+            }
+        };
+    }
+
+    macro_rules! unop_test {
+        ($name:ident, $func:expr) => {
+            unop_test!($name, $func, f64);
+        };
+        ($name:ident, $func:expr, $out_ty:ty) => {
+            mod $name {
+                use super::{translate_wat, ExecutableModule};
+                use std::sync::Once;
+
+                lazy_static! {
+                    static ref AS_PARAM: ExecutableModule = translate_wat(concat!(
+                        "(module (func (param f64) (result ",
+                        stringify!($out_ty),
+                        ")
+                            (f64.",
+                        stringify!($name),
+                        " (get_local 0))))"
+                    ),);
+                }
+
+                quickcheck! {
+                    fn as_param(a: f64) -> bool {
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| AS_PARAM.disassemble());
+                        AS_PARAM.execute_func::<(f64,), $out_ty>(0, (a,)) == Ok($func(a))
+                    }
+
+                    fn lit(a: f64) -> bool {
+                                                let translated = translate_wat(&format!(concat!("
+                            (module (func (result ",stringify!($out_ty),")
+                                (f64.",stringify!($name)," (f64.const {val}))))
+                        "), val = a));
+                        static ONCE: Once = Once::new();
+                        ONCE.call_once(|| translated.disassemble());
+
+                        translated.execute_func::<(), $out_ty>(0, ()) == Ok($func(a))
+                    }
+                }
+            }
+        };
+    }
+
+    binop_test!(add, |a, b| a + b);
+    binop_test!(mul, |a, b| a * b);
+    binop_test!(sub, |a, b| a - b);
+    binop_test!(gt, |a, b| a > b, i32);
+    binop_test!(lt, |a, b| a < b, i32);
+    binop_test!(ge, |a, b| a >= b, i32);
+    binop_test!(le, |a, b| a <= b, i32);
+
+    unop_test!(neg, |a: f64| -a);
 }
 
 quickcheck! {

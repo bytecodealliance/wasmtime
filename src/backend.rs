@@ -497,7 +497,7 @@ impl<'a, M> CodeGenSession<'a, M> {
         Context {
             asm: &mut self.assembler,
             func_starts: &self.func_starts,
-            trap_label: None,
+            labels: Default::default(),
             block_state: Default::default(),
             module_context: self.module_context,
         }
@@ -627,13 +627,21 @@ pub enum MemoryAccessMode {
     Unchecked,
 }
 
+// TODO: We can share one trap/constant for all functions by reusing this struct
+#[derive(Default)]
+struct Labels {
+    trap: Option<Label>,
+    neg_const_f32: Option<Label>,
+    neg_const_f64: Option<Label>,
+}
+
 pub struct Context<'a, M> {
     asm: &'a mut Assembler,
     module_context: &'a M,
     func_starts: &'a Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     pub block_state: BlockState,
-    trap_label: Option<Label>,
+    labels: Labels,
 }
 
 /// Label in code.
@@ -855,7 +863,7 @@ macro_rules! cmp_i64 {
             let out = if let Some(i) = left.imm_i64() {
                 match right {
                     ValueLocation::Stack(offset) => {
-                        let result = self.block_state.regs.take(I64);
+                        let result = self.block_state.regs.take(I32);
                         let offset = self.adjusted_offset(offset);
                         if let Some(i) = i.try_into() {
                             dynasm!(self.asm
@@ -869,7 +877,7 @@ macro_rules! cmp_i64 {
                         ValueLocation::Reg(result)
                     }
                     ValueLocation::Reg(rreg) => {
-                        let result = self.block_state.regs.take(I64);
+                        let result = self.block_state.regs.take(I32);
                         if let Some(i) = i.try_into() {
                             dynasm!(self.asm
                                 ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
@@ -895,7 +903,7 @@ macro_rules! cmp_i64 {
                 let lreg = self.into_reg(I64, left);
                 left = ValueLocation::Reg(lreg);
 
-                let result = self.block_state.regs.take(I64);
+                let result = self.block_state.regs.take(I32);
 
                 match right {
                     ValueLocation::Stack(offset) => {
@@ -937,6 +945,135 @@ macro_rules! cmp_i64 {
     }
 }
 
+macro_rules! cmp_f32 {
+    ($name:ident, $reverse_name:ident, $instr:ident, $const_fallback:expr) => {
+        cmp_float!(
+            comiss,
+            f32,
+            imm_f32,
+            $name,
+            $reverse_name,
+            $instr,
+            $const_fallback
+        );
+    };
+}
+
+macro_rules! cmp_f64 {
+    ($name:ident, $reverse_name:ident, $instr:ident, $const_fallback:expr) => {
+        cmp_float!(
+            comisd,
+            f64,
+            imm_f64,
+            $name,
+            $reverse_name,
+            $instr,
+            $const_fallback
+        );
+    };
+}
+
+macro_rules! cmp_float {
+    (@helper $cmp_instr:ident, $ty:ty, $imm_fn:ident, $self:expr, $left:expr, $right:expr, $instr:ident, $const_fallback:expr) => {{
+        let (left, right, this) = ($left, $right, $self);
+        if let (Some(left), Some(right)) = (left.$imm_fn(), right.$imm_fn()) {
+            if $const_fallback(<$ty>::from_bits(left.bits()), <$ty>::from_bits(right.bits())) {
+                ValueLocation::Immediate(1i32.into())
+            } else {
+                ValueLocation::Immediate(0i32.into())
+            }
+        } else {
+            let lreg = this.into_reg(GPRType::Rx, *left);
+            *left = ValueLocation::Reg(lreg);
+            let result = this.block_state.regs.take(I32);
+
+            match right {
+                ValueLocation::Stack(offset) => {
+                    let offset = this.adjusted_offset(*offset);
+
+                    dynasm!(this.asm
+                        ; xor Rq(result.rq().unwrap()), Rq(result.rq().unwrap())
+                        ; $cmp_instr Rx(lreg.rx().unwrap()), [rsp + offset]
+                        ; $instr Rb(result.rq().unwrap())
+                    );
+                }
+                right => {
+                    let rreg = this.into_reg(GPRType::Rx, *right);
+                    *right = ValueLocation::Reg(rreg);
+
+                    dynasm!(this.asm
+                        ; xor Rq(result.rq().unwrap()), Rq(result.rq().unwrap())
+                        ; $cmp_instr Rx(lreg.rx().unwrap()), Rx(rreg.rx().unwrap())
+                        ; $instr Rb(result.rq().unwrap())
+                    );
+                }
+            }
+
+            ValueLocation::Reg(result)
+        }
+    }};
+    ($cmp_instr:ident, $ty:ty, $imm_fn:ident, $name:ident, $reverse_name:ident, $instr:ident, $const_fallback:expr) => {
+        pub fn $name(&mut self) {
+            let mut right = self.pop();
+            let mut left = self.pop();
+
+            let out = cmp_float!(@helper
+                $cmp_instr,
+                $ty,
+                $imm_fn,
+                &mut *self,
+                &mut left,
+                &mut right,
+                $instr,
+                $const_fallback
+            );
+
+            self.free_value(left);
+            self.free_value(right);
+
+            self.push(out);
+        }
+
+        pub fn $reverse_name(&mut self) {
+            let mut right = self.pop();
+            let mut left = self.pop();
+
+            let out = cmp_float!(@helper
+                $cmp_instr,
+                $ty,
+                $imm_fn,
+                &mut *self,
+                &mut right,
+                &mut left,
+                $instr,
+                $const_fallback
+            );
+
+            self.free_value(left);
+            self.free_value(right);
+
+            self.push(out);
+        }
+    };
+}
+
+macro_rules! binop_i32 {
+    ($name:ident, $instr:ident, $const_fallback:expr) => {
+        binop!(
+            $name,
+            $instr,
+            $const_fallback,
+            Rd,
+            rq,
+            I32,
+            imm_i32,
+            |this: &mut Context<_>, op1: GPR, i| dynasm!(this.asm
+                ; $instr Rd(op1.rq().unwrap()), i
+            )
+        );
+    };
+}
+
 macro_rules! commutative_binop_i32 {
     ($name:ident, $instr:ident, $const_fallback:expr) => {
         commutative_binop!(
@@ -949,6 +1086,23 @@ macro_rules! commutative_binop_i32 {
             imm_i32,
             |this: &mut Context<_>, op1: GPR, i| dynasm!(this.asm
                 ; $instr Rd(op1.rq().unwrap()), i
+            )
+        );
+    };
+}
+
+macro_rules! binop_i64 {
+    ($name:ident, $instr:ident, $const_fallback:expr) => {
+        binop!(
+            $name,
+            $instr,
+            $const_fallback,
+            Rq,
+            rq,
+            I64,
+            imm_i64,
+            |this: &mut Context<_>, op1: GPR, i| dynasm!(this.asm
+                ; $instr Rq(op1.rq().unwrap()), i
             )
         );
     };
@@ -971,16 +1125,52 @@ macro_rules! commutative_binop_i64 {
     };
 }
 
+macro_rules! binop_f32 {
+    ($name:ident, $instr:ident, $const_fallback:expr) => {
+        binop!(
+            $name,
+            $instr,
+            |a: wasmparser::Ieee32, b: wasmparser::Ieee32| wasmparser::Ieee32(
+                $const_fallback(f32::from_bits(a.bits()), f32::from_bits(b.bits())).to_bits()
+            ),
+            Rx,
+            rx,
+            F32,
+            imm_f32,
+            |_, _, _| unreachable!()
+        );
+    };
+}
+
 macro_rules! commutative_binop_f32 {
     ($name:ident, $instr:ident, $const_fallback:expr) => {
         commutative_binop!(
             $name,
             $instr,
-            $const_fallback,
+            |a: wasmparser::Ieee32, b: wasmparser::Ieee32| wasmparser::Ieee32(
+                $const_fallback(f32::from_bits(a.bits()), f32::from_bits(b.bits())).to_bits()
+            ),
             Rx,
             rx,
             F32,
             imm_f32,
+            |_, _, _| unreachable!()
+        );
+    };
+}
+
+macro_rules! binop_f64 {
+    ($name:ident, $instr:ident, $const_fallback:expr) => {
+        binop!(
+            $name,
+            $instr,
+            |a: wasmparser::Ieee64, b: wasmparser::Ieee64| wasmparser::Ieee64(
+                $const_fallback(f64::from_bits(a.bits()), f64::from_bits(b.bits())).to_bits()
+            ),
+            Rx,
+            rx,
+            F64,
+            imm_f64,
             |_, _, _| unreachable!()
         );
     };
@@ -991,7 +1181,9 @@ macro_rules! commutative_binop_f64 {
         commutative_binop!(
             $name,
             $instr,
-            $const_fallback,
+            |a: wasmparser::Ieee64, b: wasmparser::Ieee64| wasmparser::Ieee64(
+                $const_fallback(f64::from_bits(a.bits()), f64::from_bits(b.bits())).to_bits()
+            ),
             Rx,
             rx,
             F64,
@@ -1000,9 +1192,36 @@ macro_rules! commutative_binop_f64 {
         );
     };
 }
-
 macro_rules! commutative_binop {
     ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:ident, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr) => {
+        binop!(
+            $name,
+            $instr,
+            $const_fallback,
+            $reg_ty,
+            $reg_fn,
+            $ty,
+            $imm_fn,
+            $direct_imm,
+            |op1: ValueLocation, op0: ValueLocation| match op1 {
+                ValueLocation::Reg(_) => (op1, op0),
+                _ => {
+                    if op0.immediate().is_some() {
+                        (op1, op0)
+                    } else {
+                        (op0, op1)
+                    }
+                }
+            }
+        );
+    };
+}
+
+macro_rules! binop {
+    ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:ident, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr) => {
+        binop!($name, $instr, $const_fallback, $reg_ty, $reg_fn, $ty, $imm_fn, $direct_imm, |a, b| (a, b));
+    };
+    ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:ident, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr, $map_op:expr) => {
         pub fn $name(&mut self) {
             let op0 = self.pop();
             let op1 = self.pop();
@@ -1014,14 +1233,8 @@ macro_rules! commutative_binop {
                 }
             }
 
-            let (op1, op0) = match op1 {
-                ValueLocation::Reg(_) => (self.into_temp_reg($ty, op1), op0),
-                _ => if op0.immediate().is_some() {
-                    (self.into_temp_reg($ty, op1), op0)
-                } else {
-                    (self.into_temp_reg($ty, op0), op1)
-                }
-            };
+            let (op1, op0) = $map_op(op1, op0);
+            let op1 = self.into_temp_reg($ty, op1);
 
             match op0 {
                 ValueLocation::Reg(reg) => {
@@ -1251,6 +1464,12 @@ impl<M: ModuleContext> Context<'_, M> {
     cmp_i64!(i64_le_s, setle, setnl, |a, b| a <= b);
     cmp_i64!(i64_gt_s, setg, setnge, |a, b| a > b);
     cmp_i64!(i64_ge_s, setge, setng, |a, b| a >= b);
+
+    cmp_f32!(f32_gt, f32_lt, seta, |a, b| a > b);
+    cmp_f32!(f32_ge, f32_le, setnc, |a, b| a >= b);
+
+    cmp_f64!(f64_gt, f64_lt, seta, |a, b| a > b);
+    cmp_f64!(f64_ge, f64_le, setnc, |a, b| a >= b);
 
     // TODO: Should we do this logic in `eq` and just have this delegate to `eq`?
     //       That would mean that `eqz` and `eq` with a const 0 argument don't
@@ -1710,6 +1929,48 @@ impl<M: ModuleContext> Context<'_, M> {
         }
     }
 
+    pub fn f32_neg(&mut self) {
+        let val = self.pop();
+
+        let out = if let Some(i) = val.imm_f32() {
+            ValueLocation::Immediate(
+                wasmparser::Ieee32((-f32::from_bits(i.bits())).to_bits()).into(),
+            )
+        } else {
+            let reg = self.into_temp_reg(GPRType::Rx, val);
+            let const_label = self.neg_const_f32_label();
+
+            dynasm!(self.asm
+                ; xorps Rx(reg.rx().unwrap()), [=>const_label.0]
+            );
+
+            ValueLocation::Reg(reg)
+        };
+
+        self.push(out);
+    }
+
+    pub fn f64_neg(&mut self) {
+        let val = self.pop();
+
+        let out = if let Some(i) = val.imm_f64() {
+            ValueLocation::Immediate(
+                wasmparser::Ieee64((-f64::from_bits(i.bits())).to_bits()).into(),
+            )
+        } else {
+            let reg = self.into_temp_reg(GPRType::Rx, val);
+            let const_label = self.neg_const_f64_label();
+
+            dynasm!(self.asm
+                ; xorpd Rx(reg.rx().unwrap()), [=>const_label.0]
+            );
+
+            ValueLocation::Reg(reg)
+        };
+
+        self.push(out);
+    }
+
     unop!(i32_clz, lzcnt, Rd, u32, u32::leading_zeros);
     unop!(i64_clz, lzcnt, Rq, u64, |a: u64| a.leading_zeros() as u64);
     unop!(i32_ctz, tzcnt, Rd, u32, u32::trailing_zeros);
@@ -1719,22 +1980,25 @@ impl<M: ModuleContext> Context<'_, M> {
 
     // TODO: Use `lea` when the LHS operand isn't a temporary but both of the operands
     //       are in registers.
-    commutative_binop_i32!(i32_add, add, |a, b| (a as i32).wrapping_add(b as i32));
+    commutative_binop_i32!(i32_add, add, i32::wrapping_add);
     commutative_binop_i32!(i32_and, and, |a, b| a & b);
     commutative_binop_i32!(i32_or, or, |a, b| a | b);
     commutative_binop_i32!(i32_xor, xor, |a, b| a ^ b);
+    binop_i32!(i32_sub, sub, i32::wrapping_sub);
 
     commutative_binop_i64!(i64_add, add, i64::wrapping_add);
     commutative_binop_i64!(i64_and, and, |a, b| a & b);
     commutative_binop_i64!(i64_or, or, |a, b| a | b);
     commutative_binop_i64!(i64_xor, xor, |a, b| a ^ b);
+    binop_i64!(i64_sub, sub, i64::wrapping_sub);
 
-    commutative_binop_f32!(f32_add, addss, |a: wasmparser::Ieee32, b: wasmparser::Ieee32| wasmparser::Ieee32(
-        (f32::from_bits(a.bits()) + f32::from_bits(b.bits())).to_bits()
-    ));
-    commutative_binop_f64!(f64_add, addsd, |a: wasmparser::Ieee64, b: wasmparser::Ieee64| wasmparser::Ieee64(
-        (f64::from_bits(a.bits()) + f64::from_bits(b.bits())).to_bits()
-    ));
+    commutative_binop_f32!(f32_add, addss, |a, b| a + b);
+    commutative_binop_f32!(f32_mul, mulss, |a, b| a * b);
+    binop_f32!(f32_sub, subss, |a, b| a - b);
+
+    commutative_binop_f64!(f64_add, addsd, |a, b| a + b);
+    commutative_binop_f64!(f64_mul, mulsd, |a, b| a * b);
+    binop_f64!(f64_sub, subsd, |a, b| a - b);
 
     shift!(
         i32_shl,
@@ -1808,52 +2072,6 @@ impl<M: ModuleContext> Context<'_, M> {
         I64
     );
 
-    // `sub` is not commutative, so we have to handle it differently (we _must_ use the `op1`
-    // temp register as the output)
-    pub fn i64_sub(&mut self) {
-        let op0 = self.pop();
-        let op1 = self.pop();
-
-        if let Some(i1) = op1.immediate() {
-            if let Some(i0) = op0.immediate() {
-                self.push(ValueLocation::Immediate(
-                    (i1.as_i64().unwrap() - i0.as_i64().unwrap()).into(),
-                ));
-                return;
-            }
-        }
-
-        let op1 = self.into_temp_reg(I32, op1);
-        match op0 {
-            ValueLocation::Reg(reg) => {
-                dynasm!(self.asm
-                    ; sub Rq(op1.rq().unwrap()), Rq(reg.rq().unwrap())
-                );
-            }
-            ValueLocation::Stack(offset) => {
-                let offset = self.adjusted_offset(offset);
-                dynasm!(self.asm
-                    ; sub Rq(op1.rq().unwrap()), [rsp + offset]
-                );
-            }
-            ValueLocation::Immediate(i) => {
-                let i = i.as_int().unwrap();
-                if let Some(i) = i.try_into() {
-                    dynasm!(self.asm
-                        ; sub Rq(op1.rq().unwrap()), i
-                    );
-                } else {
-                    unimplemented!(concat!(
-                        "Unsupported `sub` with large 64-bit immediate operand"
-                    ));
-                }
-            }
-        }
-
-        self.push(ValueLocation::Reg(op1));
-        self.free_value(op0);
-    }
-
     // `i64_mul` needs to be seperate because the immediate form of the instruction
     // has a different syntax to the immediate form of the other instructions.
     pub fn i64_mul(&mut self) {
@@ -1903,45 +2121,6 @@ impl<M: ModuleContext> Context<'_, M> {
                         "Unsupported `imul` with large 64-bit immediate operand"
                     ));
                 }
-            }
-        }
-
-        self.push(ValueLocation::Reg(op1));
-        self.free_value(op0);
-    }
-
-    // `sub` is not commutative, so we have to handle it differently (we _must_ use the `op1`
-    // temp register as the output)
-    pub fn i32_sub(&mut self) {
-        let op0 = self.pop();
-        let op1 = self.pop();
-
-        if let Some(i1) = op1.imm_i32() {
-            if let Some(i0) = op0.imm_i32() {
-                self.block_state
-                    .stack
-                    .push(ValueLocation::Immediate(i1.wrapping_sub(i0).into()));
-                return;
-            }
-        }
-
-        let op1 = self.into_temp_reg(I64, op1);
-        match op0 {
-            ValueLocation::Reg(reg) => {
-                dynasm!(self.asm
-                    ; sub Rd(op1.rq().unwrap()), Rd(reg.rq().unwrap())
-                );
-            }
-            ValueLocation::Stack(offset) => {
-                let offset = self.adjusted_offset(offset);
-                dynasm!(self.asm
-                    ; sub Rd(op1.rq().unwrap()), [rsp + offset]
-                );
-            }
-            ValueLocation::Immediate(i) => {
-                dynasm!(self.asm
-                    ; sub Rd(op1.rq().unwrap()), i.as_i32().unwrap()
-                );
             }
         }
 
@@ -2302,13 +2481,44 @@ impl<M: ModuleContext> Context<'_, M> {
         );
     }
 
+    fn align(&mut self, align_to: u32) {
+        while self.asm.offset().0 % align_to as usize != 0 {
+            dynasm!(self.asm
+                ; .byte 0
+            );
+        }
+    }
+
     /// Writes the function epilogue (right now all this does is add the trap label that the
     /// conditional traps in `call_indirect` use)
     pub fn epilogue(&mut self) {
-        if let Some(l) = self.trap_label {
+        // TODO: We don't want to redefine this label if we're sharing it between functions
+        if let Some(l) = self.labels.trap {
             self.define_label(l);
             dynasm!(self.asm
                 ; ud2
+            );
+        }
+
+        if let Some(l) = self.labels.neg_const_f32 {
+            self.align(16);
+            self.define_label(l);
+            dynasm!(self.asm
+                ; .dword -2147483648
+                ; .dword 0
+                ; .dword 0
+                ; .dword 0
+            );
+        }
+
+        if let Some(l) = self.labels.neg_const_f64 {
+            self.align(16);
+            self.define_label(l);
+            dynasm!(self.asm
+                ; .dword 0
+                ; .dword -2147483648
+                ; .dword 0
+                ; .dword 0
             );
         }
     }
@@ -2321,12 +2531,34 @@ impl<M: ModuleContext> Context<'_, M> {
 
     #[must_use]
     fn trap_label(&mut self) -> Label {
-        if let Some(l) = self.trap_label {
+        if let Some(l) = self.labels.trap {
             return l;
         }
 
         let label = self.create_label();
-        self.trap_label = Some(label);
+        self.labels.trap = Some(label);
+        label
+    }
+
+    #[must_use]
+    fn neg_const_f32_label(&mut self) -> Label {
+        if let Some(l) = self.labels.neg_const_f32 {
+            return l;
+        }
+
+        let label = self.create_label();
+        self.labels.neg_const_f32 = Some(label);
+        label
+    }
+
+    #[must_use]
+    fn neg_const_f64_label(&mut self) -> Label {
+        if let Some(l) = self.labels.neg_const_f64 {
+            return l;
+        }
+
+        let label = self.create_label();
+        self.labels.neg_const_f64 = Some(label);
         label
     }
 }
