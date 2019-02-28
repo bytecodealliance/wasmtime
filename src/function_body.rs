@@ -36,7 +36,7 @@ where
 {
     let ty = session.module_context.func_type(func_idx);
 
-    if true {
+    if false {
         let mut microwasm = vec![];
 
         let microwasm_conv = MicrowasmConv::new(
@@ -137,7 +137,7 @@ where
                         let block = entry.get_mut();
 
                         // TODO: Is it possible with arbitrary CFGs that a block will have _only_ backwards callers?
-                        //       Certainly for Wasm that is currently impossible.
+                        //       Certainly for Microwasm generated from Wasm that is currently impossible.
                         if block.actual_num_callers == 0 {
                             loop {
                                 let done = match body.peek() {
@@ -245,8 +245,10 @@ where
                 }
             }
             Operator::BrIf { then, else_ } => {
-                // TODO: We should add the block to the hashmap if we don't have it already
                 let (then_block, else_block) = blocks.pair_mut(&then, &else_);
+                // TODO: If actual_num_callers == num_callers then we can remove this block from the hashmap.
+                //       This frees memory and acts as a kind of verification that `num_callers` is set
+                //       correctly. It doesn't help for loops and block ends generated from Wasm.
                 then_block.actual_num_callers += 1;
                 else_block.actual_num_callers += 1;
 
@@ -379,6 +381,10 @@ where
             Operator::Or(Size::_32) => ctx.i32_or(),
             Operator::Xor(Size::_32) => ctx.i32_xor(),
             Operator::Mul(I32) => ctx.i32_mul(),
+            Operator::Div(SU32) => ctx.i32_div_u(),
+            Operator::Div(SI32) => ctx.i32_div_s(),
+            Operator::Rem(sint::I32) => ctx.i32_rem_u(),
+            Operator::Rem(sint::U32) => ctx.i32_rem_s(),
             Operator::Shl(Size::_32) => ctx.i32_shl(),
             Operator::Shr(sint::I32) => ctx.i32_shr_s(),
             Operator::Shr(sint::U32) => ctx.i32_shr_u(),
