@@ -26,6 +26,8 @@ impl Block {
     }
 }
 
+const DISASSEMBLE: bool = false;
+
 pub fn translate_wasm<M: ModuleContext>(
     session: &mut CodeGenSession<M>,
     func_idx: u32,
@@ -36,7 +38,7 @@ where
 {
     let ty = session.module_context.func_type(func_idx);
 
-    if false {
+    if DISASSEMBLE {
         let mut microwasm = vec![];
 
         let microwasm_conv = MicrowasmConv::new(

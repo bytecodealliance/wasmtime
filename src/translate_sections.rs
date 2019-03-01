@@ -112,33 +112,9 @@ pub fn code(
 ) -> Result<TranslatedCodeSection, Error> {
     let func_count = code.get_count();
     let mut session = CodeGenSession::new(func_count, translation_ctx);
+
     for (idx, body) in code.into_iter().enumerate() {
         let body = body?;
-
-        if true {
-            let mut microwasm = vec![];
-
-            let mut microwasm_conv = MicrowasmConv::new(
-                translation_ctx,
-                translation_ctx
-                    .func_type(idx as _)
-                    .params
-                    .iter()
-                    .map(|t| MWType::from_wasm(*t).unwrap()),
-                translation_ctx
-                    .func_type(idx as _)
-                    .returns
-                    .iter()
-                    .map(|t| MWType::from_wasm(*t).unwrap()),
-                &body,
-            );
-
-            for ops in microwasm_conv {
-                microwasm.extend(ops?);
-            }
-
-            println!("{}", crate::microwasm::dis(idx, &microwasm));
-        }
 
         function_body::translate_wasm(
             &mut session,
@@ -146,6 +122,7 @@ pub fn code(
             &body,
         )?;
     }
+
     Ok(session.into_translated_code_section()?)
 }
 
