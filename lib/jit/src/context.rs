@@ -93,7 +93,7 @@ impl Context {
             &mut *self.compiler,
             &data,
             &mut self.namespace,
-            Rc::clone(&mut self.global_exports),
+            Rc::clone(&self.global_exports),
         )
     }
 
@@ -170,11 +170,11 @@ impl Context {
         instance_name: &str,
         field: &str,
     ) -> Result<ActionOutcome, ContextError> {
-        let mut instance = self
+        let instance = self
             .get_instance(&instance_name)
             .map_err(ContextError::Instance)?
             .clone();
-        self.get(&mut instance, field).map_err(ContextError::Action)
+        self.get(&instance, field).map_err(ContextError::Action)
     }
 
     /// Get the value of an exported global variable from an instance.

@@ -44,7 +44,7 @@ pub fn link_module(
                             signature, import_signature)
                         ));
                     }
-                    dependencies.insert(InstanceHandle::from_vmctx(vmctx));
+                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
                     function_imports.push(VMFunctionImport {
                         body: address,
                         vmctx,
@@ -82,7 +82,7 @@ pub fn link_module(
                             module_name, field,
                         )));
                     }
-                    dependencies.insert(InstanceHandle::from_vmctx(vmctx));
+                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
                     table_imports.push(VMTableImport {
                         from: definition,
                         vmctx,
@@ -136,7 +136,7 @@ pub fn link_module(
                     }
                     assert!(memory.offset_guard_size >= import_memory.offset_guard_size);
 
-                    dependencies.insert(InstanceHandle::from_vmctx(vmctx));
+                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
                     memory_imports.push(VMMemoryImport {
                         from: definition,
                         vmctx,
@@ -180,7 +180,7 @@ pub fn link_module(
                             module_name, field
                         )));
                     }
-                    dependencies.insert(InstanceHandle::from_vmctx(vmctx));
+                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
                     global_imports.push(VMGlobalImport { from: definition });
                 }
             },
