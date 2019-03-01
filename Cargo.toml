@@ -43,8 +43,6 @@ default = ["disas", "wasm"]
 disas = ["capstone"]
 wasm = ["wabt", "cranelift-wasm"]
 
-[workspace]
-
 # We want debug symbols on release binaries by default since it allows profiling
 # tools to give more accurate information. We can always strip them out later if
 # necessary.
