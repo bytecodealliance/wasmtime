@@ -20,7 +20,7 @@ pub fn disassemble(mem: &[u8]) -> Result<(), Error> {
         for b in i.bytes() {
             write!(&mut bytes_str, "{:02x} ", b).unwrap();
         }
-        write!(&mut line, "{:21}\t", bytes_str).unwrap();
+        write!(&mut line, "{:24}\t", bytes_str).unwrap();
 
         if let Some(s) = i.mnemonic() {
             write!(&mut line, "{}\t", s).unwrap();

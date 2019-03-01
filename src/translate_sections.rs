@@ -1,22 +1,23 @@
 use backend::{CodeGenSession, TranslatedCodeSection};
 use error::Error;
 use function_body;
-use module::TranslationContext;
+use microwasm::{MicrowasmConv, Type as MWType};
+use module::{ModuleContext, SimpleContext};
 #[allow(unused_imports)] // for now
 use wasmparser::{
     CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
     ExportSectionReader, ExternalKind, FuncType, FunctionSectionReader, Global,
     GlobalSectionReader, GlobalType, Import, ImportSectionEntryType, ImportSectionReader,
-    MemorySectionReader, MemoryType, Operator, TableSectionReader, Type, TypeSectionReader,
+    MemorySectionReader, MemoryType, Operator, TableSectionReader, TableType, Type,
+    TypeSectionReader,
 };
 
 /// Parses the Type section of the wasm module.
 pub fn type_(types_reader: TypeSectionReader) -> Result<Vec<FuncType>, Error> {
-    let mut types = vec![];
-    for entry in types_reader {
-        types.push(entry?);
-    }
-    Ok(types)
+    types_reader
+        .into_iter()
+        .map(|r| r.map_err(Into::into))
+        .collect()
 }
 
 /// Parses the Import section of the wasm module.
@@ -29,27 +30,23 @@ pub fn import(imports: ImportSectionReader) -> Result<(), Error> {
 
 /// Parses the Function section of the wasm module.
 pub fn function(functions: FunctionSectionReader) -> Result<Vec<u32>, Error> {
-    let mut func_ty_indicies = vec![];
-    for entry in functions {
-        func_ty_indicies.push(entry?);
-    }
-    Ok(func_ty_indicies)
+    functions
+        .into_iter()
+        .map(|r| r.map_err(Into::into))
+        .collect()
 }
 
 /// Parses the Table section of the wasm module.
-pub fn table(tables: TableSectionReader) -> Result<(), Error> {
-    for entry in tables {
-        entry?; // TODO
-    }
-    Ok(())
+pub fn table(tables: TableSectionReader) -> Result<Vec<TableType>, Error> {
+    tables.into_iter().map(|r| r.map_err(Into::into)).collect()
 }
 
 /// Parses the Memory section of the wasm module.
-pub fn memory(memories: MemorySectionReader) -> Result<(), Error> {
-    for entry in memories {
-        entry?; // TODO
-    }
-    Ok(())
+pub fn memory(memories: MemorySectionReader) -> Result<Vec<MemoryType>, Error> {
+    memories
+        .into_iter()
+        .map(|r| r.map_err(Into::into))
+        .collect()
 }
 
 /// Parses the Global section of the wasm module.
@@ -75,23 +72,57 @@ pub fn start(_index: u32) -> Result<(), Error> {
 }
 
 /// Parses the Element section of the wasm module.
-pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
+pub fn element(elements: ElementSectionReader) -> Result<Vec<u32>, Error> {
+    let mut out = Vec::new();
+
     for entry in elements {
-        entry?; // TODO
+        let entry = entry?;
+
+        assert_eq!(entry.table_index, 0);
+        let offset = {
+            let mut reader = entry.init_expr.get_operators_reader();
+            let out = match reader.read() {
+                Ok(Operator::I32Const { value }) => value,
+                _ => panic!("We only support i32.const table init expressions right now"),
+            };
+
+            //reader.ensure_end()?;
+
+            out
+        };
+
+        assert_eq!(offset, out.len() as i32);
+
+        let elements = entry
+            .items
+            .get_items_reader()?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        out.extend(elements);
     }
-    Ok(())
+
+    Ok(out)
 }
 
 /// Parses the Code section of the wasm module.
 pub fn code(
     code: CodeSectionReader,
-    translation_ctx: &TranslationContext,
+    translation_ctx: &SimpleContext,
 ) -> Result<TranslatedCodeSection, Error> {
     let func_count = code.get_count();
-    let mut session = CodeGenSession::new(func_count);
+    let mut session = CodeGenSession::new(func_count, translation_ctx);
+
     for (idx, body) in code.into_iter().enumerate() {
-        function_body::translate(&mut session, translation_ctx, idx as u32, &body?)?;
+        let body = body?;
+
+        function_body::translate_wasm(
+            &mut session,
+            idx as u32,
+            &body,
+        )?;
     }
+
     Ok(session.into_translated_code_section()?)
 }
 

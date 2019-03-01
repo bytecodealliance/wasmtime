@@ -1,0 +1,3 @@
+[submodule "wasmparser.rs"]
+	path = wasmparser.rs
+	url = git@github.com:Vurich/wasmparser.rs
