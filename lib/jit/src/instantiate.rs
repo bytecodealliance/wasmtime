@@ -87,11 +87,12 @@ impl<'data> RawCompiledModule<'data> {
         // Compute indices into the shared signature table.
         let signatures = {
             let signature_registry = compiler.signatures();
-            let mut signatures = PrimaryMap::new();
-            for sig in translation.module.signatures.values() {
-                signatures.push(signature_registry.register(sig));
-            }
-            signatures
+            translation
+                .module
+                .signatures
+                .values()
+                .map(|sig| signature_registry.register(sig))
+                .collect::<PrimaryMap<_, _>>()
         };
 
         // Make all code compiled thus far executable.

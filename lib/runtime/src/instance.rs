@@ -760,8 +760,8 @@ impl InstanceHandle {
 
     /// Create a new `InstanceHandle` pointing at the instance
     /// pointed to by the given `VMContext` pointer.
-    pub fn from_vmctx(vmctx: *mut VMContext) -> Self {
-        let instance = unsafe { (&mut *vmctx).instance() };
+    pub unsafe fn from_vmctx(vmctx: *mut VMContext) -> Self {
+        let instance = (&mut *vmctx).instance();
         instance.refcount += 1;
         Self { instance }
     }

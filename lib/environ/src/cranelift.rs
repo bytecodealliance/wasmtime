@@ -88,8 +88,8 @@ pub fn compile_module<'data, 'module>(
     function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
     isa: &dyn isa::TargetIsa,
 ) -> Result<(Compilation, Relocations), CompileError> {
-    let mut functions = PrimaryMap::new();
-    let mut relocations = PrimaryMap::new();
+    let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
+    let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
 
     function_body_inputs
         .into_iter()
