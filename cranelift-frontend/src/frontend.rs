@@ -638,7 +638,7 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Calls libc.memset
     ///
-    /// Writes `size` bytes of value `ch` to memory starting at `buffer`.
+    /// Writes `size` bytes of i8 value `ch` to memory starting at `buffer`.
     pub fn call_memset(
         &mut self,
         config: TargetFrontendConfig,
@@ -672,7 +672,7 @@ impl<'a> FunctionBuilder<'a> {
         &mut self,
         config: TargetFrontendConfig,
         buffer: Value,
-        ch: u32,
+        ch: u8,
         size: u64,
         buffer_align: u8,
     ) {
@@ -702,7 +702,7 @@ impl<'a> FunctionBuilder<'a> {
         let load_and_store_amount = size / access_size;
 
         if load_and_store_amount > THRESHOLD {
-            let ch = self.ins().iconst(types::I32, i64::from(ch));
+            let ch = self.ins().iconst(types::I8, i64::from(ch));
             let size = self.ins().iconst(config.pointer_type(), size as i64);
             self.call_memset(config, buffer, ch, size);
         } else {
