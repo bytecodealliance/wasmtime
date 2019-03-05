@@ -1237,7 +1237,7 @@ ebb0:
 ebb0:
     v4 = iconst.i32 0
     v0 -> v4
-    v1 = iconst.i32 1
+    v1 = iconst.i8 1
     v2 = iconst.i32 8192
     v3 = uextend.i32 v1
     call fn0(v0, v3, v2)
