@@ -9,6 +9,10 @@ repository = "https://github.com/CraneStation/cranelift"
 publish = false
 edition = "2018"
 
+# Present here only to make sure that cargo test --all runs tests for all
+# the crates.
+[workspace]
+
 [[bin]]
 name = "clif-util"
 path = "src/clif-util.rs"
