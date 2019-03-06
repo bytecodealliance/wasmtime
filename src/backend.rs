@@ -47,7 +47,7 @@ impl From<SignlessType> for Option<GPRType> {
 }
 
 impl GPR {
-    fn type_(&self) -> GPRType {
+    fn type_(self) -> GPRType {
         match self {
             GPR::Rq(_) => GPRType::Rq,
             GPR::Rx(_) => GPRType::Rx,
@@ -73,8 +73,8 @@ pub fn arg_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
     let types = types.into_iter();
     let mut out = Vec::with_capacity(types.size_hint().0);
     // TODO: VmCtx is in the first register
-    let mut int_gpr_iter = INTEGER_ARGS_IN_GPRS.into_iter();
-    let mut float_gpr_iter = FLOAT_ARGS_IN_GPRS.into_iter();
+    let mut int_gpr_iter = INTEGER_ARGS_IN_GPRS.iter();
+    let mut float_gpr_iter = FLOAT_ARGS_IN_GPRS.iter();
     let mut stack_idx = 0;
 
     for ty in types {
@@ -102,8 +102,8 @@ pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
     let types = types.into_iter();
     let mut out = Vec::with_capacity(types.size_hint().0);
     // TODO: VmCtx is in the first register
-    let mut int_gpr_iter = INTEGER_RETURN_GPRS.into_iter();
-    let mut float_gpr_iter = FLOAT_RETURN_GPRS.into_iter();
+    let mut int_gpr_iter = INTEGER_RETURN_GPRS.iter();
+    let mut float_gpr_iter = FLOAT_RETURN_GPRS.iter();
 
     for ty in types {
         match ty {
@@ -1224,40 +1224,43 @@ macro_rules! binop {
     };
     ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:ident, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr, $map_op:expr) => {
         pub fn $name(&mut self) {
-            let op0 = self.pop();
-            let op1 = self.pop();
+            let right = self.pop();
+            let left = self.pop();
 
-            if let Some(i1) = op1.$imm_fn() {
-                if let Some(i0) = op0.$imm_fn() {
+            if let Some(i1) = left.$imm_fn() {
+                if let Some(i0) = right.$imm_fn() {
                     self.block_state.stack.push(ValueLocation::Immediate($const_fallback(i1, i0).into()));
                     return;
                 }
             }
 
-            let (op1, op0) = $map_op(op1, op0);
-            let op1 = self.into_temp_reg($ty, op1);
+            let (left, mut right) = $map_op(left, right);
+            let left = self.into_temp_reg($ty, left);
 
-            match op0 {
-                ValueLocation::Reg(reg) => {
+            match right {
+                ValueLocation::Reg(_) => {
+                    // This handles the case where we (for example) have a float in an `Rq` reg
+                    let right_reg = self.into_reg($ty, right);
+                    right = ValueLocation::Reg(right_reg);
                     dynasm!(self.asm
-                        ; $instr $reg_ty(op1.$reg_fn().unwrap()), $reg_ty(reg.$reg_fn().unwrap())
+                        ; $instr $reg_ty(left.$reg_fn().unwrap()), $reg_ty(right_reg.$reg_fn().unwrap())
                     );
                 }
                 ValueLocation::Stack(offset) => {
                     let offset = self.adjusted_offset(offset);
                     dynasm!(self.asm
-                        ; $instr $reg_ty(op1.$reg_fn().unwrap()), [rsp + offset]
+                        ; $instr $reg_ty(left.$reg_fn().unwrap()), [rsp + offset]
                     );
                 }
                 ValueLocation::Immediate(i) => {
                     if let Some(i) = i.as_int().and_then(|i| i.try_into()) {
-                        $direct_imm(self, op1, i);
+                        $direct_imm(self, left, i);
                     } else {
                         let scratch = self.block_state.regs.take($ty);
                         self.immediate_to_reg(scratch, i);
 
                         dynasm!(self.asm
-                            ; $instr $reg_ty(op1.$reg_fn().unwrap()), $reg_ty(scratch.$reg_fn().unwrap())
+                            ; $instr $reg_ty(left.$reg_fn().unwrap()), $reg_ty(scratch.$reg_fn().unwrap())
                         );
 
                         self.block_state.regs.release(scratch);
@@ -1265,15 +1268,15 @@ macro_rules! binop {
                 }
             }
 
-            self.free_value(op0);
-            self.push(ValueLocation::Reg(op1));
+            self.free_value(right);
+            self.push(ValueLocation::Reg(left));
         }
     }
 }
 
 macro_rules! load {
-    ($name:ident, $reg_ty:ident, $instruction_name:expr, $out_ty:expr) => {
-        pub fn $name(&mut self, offset: u32) -> Result<(), Error> {
+    (@inner $name:ident, $reg_ty:ident, $emit_fn:expr) => {
+        pub fn $name(&mut self, ty: impl Into<GPRType>, offset: u32) -> Result<(), Error> {
             fn load_to_reg<_M: ModuleContext>(
                 ctx: &mut Context<_M>,
                 dst: GPR,
@@ -1284,18 +1287,7 @@ macro_rules! load {
                 dynasm!(ctx.asm
                     ; mov Rq(mem_ptr_reg.rq().unwrap()), [Rq(VMCTX) + vmctx_mem_ptr_offset]
                 );
-                match runtime_offset {
-                    Ok(imm) => {
-                        dynasm!(ctx.asm
-                            ; mov $reg_ty(dst.rq().unwrap()), [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm]
-                        );
-                    }
-                    Err(offset_reg) => {
-                        dynasm!(ctx.asm
-                            ; mov $reg_ty(dst.rq().unwrap()), [Rq(mem_ptr_reg.rq().unwrap()) + Rq(offset_reg.rq().unwrap()) + offset]
-                        );
-                    }
-                }
+                $emit_fn(ctx, dst, mem_ptr_reg, runtime_offset, offset);
                 ctx.block_state.regs.release(mem_ptr_reg);
             }
 
@@ -1303,7 +1295,7 @@ macro_rules! load {
 
             let base = self.pop();
 
-            let temp = self.block_state.regs.take($out_ty);
+            let temp = self.block_state.regs.take(ty);
 
             match base {
                 ValueLocation::Immediate(i) => {
@@ -1320,11 +1312,61 @@ macro_rules! load {
 
             Ok(())
         }
-    }
+    };
+    ($name:ident, $reg_ty:ident, NONE) => {
+        load!(@inner
+            $name,
+            $reg_ty,
+            |ctx: &mut Context<_>, dst: GPR, mem_ptr_reg: GPR, runtime_offset: Result<i32, GPR>, offset: i32| {
+                match runtime_offset {
+                    Ok(imm) => {
+                        dynasm!(ctx.asm
+                            ; mov $reg_ty(dst.rq().unwrap()), [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm]
+                        );
+                    }
+                    Err(offset_reg) => {
+                        dynasm!(ctx.asm
+                            ; mov $reg_ty(dst.rq().unwrap()), [Rq(mem_ptr_reg.rq().unwrap()) + Rq(offset_reg.rq().unwrap()) + offset]
+                        );
+                    }
+                }
+            }
+        );
+    };
+    ($name:ident, $reg_ty:ident, $xmm_instr:ident) => {
+        load!(@inner
+            $name,
+            $reg_ty,
+            |ctx: &mut Context<_>, dst: GPR, mem_ptr_reg: GPR, runtime_offset: Result<i32, GPR>, offset: i32| {
+                match (dst, runtime_offset) {
+                    (GPR::Rq(r), Ok(imm)) => {
+                        dynasm!(ctx.asm
+                            ; mov $reg_ty(r), [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm]
+                        );
+                    }
+                    (GPR::Rx(r), Ok(imm)) => {
+                        dynasm!(ctx.asm
+                            ; $xmm_instr Rx(r), [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm]
+                        );
+                    }
+                    (GPR::Rq(r), Err(offset_reg)) => {
+                        dynasm!(ctx.asm
+                            ; mov $reg_ty(r), [Rq(mem_ptr_reg.rq().unwrap()) + Rq(offset_reg.rq().unwrap()) + offset]
+                        );
+                    }
+                    (GPR::Rx(r), Err(offset_reg)) => {
+                        dynasm!(ctx.asm
+                            ; $xmm_instr Rx(r), [Rq(mem_ptr_reg.rq().unwrap()) + Rq(offset_reg.rq().unwrap()) + offset]
+                        );
+                    }
+                }
+            }
+        );
+    };
 }
 
 macro_rules! store {
-    ($name:ident, $reg_ty:ident, $size:ident, $instruction_name:expr, $in_ty:expr) => {
+    (@inner $name:ident, $int_reg_ty:ident, $match_offset:expr, $size:ident) => {
         pub fn $name(&mut self, offset: u32) -> Result<(), Error> {
             fn store_from_reg<_M: ModuleContext>(
                 ctx: &mut Context<_M>,
@@ -1332,23 +1374,14 @@ macro_rules! store {
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
                 let vmctx_mem_ptr_offset = ctx.module_context.offset_of_memory_ptr() as i32;
-                let mem_ptr_reg = ctx.block_state.regs.take(I64);
+                let mem_ptr_reg = ctx.block_state.regs.take(GPRType::Rq);
                 dynasm!(ctx.asm
                     ; mov Rq(mem_ptr_reg.rq().unwrap()), [Rq(VMCTX) + vmctx_mem_ptr_offset]
                 );
-                match runtime_offset {
-                    Ok(imm) => {
-                        dynasm!(ctx.asm
-                            ; mov [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm], $reg_ty(src.rq().unwrap())
-                        );
-                    }
-                    Err(offset_reg) => {
-                        dynasm!(ctx.asm
-                            ; mov [Rq(mem_ptr_reg.rq().unwrap()) + Rq(offset_reg.rq().unwrap()) + offset], $reg_ty(src.rq().unwrap())
-                        );
-                    }
-                }
+                let src = $match_offset(ctx, mem_ptr_reg, runtime_offset, offset, src);
                 ctx.block_state.regs.release(mem_ptr_reg);
+
+                ctx.block_state.regs.release(src);
             }
 
             assert!(offset <= i32::max_value() as u32);
@@ -1356,9 +1389,7 @@ macro_rules! store {
             let src = self.pop();
             let base = self.pop();
 
-            let src_reg = self.into_reg($in_ty, src);
-            // TODO
-            debug_assert!(stringify!($reg_ty) == "Rq" || stringify!($reg_ty) == "Rd");
+            let src_reg = self.into_reg(None, src);
 
             match base {
                 ValueLocation::Immediate(i) => {
@@ -1371,11 +1402,67 @@ macro_rules! store {
                 }
             }
 
-            self.block_state.regs.release(src_reg);
-
             Ok(())
         }
-    }
+    };
+    ($name:ident, $int_reg_ty:ident, NONE, $size:ident) => {
+        store!(@inner
+            $name,
+            $int_reg_ty,
+            |ctx: &mut Context<_>, mem_ptr_reg: GPR, runtime_offset: Result<i32, GPR>, offset: i32, src| {
+                let src_reg = ctx.into_temp_reg(GPRType::Rq, ValueLocation::Reg(src));
+
+                match runtime_offset {
+                    Ok(imm) => {
+                        dynasm!(ctx.asm
+                            ; mov [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm], $int_reg_ty(src_reg.rq().unwrap())
+                        );
+                    }
+                    Err(offset_reg) => {
+                        dynasm!(ctx.asm
+                            ; mov [Rq(mem_ptr_reg.rq().unwrap()) + Rq(offset_reg.rq().unwrap()) + offset], $int_reg_ty(src_reg.rq().unwrap())
+                        );
+                    }
+                }
+    
+                src_reg
+            },
+            $size
+        );
+    };
+    ($name:ident, $int_reg_ty:ident, $xmm_instr:ident, $size:ident) => {
+        store!(@inner
+            $name,
+            $int_reg_ty,
+            |ctx: &mut Context<_>, mem_ptr_reg: GPR, runtime_offset: Result<i32, GPR>, offset: i32, src| {
+                match (runtime_offset, src) {
+                    (Ok(imm), GPR::Rq(r)) => {
+                        dynasm!(ctx.asm
+                            ; mov [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm], $int_reg_ty(r)
+                        );
+                    }
+                    (Ok(imm), GPR::Rx(r)) => {
+                        dynasm!(ctx.asm
+                            ; $xmm_instr [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm], Rx(r)
+                        );
+                    }
+                    (Err(offset_reg), GPR::Rq(r)) => {
+                        dynasm!(ctx.asm
+                            ; mov [Rq(mem_ptr_reg.rq().unwrap()) + Rq(offset_reg.rq().unwrap()) + offset], $int_reg_ty(r)
+                        );
+                    }
+                    (Err(offset_reg), GPR::Rx(r)) => {
+                        dynasm!(ctx.asm
+                            ; $xmm_instr [Rq(mem_ptr_reg.rq().unwrap()) + Rq(offset_reg.rq().unwrap()) + offset], Rx(r)
+                        );
+                    }
+                }
+
+                src
+            },
+            $size
+        );
+    };
 }
 
 trait TryInto<O> {
@@ -1440,6 +1527,21 @@ impl<M: ModuleContext> Context<'_, M> {
 
     fn adjusted_offset(&self, offset: i32) -> i32 {
         (self.block_state.depth.0 as i32 + offset) * WORD_SIZE as i32
+    }
+
+    fn zero_reg(&mut self, reg: GPR) {
+        match reg {
+            GPR::Rq(r) => {
+                dynasm!(self.asm
+                    ; xor Rq(r), Rq(r)
+                );
+            }
+            GPR::Rx(r) => {
+                dynasm!(self.asm
+                    ; pxor Rx(r), Rx(r)
+                );
+            }
+        }
     }
 
     cmp_i32!(i32_eq, sete, sete, |a, b| a == b);
@@ -1888,10 +1990,15 @@ impl<M: ModuleContext> Context<'_, M> {
         self.block_state.depth = cc.stack_depth;
     }
 
-    load!(i32_load, Rd, "i32.load", I32);
-    load!(i64_load, Rq, "i64.load", I64);
-    store!(i32_store, Rd, DWORD, "i32.store", I32);
-    store!(i64_store, Rq, QWORD, "i64.store", I64);
+    load!(load8, Rb, NONE);
+    load!(load16, Rw, NONE);
+    load!(load32, Rd, movd);
+    load!(load64, Rq, movq);
+
+    store!(store8, Rb, NONE, DWORD);
+    store!(store16, Rw, NONE, QWORD);
+    store!(store32, Rd, movd, DWORD);
+    store!(store64, Rq, movq, QWORD);
 
     fn push_physical(&mut self, value: ValueLocation) -> ValueLocation {
         self.block_state.depth.reserve(1);
@@ -2166,11 +2273,7 @@ impl<M: ModuleContext> Context<'_, M> {
         };
 
         self.free_value(quotient);
-        let should_save_rax = if self.block_state.regs.is_free(RAX) {
-            false
-        } else {
-            true
-        };
+        let should_save_rax = !self.block_state.regs.is_free(RAX);
 
         if let ValueLocation::Reg(r) = quotient {
             self.block_state.regs.mark_used(r);
@@ -2874,4 +2977,3 @@ impl<M: ModuleContext> Context<'_, M> {
         label
     }
 }
-

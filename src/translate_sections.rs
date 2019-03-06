@@ -116,11 +116,7 @@ pub fn code(
     for (idx, body) in code.into_iter().enumerate() {
         let body = body?;
 
-        function_body::translate_wasm(
-            &mut session,
-            idx as u32,
-            &body,
-        )?;
+        function_body::translate_wasm(&mut session, idx as u32, &body)?;
     }
 
     Ok(session.into_translated_code_section()?)

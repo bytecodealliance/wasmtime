@@ -657,7 +657,7 @@ where
                 }
 
                 write!(f, "], {}", default)
-            },
+            }
             Operator::Call { function_index } => write!(f, "call {}", function_index),
             Operator::CallIndirect { .. } => write!(f, "call_indirect"),
             Operator::Drop(range) => {
@@ -803,9 +803,8 @@ impl ControlFrame {
     }
 
     fn mark_branched_to(&mut self) {
-        match &mut self.kind {
-            ControlFrameKind::Block { needs_end_label } => *needs_end_label = true,
-            _ => {}
+        if let ControlFrameKind::Block { needs_end_label } = &mut self.kind {
+            *needs_end_label = true
         }
     }
 
@@ -1318,10 +1317,7 @@ where
         }
 
         if let Some(consts) = self.consts_to_emit.take() {
-            return Some(Ok(consts
-                .into_iter()
-                .map(|value| Operator::Const(value))
-                .collect()));
+            return Some(Ok(consts.into_iter().map(Operator::Const).collect()));
         }
 
         if self.unreachable {
@@ -1564,7 +1560,6 @@ where
                             .map(Operator::Drop)
                             .into_iter()
                             .chain(None)
-                            .into_iter()
                             .chain(None)
                     })
                 }
@@ -1617,7 +1612,7 @@ where
                     Err(e) => return Some(Err(e)),
                 };
                 let targets = entries
-                    .into_iter()
+                    .iter()
                     .map(|depth| {
                         let block = self.nth_block_mut(*depth as _);
                         block.mark_branched_to();

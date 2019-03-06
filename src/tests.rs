@@ -1202,19 +1202,144 @@ fn br_table() {
     translated.disassemble();
 
     println!("as-block-first");
-    assert_eq!(
-        translated.execute_func::<_, ()>(0, ()),
-        Ok(()),
-    );
+    assert_eq!(translated.execute_func::<_, ()>(0, ()), Ok(()),);
     println!("as-block-mid");
-    assert_eq!(
-        translated.execute_func::<_, ()>(1, ()),
-        Ok(()),
-    );
+    assert_eq!(translated.execute_func::<_, ()>(1, ()), Ok(()),);
     println!("as-block-last");
+    assert_eq!(translated.execute_func::<_, ()>(2, ()), Ok(()),);
+}
+
+#[test]
+fn f32_storage() {
+    const CODE: &str = r#"
+(module
+  (memory (data "\00\00\a0\7f"))
+
+  (func (result f32)
+    (f32.load (i32.const 0))
+  )
+  (func (result i32)
+    (i32.load (i32.const 0))
+  )
+  (func
+    (f32.store (i32.const 0) (f32.const nan:0x200000))
+  )
+  (func
+    (i32.store (i32.const 0) (i32.const 0x7fa00000))
+  )
+  (func
+    (i32.store (i32.const 0) (i32.const 0))
+  )
+)
+  "#;
+    const EXPECTED: u32 = 0x7fa00000;
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    // TODO: We don't support the data section with Lightbeam's test runtime
+    assert!(translated.execute_func::<(), ()>(2, ()).is_ok());
+
+    assert_eq!(translated.execute_func::<(), u32>(1, ()), Ok(EXPECTED));
     assert_eq!(
-        translated.execute_func::<_, ()>(2, ()),
-        Ok(()),
+        translated
+            .execute_func::<(), f32>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(EXPECTED)
+    );
+    assert!(translated.execute_func::<(), ()>(4, ()).is_ok());
+    assert_eq!(translated.execute_func::<(), u32>(1, ()), Ok(0));
+    assert_eq!(
+        translated
+            .execute_func::<(), f32>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(0)
+    );
+    assert!(translated.execute_func::<(), ()>(2, ()).is_ok());
+    assert_eq!(translated.execute_func::<(), u32>(1, ()), Ok(EXPECTED));
+    assert_eq!(
+        translated
+            .execute_func::<(), f32>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(EXPECTED)
+    );
+    assert!(translated.execute_func::<(), ()>(4, ()).is_ok());
+    assert_eq!(translated.execute_func::<(), u32>(1, ()), Ok(0));
+    assert_eq!(
+        translated
+            .execute_func::<(), f32>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(0)
+    );
+    assert!(translated.execute_func::<(), ()>(3, ()).is_ok());
+    assert_eq!(translated.execute_func::<(), u32>(1, ()), Ok(EXPECTED));
+    assert_eq!(
+        translated
+            .execute_func::<(), f32>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(EXPECTED)
+    );
+}
+
+#[test]
+fn f64_storage() {
+    const CODE: &str = r#"
+(module
+  (memory (data "\00\00\00\00\00\00\f4\7f"))
+
+  (func (export "f64.load") (result f64) (f64.load (i32.const 0)))
+  (func (export "i64.load") (result i64) (i64.load (i32.const 0)))
+  (func (export "f64.store") (f64.store (i32.const 0) (f64.const nan:0x4000000000000)))
+  (func (export "i64.store") (i64.store (i32.const 0) (i64.const 0x7ff4000000000000)))
+  (func (export "reset") (i64.store (i32.const 0) (i64.const 0)))
+)
+  "#;
+    const EXPECTED: u64 = 0x7ff4000000000000;
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    // TODO: We don't support the data section with Lightbeam's test runtime
+    assert!(translated.execute_func::<(), ()>(2, ()).is_ok());
+
+    assert_eq!(translated.execute_func::<(), u64>(1, ()), Ok(EXPECTED));
+    assert_eq!(
+        translated
+            .execute_func::<(), f64>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(EXPECTED)
+    );
+    assert!(translated.execute_func::<(), ()>(4, ()).is_ok());
+    assert_eq!(translated.execute_func::<(), u64>(1, ()), Ok(0));
+    assert_eq!(
+        translated
+            .execute_func::<(), f64>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(0)
+    );
+    assert!(translated.execute_func::<(), ()>(2, ()).is_ok());
+    assert_eq!(translated.execute_func::<(), u64>(1, ()), Ok(EXPECTED));
+    assert_eq!(
+        translated
+            .execute_func::<(), f64>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(EXPECTED)
+    );
+    assert!(translated.execute_func::<(), ()>(4, ()).is_ok());
+    assert_eq!(translated.execute_func::<(), u64>(1, ()), Ok(0));
+    assert_eq!(
+        translated
+            .execute_func::<(), f64>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(0)
+    );
+    assert!(translated.execute_func::<(), ()>(3, ()).is_ok());
+    assert_eq!(translated.execute_func::<(), u64>(1, ()), Ok(EXPECTED));
+    assert_eq!(
+        translated
+            .execute_func::<(), f64>(0, ())
+            .map(|f| f.to_bits()),
+        Ok(EXPECTED)
     );
 }
 

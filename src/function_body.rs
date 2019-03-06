@@ -113,13 +113,7 @@ where
         },
     );
 
-    loop {
-        let op = if let Some(op) = body.next() {
-            op
-        } else {
-            break;
-        };
-
+    while let Some(op) = body.next() {
         if let Some(Operator::Label(label)) = body.peek() {
             let block = blocks
                 .get_mut(&BrTarget::Label(label.clone()))
@@ -313,19 +307,16 @@ where
                 use itertools::Itertools;
 
                 let (def, params) = {
-                    let def = blocks.get(&default).unwrap();
+                    let def = &blocks[&default];
                     (
-                        if def.is_next {
-                            None
-                        } else {
-                            Some(def.label)
-                        },
-                        def.params.clone()
+                        if def.is_next { None } else { Some(def.label) },
+                        def.params,
                     )
                 };
 
-                let target_labels = targets.iter()
-                    .map(|target| blocks.get(target).unwrap().label)
+                let target_labels = targets
+                    .iter()
+                    .map(|target| blocks[target].label)
                     .collect::<Vec<_>>();
 
                 ctx.br_table(target_labels, def, |ctx| {
@@ -438,10 +429,25 @@ where
             Operator::Le(SF64) => ctx.f64_le(),
             Operator::Drop(range) => ctx.drop(range),
             Operator::Const(val) => ctx.const_(val),
-            Operator::Load { ty: I32, memarg } => ctx.i32_load(memarg.offset)?,
-            Operator::Load { ty: I64, memarg } => ctx.i64_load(memarg.offset)?,
-            Operator::Store { ty: I32, memarg } => ctx.i32_store(memarg.offset)?,
-            Operator::Store { ty: I64, memarg } => ctx.i64_store(memarg.offset)?,
+            Operator::Load8 { ty: _, memarg } => ctx.load8(GPRType::Rq, memarg.offset)?,
+            Operator::Load16 { ty: _, memarg } => ctx.load16(GPRType::Rq, memarg.offset)?,
+            Operator::Load { ty: ty @ I32, memarg } | Operator::Load { ty: ty @ F32, memarg } => ctx.load32(ty, memarg.offset)?,
+            Operator::Load { ty: ty @ I64, memarg } | Operator::Load { ty: ty @ F64, memarg } => ctx.load64(ty, memarg.offset)?,
+            Operator::Store8 { ty: _, memarg } => {
+                ctx.store8(memarg.offset)?
+            }
+            Operator::Store16 { ty: _, memarg } => {
+                ctx.store16(memarg.offset)?
+            }
+            Operator::Store32 { memarg } => {
+                    ctx.store32(memarg.offset)?
+            }
+            Operator::Store { ty: I32, memarg } | Operator::Store { ty: F32, memarg } => {
+                ctx.store32(memarg.offset)?
+            }
+            Operator::Store { ty: I64, memarg } | Operator::Store { ty: F64, memarg } => {
+                ctx.store64(memarg.offset)?
+            }
             Operator::Select => {
                 ctx.select();
             }
