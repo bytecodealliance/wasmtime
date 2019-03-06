@@ -16,7 +16,9 @@ use std::string::String;
 use std::vec::Vec;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::cranelift;
-use wasmtime_environ::{Compilation, CompileError, Module, Relocations, Tunables};
+use wasmtime_environ::{
+    Compilation, CompileError, FunctionBodyData, Module, Relocations, Tunables,
+};
 use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
 
 /// A WebAssembly code JIT compiler.
@@ -66,7 +68,7 @@ impl Compiler {
     pub(crate) fn compile<'data>(
         &mut self,
         module: &Module,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
+        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         debug_data: Option<DebugInfoData>,
     ) -> Result<
         (

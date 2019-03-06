@@ -14,9 +14,9 @@ edition = "2018"
 [dependencies]
 gimli = "0.17.0"
 wasmparser = { version = "0.28.0" }
-cranelift-codegen = "0.28.0"
-cranelift-entity = "0.28.0"
-cranelift-wasm = "0.28.0"
+cranelift-codegen = "0.29.0"
+cranelift-entity = "0.29.0"
+cranelift-wasm = "0.29.0"
 faerie = "0.7.0"
 wasmtime-environ = { path = "../environ", default-features = false }
 target-lexicon = { version = "0.2.0", default-features = false }

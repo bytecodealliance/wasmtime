@@ -13,6 +13,15 @@ use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 
+/// Contains function data: byte code and its offset in the module.
+pub struct FunctionBodyData<'a> {
+    /// Body byte code.
+    pub data: &'a [u8],
+
+    /// Body offset in the module file.
+    pub module_offset: usize,
+}
+
 /// The result of translating via `ModuleEnvironment`. Function bodies are not
 /// yet translated, and data initializers have not yet been copied out of the
 /// original buffer.
@@ -24,7 +33,7 @@ pub struct ModuleTranslation<'data> {
     pub module: Module,
 
     /// References to the function bodies.
-    pub function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
+    pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
 
     /// References to the data initializers.
     pub data_initializers: Vec<DataInitializer<'data>>,
@@ -260,8 +269,15 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         });
     }
 
-    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()> {
-        self.result.function_body_inputs.push(body_bytes);
+    fn define_function_body(
+        &mut self,
+        body_bytes: &'data [u8],
+        body_offset: usize,
+    ) -> WasmResult<()> {
+        self.result.function_body_inputs.push(FunctionBodyData {
+            data: body_bytes,
+            module_offset: body_offset,
+        });
         Ok(())
     }
 

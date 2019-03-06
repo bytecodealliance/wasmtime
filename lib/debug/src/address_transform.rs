@@ -56,7 +56,7 @@ impl AddressTransform {
                     continue;
                 }
                 // src_offset is a wasm bytecode offset in the code section
-                let src_offset = t.srcloc.bits() as WasmAddress + fn_offset;
+                let src_offset = t.srcloc.bits() as WasmAddress - code_section_offset;
                 assert!(fn_offset <= src_offset && src_offset <= fn_offset + fn_size);
                 lookup.insert(
                     src_offset,
