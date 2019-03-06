@@ -13,6 +13,7 @@ use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
+use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::path::Path;
@@ -47,6 +48,7 @@ pub fn run(
     flag_triple: &str,
     flag_print_size: bool,
     flag_report_times: bool,
+    flag_calc_value_ranges: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
 
@@ -61,6 +63,7 @@ pub fn run(
             flag_print_size,
             flag_print_disasm,
             flag_report_times,
+            flag_calc_value_ranges,
             &path.to_path_buf(),
             &name,
             parsed.as_fisa(),
@@ -77,6 +80,7 @@ fn handle_module(
     flag_print_size: bool,
     flag_print_disasm: bool,
     flag_report_times: bool,
+    flag_calc_value_ranges: bool,
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
@@ -108,7 +112,8 @@ fn handle_module(
         }
     };
 
-    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns);
+    let debug_info = flag_calc_value_ranges;
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
     let _ = terminal.fg(term::color::GREEN);
@@ -205,7 +210,15 @@ fn handle_module(
             {
                 println!("; Exported as \"{}\"", export_name);
             }
-            println!("{}", context.func.display(fisa.isa));
+            let value_ranges = if flag_calc_value_ranges {
+                Some(context.build_value_labels_ranges(isa).expect("value location ranges"))
+            } else {
+                None
+            };
+            println!("{}", context.func.display_with(DisplayFunctionAnnotations {
+                isa: fisa.isa,
+                value_ranges: value_ranges.as_ref(),
+            }));
             vprintln!(flag_verbose, "");
         }
 

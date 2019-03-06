@@ -57,6 +57,7 @@ use std::collections::{hash_map, HashMap, HashSet};
 
 pub use crate::context::Context;
 pub use crate::legalizer::legalize_function;
+pub use crate::value_label::ValueLabelsRanges;
 pub use crate::verifier::verify_function;
 pub use crate::write::write_function;
 
@@ -103,6 +104,7 @@ mod simple_preopt;
 mod stack_layout;
 mod topo_order;
 mod unreachable_code;
+mod value_label;
 
 pub use crate::result::{CodegenError, CodegenResult};
 

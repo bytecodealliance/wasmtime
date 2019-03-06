@@ -121,16 +121,20 @@ pub struct DummyEnvironment {
 
     /// How to return from functions.
     return_mode: ReturnMode,
+
+    /// Instructs to collect debug data during translation.
+    debug_info: bool,
 }
 
 impl DummyEnvironment {
     /// Creates a new `DummyEnvironment` instance.
-    pub fn new(config: TargetFrontendConfig, return_mode: ReturnMode) -> Self {
+    pub fn new(config: TargetFrontendConfig, return_mode: ReturnMode, debug_info: bool) -> Self {
         Self {
             info: DummyModuleInfo::new(config),
             trans: FuncTranslator::new(),
             func_bytecode_sizes: Vec::new(),
             return_mode,
+            debug_info,
         }
     }
 
@@ -482,6 +486,9 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             let name = get_func_name(func_index);
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
             let mut func = ir::Function::with_name_signature(name, sig);
+            if self.debug_info {
+                func.collect_debug_info();
+            }
             self.trans
                 .translate(body_bytes, body_offset, &mut func, &mut func_environ)?;
             func

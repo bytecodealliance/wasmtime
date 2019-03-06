@@ -73,7 +73,7 @@ fn handle_module(path: &Path, flags: &Flags, return_mode: ReturnMode) {
     };
     let triple = triple!("riscv64");
     let isa = isa::lookup(triple).unwrap().finish(flags.clone());
-    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), return_mode);
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), return_mode, false);
 
     translate_module(&data, &mut dummy_environ).unwrap();
 

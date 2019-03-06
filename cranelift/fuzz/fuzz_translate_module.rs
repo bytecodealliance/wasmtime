@@ -20,6 +20,6 @@ fuzz_target!(|data: &[u8]| {
     let flags = settings::Flags::new(settings::builder());
     let triple = triple!("x86_64");
     let isa = isa::lookup(triple).unwrap().finish(flags);
-    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns);
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, false);
     translate_module(&wasm, &mut dummy_environ).unwrap();
 });
