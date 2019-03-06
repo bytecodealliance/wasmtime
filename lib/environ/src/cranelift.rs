@@ -153,12 +153,12 @@ pub fn compile_module<'data, 'module>(
                     locations: at,
                     body_offset: 0,
                     body_len,
-                });
+                })
             } else {
                 None
             };
 
-            Ok((code_buf, reloc_sink.func_relocs))
+            Ok((code_buf, reloc_sink.func_relocs, address_transform))
         })
         .collect::<Result<Vec<_>, CompileError>>()?
         .into_iter()
