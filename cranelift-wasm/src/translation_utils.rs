@@ -140,3 +140,9 @@ pub fn num_return_values(ty: wasmparser::Type) -> usize {
         _ => panic!("unsupported return value type"),
     }
 }
+
+/// Special VMContext value label. It is tracked as 0xffff_fffe label.
+pub fn get_vmctx_value_label() -> ir::ValueLabel {
+    const VMCTX_LABEL: u32 = 0xffff_fffe;
+    ir::ValueLabel::from_u32(VMCTX_LABEL)
+}

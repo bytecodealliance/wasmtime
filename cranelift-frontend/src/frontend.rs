@@ -9,7 +9,7 @@ use cranelift_codegen::ir::{
     types, AbiParam, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
     GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData,
     JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Type,
-    Value,
+    Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
 };
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::packed_option::PackedOption;
@@ -331,6 +331,28 @@ impl<'a> FunctionBuilder<'a> {
         self.func_ctx
             .ssa
             .def_var(var, val, self.position.basic_block.unwrap());
+    }
+
+    /// Set label for Value
+    pub fn set_val_label(&mut self, val: Value, label: ValueLabel) {
+        if let Some(values_labels) = self.func.dfg.values_labels.as_mut() {
+            use std::collections::hash_map::Entry;
+
+            let start = ValueLabelStart {
+                from: self.srcloc,
+                label,
+            };
+
+            match values_labels.entry(val) {
+                Entry::Occupied(mut e) => match e.get_mut() {
+                    ValueLabelAssignments::Starts(starts) => starts.push(start),
+                    _ => panic!("Unexpected ValueLabelAssignments at this stage"),
+                },
+                Entry::Vacant(e) => {
+                    e.insert(ValueLabelAssignments::Starts(vec![start]));
+                }
+            }
+        }
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.

@@ -30,7 +30,7 @@ use crate::translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableInde
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
+use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags, ValueLabel};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use wasmparser::{MemoryImmediate, Operator};
@@ -57,15 +57,22 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *  disappear in the Cranelift Code
          ***********************************************************************************/
         Operator::GetLocal { local_index } => {
-            state.push1(builder.use_var(Variable::with_u32(local_index)))
+            let val = builder.use_var(Variable::with_u32(local_index));
+            state.push1(val);
+            let label = ValueLabel::from_u32(local_index);
+            builder.set_val_label(val, label);
         }
         Operator::SetLocal { local_index } => {
             let val = state.pop1();
             builder.def_var(Variable::with_u32(local_index), val);
+            let label = ValueLabel::from_u32(local_index);
+            builder.set_val_label(val, label);
         }
         Operator::TeeLocal { local_index } => {
             let val = state.peek1();
             builder.def_var(Variable::with_u32(local_index), val);
+            let label = ValueLabel::from_u32(local_index);
+            builder.set_val_label(val, label);
         }
         /********************************** Globals ****************************************
          *  `get_global` and `set_global` are handled by the environment.

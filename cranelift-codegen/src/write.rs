@@ -5,10 +5,15 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
-use crate::ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
+use crate::ir::{
+    DataFlowGraph, DisplayFunctionAnnotations, Ebb, Function, Inst, SigRef, Type, Value, ValueDef,
+    ValueLoc,
+};
 use crate::isa::{RegInfo, TargetIsa};
 use crate::packed_option::ReservedValue;
+use crate::value_label::ValueLabelsRanges;
 use core::fmt::{self, Write};
+use std::collections::HashSet;
 use std::string::String;
 use std::vec::Vec;
 
@@ -154,8 +159,12 @@ impl FuncWriter for PlainWriter {
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
-pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> fmt::Result {
-    decorate_function(&mut PlainWriter, w, func, isa)
+pub fn write_function(
+    w: &mut Write,
+    func: &Function,
+    annotations: &DisplayFunctionAnnotations,
+) -> fmt::Result {
+    decorate_function(&mut PlainWriter, w, func, annotations)
 }
 
 /// Create a reverse-alias map from a value to all aliases having that value as a direct target
@@ -177,9 +186,9 @@ pub fn decorate_function<FW: FuncWriter>(
     func_w: &mut FW,
     w: &mut Write,
     func: &Function,
-    isa: Option<&TargetIsa>,
+    annotations: &DisplayFunctionAnnotations,
 ) -> fmt::Result {
-    let regs = isa.map(TargetIsa::register_info);
+    let regs = annotations.isa.map(TargetIsa::register_info);
     let regs = regs.as_ref();
 
     write!(w, "function ")?;
@@ -191,7 +200,7 @@ pub fn decorate_function<FW: FuncWriter>(
         if any {
             writeln!(w)?;
         }
-        decorate_ebb(func_w, w, func, &aliases, isa, ebb)?;
+        decorate_ebb(func_w, w, func, &aliases, annotations, ebb)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -254,12 +263,53 @@ pub fn write_ebb_header(
     writeln!(w, "):")
 }
 
+fn write_valueloc(w: &mut Write, loc: &ValueLoc, regs: &RegInfo) -> fmt::Result {
+    match loc {
+        ValueLoc::Reg(r) => write!(w, "{}", regs.display_regunit(*r)),
+        ValueLoc::Stack(ss) => write!(w, "{}", ss),
+        ValueLoc::Unassigned => write!(w, "?"),
+    }
+}
+
+fn write_value_range_markers(
+    w: &mut Write,
+    val_ranges: &ValueLabelsRanges,
+    regs: &RegInfo,
+    offset: u32,
+    indent: usize,
+) -> fmt::Result {
+    let mut result = String::new();
+    let mut shown = HashSet::new();
+    for (val, rng) in val_ranges {
+        for i in (0..rng.len()).rev() {
+            if rng[i].start == offset {
+                write!(&mut result, " {}@", val)?;
+                write_valueloc(&mut result, &rng[i].loc, regs)?;
+                shown.insert(val);
+                break;
+            }
+        }
+    }
+    for (val, rng) in val_ranges {
+        for i in (0..rng.len()).rev() {
+            if rng[i].end == offset && !shown.contains(val) {
+                write!(&mut result, " {}\u{2620}", val)?;
+                break;
+            }
+        }
+    }
+    if result.len() > 0 {
+        writeln!(w, ";{1:0$}; {2}", indent + 24, "", result)?;
+    }
+    Ok(())
+}
+
 fn decorate_ebb<FW: FuncWriter>(
     func_w: &mut FW,
     w: &mut Write,
     func: &Function,
     aliases: &SecondaryMap<Value, Vec<Value>>,
-    isa: Option<&TargetIsa>,
+    annotations: &DisplayFunctionAnnotations,
     ebb: Ebb,
 ) -> fmt::Result {
     // Indent all instructions if any encodings are present.
@@ -268,13 +318,28 @@ fn decorate_ebb<FW: FuncWriter>(
     } else {
         36
     };
+    let isa = annotations.isa;
 
     func_w.write_ebb_header(w, func, isa, ebb, indent)?;
     for a in func.dfg.ebb_params(ebb).iter().cloned() {
         write_value_aliases(w, aliases, a, indent)?;
     }
-    for inst in func.layout.ebb_insts(ebb) {
-        func_w.write_instruction(w, func, aliases, isa, inst, indent)?;
+
+    if isa.is_some() && !func.offsets.is_empty() {
+        let encinfo = isa.unwrap().encoding_info();
+        let regs = &isa.unwrap().register_info();
+        for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
+            func_w.write_instruction(w, func, aliases, isa, inst, indent)?;
+            if size > 0 {
+                if let Some(val_ranges) = annotations.value_ranges {
+                    write_value_range_markers(w, val_ranges, regs, offset + size, indent)?;
+                }
+            }
+        }
+    } else {
+        for inst in func.layout.ebb_insts(ebb) {
+            func_w.write_instruction(w, func, aliases, isa, inst, indent)?;
+        }
     }
 
     Ok(())

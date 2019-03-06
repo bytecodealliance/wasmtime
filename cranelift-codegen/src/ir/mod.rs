@@ -32,7 +32,7 @@ pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
 };
 pub use crate::ir::extname::ExternalName;
-pub use crate::ir::function::Function;
+pub use crate::ir::function::{DisplayFunctionAnnotations, Function};
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::heap::{HeapData, HeapStyle};
 pub use crate::ir::instructions::{
@@ -51,7 +51,7 @@ pub use crate::ir::types::Type;
 pub use crate::ir::valueloc::{ArgumentLoc, ValueLoc};
 
 use crate::binemit;
-use crate::entity::{PrimaryMap, SecondaryMap};
+use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
 use crate::isa;
 
 /// Map of value locations.
@@ -71,3 +71,34 @@ pub type JumpTableOffsets = SecondaryMap<JumpTable, binemit::CodeOffset>;
 
 /// Source locations for instructions.
 pub type SourceLocs = SecondaryMap<Inst, SourceLoc>;
+
+/// Marked with a label value.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ValueLabel(u32);
+entity_impl!(ValueLabel, "val");
+
+/// A label of a Value.
+#[derive(Debug, Clone)]
+pub struct ValueLabelStart {
+    /// Source location when it is in effect
+    pub from: SourceLoc,
+
+    /// The label index.
+    pub label: ValueLabel,
+}
+
+/// Value label assignements: label starts or value aliases.
+#[derive(Debug, Clone)]
+pub enum ValueLabelAssignments {
+    /// Original value labels assigned at transform.
+    Starts(std::vec::Vec<ValueLabelStart>),
+
+    /// A value alias to original value.
+    Alias {
+        /// Source location when it is in effect
+        from: SourceLoc,
+
+        /// The label index.
+        value: Value,
+    },
+}

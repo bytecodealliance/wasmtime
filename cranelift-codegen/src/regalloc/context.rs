@@ -64,6 +64,11 @@ impl Context {
         self.coloring.clear();
     }
 
+    /// Current values liveness state.
+    pub fn liveness(&self) -> &Liveness {
+        &self.liveness
+    }
+
     /// Allocate registers in `func`.
     ///
     /// After register allocation, all values in `func` have been assigned to a register or stack

@@ -29,6 +29,7 @@ use crate::simple_gvn::do_simple_gvn;
 use crate::simple_preopt::do_preopt;
 use crate::timing;
 use crate::unreachable_code::eliminate_unreachable_code;
+use crate::value_label::{build_value_labels_ranges, ComparableSourceLoc, ValueLabelsRanges};
 use crate::verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
 use std::vec::Vec;
 
@@ -330,5 +331,14 @@ impl Context {
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
         Ok(code_size)
+    }
+
+    /// Builds ranges and location for specified value labels.
+    pub fn build_value_labels_ranges(&self, isa: &TargetIsa) -> CodegenResult<ValueLabelsRanges> {
+        Ok(build_value_labels_ranges::<ComparableSourceLoc>(
+            &self.func,
+            &self.regalloc,
+            isa,
+        ))
     }
 }

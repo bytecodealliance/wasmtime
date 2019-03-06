@@ -314,6 +314,11 @@ impl Liveness {
         }
     }
 
+    /// Current live ranges.
+    pub fn ranges(&self) -> &LiveRangeSet {
+        &self.ranges
+    }
+
     /// Get a context needed for working with a `LiveRange`.
     pub fn context<'a>(&'a self, layout: &'a Layout) -> LiveRangeContext<'a, Layout> {
         LiveRangeContext::new(layout, &self.forest)

@@ -7,8 +7,9 @@
 use crate::code_translator::translate_operator;
 use crate::environ::{FuncEnvironment, ReturnMode, WasmError, WasmResult};
 use crate::state::TranslationState;
+use crate::translation_utils::get_vmctx_value_label;
 use cranelift_codegen::entity::EntityRef;
-use cranelift_codegen::ir::{self, Ebb, InstBuilder};
+use cranelift_codegen::ir::{self, Ebb, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use log::info;
@@ -84,6 +85,7 @@ impl FuncTranslator {
 
         // This clears the `FunctionBuilderContext`.
         let mut builder = FunctionBuilder::new(func, &mut self.func_ctx);
+        builder.set_srcloc(cur_srcloc(&reader));
         let entry_block = builder.create_ebb();
         builder.append_ebb_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block); // This also creates values for the arguments.
@@ -126,6 +128,10 @@ fn declare_wasm_parameters(builder: &mut FunctionBuilder, entry_block: Ebb) -> u
 
             let param_value = builder.ebb_params(entry_block)[i];
             builder.def_var(local, param_value);
+        }
+        if param_type.purpose == ir::ArgumentPurpose::VMContext {
+            let param_value = builder.ebb_params(entry_block)[i];
+            builder.set_val_label(param_value, get_vmctx_value_label());
         }
     }
 
@@ -177,6 +183,7 @@ fn declare_locals(
         let local = Variable::new(*next_local);
         builder.declare_var(local, ty);
         builder.def_var(local, zeroval);
+        builder.set_val_label(zeroval, ValueLabel::new(*next_local));
         *next_local += 1;
     }
     Ok(())
@@ -265,6 +272,7 @@ mod tests {
                 pointer_width: PointerWidth::U64,
             },
             ReturnMode::NormalReturns,
+            false,
         );
 
         let mut ctx = Context::new();
@@ -304,6 +312,7 @@ mod tests {
                 pointer_width: PointerWidth::U64,
             },
             ReturnMode::NormalReturns,
+            false,
         );
         let mut ctx = Context::new();
 
@@ -351,6 +360,7 @@ mod tests {
                 pointer_width: PointerWidth::U64,
             },
             ReturnMode::NormalReturns,
+            false,
         );
         let mut ctx = Context::new();
 

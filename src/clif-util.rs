@@ -184,7 +184,13 @@ fn main() {
                     "Just checks the correctness of Cranelift IR translated from WebAssembly",
                 )),
         )
-        .subcommand(add_wasm_or_compile("wasm"))
+        .subcommand(
+            add_wasm_or_compile("wasm").arg(
+                Arg::with_name("value-ranges")
+                    .long("value-ranges")
+                    .help("Display values ranges and their locations"),
+            ),
+        )
         .subcommand(
             SubCommand::with_name("pass")
                 .about("Run specified pass(s) on an input file.")
@@ -269,6 +275,7 @@ fn main() {
                     target_val,
                     rest_cmd.is_present("print-size"),
                     rest_cmd.is_present("time-passes"),
+                    rest_cmd.is_present("value-ranges"),
                 )
             };
 

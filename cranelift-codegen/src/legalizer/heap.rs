@@ -151,7 +151,17 @@ fn compute_addr(
 
     // Convert `offset` to `addr_ty`.
     if offset_ty != addr_ty {
+        let labels_value = offset;
         offset = pos.ins().uextend(addr_ty, offset);
+        if let Some(values_labels) = pos.func.dfg.values_labels.as_mut() {
+            values_labels.insert(
+                offset,
+                ir::ValueLabelAssignments::Alias {
+                    from: pos.func.srclocs[inst],
+                    value: labels_value,
+                },
+            );
+        }
     }
 
     // Add the heap base address base

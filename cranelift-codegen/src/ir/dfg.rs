@@ -6,7 +6,10 @@ use crate::ir::builder::ReplaceBuilder;
 use crate::ir::extfunc::ExtFuncData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::types;
-use crate::ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, ValueListPool};
+use crate::ir::{
+    Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList,
+    ValueListPool,
+};
 use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
@@ -15,6 +18,7 @@ use core::iter;
 use core::mem;
 use core::ops::{Index, IndexMut};
 use core::u16;
+use std::collections::HashMap;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
@@ -60,6 +64,9 @@ pub struct DataFlowGraph {
 
     /// External function references. These are functions that can be called directly.
     pub ext_funcs: PrimaryMap<FuncRef, ExtFuncData>,
+
+    /// Saves Value labels.
+    pub values_labels: Option<HashMap<Value, ValueLabelAssignments>>,
 }
 
 impl DataFlowGraph {
@@ -73,6 +80,7 @@ impl DataFlowGraph {
             values: PrimaryMap::new(),
             signatures: PrimaryMap::new(),
             ext_funcs: PrimaryMap::new(),
+            values_labels: None,
         }
     }
 
@@ -85,6 +93,7 @@ impl DataFlowGraph {
         self.values.clear();
         self.signatures.clear();
         self.ext_funcs.clear();
+        self.values_labels = None;
     }
 
     /// Get the total number of instructions created in this function, whether they are currently
@@ -116,6 +125,13 @@ impl DataFlowGraph {
     /// Get the total number of values.
     pub fn num_values(&self) -> usize {
         self.values.len()
+    }
+
+    /// Starts collection of debug information.
+    pub fn collect_debug_info(&mut self) {
+        if self.values_labels.is_none() {
+            self.values_labels = Some(HashMap::new());
+        }
     }
 }
 

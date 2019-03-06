@@ -64,9 +64,9 @@ pub use crate::environ::{
 pub use crate::func_translator::FuncTranslator;
 pub use crate::module_translator::translate_module;
 pub use crate::translation_utils::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
-    GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex, Table, TableElementType,
-    TableIndex,
+    get_vmctx_value_label, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
+    DefinedTableIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
+    SignatureIndex, Table, TableElementType, TableIndex,
 };
 
 /// Version number of this crate.

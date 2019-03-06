@@ -29,7 +29,7 @@ pub fn pretty_verifier_error<'a>(
         &mut PrettyVerifierError(func_w.unwrap_or_else(|| Box::new(PlainWriter)), &mut errors),
         &mut w,
         func,
-        isa,
+        &isa.into(),
     )
     .unwrap();
 
