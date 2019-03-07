@@ -47,7 +47,8 @@ mod vmoffsets;
 pub mod cranelift;
 
 pub use crate::compilation::{
-    Compilation, CompileError, Relocation, RelocationTarget, Relocations,
+    AddressTransforms, Compilation, CompileError, InstructionAddressTransform, Relocation,
+    RelocationTarget, Relocations,
 };
 pub use crate::module::{
     Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
@@ -57,7 +58,7 @@ pub use crate::module_environ::{
     ModuleTranslation,
 };
 pub use crate::tunables::Tunables;
-pub use crate::vmoffsets::VMOffsets;
+pub use crate::vmoffsets::{TargetSharedSignatureIndex, VMOffsets};
 
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;

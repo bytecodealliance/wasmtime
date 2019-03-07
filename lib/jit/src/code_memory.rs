@@ -2,6 +2,7 @@
 
 use core::{cmp, mem};
 use region;
+use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 use wasmtime_runtime::{Mmap, VMFunctionBody};
@@ -61,6 +62,25 @@ impl CodeMemory {
         let new = self.allocate(slice.len())?;
         new.copy_from_slice(slice);
         Ok(Self::view_as_mut_vmfunc_slice(new))
+    }
+
+    /// Allocate enough continuous memory block for multiple code blocks. See also
+    /// allocate_copy_of_byte_slice.
+    pub fn allocate_copy_of_byte_slices(
+        &mut self,
+        slices: &[&[u8]],
+    ) -> Result<Box<[&mut [VMFunctionBody]]>, String> {
+        let total_len = slices.into_iter().fold(0, |acc, slice| acc + slice.len());
+        let new = self.allocate(total_len)?;
+        let mut tail = new;
+        let mut result = Vec::with_capacity(slices.len());
+        for slice in slices {
+            let (block, next_tail) = tail.split_at_mut(slice.len());
+            block.copy_from_slice(slice);
+            tail = next_tail;
+            result.push(Self::view_as_mut_vmfunc_slice(block));
+        }
+        Ok(result.into_boxed_slice())
     }
 
     /// Make all allocated memory executable.

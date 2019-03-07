@@ -1,6 +1,9 @@
 //! Support for compiling with Cranelift.
 
-use crate::compilation::{Compilation, CompileError, Relocation, RelocationTarget, Relocations};
+use crate::compilation::{
+    AddressTransforms, Compilation, CompileError, FunctionAddressTransform,
+    InstructionAddressTransform, Relocation, RelocationTarget, Relocations,
+};
 use crate::func_environ::{
     get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
     get_memory32_grow_name, get_memory32_size_name, FuncEnvironment,
@@ -81,15 +84,41 @@ impl RelocSink {
     }
 }
 
+fn get_address_transform(
+    context: &Context,
+    isa: &isa::TargetIsa,
+) -> Vec<InstructionAddressTransform> {
+    let mut result = Vec::new();
+
+    let func = &context.func;
+    let mut ebbs = func.layout.ebbs().collect::<Vec<_>>();
+    ebbs.sort_by_key(|ebb| func.offsets[*ebb]); // Ensure inst offsets always increase
+
+    let encinfo = isa.encoding_info();
+    for ebb in ebbs {
+        for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
+            let srcloc = func.srclocs[inst];
+            result.push(InstructionAddressTransform {
+                srcloc,
+                code_offset: offset as usize,
+                code_len: size as usize,
+            });
+        }
+    }
+    result
+}
+
 /// Compile the module using Cranelift, producing a compilation result with
 /// associated relocations.
 pub fn compile_module<'data, 'module>(
     module: &'module Module,
     function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
     isa: &dyn isa::TargetIsa,
-) -> Result<(Compilation, Relocations), CompileError> {
+    generate_debug_info: bool,
+) -> Result<(Compilation, Relocations, AddressTransforms), CompileError> {
     let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
     let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
+    let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
 
     function_body_inputs
         .into_iter()
@@ -116,15 +145,31 @@ pub fn compile_module<'data, 'module>(
             context
                 .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
                 .map_err(CompileError::Codegen)?;
-            Ok((code_buf, reloc_sink.func_relocs))
+
+            let address_transform = if generate_debug_info {
+                let body_len = code_buf.len();
+                let at = get_address_transform(&context, isa);
+                Some(FunctionAddressTransform {
+                    locations: at,
+                    body_offset: 0,
+                    body_len,
+                })
+            } else {
+                None
+            };
+
+            Ok((code_buf, reloc_sink.func_relocs, address_transform))
         })
         .collect::<Result<Vec<_>, CompileError>>()?
         .into_iter()
-        .for_each(|(function, relocs)| {
+        .for_each(|(function, relocs, address_transform)| {
             functions.push(function);
             relocations.push(relocs);
+            if let Some(address_transform) = address_transform {
+                address_transforms.push(address_transform);
+            }
         });
 
     // TODO: Reorganize where we create the Vec for the resolved imports.
-    Ok((Compilation::new(functions), relocations))
+    Ok((Compilation::new(functions), relocations, address_transforms))
 }

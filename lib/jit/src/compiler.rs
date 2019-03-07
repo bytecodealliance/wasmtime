@@ -14,6 +14,7 @@ use cranelift_wasm::DefinedFuncIndex;
 use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
+use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::cranelift;
 use wasmtime_environ::{Compilation, CompileError, Module, Relocations, Tunables};
 use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
@@ -66,26 +67,54 @@ impl Compiler {
         &mut self,
         module: &Module,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
+        debug_data: Option<DebugInfoData>,
     ) -> Result<
         (
             PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
             Relocations,
+            Option<Vec<u8>>,
         ),
         SetupError,
     > {
-        let (compilation, relocations) =
-            cranelift::compile_module(module, function_body_inputs, &*self.isa)
-                .map_err(SetupError::Compile)?;
+        let (compilation, relocations, address_transform) = cranelift::compile_module(
+            module,
+            function_body_inputs,
+            &*self.isa,
+            debug_data.is_some(),
+        )
+        .map_err(SetupError::Compile)?;
 
         let allocated_functions =
-            allocate_functions(&mut self.code_memory, compilation).map_err(|message| {
+            allocate_functions(&mut self.code_memory, &compilation).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
                     "failed to allocate memory for functions: {}",
                     message
                 )))
             })?;
 
-        Ok((allocated_functions, relocations))
+        let dbg = if let Some(debug_data) = debug_data {
+            let target_config = self.isa.frontend_config();
+            let triple = self.isa.triple().clone();
+            let mut funcs = Vec::new();
+            for (i, allocated) in allocated_functions.into_iter() {
+                let ptr = (*allocated) as *const u8;
+                let body_len = compilation.functions[i].len();
+                funcs.push((ptr, body_len));
+            }
+            let bytes = emit_debugsections_image(
+                triple,
+                &target_config,
+                &debug_data,
+                &address_transform,
+                &funcs,
+            )
+            .map_err(|e| SetupError::DebugInfo(e))?;
+            Some(bytes)
+        } else {
+            None
+        };
+
+        Ok((allocated_functions, relocations, dbg))
     }
 
     /// Create a trampoline for invoking a function.
@@ -219,12 +248,22 @@ fn make_trampoline(
 
 fn allocate_functions(
     code_memory: &mut CodeMemory,
-    compilation: Compilation,
+    compilation: &Compilation,
 ) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
+    // Allocate code for all function in one continuous memory block.
+    // First, collect all function bodies into vector to pass to the
+    // allocate_copy_of_byte_slices.
+    let bodies = compilation
+        .functions
+        .values()
+        .map(|body| body.as_slice())
+        .collect::<Vec<&[u8]>>();
+    let fat_ptrs = code_memory.allocate_copy_of_byte_slices(&bodies)?;
+    // Second, create a PrimaryMap from result vector of pointers.
     let mut result = PrimaryMap::with_capacity(compilation.functions.len());
-    for (_, body) in compilation.functions.into_iter() {
-        let fatptr: *mut [VMFunctionBody] = code_memory.allocate_copy_of_byte_slice(body)?;
-        result.push(fatptr);
+    for i in 0..fat_ptrs.len() {
+        let fat_ptr: *mut [VMFunctionBody] = fat_ptrs[i];
+        result.push(fat_ptr);
     }
     Ok(result)
 }

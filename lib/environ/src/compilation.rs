@@ -66,3 +66,32 @@ pub enum CompileError {
     #[fail(display = "Compilation error: {}", _0)]
     Codegen(CodegenError),
 }
+
+/// Single address point transform.
+#[derive(Debug)]
+pub struct InstructionAddressTransform {
+    /// Original source location.
+    pub srcloc: ir::SourceLoc,
+
+    /// Generated instructions offset.
+    pub code_offset: usize,
+
+    /// Generated instructions length.
+    pub code_len: usize,
+}
+
+/// Function and its instructions transforms.
+#[derive(Debug)]
+pub struct FunctionAddressTransform {
+    /// Instructions transforms
+    pub locations: Vec<InstructionAddressTransform>,
+
+    /// Generated function body offset if applicable, otherwise 0.
+    pub body_offset: usize,
+
+    /// Generated function body length.
+    pub body_len: usize,
+}
+
+/// Function AddressTransforms collection.
+pub type AddressTransforms = PrimaryMap<DefinedFuncIndex, FunctionAddressTransform>;

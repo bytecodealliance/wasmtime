@@ -26,9 +26,13 @@
     )
 )]
 
-mod emit_module;
+mod context;
+mod data_segment;
+mod function;
+mod module;
+mod table;
 
-pub use crate::emit_module::emit_module;
+pub use crate::module::emit_module;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

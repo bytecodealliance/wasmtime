@@ -48,6 +48,7 @@ pub struct Context {
     namespace: Namespace,
     compiler: Box<Compiler>,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
+    debug_info: bool,
 }
 
 impl Context {
@@ -57,7 +58,18 @@ impl Context {
             namespace: Namespace::new(),
             compiler,
             global_exports: Rc::new(RefCell::new(HashMap::new())),
+            debug_info: false,
         }
+    }
+
+    /// Get debug_info settings.
+    pub fn debug_info(&self) -> bool {
+        self.debug_info
+    }
+
+    /// Set debug_info settings.
+    pub fn set_debug_info(&mut self, value: bool) {
+        self.debug_info = value;
     }
 
     /// Construct a new instance of `Context` with the given target.
@@ -88,12 +100,14 @@ impl Context {
 
     fn instantiate(&mut self, data: &[u8]) -> Result<InstanceHandle, SetupError> {
         self.validate(&data).map_err(SetupError::Validate)?;
+        let debug_info = self.debug_info();
 
         instantiate(
             &mut *self.compiler,
             &data,
             &mut self.namespace,
             Rc::clone(&self.global_exports),
+            debug_info,
         )
     }
 

@@ -223,6 +223,7 @@ pub fn instantiate_spectest() -> Result<InstanceHandle, InstantiationError> {
         imports,
         &data_initializers,
         signatures.into_boxed_slice(),
+        None,
         Box::new(()),
     )
 }
