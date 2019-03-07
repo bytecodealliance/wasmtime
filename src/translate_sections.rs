@@ -1,8 +1,8 @@
-use backend::{CodeGenSession, TranslatedCodeSection};
-use error::Error;
-use function_body;
-use microwasm::{MicrowasmConv, Type as MWType};
-use module::{ModuleContext, SimpleContext};
+use crate::backend::{CodeGenSession, TranslatedCodeSection};
+use crate::error::Error;
+use crate::function_body;
+use crate::microwasm::{MicrowasmConv, Type as MWType};
+use crate::module::{ModuleContext, SimpleContext};
 #[allow(unused_imports)] // for now
 use wasmparser::{
     CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,

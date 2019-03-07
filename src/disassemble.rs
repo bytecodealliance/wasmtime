@@ -1,5 +1,5 @@
+use crate::error::Error;
 use capstone::prelude::*;
-use error::Error;
 use std::fmt::Write;
 
 #[allow(dead_code)]

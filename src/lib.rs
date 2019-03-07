@@ -44,6 +44,6 @@ mod translate_sections;
 #[cfg(test)]
 mod tests;
 
-pub use backend::CodeGenSession;
-pub use function_body::translate_wasm as translate_function;
-pub use module::{translate, ExecutableModule, ModuleContext, Signature, TranslatedModule};
+pub use crate::backend::CodeGenSession;
+pub use crate::function_body::translate_wasm as translate_function;
+pub use crate::module::{translate, ExecutableModule, ModuleContext, Signature, TranslatedModule};

@@ -79,9 +79,17 @@ where
     L: Hash + Clone + Eq,
     Operator<L>: std::fmt::Display,
 {
+    fn drop_elements<T>(stack: &mut Vec<T>, depths: std::ops::RangeInclusive<u32>) {
+        let real_range =
+            stack.len() - 1 - *depths.end() as usize..=stack.len() - 1 - *depths.start() as usize;
+
+        stack.drain(real_range);
+    }
+
     let func_type = session.module_context.defined_func_type(func_idx);
     let mut body = body.into_iter().peekable();
 
+    let module_context = &*session.module_context;
     let ctx = &mut session.new_context(func_idx);
 
     let params = func_type
@@ -241,7 +249,7 @@ where
                 }
             }
             Operator::BrIf { then, else_ } => {
-                let (then_block, else_block) = blocks.pair_mut(&then, &else_);
+                let (then_block, else_block) = blocks.pair_mut(&then.target, &else_.target);
                 // TODO: If actual_num_callers == num_callers then we can remove this block from the hashmap.
                 //       This frees memory and acts as a kind of verification that `num_callers` is set
                 //       correctly. It doesn't help for loops and block ends generated from Wasm.
@@ -250,9 +258,6 @@ where
 
                 let then_block_parts = (then_block.is_next, then_block.label);
                 let else_block_parts = (else_block.is_next, else_block.label);
-
-                // TODO: Use "compatible" cc
-                assert_eq!(then_block.params, else_block.params);
 
                 // TODO: The blocks should have compatible (one must be subset of other?) calling
                 //       conventions or else at least one must have no calling convention. This
@@ -272,16 +277,37 @@ where
                             ctx.pass_block_args(cc);
                         }
                         (ref mut then_cc @ None, ref mut else_cc @ None) => {
+                            let max_params = then_block.params.max(else_block.params);
                             let cc = if then_block_should_serialize_args {
-                                Some(Left(ctx.serialize_args(then_block.params)))
+                                Some(Left(ctx.serialize_args(max_params)))
                             } else if else_block_should_serialize_args {
-                                Some(Left(ctx.serialize_args(else_block.params)))
+                                Some(Left(ctx.serialize_args(max_params)))
                             } else {
                                 Some(Right(ctx.virtual_calling_convention()))
                             };
 
-                            **then_cc = cc.clone();
-                            **else_cc = cc;
+                            **then_cc = {
+                                let mut cc = cc.clone();
+                                if let (Some(cc), Some(to_drop)) = (cc.as_mut(), then.to_drop.clone())
+                                {
+                                    match cc {
+                                        Left(cc) => drop_elements(&mut cc.arguments, to_drop),
+                                        Right(cc) => drop_elements(&mut cc.stack, to_drop),
+                                    }
+                                }
+                                cc
+                            };
+                            **else_cc = {
+                                let mut cc = cc;
+                                if let (Some(cc), Some(to_drop)) = (cc.as_mut(), else_.to_drop.clone())
+                                {
+                                    match cc {
+                                        Left(cc) => drop_elements(&mut cc.arguments, to_drop),
+                                        Right(cc) => drop_elements(&mut cc.stack, to_drop),
+                                    }
+                                }
+                                cc
+                            };
                         }
                         _ => unimplemented!(
                             "Can't pass different params to different sides of `br_if` yet"
@@ -290,13 +316,13 @@ where
                 };
 
                 match (then_block_parts, else_block_parts) {
-                    ((true, _), (false, BrTarget::Label(else_))) => {
+                    ((true, _), (false, else_)) => {
                         ctx.br_if_false(else_, f);
                     }
-                    ((false, BrTarget::Label(then)), (true, _)) => {
+                    ((false, then), (true, _)) => {
                         ctx.br_if_true(then, f);
                     }
-                    ((false, BrTarget::Label(then)), (false, BrTarget::Label(else_))) => {
+                    ((false, then), (false, else_)) => {
                         ctx.br_if_true(then, f);
                         ctx.br(else_);
                     }
@@ -307,16 +333,13 @@ where
                 use itertools::Itertools;
 
                 let (def, params) = {
-                    let def = &blocks[&default];
-                    (
-                        if def.is_next { None } else { Some(def.label) },
-                        def.params,
-                    )
+                    let def = &blocks[&default.target];
+                    (if def.is_next { None } else { Some(def.label) }, def.params)
                 };
 
                 let target_labels = targets
                     .iter()
-                    .map(|target| blocks[target].label)
+                    .map(|target| blocks[&target.target].label)
                     .collect::<Vec<_>>();
 
                 ctx.br_table(target_labels, def, |ctx| {
@@ -324,7 +347,7 @@ where
                     let mut max_num_callers = Some(0);
 
                     for target in targets.iter().chain(std::iter::once(&default)).unique() {
-                        let block = blocks.get_mut(target).unwrap();
+                        let block = blocks.get_mut(&target.target).unwrap();
                         block.actual_num_callers += 1;
 
                         if block.calling_convention.is_some() {
@@ -334,13 +357,15 @@ where
 
                         if let Some(max) = max_num_callers {
                             max_num_callers = block.num_callers.map(|n| max.max(n));
+                        } else {
+                            max_num_callers = block.num_callers;
                         }
                     }
 
                     if let Some(Left(cc)) = &cc {
                         ctx.pass_block_args(cc);
                     }
-       
+
                     let cc = cc.unwrap_or_else(||
                         if max_num_callers == Some(1) {
                             Right(ctx.virtual_calling_convention())
@@ -350,8 +375,15 @@ where
                     );
 
                     for target in targets.iter().chain(std::iter::once(&default)).unique() {
-                        let block = blocks.get_mut(target).unwrap();
-                        block.calling_convention = Some(cc.clone());
+                        let block = blocks.get_mut(&target.target).unwrap();
+                        let mut cc = cc.clone();
+                        if let Some(to_drop) = target.to_drop.clone() {
+                            match &mut cc {
+                                Left(cc) => drop_elements(&mut cc.arguments, to_drop),
+                                Right(cc) => drop_elements(&mut cc.stack, to_drop),
+                            }
+                        }
+                        block.calling_convention = Some(cc);
                     }
                 });
             }
@@ -429,34 +461,77 @@ where
             Operator::Le(SF64) => ctx.f64_le(),
             Operator::Drop(range) => ctx.drop(range),
             Operator::Const(val) => ctx.const_(val),
-            Operator::Load8 { ty: _, memarg } => ctx.load8(GPRType::Rq, memarg.offset)?,
-            Operator::Load16 { ty: _, memarg } => ctx.load16(GPRType::Rq, memarg.offset)?,
-            Operator::Load { ty: ty @ I32, memarg } | Operator::Load { ty: ty @ F32, memarg } => ctx.load32(ty, memarg.offset)?,
-            Operator::Load { ty: ty @ I64, memarg } | Operator::Load { ty: ty @ F64, memarg } => ctx.load64(ty, memarg.offset)?,
-            Operator::Store8 { ty: _, memarg } => {
-                ctx.store8(memarg.offset)?
-            }
-            Operator::Store16 { ty: _, memarg } => {
-                ctx.store16(memarg.offset)?
-            }
-            Operator::Store32 { memarg } => {
-                    ctx.store32(memarg.offset)?
-            }
+            Operator::I32WrapFromI64 => {}
+            Operator::Extend {
+                sign: Signedness::Unsigned,
+            } => ctx.i32_extend_u(),
+            Operator::Extend {
+                sign: Signedness::Signed,
+            } => ctx.i32_extend_s(),
+            Operator::Load8 {
+                ty: sint::U32,
+                memarg,
+            } => ctx.i32_load8_u(memarg.offset),
+            Operator::Load16 {
+                ty: sint::U32,
+                memarg,
+            } => ctx.i32_load16_u(memarg.offset),
+            Operator::Load8 {
+                ty: sint::I32,
+                memarg,
+            } => ctx.i32_load8_s(memarg.offset),
+            Operator::Load16 {
+                ty: sint::I32,
+                memarg,
+            } => ctx.i32_load16_s(memarg.offset),
+            Operator::Load8 {
+                ty: sint::U64,
+                memarg,
+            } => ctx.i64_load8_u(memarg.offset),
+            Operator::Load16 {
+                ty: sint::U64,
+                memarg,
+            } => ctx.i64_load16_u(memarg.offset),
+            Operator::Load8 {
+                ty: sint::I64,
+                memarg,
+            } => ctx.i64_load8_s(memarg.offset),
+            Operator::Load16 {
+                ty: sint::I64,
+                memarg,
+            } => ctx.i64_load16_s(memarg.offset),
+            Operator::Load32 {
+                sign: Signedness::Unsigned,
+                memarg,
+            } => ctx.i64_load32_u(memarg.offset),
+            Operator::Load32 {
+                sign: Signedness::Signed,
+                memarg,
+            } => ctx.i64_load32_s(memarg.offset),
+            Operator::Load { ty: I32, memarg } => ctx.i32_load(memarg.offset),
+            Operator::Load { ty: F32, memarg } => ctx.f32_load(memarg.offset),
+            Operator::Load { ty: I64, memarg } => ctx.i64_load(memarg.offset),
+            Operator::Load { ty: F64, memarg } => ctx.f64_load(memarg.offset),
+            Operator::Store8 { ty: _, memarg } => ctx.store8(memarg.offset),
+            Operator::Store16 { ty: _, memarg } => ctx.store16(memarg.offset),
+            Operator::Store32 { memarg } => ctx.store32(memarg.offset),
             Operator::Store { ty: I32, memarg } | Operator::Store { ty: F32, memarg } => {
-                ctx.store32(memarg.offset)?
+                ctx.store32(memarg.offset)
             }
             Operator::Store { ty: I64, memarg } | Operator::Store { ty: F64, memarg } => {
-                ctx.store64(memarg.offset)?
+                ctx.store64(memarg.offset)
             }
             Operator::Select => {
                 ctx.select();
             }
+            Operator::MemorySize { reserved: _ } => {
+                ctx.memory_size();
+            }
             Operator::Call { function_index } => {
-                let function_index = session
-                    .module_context
+                let function_index = module_context
                     .defined_func_index(function_index)
                     .expect("We don't support host calls yet");
-                let callee_ty = session.module_context.func_type(function_index);
+                let callee_ty = module_context.func_type(function_index);
 
                 // TODO: this implementation assumes that this function is locally defined.
                 ctx.call_direct(
@@ -471,7 +546,7 @@ where
             } => {
                 assert_eq!(table_index, 0);
 
-                let callee_ty = session.module_context.signature(type_index);
+                let callee_ty = module_context.signature(type_index);
 
                 // TODO: this implementation assumes that this function is locally defined.
 

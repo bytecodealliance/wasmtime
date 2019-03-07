@@ -1,5 +1,4 @@
 use crate::module::{ModuleContext, SigType, Signature};
-use cranelift_codegen::ir::Signature as CraneliftSignature;
 use smallvec::SmallVec;
 use std::{
     convert::TryFrom,
@@ -310,8 +309,8 @@ impl TryFrom<wasmparser::Type> for SignlessType {
 
 #[derive(Debug, Clone)]
 pub struct BrTable<L> {
-    pub targets: Vec<BrTarget<L>>,
-    pub default: BrTarget<L>,
+    pub targets: Vec<BrTargetDrop<L>>,
+    pub default: BrTargetDrop<L>,
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -347,6 +346,12 @@ impl<L> BrTarget<L> {
     }
 }
 
+impl<L> From<L> for BrTarget<L> {
+    fn from(other: L) -> Self {
+        BrTarget::Label(other)
+    }
+}
+
 impl fmt::Display for BrTarget<WasmLabel> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -363,6 +368,40 @@ impl fmt::Display for BrTarget<&str> {
         match self {
             BrTarget::Return => write!(f, ".return"),
             BrTarget::Label(l) => write!(f, ".L{}", l),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct BrTargetDrop<L> {
+    pub target: BrTarget<L>,
+    pub to_drop: Option<RangeInclusive<u32>>,
+}
+
+impl<L> From<BrTarget<L>> for BrTargetDrop<L> {
+    fn from(other: BrTarget<L>) -> Self {
+        BrTargetDrop {
+            target: other,
+            to_drop: None,
+        }
+    }
+}
+
+impl<L> fmt::Display for BrTargetDrop<L>
+where
+    BrTarget<L>: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(drop) = &self.to_drop {
+            write!(
+                f,
+                "({}, drop {}..={})",
+                self.target,
+                drop.start(),
+                drop.end()
+            )
+        } else {
+            write!(f, "{}", self.target)
         }
     }
 }
@@ -395,9 +434,9 @@ pub enum Operator<Label> {
     /// and the `then` label otherwise. The `then` and `else_` blocks must have the same parameters.
     BrIf {
         /// Label to jump to if the value at the top of the stack is true
-        then: BrTarget<Label>,
+        then: BrTargetDrop<Label>,
         /// Label to jump to if the value at the top of the stack is false
-        else_: BrTarget<Label>,
+        else_: BrTargetDrop<Label>,
     },
     /// Pop a value off the top of the stack, jump to `table[value.min(table.len() - 1)]`. All elements
     /// in the table must have the same parameters.
@@ -1035,8 +1074,12 @@ where
                 sig!((ty) -> (ty))
             }
 
-            WasmOperator::GetGlobal { global_index: _ } => unimplemented!(),
-            WasmOperator::SetGlobal { global_index: _ } => unimplemented!(),
+            WasmOperator::GetGlobal { global_index: _ } => {
+                unimplemented!("Haven't implemented getting type of globals yet")
+            }
+            WasmOperator::SetGlobal { global_index: _ } => {
+                unimplemented!("Haven't implemented getting type of globals yet")
+            }
 
             WasmOperator::F32Load { .. } => sig!((I32) -> (F32)),
             WasmOperator::F64Load { .. } => sig!((I32) -> (F64)),
@@ -1475,8 +1518,8 @@ where
                     Operator::block(self.block_params(), else_),
                     Operator::end(self.block_params_with_wasm_type(ty), end),
                     Operator::BrIf {
-                        then: BrTarget::Label(then),
-                        else_: BrTarget::Label(else_),
+                        then: BrTarget::Label(then).into(),
+                        else_: BrTarget::Label(else_).into()
                     },
                     Operator::Label(then),
                 ]
@@ -1586,24 +1629,17 @@ where
                 let block = self.nth_block_mut(relative_depth as _);
                 block.mark_branched_to();
 
-                if let Some(_to_drop) = to_drop {
-                    // TODO: We want to generate an intermediate block here, but that might cause
-                    //       us to generate a spurious `jmp`.
-                    unimplemented!(
-                        "We don't yet support passing different numbers of arguments \
-                         to each half of a `br_if` - supporting this efficiently without \
-                         complicating the backend might be difficult"
-                    );
-                } else {
-                    smallvec![
-                        Operator::block(params, label),
-                        Operator::BrIf {
-                            then: block.br_target(),
-                            else_: BrTarget::Label(label),
+                smallvec![
+                    Operator::block(params, label),
+                    Operator::BrIf {
+                        then: BrTargetDrop {
+                            to_drop,
+                            target: block.br_target()
                         },
-                        Operator::Label(label),
-                    ]
-                }
+                        else_: BrTarget::Label(label).into(),
+                    },
+                    Operator::Label(label),
+                ]
             }
             WasmOperator::BrTable { table } => {
                 self.unreachable = true;
@@ -1614,14 +1650,25 @@ where
                 let targets = entries
                     .iter()
                     .map(|depth| {
-                        let block = self.nth_block_mut(*depth as _);
-                        block.mark_branched_to();
-                        block.br_target()
+                        self.nth_block_mut(*depth as _).mark_branched_to();
+                        let block = self.nth_block(*depth as _);
+
+                        let target = block.br_target();
+                        BrTargetDrop {
+                            to_drop: to_drop!(block),
+                            target,
+                        }
                     })
                     .collect();
-                let default = self.nth_block_mut(default as _);
-                default.mark_branched_to();
-                let default = default.br_target();
+
+                self.nth_block_mut(default as _).mark_branched_to();
+
+                let default = self.nth_block(default as _);
+                let target = default.br_target();
+                let default = BrTargetDrop {
+                    to_drop: to_drop!(default),
+                    target,
+                };
 
                 smallvec![Operator::BrTable(BrTable { targets, default })]
             }
@@ -1839,13 +1886,17 @@ where
             WasmOperator::F64Min => smallvec![Operator::Min(Size::_64)],
             WasmOperator::F64Max => smallvec![Operator::Max(Size::_64)],
             WasmOperator::F64Copysign => smallvec![Operator::Copysign(Size::_64)],
-            WasmOperator::I32WrapI64 => unimplemented!("{:?}", op),
+            WasmOperator::I32WrapI64 => smallvec![Operator::I32WrapFromI64],
             WasmOperator::I32TruncSF32 => unimplemented!("{:?}", op),
             WasmOperator::I32TruncUF32 => unimplemented!("{:?}", op),
             WasmOperator::I32TruncSF64 => unimplemented!("{:?}", op),
             WasmOperator::I32TruncUF64 => unimplemented!("{:?}", op),
-            WasmOperator::I64ExtendSI32 => unimplemented!("{:?}", op),
-            WasmOperator::I64ExtendUI32 => unimplemented!("{:?}", op),
+            WasmOperator::I64ExtendSI32 => smallvec![Operator::Extend {
+                sign: Signedness::Signed
+            }],
+            WasmOperator::I64ExtendUI32 => smallvec![Operator::Extend {
+                sign: Signedness::Unsigned
+            }],
             WasmOperator::I64TruncSF32 => unimplemented!("{:?}", op),
             WasmOperator::I64TruncUF32 => unimplemented!("{:?}", op),
             WasmOperator::I64TruncSF64 => unimplemented!("{:?}", op),
@@ -1885,4 +1936,3 @@ where
         }))
     }
 }
-

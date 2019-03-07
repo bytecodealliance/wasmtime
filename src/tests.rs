@@ -1182,6 +1182,21 @@ fn fib_opt() {
 }
 
 #[test]
+fn i32_div() {
+    const CODE: &str = r"
+    (module
+      (func (param i32) (param i32) (result i32)
+        (i32.div_s (get_local 0) (get_local 1))
+      )
+    )";
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    assert_eq!(translated.execute_func::<_, u32>(0, (1, 1)), Ok(1));
+}
+
+#[test]
 fn br_table() {
     const CODE: &str = r"
 (module
@@ -1940,4 +1955,3 @@ fn sieve() {
 
     translate(&wabt::wat2wasm(CODE).unwrap()).unwrap();
 }
-

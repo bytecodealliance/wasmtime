@@ -1,16 +1,16 @@
+use crate::backend::TranslatedCodeSection;
+use crate::error::Error;
 use crate::microwasm;
-use backend::TranslatedCodeSection;
+use crate::translate_sections;
 use cranelift_codegen::{
     ir::{self, AbiParam, Signature as CraneliftSignature},
     isa,
 };
-use error::Error;
 use std::{
     convert::TryInto,
     hash::{Hash, Hasher},
     mem,
 };
-use translate_sections;
 use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, TableType, Type};
 
 pub trait AsValueType {
@@ -316,7 +316,7 @@ pub struct SimpleContext {
     func_ty_indicies: Vec<u32>,
 }
 
-const WASM_PAGE_SIZE: usize = 65_536;
+pub const WASM_PAGE_SIZE: usize = 65_536;
 
 pub trait Signature {
     type Type: SigType;
@@ -332,7 +332,7 @@ pub trait SigType {
 
 impl SigType for AbiParam {
     fn to_microwasm_type(&self) -> microwasm::SignlessType {
-        use microwasm::{Size::*, Type::*};
+        use crate::microwasm::{Size::*, Type::*};
 
         if self.value_type.is_int() {
             match self.value_type.bits() {
@@ -403,8 +403,8 @@ pub trait ModuleContext {
 
     fn func_type_index(&self, func_idx: u32) -> u32;
     fn signature(&self, index: u32) -> &Self::Signature;
-    fn offset_of_memory_ptr(&self) -> u8;
-    fn offset_of_memory_len(&self) -> u8;
+    fn offset_of_memory_ptr(&self) -> u32;
+    fn offset_of_memory_len(&self) -> u32;
     fn offset_of_funcs_ptr(&self) -> u8;
     fn offset_of_funcs_len(&self) -> u8;
 
@@ -442,12 +442,12 @@ impl ModuleContext for SimpleContext {
         &self.types[index as usize]
     }
 
-    fn offset_of_memory_ptr(&self) -> u8 {
-        VmCtx::offset_of_memory_ptr()
+    fn offset_of_memory_ptr(&self) -> u32 {
+        VmCtx::offset_of_memory_ptr() as _
     }
 
-    fn offset_of_memory_len(&self) -> u8 {
-        VmCtx::offset_of_memory_len()
+    fn offset_of_memory_len(&self) -> u32 {
+        VmCtx::offset_of_memory_len() as _
     }
 
     fn offset_of_funcs_ptr(&self) -> u8 {
