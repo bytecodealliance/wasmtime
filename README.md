@@ -249,6 +249,8 @@ test spec_testsuite::names                  ... FAILED
 test result: FAILED. 31 passed; 45 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
+All the failed tests apart from `address` and `unwind` (whose failure hasn't been investigated yet) are due to features that have yet to be implemented.
+
 ## Getting involved
 
 Our [issue tracker][issue tracker] is pretty barren right now since this is currently more-or-less a one-person project, but if you want to get involved jump into the [CraneStation Gitter room][cranestation-gitter] and someone can direct you to the right place. I wish I could say "the most useful thing you can do is play with it and open issues where you find problems" but until it passes the spec suite that won't be very helpful.
