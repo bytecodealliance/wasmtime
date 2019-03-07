@@ -12,9 +12,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = "0.28.0"
-cranelift-entity = "0.28.0"
-cranelift-wasm = "0.28.0"
+cranelift-codegen = "0.29.0"
+cranelift-entity = "0.29.0"
+cranelift-wasm = "0.29.0"
 wasmtime-environ = { path = "../environ", default-features = false }
 region = "2.0.0"
 lazy_static = "1.2.0"

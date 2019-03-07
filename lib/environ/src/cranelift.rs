@@ -9,6 +9,7 @@ use crate::func_environ::{
     get_memory32_grow_name, get_memory32_size_name, FuncEnvironment,
 };
 use crate::module::Module;
+use crate::module_environ::FunctionBodyData;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
@@ -112,7 +113,7 @@ fn get_address_transform(
 /// associated relocations.
 pub fn compile_module<'data, 'module>(
     module: &'module Module,
-    function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
+    function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
     isa: &dyn isa::TargetIsa,
     generate_debug_info: bool,
 ) -> Result<(Compilation, Relocations, AddressTransforms), CompileError> {
@@ -122,7 +123,7 @@ pub fn compile_module<'data, 'module>(
 
     function_body_inputs
         .into_iter()
-        .collect::<Vec<(DefinedFuncIndex, &&'data [u8])>>()
+        .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'data>)>>()
         .par_iter()
         .map(|(i, input)| {
             let func_index = module.func_index(*i);
@@ -133,7 +134,8 @@ pub fn compile_module<'data, 'module>(
             let mut trans = FuncTranslator::new();
             trans
                 .translate(
-                    input,
+                    input.data,
+                    input.module_offset,
                     &mut context.func,
                     &mut FuncEnvironment::new(isa.frontend_config(), module),
                 )
