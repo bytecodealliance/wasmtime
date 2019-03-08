@@ -46,8 +46,8 @@ pub struct GdbJitImageRegistration {
 
 impl GdbJitImageRegistration {
     /// Registers JIT image using __jit_debug_register_code
-    pub fn register(file: Vec<u8>) -> GdbJitImageRegistration {
-        GdbJitImageRegistration {
+    pub fn register(file: Vec<u8>) -> Self {
+        Self {
             entry: unsafe { register_gdb_jit_image(&file) },
             file,
         }

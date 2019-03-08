@@ -526,7 +526,7 @@ pub struct TargetSharedSignatureIndex(u32);
 impl TargetSharedSignatureIndex {
     /// Constructs `TargetSharedSignatureIndex`.
     pub fn new(value: u32) -> Self {
-        TargetSharedSignatureIndex(value)
+        Self(value)
     }
 
     /// Returns index value.

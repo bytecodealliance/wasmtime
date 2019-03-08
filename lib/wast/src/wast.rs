@@ -280,7 +280,7 @@ impl WastContext {
                         ActionOutcome::Trapped {
                             message: trap_message,
                         } => {
-                            println!(
+                            eprintln!(
                                 "{}:{}: TODO: Check the assert_trap message: expected {}, got {}",
                                 filename, line, message, trap_message
                             );
@@ -304,7 +304,7 @@ impl WastContext {
                             });
                         }
                         ActionOutcome::Trapped { message } => {
-                            println!(
+                            eprintln!(
                                 "{}:{}: TODO: Check the assert_exhaustion message: {}",
                                 filename, line, message
                             );
@@ -420,7 +420,7 @@ impl WastContext {
                         "{}:{}: invalid module was successfully instantiated",
                         filename, line
                     ));
-                    println!(
+                    eprintln!(
                         "{}:{}: TODO: Check the assert_invalid message: {}",
                         filename, line, message
                     );
@@ -430,7 +430,7 @@ impl WastContext {
                         "{}:{}: malformed module was successfully instantiated",
                         filename, line
                     ));
-                    println!(
+                    eprintln!(
                         "{}:{}: TODO: Check the assert_malformed message: {}",
                         filename, line, message
                     );
@@ -440,7 +440,7 @@ impl WastContext {
                         "{}:{}: uninstantiable module was successfully instantiated",
                         filename, line
                     ));
-                    println!(
+                    eprintln!(
                         "{}:{}: TODO: Check the assert_uninstantiable message: {}",
                         filename, line, message
                     );
@@ -450,7 +450,7 @@ impl WastContext {
                         "{}:{}: unlinkable module was successfully linked",
                         filename, line
                     ));
-                    println!(
+                    eprintln!(
                         "{}:{}: TODO: Check the assert_unlinkable message: {}",
                         filename, line, message
                     );
