@@ -37,3 +37,9 @@ ebb0(v0: i64, v1: f64, v2: i64, v3: f32):
     return
 }
 ; check: function %mixed_int_float(i64 [%rcx], f64 [%xmm1], i64 [%r8], f32 [%xmm3], i64 fp [%rbp]) -> i64 fp [%rbp] windows_fastcall {
+
+function %ret_val_float(f32, f64, i64, i64) -> f64 windows_fastcall {
+ebb0(v0: f32, v1: f64, v2: i64, v3: i64):
+    return v1
+}
+; check: function %ret_val_float(f32 [%xmm0], f64 [%xmm1], i64 [%r8], i64 [%r9], i64 fp [%rbp]) -> f64 [%xmm0], i64 fp [%rbp] windows_fastcall {

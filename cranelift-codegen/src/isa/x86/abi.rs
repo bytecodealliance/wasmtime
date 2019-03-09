@@ -161,13 +161,14 @@ pub fn legalize_signature(sig: &mut ir::Signature, triple: &Triple, _current: bo
 
     legalize_args(&mut sig.params, &mut args);
 
-    let regs = if sig.call_conv == CallConv::WindowsFastcall {
-        &RET_GPRS_WIN_FASTCALL_X64[..]
+    let (regs, fpr_limit) = if sig.call_conv == CallConv::WindowsFastcall {
+        // windows-x64 calling convention only uses XMM0 or RAX for return values
+        (&RET_GPRS_WIN_FASTCALL_X64[..], 1)
     } else {
-        &RET_GPRS[..]
+        (&RET_GPRS[..], 2)
     };
 
-    let mut rets = Args::new(bits, regs, 2, sig.call_conv);
+    let mut rets = Args::new(bits, regs, fpr_limit, sig.call_conv);
     legalize_args(&mut sig.returns, &mut rets);
 }
 
