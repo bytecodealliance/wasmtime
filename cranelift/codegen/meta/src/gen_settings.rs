@@ -152,13 +152,9 @@ fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
             fmt.indent(|fmt| {
                 let mut m = Match::new(format!("self.bytes[{}]", setting.byte_offset));
                 for (i, v) in values.iter().enumerate() {
-                    m.arm(
-                        format!("{}", i),
-                        vec![],
-                        format!("{}::{}", ty, camel_case(v)),
-                    );
+                    m.arm_no_fields(format!("{}", i), format!("{}::{}", ty, camel_case(v)));
                 }
-                m.arm("_", vec![], "panic!(\"Invalid enum value\")");
+                m.arm_no_fields("_", "panic!(\"Invalid enum value\")");
                 fmt.add_match(m);
             });
             fmtln!(fmt, "}");

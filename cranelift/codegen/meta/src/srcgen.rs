@@ -25,6 +25,14 @@ macro_rules! fmtln {
     ($fmt:ident, $arg:expr) => {
         $fmt.line($arg);
     };
+
+    ($_:tt, $($args:expr),+) => {
+        compile_error!("This macro requires at least two arguments: the Formatter instance and a format string.");
+    };
+
+    ($_:tt) => {
+        compile_error!("This macro requires at least two arguments: the Formatter instance and a format string.");
+    };
 }
 
 pub struct Formatter {
@@ -84,6 +92,11 @@ impl Formatter {
         self.lines.push(indented_line);
     }
 
+    /// Pushes an empty line.
+    pub fn empty_line(&mut self) {
+        self.lines.push("\n".to_string());
+    }
+
     /// Emit a line outdented one level.
     pub fn _outdented_line(&mut self, s: &str) {
         let new_line = format!("{}{}", self._get_outdent(), s);
@@ -112,7 +125,7 @@ impl Formatter {
     }
 
     /// Add one or more lines after stripping common indentation.
-    pub fn _multi_line(&mut self, s: &str) {
+    pub fn multi_line(&mut self, s: &str) {
         parse_multiline(s).into_iter().for_each(|l| self.line(&l));
     }
 
@@ -141,7 +154,7 @@ impl Formatter {
         self.indent(|fmt| {
             for (&(ref fields, ref body), ref names) in m.arms.iter() {
                 // name { fields } | name { fields } => { body }
-                let conditions: Vec<String> = names
+                let conditions = names
                     .iter()
                     .map(|name| {
                         if fields.len() > 0 {
@@ -150,9 +163,20 @@ impl Formatter {
                             name.clone()
                         }
                     })
-                    .collect();
-                let lhs = conditions.join(" | ");
-                fmtln!(fmt, "{} => {{", lhs);
+                    .collect::<Vec<_>>()
+                    .join(" |\n")
+                    + " => {";
+
+                fmt.multi_line(&conditions);
+                fmt.indent(|fmt| {
+                    fmt.line(body);
+                });
+                fmt.line("}");
+            }
+
+            // Make sure to include the catch all clause last.
+            if let Some(body) = m.catch_all {
+                fmt.line("_ => {");
                 fmt.indent(|fmt| {
                     fmt.line(body);
                 });
@@ -239,27 +263,57 @@ fn parse_multiline(s: &str) -> Vec<String> {
 pub struct Match {
     expr: String,
     arms: BTreeMap<(Vec<String>, String), BTreeSet<String>>,
+    /// The clause for the placeholder pattern _.
+    catch_all: Option<String>,
 }
 
 impl Match {
     /// Create a new match statement on `expr`.
-    pub fn new<T: Into<String>>(expr: T) -> Self {
+    pub fn new(expr: impl Into<String>) -> Self {
         Self {
             expr: expr.into(),
             arms: BTreeMap::new(),
+            catch_all: None,
         }
     }
 
-    /// Add an arm to the Match statement.
-    pub fn arm<T: Into<String>>(&mut self, name: T, fields: Vec<T>, body: T) {
-        // let key = (fields, body);
+    fn set_catch_all(&mut self, clause: String) {
+        assert!(self.catch_all.is_none());
+        self.catch_all = Some(clause);
+    }
+
+    /// Add an arm that reads fields to the Match statement.
+    pub fn arm<T: Into<String>, S: Into<String>>(&mut self, name: T, fields: Vec<S>, body: T) {
+        let name = name.into();
+        assert!(
+            name != "_",
+            "catch all clause can't extract fields, use arm_no_fields instead."
+        );
+
         let body = body.into();
         let fields = fields.into_iter().map(|x| x.into()).collect();
         let match_arm = self
             .arms
             .entry((fields, body))
             .or_insert_with(BTreeSet::new);
-        match_arm.insert(name.into());
+        match_arm.insert(name);
+    }
+
+    /// Adds an arm that doesn't read anythings from the fields to the Match statement.
+    pub fn arm_no_fields(&mut self, name: impl Into<String>, body: impl Into<String>) {
+        let body = body.into();
+
+        let name = name.into();
+        if name == "_" {
+            self.set_catch_all(body);
+            return;
+        }
+
+        let match_arm = self
+            .arms
+            .entry((Vec::new(), body))
+            .or_insert_with(BTreeSet::new);
+        match_arm.insert(name);
     }
 }
 
@@ -296,11 +350,42 @@ match x {
     Green { a, b } => {
         different body
     }
-    Orange { a, b } | Yellow { a, b } => {
+    Orange { a, b } |
+    Yellow { a, b } => {
         some body
     }
     Blue { x, y } => {
         some body
+    }
+}
+        "#,
+        );
+        assert_eq!(fmt.lines, expected_lines);
+    }
+
+    #[test]
+    fn match_with_catchall_order() {
+        // The catchall placeholder must be placed after other clauses.
+        let mut m = Match::new("x");
+        m.arm("Orange", vec!["a", "b"], "some body");
+        m.arm("Green", vec!["a", "b"], "different body");
+        m.arm_no_fields("_", "unreachable!()");
+        assert_eq!(m.arms.len(), 2); // catchall is not counted
+
+        let mut fmt = Formatter::new();
+        fmt.add_match(m);
+
+        let expected_lines = from_raw_string(
+            r#"
+match x {
+    Green { a, b } => {
+        different body
+    }
+    Orange { a, b } => {
+        some body
+    }
+    _ => {
+        unreachable!()
     }
 }
         "#,
