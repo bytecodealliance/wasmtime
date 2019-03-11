@@ -15,7 +15,6 @@ from cdsl.ast import Var
 from cdsl.ti import ti_rtl, TypeEnv, get_type_env, TypesEqual,\
     InTypeset, WiderOrEq
 from unique_table import UniqueTable
-from gen_instr import gen_typesets_table
 from cdsl.typevar import TypeVar
 
 try:
@@ -27,6 +26,27 @@ try:
     from cdsl.ti import TypeConstraint # noqa
 except ImportError:
     pass
+
+
+# TypeSet indexes are encoded in 8 bits, with `0xff` reserved.
+typeset_limit = 0xff
+
+
+def gen_typesets_table(fmt, type_sets):
+    # type: (Formatter, UniqueTable) -> None
+    """
+    Generate the table of ValueTypeSets described by type_sets.
+    """
+    if len(type_sets.table) == 0:
+        return
+    fmt.comment('Table of value type sets.')
+    assert len(type_sets.table) <= typeset_limit, "Too many type sets"
+    with fmt.indented(
+            'const TYPE_SETS: [ir::instructions::ValueTypeSet; {}] = ['
+            .format(len(type_sets.table)), '];'):
+        for ts in type_sets.table:
+            with fmt.indented('ir::instructions::ValueTypeSet {', '},'):
+                ts.emit_fields(fmt)
 
 
 def get_runtime_typechecks(xform):

@@ -40,8 +40,8 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
     gen_inst::generate(
         all_inst_groups,
         &shared_defs.format_registry,
-        "new_opcodes.rs",
-        "new_inst_builder.rs",
+        "opcodes.rs",
+        "inst_builder.rs",
         &out_dir,
     )?;
 
