@@ -246,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn test_magicU32() {
+    fn test_magic_u32() {
         assert_eq!(magic_u32(2u32), make_mu32(0x80000000u32, false, 0));
         assert_eq!(magic_u32(3u32), make_mu32(0xaaaaaaabu32, false, 1));
         assert_eq!(magic_u32(4u32), make_mu32(0x40000000u32, false, 0));
@@ -279,8 +279,9 @@ mod tests {
             make_mu32(0x80000001u32, false, 31)
         );
     }
+
     #[test]
-    fn test_magicU64() {
+    fn test_magic_u64() {
         assert_eq!(magic_u64(2u64), make_mu64(0x8000000000000000u64, false, 0));
         assert_eq!(magic_u64(3u64), make_mu64(0xaaaaaaaaaaaaaaabu64, false, 1));
         assert_eq!(magic_u64(4u64), make_mu64(0x4000000000000000u64, false, 0));
@@ -346,8 +347,9 @@ mod tests {
             make_mu64(0x8000000000000001u64, false, 63)
         );
     }
+
     #[test]
-    fn test_magicS32() {
+    fn test_magic_s32() {
         assert_eq!(
             magic_s32(-0x80000000i32),
             make_ms32(0x7fffffffu32 as i32, 30)
@@ -390,8 +392,9 @@ mod tests {
             make_ms32(0x40000001u32 as i32, 29)
         );
     }
+
     #[test]
-    fn test_magicS64() {
+    fn test_magic_s64() {
         assert_eq!(
             magic_s64(-0x8000000000000000i64),
             make_ms64(0x7fffffffffffffffu64 as i64, 62)
@@ -515,6 +518,7 @@ mod tests {
             make_ms64(0x4000000000000001u64 as i64, 61)
         );
     }
+
     #[test]
     fn test_magic_generators_dont_panic() {
         // The point of this is to check that the magic number generators
