@@ -1,6 +1,6 @@
 use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
-pub fn generate() -> SettingGroup {
+pub fn define() -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("shared");
 
     settings.add_enum(

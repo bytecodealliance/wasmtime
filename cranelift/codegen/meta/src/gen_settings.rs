@@ -1,16 +1,14 @@
 use crate::cdsl::camel_case;
-use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::settings::{
     BoolSetting, Predicate, Preset, Setting, SettingGroup, SpecificSetting,
 };
 use crate::constant_hash::{generate_table, simple_hash};
 use crate::error;
-use crate::shared;
 use crate::srcgen::{Formatter, Match};
 use crate::unique_table::UniqueSeqTable;
 use std::collections::HashMap;
 
-enum ParentGroup {
+pub enum ParentGroup {
     None,
     Shared,
 }
@@ -187,12 +185,12 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
         fmt.doc_comment("Get a view of the boolean predicates.");
         fmtln!(
             fmt,
-            "pub fn predicate_view(&self) -> ::settings::PredicateView {"
+            "pub fn predicate_view(&self) -> crate::settings::PredicateView {"
         );
         fmt.indent(|fmt| {
             fmtln!(
                 fmt,
-                "::settings::PredicateView::new(&self.bytes[{}..])",
+                "crate::settings::PredicateView::new(&self.bytes[{}..])",
                 group.bool_start_byte_offset
             );
         });
@@ -441,17 +439,14 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     gen_display(group, fmt);
 }
 
-pub fn generate_common(filename: &str, out_dir: &str) -> Result<SettingGroup, error::Error> {
-    let settings = shared::settings::generate();
+pub fn generate(
+    settings: &SettingGroup,
+    parent_group: ParentGroup,
+    filename: &str,
+    out_dir: &str,
+) -> Result<(), error::Error> {
     let mut fmt = Formatter::new();
-    gen_group(&settings, ParentGroup::None, &mut fmt);
+    gen_group(&settings, parent_group, &mut fmt);
     fmt.update_file(filename, out_dir)?;
-    Ok(settings)
-}
-
-pub fn generate(isa: &TargetIsa, prefix: &str, out_dir: &str) -> Result<(), error::Error> {
-    let mut fmt = Formatter::new();
-    gen_group(&isa.settings, ParentGroup::Shared, &mut fmt);
-    fmt.update_file(format!("{}-{}.rs", prefix, isa.name), out_dir)?;
     Ok(())
 }

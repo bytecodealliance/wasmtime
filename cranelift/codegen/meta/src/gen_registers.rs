@@ -132,9 +132,9 @@ fn gen_isa(isa: &TargetIsa, fmt: &mut Formatter) {
     fmtln!(fmt, "}");
 }
 
-pub fn generate(isa: &TargetIsa, base_filename: &str, out_dir: &str) -> Result<(), error::Error> {
+pub fn generate(isa: &TargetIsa, filename: &str, out_dir: &str) -> Result<(), error::Error> {
     let mut fmt = Formatter::new();
     gen_isa(&isa, &mut fmt);
-    fmt.update_file(format!("{}-{}.rs", base_filename, isa.name), out_dir)?;
+    fmt.update_file(filename, out_dir)?;
     Ok(())
 }
