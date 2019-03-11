@@ -7,6 +7,7 @@ pub mod isa;
 pub mod regs;
 pub mod settings;
 pub mod types;
+pub mod typevar;
 
 /// A macro that converts boolean settings into predicates to look more natural.
 #[macro_export]
