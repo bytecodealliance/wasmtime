@@ -3,15 +3,18 @@
 pub mod entities;
 pub mod formats;
 pub mod immediates;
+pub mod instructions;
 pub mod settings;
 pub mod types;
 
 use crate::cdsl::formats::FormatRegistry;
+use crate::cdsl::inst::InstructionGroup;
 use crate::cdsl::operands::OperandKind;
 use crate::cdsl::settings::SettingGroup;
 
 pub struct Definitions {
     pub settings: SettingGroup,
+    pub instructions: InstructionGroup,
     pub operand_kinds: OperandKinds,
     pub format_registry: FormatRegistry,
 }
@@ -49,6 +52,7 @@ pub fn define() -> Definitions {
     let format_registry = formats::define(&immediates, &entities);
     Definitions {
         settings: settings::define(),
+        instructions: instructions::define(&format_registry, &immediates, &entities),
         operand_kinds: immediates,
         format_registry,
     }
