@@ -27,7 +27,7 @@ static _RUST_NAME_PREFIX: &'static str = "ir::types::";
 ///
 /// All SSA values have a type that is described by an instance of `ValueType`
 /// or one of its subclasses.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ValueType {
     BV(BVType),
     Lane(LaneType),
@@ -90,7 +90,7 @@ impl ValueType {
     }
 
     /// Return the name of this type for generated Rust source files.
-    pub fn _rust_name(&self) -> String {
+    pub fn rust_name(&self) -> String {
         format!("{}{}", _RUST_NAME_PREFIX, self.to_string().to_uppercase())
     }
 
@@ -205,6 +205,43 @@ impl LaneType {
                 LaneType::FloatType(shared_types::Float::F64) => 10,
             }
     }
+
+    pub fn bool_from_bits(num_bits: u16) -> LaneType {
+        LaneType::BoolType(match num_bits {
+            1 => shared_types::Bool::B1,
+            8 => shared_types::Bool::B8,
+            16 => shared_types::Bool::B16,
+            32 => shared_types::Bool::B32,
+            64 => shared_types::Bool::B64,
+            _ => unreachable!("unxpected num bits for bool"),
+        })
+    }
+
+    pub fn int_from_bits(num_bits: u16) -> LaneType {
+        LaneType::IntType(match num_bits {
+            8 => shared_types::Int::I8,
+            16 => shared_types::Int::I16,
+            32 => shared_types::Int::I32,
+            64 => shared_types::Int::I64,
+            _ => unreachable!("unxpected num bits for int"),
+        })
+    }
+
+    pub fn float_from_bits(num_bits: u16) -> LaneType {
+        LaneType::FloatType(match num_bits {
+            32 => shared_types::Float::F32,
+            64 => shared_types::Float::F64,
+            _ => unreachable!("unxpected num bits for float"),
+        })
+    }
+
+    pub fn by(&self, lanes: u16) -> ValueType {
+        if lanes == 1 {
+            (*self).into()
+        } else {
+            ValueType::Vector(VectorType::new(*self, lanes.into()))
+        }
+    }
 }
 
 impl fmt::Display for LaneType {
@@ -290,6 +327,7 @@ impl Iterator for LaneTypeIterator {
 ///
 /// A vector type has a lane type which is an instance of `LaneType`,
 /// and a positive number of lanes.
+#[derive(Clone)]
 pub struct VectorType {
     base: LaneType,
     lanes: u64,
@@ -318,6 +356,11 @@ impl VectorType {
     /// Return the number of lanes.
     pub fn lane_count(&self) -> u64 {
         self.lanes
+    }
+
+    /// Return the lane type.
+    pub fn lane_type(&self) -> LaneType {
+        self.base
     }
 
     /// Find the unique number associated with this vector type.
@@ -350,14 +393,15 @@ impl fmt::Debug for VectorType {
 }
 
 /// A flat bitvector type. Used for semantics description only.
+#[derive(Clone)]
 pub struct BVType {
     bits: u64,
 }
 
 impl BVType {
     /// Initialize a new bitvector type with `n` bits.
-    pub fn _new(bits: u64) -> Self {
-        Self { bits }
+    pub fn new(bits: u16) -> Self {
+        Self { bits: bits.into() }
     }
 
     /// Return a string containing the documentation comment for this bitvector type.
@@ -386,7 +430,7 @@ impl fmt::Debug for BVType {
 /// A concrete scalar type that is neither a vector nor a lane type.
 ///
 /// Special types cannot be used to form vectors.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpecialType {
     Flag(shared_types::Flag),
 }
