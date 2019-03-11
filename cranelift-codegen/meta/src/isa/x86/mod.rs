@@ -1,6 +1,10 @@
+mod instructions;
+
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
+
+use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("x86");
@@ -109,8 +113,11 @@ fn define_registers() -> IsaRegs {
     regs.finish()
 }
 
-pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
-    let settings = define_settings(shared_settings);
+pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
+    let settings = define_settings(&shared_defs.settings);
     let regs = define_registers();
-    TargetIsa::new("x86", settings, regs)
+
+    let inst_group = instructions::define(&shared_defs.format_registry);
+
+    TargetIsa::new("x86", inst_group, settings, regs)
 }

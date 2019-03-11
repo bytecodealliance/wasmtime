@@ -20,10 +20,10 @@ pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
 /// Generates all the Rust source files used in Cranelift from the meta-language.
 pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error> {
     // Common definitions.
-    let settings = shared::settings::define();
+    let mut shared_defs = shared::define();
 
     gen_settings::generate(
-        &settings,
+        &shared_defs.settings,
         gen_settings::ParentGroup::None,
         "new_settings.rs",
         &out_dir,
@@ -31,7 +31,7 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
     gen_types::generate("types.rs", &out_dir)?;
 
     // Per ISA definitions.
-    let isas = isa::define(isas, &settings);
+    let isas = isa::define(isas, &mut shared_defs);
 
     for isa in isas {
         gen_registers::generate(&isa, &format!("registers-{}.rs", isa.name), &out_dir)?;

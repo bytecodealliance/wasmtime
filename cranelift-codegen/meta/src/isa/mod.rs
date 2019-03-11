@@ -1,5 +1,5 @@
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::settings::SettingGroup;
+use crate::shared::Definitions as SharedDefinitions;
 use std::fmt;
 
 mod arm32;
@@ -55,13 +55,13 @@ impl fmt::Display for Isa {
     }
 }
 
-pub fn define(isas: &Vec<Isa>, shared_settings: &SettingGroup) -> Vec<TargetIsa> {
+pub fn define(isas: &Vec<Isa>, shared_defs: &mut SharedDefinitions) -> Vec<TargetIsa> {
     isas.iter()
         .map(|isa| match isa {
-            Isa::Riscv => riscv::define(shared_settings),
-            Isa::X86 => x86::define(shared_settings),
-            Isa::Arm32 => arm32::define(shared_settings),
-            Isa::Arm64 => arm64::define(shared_settings),
+            Isa::Riscv => riscv::define(shared_defs),
+            Isa::X86 => x86::define(shared_defs),
+            Isa::Arm32 => arm32::define(shared_defs),
+            Isa::Arm64 => arm64::define(shared_defs),
         })
         .collect()
 }

@@ -1,6 +1,8 @@
+use crate::cdsl::inst::InstructionGroup;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
+use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let setting = SettingGroupBuilder::new("arm64");
@@ -40,8 +42,11 @@ fn define_registers() -> IsaRegs {
     regs.finish()
 }
 
-pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
-    let settings = define_settings(shared_settings);
+pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
+    let settings = define_settings(&shared_defs.settings);
     let regs = define_registers();
-    TargetIsa::new("arm64", settings, regs)
+
+    let inst_group = InstructionGroup::new("arm64", "arm64 specific instruction set");
+
+    TargetIsa::new("arm64", inst_group, settings, regs)
 }
