@@ -252,7 +252,7 @@ class Instruction(object):
         for opnum in self.value_opnums:
             typ = self.ins[opnum].typevar
             tv = typ.free_typevar()
-            # Non-polymorphic or derived form ctrl_typevar is OK.
+            # Non-polymorphic or derived from ctrl_typevar is OK.
             if tv is None or tv is ctrl_typevar:
                 continue
             # No other derived typevars allowed.

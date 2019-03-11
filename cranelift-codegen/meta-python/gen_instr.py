@@ -364,7 +364,7 @@ def gen_opcodes(groups, fmt):
     # We explicitly set the discriminant of the first variant to 1, which
     # allows us to take advantage of the NonZero optimization, meaning that
     # wrapping enums can use the 0 discriminant instead of increasing the size
-    # if the whole type, and so SIZEOF(Option<Opcode>>) == SIZEOF(Opcode)
+    # of the whole type, and so SIZEOF(Option<Opcode>>) == SIZEOF(Opcode)
     is_first_opcode = True
     with fmt.indented('pub enum Opcode {', '}'):
         for g in groups:
@@ -505,7 +505,7 @@ def gen_type_constraints(fmt, instrs):
     # Table of operand constraint sequences (as tuples). Each operand
     # constraint is represented as a string, one of:
     # - `Concrete(vt)`, where `vt` is a value type name.
-    # - `Free(idx)` where `idx` isan index into `type_sets`.
+    # - `Free(idx)` where `idx` is an index into `type_sets`.
     # - `Same`, `Lane`, `AsBool` for controlling typevar-derived constraints.
     operand_seqs = UniqueSeqTable()
 
