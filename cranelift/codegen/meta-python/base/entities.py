@@ -19,7 +19,7 @@ stack_slot = EntityRefKind('stack_slot', 'A stack slot.')
 #: A reference to a global value.
 global_value = EntityRefKind('global_value', 'A global value.')
 
-#: A reference to a function sugnature declared in the function preamble.
+#: A reference to a function signature declared in the function preamble.
 #: This is used to provide the call signature in a call_indirect instruction.
 sig_ref = EntityRefKind('sig_ref', 'A function signature.')
 
