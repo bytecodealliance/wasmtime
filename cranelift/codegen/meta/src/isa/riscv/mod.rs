@@ -1,6 +1,8 @@
+use crate::cdsl::inst::InstructionGroup;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
+use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let mut setting = SettingGroupBuilder::new("riscv");
@@ -76,8 +78,11 @@ fn define_registers() -> IsaRegs {
     regs.finish()
 }
 
-pub fn define(shared_settings: &SettingGroup) -> TargetIsa {
-    let settings = define_settings(shared_settings);
+pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
+    let settings = define_settings(&shared_defs.settings);
     let regs = define_registers();
-    TargetIsa::new("riscv", settings, regs)
+
+    let inst_group = InstructionGroup::new("riscv", "riscv specific instruction set");
+
+    TargetIsa::new("riscv", inst_group, settings, regs)
 }
