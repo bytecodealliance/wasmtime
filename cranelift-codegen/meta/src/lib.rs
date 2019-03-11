@@ -5,6 +5,7 @@ mod srcgen;
 pub mod error;
 pub mod isa;
 
+mod gen_inst;
 mod gen_registers;
 mod gen_settings;
 mod gen_types;
@@ -32,6 +33,17 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
 
     // Per ISA definitions.
     let isas = isa::define(isas, &mut shared_defs);
+
+    let mut all_inst_groups = vec![&shared_defs.instructions];
+    all_inst_groups.extend(isas.iter().map(|isa| &isa.instructions));
+
+    gen_inst::generate(
+        all_inst_groups,
+        &shared_defs.format_registry,
+        "new_opcodes.rs",
+        "new_inst_builder.rs",
+        &out_dir,
+    )?;
 
     for isa in isas {
         gen_registers::generate(&isa, &format!("registers-{}.rs", isa.name), &out_dir)?;
