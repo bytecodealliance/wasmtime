@@ -1,15 +1,54 @@
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::slice;
 
+/// Collect items into the `table` list, removing duplicates.
+pub struct UniqueTable<'entries, T: Eq + Hash> {
+    table: Vec<&'entries T>,
+    map: HashMap<&'entries T, usize>,
+}
+
+impl<'entries, T: Eq + Hash> UniqueTable<'entries, T> {
+    pub fn new() -> Self {
+        Self {
+            table: Vec::new(),
+            map: HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, entry: &'entries T) -> usize {
+        match self.map.get(&entry) {
+            None => {
+                let i = self.table.len();
+                self.table.push(entry);
+                self.map.insert(entry, i);
+                i
+            }
+            Some(&i) => i,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
+    pub fn iter(&self) -> slice::Iter<&'entries T> {
+        self.table.iter()
+    }
+}
+
 /// A table of sequences which tries to avoid common subsequences.
-pub struct UniqueTable<T: PartialEq + Clone> {
+pub struct UniqueSeqTable<T: PartialEq + Clone> {
     table: Vec<T>,
 }
 
-impl<T: PartialEq + Clone> UniqueTable<T> {
+impl<T: PartialEq + Clone> UniqueSeqTable<T> {
     pub fn new() -> Self {
         Self { table: Vec::new() }
     }
     pub fn add(&mut self, values: &Vec<T>) -> usize {
+        if values.len() == 0 {
+            return 0;
+        }
         if let Some(offset) = find_subsequence(values, &self.table) {
             offset
         } else {
