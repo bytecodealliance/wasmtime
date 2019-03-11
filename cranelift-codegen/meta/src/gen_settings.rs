@@ -7,7 +7,7 @@ use crate::constant_hash::{generate_table, simple_hash};
 use crate::error;
 use crate::shared;
 use crate::srcgen::{Formatter, Match};
-use crate::unique_table::UniqueTable;
+use crate::unique_table::UniqueSeqTable;
 use std::collections::HashMap;
 
 enum ParentGroup {
@@ -238,7 +238,7 @@ impl<'a> SettingOrPreset<'a> {
 
 /// Emits DESCRIPTORS, ENUMERATORS, HASH_TABLE and PRESETS.
 fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
-    let mut enum_table: UniqueTable<&'static str> = UniqueTable::new();
+    let mut enum_table = UniqueSeqTable::new();
 
     let mut descriptor_index_map: HashMap<SettingOrPreset, usize> = HashMap::new();
 
