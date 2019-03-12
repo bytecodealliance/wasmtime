@@ -786,16 +786,20 @@ where
             Operator::Min(ty) => write!(f, "{}.min", Type::<Size>::Float(*ty)),
             Operator::Max(ty) => write!(f, "{}.max", Type::<Size>::Float(*ty)),
             Operator::Copysign(ty) => write!(f, "{}.copysign", Type::<Size>::Float(*ty)),
-            Operator::I32WrapFromI64 => write!(f, "i32.wrapfromi64"),
-            Operator::F32DemoteFromF64 => write!(f, "f32.demotefromf64"),
-            Operator::F64PromoteFromF32 => write!(f, "f64.promotefromf32"),
-            Operator::I32ReinterpretFromF32 => write!(f, "i32.reinterpretfromf32"),
-            Operator::I64ReinterpretFromF64 => write!(f, "i64.reinterpretfromf64"),
-            Operator::F32ReinterpretFromI32 => write!(f, "f32.reinterpretfromi32"),
-            Operator::F64ReinterpretFromI64 => write!(f, "f64.reinterpretfromi64"),
+            Operator::I32WrapFromI64 => write!(f, "i32.wrap_from.i64"),
+            Operator::F32DemoteFromF64 => write!(f, "f32.demote_from.f64"),
+            Operator::F64PromoteFromF32 => write!(f, "f64.promote_from.f32"),
+            Operator::I32ReinterpretFromF32 => write!(f, "i32.reinterpret_from.f32"),
+            Operator::I64ReinterpretFromF64 => write!(f, "i64.reinterpret_from.f64"),
+            Operator::F32ReinterpretFromI32 => write!(f, "f32.reinterpret_from.i32"),
+            Operator::F64ReinterpretFromI64 => write!(f, "f64.reinterpret_from.i64"),
             Operator::MemoryCopy => write!(f, "memory.copy"),
             Operator::MemoryFill => write!(f, "memory.fill"),
             Operator::TableCopy => write!(f, "table.copy"),
+            Operator::FConvertFromI {
+                input_ty,
+                output_ty,
+            } => write!(f, "{}.convert_from.{}", input_ty, Type::Float::<Int>(*output_ty)),
             _ => unimplemented!(),
         }
     }
@@ -1831,7 +1835,6 @@ where
             // (where it's way easier to debug).
             WasmOperator::I32RemS => {
                 let id = self.next_id();
-                let params = self.block_params();
 
                 let then = (id, NameTag::Header);
                 let else_ = (id, NameTag::Else);
@@ -1885,7 +1888,44 @@ where
             WasmOperator::I64Mul => smallvec![Operator::Mul(I64)],
             WasmOperator::I64DivS => smallvec![Operator::Div(SI64)],
             WasmOperator::I64DivU => smallvec![Operator::Div(SU64)],
-            WasmOperator::I64RemS => smallvec![Operator::Rem(sint::I64)],
+            WasmOperator::I64RemS => {
+                let id = self.next_id();
+
+                let then = (id, NameTag::Header);
+                let else_ = (id, NameTag::Else);
+                let end = (id, NameTag::End);
+
+                let mut end_params = self.block_params();
+
+                end_params.pop();
+                end_params.pop();
+                end_params.push(I64);
+
+                smallvec![
+                    Operator::block(self.block_params(), then),
+                    Operator::block(self.block_params(), else_),
+                    Operator::end(end_params, end),
+                    Operator::Pick(0),
+                    Operator::Const((-1i64).into()),
+                    Operator::Ne(I64),
+                    Operator::BrIf {
+                        then: BrTarget::Label(then).into(),
+                        else_: BrTarget::Label(else_).into()
+                    },
+                    Operator::Label(then),
+                    Operator::Rem(sint::I64),
+                    Operator::Br {
+                        target: BrTarget::Label(end).into()
+                    },
+                    Operator::Label(else_),
+                    Operator::Drop(0..=1),
+                    Operator::Const(0i64.into()),
+                    Operator::Br {
+                        target: BrTarget::Label(end).into()
+                    },
+                    Operator::Label(end),
+                ]
+            }
             WasmOperator::I64RemU => smallvec![Operator::Rem(sint::U64)],
             WasmOperator::I64And => smallvec![Operator::And(Size::_64)],
             WasmOperator::I64Or => smallvec![Operator::Or(Size::_64)],
@@ -1944,15 +1984,39 @@ where
             WasmOperator::I64TruncUF32 => unimplemented!("{:?}", op),
             WasmOperator::I64TruncSF64 => unimplemented!("{:?}", op),
             WasmOperator::I64TruncUF64 => unimplemented!("{:?}", op),
-            WasmOperator::F32ConvertSI32 => unimplemented!("{:?}", op),
-            WasmOperator::F32ConvertUI32 => unimplemented!("{:?}", op),
-            WasmOperator::F32ConvertSI64 => unimplemented!("{:?}", op),
-            WasmOperator::F32ConvertUI64 => unimplemented!("{:?}", op),
+            WasmOperator::F32ConvertSI32 => smallvec![Operator::FConvertFromI {
+                input_ty: sint::I32,
+                output_ty: Size::_32
+            }],
+            WasmOperator::F32ConvertUI32 => smallvec![Operator::FConvertFromI {
+                input_ty: sint::U32,
+                output_ty: Size::_32
+            }],
+            WasmOperator::F32ConvertSI64 => smallvec![Operator::FConvertFromI {
+                input_ty: sint::I64,
+                output_ty: Size::_32
+            }],
+            WasmOperator::F32ConvertUI64 => smallvec![Operator::FConvertFromI {
+                input_ty: sint::U64,
+                output_ty: Size::_32
+            }],
+            WasmOperator::F64ConvertSI32 => smallvec![Operator::FConvertFromI {
+                input_ty: sint::I32,
+                output_ty: Size::_64
+            }],
+            WasmOperator::F64ConvertUI32 => smallvec![Operator::FConvertFromI {
+                input_ty: sint::U32,
+                output_ty: Size::_64
+            }],
+            WasmOperator::F64ConvertSI64 => smallvec![Operator::FConvertFromI {
+                input_ty: sint::I64,
+                output_ty: Size::_64
+            }],
+            WasmOperator::F64ConvertUI64 => smallvec![Operator::FConvertFromI {
+                input_ty: sint::U64,
+                output_ty: Size::_64
+            }],
             WasmOperator::F32DemoteF64 => unimplemented!("{:?}", op),
-            WasmOperator::F64ConvertSI32 => unimplemented!("{:?}", op),
-            WasmOperator::F64ConvertUI32 => unimplemented!("{:?}", op),
-            WasmOperator::F64ConvertSI64 => unimplemented!("{:?}", op),
-            WasmOperator::F64ConvertUI64 => unimplemented!("{:?}", op),
             WasmOperator::F64PromoteF32 => unimplemented!("{:?}", op),
             WasmOperator::I32ReinterpretF32 => smallvec![Operator::I32ReinterpretFromF32],
             WasmOperator::I64ReinterpretF64 => smallvec![Operator::I64ReinterpretFromF64],

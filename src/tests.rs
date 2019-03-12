@@ -1212,6 +1212,36 @@ fn i32_rem() {
 }
 
 #[test]
+fn i64_div() {
+    const CODE: &str = r"
+    (module
+      (func (param i64) (param i64) (result i64)
+        (i64.div_s (get_local 0) (get_local 1))
+      )
+    )";
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    assert_eq!(translated.execute_func::<_, u64>(0, (-1i64, -1i64)), Ok(1));
+}
+
+#[test]
+fn i64_rem() {
+    const CODE: &str = r"
+    (module
+      (func (param i64) (param i64) (result i64)
+        (i64.rem_s (get_local 0) (get_local 1))
+      )
+    )";
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    assert_eq!(translated.execute_func::<_, u64>(0, (123121i64, -1i64)), Ok(0));
+}
+
+#[test]
 fn br_table() {
     const CODE: &str = r"
 (func (param $i i32) (result i32)

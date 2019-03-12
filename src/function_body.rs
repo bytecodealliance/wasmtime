@@ -435,6 +435,10 @@ where
             Operator::Or(Size::_64) => ctx.i64_or(),
             Operator::Xor(Size::_64) => ctx.i64_xor(),
             Operator::Mul(I64) => ctx.i64_mul(),
+            Operator::Div(SU64) => ctx.i64_div_u(),
+            Operator::Div(SI64) => ctx.i64_div_s(),
+            Operator::Rem(sint::I64) => ctx.i64_rem_s(),
+            Operator::Rem(sint::U64) => ctx.i64_rem_u(),
             Operator::Shl(Size::_64) => ctx.i64_shl(),
             Operator::Shr(sint::I64) => ctx.i64_shr_s(),
             Operator::Shr(sint::U64) => ctx.i64_shr_u(),
@@ -481,6 +485,18 @@ where
             Operator::Extend {
                 sign: Signedness::Signed,
             } => ctx.i32_extend_s(),
+            Operator::FConvertFromI {
+                input_ty: sint::I32,
+                output_ty: Size::_32
+            } => {
+                ctx.f32_convert_from_i32_s()
+            },
+            Operator::FConvertFromI {
+                input_ty: sint::U32,
+                output_ty: Size::_32
+            } => {
+                ctx.f32_convert_from_i32_u()
+            },
             Operator::Load8 {
                 ty: sint::U32,
                 memarg,

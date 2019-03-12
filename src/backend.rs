@@ -663,6 +663,162 @@ impl StackDepth {
     }
 }
 
+macro_rules! int_div {
+    ($full_div_s:ident, $full_div_u:ident, $div_u:ident, $div_s:ident, $rem_u:ident, $rem_s:ident, $imm_fn:ident, $signed_ty:ty, $unsigned_ty:ty) => {
+        // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
+        //       emitting Wasm.
+        pub fn $div_u(&mut self) {
+            let divisor = self.pop();
+            let quotient = self.pop();
+
+            if let (Some(quotient), Some(divisor)) = (quotient.$imm_fn(), divisor.$imm_fn()) {
+                if divisor == 0 {
+                    self.trap();
+                    self.push(ValueLocation::Immediate((0 as $unsigned_ty).into()));
+                } else {
+                    self.push(ValueLocation::Immediate(
+                        <$unsigned_ty>::wrapping_div(quotient as _, divisor as _).into(),
+                    ));
+                }
+
+                return;
+            }
+
+            let (div, rem, saved) = self.$full_div_u(divisor, quotient);
+
+            self.free_value(rem);
+
+            let div = match div {
+                ValueLocation::Reg(div) if saved.clone().any(|(_, dst)| dst == div) => {
+                    let new = self.block_state.regs.take(I32);
+                    dynasm!(self.asm
+                        ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
+                    );
+                    self.block_state.regs.release(div);
+                    ValueLocation::Reg(new)
+                }
+                _ => div,
+            };
+
+            self.cleanup_gprs(saved);
+
+            self.push(div);
+        }
+
+        // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
+        //       emitting Wasm.
+        pub fn $div_s(&mut self) {
+            let divisor = self.pop();
+            let quotient = self.pop();
+
+            if let (Some(quotient), Some(divisor)) = (quotient.$imm_fn(), divisor.$imm_fn()) {
+                if divisor == 0 {
+                    self.trap();
+                    self.push(ValueLocation::Immediate((0 as $signed_ty).into()));
+                } else {
+                    self.push(ValueLocation::Immediate(
+                        <$signed_ty>::wrapping_div(quotient, divisor).into(),
+                    ));
+                }
+
+                return;
+            }
+
+            let (div, rem, saved) = self.$full_div_s(divisor, quotient);
+
+            self.free_value(rem);
+
+            let div = match div {
+                ValueLocation::Reg(div) if saved.clone().any(|(_, dst)| dst == div) => {
+                    let new = self.block_state.regs.take(I32);
+                    dynasm!(self.asm
+                        ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
+                    );
+                    self.block_state.regs.release(div);
+                    ValueLocation::Reg(new)
+                }
+                _ => div,
+            };
+
+            self.cleanup_gprs(saved);
+
+            self.push(div);
+        }
+
+        pub fn $rem_u(&mut self) {
+            let divisor = self.pop();
+            let quotient = self.pop();
+
+            if let (Some(quotient), Some(divisor)) = (quotient.$imm_fn(), divisor.$imm_fn()) {
+                if divisor == 0 {
+                    self.trap();
+                    self.push(ValueLocation::Immediate((0 as $unsigned_ty).into()));
+                } else {
+                    self.push(ValueLocation::Immediate(
+                        (quotient as $unsigned_ty % divisor as $unsigned_ty).into(),
+                    ));
+                }
+                return;
+            }
+
+            let (div, rem, saved) = self.$full_div_u(divisor, quotient);
+
+            self.free_value(div);
+
+            let rem = match rem {
+                ValueLocation::Reg(rem) if saved.clone().any(|(_, dst)| dst == rem) => {
+                    let new = self.block_state.regs.take(I32);
+                    dynasm!(self.asm
+                        ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
+                    );
+                    self.block_state.regs.release(rem);
+                    ValueLocation::Reg(new)
+                }
+                _ => rem,
+            };
+
+            self.cleanup_gprs(saved);
+
+            self.push(rem);
+        }
+
+        pub fn $rem_s(&mut self) {
+            let divisor = self.pop();
+            let quotient = self.pop();
+
+            if let (Some(quotient), Some(divisor)) = (quotient.$imm_fn(), divisor.$imm_fn()) {
+                if divisor == 0 {
+                    self.trap();
+                    self.push(ValueLocation::Immediate((0 as $signed_ty).into()));
+                } else {
+                    self.push(ValueLocation::Immediate((quotient % divisor).into()));
+                }
+                return;
+            }
+
+            let (div, rem, saved) = self.$full_div_s(divisor, quotient);
+
+            self.free_value(div);
+
+            let rem = match rem {
+                ValueLocation::Reg(rem) if saved.clone().any(|(_, dst)| dst == rem) => {
+                    let new = self.block_state.regs.take(I32);
+                    dynasm!(self.asm
+                        ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
+                    );
+                    self.block_state.regs.release(rem);
+                    ValueLocation::Reg(new)
+                }
+                _ => rem,
+            };
+
+            self.cleanup_gprs(saved);
+
+            self.push(rem);
+        }
+    }
+}
+
 macro_rules! unop {
     ($name:ident, $instr:ident, $reg_ty:ident, $typ:ty, $const_fallback:expr) => {
         pub fn $name(&mut self) {
@@ -715,13 +871,13 @@ macro_rules! conversion {
             let out_val = match val {
                 ValueLocation::Immediate(imm) =>
                     ValueLocation::Immediate(
-                        ($const_fallback(imm.$const_ty_fn().unwrap()) as $out_typ).into()
+                        $const_fallback(imm.$const_ty_fn().unwrap()).into()
                     ),
                 ValueLocation::Stack(offset) => {
                     let offset = self.adjusted_offset(offset);
                     let temp = self.block_state.regs.take(Type::for_::<$out_typ>());
                     dynasm!(self.asm
-                        ; $instr $out_reg_ty(temp.rq().unwrap()), [rsp + offset]
+                        ; $instr $out_reg_ty(temp.$out_reg_fn().unwrap()), DWORD [rsp + offset]
                     );
                     ValueLocation::Reg(temp)
                 }
@@ -2334,6 +2490,47 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         as_f32,
         |a: wasmparser::Ieee32| a.bits()
     );
+    conversion!(
+        f32_convert_from_i32_s,
+        cvtsi2ss,
+        Rd,
+        rq,
+        Rx,
+        rx,
+        i32,
+        f32,
+        as_i32,
+        |a| wasmparser::Ieee32((a as f32).to_bits())
+    );
+
+    pub fn f32_convert_from_i32_u(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) =>
+                ValueLocation::Immediate(
+                    wasmparser::Ieee32((imm.as_i32().unwrap() as u32 as f32).to_bits()).into()
+                ),
+            _ => {
+                let reg = self.into_reg(I32, val);
+                val = ValueLocation::Reg(reg);
+
+                let temp = self.block_state.regs.take(F32);
+
+                dynasm!(self.asm
+                    ; mov Rq(reg.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; cvtsi2ss Rx(temp.rx().unwrap()), Rq(reg.rq().unwrap())
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
     unop!(i64_popcnt, popcnt, Rq, u64, |a: u64| a.count_ones() as u64);
 
     // TODO: Use `lea` when the LHS operand isn't a temporary but both of the operands
@@ -2432,10 +2629,41 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         I64
     );
 
+    fn cleanup_gprs(&mut self, gprs: impl Iterator<Item = (GPR, GPR)>) {
+        for (src, dst) in gprs {
+            self.copy_value(&ValueLocation::Reg(src), &mut ValueLocation::Reg(dst));
+            self.block_state.regs.release(src);
+            self.block_state.regs.mark_used(dst);
+        }
+    }
+
+    int_div!(
+        i32_full_div_s,
+        i32_full_div_u,
+        i32_div_u,
+        i32_div_s,
+        i32_rem_u,
+        i32_rem_s,
+        imm_i32,
+        i32,
+        u32
+    );
+    int_div!(
+        i64_full_div_s,
+        i64_full_div_u,
+        i64_div_u,
+        i64_div_s,
+        i64_rem_u,
+        i64_rem_s,
+        imm_i64,
+        i64,
+        u64
+    );
+
     /// Returned divisor is guaranteed not to be `RAX`
     // TODO: With a proper SSE-like "Value" system we could do this way better (we wouldn't have
     //       to move `RAX` back afterwards).
-    fn i32_full_div(
+    fn full_div(
         &mut self,
         divisor: ValueLocation,
         quotient: ValueLocation,
@@ -2517,12 +2745,12 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         ValueLocation,
         impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
     ) {
-        self.i32_full_div(divisor, quotient, |this, divisor| match divisor {
+        self.full_div(divisor, quotient, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
                     ; xor edx, edx
-                    ; div [rsp + offset]
+                    ; div DWORD [rsp + offset]
                 );
             }
             ValueLocation::Reg(r) => {
@@ -2544,12 +2772,12 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         ValueLocation,
         impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
     ) {
-        self.i32_full_div(divisor, quotient, |this, divisor| match divisor {
+        self.full_div(divisor, quotient, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
                     ; cdq
-                    ; idiv [rsp + offset]
+                    ; idiv DWORD [rsp + offset]
                 );
             }
             ValueLocation::Reg(r) => {
@@ -2562,164 +2790,58 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         })
     }
 
-    fn cleanup_gprs(&mut self, gprs: impl Iterator<Item = (GPR, GPR)>) {
-        for (src, dst) in gprs {
-            self.copy_value(&ValueLocation::Reg(src), &mut ValueLocation::Reg(dst));
-            self.block_state.regs.release(src);
-            self.block_state.regs.mark_used(dst);
-        }
+    fn i64_full_div_u(
+        &mut self,
+        divisor: ValueLocation,
+        quotient: ValueLocation,
+    ) -> (
+        ValueLocation,
+        ValueLocation,
+        impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
+    ) {
+        self.full_div(divisor, quotient, |this, divisor| match divisor {
+            ValueLocation::Stack(offset) => {
+                let offset = this.adjusted_offset(offset);
+                dynasm!(this.asm
+                    ; xor rdx, rdx
+                    ; div QWORD [rsp + offset]
+                );
+            }
+            ValueLocation::Reg(r) => {
+                dynasm!(this.asm
+                    ; xor rdx, rdx
+                    ; div Rq(r.rq().unwrap())
+                );
+            }
+            ValueLocation::Immediate(_) => unreachable!(),
+        })
     }
 
-    // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
-    //       emitting Wasm.
-    pub fn i32_div_u(&mut self) {
-        let divisor = self.pop();
-        let quotient = self.pop();
-
-        if let (Some(quotient), Some(divisor)) = (quotient.imm_i32(), divisor.imm_i32()) {
-            if divisor == 0 {
-                self.trap();
-                self.push(ValueLocation::Immediate(0u32.into()));
-            } else {
-                self.push(ValueLocation::Immediate(
-                    u32::wrapping_div(quotient as _, divisor as _).into(),
-                ));
-            }
-
-            return;
-        }
-
-        let (div, rem, saved) = self.i32_full_div_u(divisor, quotient);
-
-        self.free_value(rem);
-
-        let div = match div {
-            ValueLocation::Reg(div) if saved.clone().any(|(_, dst)| dst == div) => {
-                let new = self.block_state.regs.take(I32);
-                dynasm!(self.asm
-                    ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
+    fn i64_full_div_s(
+        &mut self,
+        divisor: ValueLocation,
+        quotient: ValueLocation,
+    ) -> (
+        ValueLocation,
+        ValueLocation,
+        impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
+    ) {
+        self.full_div(divisor, quotient, |this, divisor| match divisor {
+            ValueLocation::Stack(offset) => {
+                let offset = this.adjusted_offset(offset);
+                dynasm!(this.asm
+                    ; cqo
+                    ; idiv QWORD [rsp + offset]
                 );
-                self.block_state.regs.release(div);
-                ValueLocation::Reg(new)
             }
-            _ => div,
-        };
-
-        self.cleanup_gprs(saved);
-
-        self.push(div);
-    }
-
-    // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
-    //       emitting Wasm.
-    pub fn i32_div_s(&mut self) {
-        let divisor = self.pop();
-        let quotient = self.pop();
-
-        if let (Some(quotient), Some(divisor)) = (quotient.imm_i32(), divisor.imm_i32()) {
-            if divisor == 0 {
-                self.trap();
-                self.push(ValueLocation::Immediate(0u32.into()));
-            } else {
-                self.push(ValueLocation::Immediate(
-                    i32::wrapping_div(quotient, divisor).into(),
-                ));
-            }
-
-            return;
-        }
-
-        let (div, rem, saved) = self.i32_full_div_s(divisor, quotient);
-
-        self.free_value(rem);
-
-        let div = match div {
-            ValueLocation::Reg(div) if saved.clone().any(|(_, dst)| dst == div) => {
-                let new = self.block_state.regs.take(I32);
-                dynasm!(self.asm
-                    ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
+            ValueLocation::Reg(r) => {
+                dynasm!(this.asm
+                    ; cqo
+                    ; idiv Rq(r.rq().unwrap())
                 );
-                self.block_state.regs.release(div);
-                ValueLocation::Reg(new)
             }
-            _ => div,
-        };
-
-        self.cleanup_gprs(saved);
-
-        self.push(div);
-    }
-
-    pub fn i32_rem_u(&mut self) {
-        let divisor = self.pop();
-        let quotient = self.pop();
-
-        if let (Some(quotient), Some(divisor)) = (quotient.imm_i32(), divisor.imm_i32()) {
-            if divisor == 0 {
-                self.trap();
-                self.push(ValueLocation::Immediate(0u32.into()));
-            } else {
-                self.push(ValueLocation::Immediate(
-                    (quotient as u32 % divisor as u32).into(),
-                ));
-            }
-            return;
-        }
-
-        let (div, rem, saved) = self.i32_full_div_u(divisor, quotient);
-
-        self.free_value(div);
-
-        let rem = match rem {
-            ValueLocation::Reg(rem) if saved.clone().any(|(_, dst)| dst == rem) => {
-                let new = self.block_state.regs.take(I32);
-                dynasm!(self.asm
-                    ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
-                );
-                self.block_state.regs.release(rem);
-                ValueLocation::Reg(new)
-            }
-            _ => rem,
-        };
-
-        self.cleanup_gprs(saved);
-
-        self.push(rem);
-    }
-
-    pub fn i32_rem_s(&mut self) {
-        let divisor = self.pop();
-        let quotient = self.pop();
-
-        if let (Some(quotient), Some(divisor)) = (quotient.imm_i32(), divisor.imm_i32()) {
-            if divisor == 0 {
-                self.trap();
-                self.push(ValueLocation::Immediate(0u32.into()));
-            } else {
-                self.push(ValueLocation::Immediate((quotient % divisor).into()));
-            }
-            return;
-        }
-
-        let (div, rem, saved) = self.i32_full_div_s(divisor, quotient);
-
-        self.free_value(div);
-
-        let rem = match rem {
-            ValueLocation::Reg(rem) if saved.clone().any(|(_, dst)| dst == rem) => {
-                let new = self.block_state.regs.take(I32);
-                dynasm!(self.asm
-                    ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
-                );
-                self.block_state.regs.release(rem);
-                ValueLocation::Reg(new)
-            }
-            _ => rem,
-        };
-
-        self.cleanup_gprs(saved);
-
-        self.push(rem);
+            ValueLocation::Immediate(_) => unreachable!(),
+        })
     }
 
     // `i32_mul` needs to be separate because the immediate form of the instruction
