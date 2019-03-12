@@ -62,6 +62,7 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<Cod
             divert.clear();
             cur.func.offsets[ebb] = offset;
             while let Some(inst) = cur.next_inst() {
+                divert.apply(&cur.func.dfg[inst]);
                 let enc = cur.func.encodings[inst];
                 offset += encinfo.byte_size(enc, inst, &divert, &cur.func);
             }
@@ -81,10 +82,6 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<Cod
 
             // Record the offset for `ebb` and make sure we iterate until offsets are stable.
             if cur.func.offsets[ebb] != offset {
-                debug_assert!(
-                    cur.func.offsets[ebb] < offset,
-                    "Code shrinking during relaxation"
-                );
                 cur.func.offsets[ebb] = offset;
                 go_again = true;
             }
@@ -173,12 +170,12 @@ fn relax_branch(
         dest_offset
     );
 
-    // Pick the first encoding that can handle the branch range.
+    // Pick the smallest encoding that can handle the branch range.
     let dfg = &cur.func.dfg;
     let ctrl_type = dfg.ctrl_typevar(inst);
     if let Some(enc) = isa
         .legal_encodings(cur.func, &dfg[inst], ctrl_type)
-        .find(|&enc| {
+        .filter(|&enc| {
             let range = encinfo.branch_range(enc).expect("Branch with no range");
             if !range.contains(offset, dest_offset) {
                 debug!("  trying [{}]: out of range", encinfo.display(enc));
@@ -198,7 +195,9 @@ fn relax_branch(
                 true
             }
         })
+        .min_by_key(|&enc| encinfo.byte_size(enc, inst, &divert, &cur.func))
     {
+        debug_assert!(enc != cur.func.encodings[inst]);
         cur.func.encodings[inst] = enc;
         return encinfo.byte_size(enc, inst, &divert, &cur.func);
     }
