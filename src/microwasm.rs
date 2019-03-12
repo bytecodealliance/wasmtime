@@ -174,7 +174,7 @@ type Int = Size;
 type Float = Size;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct SignfulInt(Signedness, Size);
+pub struct SignfulInt(pub Signedness, pub Size);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Type<I> {
@@ -461,16 +461,12 @@ pub enum Operator<Label> {
     Select,
     /// Duplicate the element at depth `depth` to the top of the stack. This can be used to implement
     /// `GetLocal`.
-    Pick {
-        depth: u32,
-    },
+    Pick(u32),
     /// Swap the top element of the stack with the element at depth `depth`. This can be used to implement
     /// `SetLocal`.
     // TODO: Is it better to have `Swap`, to have `Pull` (which moves the `nth` element instead of swapping)
     //       or to have both?
-    Swap {
-        depth: u32,
-    },
+    Swap(u32),
     GetGlobal {
         index: u32,
     },
@@ -715,8 +711,8 @@ where
                 Ok(())
             }
             Operator::Select => write!(f, "select"),
-            Operator::Pick { depth } => write!(f, "pick {}", depth),
-            Operator::Swap { depth } => write!(f, "swap {}", depth),
+            Operator::Pick(depth) => write!(f, "pick {}", depth),
+            Operator::Swap(depth) => write!(f, "swap {}", depth),
             Operator::Load { ty, memarg } => {
                 write!(f, "{}.load {}, {}", ty, memarg.flags, memarg.offset)
             }
@@ -1697,19 +1693,19 @@ where
             WasmOperator::GetLocal { local_index } => {
                 // TODO: `- 1` because we apply the stack difference _before_ this point
                 let depth = self.local_depth(local_index) - 1;
-                smallvec![Operator::Pick { depth }]
+                smallvec![Operator::Pick(depth)]
             }
             WasmOperator::SetLocal { local_index } => {
                 // TODO: `+ 1` because we apply the stack difference _before_ this point
                 let depth = self.local_depth(local_index) + 1;
-                smallvec![Operator::Swap { depth }, Operator::Drop(0..=0)]
+                smallvec![Operator::Swap(depth), Operator::Drop(0..=0)]
             }
             WasmOperator::TeeLocal { local_index } => {
                 let depth = self.local_depth(local_index);
                 smallvec![
-                    Operator::Swap { depth },
+                    Operator::Swap(depth),
                     Operator::Drop(0..=0),
-                    Operator::Pick { depth: depth - 1 },
+                    Operator::Pick(depth - 1),
                 ]
             }
 
@@ -1830,8 +1826,49 @@ where
             WasmOperator::I32Mul => smallvec![Operator::Mul(I32)],
             WasmOperator::I32DivS => smallvec![Operator::Div(SI32)],
             WasmOperator::I32DivU => smallvec![Operator::Div(SU32)],
-            WasmOperator::I32RemS => smallvec![Operator::Rem(sint::I32)],
-            WasmOperator::I32RemU => smallvec![Operator::Rem(sint::U32)],
+            // Unlike Wasm, our `rem_s` instruction _does_ trap on `-1`. Instead
+            // of handling this complexity in the backend, we handle it here
+            // (where it's way easier to debug).
+            WasmOperator::I32RemS => {
+                let id = self.next_id();
+                let params = self.block_params();
+
+                let then = (id, NameTag::Header);
+                let else_ = (id, NameTag::Else);
+                let end = (id, NameTag::End);
+
+                let mut end_params = self.block_params();
+
+                end_params.pop();
+                end_params.pop();
+                end_params.push(I32);
+
+                smallvec![
+                    Operator::block(self.block_params(), then),
+                    Operator::block(self.block_params(), else_),
+                    Operator::end(end_params, end),
+                    Operator::Pick(0),
+                    Operator::Const((-1i32).into()),
+                    Operator::Ne(I32),
+                    Operator::BrIf {
+                        then: BrTarget::Label(then).into(),
+                        else_: BrTarget::Label(else_).into()
+                    },
+                    Operator::Label(then),
+                    Operator::Rem(sint::I32),
+                    Operator::Br {
+                        target: BrTarget::Label(end).into()
+                    },
+                    Operator::Label(else_),
+                    Operator::Drop(0..=1),
+                    Operator::Const(0i32.into()),
+                    Operator::Br {
+                        target: BrTarget::Label(end).into()
+                    },
+                    Operator::Label(end),
+                ]
+            }
+            WasmOperator::I32RemU => smallvec![Operator::Rem(sint::U32),],
             WasmOperator::I32And => smallvec![Operator::And(Size::_32)],
             WasmOperator::I32Or => smallvec![Operator::Or(Size::_32)],
             WasmOperator::I32Xor => smallvec![Operator::Xor(Size::_32)],
@@ -1887,8 +1924,14 @@ where
             WasmOperator::F64Max => smallvec![Operator::Max(Size::_64)],
             WasmOperator::F64Copysign => smallvec![Operator::Copysign(Size::_64)],
             WasmOperator::I32WrapI64 => smallvec![Operator::I32WrapFromI64],
-            WasmOperator::I32TruncSF32 => unimplemented!("{:?}", op),
-            WasmOperator::I32TruncUF32 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncSF32 => smallvec![Operator::ITruncFromF {
+                input_ty: Size::_32,
+                output_ty: sint::I32
+            }],
+            WasmOperator::I32TruncUF32 => smallvec![Operator::ITruncFromF {
+                input_ty: Size::_32,
+                output_ty: sint::U32
+            }],
             WasmOperator::I32TruncSF64 => unimplemented!("{:?}", op),
             WasmOperator::I32TruncUF64 => unimplemented!("{:?}", op),
             WasmOperator::I64ExtendSI32 => smallvec![Operator::Extend {
@@ -1911,10 +1954,10 @@ where
             WasmOperator::F64ConvertSI64 => unimplemented!("{:?}", op),
             WasmOperator::F64ConvertUI64 => unimplemented!("{:?}", op),
             WasmOperator::F64PromoteF32 => unimplemented!("{:?}", op),
-            WasmOperator::I32ReinterpretF32 => unimplemented!("{:?}", op),
-            WasmOperator::I64ReinterpretF64 => unimplemented!("{:?}", op),
-            WasmOperator::F32ReinterpretI32 => unimplemented!("{:?}", op),
-            WasmOperator::F64ReinterpretI64 => unimplemented!("{:?}", op),
+            WasmOperator::I32ReinterpretF32 => smallvec![Operator::I32ReinterpretFromF32],
+            WasmOperator::I64ReinterpretF64 => smallvec![Operator::I64ReinterpretFromF64],
+            WasmOperator::F32ReinterpretI32 => smallvec![Operator::F32ReinterpretFromI32],
+            WasmOperator::F64ReinterpretI64 => smallvec![Operator::F64ReinterpretFromI64],
             WasmOperator::I32Extend8S => unimplemented!("{:?}", op),
             WasmOperator::I32Extend16S => unimplemented!("{:?}", op),
             WasmOperator::I64Extend8S => unimplemented!("{:?}", op),
@@ -1936,3 +1979,4 @@ where
         }))
     }
 }
+

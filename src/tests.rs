@@ -1193,35 +1193,63 @@ fn i32_div() {
     let translated = translate_wat(CODE);
     translated.disassemble();
 
-    assert_eq!(translated.execute_func::<_, u32>(0, (1, 1)), Ok(1));
+    assert_eq!(translated.execute_func::<_, u32>(0, (-1, -1)), Ok(1));
+}
+
+#[test]
+fn i32_rem() {
+    const CODE: &str = r"
+    (module
+      (func (param i32) (param i32) (result i32)
+        (i32.rem_s (get_local 0) (get_local 1))
+      )
+    )";
+
+    let translated = translate_wat(CODE);
+    translated.disassemble();
+
+    assert_eq!(translated.execute_func::<_, u32>(0, (123121, -1)), Ok(0));
 }
 
 #[test]
 fn br_table() {
     const CODE: &str = r"
-(module
-  (func
-    (block (br_table 0 0 0 (i32.const 0)) (call $dummy))
+(func (param $i i32) (result i32)
+    (return
+      (block $2 (result i32)
+        (i32.add (i32.const 10)
+          (block $1 (result i32)
+            (i32.add (i32.const 100)
+              (block $0 (result i32)
+                (i32.add (i32.const 1000)
+                  (block $default (result i32)
+                    (br_table $0 $1 $2 $default
+                      (i32.mul (i32.const 2) (get_local $i))
+                      (i32.and (i32.const 3) (get_local $i))
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
   )
-  (func
-    (block (call $dummy) (br_table 0 0 0 (i32.const 0)) (call $dummy))
-  )
-  (func
-    (block (nop) (call $dummy) (br_table 0 0 0 (i32.const 0)))
-  )
-  (func $dummy)
-)
 ";
 
     let translated = translate_wat(CODE);
     translated.disassemble();
 
-    println!("as-block-first");
-    assert_eq!(translated.execute_func::<_, ()>(0, ()), Ok(()),);
-    println!("as-block-mid");
-    assert_eq!(translated.execute_func::<_, ()>(1, ()), Ok(()),);
-    println!("as-block-last");
-    assert_eq!(translated.execute_func::<_, ()>(2, ()), Ok(()),);
+    assert_eq!(translated.execute_func::<_, u32>(0, (0u32,)), Ok(110));
+    assert_eq!(translated.execute_func::<_, u32>(0, (1u32,)), Ok(12));
+    assert_eq!(translated.execute_func::<_, u32>(0, (2u32,)), Ok(4));
+    assert_eq!(translated.execute_func::<_, u32>(0, (3u32,)), Ok(1116));
+    assert_eq!(translated.execute_func::<_, u32>(0, (4u32,)), Ok(118));
+    assert_eq!(translated.execute_func::<_, u32>(0, (5u32,)), Ok(20));
+    assert_eq!(translated.execute_func::<_, u32>(0, (6u32,)), Ok(12));
+    assert_eq!(translated.execute_func::<_, u32>(0, (7u32,)), Ok(1124));
+    assert_eq!(translated.execute_func::<_, u32>(0, (8u32,)), Ok(126));
 }
 
 #[test]
@@ -1955,3 +1983,4 @@ fn sieve() {
 
     translate(&wabt::wat2wasm(CODE).unwrap()).unwrap();
 }
+

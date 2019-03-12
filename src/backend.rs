@@ -690,6 +690,55 @@ macro_rules! unop {
                 }
             };
 
+            self.free_value(val);
+            self.push(out_val);
+        }
+    }
+}
+
+macro_rules! conversion {
+    (
+        $name:ident,
+        $instr:ident,
+        $in_reg_ty:ident,
+        $in_reg_fn:ident,
+        $out_reg_ty:ident,
+        $out_reg_fn:ident,
+        $in_typ:ty,
+        $out_typ:ty,
+        $const_ty_fn:ident,
+        $const_fallback:expr
+    ) => {
+        pub fn $name(&mut self) {
+            let mut val = self.pop();
+
+            let out_val = match val {
+                ValueLocation::Immediate(imm) =>
+                    ValueLocation::Immediate(
+                        ($const_fallback(imm.$const_ty_fn().unwrap()) as $out_typ).into()
+                    ),
+                ValueLocation::Stack(offset) => {
+                    let offset = self.adjusted_offset(offset);
+                    let temp = self.block_state.regs.take(Type::for_::<$out_typ>());
+                    dynasm!(self.asm
+                        ; $instr $out_reg_ty(temp.rq().unwrap()), [rsp + offset]
+                    );
+                    ValueLocation::Reg(temp)
+                }
+                ValueLocation::Reg(_) => {
+                    let reg = self.into_reg(Type::for_::<$in_typ>(), val);
+                    let temp = self.block_state.regs.take(Type::for_::<$out_typ>());
+                    val = ValueLocation::Reg(reg);
+
+                    dynasm!(self.asm
+                        ; $instr $out_reg_ty(temp.$out_reg_fn().unwrap()), $in_reg_ty(reg.$in_reg_fn().unwrap())
+                    );
+                    ValueLocation::Reg(temp)
+                }
+            };
+
+            self.free_value(val);
+
             self.push(out_val);
         }
     }
@@ -1624,9 +1673,17 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     /// Pops i32 predicate and branches to the specified label
     /// if the predicate is equal to zero.
-    pub fn br_if_false(&mut self, target: impl Into<BrTarget<Label>>, pass_args: impl FnOnce(&mut Self)) {
+    pub fn br_if_false(
+        &mut self,
+        target: impl Into<BrTarget<Label>>,
+        pass_args: impl FnOnce(&mut Self),
+    ) {
         let val = self.pop();
-        let label = target.into().label().map(|c| *c).unwrap_or_else(|| self.ret_label());
+        let label = target
+            .into()
+            .label()
+            .map(|c| *c)
+            .unwrap_or_else(|| self.ret_label());
 
         pass_args(self);
 
@@ -1642,9 +1699,17 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     /// Pops i32 predicate and branches to the specified label
     /// if the predicate is not equal to zero.
-    pub fn br_if_true(&mut self, target: impl Into<BrTarget<Label>>, pass_args: impl FnOnce(&mut Self)) {
+    pub fn br_if_true(
+        &mut self,
+        target: impl Into<BrTarget<Label>>,
+        pass_args: impl FnOnce(&mut Self),
+    ) {
         let val = self.pop();
-        let label = target.into().label().map(|c| *c).unwrap_or_else(|| self.ret_label());
+        let label = target
+            .into()
+            .label()
+            .map(|c| *c)
+            .unwrap_or_else(|| self.ret_label());
 
         pass_args(self);
 
@@ -1685,18 +1750,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
         pass_args(self);
 
-        if count == 0 {
-            if let Some(default) = default {
-                match default {
-                    BrTarget::Label(label) => self.br(label),
-                    BrTarget::Return => {
-                        dynasm!(self.asm
-                            ; ret
-                        );
-                    }
-                }
-            }
-        } else if let Some(imm) = selector.imm_i32() {
+        if let Some(imm) = selector.imm_i32() {
             if let Some(target) = targets.nth(imm as _).or(default) {
                 match target {
                     BrTarget::Label(label) => self.br(label),
@@ -1708,16 +1762,33 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 }
             }
         } else {
-            let selector_reg = self.into_reg(GPRType::Rq, selector);
-            selector = ValueLocation::Reg(selector_reg);
+            if count > 0 {
+                let selector_reg = self.into_reg(GPRType::Rq, selector);
+                selector = ValueLocation::Reg(selector_reg);
 
-            // TODO: Jump table (wrestling with dynasm to implement it is too much work)
-            for (i, target) in targets.enumerate() {
-                let label = self.target_to_label(target);
+                let tmp = self.block_state.regs.take(I64);
+
+                self.immediate_to_reg(tmp, (count as u32).into());
                 dynasm!(self.asm
-                    ; cmp Rq(selector_reg.rq().unwrap()), i as i32
-                    ; je =>label.0
+                    ; cmp Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                    ; cmova Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                    ; lea Rq(tmp.rq().unwrap()), [>start_label]
+                    ; lea Rq(selector_reg.rq().unwrap()), [
+                        Rq(selector_reg.rq().unwrap()) * 5
+                    ]
+                    ; add Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                    ; jmp Rq(selector_reg.rq().unwrap())
+                    ; start_label:
                 );
+
+                self.block_state.regs.release(tmp);
+
+                for (i, target) in targets.enumerate() {
+                    let label = self.target_to_label(target);
+                    dynasm!(self.asm
+                        ; jmp =>label.0
+                    );
+                }
             }
 
             if let Some(def) = default {
@@ -2251,6 +2322,18 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     }
 
     unop!(i32_popcnt, popcnt, Rd, u32, u32::count_ones);
+    conversion!(
+        i32_truncate_f32,
+        cvttss2si,
+        Rx,
+        rx,
+        Rd,
+        rq,
+        f32,
+        i32,
+        as_f32,
+        |a: wasmparser::Ieee32| a.bits()
+    );
     unop!(i64_popcnt, popcnt, Rq, u64, |a: u64| a.count_ones() as u64);
 
     // TODO: Use `lea` when the LHS operand isn't a temporary but both of the operands
@@ -2270,10 +2353,12 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     commutative_binop_f32!(f32_add, addss, |a, b| a + b);
     commutative_binop_f32!(f32_mul, mulss, |a, b| a * b);
     binop_f32!(f32_sub, subss, |a, b| a - b);
+    binop_f32!(f32_div, divss, |a, b| a / b);
 
     commutative_binop_f64!(f64_add, addsd, |a, b| a + b);
     commutative_binop_f64!(f64_mul, mulsd, |a, b| a * b);
     binop_f64!(f64_sub, subsd, |a, b| a - b);
+    binop_f64!(f64_div, divsd, |a, b| a / b);
 
     shift!(
         i32_shl,
@@ -2358,26 +2443,29 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
+        impl Iterator<Item = (GPR, GPR)> + Clone,
     ) {
-        let divisor = if ValueLocation::Reg(RAX) == divisor {
+        self.block_state.regs.mark_used(RAX);
+        self.block_state.regs.mark_used(RDX);
+        let divisor = if divisor == ValueLocation::Reg(RAX) || divisor == ValueLocation::Reg(RDX) {
             let new_reg = self.block_state.regs.take(I32);
             self.copy_value(&divisor, &mut ValueLocation::Reg(new_reg));
-            self.block_state.regs.release(RAX);
+            self.free_value(divisor);
             ValueLocation::Reg(new_reg)
         } else if let ValueLocation::Stack(_) = divisor {
             divisor
         } else {
-            ValueLocation::Reg(self.into_temp_reg(I32, divisor))
+            ValueLocation::Reg(self.into_reg(I32, divisor))
         };
-
-        self.free_value(quotient);
-        let should_save_rax = !self.block_state.regs.is_free(RAX);
-        let should_save_rdx = !self.block_state.regs.is_free(RDX);
+        self.block_state.regs.release(RDX);
+        self.block_state.regs.release(RAX);
 
         if let ValueLocation::Reg(r) = quotient {
             self.block_state.regs.mark_used(r);
         }
+
+        let should_save_rax =
+            quotient != ValueLocation::Reg(RAX) && !self.block_state.regs.is_free(RAX);
 
         let saved_rax = if should_save_rax {
             let new_reg = self.block_state.regs.take(I32);
@@ -2389,6 +2477,12 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             None
         };
 
+        self.block_state.regs.mark_used(RAX);
+        self.copy_value(&quotient, &mut ValueLocation::Reg(RAX));
+        self.free_value(quotient);
+
+        let should_save_rdx = !self.block_state.regs.is_free(RDX);
+
         let saved_rdx = if should_save_rdx {
             let new_reg = self.block_state.regs.take(I32);
             dynasm!(self.asm
@@ -2399,16 +2493,14 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             None
         };
 
-        dynasm!(self.asm
-            ; cdq
-        );
-
         do_div(self, divisor);
-        self.block_state.regs.mark_used(RAX);
+
+        self.free_value(divisor);
+        self.block_state.regs.mark_used(RDX);
 
         (
-            divisor,
             ValueLocation::Reg(RAX),
+            ValueLocation::Reg(RDX),
             saved_rax
                 .map(|s| (s, RAX))
                 .into_iter()
@@ -2429,12 +2521,14 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
+                    ; xor edx, edx
                     ; div [rsp + offset]
                 );
             }
             ValueLocation::Reg(r) => {
                 dynasm!(this.asm
-                    ; div Rq(r.rq().unwrap())
+                    ; xor edx, edx
+                    ; div Rd(r.rq().unwrap())
                 );
             }
             ValueLocation::Immediate(_) => unreachable!(),
@@ -2454,12 +2548,14 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
+                    ; cdq
                     ; idiv [rsp + offset]
                 );
             }
             ValueLocation::Reg(r) => {
                 dynasm!(this.asm
-                    ; idiv Rq(r.rq().unwrap())
+                    ; cdq
+                    ; idiv Rd(r.rq().unwrap())
                 );
             }
             ValueLocation::Immediate(_) => unreachable!(),
@@ -2496,6 +2592,59 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         let (div, rem, saved) = self.i32_full_div_u(divisor, quotient);
 
         self.free_value(rem);
+
+        let div = match div {
+            ValueLocation::Reg(div) if saved.clone().any(|(_, dst)| dst == div) => {
+                let new = self.block_state.regs.take(I32);
+                dynasm!(self.asm
+                    ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
+                );
+                self.block_state.regs.release(div);
+                ValueLocation::Reg(new)
+            }
+            _ => div,
+        };
+
+        self.cleanup_gprs(saved);
+
+        self.push(div);
+    }
+
+    // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
+    //       emitting Wasm.
+    pub fn i32_div_s(&mut self) {
+        let divisor = self.pop();
+        let quotient = self.pop();
+
+        if let (Some(quotient), Some(divisor)) = (quotient.imm_i32(), divisor.imm_i32()) {
+            if divisor == 0 {
+                self.trap();
+                self.push(ValueLocation::Immediate(0u32.into()));
+            } else {
+                self.push(ValueLocation::Immediate(
+                    i32::wrapping_div(quotient, divisor).into(),
+                ));
+            }
+
+            return;
+        }
+
+        let (div, rem, saved) = self.i32_full_div_s(divisor, quotient);
+
+        self.free_value(rem);
+
+        let div = match div {
+            ValueLocation::Reg(div) if saved.clone().any(|(_, dst)| dst == div) => {
+                let new = self.block_state.regs.take(I32);
+                dynasm!(self.asm
+                    ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
+                );
+                self.block_state.regs.release(div);
+                ValueLocation::Reg(new)
+            }
+            _ => div,
+        };
+
         self.cleanup_gprs(saved);
 
         self.push(div);
@@ -2521,19 +2670,21 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
         self.free_value(div);
 
-        let rem = if saved.clone().any(|(_, dst)| dst == RAX) {
-            let new = self.block_state.regs.take(I32);
-            dynasm!(self.asm
-                ; mov Rq(new.rq().unwrap()), rax
-            );
-            new
-        } else {
-            RAX
+        let rem = match rem {
+            ValueLocation::Reg(rem) if saved.clone().any(|(_, dst)| dst == rem) => {
+                let new = self.block_state.regs.take(I32);
+                dynasm!(self.asm
+                    ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
+                );
+                self.block_state.regs.release(rem);
+                ValueLocation::Reg(new)
+            }
+            _ => rem,
         };
 
         self.cleanup_gprs(saved);
 
-        self.push(ValueLocation::Reg(rem));
+        self.push(rem);
     }
 
     pub fn i32_rem_s(&mut self) {
@@ -2554,46 +2705,21 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
         self.free_value(div);
 
-        let rem = if saved.clone().any(|(_, dst)| dst == RAX) {
-            let new = self.block_state.regs.take(I32);
-            dynasm!(self.asm
-                ; mov Rq(new.rq().unwrap()), rax
-            );
-            new
-        } else {
-            RAX
+        let rem = match rem {
+            ValueLocation::Reg(rem) if saved.clone().any(|(_, dst)| dst == rem) => {
+                let new = self.block_state.regs.take(I32);
+                dynasm!(self.asm
+                    ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
+                );
+                self.block_state.regs.release(rem);
+                ValueLocation::Reg(new)
+            }
+            _ => rem,
         };
 
         self.cleanup_gprs(saved);
 
-        self.push(ValueLocation::Reg(rem));
-    }
-
-    // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
-    //       emitting Wasm.
-    pub fn i32_div_s(&mut self) {
-        let divisor = self.pop();
-        let quotient = self.pop();
-
-        if let (Some(quotient), Some(divisor)) = (quotient.imm_i32(), divisor.imm_i32()) {
-            if divisor == 0 {
-                self.trap();
-                self.push(ValueLocation::Immediate(0u32.into()));
-            } else {
-                self.push(ValueLocation::Immediate(
-                    i32::wrapping_div(quotient, divisor).into(),
-                ));
-            }
-
-            return;
-        }
-
-        let (div, rem, saved) = self.i32_full_div_s(divisor, quotient);
-        self.free_value(rem);
-
-        self.cleanup_gprs(saved);
-
-        self.push(div);
+        self.push(rem);
     }
 
     // `i32_mul` needs to be separate because the immediate form of the instruction
@@ -3141,3 +3267,4 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         label
     }
 }
+

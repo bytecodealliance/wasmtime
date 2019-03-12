@@ -5,7 +5,8 @@
     never_type,
     alloc_layout_extra,
     try_from,
-    try_trait
+    try_trait,
+    bind_by_move_pattern_guards
 )]
 #![plugin(dynasm)]
 

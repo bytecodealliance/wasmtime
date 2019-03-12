@@ -288,7 +288,8 @@ where
 
                             **then_cc = {
                                 let mut cc = cc.clone();
-                                if let (Some(cc), Some(to_drop)) = (cc.as_mut(), then.to_drop.clone())
+                                if let (Some(cc), Some(to_drop)) =
+                                    (cc.as_mut(), then.to_drop.clone())
                                 {
                                     match cc {
                                         Left(cc) => drop_elements(&mut cc.arguments, to_drop),
@@ -299,7 +300,8 @@ where
                             };
                             **else_cc = {
                                 let mut cc = cc;
-                                if let (Some(cc), Some(to_drop)) = (cc.as_mut(), else_.to_drop.clone())
+                                if let (Some(cc), Some(to_drop)) =
+                                    (cc.as_mut(), else_.to_drop.clone())
                                 {
                                     match cc {
                                         Left(cc) => drop_elements(&mut cc.arguments, to_drop),
@@ -357,8 +359,6 @@ where
 
                         if let Some(max) = max_num_callers {
                             max_num_callers = block.num_callers.map(|n| max.max(n));
-                        } else {
-                            max_num_callers = block.num_callers;
                         }
                     }
 
@@ -387,8 +387,8 @@ where
                     }
                 });
             }
-            Operator::Swap { depth } => ctx.swap(depth),
-            Operator::Pick { depth } => ctx.pick(depth),
+            Operator::Swap(depth) => ctx.swap(depth),
+            Operator::Pick(depth) => ctx.pick(depth),
             Operator::Eq(I32) => ctx.i32_eq(),
             Operator::Eqz(Size::_32) => ctx.i32_eqz(),
             Operator::Ne(I32) => ctx.i32_neq(),
@@ -408,8 +408,8 @@ where
             Operator::Mul(I32) => ctx.i32_mul(),
             Operator::Div(SU32) => ctx.i32_div_u(),
             Operator::Div(SI32) => ctx.i32_div_s(),
-            Operator::Rem(sint::I32) => ctx.i32_rem_u(),
-            Operator::Rem(sint::U32) => ctx.i32_rem_s(),
+            Operator::Rem(sint::I32) => ctx.i32_rem_s(),
+            Operator::Rem(sint::U32) => ctx.i32_rem_u(),
             Operator::Shl(Size::_32) => ctx.i32_shl(),
             Operator::Shr(sint::I32) => ctx.i32_shr_s(),
             Operator::Shr(sint::U32) => ctx.i32_shr_u(),
@@ -446,6 +446,7 @@ where
             Operator::Add(F32) => ctx.f32_add(),
             Operator::Mul(F32) => ctx.f32_mul(),
             Operator::Sub(F32) => ctx.f32_sub(),
+            Operator::Div(SF32) => ctx.f32_div(),
             Operator::Neg(Size::_32) => ctx.f32_neg(),
             Operator::Gt(SF32) => ctx.f32_gt(),
             Operator::Ge(SF32) => ctx.f32_ge(),
@@ -454,6 +455,7 @@ where
             Operator::Add(F64) => ctx.f64_add(),
             Operator::Mul(F64) => ctx.f64_mul(),
             Operator::Sub(F64) => ctx.f64_sub(),
+            Operator::Div(SF64) => ctx.f64_div(),
             Operator::Neg(Size::_64) => ctx.f64_neg(),
             Operator::Gt(SF64) => ctx.f64_gt(),
             Operator::Ge(SF64) => ctx.f64_ge(),
@@ -462,6 +464,17 @@ where
             Operator::Drop(range) => ctx.drop(range),
             Operator::Const(val) => ctx.const_(val),
             Operator::I32WrapFromI64 => {}
+            // All reinterpret operators are no-ops - we do the conversion at the point of usage.
+            Operator::I32ReinterpretFromF32 => {}
+            Operator::I64ReinterpretFromF64 => {}
+            Operator::F32ReinterpretFromI32 => {}
+            Operator::F64ReinterpretFromI64 => {}
+            Operator::ITruncFromF {
+                input_ty: Size::_32,
+                output_ty: SignfulInt(_, Size::_32),
+            } => {
+                ctx.i32_truncate_f32();
+            }
             Operator::Extend {
                 sign: Signedness::Unsigned,
             } => ctx.i32_extend_u(),
