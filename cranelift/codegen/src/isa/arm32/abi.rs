@@ -39,7 +39,7 @@ impl ArgAssigner for Args {
         let ty = arg.value_type;
 
         // Check for a legal type.
-        // RISC-V doesn't have SIMD at all, so break all vectors down.
+        // SIMD instructions are currently no implemented, so break down vectors
         if ty.is_vector() {
             return ValueConversion::VectorSplit.into();
         }
@@ -116,13 +116,5 @@ pub fn regclass_for_abi_type(ty: ir::Type) -> RegClass {
 
 /// Get the set of allocatable registers for `func`.
 pub fn allocatable_registers(_func: &ir::Function) -> RegisterSet {
-    let mut regs = RegisterSet::new();
-    regs.take(GPR, GPR.unit(0)); // Hard-wired 0.
-                                 // %x1 is the link register which is available for allocation.
-    regs.take(GPR, GPR.unit(2)); // Stack pointer.
-    regs.take(GPR, GPR.unit(3)); // Global pointer.
-    regs.take(GPR, GPR.unit(4)); // Thread pointer.
-                                 // TODO: %x8 is the frame pointer. Reserve it?
-
-    regs
+    unimplemented!()
 }
