@@ -31,29 +31,15 @@ extern crate serde_derive;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
-use docopt::Docopt;
 use file_per_thread_logger;
 use pretty_env_logger;
 use std::path::Path;
 use std::process;
 use wasmtime_jit::Compiler;
 use wasmtime_wast::WastContext;
+use clap::{Arg, App};
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
-
-const USAGE: &str = "
-Wast test runner.
-
-Usage:
-    run_wast [-do] <file>...
-    run_wast --help | --version
-
-Options:
-    -h, --help          print this help message
-    --version           print the Cranelift version
-    -o, --optimize      runs optimization passes on the translated functions
-    -d, --debug         enable debug output on stderr/stdout
-";
 
 #[derive(Deserialize, Debug, Clone)]
 struct Args {
@@ -64,13 +50,40 @@ struct Args {
 }
 
 fn main() {
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(String::from("0.0.0")))
-                .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
+    let cli = App::new("Wasm runner")
+            .version("0.0.0")
+            .about("Takes a binary (wasm) or text (wat) WebAssembly module and instantiates it,
+                    including calling the start function if one is present. Additional functions
+                    given with --invoke are then called")
+            .arg(Arg::with_name("input")
+                .help("Sets the input file to use")
+                .required(true)
+                .index(1))
+            .arg(Arg::with_name("debug")
+                .short("d")
+                .long("debug")
+                .help("enable debug output on stderr/stdout"))
+            .arg(Arg::with_name("optimize")
+                .short("o")
+                .long("optimize")
+                .help("runs optimization passes on the translated functions"))
+            .arg(Arg::with_name("invoke")
+                .short("v")
+                .long("invoke")
+                .value_name("FN")
+                .help("name of function to run")
+                .takes_value(true))
+            .get_matches();
+
+    let args: Args = Args {
+        arg_file: clap::values_t!(cli.values_of("input"), String).unwrap(),
+        flag_debug: cli.is_present("debug"),
+        flag_optimize: cli.is_present("optimize"),
+        flag_function: match cli.value_of("invoke") {
+            Some(x) => Some(x.to_string()),
+            None => None
+        },
+    };
 
     if args.flag_debug {
         pretty_env_logger::init();

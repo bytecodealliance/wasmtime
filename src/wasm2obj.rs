@@ -35,7 +35,6 @@ extern crate serde_derive;
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_native;
-use docopt::Docopt;
 use faerie::Artifact;
 use std::error::Error;
 use std::fmt::format;
@@ -51,24 +50,8 @@ use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::{cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
+use clap::{Arg, App};
 
-const USAGE: &str = "
-Wasm to native object translation utility.
-Takes a binary WebAssembly module into a native object file.
-The translation is dependent on the environment chosen.
-The default is a dummy environment that produces placeholder values.
-
-Usage:
-    wasm2obj [--target TARGET] [-g] <file> -o <output>
-    wasm2obj --help | --version
-
-Options:
-    -v, --verbose       displays the module and translated functions
-    -h, --help          print this help message
-    --target <TARGET>   build for the target triple; default is the host machine
-    -g                  generate debug information
-    --version           print the Cranelift version
-";
 
 #[derive(Deserialize, Debug, Clone)]
 struct Args {
@@ -85,15 +68,47 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     Ok(buf)
 }
 
-fn main() {
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(String::from("0.0.0")))
-                .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
-
+fn main(){
+     let cli = App::new("Wasm to native object translation utility")
+                .version("0.0.0")
+                .about("Takes a binary WebAssembly module into a native object file. The translation is dependent on the environment chosen. The default is a dummy environment that produces placeholder values.")
+                .arg(Arg::with_name("verbose")
+                    .short("v")
+                    .long("verbose")
+                    .help("displays the module and translated functions"))
+                .arg(Arg::with_name("target")
+                    .short("t")
+                    .long("target")
+                    .value_name("TARGET")
+                    .help("build for the target triple; default is the host machines")
+                    .takes_value(true))
+                .arg(Arg::with_name("debug")
+                    .short("g")
+                    .long("debug")
+                    .help("generate debug information"))
+                .arg(Arg::with_name("output")
+                    .short("o")
+                    .long("output")
+                    .value_name("OUTPUT")
+                    .help("output location")
+                    .required(true)
+                    .takes_value(true))
+                .arg(Arg::with_name("input")
+                    .help("Sets the input file to use")
+                    .required(true)
+                    .index(1))
+                .get_matches();
+    
+    let args: Args = Args {
+        arg_file: clap::value_t!(cli.value_of("input"), String).unwrap(),
+        arg_output: cli.value_of("output").unwrap().to_string(),
+        arg_target: match cli.value_of("target") {
+            Some(x) => Some(x.to_string()),
+            None => None
+        },
+        flag_g: cli.is_present("debug"),
+    };
+    
     let path = Path::new(&args.arg_file);
     match handle_module(
         path.to_path_buf(),
