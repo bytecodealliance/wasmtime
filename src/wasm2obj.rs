@@ -29,13 +29,9 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_native;
-use docopt::Docopt;
 use faerie::Artifact;
 use std::error::Error;
 use std::fmt::format;
@@ -47,34 +43,33 @@ use std::path::PathBuf;
 use std::process;
 use std::str;
 use std::str::FromStr;
+use structopt::StructOpt;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::{cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
 
-const USAGE: &str = "
-Wasm to native object translation utility.
-Takes a binary WebAssembly module into a native object file.
-The translation is dependent on the environment chosen.
-The default is a dummy environment that produces placeholder values.
-
-Usage:
-    wasm2obj [--target TARGET] [-g] <file> -o <output>
-    wasm2obj --help | --version
-
-Options:
-    -v, --verbose       displays the module and translated functions
-    -h, --help          print this help message
-    --target <TARGET>   build for the target triple; default is the host machine
-    -g                  generate debug information
-    --version           print the Cranelift version
-";
-
-#[derive(Deserialize, Debug, Clone)]
+/// Wasm to native object translation utility.
+///
+/// Takes a binary WebAssembly module into a native object file.
+/// The translation is dependent on the environment chosen.
+/// The default is a dummy environment that produces placeholder values.
+#[derive(StructOpt, Debug, Clone)]
+#[structopt(name = "wasm2obj")]
 struct Args {
-    arg_file: String,
+    #[structopt(name = "FILE", parse(from_os_str))]
+    arg_file: PathBuf,
+
+    /// output file
+    #[structopt(short = "o")]
     arg_output: String,
+
+    /// build for the target triple; default is the host machine
+    #[structopt(long = "target")]
     arg_target: Option<String>,
+
+    /// generate debug information
+    #[structopt(short = "g")]
     flag_g: bool,
 }
 
@@ -86,17 +81,10 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
 }
 
 fn main() {
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(String::from("0.0.0")))
-                .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
+    let args = Args::from_args();
 
-    let path = Path::new(&args.arg_file);
     match handle_module(
-        path.to_path_buf(),
+        args.arg_file,
         &args.arg_target,
         &args.arg_output,
         args.flag_g,

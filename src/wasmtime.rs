@@ -30,13 +30,9 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
-use docopt::Docopt;
 use file_per_thread_logger;
 use pretty_env_logger;
 use std::error::Error;
@@ -45,39 +41,38 @@ use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use structopt::StructOpt;
 use wabt;
 use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wast::instantiate_spectest;
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
 
-const USAGE: &str = "
-Wasm runner.
-
-Takes a binary (wasm) or text (wat) WebAssembly module and instantiates it,
-including calling the start function if one is present. Additional functions
-given with --invoke are then called.
-
-Usage:
-    wasmtime [-odg] <file>...
-    wasmtime [-odg] <file>... --invoke=<fn>
-    wasmtime --help | --version
-
-Options:
-    --invoke=<fn>       name of function to run
-    -o, --optimize      runs optimization passes on the translated functions
-    -g                  generate debug information
-    -d, --debug         enable debug output on stderr/stdout
-    -h, --help          print this help message
-    --version           print the Cranelift version
-";
-
-#[derive(Deserialize, Debug, Clone)]
+/// Wasm runner.
+///
+/// Takes a binary (wasm) or text (wat) WebAssembly module and instantiates it,
+/// including calling the start function if one is present. Additional functions
+/// given with --invoke are then called.
+#[derive(StructOpt, Debug, Clone)]
+#[structopt(name = "wasmtime")]
 struct Args {
-    arg_file: Vec<String>,
+    #[structopt(name = "FILE", parse(from_os_str))]
+    arg_file: Vec<PathBuf>,
+
+    /// runs optimization passes on the translated functions
+    #[structopt(short = "o", long = "optimize")]
     flag_optimize: bool,
+
+    /// enable debug output on stderr/stdout
+    #[structopt(short = "d", long = "debug")]
     flag_debug: bool,
+
+    /// generate debug information
+    #[structopt(short = "g")]
     flag_g: bool,
+
+    /// name of function to run
+    #[structopt(long = "invoke")]
     flag_invoke: Option<String>,
 }
 
@@ -101,13 +96,7 @@ fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
 }
 
 fn main() {
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(String::from("0.0.0")))
-                .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
+    let args = Args::from_args();
 
     if args.flag_debug {
         pretty_env_logger::init();
@@ -142,12 +131,11 @@ fn main() {
     // Enable/disable producing of debug info.
     context.set_debug_info(args.flag_g);
 
-    for filename in &args.arg_file {
-        let path = Path::new(&filename);
-        match handle_module(&mut context, &args, path) {
+    for path in &args.arg_file {
+        match handle_module(&mut context, &args, &path) {
             Ok(()) => {}
             Err(message) => {
-                let name = path.as_os_str().to_string_lossy();
+                let name = path.to_string_lossy();
                 println!("error while processing {}: {}", name, message);
                 exit(1);
             }

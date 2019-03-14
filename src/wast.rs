@@ -25,52 +25,40 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
-use docopt::Docopt;
 use file_per_thread_logger;
 use pretty_env_logger;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process;
+use structopt::StructOpt;
 use wasmtime_jit::Compiler;
 use wasmtime_wast::WastContext;
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
-const USAGE: &str = "
-Wast test runner.
-
-Usage:
-    run_wast [-do] <file>...
-    run_wast --help | --version
-
-Options:
-    -h, --help          print this help message
-    --version           print the Cranelift version
-    -o, --optimize      runs optimization passes on the translated functions
-    -d, --debug         enable debug output on stderr/stdout
-";
-
-#[derive(Deserialize, Debug, Clone)]
+/// Wast test runner.
+#[derive(StructOpt, Debug, Clone)]
+#[structopt(name = "wast")]
 struct Args {
-    arg_file: Vec<String>,
+    #[structopt(name = "FILE", parse(from_os_str))]
+    arg_file: Vec<PathBuf>,
+
+    /// enable debug output on stderr/stdout
+    #[structopt(short = "d", long = "debug")]
     flag_debug: bool,
+
+    #[structopt(long = "function")]
     flag_function: Option<String>,
+
+    /// runs optimization passes on the translated functions
+    #[structopt(short = "o", long = "optimize")]
     flag_optimize: bool,
 }
 
 fn main() {
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(String::from("0.0.0")))
-                .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
+    let args = Args::from_args();
 
     if args.flag_debug {
         pretty_env_logger::init();
@@ -102,11 +90,9 @@ fn main() {
         .expect("error instantiating \"spectest\"");
 
     for filename in &args.arg_file {
-        wast_context
-            .run_file(Path::new(&filename))
-            .unwrap_or_else(|e| {
-                eprintln!("{}", e);
-                process::exit(1)
-            });
+        wast_context.run_file(&filename).unwrap_or_else(|e| {
+            eprintln!("{}", e);
+            process::exit(1)
+        });
     }
 }
