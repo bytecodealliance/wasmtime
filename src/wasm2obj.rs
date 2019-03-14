@@ -29,9 +29,7 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
+use clap::{App, Arg};
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_native;
@@ -50,10 +48,8 @@ use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::{cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
-use clap::{Arg, App};
 
-
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 struct Args {
     arg_file: String,
     arg_output: String,
@@ -68,8 +64,8 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     Ok(buf)
 }
 
-fn main(){
-     let cli = App::new("Wasm to native object translation utility")
+fn main() {
+    let cli = App::new("Wasm to native object translation utility")
                 .version("0.0.0")
                 .about("Takes a binary WebAssembly module into a native object file. The translation is dependent on the environment chosen. The default is a dummy environment that produces placeholder values.")
                 .arg(Arg::with_name("verbose")
@@ -98,17 +94,17 @@ fn main(){
                     .required(true)
                     .index(1))
                 .get_matches();
-    
+
     let args: Args = Args {
         arg_file: clap::value_t!(cli.value_of("input"), String).unwrap(),
         arg_output: cli.value_of("output").unwrap().to_string(),
         arg_target: match cli.value_of("target") {
             Some(x) => Some(x.to_string()),
-            None => None
+            None => None,
         },
         flag_g: cli.is_present("debug"),
     };
-    
+
     let path = Path::new(&args.arg_file);
     match handle_module(
         path.to_path_buf(),

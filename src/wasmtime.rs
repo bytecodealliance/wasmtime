@@ -30,10 +30,7 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-// extern crate clap;
-
+use clap::{App, Arg};
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
@@ -48,11 +45,10 @@ use std::process::exit;
 use wabt;
 use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wast::instantiate_spectest;
-use clap::{Arg, App};
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 struct Args {
     arg_file: Vec<String>,
     flag_optimize: bool,
@@ -81,36 +77,47 @@ fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
 }
 
 fn main() {
-
     let cli = App::new("Wasm runner")
-            .version("0.0.0")
-            .about("Takes a binary (wasm) or text (wat) WebAssembly module and instantiates it,
+        .version("0.0.0")
+        .about(
+            "Takes a binary (wasm) or text (wat) WebAssembly module and instantiates it,
                     including calling the start function if one is present. Additional functions
-                    given with --invoke are then called")
-            .arg(Arg::with_name("debug")
+                    given with --invoke are then called",
+        )
+        .arg(
+            Arg::with_name("debug")
                 .short("d")
                 .long("debug")
-                .help("enable debug output on stderr/stdout"))
-            .arg(Arg::with_name("optimize")
+                .help("enable debug output on stderr/stdout"),
+        )
+        .arg(
+            Arg::with_name("optimize")
                 .short("o")
                 .long("optimize")
-                .help("runs optimization passes on the translated functions"))
-            .arg(Arg::with_name("debug_info")
+                .help("runs optimization passes on the translated functions"),
+        )
+        .arg(
+            Arg::with_name("debug_info")
                 .short("g")
                 .long("debug-info")
-                .help("generate debug information"))
-            .arg(Arg::with_name("invoke")
+                .help("generate debug information"),
+        )
+        .arg(
+            Arg::with_name("invoke")
                 .short("v")
                 .long("invoke")
                 .value_name("FN")
                 .help("name of function to run")
-                .takes_value(true))
-            .arg(Arg::with_name("input")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("input")
                 .help("Sets the input file to use")
                 .required(true)
-                .index(1))
-            .get_matches();
-    
+                .index(1),
+        )
+        .get_matches();
+
     let args: Args = Args {
         arg_file: clap::values_t!(cli.values_of("input"), String).unwrap(),
         flag_optimize: cli.is_present("optimize"),
@@ -118,7 +125,7 @@ fn main() {
         flag_g: cli.is_present("debug_info"),
         flag_invoke: match cli.value_of("invoke") {
             Some(x) => Some(x.to_string()),
-            None => None
+            None => None,
         },
     };
 
@@ -192,4 +199,3 @@ fn handle_module(context: &mut Context, args: &Args, path: &Path) -> Result<(), 
 
     Ok(())
 }
-
