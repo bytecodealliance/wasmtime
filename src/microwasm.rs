@@ -467,12 +467,8 @@ pub enum Operator<Label> {
     // TODO: Is it better to have `Swap`, to have `Pull` (which moves the `nth` element instead of swapping)
     //       or to have both?
     Swap(u32),
-    GetGlobal {
-        index: u32,
-    },
-    SetGlobal {
-        index: u32,
-    },
+    GetGlobal(u32),
+    SetGlobal(u32),
     Load {
         ty: SignlessType,
         memarg: MemoryImmediate,
@@ -799,10 +795,109 @@ where
             Operator::FConvertFromI {
                 input_ty,
                 output_ty,
-            } => write!(f, "{}.convert_from.{}", input_ty, Type::Float::<Int>(*output_ty)),
+            } => write!(
+                f,
+                "{}.convert_from.{}",
+                input_ty,
+                Type::Float::<Int>(*output_ty)
+            ),
             _ => unimplemented!(),
         }
     }
+}
+
+// TODO: If we return a `Vec<<T as MicrowasmReceiver>::Item>` will that convert to (essentially) a no-op
+//       in the case that `Item` is a ZST? That is important for ensuring that we don't do unnecessary
+//       work when we're directly generating asm.
+/// WIP: Trait to abstract over either producing a stream of Microwasm or directly producing assembly
+/// from the Wasm. This should give a significant speedup since we don't need to allocate any vectors
+/// or pay the cost of branches - we can just use iterators and direct function calls.
+pub trait MicrowasmReceiver<Label> {
+    type Item;
+
+    fn unreachable(&mut self) -> Self::Item;
+    fn block(
+        &mut self,
+        label: Label,
+        params: impl Iterator<Item = SignlessType>,
+        has_backwards_callers: bool,
+        num_callers: Option<u32>,
+    ) -> Self::Item;
+    fn label(&mut self, _: Label) -> Self::Item;
+    fn br(&mut self, target: BrTarget<Label>) -> Self::Item;
+    fn br_if(&mut self, then: BrTargetDrop<Label>, else_: BrTargetDrop<Label>) -> Self::Item;
+    fn br_table(&mut self, _: BrTable<Label>) -> Self::Item;
+    fn call(&mut self, function_index: u32) -> Self::Item;
+    fn call_indirect(&mut self, type_index: u32, table_index: u32) -> Self::Item;
+    fn drop(&mut self, _: RangeInclusive<u32>) -> Self::Item;
+    fn select(&mut self) -> Self::Item;
+    fn pick(&mut self, _: u32) -> Self::Item;
+    fn swap(&mut self, _: u32) -> Self::Item;
+    fn get_global(&mut self, index: u32) -> Self::Item;
+    fn set_global(&mut self, index: u32) -> Self::Item;
+    fn load(&mut self, ty: SignlessType, memarg: MemoryImmediate) -> Self::Item;
+    fn load8(&mut self, ty: SignfulInt, memarg: MemoryImmediate) -> Self::Item;
+    fn load16(&mut self, ty: SignfulInt, memarg: MemoryImmediate) -> Self::Item;
+    fn load32(&mut self, sign: Signedness, memarg: MemoryImmediate) -> Self::Item;
+    fn store(&mut self, ty: SignlessType, memarg: MemoryImmediate) -> Self::Item;
+    fn store8(&mut self, ty: Int, memarg: MemoryImmediate) -> Self::Item;
+    fn store16(&mut self, ty: Int, memarg: MemoryImmediate) -> Self::Item;
+    fn store32(&mut self, memarg: MemoryImmediate) -> Self::Item;
+    fn memory_size(&mut self, reserved: u32) -> Self::Item;
+    fn memory_grow(&mut self, reserved: u32) -> Self::Item;
+    fn const_(&mut self, _: Value) -> Self::Item;
+    fn ref_null(&mut self) -> Self::Item;
+    fn ref_is_null(&mut self) -> Self::Item;
+    fn eq(&mut self, _: SignlessType) -> Self::Item;
+    fn ne(&mut self, _: SignlessType) -> Self::Item;
+    fn eqz(&mut self, _: Int) -> Self::Item;
+    fn lt(&mut self, _: SignfulType) -> Self::Item;
+    fn gt(&mut self, _: SignfulType) -> Self::Item;
+    fn le(&mut self, _: SignfulType) -> Self::Item;
+    fn ge(&mut self, _: SignfulType) -> Self::Item;
+    fn add(&mut self, _: SignlessType) -> Self::Item;
+    fn sub(&mut self, _: SignlessType) -> Self::Item;
+    fn mul(&mut self, _: SignlessType) -> Self::Item;
+    fn clz(&mut self, _: Int) -> Self::Item;
+    fn ctz(&mut self, _: Int) -> Self::Item;
+    fn popcnt(&mut self, _: Int) -> Self::Item;
+    fn div(&mut self, _: SignfulType) -> Self::Item;
+    fn rem(&mut self, _: SignfulInt) -> Self::Item;
+    fn and(&mut self, _: Int) -> Self::Item;
+    fn or(&mut self, _: Int) -> Self::Item;
+    fn xor(&mut self, _: Int) -> Self::Item;
+    fn shl(&mut self, _: Int) -> Self::Item;
+    fn shr(&mut self, _: SignfulInt) -> Self::Item;
+    fn rotl(&mut self, _: Int) -> Self::Item;
+    fn rotr(&mut self, _: Int) -> Self::Item;
+    fn abs(&mut self, _: Float) -> Self::Item;
+    fn neg(&mut self, _: Float) -> Self::Item;
+    fn ceil(&mut self, _: Float) -> Self::Item;
+    fn floor(&mut self, _: Float) -> Self::Item;
+    fn trunc(&mut self, _: Float) -> Self::Item;
+    fn nearest(&mut self, _: Float) -> Self::Item;
+    fn sqrt(&mut self, _: Float) -> Self::Item;
+    fn min(&mut self, _: Float) -> Self::Item;
+    fn max(&mut self, _: Float) -> Self::Item;
+    fn copysign(&mut self, _: Float) -> Self::Item;
+    fn i32_wrap_from_i64(&mut self) -> Self::Item;
+    fn i_trunc_from_f(&mut self, input_ty: Float, output_ty: SignfulInt) -> Self::Item;
+    fn f_convert_from_i(&mut self, input_ty: SignfulInt, output_ty: Float) -> Self::Item;
+    fn f32_demote_from_f64(&mut self) -> Self::Item;
+    fn f64_promote_from_f32(&mut self) -> Self::Item;
+    fn i32_reinterpret_from_f32(&mut self) -> Self::Item;
+    fn i64_reinterpret_from_f64(&mut self) -> Self::Item;
+    fn f32_reinterpret_from_i32(&mut self) -> Self::Item;
+    fn f64_reinterpret_from_i64(&mut self) -> Self::Item;
+    fn extend(&mut self, sign: Signedness) -> Self::Item;
+    fn i_sat_trunc_from_f(&mut self, input_ty: Float, output_ty: SignfulInt) -> Self::Item;
+    fn memory_init(&mut self, segment: u32) -> Self::Item;
+    fn data_drop(&mut self, segment: u32) -> Self::Item;
+    fn memory_copy(&mut self) -> Self::Item;
+    fn memory_fill(&mut self) -> Self::Item;
+    fn table_init(&mut self, segment: u32) -> Self::Item;
+    fn elem_drop(&mut self, segment: u32) -> Self::Item;
+    fn table_copy(&mut self) -> Self::Item;
 }
 
 /// Type of a control frame.
@@ -1074,11 +1169,11 @@ where
                 sig!((ty) -> (ty))
             }
 
-            WasmOperator::GetGlobal { global_index: _ } => {
-                unimplemented!("Haven't implemented getting type of globals yet")
+            WasmOperator::GetGlobal { global_index } => {
+                sig!(() -> (self.module.global_type(*global_index).to_microwasm_type()))
             }
-            WasmOperator::SetGlobal { global_index: _ } => {
-                unimplemented!("Haven't implemented getting type of globals yet")
+            WasmOperator::SetGlobal { global_index } => {
+                sig!((self.module.global_type(*global_index).to_microwasm_type()) -> ())
             }
 
             WasmOperator::F32Load { .. } => sig!((I32) -> (F32)),
@@ -1711,6 +1806,12 @@ where
                     Operator::Drop(0..=0),
                     Operator::Pick(depth - 1),
                 ]
+            }
+            WasmOperator::GetGlobal { global_index } => {
+                smallvec![Operator::GetGlobal(global_index)]
+            }
+            WasmOperator::SetGlobal { global_index } => {
+                smallvec![Operator::SetGlobal(global_index)]
             }
 
             WasmOperator::I32Load { memarg } => smallvec![Operator::Load { ty: I32, memarg }],

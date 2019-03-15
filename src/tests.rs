@@ -404,6 +404,7 @@ mod opf32 {
     binop_test!(le, |a, b| a <= b, i32);
 
     unop_test!(neg, |a: f32| -a);
+    unop_test!(abs, |a: f32| a.abs());
 }
 
 mod opf64 {
@@ -520,6 +521,7 @@ mod opf64 {
     binop_test!(le, |a, b| a <= b, i32);
 
     unop_test!(neg, |a: f64| -a);
+    unop_test!(abs, |a: f64| a.abs());
 }
 
 quickcheck! {

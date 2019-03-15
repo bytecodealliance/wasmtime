@@ -2,6 +2,7 @@ use crate::backend::*;
 use crate::error::Error;
 use crate::microwasm::*;
 use crate::module::{quickhash, ModuleContext, SigType, Signature};
+use cranelift_codegen::binemit;
 use either::{Either, Left, Right};
 use multi_mut::HashMapMultiMut;
 use std::{collections::HashMap, convert::TryInto, hash::Hash};
@@ -28,12 +29,14 @@ impl Block {
 
 const DISASSEMBLE: bool = false;
 
-pub fn translate_wasm<M: ModuleContext>(
+pub fn translate_wasm<M>(
     session: &mut CodeGenSession<M>,
+    reloc_sink: &mut dyn binemit::RelocSink,
     func_idx: u32,
     body: &wasmparser::FunctionBody,
 ) -> Result<(), Error>
 where
+    M: ModuleContext,
     for<'any> &'any M::Signature: Into<OpSig>,
 {
     let ty = session.module_context.func_type(func_idx);
@@ -64,17 +67,20 @@ where
 
     translate(
         session,
+        reloc_sink,
         func_idx,
         microwasm_conv.flat_map(|i| i.expect("TODO: Make this not panic")),
     )
 }
 
-pub fn translate<M: ModuleContext, I, L>(
+pub fn translate<M, I, L>(
     session: &mut CodeGenSession<M>,
+    reloc_sink: &mut dyn binemit::RelocSink,
     func_idx: u32,
     body: I,
 ) -> Result<(), Error>
 where
+    M: ModuleContext,
     I: IntoIterator<Item = Operator<L>>,
     L: Hash + Clone + Eq,
     Operator<L>: std::fmt::Display,
@@ -90,7 +96,7 @@ where
     let mut body = body.into_iter().peekable();
 
     let module_context = &*session.module_context;
-    let ctx = &mut session.new_context(func_idx);
+    let ctx = &mut session.new_context(func_idx, reloc_sink);
 
     let params = func_type
         .params()
@@ -367,7 +373,7 @@ where
                     }
 
                     let cc = cc.unwrap_or_else(||
-                        if max_num_callers == Some(1) {
+                        if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
                             Right(ctx.virtual_calling_convention())
                         } else {
                             Left(ctx.serialize_args(params))
@@ -452,6 +458,7 @@ where
             Operator::Sub(F32) => ctx.f32_sub(),
             Operator::Div(SF32) => ctx.f32_div(),
             Operator::Neg(Size::_32) => ctx.f32_neg(),
+            Operator::Abs(Size::_32) => ctx.f32_abs(),
             Operator::Gt(SF32) => ctx.f32_gt(),
             Operator::Ge(SF32) => ctx.f32_ge(),
             Operator::Lt(SF32) => ctx.f32_lt(),
@@ -461,6 +468,7 @@ where
             Operator::Sub(F64) => ctx.f64_sub(),
             Operator::Div(SF64) => ctx.f64_div(),
             Operator::Neg(Size::_64) => ctx.f64_neg(),
+            Operator::Abs(Size::_64) => ctx.f64_abs(),
             Operator::Gt(SF64) => ctx.f64_gt(),
             Operator::Ge(SF64) => ctx.f64_ge(),
             Operator::Lt(SF64) => ctx.f64_lt(),
@@ -487,16 +495,12 @@ where
             } => ctx.i32_extend_s(),
             Operator::FConvertFromI {
                 input_ty: sint::I32,
-                output_ty: Size::_32
-            } => {
-                ctx.f32_convert_from_i32_s()
-            },
+                output_ty: Size::_32,
+            } => ctx.f32_convert_from_i32_s(),
             Operator::FConvertFromI {
                 input_ty: sint::U32,
-                output_ty: Size::_32
-            } => {
-                ctx.f32_convert_from_i32_u()
-            },
+                output_ty: Size::_32,
+            } => ctx.f32_convert_from_i32_u(),
             Operator::Load8 {
                 ty: sint::U32,
                 memarg,
@@ -543,18 +547,22 @@ where
             Operator::Load { ty: F64, memarg } => ctx.f64_load(memarg.offset),
             Operator::Store8 { ty: _, memarg } => ctx.store8(memarg.offset),
             Operator::Store16 { ty: _, memarg } => ctx.store16(memarg.offset),
-            Operator::Store32 { memarg } => ctx.store32(memarg.offset),
-            Operator::Store { ty: I32, memarg } | Operator::Store { ty: F32, memarg } => {
-                ctx.store32(memarg.offset)
-            }
+            Operator::Store32 { memarg }
+            | Operator::Store { ty: I32, memarg }
+            | Operator::Store { ty: F32, memarg } => ctx.store32(memarg.offset),
             Operator::Store { ty: I64, memarg } | Operator::Store { ty: F64, memarg } => {
                 ctx.store64(memarg.offset)
             }
+            Operator::GetGlobal(idx) => ctx.get_global(idx),
+            Operator::SetGlobal(idx) => ctx.set_global(idx),
             Operator::Select => {
                 ctx.select();
             }
             Operator::MemorySize { reserved: _ } => {
                 ctx.memory_size();
+            }
+            Operator::MemoryGrow { reserved: _ } => {
+                ctx.memory_grow();
             }
             Operator::Call { function_index } => {
                 let function_index = module_context
@@ -566,7 +574,7 @@ where
                 ctx.call_direct(
                     function_index,
                     callee_ty.params().iter().map(|t| t.to_microwasm_type()),
-                    callee_ty.returns().len() as u32,
+                    callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
                 );
             }
             Operator::CallIndirect {
@@ -580,9 +588,9 @@ where
                 // TODO: this implementation assumes that this function is locally defined.
 
                 ctx.call_indirect(
-                    quickhash(callee_ty) as u32,
+                    type_index,
                     callee_ty.params().iter().map(|t| t.to_microwasm_type()),
-                    callee_ty.returns().len() as u32,
+                    callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
                 );
             }
             op => {

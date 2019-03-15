@@ -6,6 +6,7 @@ use self::registers::*;
 use crate::error::Error;
 use crate::microwasm::Value;
 use crate::module::{ModuleContext, RuntimeFunc};
+use cranelift_codegen::binemit;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use std::{
@@ -13,6 +14,35 @@ use std::{
     mem,
     ops::RangeInclusive,
 };
+
+// TODO: Get rid of this! It's a total hack.
+mod magic {
+    use cranelift_codegen::ir;
+
+    /// Compute an `ir::ExternalName` for the `memory.grow` libcall for
+    /// 32-bit locally-defined memories.
+    pub fn get_memory32_grow_name() -> ir::ExternalName {
+        ir::ExternalName::user(1, 0)
+    }
+
+    /// Compute an `ir::ExternalName` for the `memory.grow` libcall for
+    /// 32-bit imported memories.
+    pub fn get_imported_memory32_grow_name() -> ir::ExternalName {
+        ir::ExternalName::user(1, 1)
+    }
+
+    /// Compute an `ir::ExternalName` for the `memory.size` libcall for
+    /// 32-bit locally-defined memories.
+    pub fn get_memory32_size_name() -> ir::ExternalName {
+        ir::ExternalName::user(1, 2)
+    }
+
+    /// Compute an `ir::ExternalName` for the `memory.size` libcall for
+    /// 32-bit imported memories.
+    pub fn get_imported_memory32_size_name() -> ir::ExternalName {
+        ir::ExternalName::user(1, 3)
+    }
+}
 
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
@@ -467,6 +497,7 @@ pub struct FunctionEnd {
 pub struct CodeGenSession<'a, M> {
     assembler: Assembler,
     pub module_context: &'a M,
+    labels: Labels,
     func_starts: Vec<(Option<AssemblyOffset>, DynamicLabel)>,
 }
 
@@ -479,12 +510,17 @@ impl<'a, M> CodeGenSession<'a, M> {
 
         CodeGenSession {
             assembler,
+            labels: Default::default(),
             func_starts,
             module_context,
         }
     }
 
-    pub fn new_context(&mut self, func_idx: u32) -> Context<'_, M> {
+    pub fn new_context<'this>(
+        &'this mut self,
+        func_idx: u32,
+        reloc_sink: &'this mut dyn binemit::RelocSink,
+    ) -> Context<'this, M> {
         {
             let func_start = &mut self.func_starts[func_idx as usize];
 
@@ -496,8 +532,10 @@ impl<'a, M> CodeGenSession<'a, M> {
 
         Context {
             asm: &mut self.assembler,
+            current_function: func_idx,
+            reloc_sink: reloc_sink,
             func_starts: &self.func_starts,
-            labels: Default::default(),
+            labels: &mut self.labels,
             block_state: Default::default(),
             module_context: self.module_context,
         }
@@ -627,22 +665,64 @@ pub enum MemoryAccessMode {
     Unchecked,
 }
 
+struct PendingLabel {
+    label: Label,
+    is_defined: bool,
+}
+
+impl PendingLabel {
+    fn undefined(label: Label) -> Self {
+        PendingLabel {
+            label,
+            is_defined: false,
+        }
+    }
+
+    fn defined(label: Label) -> Self {
+        PendingLabel {
+            label,
+            is_defined: true,
+        }
+    }
+
+    fn as_undefined(&self) -> Option<Label> {
+        if !self.is_defined {
+            Some(self.label)
+        } else {
+            None
+        }
+    }
+}
+
+impl From<Label> for PendingLabel {
+    fn from(label: Label) -> Self {
+        PendingLabel {
+            label,
+            is_defined: false,
+        }
+    }
+}
+
 // TODO: We can share one trap/constant for all functions by reusing this struct
 #[derive(Default)]
 struct Labels {
-    trap: Option<Label>,
-    ret: Option<Label>,
-    neg_const_f32: Option<Label>,
-    neg_const_f64: Option<Label>,
+    trap: Option<PendingLabel>,
+    ret: Option<PendingLabel>,
+    neg_const_f32: Option<PendingLabel>,
+    neg_const_f64: Option<PendingLabel>,
+    abs_const_f32: Option<PendingLabel>,
+    abs_const_f64: Option<PendingLabel>,
 }
 
 pub struct Context<'a, M> {
     asm: &'a mut Assembler,
+    reloc_sink: &'a mut dyn binemit::RelocSink,
     module_context: &'a M,
+    current_function: u32,
     func_starts: &'a Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     pub block_state: BlockState,
-    labels: Labels,
+    labels: &'a mut Labels,
 }
 
 /// Label in code.
@@ -1487,7 +1567,9 @@ macro_rules! load {
                 dst: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
-                let vmctx_mem_ptr_offset = ctx.module_context.offset_of_memory_ptr() as i32;
+                let vmctx_mem_ptr_offset = ctx.module_context
+
+                    .vmctx_vmmemory_definition_base(0) as i32;
                 let mem_ptr_reg = ctx.block_state.regs.take(I64);
                 dynasm!(ctx.asm
                     ; mov Rq(mem_ptr_reg.rq().unwrap()), [Rq(VMCTX) + vmctx_mem_ptr_offset]
@@ -1576,7 +1658,9 @@ macro_rules! store {
                 src: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
-                let vmctx_mem_ptr_offset = ctx.module_context.offset_of_memory_ptr() as i32;
+                let vmctx_mem_ptr_offset = ctx.module_context
+
+                    .vmctx_vmmemory_definition_base(0) as i32;
                 let mem_ptr_reg = ctx.block_state.regs.take(GPRType::Rq);
                 dynasm!(ctx.asm
                     ; mov Rq(mem_ptr_reg.rq().unwrap()), [Rq(VMCTX) + vmctx_mem_ptr_offset]
@@ -2048,6 +2132,41 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         }
     }
 
+    pub fn get_global(&mut self, global_idx: u32) {
+        let offset = self.module_context.vmctx_vmglobal_definition(
+            self.module_context
+                .defined_global_index(global_idx)
+                .expect("TODO: Support imported globals"),
+        );
+
+        let out = self.block_state.regs.take(GPRType::Rq);
+
+        // We always use `Rq` (even for floats) since the globals are not necessarily aligned to 128 bits
+        dynasm!(self.asm
+            ; mov Rq(out.rq().unwrap()), [Rq(VMCTX) + offset as i32]
+        );
+
+        self.push(ValueLocation::Reg(out));
+    }
+
+    pub fn set_global(&mut self, global_idx: u32) {
+        let val = self.pop();
+        let offset = self.module_context.vmctx_vmglobal_definition(
+            self.module_context
+                .defined_global_index(global_idx)
+                .expect("TODO: Support imported globals"),
+        );
+
+        let val = self.into_reg(GPRType::Rq, val);
+
+        // We always use `Rq` (even for floats) since the globals are not necessarily aligned to 128 bits
+        dynasm!(self.asm
+            ; mov [Rq(VMCTX) + offset as i32], Rq(val.rq().unwrap())
+        );
+
+        self.block_state.regs.release(val);
+    }
+
     fn immediate_to_reg(&mut self, reg: GPR, val: Value) {
         if val.as_bytes() == 0 {
             self.zero_reg(reg);
@@ -2397,6 +2516,48 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         self.push(out);
     }
 
+    pub fn f32_abs(&mut self) {
+        let val = self.pop();
+
+        let out = if let Some(i) = val.imm_f32() {
+            ValueLocation::Immediate(
+                wasmparser::Ieee32(f32::from_bits(i.bits()).abs().to_bits()).into(),
+            )
+        } else {
+            let reg = self.into_temp_reg(GPRType::Rx, val);
+            let const_label = self.abs_const_f32_label();
+
+            dynasm!(self.asm
+                ; andps Rx(reg.rx().unwrap()), [=>const_label.0]
+            );
+
+            ValueLocation::Reg(reg)
+        };
+
+        self.push(out);
+    }
+
+    pub fn f64_abs(&mut self) {
+        let val = self.pop();
+
+        let out = if let Some(i) = val.imm_f64() {
+            ValueLocation::Immediate(
+                wasmparser::Ieee64(f64::from_bits(i.bits()).abs().to_bits()).into(),
+            )
+        } else {
+            let reg = self.into_temp_reg(GPRType::Rx, val);
+            let const_label = self.abs_const_f64_label();
+
+            dynasm!(self.asm
+                ; andps Rx(reg.rx().unwrap()), [=>const_label.0]
+            );
+
+            ValueLocation::Reg(reg)
+        };
+
+        self.push(out);
+    }
+
     unop!(i32_clz, lzcnt, Rd, u32, u32::leading_zeros);
     unop!(i64_clz, lzcnt, Rq, u64, |a: u64| a.leading_zeros() as u64);
     unop!(i32_ctz, tzcnt, Rd, u32, u32::trailing_zeros);
@@ -2507,10 +2668,9 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         let mut val = self.pop();
 
         let out_val = match val {
-            ValueLocation::Immediate(imm) =>
-                ValueLocation::Immediate(
-                    wasmparser::Ieee32((imm.as_i32().unwrap() as u32 as f32).to_bits()).into()
-                ),
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                wasmparser::Ieee32((imm.as_i32().unwrap() as u32 as f32).to_bits()).into(),
+            ),
             _ => {
                 let reg = self.into_reg(I32, val);
                 val = ValueLocation::Reg(reg);
@@ -3040,18 +3200,63 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         self.push(ValueLocation::Immediate(imm));
     }
 
-    pub fn memory_size(&mut self) {
-        let tmp = self.block_state.regs.take(I32);
-
-        // 16 is log2(64KiB as bytes)
-        dynasm!(self.asm
-            ; mov Rd(tmp.rq().unwrap()), [
-                rdi + self.module_context.offset_of_memory_len() as i32
-            ]
-            ; shr Rd(tmp.rq().unwrap()), 16
+    fn relocated_function_call(
+        &mut self,
+        name: &cranelift_codegen::ir::ExternalName,
+        args: impl IntoIterator<Item = SignlessType>,
+        rets: impl IntoIterator<Item = SignlessType>,
+    ) {
+        self.pass_outgoing_args(&arg_locs(args));
+        // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
+        self.reloc_sink.reloc_external(
+            (self.asm.offset().0
+                - self.func_starts[self.current_function as usize]
+                    .0
+                    .unwrap()
+                    .0) as u32
+                + 2,
+            binemit::Reloc::Abs8,
+            name,
+            0,
         );
+        let temp = self.block_state.regs.take(I64);
+        dynasm!(self.asm
+            ; mov Rq(temp.rq().unwrap()), QWORD 0xdeadbeefdeadbeefu64 as i64
+            ; call Rq(temp.rq().unwrap())
+        );
+        self.block_state.regs.release(temp);
+        self.push_function_returns(rets);
+    }
 
-        self.push(ValueLocation::Reg(tmp));
+    // TODO: Other memory indices
+    pub fn memory_size(&mut self) {
+        self.push(ValueLocation::Immediate(0u32.into()));
+        self.relocated_function_call(
+            &magic::get_memory32_size_name(),
+            iter::once(I32),
+            iter::once(I32),
+        );
+        // let tmp = self.block_state.regs.take(I32);
+        //
+        // // 16 is log2(64KiB as bytes)
+        // dynasm!(self.asm
+        // ; mov Rd(tmp.rq().unwrap()), [
+        // rdi + self.module_context.vmctx_vmmemory_definition_current_length(0) as i32
+        // ]
+        // ; shr Rd(tmp.rq().unwrap()), 16
+        // );
+        //
+        // self.push(ValueLocation::Reg(tmp));
+    }
+
+    // TODO: Other memory indices
+    pub fn memory_grow(&mut self) {
+        self.push(ValueLocation::Immediate(0u32.into()));
+        self.relocated_function_call(
+            &magic::get_memory32_grow_name(),
+            iter::once(I32).chain(iter::once(I32)),
+            iter::once(I32),
+        );
     }
 
     // TODO: Use `ArrayVec`?
@@ -3172,27 +3377,23 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     }
 
     // TODO: Multiple returns
-    fn push_function_return(&mut self, arity: u32) {
-        if arity == 0 {
-            return;
+    fn push_function_returns(&mut self, returns: impl IntoIterator<Item = SignlessType>) {
+        for loc in ret_locs(returns) {
+            if let CCLoc::Reg(reg) = loc {
+                self.block_state.regs.mark_used(reg);
+            }
+
+            self.push(loc.into());
         }
-        debug_assert_eq!(arity, 1);
-        self.block_state.regs.mark_used(RAX);
-        self.push(ValueLocation::Reg(RAX));
     }
 
     // TODO: Do return types properly
     pub fn call_indirect(
         &mut self,
-        signature_hash: u32,
+        type_id: u32,
         arg_types: impl IntoIterator<Item = SignlessType>,
-        return_arity: u32,
+        return_types: impl IntoIterator<Item = SignlessType>,
     ) {
-        debug_assert!(
-            return_arity == 0 || return_arity == 1,
-            "We don't support multiple return yet"
-        );
-
         let locs = arg_locs(arg_types);
 
         for &loc in &locs {
@@ -3204,6 +3405,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         let callee = self.pop();
         let callee = self.into_temp_reg(I32, callee);
         let temp0 = self.block_state.regs.take(I64);
+        let temp1 = self.block_state.regs.take(I64);
 
         for &loc in &locs {
             if let CCLoc::Reg(r) = loc {
@@ -3217,30 +3419,44 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
         // TODO: Consider generating a single trap function and jumping to that instead.
         dynasm!(self.asm
-            ; cmp Rd(callee.rq().unwrap()), [Rq(VMCTX) + self.module_context.offset_of_funcs_len() as i32]
+            ; cmp Rd(callee.rq().unwrap()), [
+                Rq(VMCTX) +
+                    self.module_context
+                        .vmctx_vmtable_definition_current_elements(0) as i32
+            ]
             ; jae =>fail
-            ; imul Rd(callee.rq().unwrap()), Rd(callee.rq().unwrap()), mem::size_of::<RuntimeFunc>() as i32
-            ; mov Rq(temp0.rq().unwrap()), [Rq(VMCTX) + self.module_context.offset_of_funcs_ptr() as i32]
+            ; imul
+                Rd(callee.rq().unwrap()),
+                Rd(callee.rq().unwrap()),
+                self.module_context.size_of_vmcaller_checked_anyfunc() as i32
+            ; mov Rq(temp0.rq().unwrap()), [
+                Rq(VMCTX) +
+                    self.module_context
+                        .vmctx_vmtable_definition_base(0) as i32
+            ]
+            ; mov Rd(temp1.rq().unwrap()), [
+                Rq(VMCTX) +
+                    self.module_context
+                        .vmctx_vmshared_signature_id(type_id) as i32
+            ]
             ; cmp DWORD [
                 Rq(temp0.rq().unwrap()) +
                     Rq(callee.rq().unwrap()) +
-                    RuntimeFunc::offset_of_sig_hash() as i32
-            ], signature_hash as i32
+                    self.module_context.vmcaller_checked_anyfunc_type_index() as i32
+            ], Rd(temp1.rq().unwrap())
             ; jne =>fail
-        );
-
-        dynasm!(self.asm
             ; call QWORD [
                 Rq(temp0.rq().unwrap()) +
                     Rq(callee.rq().unwrap()) +
-                    RuntimeFunc::offset_of_func_start() as i32
+                    self.module_context.vmcaller_checked_anyfunc_func_ptr() as i32
             ]
         );
 
         self.block_state.regs.release(temp0);
+        self.block_state.regs.release(temp1);
         self.block_state.regs.release(callee);
 
-        self.push_function_return(return_arity);
+        self.push_function_returns(return_types);
     }
 
     pub fn swap(&mut self, depth: u32) {
@@ -3253,13 +3469,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         &mut self,
         index: u32,
         arg_types: impl IntoIterator<Item = SignlessType>,
-        return_arity: u32,
+        return_types: impl IntoIterator<Item = SignlessType>,
     ) {
-        debug_assert!(
-            return_arity == 0 || return_arity == 1,
-            "We don't support multiple return yet"
-        );
-
         self.pass_outgoing_args(&arg_locs(arg_types));
 
         let label = &self.func_starts[index as usize].1;
@@ -3267,7 +3478,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             ; call =>*label
         );
 
-        self.push_function_return(return_arity);
+        self.push_function_returns(return_types);
     }
 
     // TODO: Reserve space to store RBX, RBP, and R12..R15 so we can use them
@@ -3295,21 +3506,38 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     /// conditional traps in `call_indirect` use)
     pub fn epilogue(&mut self) {
         // TODO: We don't want to redefine this label if we're sharing it between functions
-        if let Some(l) = self.labels.trap {
+        if let Some(l) = self
+            .labels
+            .trap
+            .as_ref()
+            .and_then(PendingLabel::as_undefined)
+        {
             self.define_label(l);
             dynasm!(self.asm
                 ; ud2
             );
+            self.labels.trap = Some(PendingLabel::defined(l));
         }
 
-        if let Some(l) = self.labels.ret {
+        if let Some(l) = self
+            .labels
+            .ret
+            .as_ref()
+            .and_then(PendingLabel::as_undefined)
+        {
             self.define_label(l);
             dynasm!(self.asm
                 ; ret
             );
+            self.labels.ret = Some(PendingLabel::defined(l));
         }
 
-        if let Some(l) = self.labels.neg_const_f32 {
+        if let Some(l) = self
+            .labels
+            .neg_const_f32
+            .as_ref()
+            .and_then(PendingLabel::as_undefined)
+        {
             self.align(16);
             self.define_label(l);
             dynasm!(self.asm
@@ -3318,9 +3546,15 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 ; .dword 0
                 ; .dword 0
             );
+            self.labels.neg_const_f32 = Some(PendingLabel::defined(l));
         }
 
-        if let Some(l) = self.labels.neg_const_f64 {
+        if let Some(l) = self
+            .labels
+            .neg_const_f64
+            .as_ref()
+            .and_then(PendingLabel::as_undefined)
+        {
             self.align(16);
             self.define_label(l);
             dynasm!(self.asm
@@ -3329,6 +3563,39 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 ; .dword 0
                 ; .dword 0
             );
+            self.labels.neg_const_f64 = Some(PendingLabel::defined(l));
+        }
+
+        if let Some(l) = self
+            .labels
+            .abs_const_f32
+            .as_ref()
+            .and_then(PendingLabel::as_undefined)
+        {
+            self.align(16);
+            self.define_label(l);
+            dynasm!(self.asm
+                ; .dword 2147483647
+                ; .dword 2147483647
+                ; .dword 2147483647
+                ; .dword 2147483647
+            );
+            self.labels.abs_const_f32 = Some(PendingLabel::defined(l));
+        }
+
+        if let Some(l) = self
+            .labels
+            .abs_const_f64
+            .as_ref()
+            .and_then(PendingLabel::as_undefined)
+        {
+            self.align(16);
+            self.define_label(l);
+            dynasm!(self.asm
+                ; .qword 9223372036854775807
+                ; .qword 9223372036854775807
+            );
+            self.labels.abs_const_f64 = Some(PendingLabel::defined(l));
         }
     }
 
@@ -3347,45 +3614,67 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     #[must_use]
     fn trap_label(&mut self) -> Label {
-        if let Some(l) = self.labels.trap {
-            return l;
+        if let Some(l) = &self.labels.trap {
+            return l.label;
         }
 
         let label = self.create_label();
-        self.labels.trap = Some(label);
+        self.labels.trap = Some(label.into());
         label
     }
 
     #[must_use]
     fn ret_label(&mut self) -> Label {
-        if let Some(l) = self.labels.ret {
-            return l;
+        if let Some(l) = &self.labels.ret {
+            return l.label;
         }
 
         let label = self.create_label();
-        self.labels.ret = Some(label);
+        self.labels.ret = Some(label.into());
         label
     }
 
     #[must_use]
     fn neg_const_f32_label(&mut self) -> Label {
-        if let Some(l) = self.labels.neg_const_f32 {
-            return l;
+        if let Some(l) = &self.labels.neg_const_f32 {
+            return l.label;
         }
 
         let label = self.create_label();
-        self.labels.neg_const_f32 = Some(label);
+        self.labels.neg_const_f32 = Some(label.into());
         label
     }
 
     #[must_use]
     fn neg_const_f64_label(&mut self) -> Label {
-        if let Some(l) = self.labels.neg_const_f64 {
-            return l;
+        if let Some(l) = &self.labels.neg_const_f64 {
+            return l.label;
         }
 
         let label = self.create_label();
-        self.labels.neg_const_f64 = Some(label);
+        self.labels.neg_const_f64 = Some(label.into());
+        label
+    }
+
+    #[must_use]
+    fn abs_const_f32_label(&mut self) -> Label {
+        if let Some(l) = &self.labels.abs_const_f32 {
+            return l.label;
+        }
+
+        let label = self.create_label();
+        self.labels.abs_const_f32 = Some(label.into());
+        label
+    }
+
+    #[must_use]
+    fn abs_const_f64_label(&mut self) -> Label {
+        if let Some(l) = &self.labels.abs_const_f64 {
+            return l.label;
+        }
+
+        let label = self.create_label();
+        self.labels.abs_const_f64 = Some(label.into());
         label
     }
 }

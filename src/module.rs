@@ -102,7 +102,7 @@ impl_function_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
 #[derive(Default)]
 pub struct TranslatedModule {
     translated_code_section: Option<TranslatedCodeSection>,
-    types: SimpleContext,
+    ctx: SimpleContext,
     // TODO: Should we wrap this in a `Mutex` so that calling functions from multiple
     //       threads doesn't cause data races?
     table: Option<(TableType, Vec<u32>)>,
@@ -122,7 +122,7 @@ impl TranslatedModule {
                 .translated_code_section
                 .as_ref()
                 .expect("We don't currently support a table section without a code section");
-            let types = &self.types;
+            let ctx = &self.ctx;
 
             self.table
                 .as_mut()
@@ -131,11 +131,11 @@ impl TranslatedModule {
                         .iter()
                         .map(|i| {
                             let start = code_section.func_start(*i as _);
-                            let ty = types.func_type(*i);
+                            let ty = ctx.func_type(*i);
 
                             RuntimeFunc {
                                 func_start: start,
-                                sig_hash: quickhash(ty) as u32,
+                                sig_hash: quickhash(ty),
                             }
                         })
                         .collect::<Vec<_>>();
@@ -154,7 +154,17 @@ impl TranslatedModule {
             .into();
 
         let ctx = if mem.len > 0 || table.len > 0 {
-            Some(Box::new(VmCtx { table, mem }))
+            let hashes = self.ctx.types.iter().map(quickhash).collect::<Vec<_>>();
+
+            // Hardcoded maximum number of hashes supported for now - we will eventually port all our
+            // tests over to wasmtime which will make this obsolete so implementing this properly is
+            // unnecessary.
+            let mut out = [0; 64];
+
+            // This will panic if `hashes.len() > 64`
+            out[..hashes.len()].copy_from_slice(&hashes[..]);
+
+            Some(Box::new(GVmCtx { table, mem, hashes: out }) as Box<VmCtx>)
         } else {
             None
         };
@@ -215,11 +225,11 @@ impl ExecutableModule {
     ) -> Result<T, ExecutionError> {
         let module = &self.module;
 
-        if func_idx as usize >= module.types.func_ty_indicies.len() {
+        if func_idx as usize >= module.ctx.func_ty_indicies.len() {
             return Err(ExecutionError::FuncIndexOutOfBounds);
         }
 
-        let type_ = module.types.func_type(func_idx);
+        let type_ = module.ctx.func_type(func_idx);
 
         // TODO: Handle "compatible" types (i.e. f32 and i32)
         if (&type_.params[..], &type_.returns[..]) != (Args::TYPE_LIST, T::TYPE_LIST) {
@@ -237,7 +247,7 @@ impl ExecutableModule {
 type FuncRef = *const u8;
 
 pub struct RuntimeFunc {
-    sig_hash: u32,
+    sig_hash: u64,
     func_start: FuncRef,
 }
 
@@ -279,32 +289,41 @@ impl<T> Drop for BoxSlice<T> {
     }
 }
 
-pub struct VmCtx {
+pub type VmCtx = GVmCtx<[u64]>;
+
+pub struct GVmCtx<T: ?Sized> {
     table: BoxSlice<RuntimeFunc>,
     mem: BoxSlice<u8>,
+    hashes: T,
 }
 
-impl VmCtx {
-    pub fn offset_of_memory_ptr() -> u8 {
-        offset_of!(Self, mem.ptr)
+impl<T: ?Sized> GVmCtx<T> {
+    pub fn offset_of_memory_ptr() -> u32 {
+        offset_of!(GVmCtx<[u64; 0]>, mem.ptr)
             .try_into()
-            .expect("Offset exceeded size of u8")
+            .expect("Offset exceeded size of u32")
     }
 
-    pub fn offset_of_memory_len() -> u8 {
-        offset_of!(Self, mem.len)
+    pub fn offset_of_memory_len() -> u32 {
+        offset_of!(GVmCtx<[u64; 0]>, mem.len)
             .try_into()
-            .expect("Offset exceeded size of u8")
+            .expect("Offset exceeded size of u32")
     }
 
     pub fn offset_of_funcs_ptr() -> u8 {
-        offset_of!(Self, table.ptr)
+        offset_of!(GVmCtx<[u64; 0]>, table.ptr)
             .try_into()
             .expect("Offset exceeded size of u8")
     }
 
     pub fn offset_of_funcs_len() -> u8 {
-        offset_of!(Self, table.len)
+        offset_of!(GVmCtx<[u64; 0]>, table.len)
+            .try_into()
+            .expect("Offset exceeded size of u8")
+    }
+
+    pub fn offset_of_hashes() -> u8 {
+        offset_of!(GVmCtx<[u64; 0]>, hashes)
             .try_into()
             .expect("Offset exceeded size of u8")
     }
@@ -327,21 +346,20 @@ pub trait Signature {
 
 pub trait SigType {
     fn to_microwasm_type(&self) -> microwasm::SignlessType;
-    fn is_float(&self) -> bool;
 }
 
-impl SigType for AbiParam {
+impl SigType for ir::Type {
     fn to_microwasm_type(&self) -> microwasm::SignlessType {
         use crate::microwasm::{Size::*, Type::*};
 
-        if self.value_type.is_int() {
-            match self.value_type.bits() {
+        if self.is_int() {
+            match self.bits() {
                 32 => Int(_32),
                 64 => Int(_64),
                 _ => unimplemented!(),
             }
-        } else if self.value_type.is_float() {
-            match self.value_type.bits() {
+        } else if self.is_float() {
+            match self.bits() {
                 32 => Float(_32),
                 64 => Float(_64),
                 _ => unimplemented!(),
@@ -350,9 +368,11 @@ impl SigType for AbiParam {
             unimplemented!()
         }
     }
+}
 
-    fn is_float(&self) -> bool {
-        self.value_type.is_float()
+impl SigType for AbiParam {
+    fn to_microwasm_type(&self) -> microwasm::SignlessType {
+        self.value_type.to_microwasm_type()
     }
 }
 
@@ -377,13 +397,6 @@ impl SigType for wasmparser::Type {
     fn to_microwasm_type(&self) -> microwasm::SignlessType {
         microwasm::Type::from_wasm(*self).unwrap()
     }
-
-    fn is_float(&self) -> bool {
-        match self {
-            wasmparser::Type::F32 | wasmparser::Type::F64 => true,
-            _ => false,
-        }
-    }
 }
 
 impl Signature for FuncType {
@@ -399,14 +412,24 @@ impl Signature for FuncType {
 }
 
 pub trait ModuleContext {
-    type Signature: Signature + Hash;
+    type Signature: Signature;
+    type GlobalType: SigType;
+
+    fn vmctx_vmglobal_definition(&self, index: u32) -> u32;
+    fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32;
+    fn vmctx_vmmemory_definition_current_length(&self, defined_memory_index: u32) -> u32;
+    fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32;
+    fn vmctx_vmtable_definition_current_elements(&self, defined_table_index: u32) -> u32;
+    fn vmctx_vmshared_signature_id(&self, signature_idx: u32) -> u32;
+    fn vmcaller_checked_anyfunc_type_index(&self) -> u8;
+    fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8;
+    fn size_of_vmcaller_checked_anyfunc(&self) -> u8;
+
+    fn defined_global_index(&self, global_index: u32) -> Option<u32>;
+    fn global_type(&self, global_index: u32) -> &Self::GlobalType;
 
     fn func_type_index(&self, func_idx: u32) -> u32;
     fn signature(&self, index: u32) -> &Self::Signature;
-    fn offset_of_memory_ptr(&self) -> u32;
-    fn offset_of_memory_len(&self) -> u32;
-    fn offset_of_funcs_ptr(&self) -> u8;
-    fn offset_of_funcs_len(&self) -> u8;
 
     fn func_index(&self, defined_func_index: u32) -> u32;
     fn defined_func_index(&self, func_index: u32) -> Option<u32>;
@@ -424,6 +447,7 @@ pub trait ModuleContext {
 
 impl ModuleContext for SimpleContext {
     type Signature = FuncType;
+    type GlobalType = wasmparser::Type;
 
     // TODO: We don't support external functions yet
     fn func_index(&self, func_idx: u32) -> u32 {
@@ -438,24 +462,52 @@ impl ModuleContext for SimpleContext {
         self.func_ty_indicies[func_idx as usize]
     }
 
+    fn defined_global_index(&self, index: u32) -> Option<u32> {
+        unimplemented!()
+    }
+
+    fn global_type(&self, global_index: u32) -> &Self::GlobalType {
+        unimplemented!()
+    }
+
     fn signature(&self, index: u32) -> &Self::Signature {
         &self.types[index as usize]
     }
 
-    fn offset_of_memory_ptr(&self) -> u32 {
-        VmCtx::offset_of_memory_ptr() as _
+    fn vmctx_vmglobal_definition(&self, index: u32) -> u32 {
+        unimplemented!()
     }
 
-    fn offset_of_memory_len(&self) -> u32 {
-        VmCtx::offset_of_memory_len() as _
+    fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32 {
+        VmCtx::offset_of_memory_ptr()
     }
 
-    fn offset_of_funcs_ptr(&self) -> u8 {
-        VmCtx::offset_of_funcs_ptr()
+    fn vmctx_vmmemory_definition_current_length(&self, defined_memory_index: u32) -> u32 {
+        VmCtx::offset_of_memory_len()
     }
 
-    fn offset_of_funcs_len(&self) -> u8 {
-        VmCtx::offset_of_funcs_len()
+    fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32 {
+        VmCtx::offset_of_funcs_ptr() as _
+    }
+
+    fn vmctx_vmtable_definition_current_elements(&self, defined_table_index: u32) -> u32 {
+        VmCtx::offset_of_funcs_len() as _
+    }
+
+    fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {
+        RuntimeFunc::offset_of_sig_hash() as _
+    }
+
+    fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
+        RuntimeFunc::offset_of_func_start() as _
+    }
+
+    fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
+        std::mem::size_of::<RuntimeFunc>() as _
+    }
+
+    fn vmctx_vmshared_signature_id(&self, signature_idx: u32) -> u32 {
+        VmCtx::offset_of_hashes() as u32 + signature_idx * std::mem::size_of::<u64>() as u32
     }
 
     // TODO: type of a global
@@ -479,7 +531,7 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Type = section.code {
         let types_reader = section.get_type_section_reader()?;
-        output.types.types = translate_sections::type_(types_reader)?;
+        output.ctx.types = translate_sections::type_(types_reader)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -501,7 +553,7 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Function = section.code {
         let functions = section.get_function_section_reader()?;
-        output.types.func_ty_indicies = translate_sections::function(functions)?;
+        output.ctx.func_ty_indicies = translate_sections::function(functions)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -598,7 +650,7 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Code = section.code {
         let code = section.get_code_section_reader()?;
-        output.translated_code_section = Some(translate_sections::code(code, &output.types)?);
+        output.translated_code_section = Some(translate_sections::code(code, &output.ctx)?);
 
         reader.skip_custom_sections()?;
         if reader.eof() {

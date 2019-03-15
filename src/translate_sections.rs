@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::function_body;
 use crate::microwasm::{MicrowasmConv, Type as MWType};
 use crate::module::{ModuleContext, SimpleContext};
+use cranelift_codegen::{binemit, ir};
 #[allow(unused_imports)] // for now
 use wasmparser::{
     CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
@@ -105,6 +106,28 @@ pub fn element(elements: ElementSectionReader) -> Result<Vec<u32>, Error> {
     Ok(out)
 }
 
+struct UnimplementedRelocSink;
+
+impl binemit::RelocSink for UnimplementedRelocSink {
+    fn reloc_ebb(&mut self, _: binemit::CodeOffset, _: binemit::Reloc, _: binemit::CodeOffset) {
+        unimplemented!()
+    }
+
+    fn reloc_external(
+        &mut self,
+        _: binemit::CodeOffset,
+        _: binemit::Reloc,
+        _: &ir::ExternalName,
+        _: binemit::Addend,
+    ) {
+        unimplemented!()
+    }
+
+    fn reloc_jt(&mut self, _: binemit::CodeOffset, _: binemit::Reloc, _: ir::JumpTable) {
+        unimplemented!()
+    }
+}
+
 /// Parses the Code section of the wasm module.
 pub fn code(
     code: CodeSectionReader,
@@ -115,8 +138,9 @@ pub fn code(
 
     for (idx, body) in code.into_iter().enumerate() {
         let body = body?;
+        let mut relocs = UnimplementedRelocSink;
 
-        function_body::translate_wasm(&mut session, idx as u32, &body)?;
+        function_body::translate_wasm(&mut session, &mut relocs, idx as u32, &body)?;
     }
 
     Ok(session.into_translated_code_section()?)
