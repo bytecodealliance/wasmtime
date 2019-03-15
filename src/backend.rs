@@ -2688,9 +2688,9 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             let (neg_zero, nan) = self.copysign_consts_f32_labels();
 
             dynasm!(self.asm
-                ; andps   Rx(right.rx().unwrap()), [=>neg_zero.0]
-                ; andps   Rx(left.rx().unwrap()), [=>nan.0]
-                ; orps    Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
+                ; andps Rx(right.rx().unwrap()), [=>neg_zero.0]
+                ; andps Rx(left.rx().unwrap()), [=>nan.0]
+                ; orps  Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
             );
 
             self.block_state.regs.release(right);
@@ -2720,9 +2720,9 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             let (neg_zero, nan) = self.copysign_consts_f64_labels();
 
             dynasm!(self.asm
-                ; andpd   Rx(right.rx().unwrap()), [=>neg_zero.0]
-                ; andpd   Rx(left.rx().unwrap()), [=>nan.0]
-                ; orpd    Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
+                ; andpd Rx(right.rx().unwrap()), [=>neg_zero.0]
+                ; andpd Rx(left.rx().unwrap()), [=>nan.0]
+                ; orpd  Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
             );
 
             self.block_state.regs.release(right);
@@ -3824,10 +3824,10 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.align(16);
             self.define_label(neg_zero);
             dynasm!(self.asm
-                ; .dword -2147483647
-                ; .dword -2147483647
-                ; .dword -2147483647
-                ; .dword -2147483647
+                ; .dword 2147483648u32 as i32
+                ; .dword 2147483648u32 as i32
+                ; .dword 2147483648u32 as i32
+                ; .dword 2147483648u32 as i32
             );
             self.define_label(nan);
             dynasm!(self.asm
@@ -3848,13 +3848,13 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.align(16);
             self.define_label(neg_zero);
             dynasm!(self.asm
-                ; .qword   -9223372036854775808
-                ; .qword   -9223372036854775808
+                ; .qword -9223372036854775808
+                ; .qword -9223372036854775808
             );
             self.define_label(nan);
             dynasm!(self.asm
-                ; .qword   9223372036854775807
-                ; .qword   9223372036854775807
+                ; .qword 9223372036854775807
+                ; .qword 9223372036854775807
             );
             self.labels.copysign_consts_f64 = Some(Pending::defined((neg_zero, nan)));
         }
