@@ -6,7 +6,8 @@
     alloc_layout_extra,
     try_from,
     try_trait,
-    bind_by_move_pattern_guards
+    bind_by_move_pattern_guards,
+    copysign
 )]
 #![plugin(dynasm)]
 

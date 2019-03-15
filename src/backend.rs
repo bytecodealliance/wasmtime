@@ -6,7 +6,7 @@ use self::registers::*;
 use crate::error::Error;
 use crate::microwasm::Value;
 use crate::module::{ModuleContext, RuntimeFunc};
-use cranelift_codegen::binemit;
+use cranelift_codegen::{binemit, ir};
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use std::{
@@ -665,27 +665,30 @@ pub enum MemoryAccessMode {
     Unchecked,
 }
 
-struct PendingLabel {
-    label: Label,
+struct Pending<T> {
+    label: T,
     is_defined: bool,
 }
 
-impl PendingLabel {
-    fn undefined(label: Label) -> Self {
-        PendingLabel {
+impl<T> Pending<T> {
+    fn undefined(label: T) -> Self {
+        Pending {
             label,
             is_defined: false,
         }
     }
 
-    fn defined(label: Label) -> Self {
-        PendingLabel {
+    fn defined(label: T) -> Self {
+        Pending {
             label,
             is_defined: true,
         }
     }
 
-    fn as_undefined(&self) -> Option<Label> {
+    fn as_undefined(&self) -> Option<T>
+    where
+        T: Copy,
+    {
         if !self.is_defined {
             Some(self.label)
         } else {
@@ -694,9 +697,9 @@ impl PendingLabel {
     }
 }
 
-impl From<Label> for PendingLabel {
-    fn from(label: Label) -> Self {
-        PendingLabel {
+impl<T> From<T> for Pending<T> {
+    fn from(label: T) -> Self {
+        Pending {
             label,
             is_defined: false,
         }
@@ -706,12 +709,14 @@ impl From<Label> for PendingLabel {
 // TODO: We can share one trap/constant for all functions by reusing this struct
 #[derive(Default)]
 struct Labels {
-    trap: Option<PendingLabel>,
-    ret: Option<PendingLabel>,
-    neg_const_f32: Option<PendingLabel>,
-    neg_const_f64: Option<PendingLabel>,
-    abs_const_f32: Option<PendingLabel>,
-    abs_const_f64: Option<PendingLabel>,
+    trap: Option<Pending<Label>>,
+    ret: Option<Pending<Label>>,
+    neg_const_f32: Option<Pending<Label>>,
+    neg_const_f64: Option<Pending<Label>>,
+    abs_const_f32: Option<Pending<Label>>,
+    abs_const_f64: Option<Pending<Label>>,
+    copysign_consts_f32: Option<Pending<(Label, Label)>>,
+    copysign_consts_f64: Option<Pending<(Label, Label)>>,
 }
 
 pub struct Context<'a, M> {
@@ -2624,6 +2629,110 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         self.push(out);
     }
 
+    pub fn f32_sqrt(&mut self) {
+        let val = self.pop();
+
+        let out = if let Some(i) = val.imm_f32() {
+            ValueLocation::Immediate(
+                wasmparser::Ieee32(f32::from_bits(i.bits()).sqrt().to_bits()).into(),
+            )
+        } else {
+            let reg = self.into_temp_reg(GPRType::Rx, val);
+
+            dynasm!(self.asm
+                ; sqrtss Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
+            );
+
+            ValueLocation::Reg(reg)
+        };
+
+        self.push(out);
+    }
+
+    pub fn f64_sqrt(&mut self) {
+        let val = self.pop();
+
+        let out = if let Some(i) = val.imm_f64() {
+            ValueLocation::Immediate(
+                wasmparser::Ieee64(f64::from_bits(i.bits()).sqrt().to_bits()).into(),
+            )
+        } else {
+            let reg = self.into_temp_reg(GPRType::Rx, val);
+
+            dynasm!(self.asm
+                ; sqrtsd Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
+            );
+
+            ValueLocation::Reg(reg)
+        };
+
+        self.push(out);
+    }
+
+    pub fn f32_copysign(&mut self) {
+        let right = self.pop();
+        let left = self.pop();
+
+        let out = if let (Some(left), Some(right)) = (left.imm_f32(), right.imm_f32()) {
+            ValueLocation::Immediate(
+                wasmparser::Ieee32(
+                    f32::from_bits(left.bits())
+                        .copysign(f32::from_bits(right.bits()))
+                        .to_bits(),
+                )
+                .into(),
+            )
+        } else {
+            let left = self.into_temp_reg(GPRType::Rx, left);
+            let right = self.into_reg(GPRType::Rx, right);
+            let (neg_zero, nan) = self.copysign_consts_f32_labels();
+
+            dynasm!(self.asm
+                ; andps   Rx(right.rx().unwrap()), [=>neg_zero.0]
+                ; andps   Rx(left.rx().unwrap()), [=>nan.0]
+                ; orps    Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
+            );
+
+            self.block_state.regs.release(right);
+
+            ValueLocation::Reg(left)
+        };
+
+        self.push(out);
+    }
+
+    pub fn f64_copysign(&mut self) {
+        let right = self.pop();
+        let left = self.pop();
+
+        let out = if let (Some(left), Some(right)) = (left.imm_f64(), right.imm_f64()) {
+            ValueLocation::Immediate(
+                wasmparser::Ieee64(
+                    f64::from_bits(left.bits())
+                        .copysign(f64::from_bits(right.bits()))
+                        .to_bits(),
+                )
+                .into(),
+            )
+        } else {
+            let left = self.into_temp_reg(GPRType::Rx, left);
+            let right = self.into_reg(GPRType::Rx, right);
+            let (neg_zero, nan) = self.copysign_consts_f64_labels();
+
+            dynasm!(self.asm
+                ; andpd   Rx(right.rx().unwrap()), [=>neg_zero.0]
+                ; andpd   Rx(left.rx().unwrap()), [=>nan.0]
+                ; orpd    Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
+            );
+
+            self.block_state.regs.release(right);
+
+            ValueLocation::Reg(left)
+        };
+
+        self.push(out);
+    }
+
     unop!(i32_clz, lzcnt, Rd, u32, u32::leading_zeros);
     unop!(i64_clz, lzcnt, Rq, u64, |a: u64| a.leading_zeros() as u64);
     unop!(i32_ctz, tzcnt, Rd, u32, u32::trailing_zeros);
@@ -2775,13 +2884,65 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     commutative_binop_f32!(f32_add, addss, |a, b| a + b);
     commutative_binop_f32!(f32_mul, mulss, |a, b| a * b);
+    commutative_binop_f32!(f32_min, minss, f32::min);
+    commutative_binop_f32!(f32_max, maxss, f32::max);
     binop_f32!(f32_sub, subss, |a, b| a - b);
     binop_f32!(f32_div, divss, |a, b| a / b);
 
+    pub fn f32_ceil(&mut self) {
+        self.relocated_function_call(
+            &ir::ExternalName::LibCall(ir::LibCall::CeilF32),
+            iter::once(F32),
+            iter::once(F32),
+        );
+    }
+
+    pub fn f32_floor(&mut self) {
+        self.relocated_function_call(
+            &ir::ExternalName::LibCall(ir::LibCall::FloorF32),
+            iter::once(F32),
+            iter::once(F32),
+        );
+    }
+
+    pub fn f32_nearest(&mut self) {
+        self.relocated_function_call(
+            &ir::ExternalName::LibCall(ir::LibCall::NearestF32),
+            iter::once(F32),
+            iter::once(F32),
+        );
+    }
+
     commutative_binop_f64!(f64_add, addsd, |a, b| a + b);
     commutative_binop_f64!(f64_mul, mulsd, |a, b| a * b);
+    commutative_binop_f64!(f64_min, minsd, f64::min);
+    commutative_binop_f64!(f64_max, maxsd, f64::max);
     binop_f64!(f64_sub, subsd, |a, b| a - b);
     binop_f64!(f64_div, divsd, |a, b| a / b);
+
+    pub fn f64_ceil(&mut self) {
+        self.relocated_function_call(
+            &ir::ExternalName::LibCall(ir::LibCall::CeilF64),
+            iter::once(F64),
+            iter::once(F64),
+        );
+    }
+
+    pub fn f64_floor(&mut self) {
+        self.relocated_function_call(
+            &ir::ExternalName::LibCall(ir::LibCall::FloorF64),
+            iter::once(F64),
+            iter::once(F64),
+        );
+    }
+
+    pub fn f64_nearest(&mut self) {
+        self.relocated_function_call(
+            &ir::ExternalName::LibCall(ir::LibCall::NearestF64),
+            iter::once(F64),
+            iter::once(F64),
+        );
+    }
 
     shift!(
         i32_shl,
@@ -3572,37 +3733,27 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     /// conditional traps in `call_indirect` use)
     pub fn epilogue(&mut self) {
         // TODO: We don't want to redefine this label if we're sharing it between functions
-        if let Some(l) = self
-            .labels
-            .trap
-            .as_ref()
-            .and_then(PendingLabel::as_undefined)
-        {
+        if let Some(l) = self.labels.trap.as_ref().and_then(Pending::as_undefined) {
             self.define_label(l);
             dynasm!(self.asm
                 ; ud2
             );
-            self.labels.trap = Some(PendingLabel::defined(l));
+            self.labels.trap = Some(Pending::defined(l));
         }
 
-        if let Some(l) = self
-            .labels
-            .ret
-            .as_ref()
-            .and_then(PendingLabel::as_undefined)
-        {
+        if let Some(l) = self.labels.ret.as_ref().and_then(Pending::as_undefined) {
             self.define_label(l);
             dynasm!(self.asm
                 ; ret
             );
-            self.labels.ret = Some(PendingLabel::defined(l));
+            self.labels.ret = Some(Pending::defined(l));
         }
 
         if let Some(l) = self
             .labels
             .neg_const_f32
             .as_ref()
-            .and_then(PendingLabel::as_undefined)
+            .and_then(Pending::as_undefined)
         {
             self.align(16);
             self.define_label(l);
@@ -3612,14 +3763,14 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 ; .dword 0
                 ; .dword 0
             );
-            self.labels.neg_const_f32 = Some(PendingLabel::defined(l));
+            self.labels.neg_const_f32 = Some(Pending::defined(l));
         }
 
         if let Some(l) = self
             .labels
             .neg_const_f64
             .as_ref()
-            .and_then(PendingLabel::as_undefined)
+            .and_then(Pending::as_undefined)
         {
             self.align(16);
             self.define_label(l);
@@ -3629,14 +3780,14 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 ; .dword 0
                 ; .dword 0
             );
-            self.labels.neg_const_f64 = Some(PendingLabel::defined(l));
+            self.labels.neg_const_f64 = Some(Pending::defined(l));
         }
 
         if let Some(l) = self
             .labels
             .abs_const_f32
             .as_ref()
-            .and_then(PendingLabel::as_undefined)
+            .and_then(Pending::as_undefined)
         {
             self.align(16);
             self.define_label(l);
@@ -3646,14 +3797,14 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 ; .dword 2147483647
                 ; .dword 2147483647
             );
-            self.labels.abs_const_f32 = Some(PendingLabel::defined(l));
+            self.labels.abs_const_f32 = Some(Pending::defined(l));
         }
 
         if let Some(l) = self
             .labels
             .abs_const_f64
             .as_ref()
-            .and_then(PendingLabel::as_undefined)
+            .and_then(Pending::as_undefined)
         {
             self.align(16);
             self.define_label(l);
@@ -3661,7 +3812,51 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 ; .qword 9223372036854775807
                 ; .qword 9223372036854775807
             );
-            self.labels.abs_const_f64 = Some(PendingLabel::defined(l));
+            self.labels.abs_const_f64 = Some(Pending::defined(l));
+        }
+
+        if let Some((neg_zero, nan)) = self
+            .labels
+            .copysign_consts_f32
+            .as_ref()
+            .and_then(Pending::as_undefined)
+        {
+            self.align(16);
+            self.define_label(neg_zero);
+            dynasm!(self.asm
+                ; .dword -2147483647
+                ; .dword -2147483647
+                ; .dword -2147483647
+                ; .dword -2147483647
+            );
+            self.define_label(nan);
+            dynasm!(self.asm
+                ; .dword 2147483647
+                ; .dword 2147483647
+                ; .dword 2147483647
+                ; .dword 2147483647
+            );
+            self.labels.copysign_consts_f32 = Some(Pending::defined((neg_zero, nan)));
+        }
+
+        if let Some((neg_zero, nan)) = self
+            .labels
+            .copysign_consts_f64
+            .as_ref()
+            .and_then(Pending::as_undefined)
+        {
+            self.align(16);
+            self.define_label(neg_zero);
+            dynasm!(self.asm
+                ; .qword   -9223372036854775808
+                ; .qword   -9223372036854775808
+            );
+            self.define_label(nan);
+            dynasm!(self.asm
+                ; .qword   9223372036854775807
+                ; .qword   9223372036854775807
+            );
+            self.labels.copysign_consts_f64 = Some(Pending::defined((neg_zero, nan)));
         }
     }
 
@@ -3742,6 +3937,32 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         let label = self.create_label();
         self.labels.abs_const_f64 = Some(label.into());
         label
+    }
+
+    #[must_use]
+    fn copysign_consts_f32_labels(&mut self) -> (Label, Label) {
+        if let Some(l) = &self.labels.copysign_consts_f32 {
+            return l.label;
+        }
+
+        let neg_zero = self.create_label();
+        let nan = self.create_label();
+        let labels = (neg_zero, nan);
+        self.labels.copysign_consts_f32 = Some(labels.into());
+        labels
+    }
+
+    #[must_use]
+    fn copysign_consts_f64_labels(&mut self) -> (Label, Label) {
+        if let Some(l) = &self.labels.copysign_consts_f64 {
+            return l.label;
+        }
+
+        let neg_zero = self.create_label();
+        let nan = self.create_label();
+        let labels = (neg_zero, nan);
+        self.labels.copysign_consts_f32 = Some(labels.into());
+        labels
     }
 }
 
