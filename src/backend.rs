@@ -1245,6 +1245,48 @@ macro_rules! cmp_f32 {
     };
 }
 
+macro_rules! eq_float {
+    ($name:ident, $instr:ident, $imm_fn:ident, $const_fallback:expr) => {
+        pub fn $name(&mut self) {
+            let right = self.pop();
+            let left = self.pop();
+
+            if let Some(right) = right.immediate() {
+                if let Some(left) = left.immediate() {
+                    self.push(ValueLocation::Immediate(
+                        if $const_fallback(left.$imm_fn().unwrap(), right.$imm_fn().unwrap()) {
+                            1u32
+                        } else {
+                            0
+                        }.into()
+                    ));
+                    return;
+                }
+            }
+
+            let (left, right) = match left {
+                ValueLocation::Reg(r) if self.block_state.regs.num_usages(r) <= 1 => (left, right),
+                _ =>  (right, left)
+            };
+
+            let left = self.into_temp_reg(GPRType::Rx, left);
+            let right = self.into_reg(GPRType::Rx, right);
+            let out = self.block_state.regs.take(I32);
+
+            dynasm!(self.asm
+                ; $instr Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
+                ; movd Rd(out.rq().unwrap()), Rx(left.rx().unwrap())
+                ; and Rd(out.rq().unwrap()), 1
+            );
+
+            self.push(ValueLocation::Reg(out));
+            self.free_value(ValueLocation::Reg(left));
+            self.free_value(ValueLocation::Reg(right));
+        }
+
+    }
+}
+
 macro_rules! cmp_f64 {
     ($name:ident, $reverse_name:ident, $instr:ident, $const_fallback:expr) => {
         cmp_float!(
@@ -1855,9 +1897,33 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     cmp_f32!(f32_gt, f32_lt, seta, |a, b| a > b);
     cmp_f32!(f32_ge, f32_le, setnc, |a, b| a >= b);
+    eq_float!(
+        f32_eq,
+        cmpeqss,
+        as_f32,
+        |a: wasmparser::Ieee32, b: wasmparser::Ieee32| f32::from_bits(a.0) == f32::from_bits(b.0)
+    );
+    eq_float!(
+        f32_ne,
+        cmpneqss,
+        as_f32,
+        |a: wasmparser::Ieee32, b: wasmparser::Ieee32| f32::from_bits(a.0) != f32::from_bits(b.0)
+    );
 
     cmp_f64!(f64_gt, f64_lt, seta, |a, b| a > b);
     cmp_f64!(f64_ge, f64_le, setnc, |a, b| a >= b);
+    eq_float!(
+        f64_eq,
+        cmpeqsd,
+        as_f64,
+        |a: wasmparser::Ieee64, b: wasmparser::Ieee64| f64::from_bits(a.0) == f64::from_bits(b.0)
+    );
+    eq_float!(
+        f64_ne,
+        cmpneqsd,
+        as_f64,
+        |a: wasmparser::Ieee64, b: wasmparser::Ieee64| f64::from_bits(a.0) != f64::from_bits(b.0)
+    );
 
     // TODO: Should we do this logic in `eq` and just have this delegate to `eq`?
     //       That would mean that `eqz` and `eq` with a const 0 argument don't
