@@ -801,6 +801,8 @@ where
                 input_ty,
                 Type::Float::<Int>(*output_ty)
             ),
+            Operator::GetGlobal(index) => write!(f, "global.get {}", index),
+            Operator::SetGlobal(index) => write!(f, "global.set {}", index),
             _ => unimplemented!(),
         }
     }
@@ -1244,14 +1246,14 @@ where
             | WasmOperator::F32Lt
             | WasmOperator::F32Gt
             | WasmOperator::F32Le
-            | WasmOperator::F32Ge => sig!((F32) -> (I32)),
+            | WasmOperator::F32Ge => sig!((F32, F32) -> (I32)),
 
             WasmOperator::F64Eq
             | WasmOperator::F64Ne
             | WasmOperator::F64Lt
             | WasmOperator::F64Gt
             | WasmOperator::F64Le
-            | WasmOperator::F64Ge => sig!((F64) -> (I32)),
+            | WasmOperator::F64Ge => sig!((F64, F64) -> (I32)),
 
             WasmOperator::I32Clz | WasmOperator::I32Ctz | WasmOperator::I32Popcnt => {
                 sig!((I32) -> (I32))
