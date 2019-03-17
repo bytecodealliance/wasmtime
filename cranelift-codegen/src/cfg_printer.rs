@@ -1,10 +1,12 @@
 //! The `CFGPrinter` utility.
 
 use core::fmt::{Display, Formatter, Result, Write};
+use std::vec::Vec;
 
+use crate::entity::SecondaryMap;
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
-use crate::ir::instructions::BranchInfo;
 use crate::ir::Function;
+use crate::write::{FuncWriter, PlainWriter};
 
 /// A utility for pretty-printing the CFG of a `Function`.
 pub struct CFGPrinter<'a> {
@@ -39,23 +41,21 @@ impl<'a> CFGPrinter<'a> {
     }
 
     fn ebb_nodes(&self, w: &mut dyn Write) -> Result {
+        let mut aliases = SecondaryMap::<_, Vec<_>>::new();
+        for v in self.func.dfg.values() {
+            // VADFS returns the immediate target of an alias
+            if let Some(k) = self.func.dfg.value_alias_dest_for_serialization(v) {
+                aliases[k].push(v);
+            }
+        }
+
         for ebb in &self.func.layout {
-            write!(w, "    {} [shape=record, label=\"{{{}", ebb, ebb)?;
+            write!(w, "    {} [shape=record, label=\"{{", ebb)?;
+            crate::write::write_ebb_header(w, self.func, None, ebb, 4)?;
             // Add all outgoing branch instructions to the label.
             for inst in self.func.layout.ebb_insts(ebb) {
-                let idata = &self.func.dfg[inst];
-                match idata.analyze_branch(&self.func.dfg.value_lists) {
-                    BranchInfo::SingleDest(dest, _) => {
-                        write!(w, " | <{}>{} {}", inst, idata.opcode(), dest)?
-                    }
-                    BranchInfo::Table(table, dest) => {
-                        write!(w, " | <{}>{} {}", inst, idata.opcode(), table)?;
-                        if let Some(dest) = dest {
-                            write!(w, " {}", dest)?
-                        }
-                    }
-                    BranchInfo::NotABranch => {}
-                }
+                write!(w, " | <{}>", inst)?;
+                PlainWriter.write_instruction(w, self.func, &aliases, None, inst, 0)?;
             }
             writeln!(w, "}}\"]")?
         }
