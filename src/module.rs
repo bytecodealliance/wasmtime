@@ -164,7 +164,11 @@ impl TranslatedModule {
             // This will panic if `hashes.len() > 64`
             out[..hashes.len()].copy_from_slice(&hashes[..]);
 
-            Some(Box::new(GVmCtx { table, mem, hashes: out }) as Box<VmCtx>)
+            Some(Box::new(GVmCtx {
+                table,
+                mem,
+                hashes: out,
+            }) as Box<VmCtx>)
         } else {
             None
         };
@@ -418,12 +422,22 @@ pub trait ModuleContext {
     fn vmctx_vmglobal_definition(&self, index: u32) -> u32;
     fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32;
     fn vmctx_vmmemory_definition_current_length(&self, defined_memory_index: u32) -> u32;
+    fn vmctx_vmtable_import_from(&self, table_index: u32) -> u32;
+    fn vmctx_vmtable_definition(&self, defined_table_index: u32) -> u32;
     fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32;
     fn vmctx_vmtable_definition_current_elements(&self, defined_table_index: u32) -> u32;
+    fn vmctx_vmfunction_import_body(&self, func_index: u32) -> u32;
+    fn vmctx_vmfunction_import_vmctx(&self, func_index: u32) -> u32;
+    fn vmtable_definition_base(&self) -> u8;
+    fn vmtable_definition_current_elements(&self) -> u8;
     fn vmctx_vmshared_signature_id(&self, signature_idx: u32) -> u32;
     fn vmcaller_checked_anyfunc_type_index(&self) -> u8;
     fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8;
+    fn vmcaller_checked_anyfunc_vmctx(&self) -> u8;
     fn size_of_vmcaller_checked_anyfunc(&self) -> u8;
+
+    fn defined_table_index(&self, table_index: u32) -> Option<u32>;
+    fn defined_memory_index(&self, index: u32) -> Option<u32>;
 
     fn defined_global_index(&self, global_index: u32) -> Option<u32>;
     fn global_type(&self, global_index: u32) -> &Self::GlobalType;
@@ -442,6 +456,10 @@ pub trait ModuleContext {
     fn func_type(&self, func_idx: u32) -> &Self::Signature {
         // TODO: This assumes that there are no imported functions.
         self.signature(self.func_type_index(func_idx))
+    }
+
+    fn emit_memory_bounds_check(&self) -> bool {
+        true
     }
 }
 
@@ -478,6 +496,25 @@ impl ModuleContext for SimpleContext {
         unimplemented!()
     }
 
+    fn defined_memory_index(&self, index: u32) -> Option<u32> {
+        unimplemented!()
+    }
+
+    fn defined_table_index(&self, index: u32) -> Option<u32> {
+        Some(index)
+    }
+
+    fn vmctx_vmfunction_import_body(&self, func_index: u32) -> u32 {
+        unimplemented!()
+    }
+    fn vmctx_vmfunction_import_vmctx(&self, func_index: u32) -> u32 {
+        unimplemented!()
+    }
+
+    fn vmctx_vmtable_import_from(&self, table_index: u32) -> u32 {
+        unimplemented!()
+    }
+
     fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32 {
         VmCtx::offset_of_memory_ptr()
     }
@@ -486,12 +523,28 @@ impl ModuleContext for SimpleContext {
         VmCtx::offset_of_memory_len()
     }
 
+    fn vmctx_vmtable_definition(&self, defined_table_index: u32) -> u32 {
+        VmCtx::offset_of_funcs_ptr() as _
+    }
+
     fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32 {
         VmCtx::offset_of_funcs_ptr() as _
     }
 
     fn vmctx_vmtable_definition_current_elements(&self, defined_table_index: u32) -> u32 {
         VmCtx::offset_of_funcs_len() as _
+    }
+
+    fn vmtable_definition_base(&self) -> u8 {
+        unimplemented!()
+    }
+
+    fn vmtable_definition_current_elements(&self) -> u8 {
+        unimplemented!()
+    }
+
+    fn vmcaller_checked_anyfunc_vmctx(&self) -> u8 {
+        unimplemented!()
     }
 
     fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {

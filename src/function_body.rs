@@ -42,8 +42,6 @@ where
     let ty = session.module_context.func_type(func_idx);
 
     if DISASSEMBLE {
-        let mut microwasm = vec![];
-
         let microwasm_conv = MicrowasmConv::new(
             session.module_context,
             ty.params().iter().map(SigType::to_microwasm_type),
@@ -51,11 +49,11 @@ where
             body,
         );
 
-        for ops in microwasm_conv {
-            microwasm.extend(ops?);
-        }
-
-        println!("{}", crate::microwasm::dis(func_idx, &microwasm));
+        crate::microwasm::dis(
+            std::io::stdout(),
+            func_idx,
+            microwasm_conv.flat_map(|ops| ops.unwrap()),
+        );
     }
 
     let microwasm_conv = MicrowasmConv::new(
@@ -86,10 +84,21 @@ where
     Operator<L>: std::fmt::Display,
 {
     fn drop_elements<T>(stack: &mut Vec<T>, depths: std::ops::RangeInclusive<u32>) {
-        let real_range =
-            stack.len() - 1 - *depths.end() as usize..=stack.len() - 1 - *depths.start() as usize;
+        let _ = (|| {
+            let start = stack
+                .len()
+                .checked_sub(1)?
+                .checked_sub(*depths.end() as usize)?;
+            let end = stack
+                .len()
+                .checked_sub(1)?
+                .checked_sub(*depths.start() as usize)?;
+            let real_range = start..=end;
 
-        stack.drain(real_range);
+            stack.drain(real_range);
+
+            Some(())
+        })();
     }
 
     let func_type = session.module_context.defined_func_type(func_idx);
@@ -131,7 +140,12 @@ where
         if let Some(Operator::Label(label)) = body.peek() {
             let block = blocks
                 .get_mut(&BrTarget::Label(label.clone()))
-                .expect("Block definition should be before label definition");
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Block definition should be before label definition: {}",
+                        Operator::Label(label.clone())
+                    )
+                });
             block.is_next = true;
         }
 
@@ -142,12 +156,14 @@ where
             Operator::Label(label) => {
                 use std::collections::hash_map::Entry;
 
-                if let Entry::Occupied(mut entry) = blocks.entry(BrTarget::Label(label)) {
+                if let Entry::Occupied(mut entry) = blocks.entry(BrTarget::Label(label.clone())) {
                     let has_backwards_callers = {
                         let block = entry.get_mut();
 
-                        // TODO: Is it possible with arbitrary CFGs that a block will have _only_ backwards callers?
-                        //       Certainly for Microwasm generated from Wasm that is currently impossible.
+                        // TODO: Maybe we want to restrict Microwasm so that at least one of its callers
+                        //       must be before the label. In an ideal world the restriction would be that
+                        //       blocks without callers are illegal, but that's not reasonably possible for
+                        //       Microwasm generated from Wasm.
                         if block.actual_num_callers == 0 {
                             loop {
                                 let done = match body.peek() {
@@ -159,7 +175,30 @@ where
                                     break;
                                 }
 
-                                body.next();
+                                let skipped = body.next();
+
+                                // We still want to honour block definitions even in unreachable code
+                                if let Some(Operator::Block {
+                                    label,
+                                    has_backwards_callers,
+                                    params,
+                                    num_callers,
+                                }) = skipped
+                                {
+                                    let asm_label = ctx.create_label();
+                                    blocks.insert(
+                                        BrTarget::Label(label),
+                                        Block {
+                                            label: BrTarget::Label(asm_label),
+                                            params: params.len() as _,
+                                            calling_convention: None,
+                                            is_next: false,
+                                            has_backwards_callers,
+                                            actual_num_callers: 0,
+                                            num_callers,
+                                        },
+                                    );
+                                }
                             }
 
                             continue;
@@ -188,7 +227,10 @@ where
                         entry.remove_entry();
                     }
                 } else {
-                    panic!("Label defined before being declared");
+                    panic!(
+                        "Label defined before being declared: {}",
+                        Operator::Label(label)
+                    );
                 }
             }
             Operator::Block {
@@ -503,9 +545,51 @@ where
             Operator::F64ReinterpretFromI64 => {}
             Operator::ITruncFromF {
                 input_ty: Size::_32,
-                output_ty: SignfulInt(_, Size::_32),
+                output_ty: sint::I32,
             } => {
-                ctx.i32_truncate_f32();
+                ctx.i32_truncate_f32_s();
+            }
+            Operator::ITruncFromF {
+                input_ty: Size::_32,
+                output_ty: sint::U32,
+            } => {
+                ctx.i32_truncate_f32_u();
+            }
+            Operator::ITruncFromF {
+                input_ty: Size::_64,
+                output_ty: sint::I32,
+            } => {
+                ctx.i32_truncate_f64_s();
+            }
+            Operator::ITruncFromF {
+                input_ty: Size::_64,
+                output_ty: sint::U32,
+            } => {
+                ctx.i32_truncate_f64_u();
+            }
+            Operator::ITruncFromF {
+                input_ty: Size::_32,
+                output_ty: sint::I64,
+            } => {
+                ctx.i64_truncate_f32_s();
+            }
+            Operator::ITruncFromF {
+                input_ty: Size::_32,
+                output_ty: sint::U64,
+            } => {
+                ctx.i64_truncate_f32_u();
+            }
+            Operator::ITruncFromF {
+                input_ty: Size::_64,
+                output_ty: sint::I64,
+            } => {
+                ctx.i64_truncate_f64_s();
+            }
+            Operator::ITruncFromF {
+                input_ty: Size::_64,
+                output_ty: sint::U64,
+            } => {
+                ctx.i64_truncate_f64_u();
             }
             Operator::Extend {
                 sign: Signedness::Unsigned,
@@ -518,9 +602,35 @@ where
                 output_ty: Size::_32,
             } => ctx.f32_convert_from_i32_s(),
             Operator::FConvertFromI {
+                input_ty: sint::I32,
+                output_ty: Size::_64,
+            } => ctx.f64_convert_from_i32_s(),
+            Operator::FConvertFromI {
+                input_ty: sint::I64,
+                output_ty: Size::_32,
+            } => ctx.f32_convert_from_i64_s(),
+            Operator::FConvertFromI {
+                input_ty: sint::I64,
+                output_ty: Size::_64,
+            } => ctx.f64_convert_from_i64_s(),
+            Operator::FConvertFromI {
                 input_ty: sint::U32,
                 output_ty: Size::_32,
             } => ctx.f32_convert_from_i32_u(),
+            Operator::FConvertFromI {
+                input_ty: sint::U32,
+                output_ty: Size::_64,
+            } => ctx.f64_convert_from_i32_u(),
+            Operator::FConvertFromI {
+                input_ty: sint::U64,
+                output_ty: Size::_32,
+            } => ctx.f32_convert_from_i64_u(),
+            Operator::FConvertFromI {
+                input_ty: sint::U64,
+                output_ty: Size::_64,
+            } => ctx.f64_convert_from_i64_u(),
+            Operator::F64PromoteFromF32 => ctx.f64_from_f32(),
+            Operator::F32DemoteFromF64 => ctx.f32_from_f64(),
             Operator::Load8 {
                 ty: sint::U32,
                 memarg,
@@ -585,17 +695,22 @@ where
                 ctx.memory_grow();
             }
             Operator::Call { function_index } => {
-                let function_index = module_context
-                    .defined_func_index(function_index)
-                    .expect("We don't support host calls yet");
                 let callee_ty = module_context.func_type(function_index);
 
-                // TODO: this implementation assumes that this function is locally defined.
-                ctx.call_direct(
-                    function_index,
-                    callee_ty.params().iter().map(|t| t.to_microwasm_type()),
-                    callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
-                );
+                if let Some(defined_func_index) = module_context.defined_func_index(function_index)
+                {
+                    ctx.call_direct(
+                        defined_func_index,
+                        callee_ty.params().iter().map(|t| t.to_microwasm_type()),
+                        callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
+                    );
+                } else {
+                    ctx.call_direct_imported(
+                        function_index,
+                        callee_ty.params().iter().map(|t| t.to_microwasm_type()),
+                        callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
+                    );
+                }
             }
             Operator::CallIndirect {
                 type_index,

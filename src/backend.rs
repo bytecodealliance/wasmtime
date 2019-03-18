@@ -268,12 +268,12 @@ macro_rules! asm_println {
             ; call rax
             ; jmp >pop_rest
 
-            ; with_adjusted_stack_ptr:
+        ; with_adjusted_stack_ptr:
             ; push 1
             ; call rax
             ; pop r11
 
-            ; pop_rest:
+        ; pop_rest:
             ; pop r11
             ; pop r10
             ; pop r9
@@ -689,8 +689,11 @@ struct Labels {
     neg_const_f64: Option<Pending<Label>>,
     abs_const_f32: Option<Pending<Label>>,
     abs_const_f64: Option<Pending<Label>>,
+    truncate_f32_const_u64: Option<Pending<Label>>,
+    truncate_f64_const_u64: Option<Pending<Label>>,
     copysign_consts_f32: Option<Pending<(Label, Label)>>,
     copysign_consts_f64: Option<Pending<(Label, Label)>>,
+    from_u64_consts_f64: Option<Pending<(Label, Label)>>,
 }
 
 pub struct Context<'a, M> {
@@ -936,7 +939,7 @@ macro_rules! conversion {
                     let offset = self.adjusted_offset(offset);
                     let temp = self.block_state.regs.take(Type::for_::<$out_typ>());
                     dynasm!(self.asm
-                        ; $instr $out_reg_ty(temp.$out_reg_fn().unwrap()), DWORD [rsp + offset]
+                        ; $instr $out_reg_ty(temp.$out_reg_fn().unwrap()), [rsp + offset]
                     );
                     ValueLocation::Reg(temp)
                 }
@@ -1302,13 +1305,13 @@ macro_rules! minmax_float {
                 ; je >equal
                 ; $instr Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
                 ; jmp >ret
-                ; equal:
+            ; equal:
                 ; jnp >equal_but_not_parity
                 ; $addinstr Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
                 ; jmp >ret
-                ; equal_but_not_parity:
+            ; equal_but_not_parity:
                 ; $combineinstr Rx(left.rx().unwrap()), Rx(right.rx().unwrap())
-                ; ret:
+            ; ret:
             );
 
             self.push(ValueLocation::Reg(left));
@@ -1640,9 +1643,40 @@ macro_rules! load {
                 dst: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
-                let vmctx_mem_ptr_offset = ctx.module_context
+                let memory_def_index = ctx.module_context
+                    .defined_memory_index(0).unwrap();
 
-                    .vmctx_vmmemory_definition_base(0) as i32;
+                let vmctx_mem_ptr_offset = ctx.module_context
+                    .vmctx_vmmemory_definition_base(memory_def_index) as i32;
+
+                if ctx.module_context.emit_memory_bounds_check() {
+                    let vmctx_mem_len_offset = ctx.module_context
+                        .vmctx_vmmemory_definition_current_length(memory_def_index) as i32;
+                    let trap_label = ctx.trap_label();
+                    let addr_reg = ctx.block_state.regs.take(I64);
+                    match runtime_offset {
+                        Ok(imm) => {
+                            dynasm!(ctx.asm
+                                ; mov Rq(addr_reg.rq().unwrap()), QWORD imm as i64 + offset as i64
+                            );
+                        }
+                        Err(gpr) => {
+                            let offset_reg = ctx.block_state.regs.take(I64);
+                            dynasm!(ctx.asm
+                                ; mov Rd(offset_reg.rq().unwrap()), offset
+                                ; mov Rq(addr_reg.rq().unwrap()), Rq(gpr.rq().unwrap())
+                                ; add Rq(addr_reg.rq().unwrap()), Rq(offset_reg.rq().unwrap())
+                            );
+                            ctx.block_state.regs.release(offset_reg);
+                        }
+                    }
+                    dynasm!(ctx.asm
+                        ; cmp [Rq(VMCTX) + vmctx_mem_len_offset], Rq(addr_reg.rq().unwrap())
+                        ; jna =>trap_label.0
+                    );
+                    ctx.block_state.regs.release(addr_reg);
+                }
+
                 let mem_ptr_reg = ctx.block_state.regs.take(I64);
                 dynasm!(ctx.asm
                     ; mov Rq(mem_ptr_reg.rq().unwrap()), [Rq(VMCTX) + vmctx_mem_ptr_offset]
@@ -1731,9 +1765,40 @@ macro_rules! store {
                 src: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
-                let vmctx_mem_ptr_offset = ctx.module_context
+                let memory_def_index = ctx.module_context
+                    .defined_memory_index(0).unwrap();
 
-                    .vmctx_vmmemory_definition_base(0) as i32;
+                let vmctx_mem_ptr_offset = ctx.module_context
+                    .vmctx_vmmemory_definition_base(memory_def_index) as i32;
+
+                if ctx.module_context.emit_memory_bounds_check() {
+                    let vmctx_mem_len_offset = ctx.module_context
+                        .vmctx_vmmemory_definition_current_length(memory_def_index) as i32;
+                    let trap_label = ctx.trap_label();
+                    let addr_reg = ctx.block_state.regs.take(I64);
+                    match runtime_offset {
+                        Ok(imm) => {
+                            dynasm!(ctx.asm
+                                ; mov Rq(addr_reg.rq().unwrap()), QWORD imm as i64 + offset as i64
+                            );
+                        }
+                        Err(gpr) => {
+                            let offset_reg = ctx.block_state.regs.take(I64);
+                            dynasm!(ctx.asm
+                                ; mov Rd(offset_reg.rq().unwrap()), offset
+                                ; mov Rq(addr_reg.rq().unwrap()), Rq(gpr.rq().unwrap())
+                                ; add Rq(addr_reg.rq().unwrap()), Rq(offset_reg.rq().unwrap())
+                            );
+                            ctx.block_state.regs.release(offset_reg);
+                        }
+                    }
+                    dynasm!(ctx.asm
+                        ; cmp [Rq(VMCTX) + vmctx_mem_len_offset], Rq(addr_reg.rq().unwrap())
+                        ; jna =>trap_label.0
+                    );
+                    ctx.block_state.regs.release(addr_reg);
+                }
+
                 let mem_ptr_reg = ctx.block_state.regs.take(GPRType::Rq);
                 dynasm!(ctx.asm
                     ; mov Rq(mem_ptr_reg.rq().unwrap()), [Rq(VMCTX) + vmctx_mem_ptr_offset]
@@ -2115,7 +2180,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                     ]
                     ; add Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
                     ; jmp Rq(selector_reg.rq().unwrap())
-                    ; start_label:
+                ; start_label:
                 );
 
                 self.block_state.regs.release(tmp);
@@ -2523,16 +2588,24 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     }
 
     /// Puts this value into a register so that it can be efficiently read
-    // TODO: We should allow choosing which reg type we want to allocate here (Rx/Rq)
     fn into_reg(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> GPR {
+        let out = self.to_reg(ty, val);
+        self.free_value(val);
+        out
+    }
+
+    /// Clones this value into a register so that it can be efficiently read
+    fn to_reg(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> GPR {
         let ty = ty.into();
         match val {
-            ValueLocation::Reg(r) if ty.map(|t| t == r.type_()).unwrap_or(true) => r,
+            ValueLocation::Reg(r) if ty.map(|t| t == r.type_()).unwrap_or(true) => {
+                self.block_state.regs.mark_used(r);
+                r
+            }
             val => {
                 let scratch = self.block_state.regs.take(ty.unwrap_or(GPRType::Rq));
 
                 self.copy_value(&val, &mut ValueLocation::Reg(scratch));
-                self.free_value(val);
 
                 scratch
             }
@@ -2542,6 +2615,14 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     /// Puts this value into a temporary register so that operations
     /// on that register don't write to a local.
     fn into_temp_reg(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> GPR {
+        let out = self.to_temp_reg(ty, val);
+        self.free_value(val);
+        out
+    }
+
+    /// Clones this value into a temporary register so that operations
+    /// on that register don't write to a local.
+    fn to_temp_reg(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> GPR {
         // If we have `None` as the type then it always matches (`.unwrap_or(true)`)
         match val {
             ValueLocation::Reg(r) => {
@@ -2549,17 +2630,17 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 let type_matches = ty.map(|t| t == r.type_()).unwrap_or(true);
 
                 if self.block_state.regs.num_usages(r) <= 1 && type_matches {
+                    self.block_state.regs.mark_used(r);
                     r
                 } else {
                     let scratch = self.block_state.regs.take(ty.unwrap_or(GPRType::Rq));
 
                     self.copy_value(&val, &mut ValueLocation::Reg(scratch));
-                    self.free_value(val);
 
                     scratch
                 }
             }
-            val => self.into_reg(ty, val),
+            val => self.to_reg(ty, val),
         }
     }
 
@@ -2825,7 +2906,31 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     unop!(i32_popcnt, popcnt, Rd, u32, u32::count_ones);
     conversion!(
-        i32_truncate_f32,
+        f64_from_f32,
+        cvtss2sd,
+        Rx,
+        rx,
+        Rx,
+        rx,
+        f32,
+        f64,
+        as_f32,
+        |a: wasmparser::Ieee32| wasmparser::Ieee64((f32::from_bits(a.bits()) as f64).to_bits())
+    );
+    conversion!(
+        f32_from_f64,
+        cvtsd2ss,
+        Rx,
+        rx,
+        Rx,
+        rx,
+        f64,
+        f32,
+        as_f64,
+        |a: wasmparser::Ieee64| wasmparser::Ieee32((f64::from_bits(a.bits()) as f32).to_bits())
+    );
+    conversion!(
+        i32_truncate_f32_s,
         cvttss2si,
         Rx,
         rx,
@@ -2834,7 +2939,43 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         f32,
         i32,
         as_f32,
-        |a: wasmparser::Ieee32| a.bits()
+        |a: wasmparser::Ieee32| f32::from_bits(a.bits()) as i32
+    );
+    conversion!(
+        i32_truncate_f32_u,
+        cvttss2si,
+        Rx,
+        rx,
+        Rq,
+        rq,
+        f32,
+        i32,
+        as_f32,
+        |a: wasmparser::Ieee32| f32::from_bits(a.bits()) as i32
+    );
+    conversion!(
+        i32_truncate_f64_s,
+        cvttsd2si,
+        Rx,
+        rx,
+        Rd,
+        rq,
+        f64,
+        i32,
+        as_f64,
+        |a: wasmparser::Ieee64| f64::from_bits(a.bits()) as i32
+    );
+    conversion!(
+        i32_truncate_f64_u,
+        cvttsd2si,
+        Rx,
+        rx,
+        Rq,
+        rq,
+        f64,
+        i32,
+        as_f64,
+        |a: wasmparser::Ieee64| f64::from_bits(a.bits()) as i32
     );
     conversion!(
         f32_convert_from_i32_s,
@@ -2848,6 +2989,137 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         as_i32,
         |a| wasmparser::Ieee32((a as f32).to_bits())
     );
+    conversion!(
+        f64_convert_from_i32_s,
+        cvtsi2sd,
+        Rd,
+        rq,
+        Rx,
+        rx,
+        i32,
+        f64,
+        as_i32,
+        |a| wasmparser::Ieee64((a as f64).to_bits())
+    );
+    conversion!(
+        f32_convert_from_i64_s,
+        cvtsi2ss,
+        Rq,
+        rq,
+        Rx,
+        rx,
+        i64,
+        f32,
+        as_i32,
+        |a| wasmparser::Ieee32((a as f32).to_bits())
+    );
+    conversion!(
+        f64_convert_from_i64_s,
+        cvtsi2sd,
+        Rq,
+        rq,
+        Rx,
+        rx,
+        i64,
+        f64,
+        as_i32,
+        |a| wasmparser::Ieee64((a as f64).to_bits())
+    );
+
+    conversion!(
+        i64_truncate_f32_s,
+        cvttss2si,
+        Rx,
+        rx,
+        Rq,
+        rq,
+        f32,
+        i64,
+        as_f32,
+        |a: wasmparser::Ieee32| f32::from_bits(a.bits()) as i64
+    );
+    conversion!(
+        i64_truncate_f64_s,
+        cvttsd2si,
+        Rx,
+        rx,
+        Rq,
+        rq,
+        f64,
+        i64,
+        as_f64,
+        |a: wasmparser::Ieee64| f64::from_bits(a.bits()) as i64
+    );
+
+    pub fn i64_truncate_f32_u(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                (f32::from_bits(imm.as_f32().unwrap().bits()) as u64).into(),
+            ),
+            _ => {
+                let reg = self.into_reg(F32, val);
+                val = ValueLocation::Reg(reg);
+
+                let temp = self.block_state.regs.take(I64);
+                let u64_trunc_f32_const = self.truncate_f32_const_u64_label();
+
+                dynasm!(self.asm
+                    ; comiss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
+                    ; jnb >large
+                    ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; jmp >cont
+                ; large:
+                    ; subss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
+                    ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; btc Rq(temp.rq().unwrap()), 0b00111111
+                ; cont:
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
+    pub fn i64_truncate_f64_u(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                (f64::from_bits(imm.as_f64().unwrap().bits()) as u64).into(),
+            ),
+            _ => {
+                let reg = self.into_reg(F64, val);
+                val = ValueLocation::Reg(reg);
+
+                let temp = self.block_state.regs.take(I64);
+                let u64_trunc_f64_const = self.truncate_f64_const_u64_label();
+
+                dynasm!(self.asm
+                    ; comisd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
+                    ; jnb >large
+                    ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; jmp >cont
+                ; large:
+                    ; subsd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
+                    ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; btc Rq(temp.rq().unwrap()), 0b00111111
+                ; cont:
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
 
     pub fn f32_convert_from_i32_u(&mut self) {
         let mut val = self.pop();
@@ -2863,11 +3135,111 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 let temp = self.block_state.regs.take(F32);
 
                 dynasm!(self.asm
-                    ; mov Rq(reg.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; mov Rd(reg.rq().unwrap()), Rd(reg.rq().unwrap())
                     ; cvtsi2ss Rx(temp.rx().unwrap()), Rq(reg.rq().unwrap())
                 );
 
                 ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
+    pub fn f64_convert_from_i32_u(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                wasmparser::Ieee64((imm.as_i32().unwrap() as u32 as f64).to_bits()).into(),
+            ),
+            _ => {
+                let reg = self.into_reg(I32, val);
+                val = ValueLocation::Reg(reg);
+
+                let temp = self.block_state.regs.take(F64);
+
+                dynasm!(self.asm
+                    ; mov Rd(reg.rq().unwrap()), Rd(reg.rq().unwrap())
+                    ; cvtsi2sd Rx(temp.rx().unwrap()), Rq(reg.rq().unwrap())
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
+    pub fn f32_convert_from_i64_u(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                wasmparser::Ieee32((imm.as_i32().unwrap() as u64 as f32).to_bits()).into(),
+            ),
+            _ => {
+                let reg = self.into_reg(I64, val);
+                val = ValueLocation::Reg(reg);
+
+                let out = self.block_state.regs.take(F32);
+                let temp = self.block_state.regs.take(I64);
+
+                dynasm!(self.asm
+                    ; test Rq(reg.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; js >negative
+                    ; cvtsi2ss Rx(out.rx().unwrap()), Rq(reg.rq().unwrap())
+                ; negative:
+                    ; mov Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; shr Rq(temp.rq().unwrap()), 1
+                    ; and Rq(reg.rq().unwrap()), 1
+                    ; or Rq(reg.rq().unwrap()), Rq(temp.rq().unwrap())
+                    ; cvtsi2ss Rx(out.rx().unwrap()), Rq(reg.rq().unwrap())
+                    ; addss Rx(out.rx().unwrap()), Rx(out.rx().unwrap())
+                );
+
+                self.free_value(ValueLocation::Reg(temp));
+
+                ValueLocation::Reg(out)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
+    pub fn f64_convert_from_i64_u(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                wasmparser::Ieee64((imm.as_i64().unwrap() as u64 as f64).to_bits()).into(),
+            ),
+            _ => {
+                let reg = self.into_reg(I64, val);
+                val = ValueLocation::Reg(reg);
+
+                let out = self.block_state.regs.take(F64);
+                let temp = self.block_state.regs.take(F64);
+
+                let (conv_const_0, conv_const_1) = self.from_u64_consts_f64_labels();
+
+                dynasm!(self.asm
+                    ; movq Rx(temp.rx().unwrap()), rdi
+                    ; punpckldq Rx(temp.rx().unwrap()), [=>conv_const_0.0]
+                    ; subpd Rx(temp.rx().unwrap()), [=>conv_const_1.0]
+                    ; pshufd Rx(out.rx().unwrap()), Rx(temp.rx().unwrap()), 78
+                    ; addpd Rx(out.rx().unwrap()), Rx(temp.rx().unwrap())
+                );
+
+                self.free_value(ValueLocation::Reg(temp));
+
+                ValueLocation::Reg(out)
             }
         };
 
@@ -3764,8 +4136,6 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
         let callee = self.pop();
         let callee = self.into_temp_reg(I32, callee);
-        let temp0 = self.block_state.regs.take(I64);
-        let temp1 = self.block_state.regs.take(I64);
 
         for &loc in &locs {
             if let CCLoc::Reg(r) = loc {
@@ -3773,15 +4143,40 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             }
         }
 
+        self.block_state.depth.reserve(1);
+        dynasm!(self.asm
+            ; push Rq(VMCTX)
+        );
+        let depth = self.block_state.depth.clone();
+
         self.pass_outgoing_args(&locs);
 
         let fail = self.trap_label().0;
+        let table_index = 0;
+        let reg_offset = self
+            .module_context
+            .defined_table_index(table_index)
+            .map(|index| (None, self.module_context.vmctx_vmtable_definition(index) as i32));
+        let vmctx = GPR::Rq(VMCTX);
+        let (reg, offset) = reg_offset.unwrap_or_else(|| {
+            let reg = self.block_state.regs.take(I64);
+
+            dynasm!(self.asm
+                ; mov Rq(reg.rq().unwrap()), [
+                    Rq(VMCTX) + self.module_context.vmctx_vmtable_import_from(table_index) as i32
+                ]
+            );
+
+            (Some(reg), 0)
+        });
+
+        let temp0 = self.block_state.regs.take(I64);
 
         dynasm!(self.asm
             ; cmp Rd(callee.rq().unwrap()), [
-                Rq(VMCTX) +
-                    self.module_context
-                        .vmctx_vmtable_definition_current_elements(0) as i32
+                Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
+                    offset +
+                    self.module_context.vmtable_definition_current_elements() as i32
             ]
             ; jae =>fail
             ; imul
@@ -3789,10 +4184,19 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 Rd(callee.rq().unwrap()),
                 self.module_context.size_of_vmcaller_checked_anyfunc() as i32
             ; mov Rq(temp0.rq().unwrap()), [
-                Rq(VMCTX) +
-                    self.module_context
-                        .vmctx_vmtable_definition_base(0) as i32
+                Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
+                    offset +
+                    self.module_context.vmtable_definition_base() as i32
             ]
+        );
+
+        if let Some(reg) = reg {
+            self.block_state.regs.release(reg);
+        }
+
+        let temp1 = self.block_state.regs.take(I64);
+
+        dynasm!(self.asm
             ; mov Rd(temp1.rq().unwrap()), [
                 Rq(VMCTX) +
                     self.module_context
@@ -3804,6 +4208,11 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                     self.module_context.vmcaller_checked_anyfunc_type_index() as i32
             ], Rd(temp1.rq().unwrap())
             ; jne =>fail
+            ; mov Rq(VMCTX), [
+                Rq(temp0.rq().unwrap()) +
+                    Rq(callee.rq().unwrap()) +
+                    self.module_context.vmcaller_checked_anyfunc_vmctx() as i32
+            ]
             ; call QWORD [
                 Rq(temp0.rq().unwrap()) +
                     Rq(callee.rq().unwrap()) +
@@ -3820,6 +4229,12 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         }
 
         self.push_function_returns(return_types);
+
+        self.set_stack_depth(depth);
+        dynasm!(self.asm
+            ; pop Rq(VMCTX)
+        );
+        self.block_state.depth.free(1);
     }
 
     pub fn swap(&mut self, depth: u32) {
@@ -3835,6 +4250,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         return_types: impl IntoIterator<Item = SignlessType>,
     ) {
         let locs = arg_locs(arg_types);
+
         self.pass_outgoing_args(&locs);
 
         let label = &self.func_starts[index as usize].1;
@@ -3847,6 +4263,48 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         }
 
         self.push_function_returns(return_types);
+    }
+
+    /// Call a function with the given index
+    pub fn call_direct_imported(
+        &mut self,
+        index: u32,
+        arg_types: impl IntoIterator<Item = SignlessType>,
+        return_types: impl IntoIterator<Item = SignlessType>,
+    ) {
+        let locs = arg_locs(arg_types);
+
+        self.block_state.depth.reserve(1);
+        dynasm!(self.asm
+            ; push Rq(VMCTX)
+        );
+        let depth = self.block_state.depth.clone();
+
+        self.pass_outgoing_args(&locs);
+
+        let callee = self.block_state.regs.take(I64);
+
+        dynasm!(self.asm
+            ; mov Rq(callee.rq().unwrap()), [
+                Rq(VMCTX) + self.module_context.vmctx_vmfunction_import_body(index) as i32
+            ]
+            ; mov Rq(VMCTX), [
+                Rq(VMCTX) + self.module_context.vmctx_vmfunction_import_vmctx(index) as i32
+            ]
+            ; call Rq(callee.rq().unwrap())
+        );
+
+        for i in locs {
+            self.free_value(i.into());
+        }
+
+        self.push_function_returns(return_types);
+
+        self.set_stack_depth(depth);
+        dynasm!(self.asm
+            ; pop Rq(VMCTX)
+        );
+        self.block_state.depth.free(1);
     }
 
     // TODO: Reserve space to store RBX, RBP, and R12..R15 so we can use them
@@ -3945,6 +4403,35 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.labels.abs_const_f64 = Some(Pending::defined(l));
         }
 
+        if let Some(l) = self
+            .labels
+            .truncate_f32_const_u64
+            .as_ref()
+            .and_then(Pending::as_undefined)
+        {
+            self.align(16);
+            self.define_label(l);
+            dynasm!(self.asm
+                ; .dword 0x5F000000
+            );
+            self.labels.truncate_f32_const_u64 = Some(Pending::defined(l));
+        }
+
+        if let Some(l) = self
+            .labels
+            .truncate_f64_const_u64
+            .as_ref()
+            .and_then(Pending::as_undefined)
+        {
+            self.align(16);
+            self.define_label(l);
+            dynasm!(self.asm
+                ; .dword 0
+                ; .dword 0x43E00000
+            );
+            self.labels.truncate_f64_const_u64 = Some(Pending::defined(l));
+        }
+
         if let Some((sign_mask, rest_mask)) = self
             .labels
             .copysign_consts_f32
@@ -3981,6 +4468,27 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 ; .qword REST_MASK_F64 as i64
             );
             self.labels.copysign_consts_f64 = Some(Pending::defined((sign_mask, rest_mask)));
+        }
+
+        if let Some((conv_const_0, conv_const_1)) = self
+            .labels
+            .from_u64_consts_f64
+            .as_ref()
+            .and_then(Pending::as_undefined)
+        {
+            self.align(16);
+            self.define_label(conv_const_0);
+            dynasm!(self.asm
+                ; .dword 0x43300000
+                ; .dword 0x43300000
+            );
+            self.align(16);
+            self.define_label(conv_const_1);
+            dynasm!(self.asm
+                ; .qword 4841369599423283200
+                ; .qword 4985484787499139072
+            );
+            self.labels.from_u64_consts_f64 = Some(Pending::defined((conv_const_0, conv_const_1)));
         }
     }
 
@@ -4064,6 +4572,28 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     }
 
     #[must_use]
+    fn truncate_f32_const_u64_label(&mut self) -> Label {
+        if let Some(l) = &self.labels.truncate_f32_const_u64 {
+            return l.label;
+        }
+
+        let label = self.create_label();
+        self.labels.truncate_f32_const_u64 = Some(label.into());
+        label
+    }
+
+    #[must_use]
+    fn truncate_f64_const_u64_label(&mut self) -> Label {
+        if let Some(l) = &self.labels.truncate_f64_const_u64 {
+            return l.label;
+        }
+
+        let label = self.create_label();
+        self.labels.truncate_f64_const_u64 = Some(label.into());
+        label
+    }
+
+    #[must_use]
     fn copysign_consts_f32_labels(&mut self) -> (Label, Label) {
         if let Some(l) = &self.labels.copysign_consts_f32 {
             return l.label;
@@ -4086,6 +4616,19 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         let rest_mask = self.create_label();
         let labels = (sign_mask, rest_mask);
         self.labels.copysign_consts_f64 = Some(labels.into());
+        labels
+    }
+
+    #[must_use]
+    fn from_u64_consts_f64_labels(&mut self) -> (Label, Label) {
+        if let Some(l) = &self.labels.from_u64_consts_f64 {
+            return l.label;
+        }
+
+        let sign_mask = self.create_label();
+        let rest_mask = self.create_label();
+        let labels = (sign_mask, rest_mask);
+        self.labels.from_u64_consts_f64 = Some(labels.into());
         labels
     }
 }
