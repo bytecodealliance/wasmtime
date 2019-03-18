@@ -165,7 +165,7 @@ Now obviously I'm not advocating for replacing FireFox's optimising compiler wit
 
 ## Specification compliance
 
-It's hard to judge, since each test in the spec testsuite covers a wide range of features (to check their interactions), but currently 61 out of 74 of the spec suite tests pass when run in Wasmtime with Lightbeam as a backend. Here's the full test output:
+It's hard to judge, since each test in the spec testsuite covers a wide range of features (to check their interactions), but currently 59 out of 74 of the spec suite tests pass when run in Wasmtime with Lightbeam as a backend. Here's the full test output:
 
 ```
 running 76 tests
@@ -244,7 +244,7 @@ test spec_testsuite::tee_local              ... FAILED
 test spec_testsuite::unreachable            ... ok
 test spec_testsuite::names                  ... FAILED
 
-test result: FAILED. 61 passed; 13 failed; 0 ignored; 0 measured; 0 filtered out
+test result: FAILED. 59 passed; 15 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
 ## Getting involved
