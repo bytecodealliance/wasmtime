@@ -3455,7 +3455,9 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         self.block_state.regs.release(cond_reg);
 
         let out_gpr = match (then, else_) {
-            (ValueLocation::Reg(then_reg), else_) if self.block_state.regs.num_usages(then_reg) <= 1 => {
+            (ValueLocation::Reg(then_reg), else_)
+                if self.block_state.regs.num_usages(then_reg) <= 1 =>
+            {
                 match else_ {
                     ValueLocation::Reg(reg) => {
                         dynasm!(self.asm
@@ -3475,7 +3477,9 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
                 then_reg
             }
-            (then, ValueLocation::Reg(else_reg)) if self.block_state.regs.num_usages(else_reg) <= 1 => {
+            (then, ValueLocation::Reg(else_reg))
+                if self.block_state.regs.num_usages(else_reg) <= 1 =>
+            {
                 match then {
                     ValueLocation::Reg(reg) => {
                         dynasm!(self.asm
@@ -3686,6 +3690,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
                     if offset == -(WORD_SIZE as i32) {
                         self.push_physical(val);
+                        self.free_value(val);
                     } else {
                         let gpr = self.into_reg(GPRType::Rq, val);
                         dynasm!(self.asm
@@ -3695,14 +3700,14 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                     }
                 }
                 CCLoc::Reg(r) => {
-                    if val == ValueLocation::Reg(r) {
-                        self.free_value(val);
-                    } else if self.block_state.regs.is_free(r) {
-                        self.copy_value(&val, &mut loc.into());
-                        self.block_state.regs.mark_used(r);
-                        self.free_value(val);
-                    } else {
-                        pending.push((val, loc.into()));
+                    if val != ValueLocation::Reg(r) {
+                        if self.block_state.regs.is_free(r) {
+                            self.copy_value(&val, &mut loc.into());
+                            self.block_state.regs.mark_used(r);
+                            self.free_value(val);
+                        } else {
+                            pending.push((val, loc.into()));
+                        }
                     }
                 }
             }
