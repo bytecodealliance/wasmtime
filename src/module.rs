@@ -420,8 +420,12 @@ pub trait ModuleContext {
     type GlobalType: SigType;
 
     fn vmctx_vmglobal_definition(&self, index: u32) -> u32;
+    fn vmctx_vmmemory_import_from(&self, memory_index: u32) -> u32;
+    fn vmctx_vmmemory_definition(&self, defined_memory_index: u32) -> u32;
     fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32;
     fn vmctx_vmmemory_definition_current_length(&self, defined_memory_index: u32) -> u32;
+    fn vmmemory_definition_base(&self) -> u8;
+    fn vmmemory_definition_current_length(&self) -> u8;
     fn vmctx_vmtable_import_from(&self, table_index: u32) -> u32;
     fn vmctx_vmtable_definition(&self, defined_table_index: u32) -> u32;
     fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32;
@@ -514,6 +518,18 @@ impl ModuleContext for SimpleContext {
         unimplemented!()
     }
 
+    fn vmctx_vmmemory_definition(&self, defined_memory_index: u32) -> u32 {
+        unimplemented!()
+    }
+    fn vmctx_vmmemory_import_from(&self, memory_index: u32) -> u32 {
+        unimplemented!()
+    }
+    fn vmmemory_definition_base(&self) -> u8 {
+        unimplemented!()
+    }
+    fn vmmemory_definition_current_length(&self) -> u8 {
+        unimplemented!()
+    }
     fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32 {
         VmCtx::offset_of_memory_ptr()
     }

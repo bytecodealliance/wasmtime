@@ -1643,35 +1643,65 @@ macro_rules! load {
                 dst: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
-                let memory_def_index = ctx.module_context
-                    .defined_memory_index(0).unwrap();
+                let mem_index = 0;
+                let reg_offset = ctx.module_context
+                    .defined_memory_index(mem_index)
+                    .map(|index| (
+                        None,
+                        ctx.module_context.vmctx_vmmemory_definition(index) as i32
+                    ));
+                let (reg, mem_offset) = reg_offset.unwrap_or_else(|| {
+                    let reg = ctx.block_state.regs.take(I64);
 
-                let vmctx_mem_ptr_offset = ctx.module_context
-                    .vmctx_vmmemory_definition_base(memory_def_index) as i32;
+                    dynasm!(ctx.asm
+                        ; mov Rq(reg.rq().unwrap()), [
+                            Rq(VMCTX) + ctx.module_context.vmctx_vmmemory_import_from(mem_index) as i32
+                        ]
+                    );
+
+                    (Some(reg), 0)
+                });
+
+                let vmctx = GPR::Rq(VMCTX);
 
                 if ctx.module_context.emit_memory_bounds_check() {
-                    let vmctx_mem_len_offset = ctx.module_context
-                        .vmctx_vmmemory_definition_current_length(memory_def_index) as i32;
                     let trap_label = ctx.trap_label();
-                    let addr_reg = ctx.block_state.regs.take(I64);
-                    match runtime_offset {
+                    let addr_reg = match runtime_offset {
                         Ok(imm) => {
+                            let addr_reg = ctx.block_state.regs.take(I64);
                             dynasm!(ctx.asm
                                 ; mov Rq(addr_reg.rq().unwrap()), QWORD imm as i64 + offset as i64
                             );
+                            addr_reg
                         }
                         Err(gpr) => {
-                            let offset_reg = ctx.block_state.regs.take(I64);
-                            dynasm!(ctx.asm
-                                ; mov Rd(offset_reg.rq().unwrap()), offset
-                                ; mov Rq(addr_reg.rq().unwrap()), Rq(gpr.rq().unwrap())
-                                ; add Rq(addr_reg.rq().unwrap()), Rq(offset_reg.rq().unwrap())
-                            );
-                            ctx.block_state.regs.release(offset_reg);
+                            if offset == 0 {
+                                ctx.to_reg(I32, ValueLocation::Reg(gpr))
+                            } else if offset > 0 {
+                                let addr_reg = ctx.block_state.regs.take(I64);
+                                dynasm!(ctx.asm
+                                    ; lea Rq(addr_reg.rq().unwrap()), [Rq(gpr.rq().unwrap()) + offset]
+                                );
+                                addr_reg
+                            } else {
+                                let addr_reg = ctx.block_state.regs.take(I64);
+                                let offset_reg = ctx.block_state.regs.take(I64);
+                                dynasm!(ctx.asm
+                                    ; mov Rd(offset_reg.rq().unwrap()), offset
+                                    ; mov Rq(addr_reg.rq().unwrap()), Rq(gpr.rq().unwrap())
+                                    ; add Rq(addr_reg.rq().unwrap()), Rq(offset_reg.rq().unwrap())
+                                );
+                                ctx.block_state.regs.release(offset_reg);
+                                addr_reg
+                            }
                         }
-                    }
+                    };
                     dynasm!(ctx.asm
-                        ; cmp [Rq(VMCTX) + vmctx_mem_len_offset], Rq(addr_reg.rq().unwrap())
+                        ; cmp [
+                            Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
+                                mem_offset +
+                                ctx.module_context.vmmemory_definition_current_length() as i32
+                        ], Rq(addr_reg.rq().unwrap())
                         ; jna =>trap_label.0
                     );
                     ctx.block_state.regs.release(addr_reg);
@@ -1679,8 +1709,15 @@ macro_rules! load {
 
                 let mem_ptr_reg = ctx.block_state.regs.take(I64);
                 dynasm!(ctx.asm
-                    ; mov Rq(mem_ptr_reg.rq().unwrap()), [Rq(VMCTX) + vmctx_mem_ptr_offset]
+                    ; mov Rq(mem_ptr_reg.rq().unwrap()), [
+                        Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
+                            mem_offset +
+                            ctx.module_context.vmmemory_definition_base() as i32
+                    ]
                 );
+                if let Some(reg) = reg {
+                    ctx.block_state.regs.release(reg);
+                }
                 $emit_fn(ctx, dst, mem_ptr_reg, runtime_offset, offset);
                 ctx.block_state.regs.release(mem_ptr_reg);
             }
@@ -1765,44 +1802,81 @@ macro_rules! store {
                 src: GPR,
                 (offset, runtime_offset): (i32, Result<i32, GPR>)
             ) {
-                let memory_def_index = ctx.module_context
-                    .defined_memory_index(0).unwrap();
+                let mem_index = 0;
+                let reg_offset = ctx.module_context
+                    .defined_memory_index(mem_index)
+                    .map(|index| (
+                        None,
+                        ctx.module_context.vmctx_vmmemory_definition(index) as i32
+                    ));
+                let (reg, mem_offset) = reg_offset.unwrap_or_else(|| {
+                    let reg = ctx.block_state.regs.take(I64);
 
-                let vmctx_mem_ptr_offset = ctx.module_context
-                    .vmctx_vmmemory_definition_base(memory_def_index) as i32;
+                    dynasm!(ctx.asm
+                        ; mov Rq(reg.rq().unwrap()), [
+                            Rq(VMCTX) + ctx.module_context.vmctx_vmmemory_import_from(mem_index) as i32
+                        ]
+                    );
+
+                    (Some(reg), 0)
+                });
+
+                let vmctx = GPR::Rq(VMCTX);
 
                 if ctx.module_context.emit_memory_bounds_check() {
-                    let vmctx_mem_len_offset = ctx.module_context
-                        .vmctx_vmmemory_definition_current_length(memory_def_index) as i32;
                     let trap_label = ctx.trap_label();
-                    let addr_reg = ctx.block_state.regs.take(I64);
-                    match runtime_offset {
+                    let addr_reg = match runtime_offset {
                         Ok(imm) => {
+                            let addr_reg = ctx.block_state.regs.take(I64);
                             dynasm!(ctx.asm
                                 ; mov Rq(addr_reg.rq().unwrap()), QWORD imm as i64 + offset as i64
                             );
+                            addr_reg
                         }
                         Err(gpr) => {
-                            let offset_reg = ctx.block_state.regs.take(I64);
-                            dynasm!(ctx.asm
-                                ; mov Rd(offset_reg.rq().unwrap()), offset
-                                ; mov Rq(addr_reg.rq().unwrap()), Rq(gpr.rq().unwrap())
-                                ; add Rq(addr_reg.rq().unwrap()), Rq(offset_reg.rq().unwrap())
-                            );
-                            ctx.block_state.regs.release(offset_reg);
+                            if offset == 0 {
+                                ctx.to_reg(I32, ValueLocation::Reg(gpr))
+                            } else if offset > 0 {
+                                let addr_reg = ctx.block_state.regs.take(I64);
+                                dynasm!(ctx.asm
+                                    ; lea Rq(addr_reg.rq().unwrap()), [Rq(gpr.rq().unwrap()) + offset]
+                                );
+                                addr_reg
+                            } else {
+                                let addr_reg = ctx.block_state.regs.take(I64);
+                                let offset_reg = ctx.block_state.regs.take(I64);
+                                dynasm!(ctx.asm
+                                    ; mov Rd(offset_reg.rq().unwrap()), offset
+                                    ; mov Rq(addr_reg.rq().unwrap()), Rq(gpr.rq().unwrap())
+                                    ; add Rq(addr_reg.rq().unwrap()), Rq(offset_reg.rq().unwrap())
+                                );
+                                ctx.block_state.regs.release(offset_reg);
+                                addr_reg
+                            }
                         }
-                    }
+                    };
                     dynasm!(ctx.asm
-                        ; cmp [Rq(VMCTX) + vmctx_mem_len_offset], Rq(addr_reg.rq().unwrap())
+                        ; cmp [
+                            Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
+                                mem_offset +
+                                ctx.module_context.vmmemory_definition_current_length() as i32
+                        ], Rq(addr_reg.rq().unwrap())
                         ; jna =>trap_label.0
                     );
                     ctx.block_state.regs.release(addr_reg);
                 }
 
-                let mem_ptr_reg = ctx.block_state.regs.take(GPRType::Rq);
+                let mem_ptr_reg = ctx.block_state.regs.take(I64);
                 dynasm!(ctx.asm
-                    ; mov Rq(mem_ptr_reg.rq().unwrap()), [Rq(VMCTX) + vmctx_mem_ptr_offset]
+                    ; mov Rq(mem_ptr_reg.rq().unwrap()), [
+                        Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
+                            mem_offset +
+                            ctx.module_context.vmmemory_definition_base() as i32
+                    ]
                 );
+                if let Some(reg) = reg {
+                    ctx.block_state.regs.release(reg);
+                }
                 let src = $match_offset(ctx, mem_ptr_reg, runtime_offset, offset, src);
                 ctx.block_state.regs.release(mem_ptr_reg);
 
@@ -3960,33 +4034,42 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     // TODO: Other memory indices
     pub fn memory_size(&mut self) {
-        self.push(ValueLocation::Immediate(0u32.into()));
-        self.relocated_function_call(
-            &magic::get_memory32_size_name(),
-            iter::once(I32),
-            iter::once(I32),
-        );
-        // let tmp = self.block_state.regs.take(I32);
-        //
-        // // 16 is log2(64KiB as bytes)
-        // dynasm!(self.asm
-        // ; mov Rd(tmp.rq().unwrap()), [
-        // rdi + self.module_context.vmctx_vmmemory_definition_current_length(0) as i32
-        // ]
-        // ; shr Rd(tmp.rq().unwrap()), 16
-        // );
-        //
-        // self.push(ValueLocation::Reg(tmp));
+        let memory_index = 0;
+        if let Some(defined_memory_index) = self.module_context.defined_memory_index(memory_index) {
+            self.push(ValueLocation::Immediate(defined_memory_index.into()));
+            self.relocated_function_call(
+                &magic::get_memory32_size_name(),
+                iter::once(I32),
+                iter::once(I32),
+            );
+        } else {
+            self.push(ValueLocation::Immediate(memory_index.into()));
+            self.relocated_function_call(
+                &magic::get_imported_memory32_size_name(),
+                iter::once(I32),
+                iter::once(I32),
+            );
+        }
     }
 
     // TODO: Other memory indices
     pub fn memory_grow(&mut self) {
-        self.push(ValueLocation::Immediate(0u32.into()));
-        self.relocated_function_call(
-            &magic::get_memory32_grow_name(),
-            iter::once(I32).chain(iter::once(I32)),
-            iter::once(I32),
-        );
+        let memory_index = 0;
+        if let Some(defined_memory_index) = self.module_context.defined_memory_index(memory_index) {
+            self.push(ValueLocation::Immediate(defined_memory_index.into()));
+            self.relocated_function_call(
+                &magic::get_memory32_grow_name(),
+                iter::once(I32).chain(iter::once(I32)),
+                iter::once(I32),
+            );
+        } else {
+            self.push(ValueLocation::Immediate(memory_index.into()));
+            self.relocated_function_call(
+                &magic::get_imported_memory32_grow_name(),
+                iter::once(I32).chain(iter::once(I32)),
+                iter::once(I32),
+            );
+        }
     }
 
     // TODO: Use `ArrayVec`?
@@ -4156,7 +4239,12 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         let reg_offset = self
             .module_context
             .defined_table_index(table_index)
-            .map(|index| (None, self.module_context.vmctx_vmtable_definition(index) as i32));
+            .map(|index| {
+                (
+                    None,
+                    self.module_context.vmctx_vmtable_definition(index) as i32,
+                )
+            });
         let vmctx = GPR::Rq(VMCTX);
         let (reg, offset) = reg_offset.unwrap_or_else(|| {
             let reg = self.block_state.regs.take(I64);
