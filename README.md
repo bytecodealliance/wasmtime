@@ -165,10 +165,10 @@ Now obviously I'm not advocating for replacing FireFox's optimising compiler wit
 
 ## Specification compliance
 
-It's hard to judge, since each test in the spec testsuite covers a wide range of features (to check their interactions), but currently 59 out of 74 of the spec suite tests pass when run in Wasmtime with Lightbeam as a backend. Here's the full test output:
+It's hard to judge, since each test in the spec testsuite covers a wide range of features (to check their interactions), but currently 62 out of 74 of the spec suite tests pass when run in Wasmtime with Lightbeam as a backend. Here's the full test output:
 
 ```
-running 76 tests
+running 74 tests
 test spec_testsuite::binary                 ... ok
 test spec_testsuite::align                  ... ok
 test spec_testsuite::block                  ... ok
@@ -179,11 +179,11 @@ test spec_testsuite::address                ... ok
 test spec_testsuite::comments               ... ok
 test spec_testsuite::const_                 ... ok
 test spec_testsuite::call                   ... ok
-test spec_testsuite::conversions            ... FAILED
 test spec_testsuite::custom                 ... ok
 test spec_testsuite::custom_section         ... ok
-test spec_testsuite::br_table               ... FAILED
+test spec_testsuite::conversions            ... FAILED
 test spec_testsuite::data                   ... ok
+test spec_testsuite::br_table               ... FAILED
 test spec_testsuite::exports                ... ok
 test spec_testsuite::elem                   ... ok
 test spec_testsuite::endianness             ... ok
@@ -191,15 +191,15 @@ test spec_testsuite::call_indirect          ... ok
 test spec_testsuite::f32_bitwise            ... ok
 test spec_testsuite::f64_bitwise            ... ok
 test spec_testsuite::f32_cmp                ... ok
-test spec_testsuite::f32                    ... ok
 test spec_testsuite::fac                    ... ok
+test spec_testsuite::f32                    ... ok
 test spec_testsuite::f64                    ... ok
-test spec_testsuite::float_memory           ... ok
 test spec_testsuite::f64_cmp                ... ok
+test spec_testsuite::float_memory           ... ok
 test spec_testsuite::forward                ... ok
-test spec_testsuite::float_misc             ... ok
-test spec_testsuite::func_ptrs              ... FAILED
 test spec_testsuite::float_literals         ... ok
+test spec_testsuite::func_ptrs              ... FAILED
+test spec_testsuite::float_misc             ... ok
 test spec_testsuite::get_local              ... FAILED
 test spec_testsuite::float_exprs            ... FAILED
 test spec_testsuite::func                   ... ok
@@ -208,29 +208,29 @@ test spec_testsuite::imports                ... FAILED
 test spec_testsuite::inline_module          ... ok
 test spec_testsuite::i32                    ... ok
 test spec_testsuite::i64                    ... ok
-test spec_testsuite::if_                    ... ok
 test spec_testsuite::labels                 ... ok
+test spec_testsuite::if_                    ... ok
 test spec_testsuite::int_literals           ... ok
 test spec_testsuite::linking                ... FAILED
-test spec_testsuite::int_exprs              ... ok
 test spec_testsuite::loop_                  ... ok
+test spec_testsuite::int_exprs              ... ok
 test spec_testsuite::memory_redundancy      ... ok
-test spec_testsuite::memory_grow            ... FAILED
 test spec_testsuite::memory_trap            ... FAILED
+test spec_testsuite::memory_grow            ... FAILED
+test spec_testsuite::left_to_right          ... ok
 test spec_testsuite::memory                 ... ok
 test spec_testsuite::resizing               ... ok
-test spec_testsuite::left_to_right          ... ok
 test spec_testsuite::return_minimal         ... ok
 test spec_testsuite::nop                    ... ok
-test spec_testsuite::return_                ... ok
 test spec_testsuite::select                 ... ok
+test spec_testsuite::return_                ... ok
 test spec_testsuite::stack                  ... ok
 test spec_testsuite::start                  ... ok
-test spec_testsuite::set_local              ... FAILED
 test spec_testsuite::store_retval           ... ok
 test spec_testsuite::skip_stack_guard_page  ... FAILED
-test spec_testsuite::token                  ... ok
 test spec_testsuite::switch                 ... ok
+test spec_testsuite::set_local              ... FAILED
+test spec_testsuite::token                  ... ok
 test spec_testsuite::type_                  ... ok
 test spec_testsuite::typecheck              ... ok
 test spec_testsuite::traps                  ... FAILED
@@ -242,9 +242,9 @@ test spec_testsuite::utf8_import_module     ... ok
 test spec_testsuite::utf8_invalid_encoding  ... ok
 test spec_testsuite::tee_local              ... FAILED
 test spec_testsuite::unreachable            ... ok
-test spec_testsuite::names                  ... FAILED
+test spec_testsuite::names                  ... ok
 
-test result: FAILED. 59 passed; 15 failed; 0 ignored; 0 measured; 0 filtered out
+test result: FAILED. 62 passed; 12 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
 ## Getting involved

@@ -39,7 +39,7 @@ where
     M: ModuleContext,
     for<'any> &'any M::Signature: Into<OpSig>,
 {
-    let ty = session.module_context.func_type(func_idx);
+    let ty = session.module_context.defined_func_type(func_idx);
 
     if DISASSEMBLE {
         let microwasm_conv = MicrowasmConv::new(
@@ -320,6 +320,9 @@ where
                     ) {
                         (Some(Left(ref cc)), ref mut other @ None)
                         | (ref mut other @ None, Some(Left(ref cc))) => {
+                            // TODO: This doesn't handle the difference in parameters - we need a unified
+                            //       CC type where each element can be either a `CCLoc` or a `ValueLocation`
+                            assert_eq!(then.to_drop, else_.to_drop);
                             **other = Some(Left(cc.clone()));
 
                             ctx.pass_block_args(cc);
@@ -327,36 +330,32 @@ where
                         (ref mut then_cc @ None, ref mut else_cc @ None) => {
                             let max_params = then_block.params.max(else_block.params);
                             let cc = if then_block_should_serialize_args {
-                                Some(Left(ctx.serialize_args(max_params)))
+                                Left(ctx.serialize_args(max_params))
                             } else if else_block_should_serialize_args {
-                                Some(Left(ctx.serialize_args(max_params)))
+                                Left(ctx.serialize_args(max_params))
                             } else {
-                                Some(Right(ctx.virtual_calling_convention()))
+                                Right(ctx.virtual_calling_convention())
                             };
 
                             **then_cc = {
                                 let mut cc = cc.clone();
-                                if let (Some(cc), Some(to_drop)) =
-                                    (cc.as_mut(), then.to_drop.clone())
-                                {
-                                    match cc {
+                                if let Some(to_drop) = then.to_drop.clone() {
+                                    match &mut cc {
                                         Left(cc) => drop_elements(&mut cc.arguments, to_drop),
                                         Right(cc) => drop_elements(&mut cc.stack, to_drop),
                                     }
                                 }
-                                cc
+                                Some(cc)
                             };
                             **else_cc = {
                                 let mut cc = cc;
-                                if let (Some(cc), Some(to_drop)) =
-                                    (cc.as_mut(), else_.to_drop.clone())
-                                {
-                                    match cc {
+                                if let Some(to_drop) = else_.to_drop.clone() {
+                                    match &mut cc {
                                         Left(cc) => drop_elements(&mut cc.arguments, to_drop),
                                         Right(cc) => drop_elements(&mut cc.stack, to_drop),
                                     }
                                 }
-                                cc
+                                Some(cc)
                             };
                         }
                         _ => unimplemented!(

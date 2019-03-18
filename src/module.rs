@@ -454,7 +454,6 @@ pub trait ModuleContext {
     }
 
     fn func_type(&self, func_idx: u32) -> &Self::Signature {
-        // TODO: This assumes that there are no imported functions.
         self.signature(self.func_type_index(func_idx))
     }
 
