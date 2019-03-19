@@ -420,6 +420,7 @@ pub trait ModuleContext {
     type GlobalType: SigType;
 
     fn vmctx_vmglobal_definition(&self, index: u32) -> u32;
+    fn vmctx_vmglobal_import_from(&self, index: u32) -> u32;
     fn vmctx_vmmemory_import_from(&self, memory_index: u32) -> u32;
     fn vmctx_vmmemory_definition(&self, defined_memory_index: u32) -> u32;
     fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32;
@@ -496,6 +497,10 @@ impl ModuleContext for SimpleContext {
     }
 
     fn vmctx_vmglobal_definition(&self, index: u32) -> u32 {
+        unimplemented!()
+    }
+
+    fn vmctx_vmglobal_import_from(&self, index: u32) -> u32 {
         unimplemented!()
     }
 

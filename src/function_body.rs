@@ -10,7 +10,7 @@ use std::{collections::HashMap, convert::TryInto, hash::Hash};
 #[derive(Debug)]
 struct Block {
     label: BrTarget<Label>,
-    calling_convention: Option<Either<CallingConvention, VirtualCallingConvention>>,
+    calling_convention: Option<Either<BlockCallingConvention, VirtualCallingConvention>>,
     params: u32,
     // TODO: Is there a cleaner way to do this? `has_backwards_callers` should always be set if `is_next`
     //       is false, so we should probably use an `enum` here.
@@ -126,7 +126,7 @@ where
             params: num_returns as u32,
             // TODO: This only works for integers
             //
-            calling_convention: Some(Left(CallingConvention::function_start(ret_locs(
+            calling_convention: Some(Left(BlockCallingConvention::function_start(ret_locs(
                 func_type.returns().iter().map(|t| t.to_microwasm_type()),
             )))),
             is_next: false,
@@ -381,9 +381,9 @@ where
             Operator::BrTable(BrTable { targets, default }) => {
                 use itertools::Itertools;
 
-                let (def, params) = {
+                let (label, num_callers, params) = {
                     let def = &blocks[&default.target];
-                    (if def.is_next { None } else { Some(def.label) }, def.params)
+                    (if def.is_next { None } else { Some(def.label) }, def.num_callers, def.params)
                 };
 
                 let target_labels = targets
@@ -391,9 +391,10 @@ where
                     .map(|target| blocks[&target.target].label)
                     .collect::<Vec<_>>();
 
-                ctx.br_table(target_labels, def, |ctx| {
+                ctx.br_table(target_labels, label, |ctx| {
                     let mut cc = None;
-                    let mut max_num_callers = Some(0);
+                    let mut max_params = params;
+                    let mut max_num_callers = num_callers;
 
                     for target in targets.iter().chain(std::iter::once(&default)).unique() {
                         let block = blocks.get_mut(&target.target).unwrap();
@@ -407,6 +408,8 @@ where
                         if let Some(max) = max_num_callers {
                             max_num_callers = block.num_callers.map(|n| max.max(n));
                         }
+
+                        max_params = max_params.max(block.params);
                     }
 
                     if let Some(Left(cc)) = &cc {
@@ -417,7 +420,7 @@ where
                         if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
                             Right(ctx.virtual_calling_convention())
                         } else {
-                            Left(ctx.serialize_args(params))
+                            Left(ctx.serialize_args(max_params))
                         }
                     );
 

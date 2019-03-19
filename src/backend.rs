@@ -406,14 +406,14 @@ impl Registers {
 }
 
 #[derive(Debug, Clone)]
-pub struct CallingConvention {
+pub struct BlockCallingConvention {
     pub stack_depth: StackDepth,
     pub arguments: Vec<CCLoc>,
 }
 
-impl CallingConvention {
+impl BlockCallingConvention {
     pub fn function_start(args: impl IntoIterator<Item = CCLoc>) -> Self {
-        CallingConvention {
+        BlockCallingConvention {
             // We start and return the function with stack depth 1 since we must
             // allow space for the saved return address.
             stack_depth: StackDepth(1),
@@ -941,6 +941,7 @@ macro_rules! conversion {
                     dynasm!(self.asm
                         ; $instr $out_reg_ty(temp.$out_reg_fn().unwrap()), [rsp + offset]
                     );
+
                     ValueLocation::Reg(temp)
                 }
                 ValueLocation::Reg(_) => {
@@ -951,6 +952,7 @@ macro_rules! conversion {
                     dynasm!(self.asm
                         ; $instr $out_reg_ty(temp.$out_reg_fn().unwrap()), $in_reg_ty(reg.$in_reg_fn().unwrap())
                     );
+
                     ValueLocation::Reg(temp)
                 }
             };
@@ -1856,12 +1858,12 @@ macro_rules! store {
                         }
                     };
                     dynasm!(ctx.asm
-                        ; cmp [
+                        ; cmp Rq(addr_reg.rq().unwrap()), [
                             Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
                                 mem_offset +
                                 ctx.module_context.vmmemory_definition_current_length() as i32
-                        ], Rq(addr_reg.rq().unwrap())
-                        ; jna =>trap_label.0
+                        ]
+                        ; jae =>trap_label.0
                     );
                     ctx.block_state.regs.release(addr_reg);
                 }
@@ -1879,7 +1881,6 @@ macro_rules! store {
                 }
                 let src = $match_offset(ctx, mem_ptr_reg, runtime_offset, offset, src);
                 ctx.block_state.regs.release(mem_ptr_reg);
-
                 ctx.block_state.regs.release(src);
             }
 
@@ -2300,6 +2301,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                     ; pop Rq(trash.rq().unwrap())
                 );
             }
+            self.block_state.regs.release(trash);
         }
 
         self.block_state.depth = depth;
@@ -2320,7 +2322,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         }
     }
 
-    pub fn pass_block_args(&mut self, cc: &CallingConvention) {
+    pub fn pass_block_args(&mut self, cc: &BlockCallingConvention) {
         let args = &cc.arguments;
         for (remaining, &dst) in args
             .iter()
@@ -2347,7 +2349,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     /// Puts all stack values into "real" locations so that they can i.e. be set to different
     /// values on different iterations of a loop
-    pub fn serialize_args(&mut self, count: u32) -> CallingConvention {
+    pub fn serialize_args(&mut self, count: u32) -> BlockCallingConvention {
         let mut out = Vec::with_capacity(count as _);
 
         // TODO: We can make this more efficient now that `pop` isn't so complicated
@@ -2362,24 +2364,39 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
         out.reverse();
 
-        CallingConvention {
+        BlockCallingConvention {
             stack_depth: self.block_state.depth,
             arguments: out,
         }
     }
 
     pub fn get_global(&mut self, global_idx: u32) {
-        let offset = self.module_context.vmctx_vmglobal_definition(
+        let (reg, offset) =
             self.module_context
                 .defined_global_index(global_idx)
-                .expect("TODO: Support imported globals"),
-        );
+                .map(|defined_global_index| {
+                    (None, self.module_context
+                        .vmctx_vmglobal_definition(defined_global_index))
+                })
+                .unwrap_or_else(|| {
+                    let reg = self.block_state.regs.take(I64);
+
+                    dynasm!(self.asm
+                        ; mov Rq(reg.rq().unwrap()), [
+                            Rq(VMCTX) +
+                                self.module_context.vmctx_vmglobal_import_from(global_idx) as i32
+                        ]
+                    );
+
+                    (Some(reg), 0)
+                });
 
         let out = self.block_state.regs.take(GPRType::Rq);
+        let vmctx = GPR::Rq(VMCTX);
 
-        // We always use `Rq` (even for floats) since the globals are not necessarily aligned to 128 bits
+        // TODO: Are globals necessarily aligned to 128 bits? We can load directly to an XMM reg if so
         dynasm!(self.asm
-            ; mov Rq(out.rq().unwrap()), [Rq(VMCTX) + offset as i32]
+            ; mov Rq(out.rq().unwrap()), [Rq(reg.unwrap_or(vmctx).rq().unwrap()) + offset as i32]
         );
 
         self.push(ValueLocation::Reg(out));
@@ -2561,7 +2578,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         self.block_state.depth = state.depth;
     }
 
-    pub fn apply_cc(&mut self, cc: &CallingConvention) {
+    pub fn apply_cc(&mut self, cc: &BlockCallingConvention) {
         let stack = cc.arguments.iter();
 
         self.block_state.stack = Vec::with_capacity(stack.size_hint().0);
@@ -4010,7 +4027,15 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         args: impl IntoIterator<Item = SignlessType>,
         rets: impl IntoIterator<Item = SignlessType>,
     ) {
-        self.pass_outgoing_args(&arg_locs(args));
+        self.block_state.depth.reserve(1);
+        dynasm!(self.asm
+            ; push Rq(VMCTX)
+        );
+        let depth = self.block_state.depth.clone();
+
+        let locs = arg_locs(args);
+
+        self.pass_outgoing_args(&locs);
         // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
         self.reloc_sink.reloc_external(
             (self.asm.offset().0
@@ -4028,8 +4053,20 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             ; mov Rq(temp.rq().unwrap()), QWORD 0xdeadbeefdeadbeefu64 as i64
             ; call Rq(temp.rq().unwrap())
         );
+
         self.block_state.regs.release(temp);
+
+        for i in locs {
+            self.free_value(i.into());
+        }
+
         self.push_function_returns(rets);
+
+        self.set_stack_depth(depth);
+        dynasm!(self.asm
+            ; pop Rq(VMCTX)
+        );
+        self.block_state.depth.free(1);
     }
 
     // TODO: Other memory indices
@@ -4132,7 +4169,12 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             })
             .max()
             .unwrap_or(0);
-        let depth = self.block_state.depth.0 + total_stack_space;
+        let mut depth = self.block_state.depth.0 + total_stack_space;
+
+        if depth & 1 != 0 {
+            self.set_stack_depth(StackDepth(self.block_state.depth.0 + 1));
+            depth += 1;
+        }
 
         let mut pending = Vec::<(ValueLocation, ValueLocation)>::new();
 
@@ -4168,13 +4210,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             }
         }
 
-        let mut try_count = 10;
         while !pending.is_empty() {
-            try_count -= 1;
-
-            if try_count == 0 {
-                unimplemented!("We can't handle cycles in the register allocation right now");
-            }
+            let start_len = pending.len();
 
             for (src, dst) in mem::replace(&mut pending, vec![]) {
                 if let ValueLocation::Reg(r) = dst {
@@ -4187,6 +4224,13 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 }
                 self.copy_value(&src, &mut { dst });
                 self.free_value(src);
+            }
+
+            if pending.len() == start_len {
+                unimplemented!(
+                    "We can't handle cycles in the register allocator: {:?}",
+                    pending
+                );
             }
         }
 
@@ -4382,6 +4426,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             ; call Rq(callee.rq().unwrap())
         );
 
+        self.block_state.regs.release(callee);
+
         for i in locs {
             self.free_value(i.into());
         }
@@ -4400,7 +4446,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     /// Writes the function prologue and stores the arguments as locals
     pub fn start_function(&mut self, params: impl IntoIterator<Item = SignlessType>) {
         let locs = Vec::from_iter(arg_locs(params));
-        self.apply_cc(&CallingConvention::function_start(locs));
+
+        self.apply_cc(&BlockCallingConvention::function_start(locs));
     }
 
     pub fn ret(&mut self) {
@@ -4443,7 +4490,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.align(16);
             self.define_label(l);
             dynasm!(self.asm
-                ; .dword -2147483648
+                ; .dword SIGN_MASK_F32 as i32
             );
             self.labels.neg_const_f32 = Some(Pending::defined(l));
         }
@@ -4457,8 +4504,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.align(16);
             self.define_label(l);
             dynasm!(self.asm
-                ; .dword 0
-                ; .dword -2147483648
+                ; .qword SIGN_MASK_F64 as i64
             );
             self.labels.neg_const_f64 = Some(Pending::defined(l));
         }
@@ -4472,7 +4518,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.align(16);
             self.define_label(l);
             dynasm!(self.asm
-                ; .dword 2147483647
+                ; .dword (!SIGN_MASK_F32) as i32
             );
             self.labels.abs_const_f32 = Some(Pending::defined(l));
         }
@@ -4486,7 +4532,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.align(16);
             self.define_label(l);
             dynasm!(self.asm
-                ; .qword 9223372036854775807
+                ; .qword (!SIGN_MASK_F64) as i64
             );
             self.labels.abs_const_f64 = Some(Pending::defined(l));
         }
