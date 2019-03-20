@@ -689,6 +689,8 @@ struct Labels {
     neg_const_f64: Option<Pending<Label>>,
     abs_const_f32: Option<Pending<Label>>,
     abs_const_f64: Option<Pending<Label>>,
+    truncate_f32_const_u32: Option<Pending<Label>>,
+    truncate_f64_const_u32: Option<Pending<Label>>,
     truncate_f32_const_u64: Option<Pending<Label>>,
     truncate_f64_const_u64: Option<Pending<Label>>,
     copysign_consts_f32: Option<Pending<(Label, Label)>>,
@@ -2399,23 +2401,49 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             ; mov Rq(out.rq().unwrap()), [Rq(reg.unwrap_or(vmctx).rq().unwrap()) + offset as i32]
         );
 
+        if let Some(reg) = reg {
+            self.block_state.regs.release(reg);
+        }
+
         self.push(ValueLocation::Reg(out));
     }
 
     pub fn set_global(&mut self, global_idx: u32) {
         let val = self.pop();
-        let offset = self.module_context.vmctx_vmglobal_definition(
+        let (reg, offset) =
             self.module_context
                 .defined_global_index(global_idx)
-                .expect("TODO: Support imported globals"),
-        );
+                .map(|defined_global_index| {
+                    (None, self.module_context
+                        .vmctx_vmglobal_definition(defined_global_index))
+                })
+                .unwrap_or_else(|| {
+                    let reg = self.block_state.regs.take(I64);
+
+                    dynasm!(self.asm
+                        ; mov Rq(reg.rq().unwrap()), [
+                            Rq(VMCTX) +
+                                self.module_context.vmctx_vmglobal_import_from(global_idx) as i32
+                        ]
+                    );
+
+                    (Some(reg), 0)
+                });
+
 
         let val = self.into_reg(GPRType::Rq, val);
+        let vmctx = GPR::Rq(VMCTX);
 
         // We always use `Rq` (even for floats) since the globals are not necessarily aligned to 128 bits
         dynasm!(self.asm
-            ; mov [Rq(VMCTX) + offset as i32], Rq(val.rq().unwrap())
+            ; mov [
+                Rq(reg.unwrap_or(vmctx).rq().unwrap()) + offset as i32
+            ], Rq(val.rq().unwrap())
         );
+
+        if let Some(reg) = reg {
+            self.block_state.regs.release(reg);
+        }
 
         self.block_state.regs.release(val);
     }
@@ -4560,8 +4588,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.align(16);
             self.define_label(l);
             dynasm!(self.asm
-                ; .dword 0
-                ; .dword 0x43E00000
+                ; .qword 0x43E0000000000000
             );
             self.labels.truncate_f64_const_u64 = Some(Pending::defined(l));
         }
@@ -4619,8 +4646,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             self.align(16);
             self.define_label(conv_const_1);
             dynasm!(self.asm
-                ; .qword 4841369599423283200
-                ; .qword 4985484787499139072
+                ; .qword 0x4330000000000000
+                ; .qword 0x4530000000000000
             );
             self.labels.from_u64_consts_f64 = Some(Pending::defined((conv_const_0, conv_const_1)));
         }

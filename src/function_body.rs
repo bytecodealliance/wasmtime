@@ -320,8 +320,6 @@ where
                     ) {
                         (Some(Left(ref cc)), ref mut other @ None)
                         | (ref mut other @ None, Some(Left(ref cc))) => {
-                            // TODO: This doesn't handle the difference in parameters - we need a unified
-                            //       CC type where each element can be either a `CCLoc` or a `ValueLocation`
                             assert_eq!(then.to_drop, else_.to_drop);
                             **other = Some(Left(cc.clone()));
 
