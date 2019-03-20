@@ -15,7 +15,7 @@ version="0.1.0"
 #
 # The main Cargo.toml in the top-level directory is the wasmtime-tools crate which we don't publish.
 echo "Updating crate versions to $version"
-for crate in . lib/*; do
+for crate in . wasmtime-*; do
     # Update the version number of this crate to $version.
     sed -i.bk -e "s/^version = .*/version = \"$version\"/" \
         "$crate/Cargo.toml"
@@ -36,7 +36,7 @@ cargo update
 echo git commit -a -m "\"Bump version to $version"\"
 echo git push
 for crate in \
-    environ
+    wasmtime-environ
 do
-    echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
+    echo cargo publish --manifest-path "$crate/Cargo.toml"
 done

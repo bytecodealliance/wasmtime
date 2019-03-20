@@ -25,12 +25,12 @@ path = "src/wasm2obj.rs"
 [dependencies]
 cranelift-codegen = "0.29.0"
 cranelift-native = "0.29.0"
-wasmtime-debug = { path = "lib/debug" }
-wasmtime-environ = { path = "lib/environ" }
-wasmtime-runtime = { path = "lib/runtime" }
-wasmtime-jit = { path = "lib/jit" }
-wasmtime-obj = { path = "lib/obj" }
-wasmtime-wast = { path = "lib/wast" }
+wasmtime-debug = { path = "wasmtime-debug" }
+wasmtime-environ = { path = "wasmtime-environ" }
+wasmtime-runtime = { path = "wasmtime-runtime" }
+wasmtime-jit = { path = "wasmtime-jit" }
+wasmtime-obj = { path = "wasmtime-obj" }
+wasmtime-wast = { path = "wasmtime-wast" }
 docopt = "1.0.1"
 serde = "1.0.75"
 serde_derive = "1.0.75"
