@@ -25,6 +25,7 @@ either = "1.5"
 wabt = "0.7"
 lazy_static = "1.2"
 quickcheck = "0.7"
+typemap = "0.3"
 
 [badges]
 maintenance = { status = "experimental" }

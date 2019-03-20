@@ -1,19 +1,21 @@
 #![allow(dead_code)] // for now
 
-use crate::microwasm::{BrTarget, SignlessType, Type, F32, F64, I32, I64};
-
-use self::registers::*;
 use crate::error::Error;
-use crate::microwasm::Value;
+use crate::microwasm::{BrTarget, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::{ModuleContext, RuntimeFunc};
 use cranelift_codegen::{binemit, ir};
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
+use either::Either;
 use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
     iter::{self, FromIterator},
     mem,
     ops::RangeInclusive,
 };
+
+use self::registers::*;
 
 // TODO: Get rid of this! It's a total hack.
 mod magic {
@@ -226,9 +228,9 @@ pub mod registers {
 }
 
 const SIGN_MASK_F64: u64 = 0b1000000000000000000000000000000000000000000000000000000000000000;
-const REST_MASK_F64: u64 = 0b0111111111111111111111111111111111111111111111111111111111111111;
+const REST_MASK_F64: u64 = !SIGN_MASK_F64;
 const SIGN_MASK_F32: u32 = 0b10000000000000000000000000000000;
-const REST_MASK_F32: u32 = 0b01111111111111111111111111111111;
+const REST_MASK_F32: u32 = !SIGN_MASK_F32;
 
 extern "sysv64" fn println(len: u64, args: *const u8) {
     println!("{}", unsafe {
@@ -499,15 +501,15 @@ pub struct FunctionEnd {
     should_generate_epilogue: bool,
 }
 
-pub struct CodeGenSession<'a, M> {
+pub struct CodeGenSession<'module, M> {
     assembler: Assembler,
-    pub module_context: &'a M,
+    pub module_context: &'module M,
     labels: Labels,
     func_starts: Vec<(Option<AssemblyOffset>, DynamicLabel)>,
 }
 
-impl<'a, M> CodeGenSession<'a, M> {
-    pub fn new(func_count: u32, module_context: &'a M) -> Self {
+impl<'module, M> CodeGenSession<'module, M> {
+    pub fn new(func_count: u32, module_context: &'module M) -> Self {
         let mut assembler = Assembler::new().unwrap();
         let func_starts = iter::repeat_with(|| (None, assembler.new_dynamic_label()))
             .take(func_count as usize)
@@ -538,7 +540,7 @@ impl<'a, M> CodeGenSession<'a, M> {
         Context {
             asm: &mut self.assembler,
             current_function: func_idx,
-            reloc_sink: reloc_sink,
+            reloc_sink,
             func_starts: &self.func_starts,
             labels: &mut self.labels,
             block_state: Default::default(),
@@ -681,32 +683,28 @@ impl<T> From<T> for Pending<T> {
     }
 }
 
-#[derive(Default)]
-struct Labels {
-    trap: Option<Pending<Label>>,
-    ret: Option<Pending<Label>>,
-    neg_const_f32: Option<Pending<Label>>,
-    neg_const_f64: Option<Pending<Label>>,
-    abs_const_f32: Option<Pending<Label>>,
-    abs_const_f64: Option<Pending<Label>>,
-    truncate_f32_const_u32: Option<Pending<Label>>,
-    truncate_f64_const_u32: Option<Pending<Label>>,
-    truncate_f32_const_u64: Option<Pending<Label>>,
-    truncate_f64_const_u64: Option<Pending<Label>>,
-    copysign_consts_f32: Option<Pending<(Label, Label)>>,
-    copysign_consts_f64: Option<Pending<(Label, Label)>>,
-    from_u64_consts_f64: Option<Pending<(Label, Label)>>,
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+enum LabelValue {
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
 }
 
-pub struct Context<'a, M> {
-    asm: &'a mut Assembler,
-    reloc_sink: &'a mut dyn binemit::RelocSink,
-    module_context: &'a M,
+type Labels = HashMap<
+    (u32, Either<TypeId, (LabelValue, Option<LabelValue>)>),
+    (Label, u32, Option<Box<FnMut(&mut Assembler)>>),
+>;
+
+pub struct Context<'this, M> {
+    asm: &'this mut Assembler,
+    reloc_sink: &'this mut dyn binemit::RelocSink,
+    module_context: &'this M,
     current_function: u32,
-    func_starts: &'a Vec<(Option<AssemblyOffset>, DynamicLabel)>,
+    func_starts: &'this Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     pub block_state: BlockState,
-    labels: &'a mut Labels,
+    labels: &'this mut Labels,
 }
 
 /// Label in code.
@@ -2000,7 +1998,7 @@ pub struct VirtualCallingConvention {
     pub depth: StackDepth,
 }
 
-impl<'module, M: ModuleContext> Context<'module, M> {
+impl<'this, M: ModuleContext> Context<'this, M> {
     pub fn debug(&mut self, d: std::fmt::Arguments) {
         asm_println!(self.asm, "{}", d);
     }
@@ -2373,25 +2371,28 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     }
 
     pub fn get_global(&mut self, global_idx: u32) {
-        let (reg, offset) =
-            self.module_context
-                .defined_global_index(global_idx)
-                .map(|defined_global_index| {
-                    (None, self.module_context
-                        .vmctx_vmglobal_definition(defined_global_index))
-                })
-                .unwrap_or_else(|| {
-                    let reg = self.block_state.regs.take(I64);
+        let (reg, offset) = self
+            .module_context
+            .defined_global_index(global_idx)
+            .map(|defined_global_index| {
+                (
+                    None,
+                    self.module_context
+                        .vmctx_vmglobal_definition(defined_global_index),
+                )
+            })
+            .unwrap_or_else(|| {
+                let reg = self.block_state.regs.take(I64);
 
-                    dynasm!(self.asm
-                        ; mov Rq(reg.rq().unwrap()), [
-                            Rq(VMCTX) +
-                                self.module_context.vmctx_vmglobal_import_from(global_idx) as i32
-                        ]
-                    );
+                dynasm!(self.asm
+                    ; mov Rq(reg.rq().unwrap()), [
+                        Rq(VMCTX) +
+                            self.module_context.vmctx_vmglobal_import_from(global_idx) as i32
+                    ]
+                );
 
-                    (Some(reg), 0)
-                });
+                (Some(reg), 0)
+            });
 
         let out = self.block_state.regs.take(GPRType::Rq);
         let vmctx = GPR::Rq(VMCTX);
@@ -2410,26 +2411,28 @@ impl<'module, M: ModuleContext> Context<'module, M> {
 
     pub fn set_global(&mut self, global_idx: u32) {
         let val = self.pop();
-        let (reg, offset) =
-            self.module_context
-                .defined_global_index(global_idx)
-                .map(|defined_global_index| {
-                    (None, self.module_context
-                        .vmctx_vmglobal_definition(defined_global_index))
-                })
-                .unwrap_or_else(|| {
-                    let reg = self.block_state.regs.take(I64);
+        let (reg, offset) = self
+            .module_context
+            .defined_global_index(global_idx)
+            .map(|defined_global_index| {
+                (
+                    None,
+                    self.module_context
+                        .vmctx_vmglobal_definition(defined_global_index),
+                )
+            })
+            .unwrap_or_else(|| {
+                let reg = self.block_state.regs.take(I64);
 
-                    dynasm!(self.asm
-                        ; mov Rq(reg.rq().unwrap()), [
-                            Rq(VMCTX) +
-                                self.module_context.vmctx_vmglobal_import_from(global_idx) as i32
-                        ]
-                    );
+                dynasm!(self.asm
+                    ; mov Rq(reg.rq().unwrap()), [
+                        Rq(VMCTX) +
+                            self.module_context.vmctx_vmglobal_import_from(global_idx) as i32
+                    ]
+                );
 
-                    (Some(reg), 0)
-                });
-
+                (Some(reg), 0)
+            });
 
         let val = self.into_reg(GPRType::Rq, val);
         let vmctx = GPR::Rq(VMCTX);
@@ -2572,7 +2575,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                         }
                         (GPR::Rx(in_reg), GPR::Rx(out_reg)) => {
                             dynasm!(self.asm
-                                ; movq Rx(out_reg), Rx(in_reg)
+                                ; movapd Rx(out_reg), Rx(in_reg)
                             );
                         }
                     }
@@ -2772,7 +2775,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
-            let const_label = self.neg_const_f32_label();
+            let const_label = self.aligned_label(16, LabelValue::I32(SIGN_MASK_F32 as i32));
 
             dynasm!(self.asm
                 ; xorps Rx(reg.rx().unwrap()), [=>const_label.0]
@@ -2793,7 +2796,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
-            let const_label = self.neg_const_f64_label();
+            let const_label = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
 
             dynasm!(self.asm
                 ; xorpd Rx(reg.rx().unwrap()), [=>const_label.0]
@@ -2814,7 +2817,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
-            let const_label = self.abs_const_f32_label();
+            let const_label = self.aligned_label(16, LabelValue::I32(REST_MASK_F32 as i32));
 
             dynasm!(self.asm
                 ; andps Rx(reg.rx().unwrap()), [=>const_label.0]
@@ -2835,7 +2838,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
-            let const_label = self.abs_const_f64_label();
+            let const_label = self.aligned_label(16, LabelValue::I64(REST_MASK_F64 as i64));
 
             dynasm!(self.asm
                 ; andps Rx(reg.rx().unwrap()), [=>const_label.0]
@@ -2899,7 +2902,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         } else {
             let left = self.into_temp_reg(GPRType::Rx, left);
             let right = self.into_reg(GPRType::Rx, right);
-            let (sign_mask, rest_mask) = self.copysign_consts_f32_labels();
+            let sign_mask = self.aligned_label(16, LabelValue::I32(SIGN_MASK_F32 as i32));
+            let rest_mask = self.aligned_label(16, LabelValue::I32(REST_MASK_F32 as i32));
 
             dynasm!(self.asm
                 ; andps Rx(right.rx().unwrap()), [=>sign_mask.0]
@@ -2927,7 +2931,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         } else {
             let left = self.into_temp_reg(GPRType::Rx, left);
             let right = self.into_reg(GPRType::Rx, right);
-            let (sign_mask, rest_mask) = self.copysign_consts_f64_labels();
+            let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
+            let rest_mask = self.aligned_label(16, LabelValue::I64(REST_MASK_F64 as i64));
 
             dynasm!(self.asm
                 ; andpd Rx(right.rx().unwrap()), [=>sign_mask.0]
@@ -3048,54 +3053,169 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         as_f64,
         |a: wasmparser::Ieee64| wasmparser::Ieee32((f64::from_bits(a.bits()) as f32).to_bits())
     );
-    conversion!(
-        i32_truncate_f32_s,
-        cvttss2si,
-        Rx,
-        rx,
-        Rd,
-        rq,
-        f32,
-        i32,
-        as_f32,
-        |a: wasmparser::Ieee32| f32::from_bits(a.bits()) as i32
-    );
-    conversion!(
-        i32_truncate_f32_u,
-        cvttss2si,
-        Rx,
-        rx,
-        Rq,
-        rq,
-        f32,
-        i32,
-        as_f32,
-        |a: wasmparser::Ieee32| f32::from_bits(a.bits()) as i32
-    );
-    conversion!(
-        i32_truncate_f64_s,
-        cvttsd2si,
-        Rx,
-        rx,
-        Rd,
-        rq,
-        f64,
-        i32,
-        as_f64,
-        |a: wasmparser::Ieee64| f64::from_bits(a.bits()) as i32
-    );
-    conversion!(
-        i32_truncate_f64_u,
-        cvttsd2si,
-        Rx,
-        rx,
-        Rq,
-        rq,
-        f64,
-        i32,
-        as_f64,
-        |a: wasmparser::Ieee64| f64::from_bits(a.bits()) as i32
-    );
+    pub fn i32_truncate_f32_s(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                (f32::from_bits(imm.as_f32().unwrap().bits()) as i32).into(),
+            ),
+            other => {
+                let reg = self.into_reg(F32, other);
+                let temp = self.block_state.regs.take(I32);
+                val = ValueLocation::Reg(reg);
+
+                let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
+                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xcf000000u32 as i32));
+                let zero = self.aligned_label(16, LabelValue::I32(0));
+                let trap_mask = self.trap_label();
+
+                dynasm!(self.asm
+                    ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; cmp Rd(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jne >ret
+                    ; ucomiss Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
+                    ; jp =>trap_mask.0
+                    ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
+                    ; jnae =>trap_mask.0
+                    ; ucomiss Rx(reg.rx().unwrap()), [=>zero.0]
+                    ; jnb =>trap_mask.0
+                ; ret:
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+    pub fn i32_truncate_f32_u(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                (f32::from_bits(imm.as_f32().unwrap().bits()) as i32).into(),
+            ),
+            other => {
+                let reg = self.into_temp_reg(F32, other);
+                val = ValueLocation::Reg(reg);
+                let temp = self.block_state.regs.take(I32);
+
+                let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
+                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0x4f000000u32 as i32));
+                let zero = self.aligned_label(16, LabelValue::I32(0));
+                let trap_mask = self.trap_label();
+
+                dynasm!(self.asm
+                    ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
+                    ; jae >else_
+                    ; jp =>trap_mask.0
+                    ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; cmp Rd(temp.rq().unwrap()), 0
+                    ; jnge =>trap_mask.0
+                    ; jmp >ret
+                ; else_:
+                    ; subss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
+                    ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; cmp Rd(temp.rq().unwrap()), 0
+                    ; jnge =>trap_mask.0
+                    ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                ; ret:
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
+    pub fn i32_truncate_f64_s(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                (f64::from_bits(imm.as_f64().unwrap().bits()) as i32).into(),
+            ),
+            other => {
+                let reg = self.into_reg(F32, other);
+                let temp = self.block_state.regs.take(I32);
+                val = ValueLocation::Reg(reg);
+
+                let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
+                let float_cmp_mask = self.aligned_label(16, LabelValue::I64(0xc1e0000000200000u64 as i64));
+                let zero = self.aligned_label(16, LabelValue::I64(0));
+                let trap_mask = self.trap_label();
+
+                dynasm!(self.asm
+                    ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; cmp Rd(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jne >ret
+                    ; ucomisd Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
+                    ; jp =>trap_mask.0
+                    ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
+                    ; jna =>trap_mask.0
+                    ; ucomisd Rx(reg.rx().unwrap()), [=>zero.0]
+                    ; jnb =>trap_mask.0
+                ; ret:
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
+    pub fn i32_truncate_f64_u(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                (f32::from_bits(imm.as_f32().unwrap().bits()) as i32).into(),
+            ),
+            other => {
+                let reg = self.into_temp_reg(F32, other);
+                val = ValueLocation::Reg(reg);
+                let temp = self.block_state.regs.take(I32);
+
+                let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
+                let float_cmp_mask = self.aligned_label(16, LabelValue::I64(0x41e0000000000000u64 as i64));
+                let zero = self.aligned_label(16, LabelValue::I64(0));
+                let trap_mask = self.trap_label();
+
+                dynasm!(self.asm
+                    ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
+                    ; jae >else_
+                    ; jp =>trap_mask.0
+                    ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; cmp Rd(temp.rq().unwrap()), 0
+                    ; jnge =>trap_mask.0
+                    ; jmp >ret
+                ; else_:
+                    ; subsd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
+                    ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; cmp Rd(temp.rq().unwrap()), 0
+                    ; jnge =>trap_mask.0
+                    ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                ; ret:
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
     conversion!(
         f32_convert_from_i32_s,
         cvtsi2ss,
@@ -3171,6 +3291,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     );
 
     pub fn i64_truncate_f32_u(&mut self) {
+        struct Trunc;
+
         let mut val = self.pop();
 
         let out_val = match val {
@@ -3182,7 +3304,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 val = ValueLocation::Reg(reg);
 
                 let temp = self.block_state.regs.take(I64);
-                let u64_trunc_f32_const = self.truncate_f32_const_u64_label();
+                let u64_trunc_f32_const = self.aligned_label(16, LabelValue::I32(0x5F000000));
 
                 dynasm!(self.asm
                     ; comiss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
@@ -3217,7 +3339,8 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 val = ValueLocation::Reg(reg);
 
                 let temp = self.block_state.regs.take(I64);
-                let u64_trunc_f64_const = self.truncate_f64_const_u64_label();
+                let u64_trunc_f64_const =
+                    self.aligned_label(16, LabelValue::I64(0x43E0000000000000));
 
                 dynasm!(self.asm
                     ; comisd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
@@ -3346,7 +3469,17 @@ impl<'module, M: ModuleContext> Context<'module, M> {
                 let out = self.block_state.regs.take(F64);
                 let temp = self.block_state.regs.take(F64);
 
-                let (conv_const_0, conv_const_1) = self.from_u64_consts_f64_labels();
+                let conv_const_0 = self.aligned_label(
+                    16,
+                    (LabelValue::I32(0x43300000), LabelValue::I32(0x43300000)),
+                );
+                let conv_const_1 = self.aligned_label(
+                    16,
+                    (
+                        LabelValue::I64(0x4330000000000000),
+                        LabelValue::I64(0x4530000000000000),
+                    ),
+                );
 
                 dynasm!(self.asm
                     ; movq Rx(temp.rx().unwrap()), rdi
@@ -3615,7 +3748,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone,
+        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
         self.block_state.regs.mark_used(RAX);
         self.block_state.regs.mark_used(RDX);
@@ -3687,7 +3820,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
+        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
         self.full_div(divisor, quotient, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
@@ -3714,7 +3847,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
+        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
         self.full_div(divisor, quotient, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
@@ -3741,7 +3874,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
+        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
         self.full_div(divisor, quotient, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
@@ -3768,7 +3901,7 @@ impl<'module, M: ModuleContext> Context<'module, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'module,
+        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
         self.full_div(divisor, quotient, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
@@ -4484,179 +4617,68 @@ impl<'module, M: ModuleContext> Context<'module, M> {
         );
     }
 
-    fn align(&mut self, align_to: u32) {
-        dynasm!(self.asm
-            ; .align align_to as usize
-        );
-    }
-
     /// Writes the function epilogue (right now all this does is add the trap label that the
     /// conditional traps in `call_indirect` use)
     pub fn epilogue(&mut self) {
-        if let Some(l) = self.labels.trap.as_ref().and_then(Pending::as_undefined) {
-            self.define_label(l);
-            dynasm!(self.asm
-                ; ud2
-            );
-            self.labels.trap = Some(Pending::defined(l));
-        }
-
-        if let Some(l) = self.labels.ret.as_ref().and_then(Pending::as_undefined) {
-            self.define_label(l);
-            dynasm!(self.asm
-                ; ret
-            );
-            self.labels.ret = Some(Pending::defined(l));
-        }
-
-        if let Some(l) = self
-            .labels
-            .neg_const_f32
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(l);
-            dynasm!(self.asm
-                ; .dword SIGN_MASK_F32 as i32
-            );
-            self.labels.neg_const_f32 = Some(Pending::defined(l));
-        }
-
-        if let Some(l) = self
-            .labels
-            .neg_const_f64
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(l);
-            dynasm!(self.asm
-                ; .qword SIGN_MASK_F64 as i64
-            );
-            self.labels.neg_const_f64 = Some(Pending::defined(l));
-        }
-
-        if let Some(l) = self
-            .labels
-            .abs_const_f32
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(l);
-            dynasm!(self.asm
-                ; .dword (!SIGN_MASK_F32) as i32
-            );
-            self.labels.abs_const_f32 = Some(Pending::defined(l));
-        }
-
-        if let Some(l) = self
-            .labels
-            .abs_const_f64
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(l);
-            dynasm!(self.asm
-                ; .qword (!SIGN_MASK_F64) as i64
-            );
-            self.labels.abs_const_f64 = Some(Pending::defined(l));
-        }
-
-        if let Some(l) = self
-            .labels
-            .truncate_f32_const_u64
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(l);
-            dynasm!(self.asm
-                ; .dword 0x5F000000
-            );
-            self.labels.truncate_f32_const_u64 = Some(Pending::defined(l));
-        }
-
-        if let Some(l) = self
-            .labels
-            .truncate_f64_const_u64
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(l);
-            dynasm!(self.asm
-                ; .qword 0x43E0000000000000
-            );
-            self.labels.truncate_f64_const_u64 = Some(Pending::defined(l));
-        }
-
-        if let Some((sign_mask, rest_mask)) = self
-            .labels
-            .copysign_consts_f32
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(sign_mask);
-            dynasm!(self.asm
-                ; .dword SIGN_MASK_F32 as i32
-            );
-            self.align(16);
-            self.define_label(rest_mask);
-            dynasm!(self.asm
-                ; .dword REST_MASK_F32 as i32
-            );
-            self.labels.copysign_consts_f32 = Some(Pending::defined((sign_mask, rest_mask)));
-        }
-
-        if let Some((sign_mask, rest_mask)) = self
-            .labels
-            .copysign_consts_f64
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(sign_mask);
-            dynasm!(self.asm
-                ; .qword SIGN_MASK_F64 as i64
-            );
-            self.align(16);
-            self.define_label(rest_mask);
-            dynasm!(self.asm
-                ; .qword REST_MASK_F64 as i64
-            );
-            self.labels.copysign_consts_f64 = Some(Pending::defined((sign_mask, rest_mask)));
-        }
-
-        if let Some((conv_const_0, conv_const_1)) = self
-            .labels
-            .from_u64_consts_f64
-            .as_ref()
-            .and_then(Pending::as_undefined)
-        {
-            self.align(16);
-            self.define_label(conv_const_0);
-            dynasm!(self.asm
-                ; .dword 0x43300000
-                ; .dword 0x43300000
-            );
-            self.align(16);
-            self.define_label(conv_const_1);
-            dynasm!(self.asm
-                ; .qword 0x4330000000000000
-                ; .qword 0x4530000000000000
-            );
-            self.labels.from_u64_consts_f64 = Some(Pending::defined((conv_const_0, conv_const_1)));
+        let mut values = self.labels.values_mut().collect::<Vec<_>>();
+        values.sort_unstable_by_key(|(_, align, _)| *align);
+        for (label, align, func) in values {
+            if let Some(mut func) = func.take() {
+                dynasm!(self.asm
+                    ; .align *align as usize
+                );
+                self.asm.dynamic_label(label.0);
+                func(&mut self.asm);
+            }
         }
     }
 
     pub fn trap(&mut self) {
+        let trap_label = self.trap_label();
         dynasm!(self.asm
-            ; ud2
+            ; jmp =>trap_label.0
         );
+    }
+
+    pub fn trap_label(&mut self) -> Label {
+        self.label(|asm: &mut Assembler| {
+            dynasm!(asm
+                ; ud2
+            );
+        })
+    }
+
+    pub fn ret_label(&mut self) -> Label {
+        self.label(|asm: &mut Assembler| {
+            dynasm!(asm
+                ; ret
+            );
+        })
+    }
+
+    fn label<F>(&mut self, fun: F) -> Label
+    where
+        F: IntoLabel,
+    {
+        self.aligned_label(1, fun)
+    }
+
+    fn aligned_label<F>(&mut self, align: u32, fun: F) -> Label
+    where
+        F: IntoLabel,
+    {
+        use std::collections::hash_map::Entry;
+
+        let key = fun.key();
+        if let Some((label, current_align, func)) = self.labels.get(&(align, key)) {
+            return *label;
+        }
+
+        let label = self.create_label();
+        self.labels
+            .insert((align, key), (label, align, Some(fun.callback())));
+
+        label
     }
 
     fn target_to_label(&mut self, target: BrTarget<Label>) -> Label {
@@ -4665,132 +4687,92 @@ impl<'module, M: ModuleContext> Context<'module, M> {
             BrTarget::Return => self.ret_label(),
         }
     }
+}
 
-    #[must_use]
-    fn trap_label(&mut self) -> Label {
-        if let Some(l) = &self.labels.trap {
-            return l.label;
-        }
+trait IntoLabel {
+    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)>;
+    fn callback(self) -> Box<FnMut(&mut Assembler)>;
+}
 
-        let label = self.create_label();
-        self.labels.trap = Some(label.into());
-        label
+impl<F> IntoLabel for F
+where
+    F: FnMut(&mut Assembler) + Any,
+{
+    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
+        Either::Left(TypeId::of::<Self>())
     }
 
-    #[must_use]
-    fn ret_label(&mut self) -> Label {
-        if let Some(l) = &self.labels.ret {
-            return l.label;
-        }
-
-        let label = self.create_label();
-        self.labels.ret = Some(label.into());
-        label
+    fn callback(self) -> Box<FnMut(&mut Assembler)> {
+        Box::new(self)
     }
+}
 
-    #[must_use]
-    fn neg_const_f32_label(&mut self) -> Label {
-        if let Some(l) = &self.labels.neg_const_f32 {
-            return l.label;
-        }
-
-        let label = self.create_label();
-        self.labels.neg_const_f32 = Some(label.into());
-        label
+fn const_value(val: LabelValue) -> impl FnMut(&mut Assembler) {
+    move |asm| match val {
+        LabelValue::I8(val) => dynasm!(asm
+            ; .byte val
+        ),
+        LabelValue::I16(val) => dynasm!(asm
+            ; .word val
+        ),
+        LabelValue::I32(val) => dynasm!(asm
+            ; .dword val
+        ),
+        LabelValue::I64(val) => dynasm!(asm
+            ; .qword val
+        ),
     }
+}
 
-    #[must_use]
-    fn neg_const_f64_label(&mut self) -> Label {
-        if let Some(l) = &self.labels.neg_const_f64 {
-            return l.label;
+fn const_values(a: LabelValue, b: LabelValue) -> impl FnMut(&mut Assembler) {
+    move |asm| {
+        match a {
+            LabelValue::I8(val) => dynasm!(asm
+                ; .byte val
+            ),
+            LabelValue::I16(val) => dynasm!(asm
+                ; .word val
+            ),
+            LabelValue::I32(val) => dynasm!(asm
+                ; .dword val
+            ),
+            LabelValue::I64(val) => dynasm!(asm
+                ; .qword val
+            ),
         }
 
-        let label = self.create_label();
-        self.labels.neg_const_f64 = Some(label.into());
-        label
+        match b {
+            LabelValue::I8(val) => dynasm!(asm
+                ; .byte val
+            ),
+            LabelValue::I16(val) => dynasm!(asm
+                ; .word val
+            ),
+            LabelValue::I32(val) => dynasm!(asm
+                ; .dword val
+            ),
+            LabelValue::I64(val) => dynasm!(asm
+                ; .qword val
+            ),
+        }
     }
+}
 
-    #[must_use]
-    fn abs_const_f32_label(&mut self) -> Label {
-        if let Some(l) = &self.labels.abs_const_f32 {
-            return l.label;
-        }
-
-        let label = self.create_label();
-        self.labels.abs_const_f32 = Some(label.into());
-        label
+impl IntoLabel for LabelValue {
+    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
+        Either::Right((*self, None))
     }
-
-    #[must_use]
-    fn abs_const_f64_label(&mut self) -> Label {
-        if let Some(l) = &self.labels.abs_const_f64 {
-            return l.label;
-        }
-
-        let label = self.create_label();
-        self.labels.abs_const_f64 = Some(label.into());
-        label
+    fn callback(self) -> Box<FnMut(&mut Assembler)> {
+        Box::new(const_value(self))
     }
+}
 
-    #[must_use]
-    fn truncate_f32_const_u64_label(&mut self) -> Label {
-        if let Some(l) = &self.labels.truncate_f32_const_u64 {
-            return l.label;
-        }
-
-        let label = self.create_label();
-        self.labels.truncate_f32_const_u64 = Some(label.into());
-        label
+impl IntoLabel for (LabelValue, LabelValue) {
+    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
+        Either::Right((self.0, Some(self.1)))
     }
-
-    #[must_use]
-    fn truncate_f64_const_u64_label(&mut self) -> Label {
-        if let Some(l) = &self.labels.truncate_f64_const_u64 {
-            return l.label;
-        }
-
-        let label = self.create_label();
-        self.labels.truncate_f64_const_u64 = Some(label.into());
-        label
-    }
-
-    #[must_use]
-    fn copysign_consts_f32_labels(&mut self) -> (Label, Label) {
-        if let Some(l) = &self.labels.copysign_consts_f32 {
-            return l.label;
-        }
-
-        let sign_mask = self.create_label();
-        let rest_mask = self.create_label();
-        let labels = (sign_mask, rest_mask);
-        self.labels.copysign_consts_f32 = Some(labels.into());
-        labels
-    }
-
-    #[must_use]
-    fn copysign_consts_f64_labels(&mut self) -> (Label, Label) {
-        if let Some(l) = &self.labels.copysign_consts_f64 {
-            return l.label;
-        }
-
-        let sign_mask = self.create_label();
-        let rest_mask = self.create_label();
-        let labels = (sign_mask, rest_mask);
-        self.labels.copysign_consts_f64 = Some(labels.into());
-        labels
-    }
-
-    #[must_use]
-    fn from_u64_consts_f64_labels(&mut self) -> (Label, Label) {
-        if let Some(l) = &self.labels.from_u64_consts_f64 {
-            return l.label;
-        }
-
-        let sign_mask = self.create_label();
-        let rest_mask = self.create_label();
-        let labels = (sign_mask, rest_mask);
-        self.labels.from_u64_consts_f64 = Some(labels.into());
-        labels
+    fn callback(self) -> Box<FnMut(&mut Assembler)> {
+        Box::new(const_values(self.0, self.1))
     }
 }
 

@@ -7,6 +7,7 @@
     try_from,
     try_trait,
     bind_by_move_pattern_guards,
+    fnbox,
     copysign
 )]
 #![plugin(dynasm)]
