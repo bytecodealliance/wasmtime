@@ -15,7 +15,7 @@ edition = "2018"
 cranelift-codegen = "0.29.0"
 cranelift-entity = "0.29.0"
 cranelift-wasm = "0.29.0"
-wasmtime-environ = { path = "../environ", default-features = false }
+wasmtime-environ = { path = "../wasmtime-environ", default-features = false }
 region = "2.0.0"
 lazy_static = "1.2.0"
 libc = { version = "0.2.44", default-features = false }
