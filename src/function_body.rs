@@ -323,7 +323,7 @@ where
                             assert_eq!(then.to_drop, else_.to_drop);
                             **other = Some(Left(cc.clone()));
 
-                            ctx.pass_block_args(cc);
+                            ctx.pass_block_args_preserve_flags(cc);
                         }
                         (ref mut then_cc @ None, ref mut else_cc @ None) => {
                             let max_params = then_block.params.max(else_block.params);
