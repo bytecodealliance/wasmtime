@@ -43,7 +43,7 @@ pub mod prelude {
     pub use crate::codegen::isa;
     pub use crate::codegen::settings::{self, Configurable};
 
-    pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+    pub use crate::frontend::{FunctionBuilder, Variable};
 }
 
 /// Version number of this crate.

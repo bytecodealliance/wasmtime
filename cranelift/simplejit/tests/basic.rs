@@ -37,14 +37,16 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
         .unwrap();
 
     let mut ctx = Context::new();
-    ctx.func = Function::with_name_signature(ExternalName::user(0, func_id.as_u32()), sig);
-    let mut func_ctx = FunctionBuilderContext::new();
-    {
-        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+
+    ctx.func = {
+        let func = Function::with_name_signature(ExternalName::user(0, func_id.as_u32()), sig);
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(func);
         let ebb = bcx.create_ebb();
         bcx.switch_to_block(ebb);
         bcx.ins().return_(&[]);
-    }
+        bcx.seal_all_blocks();
+        bcx.finalize()
+    };
 
     module.define_function(func_id, &mut ctx).unwrap();
 
@@ -85,11 +87,9 @@ fn switch_error() {
         call_conv: CallConv::SystemV,
     };
 
-    let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
-
-    let mut func_ctx = FunctionBuilderContext::new();
-    {
-        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut func, &mut func_ctx);
+    let func = {
+        let func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(func);
         let start = bcx.create_ebb();
         let bb0 = bcx.create_ebb();
         let bb1 = bcx.create_ebb();
@@ -134,8 +134,8 @@ fn switch_error() {
         bcx.ins().return_(&[r]);
 
         bcx.seal_all_blocks();
-        bcx.finalize();
-    }
+        bcx.finalize()
+    };
 
     let flags = settings::Flags::new(settings::builder());
     match cranelift_codegen::verify_function(&func, &flags) {
@@ -164,10 +164,9 @@ fn libcall_function() {
         .unwrap();
 
     let mut ctx = Context::new();
-    ctx.func = Function::with_name_signature(ExternalName::user(0, func_id.as_u32()), sig);
-    let mut func_ctx = FunctionBuilderContext::new();
-    {
-        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+    ctx.func = {
+        let func = Function::with_name_signature(ExternalName::user(0, func_id.as_u32()), sig);
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(func);
         let ebb = bcx.create_ebb();
         bcx.switch_to_block(ebb);
 
@@ -189,7 +188,11 @@ fn libcall_function() {
         bcx.call_memset(module.target_config(), buffer, zero, size);
 
         bcx.ins().return_(&[]);
-    }
+
+        bcx.seal_all_blocks();
+
+        bcx.finalize()
+    };
 
     module.define_function(func_id, &mut ctx).unwrap();
 
