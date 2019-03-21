@@ -2162,12 +2162,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .map(|c| *c)
             .unwrap_or_else(|| self.ret_label());
 
-        pass_args(self);
-
         let predicate = self.into_reg(I32, val);
 
         dynasm!(self.asm
             ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
+        );
+
+        pass_args(self);
+
+        dynasm!(self.asm
             ; jz =>label.0
         );
 
@@ -2188,12 +2191,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .map(|c| *c)
             .unwrap_or_else(|| self.ret_label());
 
-        pass_args(self);
-
         let predicate = self.into_reg(I32, val);
 
         dynasm!(self.asm
             ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
+        );
+
+        pass_args(self);
+
+        dynasm!(self.asm
             ; jnz =>label.0
         );
 
@@ -2344,7 +2350,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             self.pop_into(dst.into());
         }
 
-        self.set_stack_depth(cc.stack_depth);
+        self.set_stack_depth_preserve_flags(cc.stack_depth);
     }
 
     /// Puts all stack values into "real" locations so that they can i.e. be set to different
@@ -2452,30 +2458,26 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     fn immediate_to_reg(&mut self, reg: GPR, val: Value) {
-        if val.as_bytes() == 0 {
-            self.zero_reg(reg);
-        } else {
-            match reg {
-                GPR::Rq(r) => {
-                    let val = val.as_bytes();
-                    if (val as u64) <= u32::max_value() as u64 {
-                        dynasm!(self.asm
-                            ; mov Rd(r), val as i32
-                        );
-                    } else {
-                        dynasm!(self.asm
-                            ; mov Rq(r), QWORD val
-                        );
-                    }
-                }
-                GPR::Rx(r) => {
-                    let temp = self.block_state.regs.take(I64);
-                    self.immediate_to_reg(temp, val);
+        match reg {
+            GPR::Rq(r) => {
+                let val = val.as_bytes();
+                if (val as u64) <= u32::max_value() as u64 {
                     dynasm!(self.asm
-                        ; movq Rx(r), Rq(temp.rq().unwrap())
+                        ; mov Rd(r), val as i32
                     );
-                    self.block_state.regs.release(temp);
+                } else {
+                    dynasm!(self.asm
+                        ; mov Rq(r), QWORD val
+                    );
                 }
+            }
+            GPR::Rx(r) => {
+                let temp = self.block_state.regs.take(I64);
+                self.immediate_to_reg(temp, val);
+                dynasm!(self.asm
+                    ; movq Rx(r), Rq(temp.rq().unwrap())
+                );
+                self.block_state.regs.release(temp);
             }
         }
     }
@@ -3068,18 +3070,18 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xcf000000u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I32(0));
-                let trap_mask = self.trap_label();
+                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rd(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomiss Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_mask.0
+                    ; jp =>trap_label.0
                     ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jnae =>trap_mask.0
+                    ; jnae =>trap_label.0
                     ; ucomiss Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_mask.0
+                    ; jnb =>trap_label.0
                 ; ret:
                 );
 
@@ -3106,21 +3108,21 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0x4f000000u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I32(0));
-                let trap_mask = self.trap_label();
+                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; jae >else_
-                    ; jp =>trap_mask.0
+                    ; jp =>trap_label.0
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
-                    ; cmp Rd(temp.rq().unwrap()), 0
-                    ; jnge =>trap_mask.0
+                    ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
+                    ; js =>trap_label.0
                     ; jmp >ret
                 ; else_:
                     ; subss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
-                    ; cmp Rd(temp.rq().unwrap()), 0
-                    ; jnge =>trap_mask.0
+                    ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
+                    ; js =>trap_label.0
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
                 ; ret:
                 );
@@ -3147,20 +3149,21 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 val = ValueLocation::Reg(reg);
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
-                let float_cmp_mask = self.aligned_label(16, LabelValue::I64(0xc1e0000000200000u64 as i64));
+                let float_cmp_mask =
+                    self.aligned_label(16, LabelValue::I64(0xc1e0000000200000u64 as i64));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
-                let trap_mask = self.trap_label();
+                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rd(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomisd Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_mask.0
+                    ; jp =>trap_label.0
                     ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jna =>trap_mask.0
+                    ; jna =>trap_label.0
                     ; ucomisd Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_mask.0
+                    ; jnb =>trap_label.0
                 ; ret:
                 );
 
@@ -3186,23 +3189,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let temp = self.block_state.regs.take(I32);
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
-                let float_cmp_mask = self.aligned_label(16, LabelValue::I64(0x41e0000000000000u64 as i64));
+                let float_cmp_mask =
+                    self.aligned_label(16, LabelValue::I64(0x41e0000000000000u64 as i64));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
-                let trap_mask = self.trap_label();
+                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; jae >else_
-                    ; jp =>trap_mask.0
+                    ; jp =>trap_label.0
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
-                    ; cmp Rd(temp.rq().unwrap()), 0
-                    ; jnge =>trap_mask.0
+                    ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
+                    ; js =>trap_label.0
                     ; jmp >ret
                 ; else_:
                     ; subsd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
-                    ; cmp Rd(temp.rq().unwrap()), 0
-                    ; jnge =>trap_mask.0
+                    ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
+                    ; js =>trap_label.0
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
                 ; ret:
                 );
@@ -3265,30 +3269,84 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         |a| wasmparser::Ieee64((a as f64).to_bits())
     );
 
-    conversion!(
-        i64_truncate_f32_s,
-        cvttss2si,
-        Rx,
-        rx,
-        Rq,
-        rq,
-        f32,
-        i64,
-        as_f32,
-        |a: wasmparser::Ieee32| f32::from_bits(a.bits()) as i64
-    );
-    conversion!(
-        i64_truncate_f64_s,
-        cvttsd2si,
-        Rx,
-        rx,
-        Rq,
-        rq,
-        f64,
-        i64,
-        as_f64,
-        |a: wasmparser::Ieee64| f64::from_bits(a.bits()) as i64
-    );
+    pub fn i64_truncate_f32_s(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                (f32::from_bits(imm.as_f32().unwrap().bits()) as i32).into(),
+            ),
+            other => {
+                let reg = self.into_temp_reg(F32, other);
+                val = ValueLocation::Reg(reg);
+                let temp = self.block_state.regs.take(I32);
+
+                let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
+                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xdf000000u32 as i32));
+                let zero = self.aligned_label(16, LabelValue::I64(0));
+                let trap_label = self.trap_label();
+
+                dynasm!(self.asm
+                    ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; cmp Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jne >ret
+                    ; ucomiss Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
+                    ; jp =>trap_label.0
+                    ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
+                    ; jnae =>trap_label.0
+                    ; ucomiss Rx(reg.rx().unwrap()), [=>zero.0]
+                    ; jnb =>trap_label.0
+                ; ret:
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
+
+    pub fn i64_truncate_f64_s(&mut self) {
+        let mut val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) => ValueLocation::Immediate(
+                (f64::from_bits(imm.as_f64().unwrap().bits()) as i32).into(),
+            ),
+            other => {
+                let reg = self.into_reg(F32, other);
+                let temp = self.block_state.regs.take(I32);
+                val = ValueLocation::Reg(reg);
+
+                let sign_mask = self.aligned_label(8, LabelValue::I64(SIGN_MASK_F64 as i64));
+                let float_cmp_mask =
+                    self.aligned_label(16, LabelValue::I64(0xc3e0000000000000u64 as i64));
+                let zero = self.aligned_label(16, LabelValue::I64(0));
+                let trap_label = self.trap_label();
+
+                dynasm!(self.asm
+                    ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; cmp Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jne >ret
+                    ; ucomisd Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
+                    ; jp =>trap_label.0
+                    ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
+                    ; jnae =>trap_label.0
+                    ; ucomisd Rx(reg.rx().unwrap()), [=>zero.0]
+                    ; jnb =>trap_label.0
+                ; ret:
+                );
+
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+
+        self.push(out_val);
+    }
 
     pub fn i64_truncate_f32_u(&mut self) {
         struct Trunc;
@@ -3304,17 +3362,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 val = ValueLocation::Reg(reg);
 
                 let temp = self.block_state.regs.take(I64);
+                let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
                 let u64_trunc_f32_const = self.aligned_label(16, LabelValue::I32(0x5F000000));
+                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; comiss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
-                    ; jnb >large
+                    ; jae >large
+                    ; jp =>trap_label.0
                     ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
+                    ; test Rq(temp.rq().unwrap()), Rq(temp.rq().unwrap())
+                    ; js =>trap_label.0
                     ; jmp >cont
                 ; large:
                     ; subss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
                     ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
-                    ; btc Rq(temp.rq().unwrap()), 0b00111111
+                    ; test Rq(temp.rq().unwrap()), Rq(temp.rq().unwrap())
+                    ; js =>trap_label.0
+                    ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
                 ; cont:
                 );
 
@@ -3339,18 +3404,25 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 val = ValueLocation::Reg(reg);
 
                 let temp = self.block_state.regs.take(I64);
+                let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
                 let u64_trunc_f64_const =
-                    self.aligned_label(16, LabelValue::I64(0x43E0000000000000));
+                    self.aligned_label(16, LabelValue::I64(0x43e0000000000000));
+                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; comisd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
                     ; jnb >large
+                    ; jp =>trap_label.0
                     ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
-                    ; jmp >cont
+                    ; cmp Rq(temp.rq().unwrap()), 0
+                    ; jge >cont
+                    ; jmp =>trap_label.0
                 ; large:
                     ; subsd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
                     ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
-                    ; btc Rq(temp.rq().unwrap()), 0b00111111
+                    ; cmp Rq(temp.rq().unwrap()), 0
+                    ; jnge =>trap_label.0
+                    ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
                 ; cont:
                 );
 
@@ -3435,6 +3507,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; test Rq(reg.rq().unwrap()), Rq(reg.rq().unwrap())
                     ; js >negative
                     ; cvtsi2ss Rx(out.rx().unwrap()), Rq(reg.rq().unwrap())
+                    ; jmp >ret
                 ; negative:
                     ; mov Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
                     ; shr Rq(temp.rq().unwrap()), 1
@@ -3442,6 +3515,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; or Rq(reg.rq().unwrap()), Rq(temp.rq().unwrap())
                     ; cvtsi2ss Rx(out.rx().unwrap()), Rq(reg.rq().unwrap())
                     ; addss Rx(out.rx().unwrap()), Rx(out.rx().unwrap())
+                ; ret:
                 );
 
                 self.free_value(ValueLocation::Reg(temp));
@@ -3466,27 +3540,22 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let reg = self.into_reg(I64, val);
                 val = ValueLocation::Reg(reg);
 
-                let out = self.block_state.regs.take(F64);
-                let temp = self.block_state.regs.take(F64);
-
-                let conv_const_0 = self.aligned_label(
-                    16,
-                    (LabelValue::I32(0x43300000), LabelValue::I32(0x43300000)),
-                );
-                let conv_const_1 = self.aligned_label(
-                    16,
-                    (
-                        LabelValue::I64(0x4330000000000000),
-                        LabelValue::I64(0x4530000000000000),
-                    ),
-                );
+                let out = self.block_state.regs.take(F32);
+                let temp = self.block_state.regs.take(I64);
 
                 dynasm!(self.asm
-                    ; movq Rx(temp.rx().unwrap()), rdi
-                    ; punpckldq Rx(temp.rx().unwrap()), [=>conv_const_0.0]
-                    ; subpd Rx(temp.rx().unwrap()), [=>conv_const_1.0]
-                    ; pshufd Rx(out.rx().unwrap()), Rx(temp.rx().unwrap()), 78
-                    ; addpd Rx(out.rx().unwrap()), Rx(temp.rx().unwrap())
+                    ; test Rq(reg.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; js >negative
+                    ; cvtsi2sd Rx(out.rx().unwrap()), Rq(reg.rq().unwrap())
+                    ; jmp >ret
+                ; negative:
+                    ; mov Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; shr Rq(temp.rq().unwrap()), 1
+                    ; and Rq(reg.rq().unwrap()), 1
+                    ; or Rq(reg.rq().unwrap()), Rq(temp.rq().unwrap())
+                    ; cvtsi2sd Rx(out.rx().unwrap()), Rq(reg.rq().unwrap())
+                    ; addsd Rx(out.rx().unwrap()), Rx(out.rx().unwrap())
+                ; ret:
                 );
 
                 self.free_value(ValueLocation::Reg(temp));
