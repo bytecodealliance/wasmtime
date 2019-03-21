@@ -120,7 +120,7 @@ fib:
   mov    eax, dword ptr [rsp + 0x1c]
   cmp    eax, 1
   ja     .Lloop
-.Lreturn
+.Lreturn:
   mov    eax, dword ptr [rsp + 0x18]
   add    rsp, 0x20
   pop    rbp
