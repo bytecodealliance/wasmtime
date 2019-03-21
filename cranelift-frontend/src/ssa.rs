@@ -173,9 +173,7 @@ impl SSABuilder {
         self.variables.clear();
         self.blocks.clear();
         self.ebb_headers.clear();
-        debug_assert!(self.calls.is_empty());
-        debug_assert!(self.results.is_empty());
-        debug_assert!(self.side_effects.is_empty());
+        debug_assert!(self.is_empty());
     }
 
     /// Tests whether an `SSABuilder` is in a cleared state.
