@@ -43,5 +43,5 @@ for crate in \
     reader wasm module \
     faerie umbrella simplejit
 do
-    echo cargo publish --manifest-path "$crate/Cargo.toml"
+    echo cargo publish --manifest-path "cranelift-$crate/Cargo.toml"
 done
