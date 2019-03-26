@@ -9,6 +9,36 @@ type EntryIndex = u64;
 
 /// Unlike with `br_table`, `Switch` cases may be sparse or non-0-based.
 /// They emit efficient code using branches, jump tables, or a combination of both.
+///
+/// # Example
+///
+/// ```rust
+/// # use cranelift_codegen::ir::types::*;
+/// # use cranelift_codegen::ir::{ExternalName, Function, Signature, InstBuilder};
+/// # use cranelift_codegen::isa::CallConv;
+/// # use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Switch};
+/// #
+/// # let mut sig = Signature::new(CallConv::SystemV);
+/// # let mut fn_builder_ctx = FunctionBuilderContext::new();
+/// # let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+/// # let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
+/// #
+/// # let entry = builder.create_ebb();
+/// # builder.switch_to_block(entry);
+/// #
+/// let block0 = builder.create_ebb();
+/// let block1 = builder.create_ebb();
+/// let block2 = builder.create_ebb();
+/// let fallback = builder.create_ebb();
+///
+/// let val = builder.ins().iconst(I32, 1);
+///
+/// let mut switch = Switch::new();
+/// switch.set_entry(0, block0);
+/// switch.set_entry(1, block1);
+/// switch.set_entry(7, block2);
+/// switch.emit(&mut builder, val, fallback);
+/// ```
 #[derive(Debug, Default)]
 pub struct Switch {
     cases: HashMap<EntryIndex, Ebb>,
@@ -32,6 +62,14 @@ impl Switch {
         );
     }
 
+    /// Turn the `cases` `HashMap` into a list of `ContiguousCaseRange`s.
+    ///
+    /// # Postconditions
+    ///
+    /// * Every entry will be represented.
+    /// * The `ContiguousCaseRange`s will not overlap.
+    /// * Between two `ContiguousCaseRange`s there will be at least one entry index.
+    /// * No `ContiguousCaseRange`s will be empty.
     fn collect_contiguous_case_ranges(self) -> Vec<ContiguousCaseRange> {
         debug!("build_contiguous_case_ranges before: {:#?}", self.cases);
         let mut cases = self.cases.into_iter().collect::<Vec<(_, _)>>();
@@ -60,6 +98,7 @@ impl Switch {
         contiguous_case_ranges
     }
 
+    /// Binary search for the right `ContiguousCaseRange`.
     fn build_search_tree(
         bx: &mut FunctionBuilder,
         val: Value,
@@ -120,6 +159,7 @@ impl Switch {
         cases_and_jt_ebbs
     }
 
+    /// Linear search for the right `ContiguousCaseRange`.
     fn build_search_branches(
         bx: &mut FunctionBuilder,
         val: Value,
@@ -128,22 +168,41 @@ impl Switch {
         cases_and_jt_ebbs: &mut Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
     ) {
         for ContiguousCaseRange { first_index, ebbs } in contiguous_case_ranges.into_iter().rev() {
-            if ebbs.len() == 1 {
-                let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index as i64);
-                bx.ins().brnz(is_good_val, ebbs[0], &[]);
-            } else {
-                let jt_ebb = bx.create_ebb();
-                let is_good_val =
-                    bx.ins()
-                        .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, first_index as i64);
-                bx.ins().brnz(is_good_val, jt_ebb, &[]);
-                cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
+            match (ebbs.len(), first_index) {
+                (1, 0) => {
+                    bx.ins().brz(val, ebbs[0], &[]);
+                }
+                (1, _) => {
+                    let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index as i64);
+                    bx.ins().brnz(is_good_val, ebbs[0], &[]);
+                }
+                (_, 0) => {
+                    // if `first_index` is 0, then `icmp_imm uge val, first_index` is trivially true
+                    let jt_ebb = bx.create_ebb();
+                    bx.ins().jump(jt_ebb, &[]);
+                    cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
+                    // `jump otherwise` below must not be hit, because the current block has been
+                    // filled above. This is the last iteration anyway, as 0 is the smallest
+                    // unsigned int, so just return here.
+                    return;
+                }
+                (_, _) => {
+                    let jt_ebb = bx.create_ebb();
+                    let is_good_val = bx.ins().icmp_imm(
+                        IntCC::UnsignedGreaterThanOrEqual,
+                        val,
+                        first_index as i64,
+                    );
+                    bx.ins().brnz(is_good_val, jt_ebb, &[]);
+                    cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
+                }
             }
         }
 
         bx.ins().jump(otherwise, &[]);
     }
 
+    /// For every item in `cases_and_jt_ebbs` this will create a jump table in the specified ebb.
     fn build_jump_tables(
         bx: &mut FunctionBuilder,
         val: Value,
@@ -158,7 +217,11 @@ impl Switch {
             let jump_table = bx.create_jump_table(jt_data);
 
             bx.switch_to_block(jt_ebb);
-            let discr = bx.ins().iadd_imm(val, (first_index as i64).wrapping_neg());
+            let discr = if first_index == 0 {
+                val
+            } else {
+                bx.ins().iadd_imm(val, (first_index as i64).wrapping_neg())
+            };
             bx.ins().br_table(discr, otherwise, jump_table);
         }
     }
@@ -183,9 +246,22 @@ impl Switch {
     }
 }
 
+/// This represents a contiguous range of cases to switch on.
+///
+/// For example 10 => ebb1, 11 => ebb2, 12 => ebb7 will be represented as:
+///
+/// ```plain
+/// ContiguousCaseRange {
+///     first_index: 10,
+///     ebbs: vec![Ebb::from_u32(1), Ebb::from_u32(2), Ebb::from_u32(7)]
+/// }
+/// ```
 #[derive(Debug)]
 struct ContiguousCaseRange {
+    /// The entry index of the first case. Eg. 10 when the entry indexes are 10, 11, 12 and 13.
     first_index: EntryIndex,
+
+    /// The ebbs to jump to sorted in ascending order of entry index.
     ebbs: Vec<Ebb>,
 }
 
@@ -237,8 +313,7 @@ mod tests {
             "ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
-    v2 = icmp_imm eq v1, 0
-    brnz v2, ebb1
+    brz v1, ebb1
     jump ebb0"
         );
     }
@@ -267,13 +342,10 @@ mod tests {
 ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
-    v2 = icmp_imm uge v1, 0
-    brnz v2, ebb3
-    jump ebb0
+    jump ebb3
 
 ebb3:
-    v3 = iadd_imm.i32 v1, 0
-    br_table v3, ebb0, jt0"
+    br_table.i32 v1, ebb0, jt0"
         );
     }
 
@@ -287,8 +359,7 @@ ebb3:
     v1 = uextend.i32 v0
     v2 = icmp_imm eq v1, 2
     brnz v2, ebb2
-    v3 = icmp_imm eq v1, 0
-    brnz v3, ebb1
+    brz v1, ebb1
     jump ebb0"
         );
     }
@@ -318,17 +389,14 @@ ebb9:
 ebb8:
     v5 = icmp_imm.i32 eq v1, 5
     brnz v5, ebb3
-    v6 = icmp_imm.i32 uge v1, 0
-    brnz v6, ebb11
-    jump ebb0
+    jump ebb11
 
 ebb11:
-    v7 = iadd_imm.i32 v1, 0
-    br_table v7, ebb0, jt0
+    br_table.i32 v1, ebb0, jt0
 
 ebb10:
-    v8 = iadd_imm.i32 v1, -10
-    br_table v8, ebb0, jt1"
+    v6 = iadd_imm.i32 v1, -10
+    br_table v6, ebb0, jt1"
         );
     }
 
@@ -362,5 +430,24 @@ ebb10:
     brnz v3, ebb2
     jump ebb0"
         )
+    }
+
+    #[test]
+    fn switch_optimal_codegen() {
+        let func = setup!(0, [-1i64 as u64, 0, 1,]);
+        assert_eq!(
+            func,
+            "    jt0 = jump_table [ebb2, ebb3]
+
+ebb0:
+    v0 = iconst.i8 0
+    v1 = uextend.i32 v0
+    v2 = icmp_imm eq v1, -1
+    brnz v2, ebb1
+    jump ebb4
+
+ebb4:
+    br_table.i32 v1, ebb0, jt0"
+        );
     }
 }
