@@ -2391,6 +2391,38 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.set_stack_depth_preserve_flags(cc.stack_depth);
     }
 
+    pub fn serialize_block_args_preserve_flags(
+        &mut self,
+        cc: &BlockCallingConvention,
+        other_to_drop: Option<RangeInclusive<u32>>,
+    ) -> BlockCallingConvention {
+        self.do_pass_block_args(cc);
+
+        let mut out_args = cc.arguments.clone();
+
+        out_args.reverse();
+
+        if let Some(to_drop) = other_to_drop {
+            for _ in to_drop {
+                let val = self.pop();
+                // TODO: We can use stack slots for values already on the stack but we
+                //       don't refcount stack slots right now
+                let loc = CCLoc::Reg(self.into_temp_reg(None, val));
+
+                out_args.push(loc);
+            }
+        }
+
+        out_args.reverse();
+
+        self.set_stack_depth_preserve_flags(cc.stack_depth);
+
+        BlockCallingConvention {
+            stack_depth: cc.stack_depth,
+            arguments: out_args,
+        }
+    }
+
     /// Puts all stack values into "real" locations so that they can i.e. be set to different
     /// values on different iterations of a loop
     pub fn serialize_args(&mut self, count: u32) -> BlockCallingConvention {
@@ -4343,9 +4375,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.push_function_returns(rets);
 
-        self.set_stack_depth(depth);
-
         if preserve_vmctx {
+            self.set_stack_depth(depth);
+
             dynasm!(self.asm
                 ; pop Rq(VMCTX)
             );
@@ -4702,8 +4734,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
 
         self.push_function_returns(return_types);
-
-        self.set_stack_depth(depth);
     }
 
     /// Call a function with the given index

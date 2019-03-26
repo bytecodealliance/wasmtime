@@ -315,17 +315,21 @@ where
                     let else_block_should_serialize_args = else_block.should_serialize_args();
 
                     match (
-                        &mut then_block.calling_convention,
-                        &mut else_block.calling_convention,
+                        (&mut then_block.calling_convention, &then.to_drop),
+                        (&mut else_block.calling_convention, &else_.to_drop),
                     ) {
-                        (Some(Left(ref cc)), ref mut other @ None)
-                        | (ref mut other @ None, Some(Left(ref cc))) => {
-                            assert_eq!(then.to_drop, else_.to_drop);
-                            **other = Some(Left(cc.clone()));
-
-                            ctx.pass_block_args_preserve_flags(cc);
+                        ((Some(Left(ref cc)), to_drop), ref mut other @ (None, _))
+                        | (ref mut other @ (None, _), (Some(Left(ref cc)), to_drop)) => {
+                            let mut cc = ctx.serialize_block_args_preserve_flags(cc, to_drop.clone());
+                            if let Some(to_drop) = other.1 {
+                                drop_elements(&mut cc.arguments, to_drop.clone());
+                            }
+                            *other.0 = Some(Left(cc));
                         }
-                        (ref mut then_cc @ None, ref mut else_cc @ None) => {
+                        (
+                            (ref mut then_cc @ None, then_to_drop),
+                            (ref mut else_cc @ None, else_to_drop),
+                        ) => {
                             let max_params = then_block.params.max(else_block.params);
                             let cc = if then_block_should_serialize_args {
                                 Left(ctx.serialize_args(max_params))
@@ -337,7 +341,7 @@ where
 
                             **then_cc = {
                                 let mut cc = cc.clone();
-                                if let Some(to_drop) = then.to_drop.clone() {
+                                if let Some(to_drop) = then_to_drop.clone() {
                                     match &mut cc {
                                         Left(cc) => drop_elements(&mut cc.arguments, to_drop),
                                         Right(cc) => drop_elements(&mut cc.stack, to_drop),
@@ -347,7 +351,7 @@ where
                             };
                             **else_cc = {
                                 let mut cc = cc;
-                                if let Some(to_drop) = else_.to_drop.clone() {
+                                if let Some(to_drop) = else_to_drop.clone() {
                                     match &mut cc {
                                         Left(cc) => drop_elements(&mut cc.arguments, to_drop),
                                         Right(cc) => drop_elements(&mut cc.stack, to_drop),
