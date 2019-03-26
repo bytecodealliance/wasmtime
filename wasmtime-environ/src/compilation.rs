@@ -2,6 +2,7 @@
 //! module.
 
 use crate::module;
+use crate::module_environ::FunctionBodyData;
 use cranelift_codegen::{binemit, ir, isa, CodegenError};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
@@ -25,7 +26,12 @@ impl Compilation {
 
     /// Allocates the compilation result with the given function bodies.
     pub fn from_buffer(buffer: Vec<u8>, functions: impl IntoIterator<Item = Range<usize>>) -> Self {
-        Self::new(functions.into_iter().map(|range| buffer[range].to_vec()).collect())
+        Self::new(
+            functions
+                .into_iter()
+                .map(|range| buffer[range].to_vec())
+                .collect(),
+        )
     }
 
     /// Gets the bytes of a single function
@@ -141,7 +147,8 @@ pub trait Compiler {
     /// Compile a parsed module with the given `TargetIsa`.
     fn compile_module<'data, 'module>(
         module: &'module module::Module,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
+        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
-    ) -> Result<(Compilation, Relocations), CompileError>;
+        generate_debug_info: bool,
+    ) -> Result<(Compilation, Relocations, AddressTransforms), CompileError>;
 }

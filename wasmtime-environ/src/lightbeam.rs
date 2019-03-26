@@ -1,8 +1,9 @@
 //! Support for compiling with Lightbeam.
 
-use crate::compilation::{Compilation, CompileError, Relocations};
+use crate::compilation::{AddressTransforms, Compilation, CompileError, Relocations};
 use crate::func_environ::FuncEnvironment;
 use crate::module::Module;
+use crate::module_environ::FunctionBodyData;
 // TODO: Put this in `compilation`
 use crate::cranelift::RelocSink;
 use cranelift_codegen::isa;
@@ -14,13 +15,15 @@ use lightbeam;
 pub struct Lightbeam;
 
 impl crate::compilation::Compiler for Lightbeam {
-    /// Compile the module using Cranelift, producing a compilation result with
+    /// Compile the module using Lightbeam, producing a compilation result with
     /// associated relocations.
     fn compile_module<'data, 'module>(
         module: &'module Module,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, &'data [u8]>,
+        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
-    ) -> Result<(Compilation, Relocations), CompileError> {
+        // TODO
+        _generate_debug_info: bool,
+    ) -> Result<(Compilation, Relocations, AddressTransforms), CompileError> {
         let env = FuncEnvironment::new(isa.frontend_config(), module);
         let mut relocations = PrimaryMap::new();
         let mut codegen_session: lightbeam::CodeGenSession<_> =
@@ -33,7 +36,7 @@ impl crate::compilation::Compiler for Lightbeam {
                 &mut codegen_session,
                 &mut reloc_sink,
                 i.as_u32(),
-                &lightbeam::wasmparser::FunctionBody::new(0, function_body),
+                &lightbeam::wasmparser::FunctionBody::new(0, function_body.data),
             )
             .expect("Failed to translate function. TODO: Stop this from panicking");
             relocations.push(reloc_sink.func_relocs);
@@ -46,6 +49,7 @@ impl crate::compilation::Compiler for Lightbeam {
         Ok((
             Compilation::from_buffer(code_section.buffer().to_vec(), code_section.funcs()),
             relocations,
+            AddressTransforms::new(),
         ))
     }
 }

@@ -105,7 +105,7 @@ impl Compiler {
             let mut funcs = Vec::new();
             for (i, allocated) in allocated_functions.into_iter() {
                 let ptr = (*allocated) as *const u8;
-                let body_len = compilation.functions[i].len();
+                let body_len = compilation.get(i).len();
                 funcs.push((ptr, body_len));
             }
             let bytes = emit_debugsections_image(
@@ -257,27 +257,18 @@ fn allocate_functions(
     code_memory: &mut CodeMemory,
     compilation: &Compilation,
 ) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
-<<<<<<< HEAD:wasmtime-jit/src/compiler.rs
     // Allocate code for all function in one continuous memory block.
     // First, collect all function bodies into vector to pass to the
     // allocate_copy_of_byte_slices.
     let bodies = compilation
-        .functions
-        .values()
-        .map(|body| body.as_slice())
+        .into_iter()
         .collect::<Vec<&[u8]>>();
     let fat_ptrs = code_memory.allocate_copy_of_byte_slices(&bodies)?;
     // Second, create a PrimaryMap from result vector of pointers.
-    let mut result = PrimaryMap::with_capacity(compilation.functions.len());
+    let mut result = PrimaryMap::with_capacity(compilation.len());
     for i in 0..fat_ptrs.len() {
         let fat_ptr: *mut [VMFunctionBody] = fat_ptrs[i];
         result.push(fat_ptr);
-=======
-    let mut result = PrimaryMap::with_capacity(compilation.len());
-    for body in &compilation {
-        let fatptr: *mut [VMFunctionBody] = code_memory.allocate_copy_of_byte_slice(body)?;
-        result.push(fatptr);
->>>>>>> Integrate lightbeam:lib/jit/src/compiler.rs
     }
     Ok(result)
 }
