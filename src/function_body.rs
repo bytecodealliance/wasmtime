@@ -381,12 +381,23 @@ where
 
                 let (label, num_callers, params) = {
                     let def = &blocks[&default.target];
-                    (if def.is_next { None } else { Some(def.label) }, def.num_callers, def.params)
+                    (
+                        if def.is_next { None } else { Some(def.label) },
+                        def.num_callers,
+                        def.params,
+                    )
                 };
 
                 let target_labels = targets
                     .iter()
-                    .map(|target| blocks[&target.target].label)
+                    .map(|target| {
+                        let block = &blocks[&target.target];
+                        if block.is_next {
+                            None
+                        } else {
+                            Some(block.label)
+                        }
+                    })
                     .collect::<Vec<_>>();
 
                 ctx.br_table(target_labels, label, |ctx| {
@@ -695,15 +706,24 @@ where
                 ctx.memory_grow();
             }
             Operator::Call { function_index } => {
+                use cranelift_codegen::ir;
+
                 let callee_ty = module_context.func_type(function_index);
 
-                if let Some(defined_func_index) = module_context.defined_func_index(function_index)
-                {
-                    ctx.call_direct(
-                        defined_func_index,
-                        callee_ty.params().iter().map(|t| t.to_microwasm_type()),
-                        callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
-                    );
+                if let Some(defined_index) = module_context.defined_func_index(function_index) {
+                    if function_index == func_idx {
+                        ctx.call_direct_self(
+                            defined_index,
+                            callee_ty.params().iter().map(|t| t.to_microwasm_type()),
+                            callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
+                        );
+                    } else {
+                        ctx.call_direct(
+                            function_index,
+                            callee_ty.params().iter().map(|t| t.to_microwasm_type()),
+                            callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
+                        );
+                    }
                 } else {
                     ctx.call_direct_imported(
                         function_index,

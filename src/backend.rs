@@ -2251,7 +2251,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         default: Option<BrTarget<Label>>,
         pass_args: impl FnOnce(&mut Self),
     ) where
-        I: IntoIterator<Item = BrTarget<Label>>,
+        I: IntoIterator<Item = Option<BrTarget<Label>>>,
         I::IntoIter: ExactSizeIterator,
     {
         let mut targets = targets.into_iter();
@@ -2262,7 +2262,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args(self);
 
         if let Some(imm) = selector.imm_i32() {
-            if let Some(target) = targets.nth(imm as _).or(default) {
+            if let Some(target) = targets.nth(imm as _).or(Some(default)).and_then(|a| a) {
                 match target {
                     BrTarget::Label(label) => self.br(label),
                     BrTarget::Return => {
@@ -2273,8 +2273,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
         } else {
+            let end_label = self.create_label();
+
             if count > 0 {
-                let selector_reg = self.into_reg(GPRType::Rq, selector);
+                let selector_reg = self.into_temp_reg(GPRType::Rq, selector);
                 selector = ValueLocation::Reg(selector_reg);
 
                 let tmp = self.take_reg(I64);
@@ -2295,7 +2297,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 self.block_state.regs.release(tmp);
 
                 for (i, target) in targets.enumerate() {
-                    let label = self.target_to_label(target);
+                    let label = target
+                        .map(|target| self.target_to_label(target))
+                        .unwrap_or(end_label);
                     dynasm!(self.asm
                         ; jmp =>label.0
                     );
@@ -2312,6 +2316,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ),
                 }
             }
+
+            self.define_label(end_label);
         }
 
         self.free_value(selector);
@@ -3649,6 +3655,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::CeilF32),
             iter::once(F32),
             iter::once(F32),
+            true,
         );
     }
 
@@ -3657,6 +3664,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::FloorF32),
             iter::once(F32),
             iter::once(F32),
+            true,
         );
     }
 
@@ -3665,6 +3673,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::NearestF32),
             iter::once(F32),
             iter::once(F32),
+            true,
         );
     }
 
@@ -3673,6 +3682,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::TruncF32),
             iter::once(F32),
             iter::once(F32),
+            true,
         );
     }
 
@@ -3708,6 +3718,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::CeilF64),
             iter::once(F64),
             iter::once(F64),
+            true,
         );
     }
 
@@ -3716,6 +3727,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::FloorF64),
             iter::once(F64),
             iter::once(F64),
+            true,
         );
     }
 
@@ -3724,6 +3736,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::NearestF64),
             iter::once(F64),
             iter::once(F64),
+            true,
         );
     }
 
@@ -3732,6 +3745,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::TruncF64),
             iter::once(F64),
             iter::once(F64),
+            true,
         );
     }
 
@@ -4288,14 +4302,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         name: &cranelift_codegen::ir::ExternalName,
         args: impl IntoIterator<Item = SignlessType>,
         rets: impl IntoIterator<Item = SignlessType>,
+        preserve_vmctx: bool,
     ) {
-        self.block_state.depth.reserve(1);
-        dynasm!(self.asm
-            ; push Rq(VMCTX)
-        );
-        let depth = self.block_state.depth.clone();
-
         let locs = arg_locs(args);
+
+        self.save_volatile(locs.len()..);
+
+        if preserve_vmctx {
+            self.block_state.depth.reserve(1);
+            dynasm!(self.asm
+                ; push Rq(VMCTX)
+            );
+        }
+
+        let depth = self.block_state.depth.clone();
 
         self.pass_outgoing_args(&locs);
         // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
@@ -4315,7 +4335,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; mov Rq(temp.rq().unwrap()), QWORD 0xdeadbeefdeadbeefu64 as i64
             ; call Rq(temp.rq().unwrap())
         );
-
         self.block_state.regs.release(temp);
 
         for i in locs {
@@ -4325,10 +4344,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.push_function_returns(rets);
 
         self.set_stack_depth(depth);
-        dynasm!(self.asm
-            ; pop Rq(VMCTX)
-        );
-        self.block_state.depth.free(1);
+
+        if preserve_vmctx {
+            dynasm!(self.asm
+                ; pop Rq(VMCTX)
+            );
+            self.block_state.depth.free(1);
+        }
     }
 
     // TODO: Other memory indices
@@ -4340,6 +4362,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 &magic::get_memory32_size_name(),
                 iter::once(I32),
                 iter::once(I32),
+                true,
             );
         } else {
             self.push(ValueLocation::Immediate(memory_index.into()));
@@ -4347,6 +4370,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 &magic::get_imported_memory32_size_name(),
                 iter::once(I32),
                 iter::once(I32),
+                true,
             );
         }
     }
@@ -4360,6 +4384,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 &magic::get_memory32_grow_name(),
                 iter::once(I32).chain(iter::once(I32)),
                 iter::once(I32),
+                true,
             );
         } else {
             self.push(ValueLocation::Immediate(memory_index.into()));
@@ -4367,6 +4392,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 &magic::get_imported_memory32_grow_name(),
                 iter::once(I32).chain(iter::once(I32)),
                 iter::once(I32),
+                true,
             );
         }
     }
@@ -4413,8 +4439,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     /// Write the arguments to the callee to the registers and the stack using the SystemV
     /// calling convention.
     fn pass_outgoing_args(&mut self, out_locs: &[CCLoc]) {
-        self.save_volatile(out_locs.len()..);
-
         // TODO: Do alignment here
         let total_stack_space = out_locs
             .iter()
@@ -4532,6 +4556,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
+        self.save_volatile(locs.len()..);
+
         self.block_state.depth.reserve(1);
         dynasm!(self.asm
             ; push Rq(VMCTX)
@@ -4551,6 +4577,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     self.module_context.vmctx_vmtable_definition(index) as i32,
                 )
             });
+
         let vmctx = GPR::Rq(VMCTX);
         let (reg, offset) = reg_offset.unwrap_or_else(|| {
             let reg = self.take_reg(I64);
@@ -4643,13 +4670,31 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         arg_types: impl IntoIterator<Item = SignlessType>,
         return_types: impl IntoIterator<Item = SignlessType>,
     ) {
+        self.relocated_function_call(
+            &ir::ExternalName::user(0, index),
+            arg_types,
+            return_types,
+            false,
+        );
+    }
+
+    /// Call a function with the given index
+    pub fn call_direct_self(
+        &mut self,
+        defined_index: u32,
+        arg_types: impl IntoIterator<Item = SignlessType>,
+        return_types: impl IntoIterator<Item = SignlessType>,
+    ) {
         let locs = arg_locs(arg_types);
 
-        self.pass_outgoing_args(&locs);
+        self.save_volatile(locs.len()..);
+        let depth = self.block_state.depth.clone();
 
-        let label = &self.func_starts[index as usize].1;
+        let (_, label) = self.func_starts[defined_index as usize];
+
+        self.pass_outgoing_args(&locs);
         dynasm!(self.asm
-            ; call =>*label
+            ; call =>label
         );
 
         for i in locs {
@@ -4657,6 +4702,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
 
         self.push_function_returns(return_types);
+
+        self.set_stack_depth(depth);
     }
 
     /// Call a function with the given index
@@ -4674,6 +4721,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
         let depth = self.block_state.depth.clone();
 
+        self.save_volatile(locs.len()..);
         self.pass_outgoing_args(&locs);
 
         let callee = self.take_reg(I64);
