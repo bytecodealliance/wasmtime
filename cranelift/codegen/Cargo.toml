@@ -26,7 +26,7 @@ log = { version = "0.4.6", default-features = false }
 # accomodated in `tests`.
 
 [build-dependencies]
-cranelift-codegen-meta = { path = "meta", version = "0.30.0" }
+cranelift-codegen-meta = { path = "meta", version = "0.30.0", default-features = false }
 
 [features]
 default = ["std", "x86", "arm32", "arm64", "riscv"]
@@ -34,8 +34,19 @@ default = ["std", "x86", "arm32", "arm64", "riscv"]
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
-std = ["cranelift-entity/std", "cranelift-bforest/std", "target-lexicon/std"]
-core = ["hashmap_core"]
+std = [
+    "cranelift-entity/std",
+    "cranelift-bforest/std",
+    "target-lexicon/std",
+    "cranelift-codegen-meta/std"
+]
+
+# The "core" features enables use of "hashmap_core" since core doesn't have
+# a HashMap implementation, and a workaround for Cargo #4866.
+core = [
+    "hashmap_core",
+    "cranelift-codegen-meta/core"
+]
 
 # This enables some additional functions useful for writing tests, but which
 # can significantly increase the size of the library.
