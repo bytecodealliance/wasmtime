@@ -165,7 +165,7 @@ Now obviously I'm not advocating for replacing FireFox's optimising compiler wit
 
 ## Specification compliance
 
-Currently 65 out of 74 of the spec suite tests pass when run in Wasmtime with Lightbeam as a backend. Here's the full test output:
+Currently 73 out of 74 of the spec suite tests pass when run in Wasmtime with Lightbeam as a backend. Here's the full test output:
 
 ```
 running 74 tests
@@ -174,93 +174,89 @@ test spec_testsuite::align                  ... ok
 test spec_testsuite::block                  ... ok
 test spec_testsuite::br                     ... ok
 test spec_testsuite::break_drop             ... ok
-test spec_testsuite::br_if                  ... ok
 test spec_testsuite::address                ... ok
+test spec_testsuite::br_if                  ... ok
 test spec_testsuite::comments               ... ok
 test spec_testsuite::const_                 ... ok
 test spec_testsuite::call                   ... ok
 test spec_testsuite::custom                 ... ok
 test spec_testsuite::custom_section         ... ok
 test spec_testsuite::data                   ... ok
+test spec_testsuite::conversions            ... ok
 test spec_testsuite::elem                   ... ok
-test spec_testsuite::br_table               ... FAILED
 test spec_testsuite::exports                ... ok
 test spec_testsuite::call_indirect          ... ok
 test spec_testsuite::endianness             ... ok
-test spec_testsuite::conversions            ... ok
 test spec_testsuite::f32_bitwise            ... ok
-test spec_testsuite::f64_bitwise            ... ok
-test spec_testsuite::f32                    ... ok
 test spec_testsuite::f64                    ... ok
 test spec_testsuite::f32_cmp                ... ok
+test spec_testsuite::f32                    ... ok
 test spec_testsuite::fac                    ... ok
+test spec_testsuite::br_table               ... ok
+test spec_testsuite::f64_bitwise            ... ok
 test spec_testsuite::float_memory           ... ok
-test spec_testsuite::f64_cmp                ... ok
-test spec_testsuite::forward                ... ok
-test spec_testsuite::float_misc             ... ok
 test spec_testsuite::float_literals         ... ok
+test spec_testsuite::forward                ... ok
+test spec_testsuite::f64_cmp                ... ok
+test spec_testsuite::float_misc             ... ok
 test spec_testsuite::func_ptrs              ... ok
 test spec_testsuite::get_local              ... ok
-test spec_testsuite::func                   ... ok
 test spec_testsuite::globals                ... ok
 test spec_testsuite::i32                    ... ok
+test spec_testsuite::func                   ... ok
 test spec_testsuite::imports                ... ok
 test spec_testsuite::inline_module          ... ok
-test spec_testsuite::i64                    ... ok
 test spec_testsuite::if_                    ... ok
+test spec_testsuite::i64                    ... ok
 test spec_testsuite::int_literals           ... ok
 test spec_testsuite::labels                 ... ok
 test spec_testsuite::linking                ... ok
 test spec_testsuite::int_exprs              ... ok
 test spec_testsuite::loop_                  ... ok
 test spec_testsuite::left_to_right          ... ok
-test spec_testsuite::memory_redundancy      ... ok
 test spec_testsuite::memory                 ... ok
-test spec_testsuite::memory_trap            ... ok
-test spec_testsuite::memory_grow            ... ok
-test spec_testsuite::resizing               ... ok
+test spec_testsuite::memory_redundancy      ... ok
 test spec_testsuite::float_exprs            ... ok
+test spec_testsuite::memory_grow            ... ok
+test spec_testsuite::memory_trap            ... ok
+test spec_testsuite::resizing               ... ok
 test spec_testsuite::return_minimal         ... ok
 test spec_testsuite::select                 ... ok
 test spec_testsuite::nop                    ... ok
-test spec_testsuite::set_local              ... ok
 test spec_testsuite::return_                ... ok
-test spec_testsuite::start                  ... ok
-test spec_testsuite::store_retval           ... ok
+test spec_testsuite::set_local              ... ok
 test spec_testsuite::stack                  ... ok
+test spec_testsuite::store_retval           ... ok
+test spec_testsuite::start                  ... ok
 test spec_testsuite::switch                 ... ok
 test spec_testsuite::token                  ... ok
-test spec_testsuite::skip_stack_guard_page  ... ok
 test spec_testsuite::traps                  ... ok
 test spec_testsuite::type_                  ... ok
 test spec_testsuite::typecheck              ... ok
+test spec_testsuite::tee_local              ... ok
 test spec_testsuite::unreached_invalid      ... ok
 test spec_testsuite::unwind                 ... FAILED
 test spec_testsuite::utf8_custom_section_id ... ok
 test spec_testsuite::utf8_import_field      ... ok
-test spec_testsuite::tee_local              ... ok
 test spec_testsuite::utf8_import_module     ... ok
 test spec_testsuite::utf8_invalid_encoding  ... ok
+test spec_testsuite::skip_stack_guard_page  ... ok
 test spec_testsuite::unreachable            ... ok
 test spec_testsuite::names                  ... ok
 
 failures:
 
----- spec_testsuite::br_table stdout ----
-thread 'spec_testsuite::br_table' panicked at 'error running wast file: WastFileError { filename: "spec_testsuite/br_table.wast", line: 1317, error: Assert("unexpected trap: wasm trap at 0x7f05fad74e40") }', src/libcore/result.rs:997:5
-note: Run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
-
 ---- spec_testsuite::unwind stdout ----
 thread 'spec_testsuite::unwind' panicked at 'assertion failed: `(left == right)`
   left: `Some(0..=1)`,
  right: `None`', /home/jef/Documents/GitHub/Vurich/lightbeam/src/function_body.rs:323:29
+note: Run with `RUST_BACKTRACE=1` environment variable to display a backtrace.
 
 
 failures:
-    spec_testsuite::br_table
     spec_testsuite::unwind
 
-test result: FAILED. 72 passed; 2 failed; 0 ignored; 0 measured; 2 filtered out
+test result: FAILED. 73 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out
 ```
 
 ## Getting involved
