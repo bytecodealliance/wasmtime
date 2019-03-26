@@ -16,4 +16,4 @@ cranelift-codegen = "0.29.0"
 cranelift-entity = "0.29.0"
 cranelift-wasm = "0.29.0"
 wasmtime-environ = { path = "../wasmtime-environ" }
-faerie = "0.7.1"
+faerie = "0.9.1"

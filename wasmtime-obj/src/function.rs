@@ -13,7 +13,7 @@ pub fn declare_functions(
     for (i, _function_relocs) in relocations.iter().rev() {
         let func_index = module.func_index(i);
         let string_name = format!("_wasm_function_{}", func_index.index());
-        obj.declare(string_name, Decl::Function { global: true })
+        obj.declare(string_name, Decl::function().global())
             .map_err(|err| format!("{}", err))?;
     }
     Ok(())

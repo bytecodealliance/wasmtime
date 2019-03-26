@@ -74,7 +74,7 @@ pub fn emit_debugsections_image(
     let segment_body = (segment_body.0 as *const u8, segment_body.1 - segment_body.0);
 
     let body = unsafe { ::std::slice::from_raw_parts(segment_body.0, segment_body.1) };
-    obj.declare_with("all", Decl::Function { global: false }, body.to_vec())?;
+    obj.declare_with("all", Decl::function(), body.to_vec())?;
 
     emit_dwarf(&mut obj, dwarf, &resolver);
 

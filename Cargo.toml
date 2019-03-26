@@ -34,8 +34,8 @@ wasmtime-wast = { path = "wasmtime-wast" }
 docopt = "1.0.1"
 serde = "1.0.75"
 serde_derive = "1.0.75"
-faerie = "0.7.1"
-target-lexicon = { version = "0.2.0", default-features = false }
+faerie = "0.9.1"
+target-lexicon = { version = "0.3.0", default-features = false }
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.1"
 wabt = "0.7"

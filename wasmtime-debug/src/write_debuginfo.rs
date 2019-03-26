@@ -21,7 +21,7 @@ macro_rules! decl_section {
         $artifact
             .declare_with(
                 SectionId::$section.name(),
-                Decl::DebugSection,
+                Decl::debug_section(),
                 $name.0.writer.into_vec(),
             )
             .unwrap();

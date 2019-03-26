@@ -12,15 +12,8 @@ fn emit_vmcontext_init(
     target_config: &TargetFrontendConfig,
 ) -> Result<(), String> {
     let (data, table_relocs) = layout_vmcontext(module, target_config);
-    obj.declare_with(
-        "_vmcontext_init",
-        Decl::Data {
-            writable: false,
-            global: true,
-        },
-        data.to_vec(),
-    )
-    .map_err(|err| format!("{}", err))?;
+    obj.declare_with("_vmcontext_init", Decl::data().global(), data.to_vec())
+        .map_err(|err| format!("{}", err))?;
     for reloc in table_relocs.iter() {
         let target_name = format!("_table_{}", reloc.index);
         obj.link(Link {
