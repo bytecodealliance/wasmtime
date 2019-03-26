@@ -44,4 +44,8 @@ for crate in \
     faerie umbrella simplejit
 do
     echo cargo publish --manifest-path "cranelift-$crate/Cargo.toml"
+
+    # Sleep for a few seconds to allow the server to update the index.
+    # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
+    echo sleep 3
 done
