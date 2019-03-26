@@ -2,7 +2,6 @@ use crate::error::Error;
 use capstone::prelude::*;
 use std::fmt::Write;
 
-#[allow(dead_code)]
 pub fn disassemble(mem: &[u8]) -> Result<(), Error> {
     let mut cs = Capstone::new()
         .x86()

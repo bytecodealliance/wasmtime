@@ -3,13 +3,10 @@ use crate::error::Error;
 use crate::function_body;
 use crate::module::SimpleContext;
 use cranelift_codegen::{binemit, ir};
-#[allow(unused_imports)] // for now
 use wasmparser::{
-    CodeSectionReader, Data, DataSectionReader, Element, ElementSectionReader, Export,
-    ExportSectionReader, ExternalKind, FuncType, FunctionSectionReader, Global,
-    GlobalSectionReader, GlobalType, Import, ImportSectionEntryType, ImportSectionReader,
-    MemorySectionReader, MemoryType, Operator, TableSectionReader, TableType, Type,
-    TypeSectionReader,
+    CodeSectionReader, DataSectionReader, ElementSectionReader, ExportSectionReader, FuncType,
+    FunctionSectionReader, GlobalSectionReader, ImportSectionReader, MemorySectionReader,
+    MemoryType, Operator, TableSectionReader, TableType, TypeSectionReader,
 };
 
 /// Parses the Type section of the wasm module.

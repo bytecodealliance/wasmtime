@@ -1,4 +1,6 @@
-use crate::backend::*;
+use crate::backend::{
+    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, VirtualCallingConvention,
+};
 use crate::error::Error;
 use crate::microwasm::*;
 use crate::module::{ModuleContext, SigType, Signature};

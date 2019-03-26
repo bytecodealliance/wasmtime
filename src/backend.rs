@@ -1,5 +1,3 @@
-#![allow(dead_code)] // for now
-
 use crate::error::Error;
 use crate::microwasm::{BrTarget, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::ModuleContext;
@@ -166,6 +164,7 @@ impl GPRs {
     }
 }
 
+#[allow(dead_code)]
 pub mod registers {
     use super::{RegId, GPR};
 
@@ -238,7 +237,6 @@ extern "sysv64" fn println(len: u64, args: *const u8) {
     });
 }
 
-#[allow(unused_macros)]
 macro_rules! asm_println {
     ($asm:expr) => {asm_println!($asm,)};
     ($asm:expr, $($args:tt)*) => {{
@@ -311,10 +309,6 @@ impl GPRs {
             gpr
         );
         self.bits |= 1 << gpr;
-    }
-
-    fn free_count(&self) -> u32 {
-        self.bits.count_ones()
     }
 
     fn is_free(&self, gpr: RegId) -> bool {
@@ -399,14 +393,6 @@ impl Registers {
     pub fn is_free(&self, gpr: GPR) -> bool {
         let (gpr, scratch_counts) = self.scratch_counts(gpr);
         scratch_counts.0.is_free(gpr)
-    }
-
-    pub fn free_64(&self) -> u32 {
-        self.scratch_64.0.free_count()
-    }
-
-    pub fn free_128(&self) -> u32 {
-        self.scratch_128.0.free_count()
     }
 }
 
@@ -584,9 +570,6 @@ struct RelocateAccess {
 }
 
 #[derive(Debug)]
-pub struct UninitializedCodeSection(TranslatedCodeSection);
-
-#[derive(Debug)]
 pub struct TranslatedCodeSection {
     exec_buf: ExecutableBuffer,
     func_starts: Vec<AssemblyOffset>,
@@ -631,65 +614,8 @@ pub struct BlockState {
 
 type Stack = Vec<ValueLocation>;
 
-pub enum MemoryAccessMode {
-    /// This is slower than using `Unchecked` mode, but works in
-    /// any scenario (the most important scenario being when we're
-    /// running on a system that can't index much more memory than
-    /// the Wasm).
-    Checked,
-    /// This means that checks are _not emitted by the compiler_!
-    /// If you're using WebAssembly to run untrusted code, you
-    /// _must_ delegate bounds checking somehow (probably by
-    /// allocating 2^33 bytes of memory with the second half set
-    /// to unreadable/unwriteable/unexecutable)
-    Unchecked,
-}
-
-struct Pending<T> {
-    label: T,
-    is_defined: bool,
-}
-
-impl<T> Pending<T> {
-    fn undefined(label: T) -> Self {
-        Pending {
-            label,
-            is_defined: false,
-        }
-    }
-
-    fn defined(label: T) -> Self {
-        Pending {
-            label,
-            is_defined: true,
-        }
-    }
-
-    fn as_undefined(&self) -> Option<T>
-    where
-        T: Copy,
-    {
-        if !self.is_defined {
-            Some(self.label)
-        } else {
-            None
-        }
-    }
-}
-
-impl<T> From<T> for Pending<T> {
-    fn from(label: T) -> Self {
-        Pending {
-            label,
-            is_defined: false,
-        }
-    }
-}
-
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 enum LabelValue {
-    I8(i8),
-    I16(i16),
     I32(i32),
     I64(i64),
 }
@@ -971,11 +897,6 @@ macro_rules! conversion {
 macro_rules! shift {
     ($name:ident, $reg_ty:ident, $instr:ident, $const_fallback:expr, $ty:expr) => {
         pub fn $name(&mut self) {
-            enum RestoreRcx {
-                MoveValBack(GPR),
-                PopRcx,
-            }
-
             let mut count = self.pop();
             let mut val = self.pop();
 
@@ -2053,21 +1974,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     fn adjusted_offset(&self, offset: i32) -> i32 {
         (self.block_state.depth.0 as i32 + offset) * WORD_SIZE as i32
-    }
-
-    fn zero_reg(&mut self, reg: GPR) {
-        match reg {
-            GPR::Rq(r) => {
-                dynasm!(self.asm
-                    ; xor Rq(r), Rq(r)
-                );
-            }
-            GPR::Rx(r) => {
-                dynasm!(self.asm
-                    ; pxor Rx(r), Rx(r)
-                );
-            }
-        }
     }
 
     cmp_i32!(i32_eq, sete, sete, |a, b| a == b);
@@ -3418,8 +3324,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i64_truncate_f32_u(&mut self) {
-        struct Trunc;
-
         let mut val = self.pop();
 
         let out_val = match val {
@@ -4884,12 +4788,6 @@ where
 
 fn const_value(val: LabelValue) -> impl FnMut(&mut Assembler) {
     move |asm| match val {
-        LabelValue::I8(val) => dynasm!(asm
-            ; .byte val
-        ),
-        LabelValue::I16(val) => dynasm!(asm
-            ; .word val
-        ),
         LabelValue::I32(val) => dynasm!(asm
             ; .dword val
         ),
@@ -4902,12 +4800,6 @@ fn const_value(val: LabelValue) -> impl FnMut(&mut Assembler) {
 fn const_values(a: LabelValue, b: LabelValue) -> impl FnMut(&mut Assembler) {
     move |asm| {
         match a {
-            LabelValue::I8(val) => dynasm!(asm
-                ; .byte val
-            ),
-            LabelValue::I16(val) => dynasm!(asm
-                ; .word val
-            ),
             LabelValue::I32(val) => dynasm!(asm
                 ; .dword val
             ),
@@ -4917,12 +4809,6 @@ fn const_values(a: LabelValue, b: LabelValue) -> impl FnMut(&mut Assembler) {
         }
 
         match b {
-            LabelValue::I8(val) => dynasm!(asm
-                ; .byte val
-            ),
-            LabelValue::I16(val) => dynasm!(asm
-                ; .word val
-            ),
             LabelValue::I32(val) => dynasm!(asm
                 ; .dword val
             ),
