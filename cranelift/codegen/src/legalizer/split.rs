@@ -14,13 +14,13 @@
 //!
 //! When legalizing a single instruction, it is wrapped in splits and concatenations:
 //!
-//!```clif
+//! ```clif
 //!     v1 = bxor.i64 v2, v3
 //! ```
 //!
 //! becomes:
 //!
-//!```clif
+//! ```clif
 //!     v20, v21 = isplit v2
 //!     v30, v31 = isplit v3
 //!     v10 = bxor.i32 v20, v30
