@@ -886,6 +886,161 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::RefNull | Operator::RefIsNull { .. } => {
             return Err(WasmError::Unsupported("proposed reference-type operators"));
         }
+        Operator::MemoryInit { .. }
+        | Operator::DataDrop { .. }
+        | Operator::MemoryCopy
+        | Operator::MemoryFill
+        | Operator::TableInit { .. }
+        | Operator::ElemDrop { .. }
+        | Operator::TableCopy
+        | Operator::TableGet { .. }
+        | Operator::TableSet { .. }
+        | Operator::TableGrow { .. }
+        | Operator::TableSize { .. } => {
+            return Err(WasmError::Unsupported("proposed bulk memory operators"));
+        }
+        Operator::V128Load { .. }
+        | Operator::V128Store { .. }
+        | Operator::V128Const { .. }
+        | Operator::V8x16Shuffle { .. }
+        | Operator::I8x16Splat
+        | Operator::I8x16ExtractLaneS { .. }
+        | Operator::I8x16ExtractLaneU { .. }
+        | Operator::I8x16ReplaceLane { .. }
+        | Operator::I16x8Splat
+        | Operator::I16x8ExtractLaneS { .. }
+        | Operator::I16x8ExtractLaneU { .. }
+        | Operator::I16x8ReplaceLane { .. }
+        | Operator::I32x4Splat
+        | Operator::I32x4ExtractLane { .. }
+        | Operator::I32x4ReplaceLane { .. }
+        | Operator::I64x2Splat
+        | Operator::I64x2ExtractLane { .. }
+        | Operator::I64x2ReplaceLane { .. }
+        | Operator::F32x4Splat
+        | Operator::F32x4ExtractLane { .. }
+        | Operator::F32x4ReplaceLane { .. }
+        | Operator::F64x2Splat
+        | Operator::F64x2ExtractLane { .. }
+        | Operator::F64x2ReplaceLane { .. }
+        | Operator::I8x16Eq
+        | Operator::I8x16Ne
+        | Operator::I8x16LtS
+        | Operator::I8x16LtU
+        | Operator::I8x16GtS
+        | Operator::I8x16GtU
+        | Operator::I8x16LeS
+        | Operator::I8x16LeU
+        | Operator::I8x16GeS
+        | Operator::I8x16GeU
+        | Operator::I16x8Eq
+        | Operator::I16x8Ne
+        | Operator::I16x8LtS
+        | Operator::I16x8LtU
+        | Operator::I16x8GtS
+        | Operator::I16x8GtU
+        | Operator::I16x8LeS
+        | Operator::I16x8LeU
+        | Operator::I16x8GeS
+        | Operator::I16x8GeU
+        | Operator::I32x4Eq
+        | Operator::I32x4Ne
+        | Operator::I32x4LtS
+        | Operator::I32x4LtU
+        | Operator::I32x4GtS
+        | Operator::I32x4GtU
+        | Operator::I32x4LeS
+        | Operator::I32x4LeU
+        | Operator::I32x4GeS
+        | Operator::I32x4GeU
+        | Operator::F32x4Eq
+        | Operator::F32x4Ne
+        | Operator::F32x4Lt
+        | Operator::F32x4Gt
+        | Operator::F32x4Le
+        | Operator::F32x4Ge
+        | Operator::F64x2Eq
+        | Operator::F64x2Ne
+        | Operator::F64x2Lt
+        | Operator::F64x2Gt
+        | Operator::F64x2Le
+        | Operator::F64x2Ge
+        | Operator::V128Not
+        | Operator::V128And
+        | Operator::V128Or
+        | Operator::V128Xor
+        | Operator::V128Bitselect
+        | Operator::I8x16Neg
+        | Operator::I8x16AnyTrue
+        | Operator::I8x16AllTrue
+        | Operator::I8x16Shl
+        | Operator::I8x16ShrS
+        | Operator::I8x16ShrU
+        | Operator::I8x16Add
+        | Operator::I8x16AddSaturateS
+        | Operator::I8x16AddSaturateU
+        | Operator::I8x16Sub
+        | Operator::I8x16SubSaturateS
+        | Operator::I8x16SubSaturateU
+        | Operator::I8x16Mul
+        | Operator::I16x8Neg
+        | Operator::I16x8AnyTrue
+        | Operator::I16x8AllTrue
+        | Operator::I16x8Shl
+        | Operator::I16x8ShrS
+        | Operator::I16x8ShrU
+        | Operator::I16x8Add
+        | Operator::I16x8AddSaturateS
+        | Operator::I16x8AddSaturateU
+        | Operator::I16x8Sub
+        | Operator::I16x8SubSaturateS
+        | Operator::I16x8SubSaturateU
+        | Operator::I16x8Mul
+        | Operator::I32x4Neg
+        | Operator::I32x4AnyTrue
+        | Operator::I32x4AllTrue
+        | Operator::I32x4Shl
+        | Operator::I32x4ShrS
+        | Operator::I32x4ShrU
+        | Operator::I32x4Add
+        | Operator::I32x4Sub
+        | Operator::I32x4Mul
+        | Operator::I64x2Neg
+        | Operator::I64x2AnyTrue
+        | Operator::I64x2AllTrue
+        | Operator::I64x2Shl
+        | Operator::I64x2ShrS
+        | Operator::I64x2ShrU
+        | Operator::I64x2Add
+        | Operator::I64x2Sub
+        | Operator::F32x4Abs
+        | Operator::F32x4Neg
+        | Operator::F32x4Sqrt
+        | Operator::F32x4Add
+        | Operator::F32x4Sub
+        | Operator::F32x4Mul
+        | Operator::F32x4Div
+        | Operator::F32x4Min
+        | Operator::F32x4Max
+        | Operator::F64x2Abs
+        | Operator::F64x2Neg
+        | Operator::F64x2Sqrt
+        | Operator::F64x2Add
+        | Operator::F64x2Sub
+        | Operator::F64x2Mul
+        | Operator::F64x2Div
+        | Operator::F64x2Min
+        | Operator::F64x2Max
+        | Operator::I32x4TruncSF32x4Sat
+        | Operator::I32x4TruncUF32x4Sat
+        | Operator::I64x2TruncSF64x2Sat
+        | Operator::I64x2TruncUF64x2Sat
+        | Operator::F32x4ConvertSI32x4
+        | Operator::F32x4ConvertUI32x4
+        | Operator::F64x2ConvertSI64x2
+        | Operator::F64x2ConvertUI64x2 => {
+            return Err(WasmError::Unsupported("proposed SIMD operators"));
+        }
     };
     Ok(())
 }
