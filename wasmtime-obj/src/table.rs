@@ -3,14 +3,8 @@ use faerie::{Artifact, Decl};
 /// Declares data segment symbol
 pub fn declare_table(obj: &mut Artifact, index: usize) -> Result<(), String> {
     let name = format!("_table_{}", index);
-    obj.declare(
-        name,
-        Decl::Data {
-            writable: false,
-            global: false,
-        },
-    )
-    .map_err(|err| format!("{}", err))?;
+    obj.declare(name, Decl::data())
+        .map_err(|err| format!("{}", err))?;
     Ok(())
 }
 

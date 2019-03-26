@@ -8,14 +8,8 @@ pub fn declare_data_segment(
     index: usize,
 ) -> Result<(), String> {
     let name = format!("_memory_{}", index);
-    obj.declare(
-        name,
-        Decl::Data {
-            writable: false,
-            global: false,
-        },
-    )
-    .map_err(|err| format!("{}", err))?;
+    obj.declare(name, Decl::data())
+        .map_err(|err| format!("{}", err))?;
     Ok(())
 }
 
