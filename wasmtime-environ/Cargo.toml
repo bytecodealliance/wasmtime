@@ -12,9 +12,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = "0.29.0"
-cranelift-entity = "0.29.0"
-cranelift-wasm = "0.29.0"
+cranelift-codegen = "0.30.0"
+cranelift-entity = "0.30.0"
+cranelift-wasm = "0.30.0"
 cast = { version = "0.2.2", default-features = false }
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
