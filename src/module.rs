@@ -484,11 +484,11 @@ impl ModuleContext for SimpleContext {
         self.func_ty_indicies[func_idx as usize]
     }
 
-    fn defined_global_index(&self, index: u32) -> Option<u32> {
+    fn defined_global_index(&self, _index: u32) -> Option<u32> {
         unimplemented!()
     }
 
-    fn global_type(&self, global_index: u32) -> &Self::GlobalType {
+    fn global_type(&self, _global_index: u32) -> &Self::GlobalType {
         unimplemented!()
     }
 
@@ -496,15 +496,15 @@ impl ModuleContext for SimpleContext {
         &self.types[index as usize]
     }
 
-    fn vmctx_vmglobal_definition(&self, index: u32) -> u32 {
+    fn vmctx_vmglobal_definition(&self, _index: u32) -> u32 {
         unimplemented!()
     }
 
-    fn vmctx_vmglobal_import_from(&self, index: u32) -> u32 {
+    fn vmctx_vmglobal_import_from(&self, _index: u32) -> u32 {
         unimplemented!()
     }
 
-    fn defined_memory_index(&self, index: u32) -> Option<u32> {
+    fn defined_memory_index(&self, _index: u32) -> Option<u32> {
         unimplemented!()
     }
 
@@ -512,21 +512,21 @@ impl ModuleContext for SimpleContext {
         Some(index)
     }
 
-    fn vmctx_vmfunction_import_body(&self, func_index: u32) -> u32 {
+    fn vmctx_vmfunction_import_body(&self, _func_index: u32) -> u32 {
         unimplemented!()
     }
-    fn vmctx_vmfunction_import_vmctx(&self, func_index: u32) -> u32 {
-        unimplemented!()
-    }
-
-    fn vmctx_vmtable_import_from(&self, table_index: u32) -> u32 {
+    fn vmctx_vmfunction_import_vmctx(&self, _func_index: u32) -> u32 {
         unimplemented!()
     }
 
-    fn vmctx_vmmemory_definition(&self, defined_memory_index: u32) -> u32 {
+    fn vmctx_vmtable_import_from(&self, _table_index: u32) -> u32 {
         unimplemented!()
     }
-    fn vmctx_vmmemory_import_from(&self, memory_index: u32) -> u32 {
+
+    fn vmctx_vmmemory_definition(&self, _defined_memory_index: u32) -> u32 {
+        unimplemented!()
+    }
+    fn vmctx_vmmemory_import_from(&self, _memory_index: u32) -> u32 {
         unimplemented!()
     }
     fn vmmemory_definition_base(&self) -> u8 {
@@ -536,22 +536,27 @@ impl ModuleContext for SimpleContext {
         unimplemented!()
     }
     fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32 {
+        assert_eq!(defined_memory_index, 0);
         VmCtx::offset_of_memory_ptr()
     }
 
     fn vmctx_vmmemory_definition_current_length(&self, defined_memory_index: u32) -> u32 {
+        assert_eq!(defined_memory_index, 0);
         VmCtx::offset_of_memory_len()
     }
 
     fn vmctx_vmtable_definition(&self, defined_table_index: u32) -> u32 {
+        assert_eq!(defined_table_index, 0);
         VmCtx::offset_of_funcs_ptr() as _
     }
 
     fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32 {
+        assert_eq!(defined_table_index, 0);
         VmCtx::offset_of_funcs_ptr() as _
     }
 
     fn vmctx_vmtable_definition_current_elements(&self, defined_table_index: u32) -> u32 {
+        assert_eq!(defined_table_index, 0);
         VmCtx::offset_of_funcs_len() as _
     }
 

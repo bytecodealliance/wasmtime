@@ -1,8 +1,7 @@
 use crate::backend::{CodeGenSession, TranslatedCodeSection};
 use crate::error::Error;
 use crate::function_body;
-use crate::microwasm::{MicrowasmConv, Type as MWType};
-use crate::module::{ModuleContext, SimpleContext};
+use crate::module::SimpleContext;
 use cranelift_codegen::{binemit, ir};
 #[allow(unused_imports)] // for now
 use wasmparser::{

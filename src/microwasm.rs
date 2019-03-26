@@ -20,10 +20,6 @@ where
     BrTarget<L>: fmt::Display,
     L: Clone,
 {
-    use std::fmt::Write;
-
-    const DISASSEMBLE_BLOCK_DEFS: bool = true;
-
     writeln!(out, ".fn_{}:", function_name)?;
 
     let p = "      ";
@@ -508,8 +504,6 @@ pub enum Operator<Label> {
         reserved: u32,
     },
     Const(Value),
-    RefNull,
-    RefIsNull,
     Eq(SignlessType),
     Ne(SignlessType),
     /// `eqz` on integers
@@ -565,30 +559,6 @@ pub enum Operator<Label> {
     Extend {
         sign: Signedness,
     },
-    // 0xFC operators
-    /// Non-trapping Float-to-int conversion
-    ISatTruncFromF {
-        input_ty: Float,
-        output_ty: SignfulInt,
-    },
-
-    // 0xFC operators
-    // bulk memory https://github.com/WebAssembly/bulk-memory-operations/blob/master/proposals/bulk-memory-operations/Overview.md
-    MemoryInit {
-        segment: u32,
-    },
-    DataDrop {
-        segment: u32,
-    },
-    MemoryCopy,
-    MemoryFill,
-    TableInit {
-        segment: u32,
-    },
-    ElemDrop {
-        segment: u32,
-    },
-    TableCopy,
 }
 
 impl<L> Operator<L> {
@@ -743,8 +713,6 @@ where
             Operator::MemorySize { .. } => write!(f, "memory.size"),
             Operator::MemoryGrow { .. } => write!(f, "memory.grow"),
             Operator::Const(val) => write!(f, "const {}", val),
-            Operator::RefNull => write!(f, "refnull"),
-            Operator::RefIsNull => write!(f, "refisnull"),
             Operator::Eq(ty) => write!(f, "{}.eq", ty),
             Operator::Ne(ty) => write!(f, "{}.ne", ty),
             Operator::Eqz(ty) => write!(f, "{}.eqz", SignfulInt(Signedness::Unsigned, *ty)),
@@ -784,9 +752,6 @@ where
             Operator::I64ReinterpretFromF64 => write!(f, "i64.reinterpret_from.f64"),
             Operator::F32ReinterpretFromI32 => write!(f, "f32.reinterpret_from.i32"),
             Operator::F64ReinterpretFromI64 => write!(f, "f64.reinterpret_from.i64"),
-            Operator::MemoryCopy => write!(f, "memory.copy"),
-            Operator::MemoryFill => write!(f, "memory.fill"),
-            Operator::TableCopy => write!(f, "table.copy"),
             Operator::FConvertFromI {
                 input_ty,
                 output_ty,
@@ -807,25 +772,12 @@ where
                 output_ty,
                 Type::<Int>::Float(*input_ty)
             ),
-            Operator::ISatTruncFromF {
-                input_ty,
-                output_ty,
-            } => write!(
-                f,
-                "{}.saturating_truncate_from.{}",
-                output_ty,
-                Type::<Int>::Float(*input_ty)
-            ),
             Operator::Extend { sign } => write!(
                 f,
                 "{}.extend_from.{}",
                 SignfulInt(*sign, Size::_64),
                 SignfulInt(*sign, Size::_32)
             ),
-            Operator::MemoryInit { .. } => unimplemented!(),
-            Operator::TableInit { .. } => unimplemented!(),
-            Operator::DataDrop { .. } => unimplemented!(),
-            Operator::ElemDrop { .. } => unimplemented!(),
         }
     }
 }

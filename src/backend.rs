@@ -2,7 +2,7 @@
 
 use crate::error::Error;
 use crate::microwasm::{BrTarget, SignlessType, Type, Value, F32, F64, I32, I64};
-use crate::module::{ModuleContext, RuntimeFunc};
+use crate::module::ModuleContext;
 use cranelift_codegen::{binemit, ir};
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
@@ -2296,7 +2296,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 self.block_state.regs.release(tmp);
 
-                for (i, target) in targets.enumerate() {
+                for target in targets {
                     let label = target
                         .map(|target| self.target_to_label(target))
                         .unwrap_or(end_label);
@@ -3163,6 +3163,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.push(out_val);
     }
+
     pub fn i32_truncate_f32_u(&mut self) {
         let mut val = self.pop();
 
@@ -3177,7 +3178,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0x4f000000u32 as i32));
-                let zero = self.aligned_label(16, LabelValue::I32(0));
                 let trap_label = self.trap_label();
 
                 dynasm!(self.asm
@@ -3261,7 +3261,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I64(0x41e0000000000000u64 as i64));
-                let zero = self.aligned_label(16, LabelValue::I64(0));
                 let trap_label = self.trap_label();
 
                 dynasm!(self.asm
@@ -4720,7 +4719,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let locs = arg_locs(arg_types);
 
         self.save_volatile(locs.len()..);
-        let depth = self.block_state.depth.clone();
 
         let (_, label) = self.func_starts[defined_index as usize];
 
@@ -4846,10 +4844,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     where
         F: IntoLabel,
     {
-        use std::collections::hash_map::Entry;
-
         let key = fun.key();
-        if let Some((label, current_align, func)) = self.labels.get(&(align, key)) {
+        if let Some((label, _, _)) = self.labels.get(&(align, key)) {
             return *label;
         }
 

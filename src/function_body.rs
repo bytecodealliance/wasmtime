@@ -1,11 +1,11 @@
 use crate::backend::*;
 use crate::error::Error;
 use crate::microwasm::*;
-use crate::module::{quickhash, ModuleContext, SigType, Signature};
+use crate::module::{ModuleContext, SigType, Signature};
 use cranelift_codegen::binemit;
 use either::{Either, Left, Right};
 use multi_mut::HashMapMultiMut;
-use std::{collections::HashMap, convert::TryInto, hash::Hash};
+use std::{collections::HashMap, hash::Hash};
 
 #[derive(Debug)]
 struct Block {
@@ -49,7 +49,7 @@ where
             body,
         );
 
-        crate::microwasm::dis(
+        let _ = crate::microwasm::dis(
             std::io::stdout(),
             func_idx,
             microwasm_conv.flat_map(|ops| ops.unwrap()),
@@ -81,7 +81,6 @@ where
     M: ModuleContext,
     I: IntoIterator<Item = Operator<L>>,
     L: Hash + Clone + Eq,
-    Operator<L>: std::fmt::Display,
 {
     fn drop_elements<T>(stack: &mut Vec<T>, depths: std::ops::RangeInclusive<u32>) {
         let _ = (|| {
@@ -140,12 +139,7 @@ where
         if let Some(Operator::Label(label)) = body.peek() {
             let block = blocks
                 .get_mut(&BrTarget::Label(label.clone()))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Block definition should be before label definition: {}",
-                        Operator::Label(label.clone())
-                    )
-                });
+                .unwrap_or_else(|| panic!("Label defined before being declared"));
             block.is_next = true;
         }
 
@@ -227,10 +221,7 @@ where
                         entry.remove_entry();
                     }
                 } else {
-                    panic!(
-                        "Label defined before being declared: {}",
-                        Operator::Label(label)
-                    );
+                    panic!("Label defined before being declared");
                 }
             }
             Operator::Block {
@@ -320,7 +311,8 @@ where
                     ) {
                         ((Some(Left(ref cc)), to_drop), ref mut other @ (None, _))
                         | (ref mut other @ (None, _), (Some(Left(ref cc)), to_drop)) => {
-                            let mut cc = ctx.serialize_block_args_preserve_flags(cc, to_drop.clone());
+                            let mut cc =
+                                ctx.serialize_block_args_preserve_flags(cc, to_drop.clone());
                             if let Some(to_drop) = other.1 {
                                 drop_elements(&mut cc.arguments, to_drop.clone());
                             }
@@ -710,8 +702,6 @@ where
                 ctx.memory_grow();
             }
             Operator::Call { function_index } => {
-                use cranelift_codegen::ir;
-
                 let callee_ty = module_context.func_type(function_index);
 
                 if let Some(defined_index) = module_context.defined_func_index(function_index) {
@@ -751,9 +741,6 @@ where
                     callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                     callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
                 );
-            }
-            op => {
-                unimplemented!("{}", op);
             }
         }
     }
