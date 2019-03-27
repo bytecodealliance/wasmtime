@@ -23,7 +23,7 @@ cast = { version = "0.2.2", default-features = false }
 
 [dev-dependencies]
 wabt = "0.7.0"
-target-lexicon = "0.3.0"
+target-lexicon = "0.4.0"
 
 [features]
 default = ["std"]
