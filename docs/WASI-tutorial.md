@@ -113,7 +113,7 @@ which can be used to open files inside that directory. Now when the program
 calls the C `open` function, passing it either an absolute or relative path,
 the WASI libc transparently translates that path into a path that's relative to
 one of the given preopened directories, if possible (using a technique based
-on [libpreopen](https://github.com/musec/libpreopen). This way, we can have a
+on [libpreopen](https://github.com/musec/libpreopen)). This way, we can have a
 simple capability-oriented model at the system call level, while portable
 application code doesn't have to do anything special.
 
