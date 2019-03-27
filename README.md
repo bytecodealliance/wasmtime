@@ -142,7 +142,7 @@ fib:
   push rax
   push rax
   mov  rsi, rcx
-  call 0
+  call fib
   add  eax, [rsp + 8]
   mov  rcx, [rsp + 0x10]
   add  ecx, 0xfffffffe
