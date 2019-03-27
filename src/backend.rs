@@ -368,6 +368,56 @@ pub enum CCLoc {
     Stack(i32),
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CondCode {
+    CF0,
+    CF1,
+    ZF0,
+    ZF1,
+    CF0AndZF0,
+    CF1OrZF1,
+    ZF0AndSFEqOF,
+    ZF1OrSFNeOF,
+    SFEqOF,
+    SFNeOF,
+}
+
+mod cc {
+    use super::CondCode;
+
+    pub const EQUAL: CondCode = CondCode::ZF0;
+    pub const NOT_EQUAL: CondCode = CondCode::ZF1;
+    pub const GE_U: CondCode = CondCode::CF0;
+    pub const LT_U: CondCode = CondCode::CF1;
+    pub const GT_U: CondCode = CondCode::CF0AndZF0;
+    pub const LE_U: CondCode = CondCode::CF1OrZF1;
+    pub const GE_S: CondCode = CondCode::SFEqOF;
+    pub const LT_S: CondCode = CondCode::SFNeOF;
+    pub const GT_S: CondCode = CondCode::ZF0AndSFEqOF;
+    pub const LE_S: CondCode = CondCode::ZF1OrSFNeOF;
+}
+
+impl std::ops::Not for CondCode {
+    type Output = Self;
+
+    fn not(self) -> Self {
+        use CondCode::*;
+
+        match self {
+            CF0 => CF1,
+            CF1 => CF0,
+            ZF0 => ZF1,
+            ZF1 => ZF0,
+            CF0AndZF0 => CF1OrZF1,
+            CF1OrZF1 => CF0AndZF0,
+            ZF0AndSFEqOF => ZF1OrSFNeOF,
+            ZF1OrSFNeOF => ZF0AndSFEqOF,
+            SFEqOF => SFNeOF,
+            SFNeOF => SFEqOF,
+        }
+    }
+}
+
 // TODO: Allow pushing condition codes to stack? We'd have to immediately
 //       materialise them into a register if anything is pushed above them.
 /// Describes location of a value.
@@ -380,6 +430,8 @@ pub enum ValueLocation {
     Stack(i32),
     /// Value is a literal
     Immediate(Value),
+    /// Value is a set condition code
+    Cond(CondCode),
 }
 
 impl From<CCLoc> for ValueLocation {
@@ -790,7 +842,8 @@ macro_rules! unop {
                     );
                     ValueLocation::Reg(temp)
                 }
-                ValueLocation::Reg(reg) => {
+                ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                    let reg = self.into_reg(GPRType::Rq, val);
                     let temp = self.take_reg(Type::for_::<$typ>());
                     dynasm!(self.asm
                         ; $instr $reg_ty(temp.rq().unwrap()), $reg_ty(reg.rq().unwrap())
@@ -835,7 +888,7 @@ macro_rules! conversion {
 
                     ValueLocation::Reg(temp)
                 }
-                ValueLocation::Reg(_) => {
+                ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                     let reg = self.into_reg(Type::for_::<$in_typ>(), val);
                     let temp = self.take_reg(Type::for_::<$out_typ>());
                     val = ValueLocation::Reg(reg);
@@ -883,7 +936,8 @@ macro_rules! shift {
                     };
 
                     match other {
-                        ValueLocation::Reg(gpr) => {
+                        ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                            let gpr = self.into_reg(I32, other);
                             dynasm!(self.asm
                                 ; mov cl, Rb(gpr.rq().unwrap())
                             );
@@ -930,7 +984,7 @@ macro_rules! shift {
 }
 
 macro_rules! cmp_i32 {
-    ($name:ident, $instr:ident, $reverse_instr:ident, $const_fallback:expr) => {
+    ($name:ident, $flags:expr, $reverse_flags:expr, $const_fallback:expr) => {
         pub fn $name(&mut self) {
             let right = self.pop();
             let mut left = self.pop();
@@ -938,24 +992,19 @@ macro_rules! cmp_i32 {
             let out = if let Some(i) = left.imm_i32() {
                 match right {
                     ValueLocation::Stack(offset) => {
-                        let result = self.take_reg(I32);
                         let offset = self.adjusted_offset(offset);
 
                         dynasm!(self.asm
-                            ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                             ; cmp DWORD [rsp + offset], i
-                            ; $reverse_instr Rb(result.rq().unwrap())
                         );
-                        ValueLocation::Reg(result)
+                        ValueLocation::Cond($reverse_flags)
                     }
-                    ValueLocation::Reg(rreg) => {
-                        let result = self.take_reg(I32);
+                    ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                        let rreg = self.into_reg(I32, right);
                         dynasm!(self.asm
-                            ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                             ; cmp Rd(rreg.rq().unwrap()), i
-                            ; $reverse_instr Rb(result.rq().unwrap())
                         );
-                        ValueLocation::Reg(result)
+                        ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Immediate(right) => {
                         ValueLocation::Immediate(
@@ -972,34 +1021,27 @@ macro_rules! cmp_i32 {
                 // TODO: Make `into_reg` take an `&mut`?
                 left = ValueLocation::Reg(lreg);
 
-                let result = self.take_reg(I32);
-
                 match right {
                     ValueLocation::Stack(offset) => {
                         let offset = self.adjusted_offset(offset);
                         dynasm!(self.asm
-                            ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                             ; cmp Rd(lreg.rq().unwrap()), [rsp + offset]
-                            ; $instr Rb(result.rq().unwrap())
                         );
                     }
-                    ValueLocation::Reg(rreg) => {
+                    ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                        let rreg = self.into_reg(I32, right);
                         dynasm!(self.asm
-                            ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                             ; cmp Rd(lreg.rq().unwrap()), Rd(rreg.rq().unwrap())
-                            ; $instr Rb(result.rq().unwrap())
                         );
                     }
                     ValueLocation::Immediate(i) => {
                         dynasm!(self.asm
-                            ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                             ; cmp Rd(lreg.rq().unwrap()), i.as_i32().unwrap()
-                            ; $instr Rb(result.rq().unwrap())
                         );
                     }
                 }
 
-                ValueLocation::Reg(result)
+                ValueLocation::Cond($flags)
             };
 
             self.free_value(left);
@@ -1011,7 +1053,7 @@ macro_rules! cmp_i32 {
 }
 
 macro_rules! cmp_i64 {
-    ($name:ident, $instr:ident, $reverse_instr:ident, $const_fallback:expr) => {
+    ($name:ident, $flags:expr, $reverse_flags:expr, $const_fallback:expr) => {
         pub fn $name(&mut self) {
             let right = self.pop();
             let mut left = self.pop();
@@ -1019,31 +1061,26 @@ macro_rules! cmp_i64 {
             let out = if let Some(i) = left.imm_i64() {
                 match right {
                     ValueLocation::Stack(offset) => {
-                        let result = self.take_reg(I32);
                         let offset = self.adjusted_offset(offset);
                         if let Some(i) = i.try_into() {
                             dynasm!(self.asm
-                                ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                                 ; cmp QWORD [rsp + offset], i
-                                ; $reverse_instr Rb(result.rq().unwrap())
                             );
                         } else {
                             unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
                         }
-                        ValueLocation::Reg(result)
+                        ValueLocation::Cond($reverse_flags)
                     }
-                    ValueLocation::Reg(rreg) => {
-                        let result = self.take_reg(I32);
+                    ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                        let rreg = self.into_reg(I32, right);
                         if let Some(i) = i.try_into() {
                             dynasm!(self.asm
-                                ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                                 ; cmp Rq(rreg.rq().unwrap()), i
-                                ; $reverse_instr Rb(result.rq().unwrap())
                             );
                         } else {
                             unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
                         }
-                        ValueLocation::Reg(result)
+                        ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Immediate(right) => {
                         ValueLocation::Immediate(
@@ -1059,31 +1096,24 @@ macro_rules! cmp_i64 {
                 let lreg = self.into_reg(I64, left);
                 left = ValueLocation::Reg(lreg);
 
-                let result = self.take_reg(I32);
-
                 match right {
                     ValueLocation::Stack(offset) => {
                         let offset = self.adjusted_offset(offset);
                         dynasm!(self.asm
-                            ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                             ; cmp Rq(lreg.rq().unwrap()), [rsp + offset]
-                            ; $instr Rb(result.rq().unwrap())
                         );
                     }
-                    ValueLocation::Reg(rreg) => {
+                    ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                        let rreg = self.into_reg(I32, right);
                         dynasm!(self.asm
-                            ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
                             ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
-                            ; $instr Rb(result.rq().unwrap())
                         );
                     }
                     ValueLocation::Immediate(i) => {
                         let i = i.as_i64().unwrap();
                         if let Some(i) = i.try_into() {
                             dynasm!(self.asm
-                                ; xor Rd(result.rq().unwrap()), Rd(result.rq().unwrap())
-                                ; cmp Rq(lreg.rq().unwrap()), i
-                                ; $instr Rb(result.rq().unwrap())
+                                    ; cmp Rq(lreg.rq().unwrap()), i
                             );
                         } else {
                             unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
@@ -1091,7 +1121,7 @@ macro_rules! cmp_i64 {
                     }
                 }
 
-                ValueLocation::Reg(result)
+                ValueLocation::Cond($flags)
             };
 
             self.free_value(left);
@@ -1487,7 +1517,7 @@ macro_rules! binop {
             let left = self.into_temp_reg($ty, left);
 
             match right {
-                ValueLocation::Reg(_) => {
+                ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                     // This handles the case where we (for example) have a float in an `Rq` reg
                     let right_reg = self.into_reg($ty, right);
                     right = ValueLocation::Reg(right_reg);
@@ -1934,29 +1964,33 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         (self.block_state.depth.0 as i32 + offset) * WORD_SIZE as i32
     }
 
-    cmp_i32!(i32_eq, sete, sete, |a, b| a == b);
-    cmp_i32!(i32_neq, setne, setne, |a, b| a != b);
+    cmp_i32!(i32_eq, cc::EQUAL, cc::EQUAL, |a, b| a == b);
+    cmp_i32!(i32_neq, cc::NOT_EQUAL, cc::NOT_EQUAL, |a, b| a != b);
     // `dynasm-rs` inexplicably doesn't support setb but `setnae` (and `setc`) are synonymous
-    cmp_i32!(i32_lt_u, setnae, seta, |a, b| (a as u32) < (b as u32));
-    cmp_i32!(i32_le_u, setbe, setae, |a, b| (a as u32) <= (b as u32));
-    cmp_i32!(i32_gt_u, seta, setnae, |a, b| (a as u32) > (b as u32));
-    cmp_i32!(i32_ge_u, setae, setna, |a, b| (a as u32) >= (b as u32));
-    cmp_i32!(i32_lt_s, setl, setnle, |a, b| a < b);
-    cmp_i32!(i32_le_s, setle, setnl, |a, b| a <= b);
-    cmp_i32!(i32_gt_s, setg, setnge, |a, b| a > b);
-    cmp_i32!(i32_ge_s, setge, setng, |a, b| a >= b);
+    cmp_i32!(i32_lt_u, cc::LT_U, cc::GT_U, |a, b| (a as u32) < (b as u32));
+    cmp_i32!(i32_le_u, cc::LE_U, cc::GE_U, |a, b| (a as u32)
+        <= (b as u32));
+    cmp_i32!(i32_gt_u, cc::GT_U, cc::LT_U, |a, b| (a as u32) > (b as u32));
+    cmp_i32!(i32_ge_u, cc::GE_U, cc::LE_U, |a, b| (a as u32)
+        >= (b as u32));
+    cmp_i32!(i32_lt_s, cc::LT_S, cc::GT_S, |a, b| a < b);
+    cmp_i32!(i32_le_s, cc::LE_S, cc::GE_S, |a, b| a <= b);
+    cmp_i32!(i32_gt_s, cc::GT_S, cc::LT_S, |a, b| a > b);
+    cmp_i32!(i32_ge_s, cc::GE_S, cc::LE_S, |a, b| a >= b);
 
-    cmp_i64!(i64_eq, sete, sete, |a, b| a == b);
-    cmp_i64!(i64_neq, setne, setne, |a, b| a != b);
+    cmp_i64!(i64_eq, cc::EQUAL, cc::EQUAL, |a, b| a == b);
+    cmp_i64!(i64_neq, cc::NOT_EQUAL, cc::NOT_EQUAL, |a, b| a != b);
     // `dynasm-rs` inexplicably doesn't support setb but `setnae` (and `setc`) are synonymous
-    cmp_i64!(i64_lt_u, setnae, seta, |a, b| (a as u64) < (b as u64));
-    cmp_i64!(i64_le_u, setbe, setae, |a, b| (a as u64) <= (b as u64));
-    cmp_i64!(i64_gt_u, seta, setnae, |a, b| (a as u64) > (b as u64));
-    cmp_i64!(i64_ge_u, setae, setna, |a, b| (a as u64) >= (b as u64));
-    cmp_i64!(i64_lt_s, setl, setnle, |a, b| a < b);
-    cmp_i64!(i64_le_s, setle, setnl, |a, b| a <= b);
-    cmp_i64!(i64_gt_s, setg, setnge, |a, b| a > b);
-    cmp_i64!(i64_ge_s, setge, setng, |a, b| a >= b);
+    cmp_i64!(i64_lt_u, cc::LT_U, cc::GT_U, |a, b| (a as u64) < (b as u64));
+    cmp_i64!(i64_le_u, cc::LE_U, cc::GE_U, |a, b| (a as u64)
+        <= (b as u64));
+    cmp_i64!(i64_gt_u, cc::GT_U, cc::LT_U, |a, b| (a as u64) > (b as u64));
+    cmp_i64!(i64_ge_u, cc::GE_U, cc::LE_U, |a, b| (a as u64)
+        >= (b as u64));
+    cmp_i64!(i64_lt_s, cc::LT_S, cc::GT_S, |a, b| a < b);
+    cmp_i64!(i64_le_s, cc::LE_S, cc::GE_S, |a, b| a <= b);
+    cmp_i64!(i64_gt_s, cc::GT_S, cc::LT_S, |a, b| a > b);
+    cmp_i64!(i64_ge_s, cc::GE_S, cc::LE_S, |a, b| a >= b);
 
     cmp_f32!(f32_gt, f32_lt, seta, |a, b| a > b);
     cmp_f32!(f32_ge, f32_le, setnc, |a, b| a >= b);
@@ -2040,6 +2074,41 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.push(ValueLocation::Reg(out));
     }
 
+    fn br_on_cond_code(&mut self, label: Label, cond: CondCode) {
+        match cond {
+            cc::EQUAL => dynasm!(self.asm
+                ; je =>label.0
+            ),
+            cc::NOT_EQUAL => dynasm!(self.asm
+                ; jne =>label.0
+            ),
+            cc::GT_U => dynasm!(self.asm
+                ; ja =>label.0
+            ),
+            cc::GE_U => dynasm!(self.asm
+                ; jae =>label.0
+            ),
+            cc::LT_U => dynasm!(self.asm
+                ; jb =>label.0
+            ),
+            cc::LE_U => dynasm!(self.asm
+                ; jbe =>label.0
+            ),
+            cc::GT_S => dynasm!(self.asm
+                ; jg =>label.0
+            ),
+            cc::GE_S => dynasm!(self.asm
+                ; jge =>label.0
+            ),
+            cc::LT_S => dynasm!(self.asm
+                ; jl =>label.0
+            ),
+            cc::LE_S => dynasm!(self.asm
+                ; jle =>label.0
+            ),
+        }
+    }
+
     /// Pops i32 predicate and branches to the specified label
     /// if the predicate is equal to zero.
     pub fn br_if_false(
@@ -2054,19 +2123,22 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .map(|c| *c)
             .unwrap_or_else(|| self.ret_label());
 
-        let predicate = self.into_reg(I32, val);
+        let cond = match val {
+            ValueLocation::Cond(cc) => !cc,
+            other => {
+                let predicate = self.into_reg(I32, other);
+                dynasm!(self.asm
+                    ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
+                );
+                self.block_state.regs.release(predicate);
 
-        dynasm!(self.asm
-            ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
-        );
+                CondCode::ZF0
+            }
+        };
 
         pass_args(self);
 
-        dynasm!(self.asm
-            ; jz =>label.0
-        );
-
-        self.block_state.regs.release(predicate);
+        self.br_on_cond_code(label, cond);
     }
 
     /// Pops i32 predicate and branches to the specified label
@@ -2083,19 +2155,22 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .map(|c| *c)
             .unwrap_or_else(|| self.ret_label());
 
-        let predicate = self.into_reg(I32, val);
+        let cond = match val {
+            ValueLocation::Cond(cc) => cc,
+            other => {
+                let predicate = self.into_reg(I32, other);
+                dynasm!(self.asm
+                    ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
+                );
+                self.block_state.regs.release(predicate);
 
-        dynasm!(self.asm
-            ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
-        );
+                CondCode::ZF1
+            }
+        };
 
         pass_args(self);
 
-        dynasm!(self.asm
-            ; jnz =>label.0
-        );
-
-        self.block_state.regs.release(predicate);
+        self.br_on_cond_code(label, cond);
     }
 
     /// Branch unconditionally to the specified label.
@@ -2241,7 +2316,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 self.block_state.regs.mark_used(r);
             }
-            self.pop_into(dst.into());
+            self.pop_into(dst);
         }
     }
 
@@ -2419,9 +2494,96 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // The `&` and `&mut` aren't necessary (`ValueLocation` is copy) but it ensures that we don't get
     // the arguments the wrong way around. In the future we want to have a `ReadLocation` and `WriteLocation`
     // so we statically can't write to a literal so this will become a non-issue.
-    fn copy_value(&mut self, src: &ValueLocation, dst: &mut ValueLocation) {
-        match (*src, *dst) {
-            (ValueLocation::Stack(in_offset), ValueLocation::Stack(out_offset)) => {
+    fn copy_value(&mut self, src: ValueLocation, dst: CCLoc) {
+        match (src, dst) {
+            (ValueLocation::Cond(cond), CCLoc::Stack(o)) => {
+                let offset = self.adjusted_offset(o);
+
+                dynasm!(self.asm
+                    ; mov QWORD [rsp + offset], DWORD 0
+                );
+
+                match cond {
+                    cc::EQUAL => dynasm!(self.asm
+                        ; sete [rsp + offset]
+                    ),
+                    cc::NOT_EQUAL => dynasm!(self.asm
+                        ; setne [rsp + offset]
+                    ),
+                    cc::GT_U => dynasm!(self.asm
+                        ; seta [rsp + offset]
+                    ),
+                    cc::GE_U => dynasm!(self.asm
+                        ; setae [rsp + offset]
+                    ),
+                    cc::LT_U => dynasm!(self.asm
+                        ; setb [rsp + offset]
+                    ),
+                    cc::LE_U => dynasm!(self.asm
+                        ; setbe [rsp + offset]
+                    ),
+                    cc::GT_S => dynasm!(self.asm
+                        ; setg [rsp + offset]
+                    ),
+                    cc::GE_S => dynasm!(self.asm
+                        ; setge [rsp + offset]
+                    ),
+                    cc::LT_S => dynasm!(self.asm
+                        ; setl [rsp + offset]
+                    ),
+                    cc::LE_S => dynasm!(self.asm
+                        ; setle [rsp + offset]
+                    ),
+                }
+            }
+            (ValueLocation::Cond(cond), CCLoc::Reg(reg)) => match reg {
+                GPR::Rq(r) => {
+                    dynasm!(self.asm
+                        ; mov Rq(r), 0
+                    );
+
+                    match cond {
+                        cc::EQUAL => dynasm!(self.asm
+                            ; sete Rb(r)
+                        ),
+                        cc::NOT_EQUAL => dynasm!(self.asm
+                            ; setne Rb(r)
+                        ),
+                        cc::GT_U => dynasm!(self.asm
+                            ; seta Rb(r)
+                        ),
+                        cc::GE_U => dynasm!(self.asm
+                            ; setae Rb(r)
+                        ),
+                        cc::LT_U => dynasm!(self.asm
+                            ; setb Rb(r)
+                        ),
+                        cc::LE_U => dynasm!(self.asm
+                            ; setbe Rb(r)
+                        ),
+                        cc::GT_S => dynasm!(self.asm
+                            ; setg Rb(r)
+                        ),
+                        cc::GE_S => dynasm!(self.asm
+                            ; setge Rb(r)
+                        ),
+                        cc::LT_S => dynasm!(self.asm
+                            ; setl Rb(r)
+                        ),
+                        cc::LE_S => dynasm!(self.asm
+                            ; setle Rb(r)
+                        ),
+                    }
+                }
+                GPR::Rx(_) => {
+                    let temp = CCLoc::Reg(self.take_reg(I32));
+                    self.copy_value(src, temp);
+                    let temp = temp.into();
+                    self.copy_value(temp, dst);
+                    self.free_value(temp);
+                }
+            },
+            (ValueLocation::Stack(in_offset), CCLoc::Stack(out_offset)) => {
                 let in_offset = self.adjusted_offset(in_offset);
                 let out_offset = self.adjusted_offset(out_offset);
                 if in_offset != out_offset {
@@ -2434,7 +2596,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
             // TODO: XMM registers
-            (ValueLocation::Reg(in_reg), ValueLocation::Stack(out_offset)) => {
+            (ValueLocation::Reg(in_reg), CCLoc::Stack(out_offset)) => {
                 let out_offset = self.adjusted_offset(out_offset);
                 match in_reg {
                     GPR::Rq(in_reg) => {
@@ -2453,7 +2615,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     }
                 }
             }
-            (ValueLocation::Immediate(i), ValueLocation::Stack(out_offset)) => {
+            (ValueLocation::Immediate(i), CCLoc::Stack(out_offset)) => {
                 // TODO: Floats
                 let i = i.as_bytes();
                 let out_offset = self.adjusted_offset(out_offset);
@@ -2472,7 +2634,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     self.block_state.regs.release(scratch);
                 }
             }
-            (ValueLocation::Stack(in_offset), ValueLocation::Reg(out_reg)) => {
+            (ValueLocation::Stack(in_offset), CCLoc::Reg(out_reg)) => {
                 let in_offset = self.adjusted_offset(in_offset);
                 match out_reg {
                     GPR::Rq(out_reg) => {
@@ -2491,7 +2653,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     }
                 }
             }
-            (ValueLocation::Reg(in_reg), ValueLocation::Reg(out_reg)) => {
+            (ValueLocation::Reg(in_reg), CCLoc::Reg(out_reg)) => {
                 if in_reg != out_reg {
                     match (in_reg, out_reg) {
                         (GPR::Rq(in_reg), GPR::Rq(out_reg)) => {
@@ -2517,12 +2679,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     }
                 }
             }
-            (ValueLocation::Immediate(i), ValueLocation::Reg(out_reg)) => {
+            (ValueLocation::Immediate(i), CCLoc::Reg(out_reg)) => {
                 // TODO: Floats
                 self.immediate_to_reg(out_reg, i);
             }
-            // TODO: Have separate `ReadLocation` and `WriteLocation`?
-            (_, ValueLocation::Immediate(_)) => panic!("Tried to copy to an immediate value!"),
         }
     }
 
@@ -2587,7 +2747,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn push_physical(&mut self, value: ValueLocation) -> ValueLocation {
         self.block_state.depth.reserve(1);
         match value {
-            value @ ValueLocation::Reg(_) | value @ ValueLocation::Immediate(_) => {
+            ValueLocation::Reg(_) | ValueLocation::Immediate(_) | ValueLocation::Cond(_) => {
                 let gpr = self.into_reg(GPRType::Rq, value);
                 dynasm!(self.asm
                     ; push Rq(gpr.rq().unwrap())
@@ -2605,6 +2765,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     fn push(&mut self, value: ValueLocation) {
+        if let Some(value) = self.block_state.stack.pop() {
+            let new = if let ValueLocation::Cond(_) = value {
+                ValueLocation::Reg(self.into_reg(I32, value))
+            } else {
+                value
+            };
+
+            self.block_state.stack.push(new);
+        }
+
         self.block_state.stack.push(value);
     }
 
@@ -2629,9 +2799,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
     }
 
-    fn pop_into(&mut self, dst: ValueLocation) {
+    fn pop_into(&mut self, dst: CCLoc) {
         let val = self.pop();
-        self.copy_value(&val, &mut { dst });
+        self.copy_value(val, dst);
         self.free_value(val);
     }
 
@@ -2663,7 +2833,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             val => {
                 let scratch = self.take_reg(ty.unwrap_or(GPRType::Rq));
 
-                self.copy_value(&val, &mut ValueLocation::Reg(scratch));
+                self.copy_value(val, CCLoc::Reg(scratch));
 
                 scratch
             }
@@ -2693,7 +2863,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 } else {
                     let scratch = self.take_reg(ty.unwrap_or(GPRType::Rq));
 
-                    self.copy_value(&val, &mut ValueLocation::Reg(scratch));
+                    self.copy_value(val, CCLoc::Reg(scratch));
 
                     scratch
                 }
@@ -3716,7 +3886,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     fn cleanup_gprs(&mut self, gprs: impl Iterator<Item = (GPR, GPR)>) {
         for (src, dst) in gprs {
-            self.copy_value(&ValueLocation::Reg(src), &mut ValueLocation::Reg(dst));
+            self.copy_value(ValueLocation::Reg(src), CCLoc::Reg(dst));
             self.block_state.regs.release(src);
             self.block_state.regs.mark_used(dst);
         }
@@ -3762,7 +3932,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.block_state.regs.mark_used(RDX);
         let divisor = if divisor == ValueLocation::Reg(RAX) || divisor == ValueLocation::Reg(RDX) {
             let new_reg = self.take_reg(I32);
-            self.copy_value(&divisor, &mut ValueLocation::Reg(new_reg));
+            self.copy_value(divisor, CCLoc::Reg(new_reg));
             self.free_value(divisor);
             ValueLocation::Reg(new_reg)
         } else if let ValueLocation::Stack(_) = divisor {
@@ -3791,7 +3961,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.block_state.regs.mark_used(RAX);
-        self.copy_value(&quotient, &mut ValueLocation::Reg(RAX));
+        self.copy_value(quotient, CCLoc::Reg(RAX));
         self.free_value(quotient);
 
         let should_save_rdx = !self.block_state.regs.is_free(RDX);
@@ -3838,7 +4008,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; div DWORD [rsp + offset]
                 );
             }
-            ValueLocation::Reg(r) => {
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let r = this.into_reg(I32, divisor);
                 dynasm!(this.asm
                     ; xor edx, edx
                     ; div Rd(r.rq().unwrap())
@@ -3865,7 +4036,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; idiv DWORD [rsp + offset]
                 );
             }
-            ValueLocation::Reg(r) => {
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let r = this.into_reg(I32, divisor);
                 dynasm!(this.asm
                     ; cdq
                     ; idiv Rd(r.rq().unwrap())
@@ -3892,7 +4064,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; div QWORD [rsp + offset]
                 );
             }
-            ValueLocation::Reg(r) => {
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let r = this.into_reg(I64, divisor);
                 dynasm!(this.asm
                     ; xor rdx, rdx
                     ; div Rq(r.rq().unwrap())
@@ -3919,7 +4092,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; idiv QWORD [rsp + offset]
                 );
             }
-            ValueLocation::Reg(r) => {
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let r = this.into_reg(I64, divisor);
                 dynasm!(this.asm
                     ; cqo
                     ; idiv Rq(r.rq().unwrap())
@@ -3956,10 +4130,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         let out = match right {
-            ValueLocation::Reg(reg) => {
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let right = self.into_reg(I32, right);
                 let left = self.into_temp_reg(I32, left);
                 dynasm!(self.asm
-                    ; imul Rd(left.rq().unwrap()), Rd(reg.rq().unwrap())
+                    ; imul Rd(left.rq().unwrap()), Rd(right.rq().unwrap())
                 );
                 left
             }
@@ -4014,10 +4189,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         let out = match right {
-            ValueLocation::Reg(reg) => {
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let right = self.into_reg(I64, right);
                 let left = self.into_temp_reg(I64, left);
                 dynasm!(self.asm
-                    ; imul Rq(left.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; imul Rq(left.rq().unwrap()), Rq(right.rq().unwrap())
                 );
                 left
             }
@@ -4355,7 +4531,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             depth += 1;
         }
 
-        let mut pending = Vec::<(ValueLocation, ValueLocation)>::new();
+        let mut pending = Vec::<(ValueLocation, CCLoc)>::new();
 
         for &loc in out_locs.iter().rev() {
             let val = self.pop();
@@ -4378,11 +4554,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 CCLoc::Reg(r) => {
                     if val != ValueLocation::Reg(r) {
                         if self.block_state.regs.is_free(r) {
-                            self.copy_value(&val, &mut loc.into());
+                            self.copy_value(val, loc);
                             self.block_state.regs.mark_used(r);
                             self.free_value(val);
                         } else {
-                            pending.push((val, loc.into()));
+                            pending.push((val, loc));
                         }
                     }
                 }
@@ -4393,7 +4569,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             let start_len = pending.len();
 
             for (src, dst) in mem::replace(&mut pending, vec![]) {
-                if let ValueLocation::Reg(r) = dst {
+                if let CCLoc::Reg(r) = dst {
                     if !self.block_state.regs.is_free(r) {
                         pending.push((src, dst));
                         continue;
@@ -4401,7 +4577,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                     self.block_state.regs.mark_used(r);
                 }
-                self.copy_value(&src, &mut { dst });
+                self.copy_value(src, dst);
                 self.free_value(src);
             }
 
