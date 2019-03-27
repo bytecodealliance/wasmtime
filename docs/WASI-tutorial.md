@@ -107,6 +107,16 @@ hello world
 
 Now our program runs as expected!
 
+What's going on under the covers? The `--dir=` option instructs Wasmtime
+to *preopen* a directory, and make it available to the program as a capability
+which can be used to open files inside that directory. Now when the program
+calls the C `open` function, passing it either an absolute or relative path,
+the WASI libc transparently translates that path into a path that's relative to
+one of the given preopened directories, if possible (using a technique based
+on [libpreopen](https://github.com/musec/libpreopen). This way, we can have a
+simple capability-oriented model at the system call level, while portable
+application code doesn't have to do anything special.
+
 As a brief aside, note that we used the path `.` above to grant the program
 access to the current directory. This is needed because the mapping from
 paths to associated capabilities is performed by libc, so it's part of the
