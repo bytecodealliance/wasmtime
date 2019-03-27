@@ -31,6 +31,7 @@ wasmtime-runtime = { path = "wasmtime-runtime" }
 wasmtime-jit = { path = "wasmtime-jit" }
 wasmtime-obj = { path = "wasmtime-obj" }
 wasmtime-wast = { path = "wasmtime-wast" }
+wasmtime-wasi = { path = "wasmtime-wasi" }
 docopt = "1.0.1"
 serde = "1.0.75"
 serde_derive = "1.0.75"
@@ -39,5 +40,7 @@ target-lexicon = { version = "0.3.0", default-features = false }
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.1"
 wabt = "0.7"
+libc = "0.2.50"
+errno = "0.2.4"
 
 [workspace]

@@ -37,16 +37,20 @@ use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
+use errno::errno;
 use file_per_thread_logger;
 use pretty_env_logger;
 use std::error::Error;
+use std::ffi::{CString, OsStr};
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
+use std::path::Component;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use wabt;
 use wasmtime_jit::{ActionOutcome, Context};
+use wasmtime_wasi::instantiate_wasi;
 use wasmtime_wast::instantiate_spectest;
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
@@ -59,8 +63,8 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] <file>...
-    wasmtime [-odg] <file>... --invoke=<fn>
+    wasmtime [-odg] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-odg] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
     wasmtime --help | --version
 
 Options:
@@ -68,17 +72,27 @@ Options:
     -o, --optimize      runs optimization passes on the translated functions
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
+    --preload=<wasm>    load an additional wasm module before loading the main module
+    --env=<env>         pass an environment variable (\"key=value\") to the program
+    --dir=<dir>         grant access to the given host directory
+    --mapdir=<mapping>  where <mapping> has the form <wasmdir>:<hostdir>, grant access to
+                        the given host directory with the given wasm directory name
     -h, --help          print this help message
     --version           print the Cranelift version
 ";
 
 #[derive(Deserialize, Debug, Clone)]
 struct Args {
-    arg_file: Vec<String>,
+    arg_file: String,
+    arg_arg: Vec<String>,
     flag_optimize: bool,
     flag_debug: bool,
     flag_g: bool,
     flag_invoke: Option<String>,
+    flag_preload: Vec<String>,
+    flag_env: Vec<String>,
+    flag_dir: Vec<String>,
+    flag_mapdir: Vec<String>,
 }
 
 fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -98,6 +112,91 @@ fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
     } else {
         wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?
     })
+}
+
+fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(String, libc::c_int)> {
+    let mut preopen_dirs = Vec::new();
+
+    for dir in flag_dir {
+        let fd = unsafe {
+            libc::open(
+                CString::new(dir.as_bytes()).unwrap().as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY,
+            )
+        };
+        if fd < 0 {
+            println!("error while pre-opening directory {}: {}", dir, errno());
+            exit(1);
+        }
+
+        preopen_dirs.push((dir.clone(), fd));
+    }
+
+    for mapdir in flag_mapdir {
+        let parts: Vec<&str> = mapdir.split(':').collect();
+        if parts.len() != 2 {
+            println!("--mapdir argument must contain exactly one colon, separating a guest directory name and a host directory name");
+            exit(1);
+        }
+        let (key, value) = (parts[0], parts[1]);
+        let fd = unsafe {
+            libc::open(
+                CString::new(value.as_bytes()).unwrap().as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY,
+            )
+        };
+        if fd < 0 {
+            println!("error while pre-opening directory {}: {}", value, errno());
+            exit(1);
+        }
+
+        preopen_dirs.push((key.to_string(), fd));
+    }
+
+    preopen_dirs
+}
+
+/// Compute the argv array values.
+fn compute_argv(argv0: &str, arg_arg: &[String]) -> Vec<String> {
+    let mut result = Vec::new();
+
+    // Add argv[0], which is the program name. Only include the base name of the
+    // main wasm module, to avoid leaking path information.
+    result.push(
+        Path::new(argv0)
+            .components()
+            .next_back()
+            .map(Component::as_os_str)
+            .and_then(OsStr::to_str)
+            .unwrap_or("")
+            .to_owned(),
+    );
+
+    // Add the remaining arguments.
+    for arg in arg_arg {
+        result.push(arg.to_owned());
+    }
+
+    result
+}
+
+/// Compute the environ array values.
+fn compute_environ(flag_env: &[String]) -> Vec<(String, String)> {
+    let mut result = Vec::new();
+
+    // Add the environment variables, which must be of the form "key=value".
+    for env in flag_env {
+        let split = env.splitn(2, '=').collect::<Vec<_>>();
+        if split.len() != 2 {
+            println!(
+                "environment variables must be of the form \"key=value\"; got \"{}\"",
+                env
+            );
+        }
+        result.push((split[0].to_owned(), split[1].to_owned()));
+    }
+
+    result
 }
 
 fn main() {
@@ -139,18 +238,50 @@ fn main() {
         instantiate_spectest().expect("instantiating spectest"),
     );
 
+    // Make wasi available by default.
+    let global_exports = context.get_global_exports();
+    let preopen_dirs = compute_preopen_dirs(&args.flag_dir, &args.flag_mapdir);
+    let argv = compute_argv(&args.arg_file, &args.arg_arg);
+    let environ = compute_environ(&args.flag_env);
+    context.name_instance(
+        "wasi_unstable".to_owned(),
+        instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)
+            .expect("instantiating wasi"),
+    );
+
+    // FIXME: Also recognize "env", for compatibility with clang/llvm 8.0. And use
+    // "__wasi_" prefixes for compaitility with prototype reference-sysroot.
+    let global_exports = context.get_global_exports();
+    context.name_instance(
+        "env".to_owned(),
+        instantiate_wasi("__wasi_", global_exports, &preopen_dirs, &argv, &environ)
+            .expect("instantiating wasi"),
+    );
+
     // Enable/disable producing of debug info.
     context.set_debug_info(args.flag_g);
 
-    for filename in &args.arg_file {
+    // Load the preload wasm modules.
+    for filename in &args.flag_preload {
         let path = Path::new(&filename);
         match handle_module(&mut context, &args, path) {
             Ok(()) => {}
             Err(message) => {
                 let name = path.as_os_str().to_string_lossy();
-                println!("error while processing {}: {}", name, message);
+                println!("error while processing preload {}: {}", name, message);
                 exit(1);
             }
+        }
+    }
+
+    // Load the main wasm module.
+    let path = Path::new(&args.arg_file);
+    match handle_module(&mut context, &args, path) {
+        Ok(()) => {}
+        Err(message) => {
+            let name = path.as_os_str().to_string_lossy();
+            println!("error while processing main module {}: {}", name, message);
+            exit(1);
         }
     }
 }
