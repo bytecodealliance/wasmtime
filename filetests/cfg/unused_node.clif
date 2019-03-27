@@ -3,10 +3,16 @@ test print-cfg
 
 function %not_reached(i32) -> i32 {
 ; check: digraph "%not_reached" {
-; check:     ebb0 [shape=record, label="{ebb0 | <inst0>brnz ebb2}"]
-; check:     ebb1 [shape=record, label="{ebb1 | <inst4>jump ebb0}"]
-; check:     ebb2 [shape=record, label="{ebb2}"]
-
+; check:     ebb0 [shape=record, label="{ebb0(v0: i32):
+; check:  | <inst0>brnz v0, ebb2
+; check:  | <inst1>trap user0
+; check: }"]
+; check:     ebb1 [shape=record, label="{ebb1:
+; check:  | <inst4>jump ebb0(v2)
+; check: }"]
+; check:     ebb2 [shape=record, label="{ebb2:
+; check:  | <inst5>return v0
+; check: }"]
 ebb0(v0: i32):
     brnz v0, ebb2       ; unordered: ebb0:inst0 -> ebb2
     trap user0
