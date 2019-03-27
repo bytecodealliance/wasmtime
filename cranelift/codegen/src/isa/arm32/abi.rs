@@ -1,8 +1,9 @@
 //! ARM ABI implementation.
+//! This is from the RISC-V target and will need to be updated for ARM32.
 
 use super::registers::{D, GPR, Q, S};
 use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
-use crate::ir::{self, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, Type};
+use crate::ir::{self, AbiParam, ArgumentExtension, ArgumentLoc, Type};
 use crate::isa::RegClass;
 use crate::regalloc::RegisterSet;
 use core::i32;
@@ -77,27 +78,11 @@ impl ArgAssigner for Args {
 }
 
 /// Legalize `sig`.
-pub fn legalize_signature(sig: &mut ir::Signature, triple: &Triple, current: bool) {
+pub fn legalize_signature(sig: &mut ir::Signature, triple: &Triple, _current: bool) {
     let bits = triple.pointer_width().unwrap().bits();
 
     let mut args = Args::new(bits);
     legalize_args(&mut sig.params, &mut args);
-
-    let mut rets = Args::new(bits);
-    legalize_args(&mut sig.returns, &mut rets);
-
-    if current {
-        let ptr = Type::int(u16::from(bits)).unwrap();
-
-        // Add the link register as an argument and return value.
-        //
-        // The `jalr` instruction implementing a return can technically accept the return address
-        // in any register, but a micro-architecture with a return address predictor will only
-        // recognize it as a return if the address is in `x1`.
-        let link = AbiParam::special_reg(ptr, ArgumentPurpose::Link, GPR.unit(1));
-        sig.params.push(link);
-        sig.returns.push(link);
-    }
 }
 
 /// Get register class for a type appearing in a legalized signature.
