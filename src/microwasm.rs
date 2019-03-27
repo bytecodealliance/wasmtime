@@ -1,11 +1,10 @@
 use crate::module::{ModuleContext, SigType, Signature};
 use smallvec::SmallVec;
 use std::{
-    convert::{TryFrom, TryInto},
+    convert::TryInto,
     fmt,
     iter::{self, FromIterator},
     ops::RangeInclusive,
-    option::NoneError,
 };
 use wasmparser::{
     FunctionBody, Ieee32, Ieee64, MemoryImmediate, Operator as WasmOperator, OperatorsReader,
@@ -287,14 +286,6 @@ impl SignlessType {
             Type::EmptyBlockType => None,
             _ => unimplemented!(),
         }
-    }
-}
-
-impl TryFrom<wasmparser::Type> for SignlessType {
-    type Error = NoneError;
-
-    fn try_from(other: wasmparser::Type) -> Result<SignlessType, NoneError> {
-        Ok(SignlessType::from_wasm(other)?)
     }
 }
 
@@ -1543,9 +1534,7 @@ where
                     id,
                     arguments: self.stack.len() as u32,
                     returns: Vec::from_iter(Type::from_wasm(ty)),
-                    kind: ControlFrameKind::If {
-                        has_else: false,
-                    },
+                    kind: ControlFrameKind::If { has_else: false },
                 });
                 let (then, else_, end) = (
                     (id, NameTag::Header),

@@ -11,8 +11,8 @@ edition = "2018"
 
 [dependencies]
 smallvec = "0.6"
-dynasm = "0.2.3"
-dynasmrt = "0.2.3"
+dynasm = "0.3"
+dynasmrt = "0.3"
 wasmparser = { path = "./wasmparser.rs" }
 memoffset = "0.2"
 itertools = "0.8"
@@ -29,3 +29,6 @@ typemap = "0.3"
 
 [badges]
 maintenance = { status = "experimental" }
+
+[features]
+bench = []

@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::microwasm::{BrTarget, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::ModuleContext;
 use cranelift_codegen::{binemit, ir};
+use dynasm::dynasm;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use either::Either;
@@ -230,61 +231,6 @@ const SIGN_MASK_F64: u64 = 0b100000000000000000000000000000000000000000000000000
 const REST_MASK_F64: u64 = !SIGN_MASK_F64;
 const SIGN_MASK_F32: u32 = 0b10000000000000000000000000000000;
 const REST_MASK_F32: u32 = !SIGN_MASK_F32;
-
-extern "sysv64" fn println(len: u64, args: *const u8) {
-    println!("{}", unsafe {
-        std::str::from_utf8_unchecked(std::slice::from_raw_parts(args, len as usize))
-    });
-}
-
-macro_rules! asm_println {
-    ($asm:expr) => {asm_println!($asm,)};
-    ($asm:expr, $($args:tt)*) => {{
-        use std::mem;
-
-        let mut args = format!($($args)*).into_bytes();
-
-        let len = args.len();
-        let ptr = args.as_mut_ptr();
-        mem::forget(args);
-
-        dynasm!($asm
-            ; push rdi
-            ; push rsi
-            ; push rdx
-            ; push rcx
-            ; push r8
-            ; push r9
-            ; push r10
-            ; push r11
-
-            ; mov rax, QWORD println as *const u8 as i64
-            ; mov rdi, QWORD len as i64
-            ; mov rsi, QWORD ptr as i64
-
-            ; test rsp, 0b1111
-            ; jnz >with_adjusted_stack_ptr
-
-            ; call rax
-            ; jmp >pop_rest
-
-        ; with_adjusted_stack_ptr:
-            ; push 1
-            ; call rax
-            ; pop r11
-
-        ; pop_rest:
-            ; pop r11
-            ; pop r10
-            ; pop r9
-            ; pop r8
-            ; pop rcx
-            ; pop rdx
-            ; pop rsi
-            ; pop rdi
-        );
-    }}
-}
 
 impl GPRs {
     fn take(&mut self) -> Option<RegId> {
@@ -675,18 +621,22 @@ macro_rules! int_div {
                 return;
             }
 
-            let (div, rem, saved) = self.$full_div_u(divisor, quotient);
+            let (div, rem, mut saved) = self.$full_div_u(divisor, quotient);
 
             self.free_value(rem);
 
             let div = match div {
-                ValueLocation::Reg(div) if saved.clone().any(|(_, dst)| dst == div) => {
-                    let new = self.take_reg(I32);
-                    dynasm!(self.asm
-                        ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
-                    );
-                    self.block_state.regs.release(div);
-                    ValueLocation::Reg(new)
+                ValueLocation::Reg(div)  => {
+                    if saved.any(|(_, dst)| dst == div) {
+                        let new = self.take_reg(I32);
+                        dynasm!(self.asm
+                            ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
+                        );
+                        self.block_state.regs.release(div);
+                        ValueLocation::Reg(new)
+                    } else {
+                        ValueLocation::Reg(div)
+                    }
                 }
                 _ => div,
             };
@@ -715,18 +665,22 @@ macro_rules! int_div {
                 return;
             }
 
-            let (div, rem, saved) = self.$full_div_s(divisor, quotient);
+            let (div, rem, mut saved) = self.$full_div_s(divisor, quotient);
 
             self.free_value(rem);
 
             let div = match div {
-                ValueLocation::Reg(div) if saved.clone().any(|(_, dst)| dst == div) => {
-                    let new = self.take_reg(I32);
-                    dynasm!(self.asm
-                        ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
-                    );
-                    self.block_state.regs.release(div);
-                    ValueLocation::Reg(new)
+                ValueLocation::Reg(div)  => {
+                    if saved.any(|(_, dst)| dst == div) {
+                        let new = self.take_reg(I32);
+                        dynasm!(self.asm
+                            ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
+                        );
+                        self.block_state.regs.release(div);
+                        ValueLocation::Reg(new)
+                    } else {
+                        ValueLocation::Reg(div)
+                    }
                 }
                 _ => div,
             };
@@ -752,18 +706,22 @@ macro_rules! int_div {
                 return;
             }
 
-            let (div, rem, saved) = self.$full_div_u(divisor, quotient);
+            let (div, rem, mut saved) = self.$full_div_u(divisor, quotient);
 
             self.free_value(div);
 
             let rem = match rem {
-                ValueLocation::Reg(rem) if saved.clone().any(|(_, dst)| dst == rem) => {
-                    let new = self.take_reg(I32);
-                    dynasm!(self.asm
-                        ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
-                    );
-                    self.block_state.regs.release(rem);
-                    ValueLocation::Reg(new)
+                ValueLocation::Reg(rem)  => {
+                    if saved.any(|(_, dst)| dst == rem) {
+                        let new = self.take_reg(I32);
+                        dynasm!(self.asm
+                            ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
+                        );
+                        self.block_state.regs.release(rem);
+                        ValueLocation::Reg(new)
+                    } else {
+                        ValueLocation::Reg(rem)
+                    }
                 }
                 _ => rem,
             };
@@ -787,18 +745,22 @@ macro_rules! int_div {
                 return;
             }
 
-            let (div, rem, saved) = self.$full_div_s(divisor, quotient);
+            let (div, rem, mut saved) = self.$full_div_s(divisor, quotient);
 
             self.free_value(div);
 
             let rem = match rem {
-                ValueLocation::Reg(rem) if saved.clone().any(|(_, dst)| dst == rem) => {
-                    let new = self.take_reg(I32);
-                    dynasm!(self.asm
-                        ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
-                    );
-                    self.block_state.regs.release(rem);
-                    ValueLocation::Reg(new)
+                ValueLocation::Reg(rem) => {
+                    if saved.any(|(_, dst)| dst == rem) {
+                        let new = self.take_reg(I32);
+                        dynasm!(self.asm
+                            ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
+                        );
+                        self.block_state.regs.release(rem);
+                        ValueLocation::Reg(new)
+                    } else {
+                        ValueLocation::Reg(rem)
+                    }
                 }
                 _ => rem,
             };
@@ -811,7 +773,7 @@ macro_rules! int_div {
 }
 
 macro_rules! unop {
-    ($name:ident, $instr:ident, $reg_ty:ident, $typ:ty, $const_fallback:expr) => {
+    ($name:ident, $instr:ident, $reg_ty:tt, $typ:ty, $const_fallback:expr) => {
         pub fn $name(&mut self) {
             let val = self.pop();
 
@@ -847,9 +809,9 @@ macro_rules! conversion {
     (
         $name:ident,
         $instr:ident,
-        $in_reg_ty:ident,
+        $in_reg_ty:tt,
         $in_reg_fn:ident,
-        $out_reg_ty:ident,
+        $out_reg_ty:tt,
         $out_reg_fn:ident,
         $in_typ:ty,
         $out_typ:ty,
@@ -895,7 +857,7 @@ macro_rules! conversion {
 
 // TODO: Support immediate `count` parameters
 macro_rules! shift {
-    ($name:ident, $reg_ty:ident, $instr:ident, $const_fallback:expr, $ty:expr) => {
+    ($name:ident, $reg_ty:tt, $instr:ident, $const_fallback:expr, $ty:expr) => {
         pub fn $name(&mut self) {
             let mut count = self.pop();
             let mut val = self.pop();
@@ -1481,7 +1443,7 @@ macro_rules! commutative_binop_f64 {
     };
 }
 macro_rules! commutative_binop {
-    ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:ident, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr) => {
+    ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:tt, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr) => {
         binop!(
             $name,
             $instr,
@@ -1506,10 +1468,10 @@ macro_rules! commutative_binop {
 }
 
 macro_rules! binop {
-    ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:ident, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr) => {
+    ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:tt, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr) => {
         binop!($name, $instr, $const_fallback, $reg_ty, $reg_fn, $ty, $imm_fn, $direct_imm, |a, b| (a, b));
     };
-    ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:ident, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr, $map_op:expr) => {
+    ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:tt, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr, $map_op:expr) => {
         pub fn $name(&mut self) {
             let right = self.pop();
             let left = self.pop();
@@ -1541,7 +1503,7 @@ macro_rules! binop {
                 }
                 ValueLocation::Immediate(i) => {
                     if let Some(i) = i.as_int().and_then(|i| i.try_into()) {
-                        $direct_imm(self, left, i);
+                        $direct_imm(&mut *self, left, i);
                     } else {
                         let scratch = self.take_reg($ty);
                         self.immediate_to_reg(scratch, i);
@@ -1562,7 +1524,7 @@ macro_rules! binop {
 }
 
 macro_rules! load {
-    (@inner $name:ident, $rtype:expr, $reg_ty:ident, $emit_fn:expr) => {
+    (@inner $name:ident, $rtype:expr, $reg_ty:tt, $emit_fn:expr) => {
         pub fn $name(&mut self, offset: u32) {
             fn load_to_reg<_M: ModuleContext>(
                 ctx: &mut Context<_M>,
@@ -1666,7 +1628,7 @@ macro_rules! load {
             self.push(ValueLocation::Reg(temp));
         }
     };
-    ($name:ident, $rtype:expr, $reg_ty:ident, NONE, $rq_instr:ident, $ty:ident) => {
+    ($name:ident, $rtype:expr, $reg_ty:tt, NONE, $rq_instr:ident, $ty:ident) => {
         load!(@inner
             $name,
             $rtype,
@@ -1687,7 +1649,7 @@ macro_rules! load {
             }
         );
     };
-    ($name:ident, $rtype:expr, $reg_ty:ident, $xmm_instr:ident, $rq_instr:ident, $ty:ident) => {
+    ($name:ident, $rtype:expr, $reg_ty:tt, $xmm_instr:ident, $rq_instr:ident, $ty:ident) => {
         load!(@inner
             $name,
             $rtype,
@@ -1721,7 +1683,7 @@ macro_rules! load {
 }
 
 macro_rules! store {
-    (@inner $name:ident, $int_reg_ty:ident, $match_offset:expr, $size:ident) => {
+    (@inner $name:ident, $int_reg_ty:tt, $match_offset:expr, $size:ident) => {
         pub fn $name(&mut self, offset: u32) {
             fn store_from_reg<_M: ModuleContext>(
                 ctx: &mut Context<_M>,
@@ -1827,7 +1789,7 @@ macro_rules! store {
             }
         }
     };
-    ($name:ident, $int_reg_ty:ident, NONE, $size:ident) => {
+    ($name:ident, $int_reg_ty:tt, NONE, $size:ident) => {
         store!(@inner
             $name,
             $int_reg_ty,
@@ -1852,7 +1814,7 @@ macro_rules! store {
             $size
         );
     };
-    ($name:ident, $int_reg_ty:ident, $xmm_instr:ident, $size:ident) => {
+    ($name:ident, $int_reg_ty:tt, $xmm_instr:ident, $size:ident) => {
         store!(@inner
             $name,
             $int_reg_ty,
@@ -1946,10 +1908,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             let new_loc = self.push_physical(self.block_state.stack[loc]);
             self.block_state.stack[loc] = new_loc;
         }
-    }
-
-    pub fn debug(&mut self, d: std::fmt::Arguments) {
-        asm_println!(self.asm, "{}", d);
     }
 
     pub fn virtual_calling_convention(&self) -> VirtualCallingConvention {

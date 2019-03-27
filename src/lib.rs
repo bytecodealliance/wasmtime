@@ -1,18 +1,6 @@
-#![feature(
-    plugin,
-    test,
-    const_slice_len,
-    never_type,
-    alloc_layout_extra,
-    try_from,
-    try_trait,
-    bind_by_move_pattern_guards,
-    fnbox,
-    copysign
-)]
-#![plugin(dynasm)]
+#![cfg_attr(feature = "bench", feature(test))]
+#![feature(proc_macro_hygiene)]
 
-extern crate test;
 #[macro_use]
 extern crate smallvec;
 extern crate capstone;
@@ -23,6 +11,7 @@ pub extern crate wasmparser;
 extern crate failure_derive;
 #[macro_use]
 extern crate memoffset;
+extern crate dynasm;
 extern crate dynasmrt;
 extern crate itertools;
 #[cfg(test)]

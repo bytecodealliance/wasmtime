@@ -929,7 +929,10 @@ fn i64_rem() {
     let translated = translate_wat(CODE);
     translated.disassemble();
 
-    assert_eq!(translated.execute_func::<_, u64>(0, (123121i64, -1i64)), Ok(0));
+    assert_eq!(
+        translated.execute_func::<_, u64>(0, (123121i64, -1i64)),
+        Ok(0)
+    );
 }
 
 #[test]
@@ -1021,37 +1024,44 @@ macro_rules! test_select {
 test_select!(select32, i32);
 test_select!(select64, i64);
 
-#[bench]
-fn bench_fibonacci_compile(b: &mut test::Bencher) {
-    let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
+#[cfg(feature = "bench")]
+mod benches {
+    extern crate test;
 
-    b.iter(|| test::black_box(translate(&wasm).unwrap()));
-}
+    use super::{translate, wabt, FIBONACCI, FIBONACCI_OPT};
 
-#[bench]
-fn bench_fibonacci_run(b: &mut test::Bencher) {
-    let wasm = wabt::wat2wasm(FIBONACCI_OPT).unwrap();
-    let module = translate(&wasm).unwrap();
+    #[bench]
+    fn bench_fibonacci_compile(b: &mut test::Bencher) {
+        let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
 
-    b.iter(|| module.execute_func::<_, u32>(0, (20,)));
-}
-
-#[bench]
-fn bench_fibonacci_compile_run(b: &mut test::Bencher) {
-    let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
-
-    b.iter(|| translate(&wasm).unwrap().execute_func::<_, u32>(0, (20,)));
-}
-
-#[bench]
-fn bench_fibonacci_baseline(b: &mut test::Bencher) {
-    fn fib(n: i32) -> i32 {
-        if n == 0 || n == 1 {
-            1
-        } else {
-            fib(n - 1) + fib(n - 2)
-        }
+        b.iter(|| test::black_box(translate(&wasm).unwrap()));
     }
 
-    b.iter(|| test::black_box(fib(test::black_box(20))));
+    #[bench]
+    fn bench_fibonacci_run(b: &mut test::Bencher) {
+        let wasm = wabt::wat2wasm(FIBONACCI_OPT).unwrap();
+        let module = translate(&wasm).unwrap();
+
+        b.iter(|| module.execute_func::<_, u32>(0, (20,)));
+    }
+
+    #[bench]
+    fn bench_fibonacci_compile_run(b: &mut test::Bencher) {
+        let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
+
+        b.iter(|| translate(&wasm).unwrap().execute_func::<_, u32>(0, (20,)));
+    }
+
+    #[bench]
+    fn bench_fibonacci_baseline(b: &mut test::Bencher) {
+        fn fib(n: i32) -> i32 {
+            if n == 0 || n == 1 {
+                1
+            } else {
+                fib(n - 1) + fib(n - 2)
+            }
+        }
+
+        b.iter(|| test::black_box(fib(test::black_box(20))));
+    }
 }

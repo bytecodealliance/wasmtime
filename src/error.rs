@@ -20,12 +20,6 @@ impl From<BinaryReaderError> for Error {
     }
 }
 
-impl From<!> for Error {
-    fn from(other: !) -> Self {
-        other
-    }
-}
-
 impl From<capstone::Error> for Error {
     fn from(e: capstone::Error) -> Self {
         Error::Disassembler(e.to_string())
