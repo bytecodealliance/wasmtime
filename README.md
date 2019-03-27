@@ -142,18 +142,16 @@ fib:
   push rax
   push rax
   mov  rsi, rcx
-  call fib
-  add  eax, dword ptr [rsp + 8]
-  mov  rcx, qword ptr [rsp + 0x10]
+  call 0
+  add  eax, [rsp + 8]
+  mov  rcx, [rsp + 0x10]
   add  ecx, 0xfffffffe
   cmp  ecx, 1
   mov  rsi, rcx
-  pop  rcx
-  pop  rcx
-  pop  rcx
+  lea  rsp, [rsp + 0x18]
   ja   .Lloop
 .Lreturn:
-  ret
+  ret  
 ```
 
 Now obviously I'm not advocating for replacing FireFox's optimising compiler with Lightbeam since the latter can only really produce better code when receiving optimised WebAssembly (and so debug-mode or hand-written WebAssembly may produce much worse output). However, this shows that even with the restrictions of a streaming compiler it's absolutely possible to produce high-quality assembly output. For the assembly above, the Lightbeam output runs within 15% of native speed. This is paramount for one of Lightbeam's intended usecases for real-time systems that want good runtime performance but cannot tolerate compiler bombs.

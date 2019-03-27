@@ -2262,38 +2262,32 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.free_value(selector);
     }
 
-    fn set_stack_depth_preserve_flags(&mut self, depth: StackDepth) {
-        if self.block_state.depth.0 < depth.0 {
-            for _ in 0..depth.0 - self.block_state.depth.0 {
-                dynasm!(self.asm
-                    ; push rax
-                );
-            }
-        } else if self.block_state.depth.0 > depth.0 {
-            let trash = self.take_reg(I64);
-            for _ in 0..self.block_state.depth.0 - depth.0 {
-                dynasm!(self.asm
-                    ; pop Rq(trash.rq().unwrap())
-                );
-            }
-            self.block_state.regs.release(trash);
-        }
-
-        self.block_state.depth = depth;
-    }
-
     fn set_stack_depth(&mut self, depth: StackDepth) {
         if self.block_state.depth.0 != depth.0 {
             let diff = depth.0 as i32 - self.block_state.depth.0 as i32;
             if diff.abs() == 1 {
-                self.set_stack_depth_preserve_flags(depth);
+                if self.block_state.depth.0 < depth.0 {
+                    for _ in 0..depth.0 - self.block_state.depth.0 {
+                        dynasm!(self.asm
+                            ; push rax
+                        );
+                    }
+                } else if self.block_state.depth.0 > depth.0 {
+                    let trash = self.take_reg(I64);
+                    for _ in 0..self.block_state.depth.0 - depth.0 {
+                        dynasm!(self.asm
+                            ; pop Rq(trash.rq().unwrap())
+                        );
+                    }
+                    self.block_state.regs.release(trash);
+                }
             } else {
                 dynasm!(self.asm
-                    ; add rsp, (self.block_state.depth.0 as i32 - depth.0 as i32) * WORD_SIZE as i32
+                    ; lea rsp, [rsp + (self.block_state.depth.0 as i32 - depth.0 as i32) * WORD_SIZE as i32]
                 );
-
-                self.block_state.depth = depth;
             }
+
+            self.block_state.depth = depth;
         }
     }
 
@@ -2323,43 +2317,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     pub fn pass_block_args(&mut self, cc: &BlockCallingConvention) {
         self.do_pass_block_args(cc);
         self.set_stack_depth(cc.stack_depth);
-    }
-
-    pub fn pass_block_args_preserve_flags(&mut self, cc: &BlockCallingConvention) {
-        self.do_pass_block_args(cc);
-        self.set_stack_depth_preserve_flags(cc.stack_depth);
-    }
-
-    pub fn serialize_block_args_preserve_flags(
-        &mut self,
-        cc: &BlockCallingConvention,
-        other_to_drop: Option<RangeInclusive<u32>>,
-    ) -> BlockCallingConvention {
-        self.do_pass_block_args(cc);
-
-        let mut out_args = cc.arguments.clone();
-
-        out_args.reverse();
-
-        if let Some(to_drop) = other_to_drop {
-            for _ in to_drop {
-                let val = self.pop();
-                // TODO: We can use stack slots for values already on the stack but we
-                //       don't refcount stack slots right now
-                let loc = CCLoc::Reg(self.into_temp_reg(None, val));
-
-                out_args.push(loc);
-            }
-        }
-
-        out_args.reverse();
-
-        self.set_stack_depth_preserve_flags(cc.stack_depth);
-
-        BlockCallingConvention {
-            stack_depth: cc.stack_depth,
-            arguments: out_args,
-        }
     }
 
     pub fn serialize_block_args(
@@ -5054,3 +5011,4 @@ impl IntoLabel for (LabelValue, LabelValue) {
         Box::new(const_values(self.0, self.1))
     }
 }
+
