@@ -30,6 +30,7 @@ use std::process;
 
 mod cat;
 mod compile;
+mod disasm;
 mod print_cfg;
 mod utils;
 
@@ -67,6 +68,19 @@ fn add_time_flag<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("time-passes")
         .short("T")
         .help("Print pass timing report for test")
+}
+
+fn add_size_flag<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("print-size")
+        .short("X")
+        .help("Print bytecode size")
+}
+
+fn add_disasm_flag<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("disasm")
+        .long("disasm")
+        .short("D")
+        .help("Print machine code disassembly")
 }
 
 fn add_set_flag<'a>() -> clap::Arg<'a, 'a> {
@@ -120,6 +134,8 @@ fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
         .arg(add_verbose_flag())
         .arg(add_print_flag())
         .arg(add_time_flag())
+        .arg(add_size_flag())
+        .arg(add_disasm_flag())
         .arg(add_set_flag())
         .arg(add_target_flag())
         .arg(add_input_file_arg())
@@ -226,6 +242,7 @@ fn main() {
             compile::run(
                 get_vec(rest_cmd.values_of("file")),
                 rest_cmd.is_present("print"),
+                rest_cmd.is_present("disasm"),
                 rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
@@ -247,6 +264,7 @@ fn main() {
                     rest_cmd.is_present("just-decode"),
                     rest_cmd.is_present("check-translation"),
                     rest_cmd.is_present("print"),
+                    rest_cmd.is_present("disasm"),
                     &get_vec(rest_cmd.values_of("set")),
                     target_val,
                     rest_cmd.is_present("print-size"),

@@ -91,18 +91,21 @@ impl Context {
     ///
     /// This function calls `compile` and `emit_to_memory`, taking care to resize `mem` as
     /// needed, so it provides a safe interface.
+    ///
+    /// Returns the size of the function's code and the size of the read-only data.
     pub fn compile_and_emit(
         &mut self,
         isa: &TargetIsa,
         mem: &mut Vec<u8>,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
-    ) -> CodegenResult<()> {
-        let code_size = self.compile(isa)?;
+    ) -> CodegenResult<(CodeOffset, CodeOffset)> {
+        let total_size = self.compile(isa)?;
         let old_len = mem.len();
-        mem.resize(old_len + code_size as usize, 0);
-        unsafe { self.emit_to_memory(isa, mem.as_mut_ptr().add(old_len), relocs, traps) };
-        Ok(())
+        mem.resize(old_len + total_size as usize, 0);
+        let code_size =
+            unsafe { self.emit_to_memory(isa, mem.as_mut_ptr().add(old_len), relocs, traps) };
+        Ok((code_size, total_size - code_size))
     }
 
     /// Compile the function.
@@ -111,7 +114,7 @@ impl Context {
     /// represented by `isa`. This does not include the final step of emitting machine code into a
     /// code sink.
     ///
-    /// Returns the size of the function's code.
+    /// Returns the size of the function's code and read-only data.
     pub fn compile(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
@@ -155,15 +158,19 @@ impl Context {
     ///
     /// This function is unsafe since it does not perform bounds checking on the memory buffer,
     /// and it can't guarantee that the `mem` pointer is valid.
+    ///
+    /// Returns the size of the function's code.
     pub unsafe fn emit_to_memory(
         &self,
         isa: &TargetIsa,
         mem: *mut u8,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
-    ) {
+    ) -> CodeOffset {
         let _tt = timing::binemit();
-        isa.emit_function_to_memory(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));
+        let mut sink = MemoryCodeSink::new(mem, relocs, traps);
+        isa.emit_function_to_memory(&self.func, &mut sink);
+        sink.code_size as CodeOffset
     }
 
     /// Run the verifier on the function.
