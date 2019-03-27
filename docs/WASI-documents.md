@@ -7,7 +7,7 @@ For more detail on what WASI is, see [the overview](WASI-overview.md).
 
 For specifics on the API, see the [API documentation](https://github.com/CraneStation/wasmtime-wasi/blob/wasi/docs/WASI-api.md).
 Additionally, a C header file describing the WASI API is
-[here](https://github.com/CraneStation/reference-sysroot-wasi/blob/misc/libc-bottom-half/headers/public/wasi/core.h).
+[here](https://github.com/CraneStation/reference-sysroot-wasi/blob/wasi/libc-bottom-half/headers/public/wasi/core.h).
 
 For some discussion of capability-based design, see the [Capabilities document](WASI-capabilities.md).
 
