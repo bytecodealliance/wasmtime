@@ -127,37 +127,32 @@ fib:
   ret
 ```
 
-Whereas Lightbeam produces code with far fewer memory accesses than both (and fewer blocks than FireFox's output):
+Whereas Lightbeam produces smaller code with far fewer memory accesses than both (and fewer blocks than FireFox's output):
 
 ```asm
 fib:
-  xor  eax, eax
   cmp  esi, 2
-  setb al
-  mov  ecx, 1
-  test eax, eax
-  jne  .Lreturn
+  mov  eax, 1
+  jb   .Lreturn
   mov  eax, 1
 .Lloop:
   mov  rcx, rsi
   add  ecx, 0xffffffff
   push rsi
   push rax
+  push rax
   mov  rsi, rcx
-  call 0
-  add  eax, dword ptr [rsp]
-  mov  rcx, qword ptr [rsp + 8]
+  call fib
+  add  eax, dword ptr [rsp + 8]
+  mov  rcx, qword ptr [rsp + 0x10]
   add  ecx, 0xfffffffe
-  xor  edx, edx
   cmp  ecx, 1
-  seta dl
   mov  rsi, rcx
-  add  rsp, 0x10
-  test edx, edx
-  jne  .Lloop
-  mov  rcx, rax
+  pop  rcx
+  pop  rcx
+  pop  rcx
+  ja   .Lloop
 .Lreturn:
-  mov  rax, rcx
   ret
 ```
 

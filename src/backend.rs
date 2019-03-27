@@ -2362,6 +2362,38 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
     }
 
+    pub fn serialize_block_args(
+        &mut self,
+        cc: &BlockCallingConvention,
+        other_to_drop: Option<RangeInclusive<u32>>,
+    ) -> BlockCallingConvention {
+        self.do_pass_block_args(cc);
+
+        let mut out_args = cc.arguments.clone();
+
+        out_args.reverse();
+
+        if let Some(to_drop) = other_to_drop {
+            for _ in to_drop {
+                let val = self.pop();
+                // TODO: We can use stack slots for values already on the stack but we
+                //       don't refcount stack slots right now
+                let loc = CCLoc::Reg(self.into_temp_reg(None, val));
+
+                out_args.push(loc);
+            }
+        }
+
+        out_args.reverse();
+
+        self.set_stack_depth(cc.stack_depth);
+
+        BlockCallingConvention {
+            stack_depth: cc.stack_depth,
+            arguments: out_args,
+        }
+    }
+
     /// Puts all stack values into "real" locations so that they can i.e. be set to different
     /// values on different iterations of a loop
     pub fn serialize_args(&mut self, count: u32) -> BlockCallingConvention {
@@ -3670,6 +3702,58 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.push(out_val);
     }
 
+    pub fn i32_reinterpret_from_f32(&mut self) {
+        let val = self.pop();
+
+        let out = match val {
+            ValueLocation::Immediate(imm) => {
+                ValueLocation::Immediate(imm.as_f32().unwrap().bits().into())
+            }
+            val => val,
+        };
+
+        self.push(out);
+    }
+
+    pub fn i64_reinterpret_from_f64(&mut self) {
+        let val = self.pop();
+
+        let out = match val {
+            ValueLocation::Immediate(imm) => {
+                ValueLocation::Immediate(imm.as_f64().unwrap().bits().into())
+            }
+            val => val,
+        };
+
+        self.push(out);
+    }
+
+    pub fn f32_reinterpret_from_i32(&mut self) {
+        let val = self.pop();
+
+        let out = match val {
+            ValueLocation::Immediate(imm) => {
+                ValueLocation::Immediate(wasmparser::Ieee32(imm.as_i32().unwrap() as _).into())
+            }
+            val => val,
+        };
+
+        self.push(out);
+    }
+
+    pub fn f64_reinterpret_from_i64(&mut self) {
+        let val = self.pop();
+
+        let out = match val {
+            ValueLocation::Immediate(imm) => {
+                ValueLocation::Immediate(wasmparser::Ieee64(imm.as_i64().unwrap() as _).into())
+            }
+            val => val,
+        };
+
+        self.push(out);
+    }
+
     unop!(i64_popcnt, popcnt, Rq, u64, |a: u64| a.count_ones() as u64);
 
     // TODO: Use `lea` when the LHS operand isn't a temporary but both of the operands
@@ -4970,4 +5054,3 @@ impl IntoLabel for (LabelValue, LabelValue) {
         Box::new(const_values(self.0, self.1))
     }
 }
-

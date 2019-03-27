@@ -409,7 +409,9 @@ where
 
                         if block.calling_convention.is_some() {
                             assert!(cc.is_none(), "Can't pass different params to different elements of `br_table` yet");
-                            cc = block.calling_convention.clone();
+                            cc = block.calling_convention
+                                .clone()
+                                .map(|cc| (cc, target.to_drop.clone()));
                         }
 
                         if let Some(max) = max_num_callers {
@@ -419,11 +421,12 @@ where
                         max_params = max_params.max(block.params);
                     }
 
-                    if let Some(Left(cc)) = &cc {
-                        ctx.pass_block_args(cc);
-                    }
-
-                    let cc = cc.unwrap_or_else(||
+                    let cc = cc.map(|(cc, to_drop)| {
+                        match cc {
+                            Left(cc) => Left(ctx.serialize_block_args(&cc, to_drop)),
+                            Right(cc) => Right(cc),
+                        }
+                    }).unwrap_or_else(||
                         if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
                             Right(ctx.virtual_calling_convention())
                         } else {
@@ -547,11 +550,10 @@ where
             Operator::Drop(range) => ctx.drop(range),
             Operator::Const(val) => ctx.const_(val),
             Operator::I32WrapFromI64 => {}
-            // All reinterpret operators are no-ops - we do the conversion at the point of usage.
-            Operator::I32ReinterpretFromF32 => {}
-            Operator::I64ReinterpretFromF64 => {}
-            Operator::F32ReinterpretFromI32 => {}
-            Operator::F64ReinterpretFromI64 => {}
+            Operator::I32ReinterpretFromF32 => ctx.i32_reinterpret_from_f32(),
+            Operator::I64ReinterpretFromF64 => ctx.i64_reinterpret_from_f64(),
+            Operator::F32ReinterpretFromI32 => ctx.f32_reinterpret_from_i32(),
+            Operator::F64ReinterpretFromI64 => ctx.f64_reinterpret_from_i64(),
             Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I32,
