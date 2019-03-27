@@ -250,7 +250,7 @@ fn main() {
     );
 
     // FIXME: Also recognize "env", for compatibility with clang/llvm 8.0. And use
-    // "__wasi_" prefixes for compaitility with prototype reference-sysroot.
+    // "__wasi_" prefixes for compatibility with prototype reference-sysroot.
     let global_exports = context.get_global_exports();
     context.name_instance(
         "env".to_owned(),
