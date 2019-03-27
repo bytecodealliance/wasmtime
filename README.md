@@ -12,7 +12,7 @@ utility or as a library embedded in a larger application.
 [![Travis Status](https://travis-ci.org/CraneStation/wasmtime.svg?branch=master)](https://travis-ci.org/CraneStation/wasmtime)
 [![Appveyor Status](https://ci.appveyor.com/api/projects/status/vxvpt2plriy5s0mc?svg=true)](https://ci.appveyor.com/project/CraneStation/cranelift)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
-![Minimum rustc 1.30](https://img.shields.io/badge/rustc-1.30+-green.svg)
+![Minimum rustc 1.32](https://img.shields.io/badge/rustc-1.32+-green.svg)
 
 *Wasmtime is complete enough to pass the WebAssembly spec testsuite.* Support for
 system APIs is coming soon!
