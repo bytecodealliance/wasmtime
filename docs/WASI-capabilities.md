@@ -47,9 +47,12 @@ advantage of the hierarchical nature of the filesystem and require untrusted
 code to have a capability for a directory in order to access things inside
 that directory.
 
-So you can launch untrusted code, and at runtime give it access to specific
-directories, without having to set permissions in the filesystem or in
-per-application or per-user configuration settings.
+This way, you can launch untrusted code, and at runtime give it access to
+specific directories, without having to set permissions in the filesystem or
+in per-application or per-user configuration settings.
+
+See [this tutorial](WASI-tutorial.md) for an example of how this can look
+in practice.
 
 ## Berkeley socket rules
 
