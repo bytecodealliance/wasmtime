@@ -131,10 +131,10 @@ cfg_if! {
                 let mut len = 0;
                 let mut first = true;
                 for b in i.bytes() {
-                    write!(&mut bytes_str, "{:02x}", b).unwrap();
                     if !first {
                         write!(&mut bytes_str, " ").unwrap();
                     }
+                    write!(&mut bytes_str, "{:02x}", b).unwrap();
                     len += 1;
                     first = false;
                 }
