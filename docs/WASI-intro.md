@@ -15,11 +15,8 @@ information, and the [WASI Tutorial](WASI-tutorial.md) for a walkthrough
 showing how various pieces fit together.
 
 Note that everything here is a prototype, and while a lot of stuff works,
-there are numerous missing features and some rough edges. One big thing
-that's not done yet is the actual mechanism to provide a directory as a
-pre-opened capability, to allow files to be opened. Some of the pieces
-are there (`__wasilibc_register_preopened_fd`) but they're not used yet.
-Networking support is also incomplete.
+there are numerous missing features and some rough edges. For example,
+networking support is incomplete.
 
 ## How can I write programs that use WASI?
 
