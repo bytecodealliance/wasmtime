@@ -88,6 +88,11 @@ fn parse_x86_cpuid(isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
     Ok(())
 }
 
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+fn parse_x86_cpuid(_isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
+    unreachable!();
+}
+
 #[cfg(test)]
 mod tests {
     use super::builder;
