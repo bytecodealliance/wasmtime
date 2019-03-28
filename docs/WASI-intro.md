@@ -75,7 +75,7 @@ or `cargo run --bin wasmtime foo.wasm`.
 
 The polyfill is online [here](https://wasi.dev/polyfill/).
 
-The source is [here](https://github.com/CraneStation/wasmtime-wasi/tree/wasi/lib/wasi/sandboxed-system-primitives/polyfill).
+The source is [here](https://github.com/CraneStation/wasi/tree/master/wasi-polyfill).
 
 ## Where can I learn more?
 
