@@ -17,7 +17,7 @@ matrix:
     # Similarly, we don't need to hold up people using stable while we wait
     # for the results which may fail.
     fast_finish: true
-dist: trusty
+dist: xenial
 sudo: false
 before_script:
     # If an old version of rustfmt from cargo is already installed, uninstall
