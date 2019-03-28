@@ -744,6 +744,12 @@ Inputs:
 
 Open a file or directory.
 
+The returned file descriptor is not guaranteed to be the lowest-numbered
+file descriptor not currently open; it is randomized to prevent
+applications from depending on making assumptions about indexes, since
+this is error-prone in multi-threaded contexts. The returned file
+descriptor is guaranteed to be less than 2<sup>31</sup>.
+
 Note: This is similar to `openat` in POSIX.
 
 Inputs:
