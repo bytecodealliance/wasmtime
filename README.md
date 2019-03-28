@@ -39,7 +39,7 @@ Additional goals for Wasmtime include:
  - Implement the [proposed WebAssembly C API].
  - Facilitate testing, experimentation, and development around the [Cranelift] and
    [Lightbeam] JITs.
- - Develop a the native ABI used for compiling WebAssembly suitable for use in both
+ - Develop a native ABI used for compiling WebAssembly suitable for use in both
    JIT and AOT to native object files.
 
 [proposed WebAssembly C API]: https://github.com/rossberg/wasm-c-api
