@@ -57,7 +57,7 @@ Sockets aren't naturally hierarchical though, so we'll need to decide what
 capabilities look like. This is an area that isn't yet implemented.
 
 In CloudABI, users launch programs with the sockets they need already
-created. That's a potentially startup point, which might be enough for
+created. That's potentially a starting point, which might be enough for
 simple cases.
 
 We also anticipate an eventual extension to that, where we create a capability
