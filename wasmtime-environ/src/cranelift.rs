@@ -113,7 +113,7 @@ fn get_address_transform(
 /// optimizing it and then translating to assembly.
 pub struct Cranelift;
 
-impl crate::compilation::Compiler  for Cranelift {
+impl crate::compilation::Compiler for Cranelift {
     /// Compile the module using Cranelift, producing a compilation result with
     /// associated relocations.
     fn compile_module<'data, 'module>(

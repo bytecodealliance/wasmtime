@@ -260,9 +260,7 @@ fn allocate_functions(
     // Allocate code for all function in one continuous memory block.
     // First, collect all function bodies into vector to pass to the
     // allocate_copy_of_byte_slices.
-    let bodies = compilation
-        .into_iter()
-        .collect::<Vec<&[u8]>>();
+    let bodies = compilation.into_iter().collect::<Vec<&[u8]>>();
     let fat_ptrs = code_memory.allocate_copy_of_byte_slices(&bodies)?;
     // Second, create a PrimaryMap from result vector of pointers.
     let mut result = PrimaryMap::with_capacity(compilation.len());
