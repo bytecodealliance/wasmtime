@@ -313,8 +313,7 @@ where
                     ) {
                         ((Some(Left(ref cc)), to_drop), ref mut other @ (None, _))
                         | (ref mut other @ (None, _), (Some(Left(ref cc)), to_drop)) => {
-                            let mut cc =
-                                ctx.serialize_block_args(cc, to_drop.clone());
+                            let mut cc = ctx.serialize_block_args(cc, to_drop.clone());
                             if let Some(to_drop) = other.1 {
                                 drop_elements(&mut cc.arguments, to_drop.clone());
                             }

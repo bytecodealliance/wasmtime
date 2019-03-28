@@ -5023,4 +5023,3 @@ impl IntoLabel for (LabelValue, LabelValue) {
         Box::new(const_values(self.0, self.1))
     }
 }
-

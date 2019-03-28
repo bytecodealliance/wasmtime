@@ -7,8 +7,8 @@ use std::{
     ops::RangeInclusive,
 };
 use wasmparser::{
-    FunctionBody, Ieee32 as WasmIeee32, Ieee64 as WasmIeee64, MemoryImmediate as WasmMemoryImmediate, Operator as WasmOperator,
-    OperatorsReader,
+    FunctionBody, Ieee32 as WasmIeee32, Ieee64 as WasmIeee64,
+    MemoryImmediate as WasmMemoryImmediate, Operator as WasmOperator, OperatorsReader,
 };
 
 pub fn dis<L>(
@@ -1893,8 +1893,12 @@ where
             WasmOperator::MemoryGrow { reserved } => smallvec![Operator::MemoryGrow { reserved }],
             WasmOperator::I32Const { value } => smallvec![Operator::Const(Value::I32(value))],
             WasmOperator::I64Const { value } => smallvec![Operator::Const(Value::I64(value))],
-            WasmOperator::F32Const { value } => smallvec![Operator::Const(Value::F32(value.into()))],
-            WasmOperator::F64Const { value } => smallvec![Operator::Const(Value::F64(value.into()))],
+            WasmOperator::F32Const { value } => {
+                smallvec![Operator::Const(Value::F32(value.into()))]
+            }
+            WasmOperator::F64Const { value } => {
+                smallvec![Operator::Const(Value::F64(value.into()))]
+            }
             WasmOperator::RefNull => unimplemented!("{:?}", op),
             WasmOperator::RefIsNull => unimplemented!("{:?}", op),
             WasmOperator::I32Eqz => smallvec![Operator::Eqz(Size::_32)],
@@ -2170,4 +2174,3 @@ where
         }))
     }
 }
-
