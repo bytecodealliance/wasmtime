@@ -6,12 +6,8 @@ use cranelift_codegen::{
     ir::{self, AbiParam, Signature as CraneliftSignature},
     isa,
 };
-use std::{
-    convert::TryInto,
-    hash::{Hash, Hasher},
-    mem,
-};
-use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, TableType, Type};
+use std::{convert::TryInto, mem};
+use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, Type};
 
 pub trait AsValueType {
     const TYPE: Type;
@@ -105,70 +101,18 @@ pub struct TranslatedModule {
     ctx: SimpleContext,
     // TODO: Should we wrap this in a `Mutex` so that calling functions from multiple
     //       threads doesn't cause data races?
-    table: Option<(TableType, Vec<u32>)>,
     memory: Option<MemoryType>,
 }
 
-pub fn quickhash<H: Hash>(h: H) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    h.hash(&mut hasher);
-    hasher.finish()
-}
-
 impl TranslatedModule {
-    pub fn instantiate(mut self) -> ExecutableModule {
-        let table = {
-            let code_section = self
-                .translated_code_section
-                .as_ref()
-                .expect("We don't currently support a table section without a code section");
-            let ctx = &self.ctx;
-
-            self.table
-                .as_mut()
-                .map(|&mut (_, ref mut idxs)| {
-                    let initial = idxs
-                        .iter()
-                        .map(|i| {
-                            let start = code_section.func_start(*i as _);
-                            let ty = ctx.func_type(*i);
-
-                            RuntimeFunc {
-                                func_start: start,
-                                sig_hash: quickhash(ty),
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    let out = BoxSlice::from(initial.into_boxed_slice());
-                    out
-                })
-                .unwrap_or(BoxSlice {
-                    ptr: std::ptr::NonNull::dangling().as_ptr(),
-                    len: 0,
-                })
-        };
-
+    pub fn instantiate(self) -> ExecutableModule {
         let mem_size = self.memory.map(|m| m.limits.initial).unwrap_or(0) as usize;
         let mem: BoxSlice<_> = vec![0u8; mem_size * WASM_PAGE_SIZE]
             .into_boxed_slice()
             .into();
 
-        let ctx = if mem.len > 0 || table.len > 0 {
-            let hashes = self.ctx.types.iter().map(quickhash).collect::<Vec<_>>();
-
-            // Hardcoded maximum number of hashes supported for now - we will eventually port all our
-            // tests over to wasmtime which will make this obsolete so implementing this properly is
-            // unnecessary.
-            let mut out = [0; 64];
-
-            // This will panic if `hashes.len() > 64`
-            out[..hashes.len()].copy_from_slice(&hashes[..]);
-
-            Some(Box::new(GVmCtx {
-                table,
-                mem,
-                hashes: out,
-            }) as Box<VmCtx>)
+        let ctx = if mem.len > 0 {
+            Some(Box::new(VmCtx { mem }) as Box<VmCtx>)
         } else {
             None
         };
@@ -248,26 +192,6 @@ impl ExecutableModule {
     }
 }
 
-type FuncRef = *const u8;
-
-pub struct RuntimeFunc {
-    sig_hash: u64,
-    func_start: FuncRef,
-}
-
-unsafe impl Send for RuntimeFunc {}
-unsafe impl Sync for RuntimeFunc {}
-
-impl RuntimeFunc {
-    pub fn offset_of_sig_hash() -> usize {
-        offset_of!(Self, sig_hash)
-    }
-
-    pub fn offset_of_func_start() -> usize {
-        offset_of!(Self, func_start)
-    }
-}
-
 struct BoxSlice<T> {
     len: usize,
     ptr: *mut T,
@@ -293,43 +217,21 @@ impl<T> Drop for BoxSlice<T> {
     }
 }
 
-pub type VmCtx = GVmCtx<[u64]>;
-
-pub struct GVmCtx<T: ?Sized> {
-    table: BoxSlice<RuntimeFunc>,
+pub struct VmCtx {
     mem: BoxSlice<u8>,
-    hashes: T,
 }
 
-impl<T: ?Sized> GVmCtx<T> {
+impl VmCtx {
     pub fn offset_of_memory_ptr() -> u32 {
-        offset_of!(GVmCtx<[u64; 0]>, mem.ptr)
+        offset_of!(VmCtx, mem.ptr)
             .try_into()
             .expect("Offset exceeded size of u32")
     }
 
     pub fn offset_of_memory_len() -> u32 {
-        offset_of!(GVmCtx<[u64; 0]>, mem.len)
+        offset_of!(VmCtx, mem.len)
             .try_into()
             .expect("Offset exceeded size of u32")
-    }
-
-    pub fn offset_of_funcs_ptr() -> u8 {
-        offset_of!(GVmCtx<[u64; 0]>, table.ptr)
-            .try_into()
-            .expect("Offset exceeded size of u8")
-    }
-
-    pub fn offset_of_funcs_len() -> u8 {
-        offset_of!(GVmCtx<[u64; 0]>, table.len)
-            .try_into()
-            .expect("Offset exceeded size of u8")
-    }
-
-    pub fn offset_of_hashes() -> u8 {
-        offset_of!(GVmCtx<[u64; 0]>, hashes)
-            .try_into()
-            .expect("Offset exceeded size of u8")
     }
 }
 
@@ -545,19 +447,16 @@ impl ModuleContext for SimpleContext {
         VmCtx::offset_of_memory_len()
     }
 
-    fn vmctx_vmtable_definition(&self, defined_table_index: u32) -> u32 {
-        assert_eq!(defined_table_index, 0);
-        VmCtx::offset_of_funcs_ptr() as _
+    fn vmctx_vmtable_definition(&self, _defined_table_index: u32) -> u32 {
+        unimplemented!()
     }
 
-    fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32 {
-        assert_eq!(defined_table_index, 0);
-        VmCtx::offset_of_funcs_ptr() as _
+    fn vmctx_vmtable_definition_base(&self, _defined_table_index: u32) -> u32 {
+        unimplemented!()
     }
 
-    fn vmctx_vmtable_definition_current_elements(&self, defined_table_index: u32) -> u32 {
-        assert_eq!(defined_table_index, 0);
-        VmCtx::offset_of_funcs_len() as _
+    fn vmctx_vmtable_definition_current_elements(&self, _defined_table_index: u32) -> u32 {
+        unimplemented!()
     }
 
     fn vmtable_definition_base(&self) -> u8 {
@@ -573,19 +472,19 @@ impl ModuleContext for SimpleContext {
     }
 
     fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {
-        RuntimeFunc::offset_of_sig_hash() as _
+        unimplemented!()
     }
 
     fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
-        RuntimeFunc::offset_of_func_start() as _
+        unimplemented!()
     }
 
     fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
-        std::mem::size_of::<RuntimeFunc>() as _
+        unimplemented!()
     }
 
-    fn vmctx_vmshared_signature_id(&self, signature_idx: u32) -> u32 {
-        VmCtx::offset_of_hashes() as u32 + signature_idx * std::mem::size_of::<u64>() as u32
+    fn vmctx_vmshared_signature_id(&self, _signature_idx: u32) -> u32 {
+        unimplemented!()
     }
 
     // TODO: type of a global
@@ -599,7 +498,6 @@ pub fn translate(data: &[u8]) -> Result<ExecutableModule, Error> {
 pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
     let mut reader = ModuleReader::new(data)?;
     let mut output = TranslatedModule::default();
-    let mut table = None;
 
     reader.skip_custom_sections()?;
     if reader.eof() {
@@ -642,11 +540,7 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Table = section.code {
         let tables = section.get_table_section_reader()?;
-        let mut tables = translate_sections::table(tables)?;
-
-        assert!(tables.len() <= 1);
-
-        table = tables.drain(..).next();
+        translate_sections::table(tables)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
@@ -712,12 +606,7 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Element = section.code {
         let elements = section.get_element_section_reader()?;
-        let elements = translate_sections::element(elements)?;
-
-        output.table = Some((
-            table.expect("Element section with no table section"),
-            elements,
-        ));
+        translate_sections::element(elements)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {

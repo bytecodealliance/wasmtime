@@ -6,7 +6,7 @@ use cranelift_codegen::{binemit, ir};
 use wasmparser::{
     CodeSectionReader, DataSectionReader, ElementSectionReader, ExportSectionReader, FuncType,
     FunctionSectionReader, GlobalSectionReader, ImportSectionReader, MemorySectionReader,
-    MemoryType, Operator, TableSectionReader, TableType, TypeSectionReader,
+    MemoryType, TableSectionReader, TableType, TypeSectionReader,
 };
 
 /// Parses the Type section of the wasm module.
@@ -69,37 +69,12 @@ pub fn start(_index: u32) -> Result<(), Error> {
 }
 
 /// Parses the Element section of the wasm module.
-pub fn element(elements: ElementSectionReader) -> Result<Vec<u32>, Error> {
-    let mut out = Vec::new();
-
+pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
     for entry in elements {
-        let entry = entry?;
-
-        assert_eq!(entry.table_index, 0);
-        let offset = {
-            let mut reader = entry.init_expr.get_operators_reader();
-            let out = match reader.read() {
-                Ok(Operator::I32Const { value }) => value,
-                _ => panic!("We only support i32.const table init expressions right now"),
-            };
-
-            //reader.ensure_end()?;
-
-            out
-        };
-
-        assert_eq!(offset, out.len() as i32);
-
-        let elements = entry
-            .items
-            .get_items_reader()?
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-
-        out.extend(elements);
+        entry?;
     }
 
-    Ok(out)
+    Ok(())
 }
 
 struct UnimplementedRelocSink;

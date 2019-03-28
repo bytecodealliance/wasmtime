@@ -13,7 +13,7 @@ edition = "2018"
 smallvec = "0.6"
 dynasm = "0.3"
 dynasmrt = "0.3"
-wasmparser = { path = "./wasmparser.rs" }
+wasmparser = "0.29"
 memoffset = "0.2"
 itertools = "0.8"
 capstone = "0.5.0"

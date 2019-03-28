@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::microwasm::{BrTarget, SignlessType, Type, Value, F32, F64, I32, I64};
+use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::ModuleContext;
 use cranelift_codegen::{binemit, ir};
 use dynasm::dynasm;
@@ -459,11 +459,11 @@ impl ValueLocation {
         self.immediate().and_then(Value::as_i64)
     }
 
-    fn imm_f32(self) -> Option<wasmparser::Ieee32> {
+    fn imm_f32(self) -> Option<Ieee32> {
         self.immediate().and_then(Value::as_f32)
     }
 
-    fn imm_f64(self) -> Option<wasmparser::Ieee64> {
+    fn imm_f64(self) -> Option<Ieee64> {
         self.immediate().and_then(Value::as_f64)
     }
 }
@@ -1257,7 +1257,7 @@ macro_rules! cmp_float {
     (@helper $cmp_instr:ident, $ty:ty, $imm_fn:ident, $self:expr, $left:expr, $right:expr, $instr:ident, $const_fallback:expr) => {{
         let (left, right, this) = ($left, $right, $self);
         if let (Some(left), Some(right)) = (left.$imm_fn(), right.$imm_fn()) {
-            if $const_fallback(<$ty>::from_bits(left.bits()), <$ty>::from_bits(right.bits())) {
+            if $const_fallback(<$ty>::from_bits(left.to_bits()), <$ty>::from_bits(right.to_bits())) {
                 ValueLocation::Immediate(1i32.into())
             } else {
                 ValueLocation::Immediate(0i32.into())
@@ -1410,8 +1410,8 @@ macro_rules! binop_f32 {
         binop!(
             $name,
             $instr,
-            |a: wasmparser::Ieee32, b: wasmparser::Ieee32| wasmparser::Ieee32(
-                $const_fallback(f32::from_bits(a.bits()), f32::from_bits(b.bits())).to_bits()
+            |a: Ieee32, b: Ieee32| Ieee32::from_bits(
+                $const_fallback(f32::from_bits(a.to_bits()), f32::from_bits(b.to_bits())).to_bits()
             ),
             Rx,
             rx,
@@ -1427,8 +1427,8 @@ macro_rules! commutative_binop_f32 {
         commutative_binop!(
             $name,
             $instr,
-            |a: wasmparser::Ieee32, b: wasmparser::Ieee32| wasmparser::Ieee32(
-                $const_fallback(f32::from_bits(a.bits()), f32::from_bits(b.bits())).to_bits()
+            |a: Ieee32, b: Ieee32| Ieee32::from_bits(
+                $const_fallback(f32::from_bits(a.to_bits()), f32::from_bits(b.to_bits())).to_bits()
             ),
             Rx,
             rx,
@@ -1444,8 +1444,8 @@ macro_rules! binop_f64 {
         binop!(
             $name,
             $instr,
-            |a: wasmparser::Ieee64, b: wasmparser::Ieee64| wasmparser::Ieee64(
-                $const_fallback(f64::from_bits(a.bits()), f64::from_bits(b.bits())).to_bits()
+            |a: Ieee64, b: Ieee64| Ieee64::from_bits(
+                $const_fallback(f64::from_bits(a.to_bits()), f64::from_bits(b.to_bits())).to_bits()
             ),
             Rx,
             rx,
@@ -1461,8 +1461,8 @@ macro_rules! commutative_binop_f64 {
         commutative_binop!(
             $name,
             $instr,
-            |a: wasmparser::Ieee64, b: wasmparser::Ieee64| wasmparser::Ieee64(
-                $const_fallback(f64::from_bits(a.bits()), f64::from_bits(b.bits())).to_bits()
+            |a: Ieee64, b: Ieee64| Ieee64::from_bits(
+                $const_fallback(f64::from_bits(a.to_bits()), f64::from_bits(b.to_bits())).to_bits()
             ),
             Rx,
             rx,
@@ -1998,13 +1998,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         f32_eq,
         cmpeqss,
         as_f32,
-        |a: wasmparser::Ieee32, b: wasmparser::Ieee32| f32::from_bits(a.0) == f32::from_bits(b.0)
+        |a: Ieee32, b: Ieee32| f32::from_bits(a.to_bits()) == f32::from_bits(b.to_bits())
     );
     eq_float!(
         f32_ne,
         cmpneqss,
         as_f32,
-        |a: wasmparser::Ieee32, b: wasmparser::Ieee32| f32::from_bits(a.0) != f32::from_bits(b.0)
+        |a: Ieee32, b: Ieee32| f32::from_bits(a.to_bits()) != f32::from_bits(b.to_bits())
     );
 
     cmp_f64!(f64_gt, f64_lt, seta, |a, b| a > b);
@@ -2013,13 +2013,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         f64_eq,
         cmpeqsd,
         as_f64,
-        |a: wasmparser::Ieee64, b: wasmparser::Ieee64| f64::from_bits(a.0) == f64::from_bits(b.0)
+        |a: Ieee64, b: Ieee64| f64::from_bits(a.to_bits()) == f64::from_bits(b.to_bits())
     );
     eq_float!(
         f64_ne,
         cmpneqsd,
         as_f64,
-        |a: wasmparser::Ieee64, b: wasmparser::Ieee64| f64::from_bits(a.0) != f64::from_bits(b.0)
+        |a: Ieee64, b: Ieee64| f64::from_bits(a.to_bits()) != f64::from_bits(b.to_bits())
     );
 
     // TODO: Should we do this logic in `eq` and just have this delegate to `eq`?
@@ -2866,7 +2866,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = if let Some(i) = val.imm_f32() {
             ValueLocation::Immediate(
-                wasmparser::Ieee32((-f32::from_bits(i.bits())).to_bits()).into(),
+                Ieee32::from_bits((-f32::from_bits(i.to_bits())).to_bits()).into(),
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
@@ -2887,7 +2887,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = if let Some(i) = val.imm_f64() {
             ValueLocation::Immediate(
-                wasmparser::Ieee64((-f64::from_bits(i.bits())).to_bits()).into(),
+                Ieee64::from_bits((-f64::from_bits(i.to_bits())).to_bits()).into(),
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
@@ -2908,7 +2908,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = if let Some(i) = val.imm_f32() {
             ValueLocation::Immediate(
-                wasmparser::Ieee32(f32::from_bits(i.bits()).abs().to_bits()).into(),
+                Ieee32::from_bits(f32::from_bits(i.to_bits()).abs().to_bits()).into(),
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
@@ -2929,7 +2929,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = if let Some(i) = val.imm_f64() {
             ValueLocation::Immediate(
-                wasmparser::Ieee64(f64::from_bits(i.bits()).abs().to_bits()).into(),
+                Ieee64::from_bits(f64::from_bits(i.to_bits()).abs().to_bits()).into(),
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
@@ -2950,7 +2950,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = if let Some(i) = val.imm_f32() {
             ValueLocation::Immediate(
-                wasmparser::Ieee32(f32::from_bits(i.bits()).sqrt().to_bits()).into(),
+                Ieee32::from_bits(f32::from_bits(i.to_bits()).sqrt().to_bits()).into(),
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
@@ -2970,7 +2970,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = if let Some(i) = val.imm_f64() {
             ValueLocation::Immediate(
-                wasmparser::Ieee64(f64::from_bits(i.bits()).sqrt().to_bits()).into(),
+                Ieee64::from_bits(f64::from_bits(i.to_bits()).sqrt().to_bits()).into(),
             )
         } else {
             let reg = self.into_temp_reg(GPRType::Rx, val);
@@ -2991,8 +2991,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = if let (Some(left), Some(right)) = (left.imm_f32(), right.imm_f32()) {
             ValueLocation::Immediate(
-                wasmparser::Ieee32((left.bits() & REST_MASK_F32) | (right.bits() & SIGN_MASK_F32))
-                    .into(),
+                Ieee32::from_bits(
+                    (left.to_bits() & REST_MASK_F32) | (right.to_bits() & SIGN_MASK_F32),
+                )
+                .into(),
             )
         } else {
             let left = self.into_temp_reg(GPRType::Rx, left);
@@ -3020,8 +3022,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = if let (Some(left), Some(right)) = (left.imm_f64(), right.imm_f64()) {
             ValueLocation::Immediate(
-                wasmparser::Ieee64((left.bits() & REST_MASK_F64) | (right.bits() & SIGN_MASK_F64))
-                    .into(),
+                Ieee64::from_bits(
+                    (left.to_bits() & REST_MASK_F64) | (right.to_bits() & SIGN_MASK_F64),
+                )
+                .into(),
             )
         } else {
             let left = self.into_temp_reg(GPRType::Rx, left);
@@ -3134,7 +3138,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         f32,
         f64,
         as_f32,
-        |a: wasmparser::Ieee32| wasmparser::Ieee64((f32::from_bits(a.bits()) as f64).to_bits())
+        |a: Ieee32| Ieee64::from_bits((f32::from_bits(a.to_bits()) as f64).to_bits())
     );
     conversion!(
         f32_from_f64,
@@ -3146,14 +3150,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         f64,
         f32,
         as_f64,
-        |a: wasmparser::Ieee64| wasmparser::Ieee32((f64::from_bits(a.bits()) as f32).to_bits())
+        |a: Ieee64| Ieee32::from_bits((f64::from_bits(a.to_bits()) as f32).to_bits())
     );
     pub fn i32_truncate_f32_s(&mut self) {
         let mut val = self.pop();
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f32::from_bits(imm.as_f32().unwrap().bits()) as i32).into(),
+                (f32::from_bits(imm.as_f32().unwrap().to_bits()) as i32).into(),
             ),
             other => {
                 let reg = self.into_reg(F32, other);
@@ -3192,7 +3196,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f32::from_bits(imm.as_f32().unwrap().bits()) as i32).into(),
+                (f32::from_bits(imm.as_f32().unwrap().to_bits()) as i32).into(),
             ),
             other => {
                 let reg = self.into_temp_reg(F32, other);
@@ -3234,7 +3238,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f64::from_bits(imm.as_f64().unwrap().bits()) as i32).into(),
+                (f64::from_bits(imm.as_f64().unwrap().to_bits()) as i32).into(),
             ),
             other => {
                 let reg = self.into_reg(F32, other);
@@ -3274,7 +3278,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f32::from_bits(imm.as_f32().unwrap().bits()) as i32).into(),
+                (f32::from_bits(imm.as_f32().unwrap().to_bits()) as i32).into(),
             ),
             other => {
                 let reg = self.into_temp_reg(F32, other);
@@ -3322,7 +3326,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         i32,
         f32,
         as_i32,
-        |a| wasmparser::Ieee32((a as f32).to_bits())
+        |a| Ieee32::from_bits((a as f32).to_bits())
     );
     conversion!(
         f64_convert_from_i32_s,
@@ -3334,7 +3338,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         i32,
         f64,
         as_i32,
-        |a| wasmparser::Ieee64((a as f64).to_bits())
+        |a| Ieee64::from_bits((a as f64).to_bits())
     );
     conversion!(
         f32_convert_from_i64_s,
@@ -3346,7 +3350,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         i64,
         f32,
         as_i32,
-        |a| wasmparser::Ieee32((a as f32).to_bits())
+        |a| Ieee32::from_bits((a as f32).to_bits())
     );
     conversion!(
         f64_convert_from_i64_s,
@@ -3358,7 +3362,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         i64,
         f64,
         as_i32,
-        |a| wasmparser::Ieee64((a as f64).to_bits())
+        |a| Ieee64::from_bits((a as f64).to_bits())
     );
 
     pub fn i64_truncate_f32_s(&mut self) {
@@ -3366,7 +3370,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f32::from_bits(imm.as_f32().unwrap().bits()) as i32).into(),
+                (f32::from_bits(imm.as_f32().unwrap().to_bits()) as i32).into(),
             ),
             other => {
                 let reg = self.into_temp_reg(F32, other);
@@ -3405,7 +3409,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f64::from_bits(imm.as_f64().unwrap().bits()) as i32).into(),
+                (f64::from_bits(imm.as_f64().unwrap().to_bits()) as i32).into(),
             ),
             other => {
                 let reg = self.into_reg(F32, other);
@@ -3445,7 +3449,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f32::from_bits(imm.as_f32().unwrap().bits()) as u64).into(),
+                (f32::from_bits(imm.as_f32().unwrap().to_bits()) as u64).into(),
             ),
             _ => {
                 let reg = self.into_reg(F32, val);
@@ -3487,7 +3491,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f64::from_bits(imm.as_f64().unwrap().bits()) as u64).into(),
+                (f64::from_bits(imm.as_f64().unwrap().to_bits()) as u64).into(),
             ),
             _ => {
                 let reg = self.into_reg(F64, val);
@@ -3530,7 +3534,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                wasmparser::Ieee32((imm.as_i32().unwrap() as u32 as f32).to_bits()).into(),
+                Ieee32::from_bits((imm.as_i32().unwrap() as u32 as f32).to_bits()).into(),
             ),
             _ => {
                 let reg = self.into_reg(I32, val);
@@ -3557,7 +3561,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                wasmparser::Ieee64((imm.as_i32().unwrap() as u32 as f64).to_bits()).into(),
+                Ieee64::from_bits((imm.as_i32().unwrap() as u32 as f64).to_bits()).into(),
             ),
             _ => {
                 let reg = self.into_reg(I32, val);
@@ -3584,7 +3588,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                wasmparser::Ieee32((imm.as_i32().unwrap() as u64 as f32).to_bits()).into(),
+                Ieee32::from_bits((imm.as_i32().unwrap() as u64 as f32).to_bits()).into(),
             ),
             _ => {
                 let reg = self.into_reg(I64, val);
@@ -3624,7 +3628,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                wasmparser::Ieee64((imm.as_i64().unwrap() as u64 as f64).to_bits()).into(),
+                Ieee64::from_bits((imm.as_i64().unwrap() as u64 as f64).to_bits()).into(),
             ),
             _ => {
                 let reg = self.into_reg(I64, val);
@@ -3664,7 +3668,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
-                ValueLocation::Immediate(imm.as_f32().unwrap().bits().into())
+                ValueLocation::Immediate(imm.as_f32().unwrap().to_bits().into())
             }
             val => val,
         };
@@ -3677,7 +3681,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
-                ValueLocation::Immediate(imm.as_f64().unwrap().bits().into())
+                ValueLocation::Immediate(imm.as_f64().unwrap().to_bits().into())
             }
             val => val,
         };
@@ -3690,7 +3694,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
-                ValueLocation::Immediate(wasmparser::Ieee32(imm.as_i32().unwrap() as _).into())
+                ValueLocation::Immediate(Ieee32::from_bits(imm.as_i32().unwrap() as _).into())
             }
             val => val,
         };
@@ -3703,7 +3707,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
-                ValueLocation::Immediate(wasmparser::Ieee64(imm.as_i64().unwrap() as _).into())
+                ValueLocation::Immediate(Ieee64::from_bits(imm.as_i64().unwrap() as _).into())
             }
             val => val,
         };
@@ -3736,8 +3740,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         addss,
         orps,
         as_f32,
-        |a: wasmparser::Ieee32, b: wasmparser::Ieee32| wasmparser::Ieee32(
-            f32::from_bits(a.0).min(f32::from_bits(b.0)).to_bits()
+        |a: Ieee32, b: Ieee32| Ieee32::from_bits(
+            f32::from_bits(a.to_bits())
+                .min(f32::from_bits(b.to_bits()))
+                .to_bits()
         )
     );
     minmax_float!(
@@ -3747,8 +3753,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         addss,
         andps,
         as_f32,
-        |a: wasmparser::Ieee32, b: wasmparser::Ieee32| wasmparser::Ieee32(
-            f32::from_bits(a.0).max(f32::from_bits(b.0)).to_bits()
+        |a: Ieee32, b: Ieee32| Ieee32::from_bits(
+            f32::from_bits(a.to_bits())
+                .max(f32::from_bits(b.to_bits()))
+                .to_bits()
         )
     );
     binop_f32!(f32_sub, subss, |a, b| a - b);
@@ -3799,8 +3807,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         addsd,
         orpd,
         as_f64,
-        |a: wasmparser::Ieee64, b: wasmparser::Ieee64| wasmparser::Ieee64(
-            f64::from_bits(a.0).min(f64::from_bits(b.0)).to_bits()
+        |a: Ieee64, b: Ieee64| Ieee64::from_bits(
+            f64::from_bits(a.to_bits())
+                .min(f64::from_bits(b.to_bits()))
+                .to_bits()
         )
     );
     minmax_float!(
@@ -3810,8 +3820,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         addsd,
         andpd,
         as_f64,
-        |a: wasmparser::Ieee64, b: wasmparser::Ieee64| wasmparser::Ieee64(
-            f64::from_bits(a.0).max(f64::from_bits(b.0)).to_bits()
+        |a: Ieee64, b: Ieee64| Ieee64::from_bits(
+            f64::from_bits(a.to_bits())
+                .max(f64::from_bits(b.to_bits()))
+                .to_bits()
         )
     );
     binop_f64!(f64_sub, subsd, |a, b| a - b);

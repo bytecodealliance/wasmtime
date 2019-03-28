@@ -7,7 +7,8 @@ use std::{
     ops::RangeInclusive,
 };
 use wasmparser::{
-    FunctionBody, Ieee32, Ieee64, MemoryImmediate, Operator as WasmOperator, OperatorsReader,
+    FunctionBody, Ieee32 as WasmIeee32, Ieee64 as WasmIeee64, MemoryImmediate as WasmMemoryImmediate, Operator as WasmOperator,
+    OperatorsReader,
 };
 
 pub fn dis<L>(
@@ -49,8 +50,8 @@ impl fmt::Display for Value {
         match self {
             Value::I32(v) => write!(f, "{}i32", v),
             Value::I64(v) => write!(f, "{}i64", v),
-            Value::F32(v) => write!(f, "{}f32", f32::from_bits(v.bits())),
-            Value::F64(v) => write!(f, "{}f64", f64::from_bits(v.bits())),
+            Value::F32(v) => write!(f, "{}f32", f32::from_bits(v.to_bits())),
+            Value::F64(v) => write!(f, "{}f64", f64::from_bits(v.to_bits())),
         }
     }
 }
@@ -304,13 +305,6 @@ pub enum NameTag {
 
 pub type WasmLabel = (u32, NameTag);
 
-trait Label {
-    // TODO
-}
-
-// TODO: This is for Wasm blocks - we should have an increasing ID for each block that we hit.
-impl Label for (u32, NameTag) {}
-
 type OperatorFromWasm = Operator<WasmLabel>;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -384,6 +378,58 @@ where
             )
         } else {
             write!(f, "{}", self.target)
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Ieee32(u32);
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Ieee64(u64);
+
+impl Ieee32 {
+    pub fn to_bits(self) -> u32 {
+        self.0
+    }
+
+    pub fn from_bits(other: u32) -> Self {
+        Ieee32(other)
+    }
+}
+
+impl From<WasmIeee32> for Ieee32 {
+    fn from(other: WasmIeee32) -> Self {
+        Self::from_bits(other.bits())
+    }
+}
+
+impl Ieee64 {
+    pub fn to_bits(self) -> u64 {
+        self.0
+    }
+
+    pub fn from_bits(other: u64) -> Self {
+        Ieee64(other)
+    }
+}
+
+impl From<WasmIeee64> for Ieee64 {
+    fn from(other: WasmIeee64) -> Self {
+        Self::from_bits(other.bits())
+    }
+}
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct MemoryImmediate {
+    pub flags: u32,
+    pub offset: u32,
+}
+
+impl From<WasmMemoryImmediate> for MemoryImmediate {
+    fn from(other: WasmMemoryImmediate) -> Self {
+        MemoryImmediate {
+            flags: other.flags,
+            offset: other.offset,
         }
     }
 }
@@ -1750,79 +1796,105 @@ where
                 smallvec![Operator::SetGlobal(global_index)]
             }
 
-            WasmOperator::I32Load { memarg } => smallvec![Operator::Load { ty: I32, memarg }],
-            WasmOperator::I64Load { memarg } => smallvec![Operator::Load { ty: I64, memarg }],
-            WasmOperator::F32Load { memarg } => smallvec![Operator::Load { ty: F32, memarg }],
-            WasmOperator::F64Load { memarg } => smallvec![Operator::Load { ty: F64, memarg }],
+            WasmOperator::I32Load { memarg } => smallvec![Operator::Load {
+                ty: I32,
+                memarg: memarg.into()
+            }],
+            WasmOperator::I64Load { memarg } => smallvec![Operator::Load {
+                ty: I64,
+                memarg: memarg.into()
+            }],
+            WasmOperator::F32Load { memarg } => smallvec![Operator::Load {
+                ty: F32,
+                memarg: memarg.into()
+            }],
+            WasmOperator::F64Load { memarg } => smallvec![Operator::Load {
+                ty: F64,
+                memarg: memarg.into()
+            }],
             WasmOperator::I32Load8S { memarg } => smallvec![Operator::Load8 {
                 ty: sint::I32,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I32Load8U { memarg } => smallvec![Operator::Load8 {
                 ty: sint::U32,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I32Load16S { memarg } => smallvec![Operator::Load16 {
                 ty: sint::I32,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I32Load16U { memarg } => smallvec![Operator::Load16 {
                 ty: sint::U32,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I64Load8S { memarg } => smallvec![Operator::Load8 {
                 ty: sint::I64,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I64Load8U { memarg } => smallvec![Operator::Load8 {
                 ty: sint::U64,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I64Load16S { memarg } => smallvec![Operator::Load16 {
                 ty: sint::I64,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I64Load16U { memarg } => smallvec![Operator::Load16 {
                 ty: sint::U64,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I64Load32S { memarg } => smallvec![Operator::Load32 {
                 sign: Signedness::Signed,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I64Load32U { memarg } => smallvec![Operator::Load32 {
                 sign: Signedness::Unsigned,
-                memarg,
+                memarg: memarg.into(),
             }],
 
-            WasmOperator::I32Store { memarg } => smallvec![Operator::Store { ty: I32, memarg }],
-            WasmOperator::I64Store { memarg } => smallvec![Operator::Store { ty: I64, memarg }],
-            WasmOperator::F32Store { memarg } => smallvec![Operator::Store { ty: F32, memarg }],
-            WasmOperator::F64Store { memarg } => smallvec![Operator::Store { ty: F64, memarg }],
+            WasmOperator::I32Store { memarg } => smallvec![Operator::Store {
+                ty: I32,
+                memarg: memarg.into()
+            }],
+            WasmOperator::I64Store { memarg } => smallvec![Operator::Store {
+                ty: I64,
+                memarg: memarg.into()
+            }],
+            WasmOperator::F32Store { memarg } => smallvec![Operator::Store {
+                ty: F32,
+                memarg: memarg.into()
+            }],
+            WasmOperator::F64Store { memarg } => smallvec![Operator::Store {
+                ty: F64,
+                memarg: memarg.into()
+            }],
 
             WasmOperator::I32Store8 { memarg } => smallvec![Operator::Store8 {
                 ty: Size::_32,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I32Store16 { memarg } => smallvec![Operator::Store16 {
                 ty: Size::_32,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I64Store8 { memarg } => smallvec![Operator::Store8 {
                 ty: Size::_64,
-                memarg,
+                memarg: memarg.into(),
             }],
             WasmOperator::I64Store16 { memarg } => smallvec![Operator::Store16 {
                 ty: Size::_64,
-                memarg,
+                memarg: memarg.into(),
             }],
-            WasmOperator::I64Store32 { memarg } => smallvec![Operator::Store32 { memarg }],
+            WasmOperator::I64Store32 { memarg } => smallvec![Operator::Store32 {
+                memarg: memarg.into()
+            }],
             WasmOperator::MemorySize { reserved } => smallvec![Operator::MemorySize { reserved }],
             WasmOperator::MemoryGrow { reserved } => smallvec![Operator::MemoryGrow { reserved }],
             WasmOperator::I32Const { value } => smallvec![Operator::Const(Value::I32(value))],
             WasmOperator::I64Const { value } => smallvec![Operator::Const(Value::I64(value))],
-            WasmOperator::F32Const { value } => smallvec![Operator::Const(Value::F32(value))],
-            WasmOperator::F64Const { value } => smallvec![Operator::Const(Value::F64(value))],
+            WasmOperator::F32Const { value } => smallvec![Operator::Const(Value::F32(value.into()))],
+            WasmOperator::F64Const { value } => smallvec![Operator::Const(Value::F64(value.into()))],
             WasmOperator::RefNull => unimplemented!("{:?}", op),
             WasmOperator::RefIsNull => unimplemented!("{:?}", op),
             WasmOperator::I32Eqz => smallvec![Operator::Eqz(Size::_32)],
@@ -2098,3 +2170,4 @@ where
         }))
     }
 }
+
