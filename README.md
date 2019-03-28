@@ -22,7 +22,7 @@ There are Rust, C, and C++ toolchains that can compile programs with WASI. See
 tutorial on compiling and running programs using WASI and wasmtime, as
 well as an overview of the filesystem sandboxing system.
 
-Wasmtime does not yet implement Spectre mitiations, such as those being
+Wasmtime does not yet implement Spectre mitigations, such as those being
 pioneered [by](https://www.wasmjit.org/blog/spectre-mitigations-part-1.html)
 [wasmjit](https://www.wasmjit.org/blog/spectre-mitigations-part-2.html),
 however this is a subject of ongoing research.
