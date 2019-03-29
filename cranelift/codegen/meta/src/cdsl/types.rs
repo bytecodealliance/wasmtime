@@ -21,13 +21,13 @@ static LANE_BASE: u8 = 0x70;
 // Rust name prefix used for the `rust_name` method.
 static _RUST_NAME_PREFIX: &'static str = "ir::types::";
 
-// ValueType variants (i8, i32, ...) are provided in `base::types.rs`.
+// ValueType variants (i8, i32, ...) are provided in `shared::types.rs`.
 
 /// A concrete SSA value type.
 ///
 /// All SSA values have a type that is described by an instance of `ValueType`
 /// or one of its subclasses.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ValueType {
     BV(BVType),
     Lane(LaneType),
@@ -147,7 +147,7 @@ impl From<VectorType> for ValueType {
 }
 
 /// A concrete scalar type that can appear as a vector lane too.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum LaneType {
     BoolType(shared_types::Bool),
     FloatType(shared_types::Float),
@@ -327,7 +327,7 @@ impl Iterator for LaneTypeIterator {
 ///
 /// A vector type has a lane type which is an instance of `LaneType`,
 /// and a positive number of lanes.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct VectorType {
     base: LaneType,
     lanes: u64,
@@ -393,7 +393,7 @@ impl fmt::Debug for VectorType {
 }
 
 /// A flat bitvector type. Used for semantics description only.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct BVType {
     bits: u64,
 }
