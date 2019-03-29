@@ -36,6 +36,54 @@ pub struct TypeVar {
 }
 
 impl TypeVar {
+    pub fn new(name: impl Into<String>, doc: impl Into<String>, type_set: TypeSet) -> Self {
+        Self {
+            content: Rc::new(TypeVarContent {
+                name: name.into(),
+                doc: doc.into(),
+                type_set: Rc::new(type_set),
+                base: None,
+            }),
+        }
+    }
+
+    pub fn new_singleton(value_type: ValueType) -> Self {
+        let (name, doc) = (value_type.to_string(), value_type.doc());
+        let mut builder = TypeSetBuilder::new();
+
+        let (scalar_type, num_lanes) = match value_type {
+            ValueType::BV(bitvec_type) => {
+                let bits = bitvec_type.lane_bits() as RangeBound;
+                return TypeVar::new(name, doc, builder.bitvecs(bits..bits).finish());
+            }
+            ValueType::Special(special_type) => {
+                return TypeVar::new(name, doc, builder.specials(vec![special_type]).finish());
+            }
+            ValueType::Lane(lane_type) => (lane_type, 1),
+            ValueType::Vector(vec_type) => {
+                (vec_type.lane_type(), vec_type.lane_count() as RangeBound)
+            }
+        };
+
+        builder = builder.simd_lanes(num_lanes..num_lanes);
+
+        let builder = match scalar_type {
+            LaneType::IntType(int_type) => {
+                let bits = int_type as RangeBound;
+                builder.ints(bits..bits)
+            }
+            LaneType::FloatType(float_type) => {
+                let bits = float_type as RangeBound;
+                builder.floats(bits..bits)
+            }
+            LaneType::BoolType(bool_type) => {
+                let bits = bool_type as RangeBound;
+                builder.bools(bits..bits)
+            }
+        };
+        TypeVar::new(name, doc, builder.finish())
+    }
+
     fn get_typeset(&self) -> Rc<TypeSet> {
         match &self.content.base {
             Some(base) => Rc::new(base.type_var.get_typeset().image(base.derived_func)),
@@ -162,7 +210,7 @@ impl Into<TypeVar> for &TypeVar {
 }
 impl Into<TypeVar> for ValueType {
     fn into(self) -> TypeVar {
-        TypeVarBuilder::singleton(self)
+        TypeVar::new_singleton(self)
     }
 }
 
@@ -429,6 +477,83 @@ impl TypeSet {
     }
 }
 
+pub struct TypeSetBuilder {
+    ints: Interval,
+    floats: Interval,
+    bools: Interval,
+    bitvecs: Interval,
+    includes_scalars: bool,
+    simd_lanes: Interval,
+    specials: Vec<SpecialType>,
+}
+
+impl TypeSetBuilder {
+    pub fn new() -> Self {
+        Self {
+            ints: Interval::None,
+            floats: Interval::None,
+            bools: Interval::None,
+            bitvecs: Interval::None,
+            includes_scalars: true,
+            simd_lanes: Interval::None,
+            specials: Vec::new(),
+        }
+    }
+
+    pub fn ints(mut self, interval: impl Into<Interval>) -> Self {
+        assert!(self.ints == Interval::None);
+        self.ints = interval.into();
+        self
+    }
+    pub fn floats(mut self, interval: impl Into<Interval>) -> Self {
+        assert!(self.floats == Interval::None);
+        self.floats = interval.into();
+        self
+    }
+    pub fn bools(mut self, interval: impl Into<Interval>) -> Self {
+        assert!(self.bools == Interval::None);
+        self.bools = interval.into();
+        self
+    }
+    pub fn includes_scalars(mut self, includes_scalars: bool) -> Self {
+        self.includes_scalars = includes_scalars;
+        self
+    }
+    pub fn simd_lanes(mut self, interval: impl Into<Interval>) -> Self {
+        assert!(self.simd_lanes == Interval::None);
+        self.simd_lanes = interval.into();
+        self
+    }
+    pub fn bitvecs(mut self, interval: impl Into<Interval>) -> Self {
+        assert!(self.bitvecs == Interval::None);
+        self.bitvecs = interval.into();
+        self
+    }
+    pub fn specials(mut self, specials: Vec<SpecialType>) -> Self {
+        assert!(self.specials.is_empty());
+        self.specials = specials;
+        self
+    }
+
+    pub fn finish(self) -> TypeSet {
+        let min_lanes = if self.includes_scalars { 1 } else { 2 };
+;
+        let bools = range_to_set(self.bools.to_range(1..MAX_BITS, None))
+            .into_iter()
+            .filter(legal_bool)
+            .collect();
+
+        TypeSet::new(
+            range_to_set(self.simd_lanes.to_range(min_lanes..MAX_LANES, Some(1))),
+            range_to_set(self.ints.to_range(8..MAX_BITS, None)),
+            range_to_set(self.floats.to_range(32..64, None)),
+            bools,
+            range_to_set(self.bitvecs.to_range(1..MAX_BITVEC, None)),
+            self.specials,
+        )
+    }
+}
+
 #[derive(PartialEq)]
 pub enum Interval {
     None,
@@ -468,131 +593,6 @@ impl Into<Interval> for Range {
     }
 }
 
-pub struct TypeVarBuilder {
-    name: String,
-    doc: String,
-    ints: Interval,
-    floats: Interval,
-    bools: Interval,
-    bitvecs: Interval,
-    includes_scalars: bool,
-    simd_lanes: Interval,
-    specials: Vec<SpecialType>,
-}
-
-impl TypeVarBuilder {
-    pub fn new(name: impl Into<String>, doc: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            doc: doc.into(),
-            ints: Interval::None,
-            floats: Interval::None,
-            bools: Interval::None,
-            bitvecs: Interval::None,
-            includes_scalars: true,
-            simd_lanes: Interval::None,
-            specials: Vec::new(),
-        }
-    }
-
-    pub fn singleton(value_type: ValueType) -> TypeVar {
-        let mut builder = TypeVarBuilder::new(value_type.to_string(), value_type.doc());
-
-        let (scalar_type, num_lanes) = match value_type {
-            ValueType::BV(bitvec_type) => {
-                let bits = bitvec_type.lane_bits() as RangeBound;
-                return builder.bitvecs(bits..bits).finish();
-            }
-            ValueType::Special(special_type) => {
-                return builder.specials(vec![special_type]).finish();
-            }
-            ValueType::Lane(lane_type) => (lane_type, 1),
-            ValueType::Vector(vec_type) => {
-                (vec_type.lane_type(), vec_type.lane_count() as RangeBound)
-            }
-        };
-
-        builder = builder.simd_lanes(num_lanes..num_lanes);
-
-        match scalar_type {
-            LaneType::IntType(int_type) => {
-                let bits = int_type as RangeBound;
-                return builder.ints(bits..bits).finish();
-            }
-            LaneType::FloatType(float_type) => {
-                let bits = float_type as RangeBound;
-                return builder.floats(bits..bits).finish();
-            }
-            LaneType::BoolType(bool_type) => {
-                let bits = bool_type as RangeBound;
-                return builder.bools(bits..bits).finish();
-            }
-        }
-    }
-
-    pub fn ints(mut self, interval: impl Into<Interval>) -> Self {
-        assert!(self.ints == Interval::None);
-        self.ints = interval.into();
-        self
-    }
-    pub fn floats(mut self, interval: impl Into<Interval>) -> Self {
-        assert!(self.floats == Interval::None);
-        self.floats = interval.into();
-        self
-    }
-    pub fn bools(mut self, interval: impl Into<Interval>) -> Self {
-        assert!(self.bools == Interval::None);
-        self.bools = interval.into();
-        self
-    }
-    pub fn includes_scalars(mut self, includes_scalars: bool) -> Self {
-        self.includes_scalars = includes_scalars;
-        self
-    }
-    pub fn simd_lanes(mut self, interval: impl Into<Interval>) -> Self {
-        assert!(self.simd_lanes == Interval::None);
-        self.simd_lanes = interval.into();
-        self
-    }
-    pub fn bitvecs(mut self, interval: impl Into<Interval>) -> Self {
-        assert!(self.bitvecs == Interval::None);
-        self.bitvecs = interval.into();
-        self
-    }
-    pub fn specials(mut self, specials: Vec<SpecialType>) -> Self {
-        assert!(self.specials.is_empty());
-        self.specials = specials;
-        self
-    }
-
-    pub fn finish(self) -> TypeVar {
-        let min_lanes = if self.includes_scalars { 1 } else { 2 };
-
-        let bools = range_to_set(self.bools.to_range(1..MAX_BITS, None))
-            .into_iter()
-            .filter(legal_bool)
-            .collect();
-
-        let type_set = Rc::new(TypeSet::new(
-            range_to_set(self.simd_lanes.to_range(min_lanes..MAX_LANES, Some(1))),
-            range_to_set(self.ints.to_range(8..MAX_BITS, None)),
-            range_to_set(self.floats.to_range(32..64, None)),
-            bools,
-            range_to_set(self.bitvecs.to_range(1..MAX_BITVEC, None)),
-            self.specials,
-        ));
-
-        TypeVar {
-            content: Rc::new(TypeVarContent {
-                name: self.name.to_string(),
-                doc: self.doc.to_string(),
-                type_set,
-                base: None,
-            }),
-        }
-    }
-}
-
 fn legal_bool(bits: &RangeBound) -> bool {
     // Only allow legal bit widths for bool types.
     *bits == 1 || (*bits >= 8 && *bits <= MAX_BITS && bits.is_power_of_two())
@@ -620,91 +620,73 @@ fn range_to_set(range: Option<Range>) -> NumSet {
 
 #[test]
 fn test_typevar_builder() {
-    let typevar = TypeVarBuilder::new("test", "scalar integers")
-        .ints(Interval::All)
-        .finish();
-    assert_eq!(typevar.type_set.lanes, num_set![1]);
-    assert!(typevar.type_set.floats.is_empty());
-    assert_eq!(typevar.type_set.ints, num_set![8, 16, 32, 64]);
-    assert!(typevar.type_set.bools.is_empty());
-    assert!(typevar.type_set.bitvecs.is_empty());
-    assert!(typevar.type_set.specials.is_empty());
+    let type_set = TypeSetBuilder::new().ints(Interval::All).finish();
+    assert_eq!(type_set.lanes, num_set![1]);
+    assert!(type_set.floats.is_empty());
+    assert_eq!(type_set.ints, num_set![8, 16, 32, 64]);
+    assert!(type_set.bools.is_empty());
+    assert!(type_set.bitvecs.is_empty());
+    assert!(type_set.specials.is_empty());
 
-    let typevar = TypeVarBuilder::new("test", "scalar bools")
-        .bools(Interval::All)
-        .finish();
-    assert_eq!(typevar.type_set.lanes, num_set![1]);
-    assert!(typevar.type_set.floats.is_empty());
-    assert!(typevar.type_set.ints.is_empty());
-    assert_eq!(typevar.type_set.bools, num_set![1, 8, 16, 32, 64]);
-    assert!(typevar.type_set.bitvecs.is_empty());
-    assert!(typevar.type_set.specials.is_empty());
+    let type_set = TypeSetBuilder::new().bools(Interval::All).finish();
+    assert_eq!(type_set.lanes, num_set![1]);
+    assert!(type_set.floats.is_empty());
+    assert!(type_set.ints.is_empty());
+    assert_eq!(type_set.bools, num_set![1, 8, 16, 32, 64]);
+    assert!(type_set.bitvecs.is_empty());
+    assert!(type_set.specials.is_empty());
 
-    let typevar = TypeVarBuilder::new("test", "scalar floats")
-        .floats(Interval::All)
-        .finish();
-    assert_eq!(typevar.type_set.lanes, num_set![1]);
-    assert_eq!(typevar.type_set.floats, num_set![32, 64]);
-    assert!(typevar.type_set.ints.is_empty());
-    assert!(typevar.type_set.bools.is_empty());
-    assert!(typevar.type_set.bitvecs.is_empty());
-    assert!(typevar.type_set.specials.is_empty());
+    let type_set = TypeSetBuilder::new().floats(Interval::All).finish();
+    assert_eq!(type_set.lanes, num_set![1]);
+    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert!(type_set.ints.is_empty());
+    assert!(type_set.bools.is_empty());
+    assert!(type_set.bitvecs.is_empty());
+    assert!(type_set.specials.is_empty());
 
-    let typevar = TypeVarBuilder::new("test", "float vectors (but not scalars)")
+    let type_set = TypeSetBuilder::new()
         .floats(Interval::All)
         .simd_lanes(Interval::All)
         .includes_scalars(false)
         .finish();
-    assert_eq!(
-        typevar.type_set.lanes,
-        num_set![2, 4, 8, 16, 32, 64, 128, 256]
-    );
-    assert_eq!(typevar.type_set.floats, num_set![32, 64]);
-    assert!(typevar.type_set.ints.is_empty());
-    assert!(typevar.type_set.bools.is_empty());
-    assert!(typevar.type_set.bitvecs.is_empty());
-    assert!(typevar.type_set.specials.is_empty());
+    assert_eq!(type_set.lanes, num_set![2, 4, 8, 16, 32, 64, 128, 256]);
+    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert!(type_set.ints.is_empty());
+    assert!(type_set.bools.is_empty());
+    assert!(type_set.bitvecs.is_empty());
+    assert!(type_set.specials.is_empty());
 
-    let typevar = TypeVarBuilder::new("test", "float vectors and scalars")
+    let type_set = TypeSetBuilder::new()
         .floats(Interval::All)
         .simd_lanes(Interval::All)
         .includes_scalars(true)
         .finish();
-    assert_eq!(
-        typevar.type_set.lanes,
-        num_set![1, 2, 4, 8, 16, 32, 64, 128, 256]
-    );
-    assert_eq!(typevar.type_set.floats, num_set![32, 64]);
-    assert!(typevar.type_set.ints.is_empty());
-    assert!(typevar.type_set.bools.is_empty());
-    assert!(typevar.type_set.bitvecs.is_empty());
-    assert!(typevar.type_set.specials.is_empty());
+    assert_eq!(type_set.lanes, num_set![1, 2, 4, 8, 16, 32, 64, 128, 256]);
+    assert_eq!(type_set.floats, num_set![32, 64]);
+    assert!(type_set.ints.is_empty());
+    assert!(type_set.bools.is_empty());
+    assert!(type_set.bitvecs.is_empty());
+    assert!(type_set.specials.is_empty());
 
-    let typevar = TypeVarBuilder::new("test", "range of ints")
-        .ints(16..64)
-        .finish();
-    assert_eq!(typevar.type_set.lanes, num_set![1]);
-    assert_eq!(typevar.type_set.ints, num_set![16, 32, 64]);
-    assert!(typevar.type_set.floats.is_empty());
-    assert!(typevar.type_set.bools.is_empty());
-    assert!(typevar.type_set.bitvecs.is_empty());
-    assert!(typevar.type_set.specials.is_empty());
+    let type_set = TypeSetBuilder::new().ints(16..64).finish();
+    assert_eq!(type_set.lanes, num_set![1]);
+    assert_eq!(type_set.ints, num_set![16, 32, 64]);
+    assert!(type_set.floats.is_empty());
+    assert!(type_set.bools.is_empty());
+    assert!(type_set.bitvecs.is_empty());
+    assert!(type_set.specials.is_empty());
 }
 
 #[test]
 #[should_panic]
 fn test_typevar_builder_too_high_bound_panic() {
-    TypeVarBuilder::new("test", "invalid range of ints")
-        .ints(16..2 * MAX_BITS)
-        .finish();
+    TypeSetBuilder::new().ints(16..2 * MAX_BITS).finish();
 }
 
 #[test]
 #[should_panic]
 fn test_typevar_builder_inverted_bounds_panic() {
-    TypeVarBuilder::new("test", "inverted bounds")
-        .ints(32..16)
-        .finish();
+    TypeSetBuilder::new().ints(32..16).finish();
 }
 
 #[test]
@@ -714,7 +696,7 @@ fn test_singleton() {
 
     // Test i32.
     let typevar =
-        TypeVarBuilder::singleton(ValueType::Lane(LaneType::IntType(shared_types::Int::I32)));
+        TypeVar::new_singleton(ValueType::Lane(LaneType::IntType(shared_types::Int::I32)));
     assert_eq!(typevar.name, "i32");
     assert_eq!(typevar.type_set.ints, num_set![32]);
     assert!(typevar.type_set.floats.is_empty());
@@ -724,7 +706,7 @@ fn test_singleton() {
     assert_eq!(typevar.type_set.lanes, num_set![1]);
 
     // Test f32x4.
-    let typevar = TypeVarBuilder::singleton(ValueType::Vector(VectorType::new(
+    let typevar = TypeVar::new_singleton(ValueType::Vector(VectorType::new(
         LaneType::FloatType(shared_types::Float::F32),
         4,
     )));
