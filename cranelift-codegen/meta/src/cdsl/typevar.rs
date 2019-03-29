@@ -795,7 +795,55 @@ fn test_forward_images() {
 }
 
 #[test]
-fn test_singleton() {
+#[should_panic]
+fn test_typeset_singleton_panic_nonsingleton_types() {
+    TypeSetBuilder::new()
+        .ints(8..8)
+        .floats(32..32)
+        .finish()
+        .get_singleton();
+}
+
+#[test]
+#[should_panic]
+fn test_typeset_singleton_panic_nonsingleton_lanes() {
+    TypeSetBuilder::new()
+        .simd_lanes(1..2)
+        .floats(32..32)
+        .finish()
+        .get_singleton();
+}
+
+#[test]
+fn test_typeset_singleton() {
+    use crate::shared::types as shared_types;
+    assert_eq!(
+        TypeSetBuilder::new().ints(16..16).finish().get_singleton(),
+        ValueType::Lane(shared_types::Int::I16.into())
+    );
+    assert_eq!(
+        TypeSetBuilder::new()
+            .floats(64..64)
+            .finish()
+            .get_singleton(),
+        ValueType::Lane(shared_types::Float::F64.into())
+    );
+    assert_eq!(
+        TypeSetBuilder::new().bools(1..1).finish().get_singleton(),
+        ValueType::Lane(shared_types::Bool::B1.into())
+    );
+    assert_eq!(
+        TypeSetBuilder::new()
+            .simd_lanes(4..4)
+            .ints(32..32)
+            .finish()
+            .get_singleton(),
+        LaneType::from(shared_types::Int::I32).by(4)
+    );
+}
+
+#[test]
+fn test_typevar_singleton() {
     use crate::cdsl::types::VectorType;
     use crate::shared::types as shared_types;
 
