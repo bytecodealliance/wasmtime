@@ -4,7 +4,7 @@ use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::inst::{InstructionBuilder as Inst, InstructionGroup};
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::types::ValueType;
-use crate::cdsl::typevar::{Interval, TypeVar, TypeVarBuilder};
+use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::types;
 
 pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
@@ -12,9 +12,11 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
 
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
 
-    let iWord = &TypeVarBuilder::new("iWord", "A scalar integer machine word")
-        .ints(32..64)
-        .finish();
+    let iWord = &TypeVar::new(
+        "iWord",
+        "A scalar integer machine word",
+        TypeSetBuilder::new().ints(32..64).finish(),
+    );
     let nlo = &operand_doc("nlo", iWord, "Low part of numerator");
     let nhi = &operand_doc("nhi", iWord, "High part of numerator");
     let d = &operand_doc("d", iWord, "Denominator");
@@ -96,14 +98,22 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         .finish(format_registry),
     );
 
-    let Float = &TypeVarBuilder::new("Float", "A scalar or vector floating point number")
-        .floats(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
-    let IntTo = &TypeVarBuilder::new("IntTo", "An integer type with the same number of lanes")
-        .ints(32..64)
-        .simd_lanes(Interval::All)
-        .finish();
+    let Float = &TypeVar::new(
+        "Float",
+        "A scalar or vector floating point number",
+        TypeSetBuilder::new()
+            .floats(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
+    let IntTo = &TypeVar::new(
+        "IntTo",
+        "An integer type with the same number of lanes",
+        TypeSetBuilder::new()
+            .ints(32..64)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
     let x = &operand("x", Float);
     let a = &operand("a", IntTo);
 

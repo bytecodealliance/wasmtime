@@ -5,7 +5,7 @@ use crate::cdsl::inst::{InstructionBuilder as Inst, InstructionGroup};
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::type_inference::Constraint::WiderOrEq;
 use crate::cdsl::types::{LaneType, ValueType};
-use crate::cdsl::typevar::{Interval, TypeVar, TypeVarBuilder};
+use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::{types, OperandKinds};
 
 pub fn define(
@@ -47,59 +47,88 @@ pub fn define(
     let f64_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F64)).into();
 
     // Starting definitions.
-    let Int = &TypeVarBuilder::new("Int", "A scalar or vector integer type")
-        .ints(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let Int = &TypeVar::new(
+        "Int",
+        "A scalar or vector integer type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
 
-    let Bool = &TypeVarBuilder::new("Bool", "A scalar or vector boolean type")
-        .bools(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let Bool = &TypeVar::new(
+        "Bool",
+        "A scalar or vector boolean type",
+        TypeSetBuilder::new()
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
 
-    let iB = &TypeVarBuilder::new("iB", "A scalar integer type")
-        .ints(Interval::All)
-        .finish();
+    let iB = &TypeVar::new(
+        "iB",
+        "A scalar integer type",
+        TypeSetBuilder::new().ints(Interval::All).finish(),
+    );
 
-    let iAddr = &TypeVarBuilder::new("iAddr", "An integer address type")
-        .ints(32..64)
-        .finish();
+    let iAddr = &TypeVar::new(
+        "iAddr",
+        "An integer address type",
+        TypeSetBuilder::new().ints(32..64).finish(),
+    );
 
-    let Testable = &TypeVarBuilder::new("Testable", "A scalar boolean or integer type")
-        .ints(Interval::All)
-        .bools(Interval::All)
-        .finish();
+    let Testable = &TypeVar::new(
+        "Testable",
+        "A scalar boolean or integer type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .bools(Interval::All)
+            .finish(),
+    );
 
-    let TxN = &TypeVarBuilder::new("TxN", "A SIMD vector type")
-        .ints(Interval::All)
-        .floats(Interval::All)
-        .bools(Interval::All)
-        .simd_lanes(Interval::All)
-        .includes_scalars(false)
-        .finish();
+    let TxN = &TypeVar::new(
+        "TxN",
+        "A SIMD vector type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .includes_scalars(false)
+            .finish(),
+    );
 
-    let Any = &TypeVarBuilder::new(
+    let Any = &TypeVar::new(
         "Any",
         "Any integer, float, or boolean scalar or vector type",
-    )
-    .ints(Interval::All)
-    .floats(Interval::All)
-    .bools(Interval::All)
-    .simd_lanes(Interval::All)
-    .includes_scalars(true)
-    .finish();
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .includes_scalars(true)
+            .finish(),
+    );
 
-    let Mem = &TypeVarBuilder::new("Mem", "Any type that can be stored in memory")
-        .ints(Interval::All)
-        .floats(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let Mem = &TypeVar::new(
+        "Mem",
+        "Any type that can be stored in memory",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
 
-    let MemTo = &TypeVarBuilder::new("MemTo", "Any type that can be stored in memory")
-        .ints(Interval::All)
-        .floats(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let MemTo = &TypeVar::new(
+        "MemTo",
+        "Any type that can be stored in memory",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
 
     let addr = &operand("addr", iAddr);
     let c = &operand_doc("c", Testable, "Controlling value to test");
@@ -233,9 +262,11 @@ pub fn define(
 
     let x = &operand_doc("x", iB, "index into jump table");
 
-    let Entry = &TypeVarBuilder::new("Entry", "A scalar integer type")
-        .ints(Interval::All)
-        .finish();
+    let Entry = &TypeVar::new(
+        "Entry",
+        "A scalar integer type",
+        TypeSetBuilder::new().ints(Interval::All).finish(),
+    );
 
     let entry = &operand_doc("entry", Entry, "entry of jump table");
     let JT = &operand("JT", jump_table);
@@ -578,9 +609,11 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let iExt8 = &TypeVarBuilder::new("iExt8", "An integer type with more than 8 bits")
-        .ints(16..64)
-        .finish();
+    let iExt8 = &TypeVar::new(
+        "iExt8",
+        "An integer type with more than 8 bits",
+        TypeSetBuilder::new().ints(16..64).finish(),
+    );
     let x = &operand("x", iExt8);
     let a = &operand("a", iExt8);
 
@@ -672,9 +705,11 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let iExt16 = &TypeVarBuilder::new("iExt16", "An integer type with more than 16 bits")
-        .ints(32..64)
-        .finish();
+    let iExt16 = &TypeVar::new(
+        "iExt16",
+        "An integer type with more than 16 bits",
+        TypeSetBuilder::new().ints(32..64).finish(),
+    );
     let x = &operand("x", iExt16);
     let a = &operand("a", iExt16);
 
@@ -766,9 +801,11 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let iExt32 = &TypeVarBuilder::new("iExt32", "An integer type with more than 32 bits")
-        .ints(64..64)
-        .finish();
+    let iExt32 = &TypeVar::new(
+        "iExt32",
+        "An integer type with more than 32 bits",
+        TypeSetBuilder::new().ints(64..64).finish(),
+    );
     let x = &operand("x", iExt32);
     let a = &operand("a", iExt32);
 
@@ -945,9 +982,11 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let HeapOffset = &TypeVarBuilder::new("HeapOffset", "An unsigned heap offset")
-        .ints(32..64)
-        .finish();
+    let HeapOffset = &TypeVar::new(
+        "HeapOffset",
+        "An unsigned heap offset",
+        TypeSetBuilder::new().ints(32..64).finish(),
+    );
 
     let H = &operand("H", heap);
     let p = &operand("p", HeapOffset);
@@ -973,9 +1012,11 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let TableOffset = &TypeVarBuilder::new("TableOffset", "An unsigned table offset")
-        .ints(32..64)
-        .finish();
+    let TableOffset = &TypeVar::new(
+        "TableOffset",
+        "An unsigned table offset",
+        TypeSetBuilder::new().ints(32..64).finish(),
+    );
     let T = &operand("T", table);
     let p = &operand("p", TableOffset);
     let Offset = &operand_doc("Offset", offset32, "Byte offset from element address");
@@ -1342,13 +1383,17 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let Any128 = &TypeVarBuilder::new("Any128", "Any scalar or vector type with as most 128 lanes")
-        .ints(Interval::All)
-        .floats(Interval::All)
-        .bools(Interval::All)
-        .simd_lanes(1..128)
-        .includes_scalars(true)
-        .finish();
+    let Any128 = &TypeVar::new(
+        "Any128",
+        "Any scalar or vector type with as most 128 lanes",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .simd_lanes(1..128)
+            .includes_scalars(true)
+            .finish(),
+    );
 
     let x = &operand_doc("x", Any128, "Low-numbered lanes");
     let y = &operand_doc("y", Any128, "High-numbered lanes");
@@ -1935,16 +1980,17 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let bits = &TypeVarBuilder::new(
+    let bits = &TypeVar::new(
         "bits",
         "Any integer, float, or boolean scalar or vector type",
-    )
-    .ints(Interval::All)
-    .floats(Interval::All)
-    .bools(Interval::All)
-    .simd_lanes(Interval::All)
-    .includes_scalars(true)
-    .finish();
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .includes_scalars(true)
+            .finish(),
+    );
     let x = &operand("x", bits);
     let y = &operand("y", bits);
     let a = &operand("a", bits);
@@ -2331,10 +2377,14 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let Float = &TypeVarBuilder::new("Float", "A scalar or vector floating point number")
-        .floats(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let Float = &TypeVar::new(
+        "Float",
+        "A scalar or vector floating point number",
+        TypeSetBuilder::new()
+            .floats(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
     let Cond = &operand("Cond", floatcc);
     let x = &operand("x", Float);
     let y = &operand("y", Float);
@@ -2703,18 +2753,23 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let Bool = &TypeVarBuilder::new("Bool", "A scalar or vector boolean type")
-        .bools(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let Bool = &TypeVar::new(
+        "Bool",
+        "A scalar or vector boolean type",
+        TypeSetBuilder::new()
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
 
-    let BoolTo = &TypeVarBuilder::new(
+    let BoolTo = &TypeVar::new(
         "BoolTo",
         "A smaller boolean type with the same number of lanes",
-    )
-    .bools(Interval::All)
-    .simd_lanes(Interval::All)
-    .finish();
+        TypeSetBuilder::new()
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
 
     let x = &operand("x", Bool);
     let a = &operand("a", BoolTo);
@@ -2736,13 +2791,14 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let BoolTo = &TypeVarBuilder::new(
+    let BoolTo = &TypeVar::new(
         "BoolTo",
         "A larger boolean type with the same number of lanes",
-    )
-    .bools(Interval::All)
-    .simd_lanes(Interval::All)
-    .finish();
+        TypeSetBuilder::new()
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
     let x = &operand("x", Bool);
     let a = &operand("a", BoolTo);
 
@@ -2763,10 +2819,14 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let IntTo = &TypeVarBuilder::new("IntTo", "An integer type with the same number of lanes")
-        .ints(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let IntTo = &TypeVar::new(
+        "IntTo",
+        "An integer type with the same number of lanes",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
     let x = &operand("x", Bool);
     let a = &operand("a", IntTo);
 
@@ -2800,18 +2860,23 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let Int = &TypeVarBuilder::new("Int", "A scalar or vector integer type")
-        .ints(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let Int = &TypeVar::new(
+        "Int",
+        "A scalar or vector integer type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
 
-    let IntTo = &TypeVarBuilder::new(
+    let IntTo = &TypeVar::new(
         "IntTo",
         "A smaller integer type with the same number of lanes",
-    )
-    .ints(Interval::All)
-    .simd_lanes(Interval::All)
-    .finish();
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
     let x = &operand("x", Int);
     let a = &operand("a", IntTo);
 
@@ -2836,13 +2901,14 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let IntTo = &TypeVarBuilder::new(
+    let IntTo = &TypeVar::new(
         "IntTo",
         "A larger integer type with the same number of lanes",
-    )
-    .ints(Interval::All)
-    .simd_lanes(Interval::All)
-    .finish();
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
     let x = &operand("x", Int);
     let a = &operand("a", IntTo);
 
@@ -2888,10 +2954,14 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let FloatTo = &TypeVarBuilder::new("FloatTo", "A scalar or vector floating point number")
-        .floats(Interval::All)
-        .simd_lanes(Interval::All)
-        .finish();
+    let FloatTo = &TypeVar::new(
+        "FloatTo",
+        "A scalar or vector floating point number",
+        TypeSetBuilder::new()
+            .floats(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
     let x = &operand("x", Float);
     let a = &operand("a", FloatTo);
 
@@ -3046,10 +3116,14 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let WideInt = &TypeVarBuilder::new("WideInt", "An integer type with lanes from `i16` upwards")
-        .ints(16..64)
-        .simd_lanes(Interval::All)
-        .finish();
+    let WideInt = &TypeVar::new(
+        "WideInt",
+        "An integer type with lanes from `i16` upwards",
+        TypeSetBuilder::new()
+            .ints(16..64)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
     let x = &operand("x", WideInt);
     let lo = &operand_doc("lo", &WideInt.half_width(), "The low bits of `x`");
     let hi = &operand_doc("hi", &WideInt.half_width(), "The high bits of `x`");
@@ -3073,10 +3147,14 @@ pub fn define(
         .finish(format_registry),
     );
 
-    let NarrowInt = &TypeVarBuilder::new("NarrowInt", "An integer type with lanes type to `i32`")
-        .ints(8..32)
-        .simd_lanes(Interval::All)
-        .finish();
+    let NarrowInt = &TypeVar::new(
+        "NarrowInt",
+        "An integer type with lanes type to `i32`",
+        TypeSetBuilder::new()
+            .ints(8..32)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
 
     let lo = &operand("lo", NarrowInt);
     let hi = &operand("hi", NarrowInt);
