@@ -25,7 +25,9 @@ pub struct TypeVarContent {
     pub doc: String,
 
     /// Type set associated to the type variable.
-    pub type_set: Rc<TypeSet>,
+    /// This field must remain private; use `get_typeset()` or `get_raw_typeset()` to get the
+    /// information you want.
+    type_set: Rc<TypeSet>,
 
     pub base: Option<TypeVarParent>,
 }
@@ -84,11 +86,20 @@ impl TypeVar {
         TypeVar::new(name, doc, builder.finish())
     }
 
+    /// Returns this typevar's type set, maybe computing it from the parent.
     fn get_typeset(&self) -> Rc<TypeSet> {
+        // TODO Can this be done in a non-lazy way in derived() and we can remove this function and
+        // the one below?
         match &self.content.base {
             Some(base) => Rc::new(base.type_var.get_typeset().image(base.derived_func)),
             None => self.content.type_set.clone(),
         }
+    }
+
+    /// Returns this typevar's type set, assuming this type var has no parent.
+    pub fn get_raw_typeset(&self) -> &TypeSet {
+        assert_eq!(self.content.type_set, self.get_typeset());
+        &*self.content.type_set
     }
 
     /// If the associated typeset has a single type return it. Otherwise return None.
