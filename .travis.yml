@@ -37,10 +37,10 @@ before_script:
     - rustup update
     - rustfmt +stable --version
     # Testing.
-    gcc -Wall t.c -Wl,-y,getentropy
-    clang -Wall t.c -Wl,-y,getentropy
-    /lib/x86_64-linux-gnu/libc.so.6
-    nm -D /lib/x86_64-linux-gnu/libc.so.6 | grep getentropy
+    - gcc -Wall t.c -Wl,-y,getentropy
+    - clang -Wall t.c -Wl,-y,getentropy
+    - /lib/x86_64-linux-gnu/libc.so.6
+    - nm -D /lib/x86_64-linux-gnu/libc.so.6 | grep getentropy
 script: ./test-all.sh
 cache:
     cargo: true
