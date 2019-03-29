@@ -236,6 +236,12 @@ type RangeBound = u16;
 type Range = ops::Range<RangeBound>;
 type NumSet = BTreeSet<RangeBound>;
 
+macro_rules! num_set {
+    ($($expr:expr),*) => {
+        NumSet::from_iter(vec![$($expr),*])
+    };
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeSet {
     pub lanes: NumSet,
@@ -288,7 +294,7 @@ impl TypeSet {
     /// Return a TypeSet describing the image of self across lane_of.
     fn lane_of(&self) -> TypeSet {
         let mut copy = self.clone();
-        copy.lanes = NumSet::from_iter(vec![1]);
+        copy.lanes = num_set![1];
         copy.bitvecs = NumSet::new();
         copy
     }
@@ -299,7 +305,7 @@ impl TypeSet {
         copy.ints = NumSet::new();
         copy.floats = NumSet::new();
         copy.bitvecs = NumSet::new();
-        if (&self.lanes - &NumSet::from_iter(vec![1])).len() > 0 {
+        if (&self.lanes - &num_set![1]).len() > 0 {
             copy.bools = &self.ints | &self.floats;
             copy.bools = &copy.bools | &self.bools;
         }
@@ -376,7 +382,7 @@ impl TypeSet {
         let all_scalars = &(&self.ints | &self.floats) | &self.bools;
 
         let mut copy = self.clone();
-        copy.lanes = NumSet::from_iter(vec![1]);
+        copy.lanes = num_set![1];
         copy.ints = NumSet::new();
         copy.bools = NumSet::new();
         copy.floats = NumSet::new();
@@ -617,12 +623,9 @@ fn test_typevar_builder() {
     let typevar = TypeVarBuilder::new("test", "scalar integers")
         .ints(Interval::All)
         .finish();
-    assert_eq!(typevar.type_set.lanes, NumSet::from_iter(vec![1]));
+    assert_eq!(typevar.type_set.lanes, num_set![1]);
     assert!(typevar.type_set.floats.is_empty());
-    assert_eq!(
-        typevar.type_set.ints,
-        NumSet::from_iter(vec![8, 16, 32, 64])
-    );
+    assert_eq!(typevar.type_set.ints, num_set![8, 16, 32, 64]);
     assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.bitvecs.is_empty());
     assert!(typevar.type_set.specials.is_empty());
@@ -630,21 +633,18 @@ fn test_typevar_builder() {
     let typevar = TypeVarBuilder::new("test", "scalar bools")
         .bools(Interval::All)
         .finish();
-    assert_eq!(typevar.type_set.lanes, NumSet::from_iter(vec![1]));
+    assert_eq!(typevar.type_set.lanes, num_set![1]);
     assert!(typevar.type_set.floats.is_empty());
     assert!(typevar.type_set.ints.is_empty());
-    assert_eq!(
-        typevar.type_set.bools,
-        NumSet::from_iter(vec![1, 8, 16, 32, 64])
-    );
+    assert_eq!(typevar.type_set.bools, num_set![1, 8, 16, 32, 64]);
     assert!(typevar.type_set.bitvecs.is_empty());
     assert!(typevar.type_set.specials.is_empty());
 
     let typevar = TypeVarBuilder::new("test", "scalar floats")
         .floats(Interval::All)
         .finish();
-    assert_eq!(typevar.type_set.lanes, NumSet::from_iter(vec![1]));
-    assert_eq!(typevar.type_set.floats, NumSet::from_iter(vec![32, 64]));
+    assert_eq!(typevar.type_set.lanes, num_set![1]);
+    assert_eq!(typevar.type_set.floats, num_set![32, 64]);
     assert!(typevar.type_set.ints.is_empty());
     assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.bitvecs.is_empty());
@@ -657,9 +657,9 @@ fn test_typevar_builder() {
         .finish();
     assert_eq!(
         typevar.type_set.lanes,
-        NumSet::from_iter(vec![2, 4, 8, 16, 32, 64, 128, 256])
+        num_set![2, 4, 8, 16, 32, 64, 128, 256]
     );
-    assert_eq!(typevar.type_set.floats, NumSet::from_iter(vec![32, 64]));
+    assert_eq!(typevar.type_set.floats, num_set![32, 64]);
     assert!(typevar.type_set.ints.is_empty());
     assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.bitvecs.is_empty());
@@ -672,9 +672,9 @@ fn test_typevar_builder() {
         .finish();
     assert_eq!(
         typevar.type_set.lanes,
-        NumSet::from_iter(vec![1, 2, 4, 8, 16, 32, 64, 128, 256])
+        num_set![1, 2, 4, 8, 16, 32, 64, 128, 256]
     );
-    assert_eq!(typevar.type_set.floats, NumSet::from_iter(vec![32, 64]));
+    assert_eq!(typevar.type_set.floats, num_set![32, 64]);
     assert!(typevar.type_set.ints.is_empty());
     assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.bitvecs.is_empty());
@@ -683,8 +683,8 @@ fn test_typevar_builder() {
     let typevar = TypeVarBuilder::new("test", "range of ints")
         .ints(16..64)
         .finish();
-    assert_eq!(typevar.type_set.lanes, NumSet::from_iter(vec![1]));
-    assert_eq!(typevar.type_set.ints, NumSet::from_iter(vec![16, 32, 64]));
+    assert_eq!(typevar.type_set.lanes, num_set![1]);
+    assert_eq!(typevar.type_set.ints, num_set![16, 32, 64]);
     assert!(typevar.type_set.floats.is_empty());
     assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.bitvecs.is_empty());
@@ -716,12 +716,12 @@ fn test_singleton() {
     let typevar =
         TypeVarBuilder::singleton(ValueType::Lane(LaneType::IntType(shared_types::Int::I32)));
     assert_eq!(typevar.name, "i32");
-    assert_eq!(typevar.type_set.ints, NumSet::from_iter(vec![32]));
+    assert_eq!(typevar.type_set.ints, num_set![32]);
     assert!(typevar.type_set.floats.is_empty());
     assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.bitvecs.is_empty());
     assert!(typevar.type_set.specials.is_empty());
-    assert_eq!(typevar.type_set.lanes, NumSet::from_iter(vec![1]));
+    assert_eq!(typevar.type_set.lanes, num_set![1]);
 
     // Test f32x4.
     let typevar = TypeVarBuilder::singleton(ValueType::Vector(VectorType::new(
@@ -730,8 +730,8 @@ fn test_singleton() {
     )));
     assert_eq!(typevar.name, "f32x4");
     assert!(typevar.type_set.ints.is_empty());
-    assert_eq!(typevar.type_set.floats, NumSet::from_iter(vec![32]));
-    assert_eq!(typevar.type_set.lanes, NumSet::from_iter(vec![4]));
+    assert_eq!(typevar.type_set.floats, num_set![32]);
+    assert_eq!(typevar.type_set.lanes, num_set![4]);
     assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.bitvecs.is_empty());
     assert!(typevar.type_set.specials.is_empty());
