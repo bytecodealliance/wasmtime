@@ -117,7 +117,7 @@ impl TypeVar {
 
     /// Create a type variable that is a function of another.
     fn derived(&self, derived_func: DerivedFunc) -> TypeVar {
-        let ts = self.content.type_set.clone();
+        let ts = self.get_typeset();
 
         // Safety checks to avoid over/underflows.
         assert!(ts.specials.len() == 0, "can't derive from special types");
@@ -169,7 +169,7 @@ impl TypeVar {
 
         return TypeVar {
             content: Rc::new(TypeVarContent {
-                name: "".into(), // XXX Python passes None to these two fields
+                name: format!("{}({})", derived_func.name(), self.name),
                 doc: "".into(),
                 type_set: ts,
                 base: Some(TypeVarParent {
@@ -840,6 +840,23 @@ fn test_typeset_singleton() {
             .get_singleton(),
         LaneType::from(shared_types::Int::I32).by(4)
     );
+}
+
+#[test]
+fn test_typevar_functions() {
+    let x = TypeVar::new(
+        "x",
+        "i16 and up",
+        TypeSetBuilder::new().ints(16..64).finish(),
+    );
+    assert_eq!(x.half_width().name, "half_width(x)");
+    assert_eq!(
+        x.half_width().double_width().name,
+        "double_width(half_width(x))"
+    );
+
+    let x = TypeVar::new("x", "up to i32", TypeSetBuilder::new().ints(8..32).finish());
+    assert_eq!(x.double_width().name, "double_width(x)");
 }
 
 #[test]
