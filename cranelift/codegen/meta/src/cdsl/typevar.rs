@@ -690,6 +690,111 @@ fn test_typevar_builder_inverted_bounds_panic() {
 }
 
 #[test]
+fn test_as_bool() {
+    let a = TypeSetBuilder::new()
+        .simd_lanes(2..8)
+        .ints(8..8)
+        .floats(32..32)
+        .finish();
+    assert_eq!(
+        a.lane_of(),
+        TypeSetBuilder::new().ints(8..8).floats(32..32).finish()
+    );
+
+    // Test as_bool with disjoint intervals.
+    let mut a_as_bool = TypeSetBuilder::new().simd_lanes(2..8).finish();
+    a_as_bool.bools = num_set![8, 32];
+    assert_eq!(a.as_bool(), a_as_bool);
+
+    let b = TypeSetBuilder::new()
+        .simd_lanes(1..8)
+        .ints(8..8)
+        .floats(32..32)
+        .finish();
+    let mut b_as_bool = TypeSetBuilder::new().simd_lanes(1..8).finish();
+    b_as_bool.bools = num_set![1, 8, 32];
+    assert_eq!(b.as_bool(), b_as_bool);
+}
+
+#[test]
+fn test_forward_images() {
+    let empty_set = TypeSetBuilder::new().finish();
+
+    // Half vector.
+    assert_eq!(
+        TypeSetBuilder::new()
+            .simd_lanes(1..32)
+            .finish()
+            .half_vector(),
+        TypeSetBuilder::new().simd_lanes(1..16).finish()
+    );
+
+    // Double vector.
+    assert_eq!(
+        TypeSetBuilder::new()
+            .simd_lanes(1..32)
+            .finish()
+            .double_vector(),
+        TypeSetBuilder::new().simd_lanes(2..64).finish()
+    );
+    assert_eq!(
+        TypeSetBuilder::new()
+            .simd_lanes(128..256)
+            .finish()
+            .double_vector(),
+        TypeSetBuilder::new().simd_lanes(256..256).finish()
+    );
+
+    // Half width.
+    assert_eq!(
+        TypeSetBuilder::new().ints(8..32).finish().half_width(),
+        TypeSetBuilder::new().ints(8..16).finish()
+    );
+    assert_eq!(
+        TypeSetBuilder::new().floats(32..32).finish().half_width(),
+        empty_set
+    );
+    assert_eq!(
+        TypeSetBuilder::new().floats(32..64).finish().half_width(),
+        TypeSetBuilder::new().floats(32..32).finish()
+    );
+    assert_eq!(
+        TypeSetBuilder::new().bools(1..8).finish().half_width(),
+        empty_set
+    );
+    assert_eq!(
+        TypeSetBuilder::new().bools(1..32).finish().half_width(),
+        TypeSetBuilder::new().bools(8..16).finish()
+    );
+
+    // Double width.
+    assert_eq!(
+        TypeSetBuilder::new().ints(8..32).finish().double_width(),
+        TypeSetBuilder::new().ints(16..64).finish()
+    );
+    assert_eq!(
+        TypeSetBuilder::new().ints(32..64).finish().double_width(),
+        TypeSetBuilder::new().ints(64..64).finish()
+    );
+    assert_eq!(
+        TypeSetBuilder::new().floats(32..32).finish().double_width(),
+        TypeSetBuilder::new().floats(64..64).finish()
+    );
+    assert_eq!(
+        TypeSetBuilder::new().floats(32..64).finish().double_width(),
+        TypeSetBuilder::new().floats(64..64).finish()
+    );
+    assert_eq!(
+        TypeSetBuilder::new().bools(1..16).finish().double_width(),
+        TypeSetBuilder::new().bools(16..32).finish()
+    );
+    assert_eq!(
+        TypeSetBuilder::new().bools(32..64).finish().double_width(),
+        TypeSetBuilder::new().bools(64..64).finish()
+    );
+}
+
+#[test]
 fn test_singleton() {
     use crate::cdsl::types::VectorType;
     use crate::shared::types as shared_types;
