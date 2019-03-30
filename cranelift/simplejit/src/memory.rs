@@ -97,7 +97,12 @@ impl Memory {
     }
 
     /// TODO: Use a proper error type.
-    pub fn allocate(&mut self, size: usize) -> Result<*mut u8, String> {
+    pub fn allocate(&mut self, size: usize, align: u8) -> Result<*mut u8, String> {
+        if self.position % align as usize != 0 {
+            self.position += align as usize - self.position % align as usize;
+            debug_assert!(self.position % align as usize == 0);
+        }
+
         if size <= self.current.len - self.position {
             // TODO: Ensure overflow is not possible.
             let ptr = unsafe { self.current.ptr.add(self.position) };
