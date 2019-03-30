@@ -127,9 +127,9 @@ impl Backend for FaerieBackend {
             .expect("inconsistent declarations");
     }
 
-    fn declare_data(&mut self, name: &str, linkage: Linkage, writable: bool) {
+    fn declare_data(&mut self, name: &str, linkage: Linkage, writable: bool, align: Option<u8>) {
         self.artifact
-            .declare(name, translate_data_linkage(linkage, writable))
+            .declare(name, translate_data_linkage(linkage, writable, align))
             .expect("inconsistent declarations");
     }
 
@@ -190,6 +190,7 @@ impl Backend for FaerieBackend {
         &mut self,
         name: &str,
         _writable: bool,
+        _align: Option<u8>,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
     ) -> ModuleResult<FaerieCompiledData> {
@@ -334,12 +335,13 @@ fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
     }
 }
 
-fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
+fn translate_data_linkage(linkage: Linkage, writable: bool, align: Option<u8>) -> faerie::Decl {
+    let align = align.map(|align| usize::from(align));
     match linkage {
         Linkage::Import => faerie::Decl::data_import().into(),
-        Linkage::Local => faerie::Decl::data().with_writable(writable).into(),
-        Linkage::Export => faerie::Decl::data().global().with_writable(writable).into(),
-        Linkage::Preemptible => faerie::Decl::data().weak().with_writable(writable).into(),
+        Linkage::Local => faerie::Decl::data().with_writable(writable).with_align(align).into(),
+        Linkage::Export => faerie::Decl::data().global().with_writable(writable).with_align(align).into(),
+        Linkage::Preemptible => faerie::Decl::data().weak().with_writable(writable).with_align(align).into(),
     }
 }
 
