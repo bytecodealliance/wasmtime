@@ -339,9 +339,20 @@ fn translate_data_linkage(linkage: Linkage, writable: bool, align: Option<u8>) -
     let align = align.map(|align| usize::from(align));
     match linkage {
         Linkage::Import => faerie::Decl::data_import().into(),
-        Linkage::Local => faerie::Decl::data().with_writable(writable).with_align(align).into(),
-        Linkage::Export => faerie::Decl::data().global().with_writable(writable).with_align(align).into(),
-        Linkage::Preemptible => faerie::Decl::data().weak().with_writable(writable).with_align(align).into(),
+        Linkage::Local => faerie::Decl::data()
+            .with_writable(writable)
+            .with_align(align)
+            .into(),
+        Linkage::Export => faerie::Decl::data()
+            .global()
+            .with_writable(writable)
+            .with_align(align)
+            .into(),
+        Linkage::Preemptible => faerie::Decl::data()
+            .weak()
+            .with_writable(writable)
+            .with_align(align)
+            .into(),
     }
 }
 

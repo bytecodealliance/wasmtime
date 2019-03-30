@@ -448,8 +448,12 @@ where
                 FuncOrDataId::Data(id) => {
                     let existing = &mut self.contents.data_objects[id];
                     existing.merge(linkage, writable);
-                    self.backend
-                        .declare_data(name, existing.decl.linkage, existing.decl.writable, existing.decl.align);
+                    self.backend.declare_data(
+                        name,
+                        existing.decl.linkage,
+                        existing.decl.writable,
+                        existing.decl.align,
+                    );
                     Ok(id)
                 }
 
