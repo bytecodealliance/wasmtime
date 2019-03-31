@@ -12,13 +12,20 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <stdlib.h>
+
 #if defined(__FreeBSD__) || defined(__APPLE__)
 #define CONFIG_HAS_ARC4RANDOM_BUF 1
 #else
 #define CONFIG_HAS_ARC4RANDOM_BUF 0
 #endif
 
-#ifdef __linux__
+// On Linux, prefer to use getentropy, though it isn't available in
+// GLIBC before 2.25.
+#if defined(__linux__) && \
+    (!defined(__GLIBC__) || \
+     __GLIBC__ > 2 || \
+     (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25))
 #define CONFIG_HAS_GETENTROPY 1
 #else
 #define CONFIG_HAS_GETENTROPY 0
