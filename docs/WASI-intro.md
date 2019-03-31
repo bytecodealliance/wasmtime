@@ -26,9 +26,12 @@ toolchains will be able to implement WASI as well!
 
 ### Rust
 
-To install a WASI-enabled Rust toolchain, follow the instructions here:
+To install a WASI-enabled Rust toolchain:
 
-https://github.com/alexcrichton/rust/releases/tag/wasi3
+```
+rustup target add wasm32-unknown-wasi --toolchain nightly
+cargo +nightly build --target wasm32-unknown-wasi
+```
 
 Until now, Rust's WebAssembly support has had two main options, the
 Emscripten-based option, and the wasm32-unknown-unknown option. The latter

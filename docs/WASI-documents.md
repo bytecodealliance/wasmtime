@@ -9,6 +9,8 @@ For specifics on the API, see the [API documentation](https://github.com/CraneSt
 Additionally, a C header file describing the WASI API is
 [here](https://github.com/CraneStation/wasi-sysroot/blob/wasi/libc-bottom-half/headers/public/wasi/core.h).
 
+The WASI libc repository is [wasi-sysroot](https://github.com/CraneStation/wasi-sysroot/).
+
 For some discussion of capability-based design, see the [Capabilities document](WASI-capabilities.md).
 
 For some discussion of WASI's design inspiration, see the [Background document](WASI-background.md).
@@ -19,4 +21,3 @@ For some ideas of things that we may want to change about WASI in the
 short term, see the [possible changes](WASI-some-possible-changes.md) document.
 For longer-term ideas, see the [possible future features](WASI-possible-future-features.md)
 document.
-
