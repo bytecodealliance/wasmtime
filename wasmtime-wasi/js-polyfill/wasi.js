@@ -452,13 +452,13 @@ proc_raise: function(sig) {
 
 random_get: function(buf, buf_len) {
     let host_buf = _malloc(buf_len);
-    let ret = __wasi_random_get(host_buf, buf_len);
+    let ret = ___wasi_random_get(host_buf, buf_len);
     copyout_bytes(buf, host_buf, buf_len);
     return ret;
 },
 
 sched_yield: function() {
-    return __wasi_sched_yield();
+    return ___wasi_sched_yield();
 },
 
 sock_recv: function(sock, ri_data, ri_data_len, ri_flags, ro_datalen, ro_flags) {
@@ -480,7 +480,7 @@ sock_send: function(sock, si_data, si_data_len, si_flags, so_datalen) {
 },
 
 sock_shutdown: function(sock, how) {
-    return __wasi_sock_shutdown(sock, how);
+    return ___wasi_sock_shutdown(sock, how);
 }
 
 };
