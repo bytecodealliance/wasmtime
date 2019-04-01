@@ -213,7 +213,144 @@ pub struct __wasi_event_t {
     pub error: __wasi_errno_t,
     pub type_: __wasi_eventtype_t,
     pub __bindgen_padding_0: u32,
-    pub __bindgen_anon_1: __wasi_event_t__bindgen_ty_1,
+    pub u: __wasi_event_t___wasi_event_u,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union __wasi_event_t___wasi_event_u {
+    pub fd_readwrite: __wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t,
+    _bindgen_union_align: [u64; 2usize],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct __wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+    pub nbytes: __wasi_filesize_t,
+    pub flags: __wasi_eventrwflags_t,
+    pub __bindgen_padding_0: [u16; 3usize],
+}
+#[test]
+fn bindgen_test_layout___wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t() {
+    assert_eq!(
+        ::std::mem::size_of::<__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t>(),
+        16usize,
+        concat!(
+            "Size of: ",
+            stringify!(__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t>()))
+                .nbytes as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t),
+            "::",
+            stringify!(nbytes)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t>()))
+                .flags as *const _ as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t),
+            "::",
+            stringify!(flags)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout___wasi_event_t___wasi_event_u() {
+    assert_eq!(
+        ::std::mem::size_of::<__wasi_event_t___wasi_event_u>(),
+        16usize,
+        concat!("Size of: ", stringify!(__wasi_event_t___wasi_event_u))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<__wasi_event_t___wasi_event_u>(),
+        8usize,
+        concat!("Alignment of ", stringify!(__wasi_event_t___wasi_event_u))
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<__wasi_event_t___wasi_event_u>())).fd_readwrite as *const _
+                as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__wasi_event_t___wasi_event_u),
+            "::",
+            stringify!(fd_readwrite)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout___wasi_event_t() {
+    assert_eq!(
+        ::std::mem::size_of::<__wasi_event_t>(),
+        32usize,
+        concat!("Size of: ", stringify!(__wasi_event_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<__wasi_event_t>(),
+        8usize,
+        concat!("Alignment of ", stringify!(__wasi_event_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<__wasi_event_t>())).userdata as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__wasi_event_t),
+            "::",
+            stringify!(userdata)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<__wasi_event_t>())).error as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__wasi_event_t),
+            "::",
+            stringify!(error)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<__wasi_event_t>())).type_ as *const _ as usize },
+        10usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__wasi_event_t),
+            "::",
+            stringify!(type_)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<__wasi_event_t>())).u as *const _ as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__wasi_event_t),
+            "::",
+            stringify!(u)
+        )
+    );
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -731,18 +868,19 @@ pub struct __wasi_subscription_t {
     pub userdata: __wasi_userdata_t,
     pub type_: __wasi_eventtype_t,
     pub __bindgen_padding_0: u32,
-    pub __bindgen_anon_1: __wasi_subscription_t__bindgen_ty_1,
+    pub u: __wasi_subscription_t___wasi_subscription_u,
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub union __wasi_subscription_t__bindgen_ty_1 {
-    pub clock: __wasi_subscription_t__bindgen_ty_1__bindgen_ty_1,
-    pub fd_readwrite: __wasi_subscription_t__bindgen_ty_1__bindgen_ty_3,
+pub union __wasi_subscription_t___wasi_subscription_u {
+    pub clock: __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+    pub fd_readwrite:
+        __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t,
     _bindgen_union_align: [u64; 5usize],
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __wasi_subscription_t__bindgen_ty_1__bindgen_ty_1 {
+pub struct __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t {
     pub identifier: __wasi_userdata_t,
     pub clock_id: __wasi_clockid_t,
     pub __bindgen_padding_0: u32,
@@ -751,78 +889,99 @@ pub struct __wasi_subscription_t__bindgen_ty_1__bindgen_ty_1 {
     pub flags: __wasi_subclockflags_t,
     pub __bindgen_padding_1: [u16; 3usize],
 }
-#[allow(non_snake_case)]
 #[test]
-fn bindgen_test_layout_wasi_subscription_t__bindgen_ty_1__bindgen_ty_1() {
+fn bindgen_test_layout___wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t() {
     assert_eq!(
-        ::std::mem::size_of::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1>(),
+        ::std::mem::size_of::<
+            __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+        >(),
         40usize,
         concat!(
             "Size of: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1)
+            stringify!(__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<
+            __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+        >(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t)
         )
     );
     assert_eq!(
         unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1>())).identifier
-                as *const _ as usize
+            &(*(::std::ptr::null::<
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+            >()))
+            .identifier as *const _ as usize
         },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1),
+            stringify!(__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t),
             "::",
             stringify!(identifier)
         )
     );
     assert_eq!(
         unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1>())).clock_id
-                as *const _ as usize
+            &(*(::std::ptr::null::<
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+            >()))
+            .clock_id as *const _ as usize
         },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1),
+            stringify!(__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t),
             "::",
             stringify!(clock_id)
         )
     );
     assert_eq!(
         unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1>())).timeout
-                as *const _ as usize
+            &(*(::std::ptr::null::<
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+            >()))
+            .timeout as *const _ as usize
         },
         16usize,
         concat!(
             "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1),
+            stringify!(__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t),
             "::",
             stringify!(timeout)
         )
     );
     assert_eq!(
         unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1>())).precision
-                as *const _ as usize
+            &(*(::std::ptr::null::<
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+            >()))
+            .precision as *const _ as usize
         },
         24usize,
         concat!(
             "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1),
+            stringify!(__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t),
             "::",
             stringify!(precision)
         )
     );
     assert_eq!(
         unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1>())).flags
-                as *const _ as usize
+            &(*(::std::ptr::null::<
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+            >()))
+            .flags as *const _ as usize
         },
         32usize,
         concat!(
             "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_1),
+            stringify!(__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t),
             "::",
             stringify!(flags)
         )
@@ -830,122 +989,110 @@ fn bindgen_test_layout_wasi_subscription_t__bindgen_ty_1__bindgen_ty_1() {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __wasi_subscription_t__bindgen_ty_1__bindgen_ty_3 {
+pub struct __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t {
     pub fd: __wasi_fd_t,
 }
-#[allow(non_snake_case)]
 #[test]
-fn bindgen_test_layout_wasi_subscription_t__bindgen_ty_1__bindgen_ty_3() {
+fn bindgen_test_layout___wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t(
+) {
     assert_eq!(
-        ::std::mem::size_of::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_3>(),
+        ::std::mem::size_of::<
+            __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t,
+        >(),
         4usize,
         concat!(
             "Size of: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_3)
+            stringify!(
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t
+            )
         )
     );
     assert_eq!(
-        ::std::mem::align_of::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_3>(),
+        ::std::mem::align_of::<
+            __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t,
+        >(),
         4usize,
         concat!(
             "Alignment of ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_3)
+            stringify!(
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t
+            )
         )
     );
     assert_eq!(
         unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_3>())).fd
-                as *const _ as usize
+            &(*(::std::ptr::null::<
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t,
+            >()))
+            .fd as *const _ as usize
         },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_3),
+            stringify!(
+                __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t
+            ),
             "::",
             stringify!(fd)
         )
     );
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __wasi_subscription_t__bindgen_ty_1__bindgen_ty_5 {
-    pub fd: __wasi_fd_t,
-}
-#[allow(non_snake_case)]
 #[test]
-fn bindgen_test_layout_wasi_subscription_t__bindgen_ty_1__bindgen_ty_5() {
+fn bindgen_test_layout___wasi_subscription_t___wasi_subscription_u() {
     assert_eq!(
-        ::std::mem::size_of::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_5>(),
-        4usize,
-        concat!(
-            "Size of: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_5)
-        )
-    );
-    assert_eq!(
-        ::std::mem::align_of::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_5>(),
-        4usize,
-        concat!(
-            "Alignment of ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_5)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1__bindgen_ty_5>())).fd
-                as *const _ as usize
-        },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1__bindgen_ty_5),
-            "::",
-            stringify!(fd)
-        )
-    );
-}
-#[allow(non_snake_case)]
-#[test]
-fn bindgen_test_layout_wasi_subscription_t__bindgen_ty_1() {
-    assert_eq!(
-        ::std::mem::size_of::<__wasi_subscription_t__bindgen_ty_1>(),
+        ::std::mem::size_of::<__wasi_subscription_t___wasi_subscription_u>(),
         40usize,
-        concat!("Size of: ", stringify!(__wasi_subscription_t__bindgen_ty_1))
+        concat!(
+            "Size of: ",
+            stringify!(__wasi_subscription_t___wasi_subscription_u)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<__wasi_subscription_t___wasi_subscription_u>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(__wasi_subscription_t___wasi_subscription_u)
+        )
     );
     assert_eq!(
         unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1>())).clock as *const _
-                as usize
+            &(*(::std::ptr::null::<__wasi_subscription_t___wasi_subscription_u>())).clock
+                as *const _ as usize
         },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1),
+            stringify!(__wasi_subscription_t___wasi_subscription_u),
             "::",
             stringify!(clock)
         )
     );
     assert_eq!(
         unsafe {
-            &(*(::std::ptr::null::<__wasi_subscription_t__bindgen_ty_1>())).fd_readwrite as *const _
-                as usize
+            &(*(::std::ptr::null::<__wasi_subscription_t___wasi_subscription_u>())).fd_readwrite
+                as *const _ as usize
         },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__wasi_subscription_t__bindgen_ty_1),
+            stringify!(__wasi_subscription_t___wasi_subscription_u),
             "::",
             stringify!(fd_readwrite)
         )
     );
 }
-#[allow(non_snake_case)]
 #[test]
-fn bindgen_test_layout_wasi_subscription_t() {
+fn bindgen_test_layout___wasi_subscription_t() {
     assert_eq!(
         ::std::mem::size_of::<__wasi_subscription_t>(),
         56usize,
         concat!("Size of: ", stringify!(__wasi_subscription_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<__wasi_subscription_t>(),
+        8usize,
+        concat!("Alignment of ", stringify!(__wasi_subscription_t))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<__wasi_subscription_t>())).userdata as *const _ as usize },
@@ -967,8 +1114,17 @@ fn bindgen_test_layout_wasi_subscription_t() {
             stringify!(type_)
         )
     );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<__wasi_subscription_t>())).u as *const _ as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__wasi_subscription_t),
+            "::",
+            stringify!(u)
+        )
+    );
 }
-
 pub fn strerror(errno: __wasi_errno_t) -> &'static str {
     match errno {
         __WASI_ESUCCESS => "__WASI_ESUCCESS",

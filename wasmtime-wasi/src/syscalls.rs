@@ -193,8 +193,7 @@ syscalls! {
 
         let e = host::wasmtime_ssp_args_get(argv_environ, host_argv.as_mut_ptr(), host_argv_buf);
 
-        encode_charstar_slice(argv, host_argv.as_mut_ptr(), (*argv_environ).argc + 1,
-                              argv_buf, host_argv_buf);
+        encode_charstar_slice(argv, host_argv, argv_buf, host_argv_buf);
 
         return_encoded_errno(e)
     }
@@ -327,8 +326,7 @@ syscalls! {
 
         let e = host::wasmtime_ssp_environ_get(argv_environ, host_environ.as_mut_ptr(), host_environ_buf);
 
-        encode_charstar_slice(environ, host_environ.as_mut_ptr(), (*argv_environ).environ_count + 1,
-                              environ_buf, host_environ_buf);
+        encode_charstar_slice(environ, host_environ, environ_buf, host_environ_buf);
 
         return_encoded_errno(e)
     }
@@ -1376,7 +1374,7 @@ syscalls! {
                 trace!("     | *out[{}]=...", index);
             }
         }
-        encode_event_slice(vmctx, out, host_out).unwrap();
+        encode_event_slice(vmctx, out, host_out);
 
         return_encoded_errno(e)
     }
