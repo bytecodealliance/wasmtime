@@ -110,7 +110,35 @@ pub fn encode_usize(len: usize) -> wasm32::size_t {
     cast::u32(len).unwrap()
 }
 
-pub unsafe fn decode_filesize(filesize: wasm32::__wasi_filesize_t) -> host::__wasi_filesize_t {
+pub fn decode_device(device: wasm32::__wasi_device_t) -> host::__wasi_device_t {
+    device
+}
+
+pub fn encode_device(device: host::__wasi_device_t) -> wasm32::__wasi_device_t {
+    device
+}
+
+pub fn decode_inode(inode: wasm32::__wasi_inode_t) -> host::__wasi_inode_t {
+    inode
+}
+
+pub fn encode_inode(inode: host::__wasi_inode_t) -> wasm32::__wasi_inode_t {
+    inode
+}
+
+pub fn decode_linkcount(linkcount: wasm32::__wasi_linkcount_t) -> host::__wasi_linkcount_t {
+    linkcount
+}
+
+pub fn encode_linkcount(linkcount: host::__wasi_linkcount_t) -> wasm32::__wasi_linkcount_t {
+    linkcount
+}
+
+pub fn decode_filesize(filesize: wasm32::__wasi_filesize_t) -> host::__wasi_filesize_t {
+    filesize
+}
+
+pub fn encode_filesize(filesize: host::__wasi_filesize_t) -> wasm32::__wasi_filesize_t {
     filesize
 }
 
@@ -131,6 +159,10 @@ pub fn decode_clockid(clockid: wasm32::__wasi_clockid_t) -> host::__wasi_clockid
 }
 
 pub fn decode_timestamp(timestamp: wasm32::__wasi_timestamp_t) -> host::__wasi_timestamp_t {
+    timestamp
+}
+
+pub fn encode_timestamp(timestamp: host::__wasi_timestamp_t) -> wasm32::__wasi_timestamp_t {
     timestamp
 }
 
@@ -488,18 +520,40 @@ pub unsafe fn encode_fdstat_byref(
 }
 
 pub unsafe fn decode_filestat_byref(
-    _vmctx: &mut VMContext,
-    _filestat_ptr: wasm32::uintptr_t,
+    vmctx: &mut VMContext,
+    filestat_ptr: wasm32::uintptr_t,
 ) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
-    unimplemented!("decode_filestat_byref");
+    let wasm32_filestat = decode_pointee::<wasm32::__wasi_filestat_t>(vmctx, filestat_ptr)?;
+
+    Ok(host::__wasi_filestat_t {
+        st_dev: decode_device(wasm32_filestat.st_dev),
+        st_ino: decode_inode(wasm32_filestat.st_ino),
+        st_filetype: decode_filetype(wasm32_filestat.st_filetype),
+        st_nlink: decode_linkcount(wasm32_filestat.st_nlink),
+        st_size: decode_filesize(wasm32_filestat.st_size),
+        st_atim: decode_timestamp(wasm32_filestat.st_atim),
+        st_mtim: decode_timestamp(wasm32_filestat.st_mtim),
+        st_ctim: decode_timestamp(wasm32_filestat.st_ctim),
+    })
 }
 
 pub unsafe fn encode_filestat_byref(
-    _vmctx: &mut VMContext,
-    _filestat_ptr: wasm32::uintptr_t,
-    _host_filestat: host::__wasi_filestat_t,
+    vmctx: &mut VMContext,
+    filestat_ptr: wasm32::uintptr_t,
+    host_filestat: host::__wasi_filestat_t,
 ) -> Result<(), host::__wasi_errno_t> {
-    unimplemented!("encode_filestat_byref");
+    let wasm32_filestat = wasm32::__wasi_filestat_t {
+        st_dev: encode_device(host_filestat.st_dev),
+        st_ino: encode_inode(host_filestat.st_ino),
+        st_filetype: encode_filetype(host_filestat.st_filetype),
+        st_nlink: encode_linkcount(host_filestat.st_nlink),
+        st_size: encode_filesize(host_filestat.st_size),
+        st_atim: encode_timestamp(host_filestat.st_atim),
+        st_mtim: encode_timestamp(host_filestat.st_mtim),
+        st_ctim: encode_timestamp(host_filestat.st_ctim),
+    };
+
+    encode_pointee::<wasm32::__wasi_filestat_t>(vmctx, filestat_ptr, wasm32_filestat)
 }
 
 pub fn encode_errno(e: host::__wasi_errno_t) -> wasm32::__wasi_errno_t {
