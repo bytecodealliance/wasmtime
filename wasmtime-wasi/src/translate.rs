@@ -67,22 +67,17 @@ unsafe fn decode_ptr_to<T>(
 unsafe fn decode_pointee<T>(
     vmctx: &mut VMContext,
     ptr: wasm32::uintptr_t,
-) -> Result<T, host::__wasi_errno_t> {
-    let ptr = decode_ptr_to::<T>(vmctx, ptr)?;
-
-    // Size and alignment are checked by `decode_ptr_to`.
-    Ok(ptr.read())
+) -> Result<(), host::__wasi_errno_t> {
+    // Check bounds and alignment.
+    decode_ptr_to::<T>(vmctx, ptr)?;
+    Ok(())
 }
 
-pub unsafe fn encode_pointee<T>(
-    vmctx: &mut VMContext,
-    ptr: wasm32::uintptr_t,
-    t: T,
-) -> Result<(), host::__wasi_errno_t> {
-    let ptr = decode_ptr_to::<T>(vmctx, ptr)?;
+pub unsafe fn encode_pointee<T>(vmctx: &mut VMContext, ptr: wasm32::uintptr_t, t: T) {
+    // Bounds and alignment are checked in `decode_pointee`.
+    let ptr = decode_ptr_to::<T>(vmctx, ptr).unwrap();
 
-    // Size and alignment are checked by `decode_ptr_to`.
-    Ok(ptr.write(t))
+    ptr.write(t);
 }
 
 pub unsafe fn decode_slice_of<T>(
@@ -102,32 +97,16 @@ pub unsafe fn decode_slice_of<T>(
     Ok((ptr, len))
 }
 
-pub fn decode_usize(len: wasm32::size_t) -> usize {
-    cast::usize(len)
-}
-
 pub fn encode_usize(len: usize) -> wasm32::size_t {
     cast::u32(len).unwrap()
-}
-
-pub fn decode_device(device: wasm32::__wasi_device_t) -> host::__wasi_device_t {
-    device
 }
 
 pub fn encode_device(device: host::__wasi_device_t) -> wasm32::__wasi_device_t {
     device
 }
 
-pub fn decode_inode(inode: wasm32::__wasi_inode_t) -> host::__wasi_inode_t {
-    inode
-}
-
 pub fn encode_inode(inode: host::__wasi_inode_t) -> wasm32::__wasi_inode_t {
     inode
-}
-
-pub fn decode_linkcount(linkcount: wasm32::__wasi_linkcount_t) -> host::__wasi_linkcount_t {
-    linkcount
 }
 
 pub fn encode_linkcount(linkcount: host::__wasi_linkcount_t) -> wasm32::__wasi_linkcount_t {
@@ -208,10 +187,6 @@ pub fn decode_lookupflags(lookupflags: wasm32::__wasi_lookupflags_t) -> host::__
     lookupflags
 }
 
-pub fn decode_roflags(roflags: wasm32::__wasi_roflags_t) -> host::__wasi_roflags_t {
-    roflags
-}
-
 pub fn decode_oflags(oflags: wasm32::__wasi_oflags_t) -> host::__wasi_oflags_t {
     oflags
 }
@@ -224,16 +199,8 @@ pub fn decode_dircookie(dircookie: wasm32::__wasi_dircookie_t) -> host::__wasi_d
     dircookie
 }
 
-pub fn decode_preopentype(preopentype: wasm32::__wasi_preopentype_t) -> host::__wasi_preopentype_t {
-    preopentype
-}
-
 pub fn encode_preopentype(preopentype: host::__wasi_preopentype_t) -> wasm32::__wasi_preopentype_t {
     preopentype
-}
-
-pub fn decode_filetype(filetype: wasm32::__wasi_filetype_t) -> host::__wasi_filetype_t {
-    filetype
 }
 
 pub fn encode_filetype(filetype: host::__wasi_filetype_t) -> wasm32::__wasi_filetype_t {
@@ -470,39 +437,37 @@ pub unsafe fn encode_event_slice(
             vmctx,
             ptr + (i * size_of::<wasm32::__wasi_event_t>()) as u32,
             guest,
-        )
-        .unwrap();
+        );
     }
 }
 
 pub unsafe fn decode_fd_byref(
     vmctx: &mut VMContext,
     fd_ptr: wasm32::uintptr_t,
-) -> Result<host::__wasi_fd_t, host::__wasi_errno_t> {
-    decode_pointee::<wasm32::__wasi_fd_t>(vmctx, fd_ptr).map(decode_fd)
+) -> Result<(), host::__wasi_errno_t> {
+    decode_pointee::<wasm32::__wasi_fd_t>(vmctx, fd_ptr)
 }
 
 pub unsafe fn encode_fd_byref(
     vmctx: &mut VMContext,
     fd_ptr: wasm32::uintptr_t,
     fd: host::__wasi_fd_t,
-) -> Result<(), host::__wasi_errno_t> {
+) {
     encode_pointee::<wasm32::__wasi_fd_t>(vmctx, fd_ptr, wasm32::size_t::cast(fd))
 }
 
 pub unsafe fn decode_timestamp_byref(
     vmctx: &mut VMContext,
     timestamp_ptr: wasm32::uintptr_t,
-) -> Result<host::__wasi_timestamp_t, host::__wasi_errno_t> {
+) -> Result<(), host::__wasi_errno_t> {
     decode_pointee::<wasm32::__wasi_timestamp_t>(vmctx, timestamp_ptr)
-        .map(host::__wasi_timestamp_t::cast)
 }
 
 pub unsafe fn encode_timestamp_byref(
     vmctx: &mut VMContext,
     timestamp_ptr: wasm32::uintptr_t,
     host_timestamp: host::__wasi_timestamp_t,
-) -> Result<(), host::__wasi_errno_t> {
+) {
     encode_pointee::<wasm32::__wasi_timestamp_t>(
         vmctx,
         timestamp_ptr,
@@ -513,16 +478,15 @@ pub unsafe fn encode_timestamp_byref(
 pub unsafe fn decode_filesize_byref(
     vmctx: &mut VMContext,
     filesize_ptr: wasm32::uintptr_t,
-) -> Result<host::__wasi_filesize_t, host::__wasi_errno_t> {
+) -> Result<(), host::__wasi_errno_t> {
     decode_pointee::<wasm32::__wasi_filesize_t>(vmctx, filesize_ptr)
-        .map(host::__wasi_filesize_t::cast)
 }
 
 pub unsafe fn encode_filesize_byref(
     vmctx: &mut VMContext,
     filesize_ptr: wasm32::uintptr_t,
     host_filesize: host::__wasi_filesize_t,
-) -> Result<(), host::__wasi_errno_t> {
+) {
     encode_pointee::<wasm32::__wasi_filesize_t>(
         vmctx,
         filesize_ptr,
@@ -533,15 +497,15 @@ pub unsafe fn encode_filesize_byref(
 pub unsafe fn decode_roflags_byref(
     vmctx: &mut VMContext,
     roflags_ptr: wasm32::uintptr_t,
-) -> Result<host::__wasi_roflags_t, host::__wasi_errno_t> {
-    decode_pointee::<wasm32::__wasi_roflags_t>(vmctx, roflags_ptr).map(decode_roflags)
+) -> Result<(), host::__wasi_errno_t> {
+    decode_pointee::<wasm32::__wasi_roflags_t>(vmctx, roflags_ptr)
 }
 
 pub unsafe fn encode_roflags_byref(
     vmctx: &mut VMContext,
     roflags_ptr: wasm32::uintptr_t,
     host_roflags: host::__wasi_roflags_t,
-) -> Result<(), host::__wasi_errno_t> {
+) {
     encode_pointee::<wasm32::__wasi_roflags_t>(
         vmctx,
         roflags_ptr,
@@ -552,39 +516,31 @@ pub unsafe fn encode_roflags_byref(
 pub unsafe fn decode_usize_byref(
     vmctx: &mut VMContext,
     usize_ptr: wasm32::uintptr_t,
-) -> Result<usize, host::__wasi_errno_t> {
-    decode_pointee::<wasm32::size_t>(vmctx, usize_ptr).map(decode_usize)
+) -> Result<(), host::__wasi_errno_t> {
+    decode_pointee::<wasm32::size_t>(vmctx, usize_ptr)
 }
 
 pub unsafe fn encode_usize_byref(
     vmctx: &mut VMContext,
     usize_ptr: wasm32::uintptr_t,
     host_usize: usize,
-) -> Result<(), host::__wasi_errno_t> {
+) {
     encode_pointee::<wasm32::size_t>(vmctx, usize_ptr, wasm32::size_t::cast(host_usize).unwrap())
 }
 
 pub unsafe fn decode_prestat_byref(
     vmctx: &mut VMContext,
     prestat_ptr: wasm32::uintptr_t,
-) -> Result<host::__wasi_prestat_t, host::__wasi_errno_t> {
-    let wasm32_prestat = decode_pointee::<wasm32::__wasi_prestat_t>(vmctx, prestat_ptr)?;
-
-    Ok(host::__wasi_prestat_t {
-        pr_type: decode_preopentype(wasm32_prestat.pr_type),
-        u: host::__wasi_prestat_t___wasi_prestat_u {
-            dir: host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
-                pr_name_len: decode_usize(wasm32_prestat.u.dir.pr_name_len),
-            },
-        },
-    })
+) -> Result<(), host::__wasi_errno_t> {
+    decode_pointee::<wasm32::__wasi_prestat_t>(vmctx, prestat_ptr)?;
+    Ok(())
 }
 
 pub unsafe fn encode_prestat_byref(
     vmctx: &mut VMContext,
     prestat_ptr: wasm32::uintptr_t,
     host_prestat: host::__wasi_prestat_t,
-) -> Result<(), host::__wasi_errno_t> {
+) {
     let wasm32_prestat = wasm32::__wasi_prestat_t {
         pr_type: encode_preopentype(host_prestat.pr_type),
         u: wasm32::__wasi_prestat_t___wasi_prestat_u {
@@ -600,22 +556,16 @@ pub unsafe fn encode_prestat_byref(
 pub unsafe fn decode_fdstat_byref(
     vmctx: &mut VMContext,
     fdstat_ptr: wasm32::uintptr_t,
-) -> Result<host::__wasi_fdstat_t, host::__wasi_errno_t> {
-    let wasm32_fdstat = decode_pointee::<wasm32::__wasi_fdstat_t>(vmctx, fdstat_ptr)?;
-
-    Ok(host::__wasi_fdstat_t {
-        fs_filetype: decode_filetype(wasm32_fdstat.fs_filetype),
-        fs_flags: decode_fdflags(wasm32_fdstat.fs_flags),
-        fs_rights_base: decode_rights(wasm32_fdstat.fs_rights_base),
-        fs_rights_inheriting: decode_rights(wasm32_fdstat.fs_rights_inheriting),
-    })
+) -> Result<(), host::__wasi_errno_t> {
+    decode_pointee::<wasm32::__wasi_fdstat_t>(vmctx, fdstat_ptr)?;
+    Ok(())
 }
 
 pub unsafe fn encode_fdstat_byref(
     vmctx: &mut VMContext,
     fdstat_ptr: wasm32::uintptr_t,
     host_fdstat: host::__wasi_fdstat_t,
-) -> Result<(), host::__wasi_errno_t> {
+) {
     let wasm32_fdstat = wasm32::__wasi_fdstat_t {
         fs_filetype: encode_filetype(host_fdstat.fs_filetype),
         fs_flags: encode_fdflags(host_fdstat.fs_flags),
@@ -630,26 +580,16 @@ pub unsafe fn encode_fdstat_byref(
 pub unsafe fn decode_filestat_byref(
     vmctx: &mut VMContext,
     filestat_ptr: wasm32::uintptr_t,
-) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
-    let wasm32_filestat = decode_pointee::<wasm32::__wasi_filestat_t>(vmctx, filestat_ptr)?;
-
-    Ok(host::__wasi_filestat_t {
-        st_dev: decode_device(wasm32_filestat.st_dev),
-        st_ino: decode_inode(wasm32_filestat.st_ino),
-        st_filetype: decode_filetype(wasm32_filestat.st_filetype),
-        st_nlink: decode_linkcount(wasm32_filestat.st_nlink),
-        st_size: decode_filesize(wasm32_filestat.st_size),
-        st_atim: decode_timestamp(wasm32_filestat.st_atim),
-        st_mtim: decode_timestamp(wasm32_filestat.st_mtim),
-        st_ctim: decode_timestamp(wasm32_filestat.st_ctim),
-    })
+) -> Result<(), host::__wasi_errno_t> {
+    decode_pointee::<wasm32::__wasi_filestat_t>(vmctx, filestat_ptr)?;
+    Ok(())
 }
 
 pub unsafe fn encode_filestat_byref(
     vmctx: &mut VMContext,
     filestat_ptr: wasm32::uintptr_t,
     host_filestat: host::__wasi_filestat_t,
-) -> Result<(), host::__wasi_errno_t> {
+) {
     let wasm32_filestat = wasm32::__wasi_filestat_t {
         st_dev: encode_device(host_filestat.st_dev),
         st_ino: encode_inode(host_filestat.st_ino),

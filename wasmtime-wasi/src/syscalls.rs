@@ -210,16 +210,14 @@ syscalls! {
         );
 
         let vmctx = &mut *vmctx;
-        #[allow(unused_assignments)]
-        let mut host_argc = match decode_usize_byref(vmctx, argc) {
-            Ok(host_argc) => host_argc,
-            Err(e) => return return_encoded_errno(e),
-        };
-        #[allow(unused_assignments)]
-        let mut host_argv_buf_size = match decode_usize_byref(vmctx, argv_buf_size) {
-            Ok(host_argv_buf_size) => host_argv_buf_size,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_argc = 0;
+        if let Err(e) = decode_usize_byref(vmctx, argc) {
+            return return_encoded_errno(e);
+        }
+        let mut host_argv_buf_size = 0;
+        if let Err(e) = decode_usize_byref(vmctx, argv_buf_size) {
+            return return_encoded_errno(e);
+        }
 
         let vmctx = &mut *vmctx;
         let argv_environ = get_argv_environ(vmctx);
@@ -227,10 +225,10 @@ syscalls! {
         let e = host::wasmtime_ssp_args_sizes_get(argv_environ, &mut host_argc, &mut host_argv_buf_size);
 
         trace!("     | *argc={:?}", host_argc);
-        encode_usize_byref(vmctx, argc, host_argc).unwrap();
+        encode_usize_byref(vmctx, argc, host_argc);
 
         trace!("     | *argv_buf_size={:?}", host_argv_buf_size);
-        encode_usize_byref(vmctx, argv_buf_size, host_argv_buf_size).unwrap();
+        encode_usize_byref(vmctx, argv_buf_size, host_argv_buf_size);
 
         return_encoded_errno(e)
     }
@@ -248,15 +246,15 @@ syscalls! {
 
         let vmctx = &mut *vmctx;
         let clock_id = decode_clockid(clock_id);
-        let mut host_resolution = match decode_timestamp_byref(vmctx, resolution) {
-            Ok(host_resolution) => host_resolution,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_resolution = 0;
+        if let Err(e) = decode_timestamp_byref(vmctx, resolution) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_clock_res_get(clock_id, &mut host_resolution);
 
         trace!("     | *resolution={:?}", host_resolution);
-        encode_timestamp_byref(vmctx, resolution, host_resolution).unwrap();
+        encode_timestamp_byref(vmctx, resolution, host_resolution);
 
         return_encoded_errno(e)
     }
@@ -277,15 +275,15 @@ syscalls! {
         let vmctx = &mut *vmctx;
         let clock_id = decode_clockid(clock_id);
         let precision = decode_timestamp(precision);
-        let mut host_time = match decode_timestamp_byref(vmctx, time) {
-            Ok(host_time) => host_time,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_time = 0;
+        if let Err(e) = decode_timestamp_byref(vmctx, time) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_clock_time_get(clock_id, precision, &mut host_time);
 
         trace!("     | *time={:?}", host_time);
-        encode_timestamp_byref(vmctx, time, host_time).unwrap();
+        encode_timestamp_byref(vmctx, time, host_time);
 
         return_encoded_errno(e)
     }
@@ -343,16 +341,14 @@ syscalls! {
         );
 
         let vmctx = &mut *vmctx;
-        #[allow(unused_assignments)]
-        let mut host_environ_count = match decode_usize_byref(vmctx, environ_count) {
-            Ok(host_environ_count) => host_environ_count,
-            Err(e) => return return_encoded_errno(e),
-        };
-        #[allow(unused_assignments)]
-        let mut host_environ_buf_size = match decode_usize_byref(vmctx, environ_buf_size) {
-            Ok(host_environ_buf_size) => host_environ_buf_size,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_environ_count = 0;
+        if let Err(e) = decode_usize_byref(vmctx, environ_count) {
+            return return_encoded_errno(e);
+        }
+        let mut host_environ_buf_size = 0;
+        if let Err(e) = decode_usize_byref(vmctx, environ_buf_size) {
+            return return_encoded_errno(e);
+        }
 
         let vmctx = &mut *vmctx;
         let argv_environ = get_argv_environ(vmctx);
@@ -360,10 +356,10 @@ syscalls! {
         let e = host::wasmtime_ssp_environ_sizes_get(argv_environ, &mut host_environ_count, &mut host_environ_buf_size);
 
         trace!("     | *environ_count={:?}", host_environ_count);
-        encode_usize_byref(vmctx, environ_count, host_environ_count).unwrap();
+        encode_usize_byref(vmctx, environ_count, host_environ_count);
 
         trace!("     | *environ_buf_size={:?}", host_environ_buf_size);
-        encode_usize_byref(vmctx, environ_buf_size, host_environ_buf_size).unwrap();
+        encode_usize_byref(vmctx, environ_buf_size, host_environ_buf_size);
 
         return_encoded_errno(e)
     }
@@ -378,14 +374,14 @@ syscalls! {
         let vmctx = &mut *vmctx;
         let prestats = get_prestats(vmctx);
         let fd = decode_fd(fd);
-        let mut host_buf = match decode_prestat_byref(vmctx, buf) {
-            Ok(host_buf) => host_buf,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_buf = std::mem::zeroed();
+        if let Err(e) = decode_prestat_byref(vmctx, buf) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_prestat_get(prestats, fd, &mut host_buf);
 
-        encode_prestat_byref(vmctx, buf, host_buf).unwrap();
+        encode_prestat_byref(vmctx, buf, host_buf);
 
         return_encoded_errno(e)
     }
@@ -468,10 +464,10 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
         let offset = decode_filesize(offset);
-        let mut host_nread = match decode_usize_byref(vmctx, nread) {
-            Ok(host_nread) => host_nread,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_nread = 0;
+        if let Err(e) = decode_usize_byref(vmctx, nread) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_pread(
             curfds,
@@ -483,7 +479,7 @@ syscalls! {
         );
 
         trace!("     | *nread={:?}", host_nread);
-        encode_usize_byref(vmctx, nread, host_nread).unwrap();
+        encode_usize_byref(vmctx, nread, host_nread);
 
         return_encoded_errno(e)
     }
@@ -513,10 +509,10 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
         let offset = decode_filesize(offset);
-        let mut host_nwritten = match decode_usize_byref(vmctx, nwritten) {
-            Ok(host_nwritten) => host_nwritten,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_nwritten = 0;
+        if let Err(e) = decode_usize_byref(vmctx, nwritten) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_pwrite(
             curfds,
@@ -528,7 +524,7 @@ syscalls! {
         );
 
         trace!("     | *nwritten={:?}", host_nwritten);
-        encode_usize_byref(vmctx, nwritten, host_nwritten).unwrap();
+        encode_usize_byref(vmctx, nwritten, host_nwritten);
 
         return_encoded_errno(e)
     }
@@ -555,15 +551,15 @@ syscalls! {
             Ok(iovs) => iovs,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_nread = match decode_usize_byref(vmctx, nread) {
-            Ok(host_nread) => host_nread,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_nread = 0;
+        if let Err(e) = decode_usize_byref(vmctx, nread) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_read(curfds, fd, iovs.as_ptr(), iovs.len(), &mut host_nread);
 
         trace!("     | *nread={:?}", host_nread);
-        encode_usize_byref(vmctx, nread, host_nread).unwrap();
+        encode_usize_byref(vmctx, nread, host_nread);
 
         return_encoded_errno(e)
     }
@@ -605,15 +601,15 @@ syscalls! {
         let fd = decode_fd(fd);
         let offset = decode_filedelta(offset);
         let whence = decode_whence(whence);
-        let mut host_newoffset = match decode_filesize_byref(vmctx, newoffset) {
-            Ok(host_newoffset) => host_newoffset,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_newoffset = 0;
+        if let Err(e) = decode_filesize_byref(vmctx, newoffset) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_seek(curfds, fd, offset, whence, &mut host_newoffset);
 
         trace!("     | *newoffset={:?}", host_newoffset);
-        encode_filesize_byref(vmctx, newoffset, host_newoffset).unwrap();
+        encode_filesize_byref(vmctx, newoffset, host_newoffset);
 
         return_encoded_errno(e)
     }
@@ -628,15 +624,15 @@ syscalls! {
         let vmctx = &mut *vmctx;
         let curfds = get_curfds(vmctx);
         let fd = decode_fd(fd);
-        let mut host_newoffset = match decode_filesize_byref(vmctx, newoffset) {
-            Ok(host_newoffset) => host_newoffset,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_newoffset = 0;
+        if let Err(e) = decode_filesize_byref(vmctx, newoffset) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_tell(curfds, fd, &mut host_newoffset);
 
         trace!("     | *newoffset={:?}", host_newoffset);
-        encode_filesize_byref(vmctx, newoffset, host_newoffset).unwrap();
+        encode_filesize_byref(vmctx, newoffset, host_newoffset);
 
         return_encoded_errno(e)
     }
@@ -651,15 +647,15 @@ syscalls! {
         let vmctx = &mut *vmctx;
         let curfds = get_curfds(vmctx);
         let fd = decode_fd(fd);
-        let mut host_buf = match decode_fdstat_byref(vmctx, buf) {
-            Ok(host_buf) => host_buf,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_buf = std::mem::zeroed();
+        if let Err(e) = decode_fdstat_byref(vmctx, buf) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_fdstat_get(curfds, fd, &mut host_buf);
 
         trace!("     | *buf={:?}", host_buf);
-        encode_fdstat_byref(vmctx, buf, host_buf).unwrap();
+        encode_fdstat_byref(vmctx, buf, host_buf);
 
         return_encoded_errno(e)
     }
@@ -746,15 +742,15 @@ syscalls! {
             Ok(iovs) => iovs,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_nwritten = match decode_usize_byref(vmctx, nwritten) {
-            Ok(host_nwritten) => host_nwritten,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_nwritten = 0;
+        if let Err(e) = decode_usize_byref(vmctx, nwritten) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_write(curfds, fd, iovs.as_ptr(), iovs.len(), &mut host_nwritten);
 
         trace!("     | *nwritten={:?}", host_nwritten);
-        encode_usize_byref(vmctx, nwritten, host_nwritten).unwrap();
+        encode_usize_byref(vmctx, nwritten, host_nwritten);
 
         return_encoded_errno(e)
     }
@@ -916,10 +912,10 @@ syscalls! {
         let fs_rights_base = decode_rights(fs_rights_base);
         let fs_rights_inheriting = decode_rights(fs_rights_inheriting);
         let fs_flags = decode_fdflags(fs_flags);
-        let mut host_fd = match decode_fd_byref(vmctx, fd) {
-            Ok(host_fd) => host_fd,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_fd = 0;
+        if let Err(e) = decode_fd_byref(vmctx, fd) {
+            return return_encoded_errno(e);
+        }
 
         trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
 
@@ -937,7 +933,7 @@ syscalls! {
         );
 
         trace!("     | *fd={:?}", host_fd);
-        encode_fd_byref(vmctx, fd, host_fd).unwrap();
+        encode_fd_byref(vmctx, fd, host_fd);
 
         return_encoded_errno(e)
     }
@@ -967,10 +963,10 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
         let cookie = decode_dircookie(cookie);
-        let mut host_buf_used = match decode_usize_byref(vmctx, buf_used) {
-            Ok(host_buf_used) => host_buf_used,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_buf_used = 0;
+        if let Err(e) = decode_usize_byref(vmctx, buf_used) {
+            return return_encoded_errno(e);
+        }
 
         trace!("     | (buf,buf_len)={:?}", str_for_trace(buf, buf_len));
 
@@ -984,7 +980,7 @@ syscalls! {
         );
 
         trace!("     | *buf_used={:?}", host_buf_used);
-        encode_usize_byref(vmctx, buf_used, host_buf_used).unwrap();
+        encode_usize_byref(vmctx, buf_used, host_buf_used);
 
         return_encoded_errno(e)
     }
@@ -1019,10 +1015,10 @@ syscalls! {
             Ok((buf, buf_len)) => (buf, buf_len),
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_buf_used = match decode_usize_byref(vmctx, buf_used) {
-            Ok(host_buf_used) => host_buf_used,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_buf_used = 0;
+        if let Err(e) = decode_usize_byref(vmctx, buf_used) {
+            return return_encoded_errno(e);
+        }
 
         trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
 
@@ -1038,7 +1034,7 @@ syscalls! {
 
         trace!("     | *buf_used={:?}", host_buf_used);
         trace!("     | (buf,*buf_used)={:?}", str_for_trace(buf, host_buf_used));
-        encode_usize_byref(vmctx, buf_used, host_buf_used).unwrap();
+        encode_usize_byref(vmctx, buf_used, host_buf_used);
 
         return_encoded_errno(e)
     }
@@ -1093,15 +1089,15 @@ syscalls! {
         let vmctx = &mut *vmctx;
         let curfds = get_curfds(vmctx);
         let fd = decode_fd(fd);
-        let mut host_buf = match decode_filestat_byref(vmctx, buf) {
-            Ok(host_buf) => host_buf,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_buf = std::mem::zeroed();
+        if let Err(e) = decode_filestat_byref(vmctx, buf) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_fd_filestat_get(curfds, fd, &mut host_buf);
 
         trace!("     | *buf={:?}", host_buf);
-        encode_filestat_byref(vmctx, buf, host_buf).unwrap();
+        encode_filestat_byref(vmctx, buf, host_buf);
 
         return_encoded_errno(e)
     }
@@ -1178,17 +1174,17 @@ syscalls! {
             Ok((path, path_len)) => (path, path_len),
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_buf = match decode_filestat_byref(vmctx, buf) {
-            Ok(host_buf) => host_buf,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_buf = std::mem::zeroed();
+        if let Err(e) = decode_filestat_byref(vmctx, buf) {
+            return return_encoded_errno(e);
+        }
 
         trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
 
         let e = host::wasmtime_ssp_path_filestat_get(curfds, fd, flags, path, path_len, &mut host_buf);
 
         trace!("     | *buf={:?}", host_buf);
-        encode_filestat_byref(vmctx, buf, host_buf).unwrap();
+        encode_filestat_byref(vmctx, buf, host_buf);
 
         return_encoded_errno(e)
     }
@@ -1350,10 +1346,10 @@ syscalls! {
             Ok(out) => out,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_nevents = match decode_usize_byref(vmctx, nevents) {
-            Ok(host_nevents) => host_nevents,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_nevents = 0;
+        if let Err(e) = decode_usize_byref(vmctx, nevents) {
+            return return_encoded_errno(e);
+        }
 
         assert!(in_.len() == host_out.len());
 
@@ -1366,7 +1362,7 @@ syscalls! {
         );
 
         trace!("     | *nevents={:?}", host_nevents);
-        encode_usize_byref(vmctx, nevents, host_nevents).unwrap();
+        encode_usize_byref(vmctx, nevents, host_nevents);
 
         if log_enabled!(log::Level::Trace) {
             for (index, _event) in host_out.iter().enumerate() {
@@ -1444,14 +1440,14 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
         let ri_flags = decode_riflags(ri_flags);
-        let mut host_ro_datalen = match decode_usize_byref(vmctx, ro_datalen) {
-            Ok(host_ro_datalen) => host_ro_datalen,
-            Err(e) => return return_encoded_errno(e),
-        };
-        let mut host_ro_flags = match decode_roflags_byref(vmctx, ro_flags) {
-            Ok(host_ro_flags) => host_ro_flags,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_ro_datalen = 0;
+        if let Err(e) = decode_usize_byref(vmctx, ro_datalen) {
+            return return_encoded_errno(e);
+        }
+        let mut host_ro_flags = 0;
+        if let Err(e) = decode_roflags_byref(vmctx, ro_flags) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_sock_recv(curfds, sock, ri_data.as_ptr(), ri_data.len(), ri_flags,
                                              &mut host_ro_datalen, &mut host_ro_flags);
@@ -1459,8 +1455,8 @@ syscalls! {
         // TODO: Format the output for tracing.
         trace!("     | *ro_datalen={}", host_ro_datalen);
         trace!("     | *ro_flags={}", host_ro_flags);
-        encode_usize_byref(vmctx, ro_datalen, host_ro_datalen).unwrap();
-        encode_roflags_byref(vmctx, ro_flags, host_ro_flags).unwrap();
+        encode_usize_byref(vmctx, ro_datalen, host_ro_datalen);
+        encode_roflags_byref(vmctx, ro_flags, host_ro_flags);
 
         return_encoded_errno(e)
     }
@@ -1487,15 +1483,15 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
         let si_flags = decode_siflags(si_flags);
-        let mut host_so_datalen = match decode_usize_byref(vmctx, so_datalen) {
-            Ok(so_datalen) => so_datalen,
-            Err(e) => return return_encoded_errno(e),
-        };
+        let mut host_so_datalen = 0;
+        if let Err(e) = decode_usize_byref(vmctx, so_datalen) {
+            return return_encoded_errno(e);
+        }
 
         let e = host::wasmtime_ssp_sock_send(curfds, sock, si_data.as_ptr(), si_data.len(), si_flags, &mut host_so_datalen);
 
         trace!("     | *so_datalen={:?}", host_so_datalen);
-        encode_usize_byref(vmctx, so_datalen, host_so_datalen).unwrap();
+        encode_usize_byref(vmctx, so_datalen, host_so_datalen);
 
         return_encoded_errno(e)
     }
