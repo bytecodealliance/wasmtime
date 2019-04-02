@@ -28,8 +28,6 @@ extern crate lazy_static;
 extern crate memoffset;
 #[macro_use]
 extern crate failure_derive;
-#[cfg(target_os = "windows")]
-extern crate winapi;
 
 mod export;
 mod imports;
