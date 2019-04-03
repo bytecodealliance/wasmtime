@@ -187,9 +187,9 @@ impl Mmap {
     /// `self`'s reserved memory.
     #[cfg(target_os = "windows")]
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<(), String> {
+        use core::ffi::c_void;
         use winapi::um::memoryapi::VirtualAlloc;
-        use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
-
+        use winapi::um::winnt::{MEM_COMMIT, PAGE_READWRITE};
         let page_size = region::page::size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
@@ -197,7 +197,16 @@ impl Mmap {
         assert!(start < self.len - len);
 
         // Commit the accessible size.
-        if unsafe { VirtualAlloc(self.ptr.add(start), len, MEM_COMMIT, PAGE_READWRITE) }.is_null() {
+        if unsafe {
+            VirtualAlloc(
+                self.ptr.add(start) as *mut c_void,
+                len,
+                MEM_COMMIT,
+                PAGE_READWRITE,
+            )
+        }
+        .is_null()
+        {
             return Err(errno::errno().to_string());
         }
 

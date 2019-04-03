@@ -13,8 +13,10 @@
 #include <stdio.h>
 
 #if defined(_WIN32)
-# include <winternl.h>  // must include before util/Windows.h's `#undef`s
-# include "util/Windows.h"
+
+# include <windows.h>
+# include <winternl.h>
+
 #elif defined(USE_APPLE_MACH_PORTS)
 # include <mach/exc.h>
 # include <mach/mach.h>
