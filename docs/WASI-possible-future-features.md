@@ -1,7 +1,7 @@
 # Possible Future Features
 
-This are features we're interested in, but don't have yet, and which will require
-some amount of design work.
+These are some features we're interested in, but don't have yet, and which will
+require some amount of design work.
 
 ## File Locking
 
