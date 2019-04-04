@@ -17,6 +17,9 @@ utility or as a library embedded in a larger application.
 Wasmtime passes the WebAssembly spec testsuite, and supports a new system
 API proposal called [WebAssembly System Interface], or WASI.
 
+To build Wasmtime, install cmake and clang, and then build with cargo, such
+as with "cargo build --release".
+
 There are Rust, C, and C++ toolchains that can compile programs with WASI. See
 [here][WASI intro] for more information, and [here][WASI tutorial] for a
 tutorial on compiling and running programs using WASI and wasmtime, as
