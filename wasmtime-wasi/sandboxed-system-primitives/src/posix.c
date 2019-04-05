@@ -653,52 +653,6 @@ static __wasi_errno_t fd_table_insert_fd(
   return fd_table_insert(ft, fo, rights_base, rights_inheriting, out);
 }
 
-// Inserts a pair of numerical file descriptors into the file descriptor
-// table.
-static __wasi_errno_t fd_table_insert_fdpair(
-    struct fd_table *ft,
-    const int *in,
-    __wasi_filetype_t type,
-    __wasi_rights_t rights_base1,
-    __wasi_rights_t rights_base2,
-    __wasi_rights_t rights_inheriting,
-    __wasi_fd_t *out1,
-    __wasi_fd_t *out2
-) REQUIRES_UNLOCKED(ft->lock) {
-  struct fd_object *fo1;
-  __wasi_errno_t error = fd_object_new(type, &fo1);
-  if (error != 0) {
-    close(in[0]);
-    close(in[1]);
-    return error;
-  }
-  fo1->number = in[0];
-  struct fd_object *fo2;
-  error = fd_object_new(type, &fo2);
-  if (error != 0) {
-    fd_object_release(fo1);
-    close(in[1]);
-    return error;
-  }
-  fo2->number = in[1];
-
-  // Grow the file descriptor table if needed.
-  rwlock_wrlock(&ft->lock);
-  if (!fd_table_grow(ft, 0, 2)) {
-    rwlock_unlock(&ft->lock);
-    fd_object_release(fo1);
-    fd_object_release(fo2);
-    return convert_errno(errno);
-  }
-
-  *out1 = fd_table_unused(ft);
-  fd_table_attach(ft, *out1, fo1, rights_base1, rights_inheriting);
-  *out2 = fd_table_unused(ft);
-  fd_table_attach(ft, *out2, fo2, rights_base2, rights_inheriting);
-  rwlock_unlock(&ft->lock);
-  return 0;
-}
-
 __wasi_errno_t wasmtime_ssp_fd_prestat_get(
 #if !defined(WASMTIME_SSP_STATIC_CURFDS)
     struct fd_prestats *prestats,
@@ -788,23 +742,6 @@ __wasi_errno_t wasmtime_ssp_fd_close(
   rwlock_unlock(&ft->lock);
   fd_object_release(fo);
   return 0;
-}
-
-static __wasi_errno_t fd_create_socketpair(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-    struct fd_table *curfds,
-#endif
-    __wasi_filetype_t type,
-    int socktype,
-    __wasi_fd_t *fd1,
-    __wasi_fd_t *fd2
-) {
-  int fds[2];
-  if (socketpair(AF_UNIX, socktype, 0, fds) < 0)
-    return convert_errno(errno);
-  return fd_table_insert_fdpair(curfds, fds, type, RIGHTS_SOCKET_BASE,
-                                RIGHTS_SOCKET_BASE, RIGHTS_SOCKET_INHERITING,
-                                fd1, fd2);
 }
 
 // Look up a file descriptor object in a locked file descriptor table
