@@ -47,6 +47,7 @@
    __WASI_RIGHT_FD_READDIR | __WASI_RIGHT_PATH_READLINK |              \
    __WASI_RIGHT_PATH_RENAME_SOURCE | __WASI_RIGHT_PATH_RENAME_TARGET | \
    __WASI_RIGHT_PATH_FILESTAT_GET |                                    \
+   __WASI_RIGHT_PATH_FILESTAT_SET_SIZE |                               \
    __WASI_RIGHT_PATH_FILESTAT_SET_TIMES |                              \
    __WASI_RIGHT_FD_FILESTAT_GET | __WASI_RIGHT_FD_FILESTAT_SET_TIMES | \
    __WASI_RIGHT_PATH_SYMLINK | __WASI_RIGHT_PATH_UNLINK_FILE |         \
