@@ -45,7 +45,20 @@ cargo build
 
 # Run the tests. We run these in debug mode so that assertions are enabled.
 banner "Rust unit tests"
-RUST_BACKTRACE=1 cargo test --all
+
+# TODO: lightbeam currently requires rust nightly, so don't try to run the
+# tests here. Name all the other packages, rather than using --all. We'll
+# run the lightbeam tests below if nightly is available.
+#RUST_BACKTRACE=1 cargo test --all
+RUST_BACKTRACE=1 cargo test \
+  --package wasmtime-tools \
+  --package wasmtime-wasi \
+  --package wasmtime-wast \
+  --package wasmtime-debug \
+  --package wasmtime-environ \
+  --package wasmtime-runtime \
+  --package wasmtime-jit \
+  --package wasmtime-obj
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/wasmtime/index.html"
@@ -66,6 +79,10 @@ if rustup toolchain list | grep -q nightly; then
     ASAN_OPTIONS=detect_leaks=0 \
     cargo +nightly fuzz run compile \
         "$topdir/fuzz/corpus/compile/$fuzz_module"
+
+    # Nightly is available, so also run lightbeam's tests, which we
+    # skipped earlier.
+    cargo +nightly test --package lightbeam
 else
     echo "nightly toolchain not found, skipping fuzz target integration test"
 fi
