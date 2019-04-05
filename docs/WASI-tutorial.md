@@ -136,7 +136,6 @@ out of the sandbox? Let's see:
 
 ```
 $ wasmtime --dir=. --dir=/tmp a.out test.txt /tmp/../etc/passwd
-$ cat /tmp/somewhere.txt
 error opening output /tmp/../etc/passwd: Capabilities insufficient
 ```
 
