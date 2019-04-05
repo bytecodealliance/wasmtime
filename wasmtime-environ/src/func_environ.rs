@@ -14,9 +14,11 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
-    self, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex, WasmResult,
+    self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
+    WasmResult,
 };
+#[cfg(feature = "lightbeam")]
+use cranelift_wasm::{DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex};
 use std::vec::Vec;
 
 /// Compute an `ir::ExternalName` for a given wasm function index.

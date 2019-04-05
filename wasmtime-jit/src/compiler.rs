@@ -15,7 +15,6 @@ use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
-use wasmtime_environ::cranelift;
 use wasmtime_environ::{
     Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, Relocations, Tunables,
 };
