@@ -49,7 +49,7 @@ use std::str;
 use std::str::FromStr;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
-use wasmtime_environ::{cranelift, ModuleEnvironment, Tunables};
+use wasmtime_environ::{Compiler, Cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
 
 const USAGE: &str = "
@@ -159,7 +159,7 @@ fn handle_module(
         )
     };
 
-    let (compilation, relocations, address_transform) = cranelift::compile_module(
+    let (compilation, relocations, address_transform) = Cranelift::compile_module(
         &module,
         lazy_function_body_inputs,
         &*isa,

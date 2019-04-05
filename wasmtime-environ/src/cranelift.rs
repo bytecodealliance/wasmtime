@@ -21,9 +21,9 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::vec::Vec;
 
 /// Implementation of a relocation sink that just saves all the information for later
-struct RelocSink {
+pub struct RelocSink {
     /// Relocations recorded for the function.
-    func_relocs: Vec<Relocation>,
+    pub func_relocs: Vec<Relocation>,
 }
 
 impl binemit::RelocSink for RelocSink {
@@ -109,69 +109,75 @@ fn get_address_transform(
     result
 }
 
-/// Compile the module using Cranelift, producing a compilation result with
-/// associated relocations.
-pub fn compile_module<'data, 'module>(
-    module: &'module Module,
-    function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
-    isa: &dyn isa::TargetIsa,
-    generate_debug_info: bool,
-) -> Result<(Compilation, Relocations, AddressTransforms), CompileError> {
-    let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
+/// A compiler that compiles a WebAssembly module with Cranelift, translating the Wasm to Cranelift IR,
+/// optimizing it and then translating to assembly.
+pub struct Cranelift;
 
-    function_body_inputs
-        .into_iter()
-        .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'data>)>>()
-        .par_iter()
-        .map(|(i, input)| {
-            let func_index = module.func_index(*i);
-            let mut context = Context::new();
-            context.func.name = get_func_name(func_index);
-            context.func.signature = module.signatures[module.functions[func_index]].clone();
+impl crate::compilation::Compiler for Cranelift {
+    /// Compile the module using Cranelift, producing a compilation result with
+    /// associated relocations.
+    fn compile_module<'data, 'module>(
+        module: &'module Module,
+        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+        isa: &dyn isa::TargetIsa,
+        generate_debug_info: bool,
+    ) -> Result<(Compilation, Relocations, AddressTransforms), CompileError> {
+        let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
+        let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
+        let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
 
-            let mut trans = FuncTranslator::new();
-            trans
-                .translate(
-                    input.data,
-                    input.module_offset,
-                    &mut context.func,
-                    &mut FuncEnvironment::new(isa.frontend_config(), module),
-                )
-                .map_err(CompileError::Wasm)?;
+        function_body_inputs
+            .into_iter()
+            .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'data>)>>()
+            .par_iter()
+            .map(|(i, input)| {
+                let func_index = module.func_index(*i);
+                let mut context = Context::new();
+                context.func.name = get_func_name(func_index);
+                context.func.signature = module.signatures[module.functions[func_index]].clone();
 
-            let mut code_buf: Vec<u8> = Vec::new();
-            let mut reloc_sink = RelocSink::new();
-            let mut trap_sink = binemit::NullTrapSink {};
-            context
-                .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
-                .map_err(CompileError::Codegen)?;
+                let mut trans = FuncTranslator::new();
+                trans
+                    .translate(
+                        input.data,
+                        input.module_offset,
+                        &mut context.func,
+                        &mut FuncEnvironment::new(isa.frontend_config(), module),
+                    )
+                    .map_err(CompileError::Wasm)?;
 
-            let address_transform = if generate_debug_info {
-                let body_len = code_buf.len();
-                let at = get_address_transform(&context, isa);
-                Some(FunctionAddressTransform {
-                    locations: at,
-                    body_offset: 0,
-                    body_len,
-                })
-            } else {
-                None
-            };
+                let mut code_buf: Vec<u8> = Vec::new();
+                let mut reloc_sink = RelocSink::new();
+                let mut trap_sink = binemit::NullTrapSink {};
+                context
+                    .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
+                    .map_err(CompileError::Codegen)?;
 
-            Ok((code_buf, reloc_sink.func_relocs, address_transform))
-        })
-        .collect::<Result<Vec<_>, CompileError>>()?
-        .into_iter()
-        .for_each(|(function, relocs, address_transform)| {
-            functions.push(function);
-            relocations.push(relocs);
-            if let Some(address_transform) = address_transform {
-                address_transforms.push(address_transform);
-            }
-        });
+                let address_transform = if generate_debug_info {
+                    let body_len = code_buf.len();
+                    let at = get_address_transform(&context, isa);
+                    Some(FunctionAddressTransform {
+                        locations: at,
+                        body_offset: 0,
+                        body_len,
+                    })
+                } else {
+                    None
+                };
 
-    // TODO: Reorganize where we create the Vec for the resolved imports.
-    Ok((Compilation::new(functions), relocations, address_transforms))
+                Ok((code_buf, reloc_sink.func_relocs, address_transform))
+            })
+            .collect::<Result<Vec<_>, CompileError>>()?
+            .into_iter()
+            .for_each(|(function, relocs, address_transform)| {
+                functions.push(function);
+                relocations.push(relocs);
+                if let Some(address_transform) = address_transform {
+                    address_transforms.push(address_transform);
+                }
+            });
+
+        // TODO: Reorganize where we create the Vec for the resolved imports.
+        Ok((Compilation::new(functions), relocations, address_transforms))
+    }
 }

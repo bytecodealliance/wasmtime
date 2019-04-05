@@ -44,3 +44,6 @@ libc = "0.2.50"
 errno = "0.2.4"
 
 [workspace]
+
+[features]
+lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam"]

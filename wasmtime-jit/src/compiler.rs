@@ -17,7 +17,7 @@ use std::vec::Vec;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::cranelift;
 use wasmtime_environ::{
-    Compilation, CompileError, FunctionBodyData, Module, Relocations, Tunables,
+    Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, Relocations, Tunables,
 };
 use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
 
@@ -53,6 +53,11 @@ impl Compiler {
     }
 }
 
+#[cfg(feature = "lightbeam")]
+type DefaultCompiler = wasmtime_environ::lightbeam::Lightbeam;
+#[cfg(not(feature = "lightbeam"))]
+type DefaultCompiler = wasmtime_environ::cranelift::Cranelift;
+
 impl Compiler {
     /// Return the target's frontend configuration settings.
     pub fn frontend_config(&self) -> TargetFrontendConfig {
@@ -78,7 +83,7 @@ impl Compiler {
         ),
         SetupError,
     > {
-        let (compilation, relocations, address_transform) = cranelift::compile_module(
+        let (compilation, relocations, address_transform) = DefaultCompiler::compile_module(
             module,
             function_body_inputs,
             &*self.isa,
@@ -100,7 +105,7 @@ impl Compiler {
             let mut funcs = Vec::new();
             for (i, allocated) in allocated_functions.into_iter() {
                 let ptr = (*allocated) as *const u8;
-                let body_len = compilation.functions[i].len();
+                let body_len = compilation.get(i).len();
                 funcs.push((ptr, body_len));
             }
             let bytes = emit_debugsections_image(
@@ -255,14 +260,10 @@ fn allocate_functions(
     // Allocate code for all function in one continuous memory block.
     // First, collect all function bodies into vector to pass to the
     // allocate_copy_of_byte_slices.
-    let bodies = compilation
-        .functions
-        .values()
-        .map(|body| body.as_slice())
-        .collect::<Vec<&[u8]>>();
+    let bodies = compilation.into_iter().collect::<Vec<&[u8]>>();
     let fat_ptrs = code_memory.allocate_copy_of_byte_slices(&bodies)?;
     // Second, create a PrimaryMap from result vector of pointers.
-    let mut result = PrimaryMap::with_capacity(compilation.functions.len());
+    let mut result = PrimaryMap::with_capacity(compilation.len());
     for i in 0..fat_ptrs.len() {
         let fat_ptr: *mut [VMFunctionBody] = fat_ptrs[i];
         result.push(fat_ptr);

@@ -1,24 +1,70 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use cranelift_codegen::binemit;
-use cranelift_codegen::ir;
-use cranelift_codegen::CodegenError;
+use crate::module;
+use crate::module_environ::FunctionBodyData;
+use cranelift_codegen::{binemit, ir, isa, CodegenError};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
+use std::ops::Range;
 use std::vec::Vec;
+
+type Functions = PrimaryMap<DefinedFuncIndex, Vec<u8>>;
 
 /// The result of compiling a WebAssembly module's functions.
 #[derive(Debug)]
 pub struct Compilation {
     /// Compiled machine code for the function bodies.
-    pub functions: PrimaryMap<DefinedFuncIndex, Vec<u8>>,
+    functions: Functions,
 }
 
 impl Compilation {
-    /// Allocates the compilation result with the given function bodies.
-    pub fn new(functions: PrimaryMap<DefinedFuncIndex, Vec<u8>>) -> Self {
+    /// Creates a compilation artifact from a contiguous function buffer and a set of ranges
+    pub fn new(functions: Functions) -> Self {
         Self { functions }
+    }
+
+    /// Allocates the compilation result with the given function bodies.
+    pub fn from_buffer(buffer: Vec<u8>, functions: impl IntoIterator<Item = Range<usize>>) -> Self {
+        Self::new(
+            functions
+                .into_iter()
+                .map(|range| buffer[range].to_vec())
+                .collect(),
+        )
+    }
+
+    /// Gets the bytes of a single function
+    pub fn get(&self, func: DefinedFuncIndex) -> &[u8] {
+        &self.functions[func]
+    }
+
+    /// Gets the number of functions defined.
+    pub fn len(&self) -> usize {
+        self.functions.len()
+    }
+}
+
+impl<'a> IntoIterator for &'a Compilation {
+    type IntoIter = Iter<'a>;
+    type Item = <Self::IntoIter as Iterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Iter {
+            iterator: self.functions.iter(),
+        }
+    }
+}
+
+pub struct Iter<'a> {
+    iterator: <&'a Functions as IntoIterator>::IntoIter,
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iterator.next().map(|(_, b)| &b[..])
     }
 }
 
@@ -95,3 +141,14 @@ pub struct FunctionAddressTransform {
 
 /// Function AddressTransforms collection.
 pub type AddressTransforms = PrimaryMap<DefinedFuncIndex, FunctionAddressTransform>;
+
+/// An implementation of a compiler from parsed WebAssembly module to native code.
+pub trait Compiler {
+    /// Compile a parsed module with the given `TargetIsa`.
+    fn compile_module<'data, 'module>(
+        module: &'module module::Module,
+        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+        isa: &dyn isa::TargetIsa,
+        generate_debug_info: bool,
+    ) -> Result<(Compilation, Relocations, AddressTransforms), CompileError>;
+}
