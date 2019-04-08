@@ -36,7 +36,7 @@ cargo update
 echo git commit -a -m "\"Bump version to $version"\"
 echo git tag v$version
 echo git push
-echo git push v$version
+echo git push origin v$version
 for crate in \
     entity bforest codegen/meta codegen frontend native \
     preopt \
