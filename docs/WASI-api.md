@@ -80,8 +80,8 @@ This is also a work in progress, and the API here is still evolving.
 - [`__wasi_fd_filestat_set_size()`](#fd_filestat_set_size)
 - [`__wasi_fd_filestat_set_times()`](#fd_filestat_set_times)
 - [`__wasi_fd_pread()`](#fd_pread)
-- [`__wasi_fd_prestat_get()`](#fd_prestat_get)
 - [`__wasi_fd_prestat_dir_name()`](#fd_prestat_dir_name)
+- [`__wasi_fd_prestat_get()`](#fd_prestat_get)
 - [`__wasi_fd_pwrite()`](#fd_pwrite)
 - [`__wasi_fd_read()`](#fd_read)
 - [`__wasi_fd_readdir()`](#fd_readdir)
@@ -131,11 +131,11 @@ Return command-line argument data sizes.
 
 Outputs:
 
-- <a href="#args_sizes_get.argc" name="args_sizes_get.argc"></a><code>size\_t \*<strong>argc</strong></code>
+- <a href="#args_sizes_get.argc" name="args_sizes_get.argc"></a><code>size\_t <strong>argc</strong></code>
 
     The number of arguments.
 
-- <a href="#args_sizes_get.argv_buf_size" name="args_sizes_get.argv_buf_size"></a><code>size\_t \*<strong>argv\_buf\_size</strong></code>
+- <a href="#args_sizes_get.argv_buf_size" name="args_sizes_get.argv_buf_size"></a><code>size\_t <strong>argv\_buf\_size</strong></code>
 
     The size of the argument string data.
 
@@ -202,15 +202,15 @@ Inputs:
 
 ### <a href="#environ_sizes_get" name="environ_sizes_get"></a>`__wasi_environ_sizes_get()`
 
-Return command-line argument data sizes.
+Return environment variable data sizes.
 
 Outputs:
 
-- <a href="#environ_sizes_get.environ_count" name="environ_sizes_get.environ_count"></a><code>size\_t \*<strong>environ\_count</strong></code>
+- <a href="#environ_sizes_get.environ_count" name="environ_sizes_get.environ_count"></a><code>size\_t <strong>environ\_count</strong></code>
 
     The number of environment variables.
 
-- <a href="#environ_sizes_get.environ_buf_size" name="environ_sizes_get.environ_buf_size"></a><code>size\_t \*<strong>environ\_buf\_size</strong></code>
+- <a href="#environ_sizes_get.environ_buf_size" name="environ_sizes_get.environ_buf_size"></a><code>size\_t <strong>environ\_buf\_size</strong></code>
 
     The size of the environment variable string data.
 
@@ -313,8 +313,7 @@ Inputs:
 
 - <a href="#fd_fdstat_set_flags.flags" name="fd_fdstat_set_flags.flags"></a><code>[\_\_wasi\_fdflags\_t](#fdflags) <strong>flags</strong></code>
 
-    The desired values of the file descriptor
-    flags.
+    The desired values of the file descriptor flags.
 
 ### <a href="#fd_fdstat_set_rights" name="fd_fdstat_set_rights"></a>`__wasi_fd_fdstat_set_rights()`
 
@@ -330,9 +329,13 @@ Inputs:
 
     The file descriptor to operate on.
 
-- <a href="#fd_fdstat_set_rights.fs_rights_base" name="fd_fdstat_set_rights.fs_rights_base"></a><code>[\_\_wasi\_rights\_t](#rights) <strong>fs\_rights\_base</strong></code> and <a href="#fd_fdstat_set_rights.fs_rights_inheriting" name="fd_fdstat_set_rights.fs_rights_inheriting"></a><code>[\_\_wasi\_rights\_t](#rights) <strong>fs\_rights\_inheriting</strong></code>
+- <a href="#fd_fdstat_set_rights.fs_rights_base" name="fd_fdstat_set_rights.fs_rights_base"></a><code>[\_\_wasi\_rights\_t](#rights) <strong>fs\_rights\_base</strong></code>
 
-    The desired rights of the file descriptor.
+    The desired base rights of the file descriptor.
+
+- <a href="#fd_fdstat_set_rights.fs_rights_inheriting" name="fd_fdstat_set_rights.fs_rights_inheriting"></a><code>[\_\_wasi\_rights\_t](#rights) <strong>fs\_rights\_inheriting</strong></code>
+
+    The desired inheriting rights of the file descriptor.
 
 ### <a href="#fd_filestat_get" name="fd_filestat_get"></a>`__wasi_fd_filestat_get()`
 
@@ -417,20 +420,6 @@ Outputs:
 
     The number of bytes read.
 
-### <a href="#fd_prestat_get" name="fd_prestat_get"></a>`__wasi_fd_prestat_get()`
-
-Return a description of the given preopened file descriptor.
-
-Inputs:
-
-- <a href="#fd_prestat_get.fd" name="fd_prestat_get.fd"></a><code>[\_\_wasi\_fd\_t](#fd) <strong>fd</strong></code>
-
-    The file descriptor about which to retrieve information.
-
-- <a href="#fd_prestat_get.buf" name="fd_prestat_get.buf"></a><code>[\_\_wasi\_prestat\_t](#prestat) \*<strong>buf</strong></code>
-
-    The buffer where the description is stored.
-
 ### <a href="#fd_prestat_dir_name" name="fd_prestat_dir_name"></a>`__wasi_fd_prestat_dir_name()`
 
 Return a description of the given preopened file descriptor.
@@ -444,6 +433,20 @@ Inputs:
 - <a href="#fd_prestat_dir_name.path" name="fd_prestat_dir_name.path"></a><code>const char \*<strong>path</strong></code> and <a href="#fd_prestat_dir_name.path_len" name="fd_prestat_dir_name.path_len"></a><code>size\_t <strong>path\_len</strong></code>
 
     A buffer into which to write the preopened directory name.
+
+### <a href="#fd_prestat_get" name="fd_prestat_get"></a>`__wasi_fd_prestat_get()`
+
+Return a description of the given preopened file descriptor.
+
+Inputs:
+
+- <a href="#fd_prestat_get.fd" name="fd_prestat_get.fd"></a><code>[\_\_wasi\_fd\_t](#fd) <strong>fd</strong></code>
+
+    The file descriptor about which to retrieve information.
+
+- <a href="#fd_prestat_get.buf" name="fd_prestat_get.buf"></a><code>[\_\_wasi\_prestat\_t](#prestat) \*<strong>buf</strong></code>
+
+    The buffer where the description is stored.
 
 ### <a href="#fd_pwrite" name="fd_pwrite"></a>`__wasi_fd_pwrite()`
 
@@ -677,8 +680,7 @@ Inputs:
 
 - <a href="#path_filestat_get.buf" name="path_filestat_get.buf"></a><code>[\_\_wasi\_filestat\_t](#filestat) \*<strong>buf</strong></code>
 
-    The buffer where the file's attributes are
-    stored.
+    The buffer where the file's attributes are stored.
 
 ### <a href="#path_filestat_set_times" name="path_filestat_set_times"></a>`__wasi_path_filestat_set_times()`
 
@@ -770,16 +772,25 @@ Inputs:
 
     The method by which to open the file.
 
-- <a href="#path_open.fs_rights_base" name="path_open.fs_rights_base"></a><code>[\_\_wasi\_rights\_t](#rights) <strong>fs\_rights\_base</strong></code> and <a href="#path_open.fs_rights_inheriting" name="path_open.fs_rights_inheriting"></a><code>[\_\_wasi\_rights\_t](#rights) <strong>fs\_rights\_inheriting</strong></code>
+- <a href="#path_open.fs_rights_base" name="path_open.fs_rights_base"></a><code>[\_\_wasi\_rights\_t](#rights) <strong>fs\_rights\_base</strong></code>
 
-    The initial rights of the newly created file descriptor. The
+    The initial base rights of the newly created file descriptor. The
     implementation is allowed to return a file descriptor with fewer
     rights than specified, if and only if those rights do not apply
     to the type of file being opened.
 
     The *base* rights are rights that will apply to operations using
-    the file descriptor itself, while the *inheriting* rights are
-    rights that apply to file descriptors derived from it.
+    the file descriptor itself.
+
+- <a href="#path_open.fs_rights_inheriting" name="path_open.fs_rights_inheriting"></a><code>[\_\_wasi\_rights\_t](#rights) <strong>fs\_rights\_inheriting</strong></code>
+
+    The initial inheriting rights of the newly created file descriptor. The
+    implementation is allowed to return a file descriptor with fewer
+    rights than specified, if and only if those rights do not apply
+    to the type of file being opened.
+
+    The *inheriting* rights are rights that will apply to file descriptors derived
+    from the file descriptor itself.
 
 - <a href="#path_open.fs_flags" name="path_open.fs_flags"></a><code>[\_\_wasi\_fdflags\_t](#fdflags) <strong>fs\_flags</strong></code>
 
@@ -1020,7 +1031,7 @@ Inputs:
 
 - <a href="#sock_send.si_data" name="sock_send.si_data"></a><code>const [\_\_wasi\_ciovec\_t](#ciovec) \*<strong>si\_data</strong></code> and <a href="#sock_send.si_data_len" name="sock_send.si_data_len"></a><code>size\_t <strong>si\_data\_len</strong></code>
 
-    List of scatter/gather vectors to which to retrieve data
+    List of scatter/gather vectors to which to retrieve data.
 
 - <a href="#sock_send.si_flags" name="sock_send.si_flags"></a><code>[\_\_wasi\_siflags\_t](#siflags) <strong>si\_flags</strong></code>
 
@@ -1657,7 +1668,7 @@ Used by [`__wasi_fd_seek()`](#fd_seek).
 
 Non-negative file size or length of a region within a file.
 
-Used by [`__wasi_event_t`](#event), [`__wasi_filestat_t`](#filestat), [`__wasi_fd_pread()`](#fd_pread), [`__wasi_fd_pwrite()`](#fd_pwrite), [`__wasi_fd_seek()`](#fd_seek), [`__wasi_path_tell()`](#path_tell), [`__wasi_fd_advise()`](#fd_advise), [`__wasi_fd_allocate()`](#fd_allocate), and [`__wasi_fd_filestat_set_size()`](#fd_filestat_set_size).
+Used by [`__wasi_event_t`](#event), [`__wasi_filestat_t`](#filestat), [`__wasi_fd_advise()`](#fd_advise), [`__wasi_fd_allocate()`](#fd_allocate), [`__wasi_fd_filestat_set_size()`](#fd_filestat_set_size), [`__wasi_fd_pread()`](#fd_pread), [`__wasi_fd_pwrite()`](#fd_pwrite), [`__wasi_fd_seek()`](#fd_seek), and [`__wasi_fd_tell()`](#fd_tell).
 
 ### <a href="#filestat" name="filestat"></a>`__wasi_filestat_t` (`struct`)
 
