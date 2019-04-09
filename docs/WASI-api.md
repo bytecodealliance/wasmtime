@@ -1837,6 +1837,36 @@ Possible values:
 
     Truncate file to size 0.
 
+### <a href="#preopentype" name="preopentype"></a>`__wasi_preopentype_t` (`uint8_t`)
+
+Preopened resource type.
+
+Used by [`__wasi_prestat_t`](#prestat).
+
+Possible values:
+
+- <a href="#preopentype.dir" name="preopentype.dir"></a>**`__WASI_PREOPENTYPE_DIR`**
+
+    Preopened directory.
+
+### <a href="#prestat" name="prestat"></a>`__wasi_prestat_t` (`struct`)
+
+Information about a preopened resource.
+
+Used by [`__wasi_fd_prestat_get()`](#fd_prestat_get).
+
+Members:
+
+- <a href="#prestat.pr_type" name="prestat.pr_type"></a><code>[\_\_wasi\_preopentype\_t](#preopentype) <strong>pr\_type</strong></code>
+
+    The type of the preopened resource.
+
+- When `pr_type` is [`__WASI_PREOPENTYPE_DIR`](#preopentype.dir):
+
+    - <a href="#prestat.pr_name_len" name="prestat.pr_name_len"></a><code>size\_t <strong>u.pr\_name\_len</strong></code>
+
+        The length of the preopened directory name.
+
 ### <a href="#riflags" name="riflags"></a>`__wasi_riflags_t` (`uint16_t` bitfield)
 
 Flags provided to [`__wasi_sock_recv()`](#sock_recv).
