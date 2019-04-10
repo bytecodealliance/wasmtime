@@ -64,7 +64,7 @@ ebb2:
 ; nextln:    v2 = select v3, v1, v1
 ; nextln:    trapz v3, user0
 ; nextln:    brnz v3, ebb2
-; nextln:    fallthrough ebb1
+; nextln:    jump ebb1
 
 function %irsub_imm(i32) -> i32 {
 ebb0(v0: i32):
