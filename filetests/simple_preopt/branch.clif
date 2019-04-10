@@ -17,7 +17,7 @@ ebb2:
 ; nextln: ebb0(v0: i32):
 ; nextln:     v1 = icmp_imm eq v0, 0
 ; nextln:     brnz v0, ebb2
-; nextln:     fallthrough ebb1
+; nextln:     jump ebb1
 ; nextln: 
 ; nextln: ebb1:
 ; nextln:     v3 = iconst.i32 1
@@ -44,7 +44,7 @@ ebb2:
 ; nextln: ebb0(v0: i32):
 ; nextln:     v1 = icmp_imm ne v0, 0
 ; nextln:     brnz v0, ebb2
-; nextln:     fallthrough ebb1
+; nextln:     jump ebb1
 ; nextln: 
 ; nextln: ebb1:
 ; nextln:     v3 = iconst.i32 1
@@ -69,7 +69,7 @@ ebb2:
 ; sameln: function %br_icmp_inversio
 ; nextln: ebb0(v0: i32, v1: i32):
 ; nextln:     br_icmp ule v0, v1, ebb2
-; nextln:     fallthrough ebb1
+; nextln:     jump ebb1
 ; nextln: 
 ; nextln: ebb1:
 ; nextln:     v2 = iconst.i32 1
