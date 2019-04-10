@@ -36,7 +36,13 @@ static mut __jit_debug_descriptor: JITDescriptor = JITDescriptor {
 
 #[no_mangle]
 #[inline(never)]
-extern "C" fn __jit_debug_register_code() {}
+extern "C" fn __jit_debug_register_code() {
+    // Hack to not allow inlining even when Rust wants to do it in release mode.
+    let x = 3;
+    unsafe {
+        std::ptr::read_volatile(&x);
+    }
+}
 
 /// Registeration for JIT image
 pub struct GdbJitImageRegistration {
