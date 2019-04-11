@@ -17,6 +17,12 @@ utility or as a library embedded in a larger application.
 Wasmtime passes the WebAssembly spec testsuite, and supports a new system
 API proposal called [WebAssembly System Interface], or WASI.
 
+Wasmtime includes a git submodule; in order to build it, it's necessary to
+obtain a full checkout, like this:
+```
+git clone --recurse-submodules https://github.com/CraneStation/wasmtime.git.
+```
+
 To build Wasmtime, install cmake and clang, and then build with cargo, such
 as with "cargo build --release". For information on installing clang, see
 [rust-bindgen's documentation](https://github.com/rust-lang/rust-bindgen/blob/master/book/src/requirements.md).
