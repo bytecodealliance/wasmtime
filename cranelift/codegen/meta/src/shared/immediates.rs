@@ -71,10 +71,10 @@ pub fn define() -> Vec<OperandKind> {
     let mut intcc_values = HashMap::new();
     intcc_values.insert("eq", "Equal");
     intcc_values.insert("ne", "NotEqual");
-    intcc_values.insert("sge", "UnsignedGreaterThanOrEqual");
-    intcc_values.insert("sgt", "UnsignedGreaterThan");
-    intcc_values.insert("sle", "UnsignedLessThanOrEqual");
-    intcc_values.insert("slt", "UnsignedLessThan");
+    intcc_values.insert("sge", "SignedGreaterThanOrEqual");
+    intcc_values.insert("sgt", "SignedGreaterThan");
+    intcc_values.insert("sle", "SignedLessThanOrEqual");
+    intcc_values.insert("slt", "SignedLessThan");
     intcc_values.insert("uge", "UnsignedGreaterThanOrEqual");
     intcc_values.insert("ugt", "UnsignedGreaterThan");
     intcc_values.insert("ule", "UnsignedLessThanOrEqual");
