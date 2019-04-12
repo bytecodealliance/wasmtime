@@ -547,7 +547,11 @@ impl Instance {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
-    pub(crate) fn memory_grow(&mut self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
+    pub(crate) fn memory_grow(
+        &mut self,
+        memory_index: DefinedMemoryIndex,
+        delta: u32,
+    ) -> Option<u32> {
         let result = self
             .memories
             .get_mut(memory_index)
