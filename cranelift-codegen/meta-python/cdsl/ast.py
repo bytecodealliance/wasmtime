@@ -162,19 +162,19 @@ class Var(Atom):
         Values that are defined only in the destination pattern.
     """
 
-    def __init__(self, name, typevar=None):
-        # type: (str, TypeVar) -> None
+    def __init__(self, name):
+        # type: (str) -> None
         self.name = name
         # The `Def` defining this variable in a source pattern.
         self.src_def = None  # type: Def
         # The `Def` defining this variable in a destination pattern.
         self.dst_def = None  # type: Def
         # TypeVar representing the type of this variable.
-        self.typevar = typevar  # type: TypeVar
+        self.typevar = None  # type: TypeVar
         # The original 'typeof(x)' type variable that was created for this Var.
         # This one doesn't change. `self.typevar` above may be changed to
         # another typevar by type inference.
-        self.original_typevar = self.typevar  # type: TypeVar
+        self.original_typevar = None  # type: TypeVar
 
     def __str__(self):
         # type: () -> str
