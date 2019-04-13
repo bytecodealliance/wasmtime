@@ -616,25 +616,6 @@ fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
     } else {
         panic!();
     }
-
-    /*
-        match info.kind {
-            BranchOptKind::EqualZero => {
-                let args = info.args.as_slice(&pos.func.dfg.value_lists)[1..].to_vec();
-                pos.func
-                    .dfg
-                    .replace(info.br_inst)
-                    .brz(info.cmp_arg, info.destination, &args);
-            }
-            BranchOptKind::NotEqualZero => {
-                let args = info.args.as_slice(&pos.func.dfg.value_lists)[1..].to_vec();
-                pos.func
-                    .dfg
-                    .replace(info.br_inst)
-                    .brnz(info.cmp_arg, info.destination, &args);
-            }
-        }
-    */
 }
 
 struct BranchOrderInfo {
