@@ -3,7 +3,7 @@ x86 Encodings.
 """
 from __future__ import absolute_import
 from cdsl.predicates import IsZero32BitFloat, IsZero64BitFloat
-from cdsl.predicates import IsUnsignedInt, Not, And
+from cdsl.predicates import IsUnsignedInt
 from base.predicates import IsColocatedFunc, IsColocatedData, LengthEquals
 from base import instructions as base
 from base import types
@@ -15,8 +15,8 @@ from . import settings as cfg
 from . import instructions as x86
 from .legalize import x86_expand
 from base.legalize import narrow, widen, expand_flags
-from base.settings import allones_funcaddrs, is_pic
-from .settings import use_sse41
+from .settings import use_sse41, not_all_ones_funcaddrs_and_not_is_pic, \
+    all_ones_funcaddrs_and_not_is_pic, is_pic, not_is_pic
 
 try:
     from typing import TYPE_CHECKING, Any  # noqa
@@ -407,15 +407,15 @@ enc_both(base.regspill.f64, r.fregspill32, 0xf2, 0x0f, 0x11)
 
 # Non-PIC, all-ones funcaddresses.
 X86_32.enc(base.func_addr.i32, *r.fnaddr4(0xb8),
-           isap=And(Not(allones_funcaddrs), Not(is_pic)))
+           isap=not_all_ones_funcaddrs_and_not_is_pic)
 X86_64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1),
-           isap=And(Not(allones_funcaddrs), Not(is_pic)))
+           isap=not_all_ones_funcaddrs_and_not_is_pic)
 
 # Non-PIC, all-zeros funcaddresses.
 X86_32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
-           isap=And(allones_funcaddrs, Not(is_pic)))
+           isap=all_ones_funcaddrs_and_not_is_pic)
 X86_64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
-           isap=And(allones_funcaddrs, Not(is_pic)))
+           isap=all_ones_funcaddrs_and_not_is_pic)
 
 # 64-bit, colocated, both PIC and non-PIC. Use the lea instruction's
 # pc-relative field.
@@ -432,9 +432,9 @@ X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
 
 # Non-PIC
 X86_32.enc(base.symbol_value.i32, *r.gvaddr4(0xb8),
-           isap=Not(is_pic))
+           isap=not_is_pic)
 X86_64.enc(base.symbol_value.i64, *r.gvaddr8.rex(0xb8, w=1),
-           isap=Not(is_pic))
+           isap=not_is_pic)
 
 # PIC, colocated
 X86_64.enc(base.symbol_value.i64, *r.pcrel_gvaddr8.rex(0x8d, w=1),
