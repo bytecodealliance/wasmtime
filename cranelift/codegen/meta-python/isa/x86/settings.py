@@ -3,7 +3,7 @@ x86 settings.
 """
 from __future__ import absolute_import
 from cdsl.settings import SettingGroup, BoolSetting, Preset
-from cdsl.predicates import And
+from cdsl.predicates import And, Not
 import base.settings as shared
 from .defs import ISA
 
@@ -34,6 +34,13 @@ use_sse42 = And(has_sse42, use_sse41)
 use_popcnt = And(has_popcnt, has_sse42)
 use_bmi1 = And(has_bmi1)
 use_lzcnt = And(has_lzcnt)
+
+is_pic = And(shared.is_pic)
+not_is_pic = Not(shared.is_pic)
+all_ones_funcaddrs_and_not_is_pic = And(shared.allones_funcaddrs,
+                                        Not(shared.is_pic))
+not_all_ones_funcaddrs_and_not_is_pic = And(Not(shared.allones_funcaddrs),
+                                            Not(shared.is_pic))
 
 # Presets corresponding to x86 CPUs.
 
