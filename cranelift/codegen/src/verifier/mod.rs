@@ -459,6 +459,15 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn verify_jump_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        for (jt, jt_data) in &self.func.jump_tables {
+            for &ebb in jt_data.iter() {
+                self.verify_ebb(jt, ebb, errors)?;
+            }
+        }
+        Ok(())
+    }
+
     fn ebb_integrity(
         &self,
         ebb: Ebb,
@@ -606,8 +615,13 @@ impl<'a> Verifier<'a> {
                 self.verify_ebb(inst, destination, errors)?;
                 self.verify_value_list(inst, args, errors)?;
             }
-            BranchTable { table, .. }
-            | BranchTableBase { table, .. }
+            BranchTable {
+                table, destination, ..
+            } => {
+                self.verify_ebb(inst, destination, errors)?;
+                self.verify_jump_table(inst, table, errors)?;
+            }
+            BranchTableBase { table, .. }
             | BranchTableEntry { table, .. }
             | IndirectJump { table, .. } => {
                 self.verify_jump_table(inst, table, errors)?;
@@ -685,16 +699,16 @@ impl<'a> Verifier<'a> {
 
     fn verify_ebb(
         &self,
-        inst: Inst,
+        loc: impl Into<AnyEntity>,
         e: Ebb,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.dfg.ebb_is_valid(e) || !self.func.layout.is_ebb_inserted(e) {
-            return fatal!(errors, inst, "invalid ebb reference {}", e);
+            return fatal!(errors, loc, "invalid ebb reference {}", e);
         }
         if let Some(entry_block) = self.func.layout.entry_block() {
             if e == entry_block {
-                return fatal!(errors, inst, "invalid reference to entry ebb {}", e);
+                return fatal!(errors, loc, "invalid reference to entry ebb {}", e);
             }
         }
         Ok(())
@@ -1679,6 +1693,7 @@ impl<'a> Verifier<'a> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
         self.verify_tables(errors)?;
+        self.verify_jump_tables(errors)?;
         self.typecheck_entry_block_params(errors)?;
 
         for ebb in self.func.layout.ebbs() {
