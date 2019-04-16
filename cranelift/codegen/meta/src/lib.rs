@@ -27,7 +27,7 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
     gen_settings::generate(
         &shared_defs.settings,
         gen_settings::ParentGroup::None,
-        "new_settings.rs",
+        "settings.rs",
         &out_dir,
     )?;
     gen_types::generate("types.rs", &out_dir)?;
@@ -59,7 +59,7 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
         gen_settings::generate(
             &isa.settings,
             gen_settings::ParentGroup::Shared,
-            &format!("new_settings-{}.rs", isa.name),
+            &format!("settings-{}.rs", isa.name),
             &out_dir,
         )?;
     }
