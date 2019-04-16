@@ -65,6 +65,8 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         predicate!(!allones_funcaddrs && !is_pic),
     );
 
+    // Presets corresponding to x86 CPUs.
+
     settings.add_preset("baseline", preset!());
     let nehalem = settings.add_preset(
         "nehalem",

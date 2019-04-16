@@ -59,7 +59,7 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
         gen_settings::generate(
             &isa.settings,
             gen_settings::ParentGroup::Shared,
-            &format!("new_settings-{}", isa.name),
+            &format!("new_settings-{}.rs", isa.name),
             &out_dir,
         )?;
     }
