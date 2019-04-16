@@ -288,7 +288,8 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             });
             fmtln!(fmt, "},");
 
-            descriptor_index_map.insert(SettingOrPreset::Preset(preset), idx);
+            let whole_idx = idx + group.settings.len();
+            descriptor_index_map.insert(SettingOrPreset::Preset(preset), whole_idx);
         }
     });
     fmtln!(fmt, "];");
@@ -304,20 +305,9 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
 
     // Generate hash table.
     let mut hash_entries: Vec<SettingOrPreset> = Vec::new();
-    hash_entries.extend(
-        group
-            .settings
-            .iter()
-            .map(|x| SettingOrPreset::Setting(x))
-            .collect::<Vec<SettingOrPreset>>(),
-    );
-    hash_entries.extend(
-        group
-            .presets
-            .iter()
-            .map(|x| SettingOrPreset::Preset(x))
-            .collect::<Vec<SettingOrPreset>>(),
-    );
+    hash_entries.extend(group.settings.iter().map(|x| SettingOrPreset::Setting(x)));
+    hash_entries.extend(group.presets.iter().map(|x| SettingOrPreset::Preset(x)));
+
     let hash_table = generate_table(&hash_entries, |entry| simple_hash(entry.name()));
     fmtln!(fmt, "static HASH_TABLE: [u16; {}] = [", hash_table.len());
     fmt.indent(|fmt| {
@@ -341,7 +331,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     fmtln!(
         fmt,
         "static PRESETS: [(u8, u8); {}] = [",
-        group.presets.len()
+        group.presets.len() * (group.settings_size as usize)
     );
     fmt.indent(|fmt| {
         for preset in &group.presets {

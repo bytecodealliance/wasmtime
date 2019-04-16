@@ -41,7 +41,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     setting.add_bool(
         "enable_e",
         "Enable the 'RV32E' instruction set with only 16 registers",
-        true,
+        false,
     );
 
     let shared_enable_atomics = shared.get_bool("enable_atomics");
