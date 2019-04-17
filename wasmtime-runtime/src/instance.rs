@@ -520,8 +520,7 @@ impl Instance {
     }
 
     /// Return the memory index for the given `VMMemoryDefinition`.
-    /// FIXME: Should this be pub(crate)?
-    pub fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
+    pub(crate) fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
         let offsets = &self.offsets;
         let begin = unsafe {
             (&self.vmctx as *const VMContext as *const u8)
@@ -548,8 +547,11 @@ impl Instance {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
-    /// FIXME: Should this be pub(crate)?
-    pub fn memory_grow(&mut self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
+    pub(crate) fn memory_grow(
+        &mut self,
+        memory_index: DefinedMemoryIndex,
+        delta: u32,
+    ) -> Option<u32> {
         let result = self
             .memories
             .get_mut(memory_index)
@@ -831,6 +833,19 @@ impl InstanceHandle {
     /// Return a reference to the custom state attached to this instance.
     pub fn host_state(&mut self) -> &mut Any {
         self.instance_mut().host_state()
+    }
+
+    /// Return the memory index for the given `VMMemoryDefinition` in this instance.
+    pub fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
+        self.instance().memory_index(memory)
+    }
+
+    /// Grow memory in this instance by the specified amount of pages.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount
+    /// of pages.
+    pub fn memory_grow(&mut self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
+        self.instance_mut().memory_grow(memory_index, delta)
     }
 }
 
