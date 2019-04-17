@@ -330,7 +330,9 @@ impl Registers {
     pub fn release(&mut self, gpr: GPR) {
         let (gpr, scratch_counts) = self.scratch_counts_mut(gpr);
         let c = &mut scratch_counts.1[gpr as usize];
-        *c = c.checked_sub(1).unwrap_or_else(|| panic!("Double-freed register: {}", gpr));
+        *c = c
+            .checked_sub(1)
+            .unwrap_or_else(|| panic!("Double-freed register: {}", gpr));
         if *c == 0 {
             scratch_counts.0.release(gpr);
         }
@@ -4342,6 +4344,119 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.free_value(right);
     }
 
+    fn cmov(&mut self, cond_code: CondCode, dst: GPR, src: CCLoc) {
+        match src {
+            CCLoc::Reg(reg) => match cond_code {
+                cc::EQUAL => {
+                    dynasm!(self.asm
+                        ; cmove Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::NOT_EQUAL => {
+                    dynasm!(self.asm
+                        ; cmovne Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::GE_U => {
+                    dynasm!(self.asm
+                        ; cmovae Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::LT_U => {
+                    dynasm!(self.asm
+                        ; cmovb Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::GT_U => {
+                    dynasm!(self.asm
+                        ; cmova Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::LE_U => {
+                    dynasm!(self.asm
+                        ; cmovbe Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::GE_S => {
+                    dynasm!(self.asm
+                        ; cmovge Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::LT_S => {
+                    dynasm!(self.asm
+                        ; cmovl Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::GT_S => {
+                    dynasm!(self.asm
+                        ; cmovg Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+                cc::LE_S => {
+                    dynasm!(self.asm
+                        ; cmovle Rq(dst.rq().unwrap()), Rq(reg.rq().unwrap())
+                    );
+                }
+            },
+            CCLoc::Stack(offset) => {
+                let offset = self.adjusted_offset(offset);
+
+                match cond_code {
+                    cc::EQUAL => {
+                        dynasm!(self.asm
+                            ; cmove Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::NOT_EQUAL => {
+                        dynasm!(self.asm
+                            ; cmovne Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::GE_U => {
+                        dynasm!(self.asm
+                            ; cmovae Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::LT_U => {
+                        dynasm!(self.asm
+                            ; cmovb Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::GT_U => {
+                        dynasm!(self.asm
+                            ; cmova Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::LE_U => {
+                        dynasm!(self.asm
+                            ; cmovbe Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::GE_S => {
+                        dynasm!(self.asm
+                            ; cmovge Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::LT_S => {
+                        dynasm!(self.asm
+                            ; cmovl Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::GT_S => {
+                        dynasm!(self.asm
+                            ; cmovg Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                    cc::LE_S => {
+                        dynasm!(self.asm
+                            ; cmovle Rq(dst.rq().unwrap()), [rsp + offset]
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     pub fn select(&mut self) {
         let cond = self.pop();
         let else_ = self.pop();
@@ -4357,103 +4472,52 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             return;
         }
 
-        let cond_reg = self.into_reg(I32, cond).unwrap();
-        let else_ = if let ValueLocation::Stack(_) = else_ {
-            else_
-        } else {
-            ValueLocation::Reg(self.into_reg(I32, else_).unwrap())
+        let cond_code = match cond {
+            ValueLocation::Cond(cc) => cc,
+            _ => {
+                let cond_reg = self.into_reg(I32, cond).unwrap();
+                dynasm!(self.asm
+                    ; test Rd(cond_reg.rq().unwrap()), Rd(cond_reg.rq().unwrap())
+                );
+
+                self.block_state.regs.release(cond_reg);
+
+                cc::NOT_EQUAL
+            }
         };
 
-        let then = if let ValueLocation::Stack(_) = then {
-            then
+        let else_ = if let ValueLocation::Stack(offset) = else_ {
+            CCLoc::Stack(offset)
         } else {
-            ValueLocation::Reg(self.into_reg(I32, then).unwrap())
+            CCLoc::Reg(self.into_reg(I32, else_).unwrap())
         };
 
-        dynasm!(self.asm
-            ; test Rd(cond_reg.rq().unwrap()), Rd(cond_reg.rq().unwrap())
-        );
-
-        self.block_state.regs.release(cond_reg);
+        let then = if let ValueLocation::Stack(offset) = then {
+            CCLoc::Stack(offset)
+        } else {
+            CCLoc::Reg(self.into_reg(I32, then).unwrap())
+        };
 
         let out_gpr = match (then, else_) {
-            (ValueLocation::Reg(then_reg), else_)
-                if self.block_state.regs.num_usages(then_reg) <= 1 =>
-            {
-                match else_ {
-                    ValueLocation::Reg(reg) => {
-                        dynasm!(self.asm
-                            ; cmovz Rq(then_reg.rq().unwrap()), Rq(reg.rq().unwrap())
-                        );
-                    }
-                    ValueLocation::Stack(offset) => {
-                        let offset = self.adjusted_offset(offset);
-                        dynasm!(self.asm
-                            ; cmovz Rq(then_reg.rq().unwrap()), [rsp + offset]
-                        );
-                    }
-                    _ => unreachable!(),
-                }
-
-                self.free_value(else_);
+            (CCLoc::Reg(then_reg), else_) if self.block_state.regs.num_usages(then_reg) <= 1 => {
+                self.cmov(!cond_code, then_reg, else_);
+                self.free_value(else_.into());
 
                 then_reg
             }
-            (then, ValueLocation::Reg(else_reg))
-                if self.block_state.regs.num_usages(else_reg) <= 1 =>
-            {
-                match then {
-                    ValueLocation::Reg(reg) => {
-                        dynasm!(self.asm
-                            ; cmovnz Rq(else_reg.rq().unwrap()), Rq(reg.rq().unwrap())
-                        );
-                    }
-                    ValueLocation::Stack(offset) => {
-                        let offset = self.adjusted_offset(offset);
-                        dynasm!(self.asm
-                            ; cmovnz Rq(else_reg.rq().unwrap()), [rsp + offset]
-                        );
-                    }
-                    _ => unreachable!(),
-                }
-
-                self.free_value(then);
+            (then, CCLoc::Reg(else_reg)) if self.block_state.regs.num_usages(else_reg) <= 1 => {
+                self.cmov(cond_code, else_reg, then);
+                self.free_value(then.into());
 
                 else_reg
             }
             (then, else_) => {
                 let out = self.take_reg(GPRType::Rq).unwrap();
-                match else_ {
-                    ValueLocation::Reg(reg) => {
-                        dynasm!(self.asm
-                            ; cmovz Rq(out.rq().unwrap()), Rq(reg.rq().unwrap())
-                        );
-                    }
-                    ValueLocation::Stack(offset) => {
-                        let offset = self.adjusted_offset(offset);
-                        dynasm!(self.asm
-                            ; cmovz Rq(out.rq().unwrap()), [rsp + offset]
-                        );
-                    }
-                    _ => unreachable!(),
-                }
-                match then {
-                    ValueLocation::Reg(reg) => {
-                        dynasm!(self.asm
-                            ; cmovnz Rq(out.rq().unwrap()), Rq(reg.rq().unwrap())
-                        );
-                    }
-                    ValueLocation::Stack(offset) => {
-                        let offset = self.adjusted_offset(offset);
-                        dynasm!(self.asm
-                            ; cmovnz Rq(out.rq().unwrap()), [rsp + offset]
-                        );
-                    }
-                    _ => unreachable!(),
-                }
+                self.cmov(!cond_code, out, else_);
+                self.cmov(cond_code, out, then);
 
-                self.free_value(then);
-                self.free_value(else_);
+                self.free_value(then.into());
+                self.free_value(else_.into());
 
                 out
             }
