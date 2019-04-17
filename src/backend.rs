@@ -9,6 +9,7 @@ use either::Either;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
+    convert::TryFrom,
     iter::{self, FromIterator},
     mem,
     ops::RangeInclusive,
@@ -931,8 +932,23 @@ macro_rules! shift {
             let mut count = self.pop();
             let mut val = self.pop();
 
+            if let Some(imm) = val.immediate() {
+                if let Some(imm) = imm.as_int() {
+                    if let Ok(imm) = i8::try_from(imm) {
+                        let reg = self.into_temp_reg($ty, val).unwrap();
+
+                        dynasm!(self.asm
+                            ; $instr $reg_ty(reg.rq().unwrap()), imm
+                        );
+                    }
+                }
+            }
+
             if val == ValueLocation::Reg(RCX) {
-                val = ValueLocation::Reg(self.into_temp_reg($ty, val).unwrap());
+                let new = self.take_reg($ty).unwrap();
+                self.copy_value(val, CCLoc::Reg(new));
+                self.free_value(val);
+                val = ValueLocation::Reg(new);
             }
 
             // TODO: Maybe allocate `RCX`, write `count` to it and then free `count`.
@@ -979,7 +995,7 @@ macro_rules! shift {
             self.block_state.regs.mark_used(RCX);
             count = ValueLocation::Reg(RCX);
 
-            let reg = self.into_reg($ty, val).unwrap();
+            let reg = self.into_temp_reg($ty, val).unwrap();
 
             dynasm!(self.asm
                 ; $instr $reg_ty(reg.rq().unwrap()), cl
