@@ -83,6 +83,7 @@ where
     M: ModuleContext,
     I: IntoIterator<Item = Operator<L>>,
     L: Hash + Clone + Eq,
+    BrTarget<L>: std::fmt::Display,
 {
     fn drop_elements<T>(stack: &mut Vec<T>, depths: std::ops::RangeInclusive<u32>) {
         let _ = (|| {
@@ -138,6 +139,8 @@ where
     );
 
     while let Some(op) = body.next() {
+        println!("{}", op);
+
         if let Some(Operator::Label(label)) = body.peek() {
             let block = blocks
                 .get_mut(&BrTarget::Label(label.clone()))
@@ -324,33 +327,46 @@ where
                             (ref mut else_cc @ None, else_to_drop),
                         ) => {
                             let max_params = then_block.params.max(else_block.params);
-                            let cc = if then_block_should_serialize_args {
-                                Left(ctx.serialize_args(max_params))
-                            } else if else_block_should_serialize_args {
-                                Left(ctx.serialize_args(max_params))
+                            let virt_cc = if !then_block_should_serialize_args
+                                || !else_block_should_serialize_args
+                            {
+                                Some(ctx.virtual_calling_convention())
                             } else {
-                                Right(ctx.virtual_calling_convention())
+                                None
+                            };
+                            let cc = if then_block_should_serialize_args
+                                || else_block_should_serialize_args
+                            {
+                                Some(ctx.serialize_args(max_params))
+                            } else {
+                                None
                             };
 
-                            **then_cc = {
-                                let mut cc = cc.clone();
+                            **then_cc = if then_block_should_serialize_args {
+                                let mut cc = cc.clone().unwrap();
                                 if let Some(to_drop) = then_to_drop.clone() {
-                                    match &mut cc {
-                                        Left(cc) => drop_elements(&mut cc.arguments, to_drop),
-                                        Right(cc) => drop_elements(&mut cc.stack, to_drop),
-                                    }
+                                    drop_elements(&mut cc.arguments, to_drop);
                                 }
-                                Some(cc)
+                                Some(Left(cc))
+                            } else {
+                                let mut cc = virt_cc.clone().unwrap();
+                                if let Some(to_drop) = then_to_drop.clone() {
+                                    drop_elements(&mut cc.stack, to_drop);
+                                }
+                                Some(Right(cc))
                             };
-                            **else_cc = {
-                                let mut cc = cc;
+                            **else_cc = if else_block_should_serialize_args {
+                                let mut cc = cc.unwrap();
                                 if let Some(to_drop) = else_to_drop.clone() {
-                                    match &mut cc {
-                                        Left(cc) => drop_elements(&mut cc.arguments, to_drop),
-                                        Right(cc) => drop_elements(&mut cc.stack, to_drop),
-                                    }
+                                    drop_elements(&mut cc.arguments, to_drop);
                                 }
-                                Some(cc)
+                                Some(Left(cc))
+                            } else {
+                                let mut cc = virt_cc.unwrap();
+                                if let Some(to_drop) = else_to_drop.clone() {
+                                    drop_elements(&mut cc.stack, to_drop);
+                                }
+                                Some(Right(cc))
                             };
                         }
                         _ => unimplemented!(
