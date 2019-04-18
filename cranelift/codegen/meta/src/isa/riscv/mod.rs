@@ -1,7 +1,11 @@
+use crate::cdsl::cpu_modes::CpuMode;
 use crate::cdsl::inst::InstructionGroup;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
+
+use crate::shared::types::Float::{F32, F64};
+use crate::shared::types::Int::{I32, I64};
 use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(shared: &SettingGroup) -> SettingGroup {
@@ -84,5 +88,26 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let inst_group = InstructionGroup::new("riscv", "riscv specific instruction set");
 
-    TargetIsa::new("riscv", inst_group, settings, regs)
+    // CPU modes for 32-bit and 64-bit operation.
+    let mut rv_32 = CpuMode::new("RV32");
+    let mut rv_64 = CpuMode::new("RV64");
+
+    let expand = shared_defs.transform_groups.by_name("expand");
+    let narrow = shared_defs.transform_groups.by_name("narrow");
+    rv_32.legalize_monomorphic(expand);
+    rv_32.legalize_default(narrow);
+    rv_32.legalize_type(I32, expand);
+    rv_32.legalize_type(F32, expand);
+    rv_32.legalize_type(F64, expand);
+
+    rv_64.legalize_monomorphic(expand);
+    rv_64.legalize_default(narrow);
+    rv_64.legalize_type(I32, expand);
+    rv_64.legalize_type(I64, expand);
+    rv_64.legalize_type(F32, expand);
+    rv_64.legalize_type(F64, expand);
+
+    let cpu_modes = vec![rv_32, rv_64];
+
+    TargetIsa::new("riscv", inst_group, settings, regs, cpu_modes)
 }

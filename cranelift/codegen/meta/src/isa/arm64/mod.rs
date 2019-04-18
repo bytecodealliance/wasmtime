@@ -1,7 +1,9 @@
+use crate::cdsl::cpu_modes::CpuMode;
 use crate::cdsl::inst::InstructionGroup;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
+
 use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
@@ -48,5 +50,13 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let inst_group = InstructionGroup::new("arm64", "arm64 specific instruction set");
 
-    TargetIsa::new("arm64", inst_group, settings, regs)
+    let mut a64 = CpuMode::new("A64");
+
+    // TODO refine these.
+    let narrow = shared_defs.transform_groups.by_name("narrow");
+    a64.legalize_default(narrow);
+
+    let cpu_modes = vec![a64];
+
+    TargetIsa::new("arm64", inst_group, settings, regs, cpu_modes)
 }
