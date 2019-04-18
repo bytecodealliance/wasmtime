@@ -286,7 +286,7 @@ Inputs:
 
 Get the attributes of a file descriptor.
 
-Note: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well
+Note: This returns similar flags to `fcntl(fd, F_GETFL)` in POSIX, as well
 as additional fields.
 
 Inputs:
