@@ -1,10 +1,15 @@
 use crate::cdsl::camel_case;
-use crate::cdsl::formats::{FormatRegistry, InstructionFormat, InstructionFormatIndex};
+use crate::cdsl::formats::{
+    FormatField, FormatRegistry, InstructionFormat, InstructionFormatIndex,
+};
 use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
+use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::TypeVar;
 
 use std::fmt;
+use std::ops;
+use std::rc::Rc;
 use std::slice;
 
 /// Every instruction must belong to exactly one instruction group. A given
@@ -32,6 +37,13 @@ impl InstructionGroup {
     pub fn iter(&self) -> slice::Iter<Instruction> {
         self.instructions.iter()
     }
+
+    pub fn by_name(&self, name: &'static str) -> &Instruction {
+        self.instructions
+            .iter()
+            .find(|inst| inst.name == name)
+            .expect(&format!("unexisting instruction with name {}", name))
+    }
 }
 
 pub struct PolymorphicInfo {
@@ -40,7 +52,7 @@ pub struct PolymorphicInfo {
     pub other_typevars: Vec<TypeVar>,
 }
 
-pub struct Instruction {
+pub struct InstructionContent {
     /// Instruction mnemonic, also becomes opcode name.
     pub name: &'static str,
     pub camel_name: String,
@@ -53,7 +65,7 @@ pub struct Instruction {
     /// Output operands. The output operands must be SSA values or `variable_args`.
     pub operands_out: Vec<Operand>,
     /// Instruction-specific TypeConstraints.
-    _constraints: Vec<Constraint>,
+    pub constraints: Vec<Constraint>,
 
     /// Instruction format, automatically derived from the input operands.
     pub format: InstructionFormatIndex,
@@ -90,6 +102,18 @@ pub struct Instruction {
     pub writes_cpu_flags: bool,
 }
 
+#[derive(Clone)]
+pub struct Instruction {
+    content: Rc<InstructionContent>,
+}
+
+impl ops::Deref for Instruction {
+    type Target = InstructionContent;
+    fn deref(&self) -> &Self::Target {
+        &*self.content
+    }
+}
+
 impl Instruction {
     pub fn snake_name(&self) -> &'static str {
         if self.name == "return" {
@@ -107,6 +131,17 @@ impl Instruction {
             }
         }
         ""
+    }
+
+    pub fn all_typevars(&self) -> Vec<&TypeVar> {
+        match &self.polymorphic_info {
+            Some(poly) => {
+                let mut result = vec![&poly.ctrl_typevar];
+                result.extend(&poly.other_typevars);
+                result
+            }
+            None => Vec::new(),
+        }
     }
 }
 
@@ -272,30 +307,38 @@ impl InstructionBuilder {
         let writes_cpu_flags = operands_out.iter().any(|op| op.is_cpu_flags());
 
         Instruction {
-            name: self.name,
-            camel_name: camel_case(self.name),
-            doc: self.doc,
-            operands_in,
-            operands_out,
-            _constraints: self.constraints.unwrap_or_else(Vec::new),
-            format: format_index,
-            polymorphic_info,
-            value_opnums,
-            value_results,
-            imm_opnums,
-            is_terminator: self.is_terminator,
-            is_branch: self.is_branch,
-            is_indirect_branch: self.is_indirect_branch,
-            is_call: self.is_call,
-            is_return: self.is_return,
-            is_ghost: self.is_ghost,
-            can_load: self.can_load,
-            can_store: self.can_store,
-            can_trap: self.can_trap,
-            other_side_effects: self.other_side_effects,
-            writes_cpu_flags,
+            content: Rc::new(InstructionContent {
+                name: self.name,
+                camel_name: camel_case(self.name),
+                doc: self.doc,
+                operands_in,
+                operands_out,
+                constraints: self.constraints.unwrap_or_else(Vec::new),
+                format: format_index,
+                polymorphic_info,
+                value_opnums,
+                value_results,
+                imm_opnums,
+                is_terminator: self.is_terminator,
+                is_branch: self.is_branch,
+                is_indirect_branch: self.is_indirect_branch,
+                is_call: self.is_call,
+                is_return: self.is_return,
+                is_ghost: self.is_ghost,
+                can_load: self.can_load,
+                can_store: self.can_store,
+                can_trap: self.can_trap,
+                other_side_effects: self.other_side_effects,
+                writes_cpu_flags,
+            }),
         }
     }
+}
+
+#[derive(Clone)]
+pub struct BoundInstruction {
+    pub inst: Instruction,
+    pub value_types: Vec<ValueType>,
 }
 
 /// Check if this instruction is polymorphic, and verify its use of type variables.

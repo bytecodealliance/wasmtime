@@ -134,7 +134,7 @@ pub struct OperandKind {
     /// The camel-cased name of an operand kind is also the Rust type used to represent it.
     pub rust_type: String,
 
-    fields: OperandKindFields,
+    pub fields: OperandKindFields,
 }
 
 impl OperandKind {
