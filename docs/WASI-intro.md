@@ -51,9 +51,14 @@ To make things easier, we provide
 [prebuilt packages](https://github.com/CraneStation/wasi-sdk/releases)
 that provide builds of Clang and sysroot libraries.
 
-Note that C++ support has a notable
-[bug](https://bugs.llvm.org/show_bug.cgi?id=40412) in clang which affects
-<iostream> in libcxx. This will be fixed in future versions.
+WASI doesn't yet support `setjmp`/`longjmp` or C++ exceptions, as it is
+waiting for [unwinding support in WebAssembly].
+
+[unwinding support in WebAssembly]: https://github.com/WebAssembly/exception-handling/
+
+Some C++ programs, particularly those using `<iostream>`, may see warnings
+about function signature mismatches; this is a
+[known bug](https://bugs.llvm.org/show_bug.cgi?id=40412).
 
 ## How can I run programs that use WASI?
 
