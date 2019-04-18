@@ -40,7 +40,8 @@ mod module;
 pub use crate::backend::Backend;
 pub use crate::data_context::{DataContext, DataDescription, Init};
 pub use crate::module::{
-    DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleNamespace, ModuleResult,
+    DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleFunction, ModuleNamespace,
+    ModuleResult,
 };
 
 /// Version number of this crate.
