@@ -6,6 +6,7 @@ pub mod error;
 pub mod isa;
 
 mod gen_inst;
+mod gen_legalizer;
 mod gen_registers;
 mod gen_settings;
 mod gen_types;
@@ -42,6 +43,14 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
         &shared_defs.format_registry,
         "opcodes.rs",
         "inst_builder.rs",
+        &out_dir,
+    )?;
+
+    gen_legalizer::generate(
+        &isas,
+        &shared_defs.format_registry,
+        &shared_defs.transform_groups,
+        "new_legalize",
         &out_dir,
     )?;
 
