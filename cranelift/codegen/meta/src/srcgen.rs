@@ -79,7 +79,7 @@ impl Formatter {
 
     /// Get a string containing whitespace outdented one level. Used for
     /// lines of code that are inside a single indented block.
-    fn _get_outdent(&mut self) -> String {
+    fn get_outdent(&mut self) -> String {
         self.indent_pop();
         let s = self.get_indent();
         self.indent_push();
@@ -98,8 +98,8 @@ impl Formatter {
     }
 
     /// Emit a line outdented one level.
-    pub fn _outdented_line(&mut self, s: &str) {
-        let new_line = format!("{}{}\n", self._get_outdent(), s);
+    pub fn outdented_line(&mut self, s: &str) {
+        let new_line = format!("{}{}\n", self.get_outdent(), s);
         self.lines.push(new_line);
     }
 

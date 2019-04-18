@@ -665,7 +665,7 @@ fn typeset_to_string(ts: &TypeSet) -> String {
 }
 
 /// Generate the table of ValueTypeSets described by type_sets.
-fn gen_typesets_table(type_sets: &UniqueTable<TypeSet>, fmt: &mut Formatter) {
+pub fn gen_typesets_table(type_sets: &UniqueTable<TypeSet>, fmt: &mut Formatter) {
     if type_sets.len() == 0 {
         return;
     }
