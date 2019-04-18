@@ -30,25 +30,25 @@ pub struct TypeVarContent {
     /// Type set associated to the type variable.
     /// This field must remain private; use `get_typeset()` or `get_raw_typeset()` to get the
     /// information you want.
-    type_set: Rc<TypeSet>,
+    type_set: TypeSet,
 
     pub base: Option<TypeVarParent>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TypeVar {
-    content: Rc<TypeVarContent>,
+    content: Rc<RefCell<TypeVarContent>>,
 }
 
 impl TypeVar {
     pub fn new(name: impl Into<String>, doc: impl Into<String>, type_set: TypeSet) -> Self {
         Self {
-            content: Rc::new(TypeVarContent {
+            content: Rc::new(RefCell::new(TypeVarContent {
                 name: name.into(),
                 doc: doc.into(),
-                type_set: Rc::new(type_set),
+                type_set,
                 base: None,
-            }),
+            })),
         }
     }
 
@@ -89,20 +89,37 @@ impl TypeVar {
         TypeVar::new(name, doc, builder.finish())
     }
 
-    /// Returns this typevar's type set, maybe computing it from the parent.
-    fn get_typeset(&self) -> Rc<TypeSet> {
-        // TODO Can this be done in a non-lazy way in derived() and we can remove this function and
-        // the one below?
-        match &self.content.base {
-            Some(base) => Rc::new(base.type_var.get_typeset().image(base.derived_func)),
-            None => self.content.type_set.clone(),
+    /// Get a fresh copy of self, named after `name`. Can only be called on non-derived typevars.
+    pub fn copy_from(other: &TypeVar, name: String) -> TypeVar {
+        assert!(
+            other.base.is_none(),
+            "copy_from() can only be called on non-derived type variables"
+        );
+        TypeVar {
+            content: Rc::new(RefCell::new(TypeVarContent {
+                name,
+                doc: "".into(),
+                type_set: other.type_set.clone(),
+                base: None,
+            })),
+        }
+    }
+
+    /// Returns the typeset for this TV. If the TV is derived, computes it recursively from the
+    /// derived function and the base's typeset.
+    /// Note this can't be done non-lazily in the constructor, because the TypeSet of the base may
+    /// change over time.
+    pub fn get_typeset(&self) -> TypeSet {
+        match &self.base {
+            Some(base) => base.type_var.get_typeset().image(base.derived_func),
+            None => self.type_set.clone(),
         }
     }
 
     /// Returns this typevar's type set, assuming this type var has no parent.
     pub fn get_raw_typeset(&self) -> &TypeSet {
-        assert_eq!(self.content.type_set, self.get_typeset());
-        &*self.content.type_set
+        assert_eq!(self.type_set, self.get_typeset());
+        &self.type_set
     }
 
     /// If the associated typeset has a single type return it. Otherwise return None.
@@ -117,7 +134,7 @@ impl TypeVar {
 
     /// Get the free type variable controlling this one.
     pub fn free_typevar(&self) -> Option<TypeVar> {
-        match &self.content.base {
+        match &self.base {
             Some(base) => base.type_var.free_typevar(),
             None => {
                 match self.singleton_type() {
@@ -130,7 +147,7 @@ impl TypeVar {
     }
 
     /// Create a type variable that is a function of another.
-    fn derived(&self, derived_func: DerivedFunc) -> TypeVar {
+    pub fn derived(&self, derived_func: DerivedFunc) -> TypeVar {
         let ts = self.get_typeset();
 
         // Safety checks to avoid over/underflows.
@@ -182,7 +199,7 @@ impl TypeVar {
         }
 
         return TypeVar {
-            content: Rc::new(TypeVarContent {
+            content: Rc::new(RefCell::new(TypeVarContent {
                 name: format!("{}({})", derived_func.name(), self.name),
                 doc: "".into(),
                 type_set: ts,
@@ -190,7 +207,7 @@ impl TypeVar {
                     type_var: self.clone(),
                     derived_func,
                 }),
-            }),
+            })),
         };
     }
 
@@ -215,6 +232,52 @@ impl TypeVar {
     pub fn to_bitvec(&self) -> TypeVar {
         return self.derived(DerivedFunc::ToBitVec);
     }
+
+    /// Constrain the range of types this variable can assume to a subset of those in the typeset
+    /// ts.
+    /// May mutate itself if it's not derived, or its parent if it is.
+    pub fn constrain_types_by_ts(&self, type_set: TypeSet) {
+        match &self.base {
+            Some(base) => {
+                base.type_var
+                    .constrain_types_by_ts(type_set.preimage(base.derived_func));
+            }
+            None => {
+                self.content
+                    .borrow_mut()
+                    .type_set
+                    .inplace_intersect_with(&type_set);
+            }
+        }
+    }
+
+    /// Constrain the range of types this variable can assume to a subset of those `other` can
+    /// assume.
+    /// May mutate itself if it's not derived, or its parent if it is.
+    pub fn constrain_types(&self, other: TypeVar) {
+        if self == &other {
+            return;
+        }
+        self.constrain_types_by_ts(other.get_typeset());
+    }
+
+    /// Get a Rust expression that computes the type of this type variable.
+    pub fn to_rust_code(&self) -> String {
+        match &self.base {
+            Some(base) => format!(
+                "{}.{}()",
+                base.type_var.to_rust_code(),
+                base.derived_func.name()
+            ),
+            None => {
+                if let Some(singleton) = self.singleton_type() {
+                    singleton.rust_name()
+                } else {
+                    self.name.clone()
+                }
+            }
+        }
+    }
 }
 
 impl Into<TypeVar> for &TypeVar {
@@ -228,24 +291,46 @@ impl Into<TypeVar> for ValueType {
     }
 }
 
+// Hash TypeVars by pointers.
+// There might be a better way to do this, but since TypeVar's content (namely TypeSet) can be
+// mutated, it makes sense to use pointer equality/hashing here.
+impl hash::Hash for TypeVar {
+    fn hash<H: hash::Hasher>(&self, h: &mut H) {
+        match &self.base {
+            Some(base) => {
+                base.type_var.hash(h);
+                base.derived_func.hash(h);
+            }
+            None => {
+                (&**self as *const TypeVarContent).hash(h);
+            }
+        }
+    }
+}
+
 impl PartialEq for TypeVar {
     fn eq(&self, other: &TypeVar) -> bool {
-        match (&self.content.base, &other.content.base) {
-            (Some(base1), Some(base2)) => base1.type_var.eq(&base2.type_var),
+        match (&self.base, &other.base) {
+            (Some(base1), Some(base2)) => {
+                base1.type_var.eq(&base2.type_var) && base1.derived_func == base2.derived_func
+            }
             (None, None) => Rc::ptr_eq(&self.content, &other.content),
             _ => false,
         }
     }
 }
 
+// Allow TypeVar as map keys, based on pointer equality (see also above PartialEq impl).
+impl Eq for TypeVar {}
+
 impl ops::Deref for TypeVar {
     type Target = TypeVarContent;
     fn deref(&self) -> &Self::Target {
-        &*self.content
+        unsafe { self.content.as_ptr().as_ref().unwrap() }
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub enum DerivedFunc {
     LaneOf,
     AsBool,
@@ -268,9 +353,20 @@ impl DerivedFunc {
             DerivedFunc::ToBitVec => "to_bitvec",
         }
     }
+
+    /// Returns the inverse function of this one, if it is a bijection.
+    pub fn inverse(&self) -> Option<DerivedFunc> {
+        match self {
+            DerivedFunc::HalfWidth => Some(DerivedFunc::DoubleWidth),
+            DerivedFunc::DoubleWidth => Some(DerivedFunc::HalfWidth),
+            DerivedFunc::HalfVector => Some(DerivedFunc::DoubleVector),
+            DerivedFunc::DoubleVector => Some(DerivedFunc::HalfVector),
+            _ => None,
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct TypeVarParent {
     pub type_var: TypeVar,
     pub derived_func: DerivedFunc,
@@ -734,6 +830,18 @@ impl TypeSetBuilder {
             range_to_set(self.bitvecs.to_range(1..MAX_BITVEC, None)),
             self.specials,
         )
+    }
+
+    pub fn all() -> TypeSet {
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .bitvecs(Interval::All)
+            .specials(ValueType::all_special_types().collect())
+            .includes_scalars(true)
+            .finish()
     }
 }
 
