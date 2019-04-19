@@ -56,4 +56,24 @@ Additional goals for Wasmtime include:
 [Cranelift]: https://github.com/CraneStation/cranelift
 [Lightbeam]: https://github.com/CraneStation/lightbeam
 
+#### Including Wasmtime in your project
+Wasmtime exposes an API for JIT compilation through the `wasmtime-jit` subcrate, which depends on `wasmtime-environ` and `wasmtime-runtime` for the ABI and runtime support respectively. However, this API is not documented and subject to change. Please use at your own risk!
+
+Build the individual crates as such:
+
+```
+cargo build --package wasmtime-jit
+```
+
+Wasmtime does not currently publish these crates on crates.io. They may be included as a git dependency, like this:
+
+```toml
+[dependencies]
+wasmtime-environ = { git = "https://github.com/CraneStation/wasmtime", rev = "somecommithash" }
+wasmtime-runtime = { git = "https://github.com/CraneStation/wasmtime", rev = "somecommithash" }
+wasmtime-jit = { git = "https://github.com/CraneStation/wasmtime", rev = "somecommithash" }
+```
+
+All three crates must be specified as dependencies for `wasmtime-jit` to build correctly, at the moment.
+
 It's Wasmtime.
