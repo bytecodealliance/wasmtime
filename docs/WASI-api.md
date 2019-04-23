@@ -766,7 +766,8 @@ Inputs:
 
 - <a href="#path_open.path" name="path_open.path"></a><code>const char \*<strong>path</strong></code> and <a href="#path_open.path_len" name="path_open.path_len"></a><code>size\_t <strong>path\_len</strong></code>
 
-    The path of the file or directory to open.
+    The relative path of the file or directory to open, relative to
+    the [`dirfd`](#path_open.dirfd) directory.
 
 - <a href="#path_open.o_flags" name="path_open.o_flags"></a><code>[\_\_wasi\_oflags\_t](#oflags) <strong>o_flags</strong></code>
 
