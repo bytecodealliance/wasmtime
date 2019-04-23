@@ -1376,7 +1376,7 @@ syscalls! {
     }
 
     pub unsafe extern "C" fn proc_exit(_vmctx: *mut VMContext, rval: u32,) -> () {
-        trace!("proc_exec(rval={:?})", rval);
+        trace!("proc_exit(rval={:?})", rval);
 
         let rval = decode_exitcode(rval);
 
