@@ -564,6 +564,7 @@ __wasi_errno_t wasmtime_ssp_fd_read(
 __wasi_errno_t wasmtime_ssp_fd_renumber(
 #if !defined(WASMTIME_SSP_STATIC_CURFDS)
     struct fd_table *curfds,
+    struct fd_prestats *prestats,
 #endif
     __wasi_fd_t from,
     __wasi_fd_t to

@@ -573,10 +573,11 @@ syscalls! {
 
         let vmctx = &mut *vmctx;
         let curfds = get_curfds(vmctx);
+        let prestats = get_prestats(vmctx);
         let from = decode_fd(from);
         let to = decode_fd(to);
 
-        let e = host::wasmtime_ssp_fd_renumber(curfds, from, to);
+        let e = host::wasmtime_ssp_fd_renumber(curfds, prestats, from, to);
 
         return_encoded_errno(e)
     }
