@@ -1993,8 +1993,7 @@ __wasi_errno_t wasmtime_ssp_path_rename(
   path_put(&old_pa);
   path_put(&new_pa);
   if (ret < 0) {
-    // Linux returns EBUSY in cases where EINVAL would be more suited.
-    return errno == EBUSY ? __WASI_EINVAL : convert_errno(errno);
+    return convert_errno(errno);
   }
   return 0;
 }
