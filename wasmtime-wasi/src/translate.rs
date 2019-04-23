@@ -137,12 +137,6 @@ pub fn encode_filesize(filesize: host::__wasi_filesize_t) -> wasm32::__wasi_file
     filesize
 }
 
-pub fn decode_eventrwflags(
-    eventrwflags: wasm32::__wasi_eventrwflags_t,
-) -> host::__wasi_eventrwflags_t {
-    eventrwflags
-}
-
 pub fn encode_eventrwflags(
     eventrwflags: host::__wasi_eventrwflags_t,
 ) -> wasm32::__wasi_eventrwflags_t {
@@ -365,31 +359,6 @@ pub unsafe fn decode_subscription_slice(
         .collect()
 }
 
-pub fn decode_event(
-    guest_event: wasm32::__wasi_event_t,
-) -> Result<host::__wasi_event_t, host::__wasi_errno_t> {
-    let mut host_event = host::__wasi_event_t {
-        userdata: decode_userdata(guest_event.userdata),
-        error: decode_errno(guest_event.error),
-        type_: decode_eventtype(guest_event.type_),
-        u: unsafe { zeroed() },
-    };
-
-    match guest_event.type_ {
-        wasm32::__WASI_EVENTTYPE_CLOCK => {}
-        wasm32::__WASI_EVENTTYPE_FD_READ | wasm32::__WASI_EVENTTYPE_FD_WRITE => unsafe {
-            host_event.u.fd_readwrite =
-                host::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
-                    nbytes: decode_filesize(guest_event.u.fd_readwrite.nbytes),
-                    flags: decode_eventrwflags(guest_event.u.fd_readwrite.flags),
-                }
-        },
-        _ => return Err(host::__WASI_EINVAL as host::__wasi_errno_t),
-    };
-
-    Ok(host_event)
-}
-
 pub fn encode_event(host_event: host::__wasi_event_t) -> wasm32::__wasi_event_t {
     let mut guest_event = wasm32::__wasi_event_t {
         userdata: encode_userdata(host_event.userdata),
@@ -419,25 +388,19 @@ pub unsafe fn decode_event_slice(
     vmctx: &mut VMContext,
     ptr: wasm32::uintptr_t,
     len: wasm32::size_t,
-) -> Result<Vec<host::__wasi_event_t>, host::__wasi_errno_t> {
-    let slice = decode_slice_of::<wasm32::__wasi_event_t>(vmctx, ptr, len)?;
-    let slice = slice::from_raw_parts(slice.0, slice.1);
-    slice.iter().map(|event| decode_event(*event)).collect()
+) -> Result<(*mut wasm32::__wasi_event_t, usize), host::__wasi_errno_t> {
+    decode_slice_of::<wasm32::__wasi_event_t>(vmctx, ptr, len)
 }
 
 pub unsafe fn encode_event_slice(
-    vmctx: &mut VMContext,
-    ptr: wasm32::uintptr_t,
+    ptr: *mut wasm32::__wasi_event_t,
     host_vec: Vec<host::__wasi_event_t>,
 ) {
     for (i, host) in host_vec.iter().enumerate() {
         let guest = encode_event(*host);
 
-        encode_pointee(
-            vmctx,
-            ptr + (i * size_of::<wasm32::__wasi_event_t>()) as u32,
-            guest,
-        );
+        ptr.add(i * size_of::<wasm32::__wasi_event_t>())
+            .write(guest);
     }
 }
 
@@ -602,10 +565,6 @@ pub unsafe fn encode_filestat_byref(
     };
 
     encode_pointee::<wasm32::__wasi_filestat_t>(vmctx, filestat_ptr, wasm32_filestat)
-}
-
-pub fn decode_errno(errno: wasm32::__wasi_errno_t) -> host::__wasi_errno_t {
-    errno
 }
 
 pub fn encode_errno(e: host::__wasi_errno_t) -> wasm32::__wasi_errno_t {
