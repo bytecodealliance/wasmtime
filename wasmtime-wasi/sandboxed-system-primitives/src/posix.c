@@ -1720,7 +1720,7 @@ __wasi_errno_t wasmtime_ssp_path_open(
   bool write =
       (rights_base & (__WASI_RIGHT_FD_DATASYNC | __WASI_RIGHT_FD_WRITE |
                       __WASI_RIGHT_FD_ALLOCATE |
-                      __WASI_RIGHT_PATH_FILESTAT_SET_SIZE)) != 0;
+                      __WASI_RIGHT_FD_FILESTAT_SET_SIZE)) != 0;
   int noflags = write ? read ? O_RDWR : O_WRONLY : O_RDONLY;
 
   // Which rights are needed on the directory file descriptor.
@@ -1738,7 +1738,7 @@ __wasi_errno_t wasmtime_ssp_path_open(
     noflags |= O_EXCL;
   if ((oflags & __WASI_O_TRUNC) != 0) {
     noflags |= O_TRUNC;
-    needed_inheriting |= __WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+    needed_base |= __WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
   }
 
   // Convert file descriptor flags.
