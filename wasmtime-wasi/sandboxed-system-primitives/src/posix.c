@@ -958,10 +958,27 @@ __wasi_errno_t wasmtime_ssp_fd_read(
 __wasi_errno_t wasmtime_ssp_fd_renumber(
 #if !defined(WASMTIME_SSP_STATIC_CURFDS)
     struct fd_table *curfds,
+    struct fd_prestats *prestats,
 #endif
     __wasi_fd_t from,
     __wasi_fd_t to
 ) {
+  // Don't allow renumbering over a pre-opened resource.
+  // TODO: Eventually, we do want to permit this, once libpreopen in
+  // userspace is capable of removing entries from its tables as well.
+  {
+    rwlock_rdlock(&prestats->lock);
+    struct fd_prestat *prestat;
+    __wasi_errno_t error = fd_prestats_get_entry(prestats, to, &prestat);
+    if (error != 0) {
+      error = fd_prestats_get_entry(prestats, from, &prestat);
+    }
+    rwlock_unlock(&prestats->lock);
+    if (error == 0) {
+      return __WASI_ENOTSUP;
+    }
+  }
+
   struct fd_table *ft = curfds;
   rwlock_wrlock(&ft->lock);
   struct fd_entry *fe_from;
