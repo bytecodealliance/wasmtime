@@ -1780,8 +1780,9 @@ __wasi_errno_t wasmtime_ssp_path_open(
 
   int nfd = openat(pa.fd, pa.path, noflags, 0666);
   if (nfd < 0) {
+    int openat_errno = errno;
     // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket.
-    if (errno == ENXIO) {
+    if (openat_errno == ENXIO) {
       struct stat sb;
       int ret =
           fstatat(pa.fd, pa.path, &sb, pa.follow ? 0 : AT_SYMLINK_NOFOLLOW);
@@ -1789,12 +1790,22 @@ __wasi_errno_t wasmtime_ssp_path_open(
       return ret == 0 && S_ISSOCK(sb.st_mode) ? __WASI_ENOTSUP
                                               : __WASI_ENXIO;
     }
+    // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
+    // on a symlink.
+    if (openat_errno == ENOTDIR && (noflags & (O_NOFOLLOW | O_DIRECTORY)) != 0) {
+      struct stat sb;
+      int ret = fstatat(pa.fd, pa.path, &sb, AT_SYMLINK_NOFOLLOW);
+      if (S_ISLNK(sb.st_mode)) {
+        path_put(&pa);
+        return __WASI_ELOOP;
+      }
+    }
     path_put(&pa);
     // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
     // a symlink.
-    if (!pa.follow && errno == EMLINK)
+    if (!pa.follow && openat_errno == EMLINK)
       return __WASI_ELOOP;
-    return convert_errno(errno);
+    return convert_errno(openat_errno);
   }
   path_put(&pa);
 
