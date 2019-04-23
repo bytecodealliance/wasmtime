@@ -914,7 +914,7 @@ syscalls! {
         let fs_rights_base = decode_rights(fs_rights_base);
         let fs_rights_inheriting = decode_rights(fs_rights_inheriting);
         let fs_flags = decode_fdflags(fs_flags);
-        let mut host_fd = 0;
+        let mut host_fd = wasm32::__wasi_fd_t::max_value();
         if let Err(e) = decode_fd_byref(vmctx, fd) {
             return return_encoded_errno(e);
         }
