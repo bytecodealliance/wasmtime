@@ -91,6 +91,25 @@ fn size_plus_maybe_sib_or_offset_for_in_reg_1(
     sizing.base_size + additional_size_if(1, inst, divert, func, needs_sib_byte_or_offset)
 }
 
+/// If the value's definition is a constant immediate, returns its unpacked value, or None
+/// otherwise.
+fn maybe_iconst_imm(pos: &FuncCursor, value: ir::Value) -> Option<i64> {
+    if let ir::ValueDef::Result(inst, _) = &pos.func.dfg.value_def(value) {
+        if let ir::InstructionData::UnaryImm {
+            opcode: ir::Opcode::Iconst,
+            imm,
+        } = &pos.func.dfg[*inst]
+        {
+            let value: i64 = (*imm).into();
+            Some(value)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 /// Expand the `sdiv` and `srem` instructions using `x86_sdivmodx`.
 fn expand_sdivrem(
     inst: ir::Inst,
@@ -109,7 +128,7 @@ fn expand_sdivrem(
         } => (args[0], args[1], true),
         _ => panic!("Need sdiv/srem: {}", func.dfg.display_inst(inst, None)),
     };
-    let avoid_div_traps = isa.flags().avoid_div_traps();
+
     let old_ebb = func.layout.pp_ebb(inst);
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
@@ -118,10 +137,38 @@ fn expand_sdivrem(
     pos.use_srcloc(inst);
     pos.func.dfg.clear_results(inst);
 
+    let avoid_div_traps = isa.flags().avoid_div_traps();
+
     // If we can tolerate native division traps, sdiv doesn't need branching.
     if !avoid_div_traps && !is_srem {
         let xhi = pos.ins().sshr_imm(x, i64::from(ty.lane_bits()) - 1);
         pos.ins().with_result(result).x86_sdivmodx(x, xhi, y);
+        pos.remove_inst();
+        return;
+    }
+
+    // Try to remove checks if the input value is an immediate other than 0 or -1. For these two
+    // immediates, we'd ideally replace conditional traps by traps, but this requires more
+    // manipulation of the dfg/cfg, which is out of scope here.
+    let (could_be_zero, could_be_minus_one) = if let Some(imm) = maybe_iconst_imm(&pos, y) {
+        (imm == 0, imm == -1)
+    } else {
+        (true, true)
+    };
+
+    // Put in an explicit division-by-zero trap if the environment requires it.
+    if avoid_div_traps && could_be_zero {
+        pos.ins().trapz(y, ir::TrapCode::IntegerDivisionByZero);
+    }
+
+    if !could_be_minus_one {
+        let xhi = pos.ins().sshr_imm(x, i64::from(ty.lane_bits()) - 1);
+        let reuse = if is_srem {
+            [None, Some(result)]
+        } else {
+            [Some(result), None]
+        };
+        pos.ins().with_results(reuse).x86_sdivmodx(x, xhi, y);
         pos.remove_inst();
         return;
     }
@@ -138,11 +185,6 @@ fn expand_sdivrem(
     // Start by checking for a -1 divisor which needs to be handled specially.
     let is_m1 = pos.ins().ifcmp_imm(y, -1);
     pos.ins().brif(IntCC::Equal, is_m1, minus_one, &[]);
-
-    // Put in an explicit division-by-zero trap if the environment requires it.
-    if avoid_div_traps {
-        pos.ins().trapz(y, ir::TrapCode::IntegerDivisionByZero);
-    }
 
     // Now it is safe to execute the `x86_sdivmodx` instruction which will still trap on division
     // by zero.
@@ -206,7 +248,17 @@ fn expand_udivrem(
 
     // Put in an explicit division-by-zero trap if the environment requires it.
     if avoid_div_traps {
-        pos.ins().trapz(y, ir::TrapCode::IntegerDivisionByZero);
+        let zero_check = if let Some(imm) = maybe_iconst_imm(&pos, y) {
+            // Ideally, we'd just replace the conditional trap with a trap when the immediate is
+            // zero, but this requires more manipulation of the dfg/cfg, which is out of scope
+            // here.
+            imm == 0
+        } else {
+            true
+        };
+        if zero_check {
+            pos.ins().trapz(y, ir::TrapCode::IntegerDivisionByZero);
+        }
     }
 
     // Now it is safe to execute the `x86_udivmodx` instruction.
