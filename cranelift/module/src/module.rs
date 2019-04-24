@@ -203,9 +203,10 @@ impl<B> ModuleData<B>
 where
     B: Backend,
 {
-    fn merge(&mut self, linkage: Linkage, writable: bool) {
+    fn merge(&mut self, linkage: Linkage, writable: bool, align: Option<u8>) {
         self.decl.linkage = Linkage::merge(self.decl.linkage, linkage);
         self.decl.writable = self.decl.writable || writable;
+        self.decl.align = self.decl.align.max(align);
     }
 }
 
@@ -447,7 +448,7 @@ where
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Data(id) => {
                     let existing = &mut self.contents.data_objects[id];
-                    existing.merge(linkage, writable);
+                    existing.merge(linkage, writable, align);
                     self.backend.declare_data(
                         name,
                         existing.decl.linkage,
