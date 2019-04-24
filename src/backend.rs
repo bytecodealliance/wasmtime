@@ -371,6 +371,16 @@ pub enum CCLoc {
     Stack(i32),
 }
 
+impl CCLoc {
+    fn try_from(other: ValueLocation) -> Option<Self> {
+        match other {
+            ValueLocation::Reg(reg) => Some(CCLoc::Reg(reg)),
+            ValueLocation::Stack(offset) => Some(CCLoc::Stack(offset)),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CondCode {
     CF0,
@@ -670,27 +680,27 @@ impl StackDepth {
 }
 
 macro_rules! int_div {
-    ($full_div_s:ident, $full_div_u:ident, $div_u:ident, $div_s:ident, $rem_u:ident, $rem_s:ident, $imm_fn:ident, $signed_ty:ty, $unsigned_ty:ty) => {
+    ($full_div_s:ident, $full_div_u:ident, $div_u:ident, $div_s:ident, $rem_u:ident, $rem_s:ident, $imm_fn:ident, $signed_ty:ty, $unsigned_ty:ty, $reg_ty:tt, $pointer_ty:tt) => {
         // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
         //       emitting Wasm.
         pub fn $div_u(&mut self) {
             let divisor = self.pop();
-            let quotient = self.pop();
+            let dividend = self.pop();
 
-            if let (Some(quotient), Some(divisor)) = (quotient.$imm_fn(), divisor.$imm_fn()) {
+            if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
                     self.trap();
                     self.push(ValueLocation::Immediate((0 as $unsigned_ty).into()));
                 } else {
                     self.push(ValueLocation::Immediate(
-                        <$unsigned_ty>::wrapping_div(quotient as _, divisor as _).into(),
+                        <$unsigned_ty>::wrapping_div(dividend as _, divisor as _).into(),
                     ));
                 }
 
                 return;
             }
 
-            let (div, rem, mut saved) = self.$full_div_u(divisor, quotient);
+            let (div, rem, mut saved) = self.$full_div_u(divisor, dividend);
 
             self.free_value(rem);
 
@@ -719,22 +729,22 @@ macro_rules! int_div {
         //       emitting Wasm.
         pub fn $div_s(&mut self) {
             let divisor = self.pop();
-            let quotient = self.pop();
+            let dividend = self.pop();
 
-            if let (Some(quotient), Some(divisor)) = (quotient.$imm_fn(), divisor.$imm_fn()) {
+            if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
                     self.trap();
                     self.push(ValueLocation::Immediate((0 as $signed_ty).into()));
                 } else {
                     self.push(ValueLocation::Immediate(
-                        <$signed_ty>::wrapping_div(quotient, divisor).into(),
+                        <$signed_ty>::wrapping_div(dividend, divisor).into(),
                     ));
                 }
 
                 return;
             }
 
-            let (div, rem, mut saved) = self.$full_div_s(divisor, quotient);
+            let (div, rem, mut saved) = self.$full_div_s(divisor, dividend);
 
             self.free_value(rem);
 
@@ -761,21 +771,21 @@ macro_rules! int_div {
 
         pub fn $rem_u(&mut self) {
             let divisor = self.pop();
-            let quotient = self.pop();
+            let dividend = self.pop();
 
-            if let (Some(quotient), Some(divisor)) = (quotient.$imm_fn(), divisor.$imm_fn()) {
+            if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
                     self.trap();
                     self.push(ValueLocation::Immediate((0 as $unsigned_ty).into()));
                 } else {
                     self.push(ValueLocation::Immediate(
-                        (quotient as $unsigned_ty % divisor as $unsigned_ty).into(),
+                        (dividend as $unsigned_ty % divisor as $unsigned_ty).into(),
                     ));
                 }
                 return;
             }
 
-            let (div, rem, mut saved) = self.$full_div_u(divisor, quotient);
+            let (div, rem, mut saved) = self.$full_div_u(divisor, dividend);
 
             self.free_value(div);
 
@@ -802,19 +812,54 @@ macro_rules! int_div {
 
         pub fn $rem_s(&mut self) {
             let divisor = self.pop();
-            let quotient = self.pop();
+            let dividend = self.pop();
 
-            if let (Some(quotient), Some(divisor)) = (quotient.$imm_fn(), divisor.$imm_fn()) {
+            if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
                     self.trap();
                     self.push(ValueLocation::Immediate((0 as $signed_ty).into()));
                 } else {
-                    self.push(ValueLocation::Immediate((quotient % divisor).into()));
+                    self.push(ValueLocation::Immediate((dividend % divisor).into()));
                 }
                 return;
             }
 
-            let (div, rem, mut saved) = self.$full_div_s(divisor, quotient);
+            let is_neg1 = self.create_label();
+
+            let gen_neg1_case = match divisor {
+                ValueLocation::Immediate(_) => {
+                    if divisor.$imm_fn().unwrap() == -1 {
+                        self.push(ValueLocation::Immediate((-1 as $signed_ty).into()));
+                        return;
+                    }
+
+                    false
+                }
+                ValueLocation::Reg(_) => {
+                    let reg = self.into_reg(GPRType::Rq, divisor).unwrap();
+                    dynasm!(self.asm
+                        ; cmp $reg_ty(reg.rq().unwrap()), -1
+                        ; je =>is_neg1.0
+                    );
+
+                    true
+                }
+                ValueLocation::Stack(offset) => {
+                    let offset = self.adjusted_offset(offset);
+                    dynasm!(self.asm
+                        ; cmp $pointer_ty [rsp + offset], -1
+                        ; je =>is_neg1.0
+                    );
+
+                    true
+                }
+                ValueLocation::Cond(_) => {
+                    // `cc` can never be `-1`, only `0` and `1`
+                    false
+                }
+            };
+
+            let (div, rem, mut saved) = self.$full_div_s(divisor, dividend);
 
             self.free_value(div);
 
@@ -835,6 +880,21 @@ macro_rules! int_div {
             };
 
             self.cleanup_gprs(saved);
+
+            if gen_neg1_case {
+                let ret = self.create_label();
+                dynasm!(self.asm
+                    ; jmp =>ret.0
+                );
+                self.define_label(is_neg1);
+
+                self.copy_value(
+                    ValueLocation::Immediate((0 as $signed_ty).into()),
+                    CCLoc::try_from(rem).expect("Programmer error")
+                );
+
+                self.define_label(ret);
+            }
 
             self.push(rem);
         }
@@ -4033,7 +4093,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         i32_rem_s,
         imm_i32,
         i32,
-        u32
+        u32,
+        Rd,
+        DWORD
     );
     int_div!(
         i64_full_div_s,
@@ -4044,7 +4106,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         i64_rem_s,
         imm_i64,
         i64,
-        u64
+        u64,
+        Rq,
+        QWORD
     );
 
     /// Returned divisor is guaranteed not to be `RAX`

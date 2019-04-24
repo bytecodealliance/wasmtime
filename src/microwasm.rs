@@ -1946,44 +1946,8 @@ where
             // Unlike Wasm, our `rem_s` instruction _does_ trap on `-1`. Instead
             // of handling this complexity in the backend, we handle it here
             // (where it's way easier to debug).
-            WasmOperator::I32RemS => {
-                let id = self.next_id();
+            WasmOperator::I32RemS => smallvec![Operator::Rem(sint::I32),],
 
-                let then = (id, NameTag::Header);
-                let else_ = (id, NameTag::Else);
-                let end = (id, NameTag::End);
-
-                let mut end_params = self.block_params();
-
-                end_params.pop();
-                end_params.pop();
-                end_params.push(I32);
-
-                smallvec![
-                    Operator::block(self.block_params(), then),
-                    Operator::block(self.block_params(), else_),
-                    Operator::end(end_params, end),
-                    Operator::Pick(0),
-                    Operator::Const((-1i32).into()),
-                    Operator::Ne(I32),
-                    Operator::BrIf {
-                        then: BrTarget::Label(then).into(),
-                        else_: BrTarget::Label(else_).into()
-                    },
-                    Operator::Label(then),
-                    Operator::Rem(sint::I32),
-                    Operator::Br {
-                        target: BrTarget::Label(end).into()
-                    },
-                    Operator::Label(else_),
-                    Operator::Drop(0..=1),
-                    Operator::Const(0i32.into()),
-                    Operator::Br {
-                        target: BrTarget::Label(end).into()
-                    },
-                    Operator::Label(end),
-                ]
-            }
             WasmOperator::I32RemU => smallvec![Operator::Rem(sint::U32),],
             WasmOperator::I32And => smallvec![Operator::And(Size::_32)],
             WasmOperator::I32Or => smallvec![Operator::Or(Size::_32)],
@@ -2001,44 +1965,8 @@ where
             WasmOperator::I64Mul => smallvec![Operator::Mul(I64)],
             WasmOperator::I64DivS => smallvec![Operator::Div(SI64)],
             WasmOperator::I64DivU => smallvec![Operator::Div(SU64)],
-            WasmOperator::I64RemS => {
-                let id = self.next_id();
+            WasmOperator::I64RemS => smallvec![Operator::Rem(sint::I64),],
 
-                let then = (id, NameTag::Header);
-                let else_ = (id, NameTag::Else);
-                let end = (id, NameTag::End);
-
-                let mut end_params = self.block_params();
-
-                end_params.pop();
-                end_params.pop();
-                end_params.push(I64);
-
-                smallvec![
-                    Operator::block(self.block_params(), then),
-                    Operator::block(self.block_params(), else_),
-                    Operator::end(end_params, end),
-                    Operator::Pick(0),
-                    Operator::Const((-1i64).into()),
-                    Operator::Ne(I64),
-                    Operator::BrIf {
-                        then: BrTarget::Label(then).into(),
-                        else_: BrTarget::Label(else_).into()
-                    },
-                    Operator::Label(then),
-                    Operator::Rem(sint::I64),
-                    Operator::Br {
-                        target: BrTarget::Label(end).into()
-                    },
-                    Operator::Label(else_),
-                    Operator::Drop(0..=1),
-                    Operator::Const(0i64.into()),
-                    Operator::Br {
-                        target: BrTarget::Label(end).into()
-                    },
-                    Operator::Label(end),
-                ]
-            }
             WasmOperator::I64RemU => smallvec![Operator::Rem(sint::U64)],
             WasmOperator::I64And => smallvec![Operator::And(Size::_64)],
             WasmOperator::I64Or => smallvec![Operator::Or(Size::_64)],
@@ -2174,3 +2102,4 @@ where
         }))
     }
 }
+
