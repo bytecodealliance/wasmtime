@@ -4529,7 +4529,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
             (then, else_) => {
                 let out = self.take_reg(GPRType::Rq).unwrap();
-                self.cmov(!cond_code, out, else_);
+                self.copy_value(else_.into(), CCLoc::Reg(out));
                 self.cmov(cond_code, out, then);
 
                 self.free_value(then.into());
