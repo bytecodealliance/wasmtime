@@ -139,12 +139,10 @@ where
     );
 
     while let Some(op) = body.next() {
-        println!("{}", op);
-
         if let Some(Operator::Label(label)) = body.peek() {
             let block = blocks
                 .get_mut(&BrTarget::Label(label.clone()))
-                .unwrap_or_else(|| panic!("Label defined before being declared"));
+                .expect("Label defined before being declared");
             block.is_next = true;
         }
 
@@ -213,7 +211,7 @@ where
                             Some(Right(virt)) => {
                                 ctx.set_state(virt.clone());
                             }
-                            _ => {}
+                            _ => assert_eq!(block.params as usize, ctx.block_state.stack.len()),
                         }
 
                         ctx.define_label(block.label.label().unwrap().clone());

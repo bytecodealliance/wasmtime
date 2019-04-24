@@ -632,9 +632,9 @@ impl TranslatedCodeSection {
 
 #[derive(Debug, Default, Clone)]
 pub struct BlockState {
-    stack: Stack,
-    depth: StackDepth,
-    regs: Registers,
+    pub stack: Stack,
+    pub depth: StackDepth,
+    pub regs: Registers,
 }
 
 type Stack = Vec<ValueLocation>;
@@ -992,7 +992,7 @@ macro_rules! shift {
             let mut count = self.pop();
             let mut val = self.pop();
 
-            if let Some(imm) = val.immediate() {
+            if let Some(imm) = count.immediate() {
                 if let Some(imm) = imm.as_int() {
                     if let Ok(imm) = i8::try_from(imm) {
                         let reg = self.into_temp_reg($ty, val).unwrap();
@@ -1000,6 +1000,8 @@ macro_rules! shift {
                         dynasm!(self.asm
                             ; $instr $reg_ty(reg.rq().unwrap()), imm
                         );
+                        self.push(ValueLocation::Reg(reg));
+                        return;
                     }
                 }
             }
@@ -2018,20 +2020,18 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             return false;
         };
+
         let old_loc = self.block_state.stack[pos];
-
         let new_loc = self.push_physical(old_loc);
-
-        for elem in &mut self.block_state.stack[pos..] {
-            if *elem == old_loc {
-                *elem = new_loc;
-            }
-        }
+        self.block_state.stack[pos] = new_loc;
 
         let reg = old_loc.reg().unwrap();
 
-        while self.block_state.regs.num_usages(reg) > 0 {
-            self.block_state.regs.release(reg);
+        for elem in &mut self.block_state.stack[pos + 1..] {
+            if *elem == old_loc {
+                *elem = new_loc;
+                self.block_state.regs.release(reg);
+            }
         }
 
         true
@@ -2375,23 +2375,36 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn set_stack_depth(&mut self, depth: StackDepth) {
         if self.block_state.depth.0 != depth.0 {
             let diff = depth.0 as i32 - self.block_state.depth.0 as i32;
-            if diff.abs() == 1 {
+            let emit_lea = if diff.abs() == 1 {
                 if self.block_state.depth.0 < depth.0 {
                     for _ in 0..depth.0 - self.block_state.depth.0 {
                         dynasm!(self.asm
                             ; push rax
                         );
                     }
+
+                    false
                 } else if self.block_state.depth.0 > depth.0 {
-                    let trash = self.take_reg(I64).unwrap();
-                    for _ in 0..self.block_state.depth.0 - depth.0 {
-                        dynasm!(self.asm
-                            ; pop Rq(trash.rq().unwrap())
-                        );
+                    if let Some(trash) = self.take_reg(I64) {
+                        for _ in 0..self.block_state.depth.0 - depth.0 {
+                            dynasm!(self.asm
+                                ; pop Rq(trash.rq().unwrap())
+                            );
+                        }
+                        self.block_state.regs.release(trash);
+
+                        false
+                    } else {
+                        true
                     }
-                    self.block_state.regs.release(trash);
+                } else {
+                    false
                 }
             } else {
+                true
+            };
+
+            if emit_lea {
                 dynasm!(self.asm
                     ; lea rsp, [rsp + (self.block_state.depth.0 as i32 - depth.0 as i32) * WORD_SIZE as i32]
                 );
@@ -4800,7 +4813,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                     if offset == -(WORD_SIZE as i32) {
                         self.push_physical(val);
-                        self.free_value(val);
                     } else {
                         let gpr = self.into_reg(GPRType::Rq, val).unwrap();
                         dynasm!(self.asm
