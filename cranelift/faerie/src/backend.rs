@@ -96,7 +96,15 @@ pub struct FaerieBackend {
     libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
 
-pub struct FaerieCompiledFunction {}
+pub struct FaerieCompiledFunction {
+    code_length: u32,
+}
+
+impl FaerieCompiledFunction {
+    pub fn code_length(&self) -> u32 {
+        self.code_length
+    }
+}
 
 pub struct FaerieCompiledData {}
 
@@ -187,10 +195,14 @@ impl Backend for FaerieBackend {
             }
         }
 
+        // because `define` will take ownership of code, this is our last chance
+        let code_length = code.len() as u32;
+
         self.artifact
             .define(name, code)
             .expect("inconsistent declaration");
-        Ok(FaerieCompiledFunction {})
+
+        Ok(FaerieCompiledFunction { code_length })
     }
 
     fn define_data(

@@ -153,14 +153,14 @@ pub enum ModuleError {
 pub type ModuleResult<T> = Result<T, ModuleError>;
 
 /// A function belonging to a `Module`.
-struct ModuleFunction<B>
+pub struct ModuleFunction<B>
 where
     B: Backend,
 {
     /// The function declaration.
-    decl: FunctionDeclaration,
+    pub decl: FunctionDeclaration,
     /// The compiled artifact, once it's available.
-    compiled: Option<B::CompiledFunction>,
+    pub compiled: Option<B::CompiledFunction>,
 }
 
 impl<B> ModuleFunction<B>
@@ -425,6 +425,11 @@ where
                 Ok(id)
             }
         }
+    }
+
+    /// An iterator over functions that have been declared in this module.
+    pub fn declared_functions(&self) -> core::slice::Iter<'_, ModuleFunction<B>> {
+        self.contents.functions.values()
     }
 
     /// Declare a data object in this module.
