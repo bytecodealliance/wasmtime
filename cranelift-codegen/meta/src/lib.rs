@@ -50,7 +50,7 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
         &isas,
         &shared_defs.format_registry,
         &shared_defs.transform_groups,
-        "new_legalize",
+        "legalize",
         &out_dir,
     )?;
 
