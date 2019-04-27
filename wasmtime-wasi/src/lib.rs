@@ -10,6 +10,7 @@ extern crate wasmtime_runtime;
 extern crate log;
 
 mod host;
+mod host_impls;
 mod instantiate;
 mod syscalls;
 mod translate;

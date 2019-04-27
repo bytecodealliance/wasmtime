@@ -2,6 +2,7 @@ use crate::host::{argv_environ_values, fd_prestats, fd_table};
 use crate::instantiate::WASIState;
 use cranelift_codegen::ir::types::{Type, I32, I64};
 use host;
+use host_impls;
 use std::{ptr, slice, str};
 use translate::*;
 use wasm32;
@@ -1383,7 +1384,7 @@ syscalls! {
 
         // TODO: Rather than call __wasi_proc_exit here, we should trigger a
         // stack unwind similar to a trap.
-        host::wasmtime_ssp_proc_exit(rval);
+        host_impls::wasmtime_ssp_proc_exit(rval);
     }
 
     pub unsafe extern "C" fn proc_raise(

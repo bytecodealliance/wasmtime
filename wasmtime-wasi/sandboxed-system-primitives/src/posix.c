@@ -2530,12 +2530,6 @@ __wasi_errno_t wasmtime_ssp_poll_oneoff(
   return error;
 }
 
-void wasmtime_ssp_proc_exit(
-    __wasi_exitcode_t rval
-) {
-  _Exit(rval);
-}
-
 __wasi_errno_t wasmtime_ssp_proc_raise(
     __wasi_signal_t sig
 ) {

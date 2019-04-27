@@ -810,10 +810,6 @@ __wasi_errno_t wasmtime_ssp_poll_oneoff(
     size_t *nevents
 ) WASMTIME_SSP_SYSCALL_NAME(poll_oneoff) __attribute__((__warn_unused_result__));
 
-_Noreturn void wasmtime_ssp_proc_exit(
-    __wasi_exitcode_t rval
-) WASMTIME_SSP_SYSCALL_NAME(proc_exit);
-
 __wasi_errno_t wasmtime_ssp_proc_raise(
     __wasi_signal_t sig
 ) WASMTIME_SSP_SYSCALL_NAME(proc_raise) __attribute__((__warn_unused_result__));
