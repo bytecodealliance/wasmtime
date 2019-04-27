@@ -176,7 +176,7 @@ syscalls! {
             Err(_) => return wasm32::__WASI_ENOMEM,
         };
         let argv_buf_size = match cast::u32((*argv_environ).argv_buf_size) {
-            Ok(argc) => argc,
+            Ok(argv_buf_size) => argv_buf_size,
             Err(_) => return wasm32::__WASI_ENOMEM,
         };
 
@@ -192,7 +192,10 @@ syscalls! {
         let mut host_argv = Vec::new();
         host_argv.resize((*argv_environ).argc + 1, ptr::null_mut());
 
-        let e = host::wasmtime_ssp_args_get(argv_environ, host_argv.as_mut_ptr(), host_argv_buf);
+        let e = host_impls::wasmtime_ssp_args_get(
+            &mut *argv_environ,
+            host_argv.as_mut_slice(),
+            slice::from_raw_parts_mut(host_argv_buf, argv_buf_size as usize));
 
         encode_charstar_slice(argv, host_argv, argv_buf, host_argv_buf);
 
@@ -223,7 +226,7 @@ syscalls! {
         let vmctx = &mut *vmctx;
         let argv_environ = get_argv_environ(vmctx);
 
-        let e = host::wasmtime_ssp_args_sizes_get(argv_environ, &mut host_argc, &mut host_argv_buf_size);
+        let e = host_impls::wasmtime_ssp_args_sizes_get(&mut *argv_environ, &mut host_argc, &mut host_argv_buf_size);
 
         trace!("     | *argc={:?}", host_argc);
         encode_usize_byref(vmctx, argc, host_argc);
@@ -311,8 +314,8 @@ syscalls! {
             Err(_) => return wasm32::__WASI_ENOMEM,
         };
 
-        let (host_environ_buf, _environ_buf_len) = match decode_char_slice(vmctx, environ_buf, environ_buf_size) {
-            Ok((environ_buf, environ_buf_len)) => (environ_buf, environ_buf_len),
+        let (host_environ_buf, _environ_buf_size) = match decode_char_slice(vmctx, environ_buf, environ_buf_size) {
+            Ok((environ_buf, environ_buf_size)) => (environ_buf, environ_buf_size),
             Err(e) => return return_encoded_errno(e),
         };
         // Add 1 so that we can add an extra NULL pointer at the end.
@@ -323,7 +326,10 @@ syscalls! {
         let mut host_environ = Vec::new();
         host_environ.resize((*argv_environ).environ_count + 1, ptr::null_mut());
 
-        let e = host::wasmtime_ssp_environ_get(argv_environ, host_environ.as_mut_ptr(), host_environ_buf);
+        let e = host_impls::wasmtime_ssp_environ_get(
+            &mut *argv_environ,
+            host_environ.as_mut_slice(),
+            slice::from_raw_parts_mut(host_environ_buf, environ_buf_size as usize));
 
         encode_charstar_slice(environ, host_environ, environ_buf, host_environ_buf);
 
@@ -354,7 +360,7 @@ syscalls! {
         let vmctx = &mut *vmctx;
         let argv_environ = get_argv_environ(vmctx);
 
-        let e = host::wasmtime_ssp_environ_sizes_get(argv_environ, &mut host_environ_count, &mut host_environ_buf_size);
+        let e = host_impls::wasmtime_ssp_environ_sizes_get(&mut *argv_environ, &mut host_environ_count, &mut host_environ_buf_size);
 
         trace!("     | *environ_count={:?}", host_environ_count);
         encode_usize_byref(vmctx, environ_count, host_environ_count);

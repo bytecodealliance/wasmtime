@@ -454,22 +454,6 @@ _Static_assert(_Alignof(__wasi_subscription_t) == 8, "non-wasi data layout");
 #define WASMTIME_SSP_SYSCALL_NAME(name)
 #endif
 
-__wasi_errno_t wasmtime_ssp_args_get(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-    struct argv_environ_values *arg_environ,
-#endif
-    char **argv,
-    char *argv_buf
-) WASMTIME_SSP_SYSCALL_NAME(args_get) __attribute__((__warn_unused_result__));
-
-__wasi_errno_t wasmtime_ssp_args_sizes_get(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-    struct argv_environ_values *arg_environ,
-#endif
-    size_t *argc,
-    size_t *argv_buf_size
-) WASMTIME_SSP_SYSCALL_NAME(args_sizes_get) __attribute__((__warn_unused_result__));
-
 __wasi_errno_t wasmtime_ssp_clock_res_get(
     __wasi_clockid_t clock_id,
     __wasi_timestamp_t *resolution
@@ -481,21 +465,13 @@ __wasi_errno_t wasmtime_ssp_clock_time_get(
     __wasi_timestamp_t *time
 ) WASMTIME_SSP_SYSCALL_NAME(clock_time_get) __attribute__((__warn_unused_result__));
 
-__wasi_errno_t wasmtime_ssp_environ_get(
+__wasi_errno_t wasmtime_ssp_fd_prestat_get(
 #if !defined(WASMTIME_SSP_STATIC_CURFDS)
-    struct argv_environ_values *arg_environ,
+    struct fd_prestats *prestats,
 #endif
-    char **environ,
-    char *environ_buf
-) WASMTIME_SSP_SYSCALL_NAME(environ_get) __attribute__((__warn_unused_result__));
-
-__wasi_errno_t wasmtime_ssp_environ_sizes_get(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-    struct argv_environ_values *arg_environ,
-#endif
-    size_t *environ_count,
-    size_t *environ_buf_size
-) WASMTIME_SSP_SYSCALL_NAME(environ_sizes_get) __attribute__((__warn_unused_result__));
+    __wasi_fd_t fd,
+    __wasi_prestat_t *buf
+) WASMTIME_SSP_SYSCALL_NAME(fd_prestat_get) __attribute__((__warn_unused_result__));
 
 __wasi_errno_t wasmtime_ssp_fd_prestat_dir_name(
 #if !defined(WASMTIME_SSP_STATIC_CURFDS)

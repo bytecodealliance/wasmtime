@@ -1,6 +1,6 @@
 use super::host;
-use super::wasm32;
 use errno::{errno, Errno};
+use std::slice;
 
 /// Convert POSIX error code to host's WASI error code
 fn convert_errno(error: Errno) -> host::__wasi_errno_t {
@@ -121,7 +121,79 @@ macro_rules! rwlock_unlock {
     };
 }
 
-pub fn wasmtime_ssp_proc_exit(rval: wasm32::__wasi_exitcode_t) {
+pub fn wasmtime_ssp_args_get(
+    argv_environ: &mut host::argv_environ_values,
+    argv: &mut [*mut host::char],
+    argv_buf: &mut [host::char],
+) -> host::__wasi_errno_t {
+    for i in 0..argv_environ.argc {
+        let buf_off;
+        unsafe {
+            buf_off = usize::checked_sub(
+                argv_environ.argv.offset(i as isize) as _,
+                argv_environ.argv_buf as _,
+            )
+            .expect("argv[i] - argv_buf overflows");
+        }
+        argv[i] = argv_buf[buf_off..].as_mut_ptr();
+    }
+    argv[argv_environ.argc] = std::ptr::null_mut();
+    let argv_environ_buf;
+    unsafe {
+        argv_environ_buf =
+            slice::from_raw_parts_mut(argv_environ.argv_buf, argv_environ.argv_buf_size);
+    }
+    argv_buf.copy_from_slice(argv_environ_buf);
+    host::__WASI_ESUCCESS
+}
+
+pub fn wasmtime_ssp_args_sizes_get(
+    argv_environ: &mut host::argv_environ_values,
+    argc: &mut usize,
+    argv_buf_size: &mut usize,
+) -> host::__wasi_errno_t {
+    *argc = argv_environ.argc;
+    *argv_buf_size = argv_environ.argv_buf_size;
+    host::__WASI_ESUCCESS
+}
+
+pub fn wasmtime_ssp_environ_get(
+    argv_environ: &mut host::argv_environ_values,
+    environ: &mut [*mut host::char],
+    environ_buf: &mut [host::char],
+) -> host::__wasi_errno_t {
+    for i in 0..(*argv_environ).environ_count {
+        let buf_off;
+        unsafe {
+            buf_off = usize::checked_sub(
+                argv_environ.environ.offset(i as isize) as _,
+                argv_environ.environ_buf as _,
+            )
+            .expect("environ[i] - environ_buf overflows");
+        }
+        environ[i] = environ_buf[buf_off..].as_mut_ptr();
+    }
+    environ[argv_environ.environ_count] = std::ptr::null_mut();
+    let argv_environ_buf;
+    unsafe {
+        argv_environ_buf =
+            slice::from_raw_parts_mut(argv_environ.environ_buf, argv_environ.environ_buf_size);
+    }
+    environ_buf.copy_from_slice(argv_environ_buf);
+    host::__WASI_ESUCCESS
+}
+
+pub fn wasmtime_ssp_environ_sizes_get(
+    argv_environ: &mut host::argv_environ_values,
+    environ_count: &mut usize,
+    environ_buf_size: &mut usize,
+) -> host::__wasi_errno_t {
+    *environ_count = argv_environ.environ_count;
+    *environ_buf_size = argv_environ.environ_buf_size;
+    host::__WASI_ESUCCESS
+}
+
+pub fn wasmtime_ssp_proc_exit(rval: host::__wasi_exitcode_t) {
     ::std::process::exit(rval as i32)
 }
 

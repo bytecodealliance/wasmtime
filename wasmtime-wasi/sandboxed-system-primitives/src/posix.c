@@ -2656,60 +2656,6 @@ __wasi_errno_t wasmtime_ssp_sock_shutdown(
   return 0;
 }
 
-__wasi_errno_t wasmtime_ssp_args_get(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-  struct argv_environ_values *argv_environ,
-#endif
-  char **argv,
-  char *argv_buf
-) {
-  for (size_t i = 0; i < argv_environ->argc; ++i) {
-    argv[i] = argv_buf + (argv_environ->argv[i] - argv_environ->argv_buf);
-  }
-  argv[argv_environ->argc] = NULL;
-  memcpy(argv_buf, argv_environ->argv_buf, argv_environ->argv_buf_size);
-  return __WASI_ESUCCESS;
-}
-
-__wasi_errno_t wasmtime_ssp_args_sizes_get(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-  struct argv_environ_values *argv_environ,
-#endif
-  size_t *argc,
-  size_t *argv_buf_size
-) {
-  *argc = argv_environ->argc;
-  *argv_buf_size = argv_environ->argv_buf_size;
-  return __WASI_ESUCCESS;
-}
-
-__wasi_errno_t wasmtime_ssp_environ_get(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-  struct argv_environ_values *argv_environ,
-#endif
-  char **environ,
-  char *environ_buf
-) {
-  for (size_t i = 0; i < argv_environ->environ_count; ++i) {
-    environ[i] = environ_buf + (argv_environ->environ[i] - argv_environ->environ_buf);
-  }
-  environ[argv_environ->environ_count] = NULL;
-  memcpy(environ_buf, argv_environ->environ_buf, argv_environ->environ_buf_size);
-  return __WASI_ESUCCESS;
-}
-
-__wasi_errno_t wasmtime_ssp_environ_sizes_get(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-  struct argv_environ_values *argv_environ,
-#endif
-  size_t *environ_count,
-  size_t *environ_buf_size
-) {
-  *environ_count = argv_environ->environ_count;
-  *environ_buf_size = argv_environ->environ_buf_size;
-  return __WASI_ESUCCESS;
-}
-
 void argv_environ_init(struct argv_environ_values *argv_environ,
                        const size_t *argv_offsets, size_t argv_offsets_len,
                        const char *argv_buf, size_t argv_buf_len,
