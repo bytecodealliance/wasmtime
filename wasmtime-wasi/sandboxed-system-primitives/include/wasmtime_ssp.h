@@ -850,9 +850,6 @@ __wasi_errno_t wasmtime_ssp_sock_shutdown(
     __wasi_sdflags_t how
 ) WASMTIME_SSP_SYSCALL_NAME(sock_shutdown) __attribute__((__warn_unused_result__));
 
-__wasi_errno_t wasmtime_ssp_sched_yield(void)
-    WASMTIME_SSP_SYSCALL_NAME(sched_yield) __attribute__((__warn_unused_result__));
-
 #ifdef __cplusplus
 }
 #endif

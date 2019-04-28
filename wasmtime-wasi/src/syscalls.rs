@@ -1413,7 +1413,7 @@ syscalls! {
     }
 
     pub unsafe extern "C" fn sched_yield(_vmctx: *mut VMContext,) -> wasm32::__wasi_errno_t {
-        let e = host::wasmtime_ssp_sched_yield();
+        let e = host_impls::wasmtime_ssp_sched_yield();
 
         return_encoded_errno(e)
     }

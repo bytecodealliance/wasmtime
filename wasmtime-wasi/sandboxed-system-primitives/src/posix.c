@@ -2684,12 +2684,6 @@ __wasi_errno_t wasmtime_ssp_sock_shutdown(
   return 0;
 }
 
-__wasi_errno_t wasmtime_ssp_sched_yield(void) {
-  if (sched_yield() < 0)
-    return convert_errno(errno);
-  return 0;
-}
-
 __wasi_errno_t wasmtime_ssp_args_get(
 #if !defined(WASMTIME_SSP_STATIC_CURFDS)
   struct argv_environ_values *argv_environ,
