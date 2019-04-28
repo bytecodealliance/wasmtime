@@ -2,7 +2,7 @@
 
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    ir::{self, InstBuilder},
+    ir::{self, dfg::ValueDef, InstBuilder},
 };
 // use rustc_apfloat::{
 //     ieee::{Double, Single},
@@ -69,7 +69,10 @@ pub fn fold_constants(func: &mut ir::Function) {
 fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<ConstImm> {
     let original = dfg.resolve_aliases(value);
 
-    let inst = dfg.value_def(original).unwrap_inst();
+    let inst = match dfg.value_def(original) {
+        ValueDef::Result(inst, _) => inst,
+        ValueDef::Param(_, _) => return None,
+    };
 
     use self::ir::{InstructionData::*, Opcode::*};
     match dfg[inst] {
