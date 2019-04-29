@@ -27,7 +27,7 @@ target-lexicon = "0.4.0"
 
 [features]
 default = ["std"]
-std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std"]
+std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std", "failure/std"]
 core = ["hashmap_core", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
 
 [badges]
