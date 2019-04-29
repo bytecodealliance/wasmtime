@@ -182,18 +182,26 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         self.mod_info.config
     }
 
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
+    fn return_mode(&self) -> ReturnMode {
+        self.return_mode
+    }
+
+    fn make_global(
+        &mut self,
+        func: &mut ir::Function,
+        index: GlobalIndex,
+    ) -> WasmResult<GlobalVariable> {
         // Just create a dummy `vmctx` global.
         let offset = cast::i32((index.index() * 8) + 8).unwrap().into();
         let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
-        GlobalVariable::Memory {
+        Ok(GlobalVariable::Memory {
             gv: vmctx,
             offset,
             ty: self.mod_info.globals[index].entity.ty,
-        }
+        })
     }
 
-    fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
+    fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> WasmResult<ir::Heap> {
         // Create a static heap whose base address is stored at `vmctx+0`.
         let addr = func.create_global_value(ir::GlobalValueData::VMContext);
         let gv = func.create_global_value(ir::GlobalValueData::Load {
@@ -203,7 +211,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             readonly: true,
         });
 
-        func.create_heap(ir::HeapData {
+        Ok(func.create_heap(ir::HeapData {
             base: gv,
             min_size: 0.into(),
             offset_guard_size: 0x8000_0000.into(),
@@ -211,10 +219,10 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
                 bound: 0x1_0000_0000.into(),
             },
             index_type: I32,
-        })
+        }))
     }
 
-    fn make_table(&mut self, func: &mut ir::Function, _index: TableIndex) -> ir::Table {
+    fn make_table(&mut self, func: &mut ir::Function, _index: TableIndex) -> WasmResult<ir::Table> {
         // Create a table whose base address is stored at `vmctx+0`.
         let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
@@ -230,32 +238,40 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             readonly: true,
         });
 
-        func.create_table(ir::TableData {
+        Ok(func.create_table(ir::TableData {
             base_gv,
             min_size: Uimm64::new(0),
             bound_gv,
             element_size: Uimm64::from(u64::from(self.pointer_bytes()) * 2),
             index_type: I32,
-        })
+        }))
     }
 
-    fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
+    fn make_indirect_sig(
+        &mut self,
+        func: &mut ir::Function,
+        index: SignatureIndex,
+    ) -> WasmResult<ir::SigRef> {
         // A real implementation would probably change the calling convention and add `vmctx` and
         // signature index arguments.
-        func.import_signature(self.vmctx_sig(index))
+        Ok(func.import_signature(self.vmctx_sig(index)))
     }
 
-    fn make_direct_func(&mut self, func: &mut ir::Function, index: FuncIndex) -> ir::FuncRef {
+    fn make_direct_func(
+        &mut self,
+        func: &mut ir::Function,
+        index: FuncIndex,
+    ) -> WasmResult<ir::FuncRef> {
         let sigidx = self.mod_info.functions[index].entity;
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.vmctx_sig(sigidx));
         let name = get_func_name(index);
-        func.import_function(ir::ExtFuncData {
+        Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,
             colocated: false,
-        })
+        }))
     }
 
     fn translate_call_indirect(
@@ -339,10 +355,6 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _heap: ir::Heap,
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, -1))
-    }
-
-    fn return_mode(&self) -> ReturnMode {
-        self.return_mode
     }
 }
 
