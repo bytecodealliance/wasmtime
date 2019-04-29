@@ -37,7 +37,7 @@ mod backend;
 mod data_context;
 mod module;
 
-pub use crate::backend::Backend;
+pub use crate::backend::{default_libcall_names, Backend};
 pub use crate::data_context::{DataContext, DataDescription, Init};
 pub use crate::module::{
     DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleFunction, ModuleNamespace,
