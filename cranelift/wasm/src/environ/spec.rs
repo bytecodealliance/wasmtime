@@ -39,7 +39,7 @@ pub enum GlobalVariable {
 ///
 /// When a WebAssembly function can't be translated, one of these error codes will be returned
 /// to describe the failure.
-#[derive(Fail, Debug, PartialEq, Eq)]
+#[derive(Fail, Debug)]
 pub enum WasmError {
     /// The input WebAssembly code is invalid.
     ///
@@ -67,6 +67,18 @@ pub enum WasmError {
     /// [limits]: https://cranelift.readthedocs.io/en/latest/ir.html#implementation-limits
     #[fail(display = "Implementation limit exceeded")]
     ImplLimitExceeded,
+
+    /// Any user-defined error. Requires an std build, where failure::Error is defined.
+    #[cfg(feature = "std")]
+    #[fail(display = "User error: {}", _0)]
+    User(failure::Error),
+}
+
+#[cfg(feature = "std")]
+impl From<failure::Error> for WasmError {
+    fn from(err: failure::Error) -> Self {
+        WasmError::User(err)
+    }
 }
 
 impl From<BinaryReaderError> for WasmError {
