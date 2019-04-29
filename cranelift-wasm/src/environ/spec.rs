@@ -110,6 +110,13 @@ pub trait FuncEnvironment {
         self.target_config().pointer_bytes()
     }
 
+    /// Should the code be structured to use a single `fallthrough_return` instruction at the end
+    /// of the function body, rather than `return` instructions as needed? This is used by VMs
+    /// to append custom epilogues.
+    fn return_mode(&self) -> ReturnMode {
+        ReturnMode::NormalReturns
+    }
+
     /// Set up the necessary preamble definitions in `func` to access the global variable
     /// identified by `index`.
     ///
@@ -117,19 +124,23 @@ pub trait FuncEnvironment {
     ///
     /// Return the global variable reference that should be used to access the global and the
     /// WebAssembly type of the global.
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable;
+    fn make_global(
+        &mut self,
+        func: &mut ir::Function,
+        index: GlobalIndex,
+    ) -> WasmResult<GlobalVariable>;
 
     /// Set up the necessary preamble definitions in `func` to access the linear memory identified
     /// by `index`.
     ///
     /// The index space covers both imported and locally declared memories.
-    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap;
+    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<ir::Heap>;
 
     /// Set up the necessary preamble definitions in `func` to access the table identified
     /// by `index`.
     ///
     /// The index space covers both imported and locally declared tables.
-    fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> ir::Table;
+    fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table>;
 
     /// Set up a signature definition in the preamble of `func` that can be used for an indirect
     /// call with signature `index`.
@@ -140,7 +151,11 @@ pub trait FuncEnvironment {
     ///
     /// The signature will only be used for indirect calls, even if the module has direct function
     /// calls with the same WebAssembly type.
-    fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef;
+    fn make_indirect_sig(
+        &mut self,
+        func: &mut ir::Function,
+        index: SignatureIndex,
+    ) -> WasmResult<ir::SigRef>;
 
     /// Set up an external function definition in the preamble of `func` that can be used to
     /// directly call the function `index`.
@@ -153,7 +168,11 @@ pub trait FuncEnvironment {
     ///
     /// The function's signature will only be used for direct calls, even if the module has
     /// indirect calls with the same WebAssembly type.
-    fn make_direct_func(&mut self, func: &mut ir::Function, index: FuncIndex) -> ir::FuncRef;
+    fn make_direct_func(
+        &mut self,
+        func: &mut ir::Function,
+        index: FuncIndex,
+    ) -> WasmResult<ir::FuncRef>;
 
     /// Translate a `call_indirect` WebAssembly instruction at `pos`.
     ///
@@ -226,15 +245,9 @@ pub trait FuncEnvironment {
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at
     /// the beginnings of loops.
-    fn translate_loop_header(&mut self, _pos: FuncCursor) {
+    fn translate_loop_header(&mut self, _pos: FuncCursor) -> WasmResult<()> {
         // By default, don't emit anything.
-    }
-
-    /// Should the code be structured to use a single `fallthrough_return` instruction at the end
-    /// of the function body, rather than `return` instructions as needed? This is used by VMs
-    /// to append custom epilogues.
-    fn return_mode(&self) -> ReturnMode {
-        ReturnMode::NormalReturns
+        Ok(())
     }
 }
 

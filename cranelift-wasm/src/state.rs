@@ -3,8 +3,8 @@
 //! The `TranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
 
-use super::HashMap;
-use crate::environ::{FuncEnvironment, GlobalVariable};
+use super::{HashMap, Occupied, Vacant};
+use crate::environ::{FuncEnvironment, GlobalVariable, WasmResult};
 use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
 use cranelift_codegen::ir::{self, Ebb, Inst, Value};
 use std::vec::Vec;
@@ -285,12 +285,12 @@ impl TranslationState {
         func: &mut ir::Function,
         index: u32,
         environ: &mut FE,
-    ) -> GlobalVariable {
+    ) -> WasmResult<GlobalVariable> {
         let index = GlobalIndex::from_u32(index);
-        *self
-            .globals
-            .entry(index)
-            .or_insert_with(|| environ.make_global(func, index))
+        match self.globals.entry(index) {
+            Occupied(entry) => Ok(*entry.get()),
+            Vacant(entry) => Ok(*entry.insert(environ.make_global(func, index)?)),
+        }
     }
 
     /// Get the `Heap` reference that should be used to access linear memory `index`.
@@ -300,12 +300,12 @@ impl TranslationState {
         func: &mut ir::Function,
         index: u32,
         environ: &mut FE,
-    ) -> ir::Heap {
+    ) -> WasmResult<ir::Heap> {
         let index = MemoryIndex::from_u32(index);
-        *self
-            .heaps
-            .entry(index)
-            .or_insert_with(|| environ.make_heap(func, index))
+        match self.heaps.entry(index) {
+            Occupied(entry) => Ok(*entry.get()),
+            Vacant(entry) => Ok(*entry.insert(environ.make_heap(func, index)?)),
+        }
     }
 
     /// Get the `Table` reference that should be used to access table `index`.
@@ -315,12 +315,12 @@ impl TranslationState {
         func: &mut ir::Function,
         index: u32,
         environ: &mut FE,
-    ) -> ir::Table {
+    ) -> WasmResult<ir::Table> {
         let index = TableIndex::from_u32(index);
-        *self
-            .tables
-            .entry(index)
-            .or_insert_with(|| environ.make_table(func, index))
+        match self.tables.entry(index) {
+            Occupied(entry) => Ok(*entry.get()),
+            Vacant(entry) => Ok(*entry.insert(environ.make_table(func, index)?)),
+        }
     }
 
     /// Get the `SigRef` reference that should be used to make an indirect call with signature
@@ -332,12 +332,15 @@ impl TranslationState {
         func: &mut ir::Function,
         index: u32,
         environ: &mut FE,
-    ) -> (ir::SigRef, usize) {
+    ) -> WasmResult<(ir::SigRef, usize)> {
         let index = SignatureIndex::from_u32(index);
-        *self.signatures.entry(index).or_insert_with(|| {
-            let sig = environ.make_indirect_sig(func, index);
-            (sig, normal_args(&func.dfg.signatures[sig]))
-        })
+        match self.signatures.entry(index) {
+            Occupied(entry) => Ok(*entry.get()),
+            Vacant(entry) => {
+                let sig = environ.make_indirect_sig(func, index)?;
+                Ok(*entry.insert((sig, normal_args(&func.dfg.signatures[sig]))))
+            }
+        }
     }
 
     /// Get the `FuncRef` reference that should be used to make a direct call to function
@@ -349,13 +352,16 @@ impl TranslationState {
         func: &mut ir::Function,
         index: u32,
         environ: &mut FE,
-    ) -> (ir::FuncRef, usize) {
+    ) -> WasmResult<(ir::FuncRef, usize)> {
         let index = FuncIndex::from_u32(index);
-        *self.functions.entry(index).or_insert_with(|| {
-            let fref = environ.make_direct_func(func, index);
-            let sig = func.dfg.ext_funcs[fref].signature;
-            (fref, normal_args(&func.dfg.signatures[sig]))
-        })
+        match self.functions.entry(index) {
+            Occupied(entry) => Ok(*entry.get()),
+            Vacant(entry) => {
+                let fref = environ.make_direct_func(func, index)?;
+                let sig = func.dfg.ext_funcs[fref].signature;
+                Ok(*entry.insert((fref, normal_args(&func.dfg.signatures[sig]))))
+            }
+        }
     }
 }
 
