@@ -4,134 +4,82 @@ include!(concat!(env!("OUT_DIR"), "/wasmtime_ssp.rs"));
 
 pub type char = ::std::os::raw::c_char;
 pub type void = ::std::os::raw::c_void;
+// pub type __wasi_errno_t = u16;
 
-use super::wasm32;
-
-// Taken from rust's implementation of `std::os` functionality for unix systems
-// rust/src/libstd/sys/unix/os.rs
-// https://github.com/rust-lang/rust/blob/9ebf47851a357faa4cd97f4b1dc7835f6376e639/src/libstd/sys/unix/os.rs
-extern "C" {
-    #[cfg(not(target_os = "dragonfly"))]
-    #[cfg_attr(
-        any(target_os = "linux", target_os = "fuchsia", target_os = "l4re"),
-        link_name = "__errno_location"
-    )]
-    #[cfg_attr(
-        any(
-            target_os = "bitrig",
-            target_os = "netbsd",
-            target_os = "openbsd",
-            target_os = "android",
-            target_os = "hermit",
-            target_env = "newlib"
-        ),
-        link_name = "__errno"
-    )]
-    #[cfg_attr(target_os = "solaris", link_name = "___errno")]
-    #[cfg_attr(
-        any(target_os = "macos", target_os = "ios", target_os = "freebsd"),
-        link_name = "__error"
-    )]
-    #[cfg_attr(target_os = "haiku", link_name = "_errnop")]
-    fn errno_location() -> *mut libc::c_int;
-}
-
-#[cfg(not(target_os = "dragonfly"))]
-pub fn errno() -> i32 {
-    unsafe { (*errno_location()) as i32 }
-}
-
-#[cfg(target_os = "dragonfly")]
-pub fn errno() -> i32 {
-    extern "C" {
-        #[thread_local]
-        static errno: c_int;
-    }
-
-    unsafe { errno as i32 }
-}
-
-pub fn convert_errno(errno: i32) -> wasm32::__wasi_errno_t {
-    #[allow(unreachable_patterns)]
-    match errno {
-        libc::E2BIG => wasm32::__WASI_E2BIG,
-        libc::EACCES => wasm32::__WASI_EACCES,
-        libc::EADDRINUSE => wasm32::__WASI_EADDRINUSE,
-        libc::EADDRNOTAVAIL => wasm32::__WASI_EADDRNOTAVAIL,
-        libc::EAFNOSUPPORT => wasm32::__WASI_EAFNOSUPPORT,
-        libc::EAGAIN | libc::EWOULDBLOCK => wasm32::__WASI_EAGAIN,
-        libc::EALREADY => wasm32::__WASI_EALREADY,
-        libc::EBADF => wasm32::__WASI_EBADF,
-        libc::EBADMSG => wasm32::__WASI_EBADMSG,
-        libc::EBUSY => wasm32::__WASI_EBUSY,
-        libc::ECANCELED => wasm32::__WASI_ECANCELED,
-        libc::ECHILD => wasm32::__WASI_ECHILD,
-        libc::ECONNABORTED => wasm32::__WASI_ECONNABORTED,
-        libc::ECONNREFUSED => wasm32::__WASI_ECONNREFUSED,
-        libc::ECONNRESET => wasm32::__WASI_ECONNRESET,
-        libc::EDEADLK => wasm32::__WASI_EDEADLK,
-        libc::EDESTADDRREQ => wasm32::__WASI_EDESTADDRREQ,
-        libc::EDOM => wasm32::__WASI_EDOM,
-        libc::EDQUOT => wasm32::__WASI_EDQUOT,
-        libc::EEXIST => wasm32::__WASI_EEXIST,
-        libc::EFAULT => wasm32::__WASI_EFAULT,
-        libc::EFBIG => wasm32::__WASI_EFBIG,
-        libc::EHOSTUNREACH => wasm32::__WASI_EHOSTUNREACH,
-        libc::EIDRM => wasm32::__WASI_EIDRM,
-        libc::EILSEQ => wasm32::__WASI_EILSEQ,
-        libc::EINPROGRESS => wasm32::__WASI_EINPROGRESS,
-        libc::EINTR => wasm32::__WASI_EINTR,
-        libc::EINVAL => wasm32::__WASI_EINVAL,
-        libc::EIO => wasm32::__WASI_EIO,
-        libc::EISCONN => wasm32::__WASI_EISCONN,
-        libc::EISDIR => wasm32::__WASI_EISDIR,
-        libc::ELOOP => wasm32::__WASI_ELOOP,
-        libc::EMFILE => wasm32::__WASI_EMFILE,
-        libc::EMLINK => wasm32::__WASI_EMLINK,
-        libc::EMSGSIZE => wasm32::__WASI_EMSGSIZE,
-        libc::EMULTIHOP => wasm32::__WASI_EMULTIHOP,
-        libc::ENAMETOOLONG => wasm32::__WASI_ENAMETOOLONG,
-        libc::ENETDOWN => wasm32::__WASI_ENETDOWN,
-        libc::ENETRESET => wasm32::__WASI_ENETRESET,
-        libc::ENETUNREACH => wasm32::__WASI_ENETUNREACH,
-        libc::ENFILE => wasm32::__WASI_ENFILE,
-        libc::ENOBUFS => wasm32::__WASI_ENOBUFS,
-        libc::ENODEV => wasm32::__WASI_ENODEV,
-        libc::ENOENT => wasm32::__WASI_ENOENT,
-        libc::ENOEXEC => wasm32::__WASI_ENOEXEC,
-        libc::ENOLCK => wasm32::__WASI_ENOLCK,
-        libc::ENOLINK => wasm32::__WASI_ENOLINK,
-        libc::ENOMEM => wasm32::__WASI_ENOMEM,
-        libc::ENOMSG => wasm32::__WASI_ENOMSG,
-        libc::ENOPROTOOPT => wasm32::__WASI_ENOPROTOOPT,
-        libc::ENOSPC => wasm32::__WASI_ENOSPC,
-        libc::ENOSYS => wasm32::__WASI_ENOSYS,
-        // TODO: verify if this is correct
-        #[cfg(target_os = "freebsd")]
-        libc::ENOTCAPABLE => wasm32::__WASI_ENOTCAPABLE,
-        libc::ENOTCONN => wasm32::__WASI_ENOTCONN,
-        libc::ENOTDIR => wasm32::__WASI_ENOTDIR,
-        libc::ENOTEMPTY => wasm32::__WASI_ENOTEMPTY,
-        libc::ENOTRECOVERABLE => wasm32::__WASI_ENOTRECOVERABLE,
-        libc::ENOTSOCK => wasm32::__WASI_ENOTSOCK,
-        libc::ENOTSUP | libc::EOPNOTSUPP => wasm32::__WASI_ENOTSUP,
-        libc::ENOTTY => wasm32::__WASI_ENOTTY,
-        libc::ENXIO => wasm32::__WASI_ENXIO,
-        libc::EOVERFLOW => wasm32::__WASI_EOVERFLOW,
-        libc::EOWNERDEAD => wasm32::__WASI_EOWNERDEAD,
-        libc::EPERM => wasm32::__WASI_EPERM,
-        libc::EPIPE => wasm32::__WASI_EPIPE,
-        libc::EPROTO => wasm32::__WASI_EPROTO,
-        libc::EPROTONOSUPPORT => wasm32::__WASI_EPROTONOSUPPORT,
-        libc::EPROTOTYPE => wasm32::__WASI_EPROTOTYPE,
-        libc::ERANGE => wasm32::__WASI_ERANGE,
-        libc::EROFS => wasm32::__WASI_EROFS,
-        libc::ESPIPE => wasm32::__WASI_ESPIPE,
-        libc::ESRCH => wasm32::__WASI_ESRCH,
-        libc::ESTALE => wasm32::__WASI_ESTALE,
-        libc::ETIMEDOUT => wasm32::__WASI_ETIMEDOUT,
-        libc::ETXTBSY => wasm32::__WASI_ETXTBSY,
-        libc::EXDEV => wasm32::__WASI_EXDEV,
-        _ => wasm32::__WASI_ENOSYS,
-    }
-}
+pub const __WASI_ESUCCESS: __wasi_errno_t = 0;
+pub const __WASI_E2BIG: __wasi_errno_t = 1;
+pub const __WASI_EACCES: __wasi_errno_t = 2;
+pub const __WASI_EADDRINUSE: __wasi_errno_t = 3;
+pub const __WASI_EADDRNOTAVAIL: __wasi_errno_t = 4;
+pub const __WASI_EAFNOSUPPORT: __wasi_errno_t = 5;
+pub const __WASI_EAGAIN: __wasi_errno_t = 6;
+pub const __WASI_EALREADY: __wasi_errno_t = 7;
+pub const __WASI_EBADF: __wasi_errno_t = 8;
+pub const __WASI_EBADMSG: __wasi_errno_t = 9;
+pub const __WASI_EBUSY: __wasi_errno_t = 10;
+pub const __WASI_ECANCELED: __wasi_errno_t = 11;
+pub const __WASI_ECHILD: __wasi_errno_t = 12;
+pub const __WASI_ECONNABORTED: __wasi_errno_t = 13;
+pub const __WASI_ECONNREFUSED: __wasi_errno_t = 14;
+pub const __WASI_ECONNRESET: __wasi_errno_t = 15;
+pub const __WASI_EDEADLK: __wasi_errno_t = 16;
+pub const __WASI_EDESTADDRREQ: __wasi_errno_t = 17;
+pub const __WASI_EDOM: __wasi_errno_t = 18;
+pub const __WASI_EDQUOT: __wasi_errno_t = 19;
+pub const __WASI_EEXIST: __wasi_errno_t = 20;
+pub const __WASI_EFAULT: __wasi_errno_t = 21;
+pub const __WASI_EFBIG: __wasi_errno_t = 22;
+pub const __WASI_EHOSTUNREACH: __wasi_errno_t = 23;
+pub const __WASI_EIDRM: __wasi_errno_t = 24;
+pub const __WASI_EILSEQ: __wasi_errno_t = 25;
+pub const __WASI_EINPROGRESS: __wasi_errno_t = 26;
+pub const __WASI_EINTR: __wasi_errno_t = 27;
+pub const __WASI_EINVAL: __wasi_errno_t = 28;
+pub const __WASI_EIO: __wasi_errno_t = 29;
+pub const __WASI_EISCONN: __wasi_errno_t = 30;
+pub const __WASI_EISDIR: __wasi_errno_t = 31;
+pub const __WASI_ELOOP: __wasi_errno_t = 32;
+pub const __WASI_EMFILE: __wasi_errno_t = 33;
+pub const __WASI_EMLINK: __wasi_errno_t = 34;
+pub const __WASI_EMSGSIZE: __wasi_errno_t = 35;
+pub const __WASI_EMULTIHOP: __wasi_errno_t = 36;
+pub const __WASI_ENAMETOOLONG: __wasi_errno_t = 37;
+pub const __WASI_ENETDOWN: __wasi_errno_t = 38;
+pub const __WASI_ENETRESET: __wasi_errno_t = 39;
+pub const __WASI_ENETUNREACH: __wasi_errno_t = 40;
+pub const __WASI_ENFILE: __wasi_errno_t = 41;
+pub const __WASI_ENOBUFS: __wasi_errno_t = 42;
+pub const __WASI_ENODEV: __wasi_errno_t = 43;
+pub const __WASI_ENOENT: __wasi_errno_t = 44;
+pub const __WASI_ENOEXEC: __wasi_errno_t = 45;
+pub const __WASI_ENOLCK: __wasi_errno_t = 46;
+pub const __WASI_ENOLINK: __wasi_errno_t = 47;
+pub const __WASI_ENOMEM: __wasi_errno_t = 48;
+pub const __WASI_ENOMSG: __wasi_errno_t = 49;
+pub const __WASI_ENOPROTOOPT: __wasi_errno_t = 50;
+pub const __WASI_ENOSPC: __wasi_errno_t = 51;
+pub const __WASI_ENOSYS: __wasi_errno_t = 52;
+pub const __WASI_ENOTCONN: __wasi_errno_t = 53;
+pub const __WASI_ENOTDIR: __wasi_errno_t = 54;
+pub const __WASI_ENOTEMPTY: __wasi_errno_t = 55;
+pub const __WASI_ENOTRECOVERABLE: __wasi_errno_t = 56;
+pub const __WASI_ENOTSOCK: __wasi_errno_t = 57;
+pub const __WASI_ENOTSUP: __wasi_errno_t = 58;
+pub const __WASI_ENOTTY: __wasi_errno_t = 59;
+pub const __WASI_ENXIO: __wasi_errno_t = 60;
+pub const __WASI_EOVERFLOW: __wasi_errno_t = 61;
+pub const __WASI_EOWNERDEAD: __wasi_errno_t = 62;
+pub const __WASI_EPERM: __wasi_errno_t = 63;
+pub const __WASI_EPIPE: __wasi_errno_t = 64;
+pub const __WASI_EPROTO: __wasi_errno_t = 65;
+pub const __WASI_EPROTONOSUPPORT: __wasi_errno_t = 66;
+pub const __WASI_EPROTOTYPE: __wasi_errno_t = 67;
+pub const __WASI_ERANGE: __wasi_errno_t = 68;
+pub const __WASI_EROFS: __wasi_errno_t = 69;
+pub const __WASI_ESPIPE: __wasi_errno_t = 70;
+pub const __WASI_ESRCH: __wasi_errno_t = 71;
+pub const __WASI_ESTALE: __wasi_errno_t = 72;
+pub const __WASI_ETIMEDOUT: __wasi_errno_t = 73;
+pub const __WASI_ETXTBSY: __wasi_errno_t = 74;
+pub const __WASI_EXDEV: __wasi_errno_t = 75;
+pub const __WASI_ENOTCAPABLE: __wasi_errno_t = 76;

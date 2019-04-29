@@ -8,6 +8,7 @@ extern crate wasmtime_jit;
 extern crate wasmtime_runtime;
 #[macro_use]
 extern crate log;
+extern crate errno;
 
 mod host;
 mod host_impls;
