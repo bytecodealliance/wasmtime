@@ -5,7 +5,7 @@
 //! WebAssembly module and the runtime environment.
 
 use crate::code_translator::translate_operator;
-use crate::environ::{FuncEnvironment, ReturnMode, WasmResult};
+use crate::environ::{FuncEnvironment, ReturnMode, WasmError, WasmResult};
 use crate::state::TranslationState;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Ebb, InstBuilder};
@@ -147,7 +147,7 @@ fn parse_local_decls(
     for _ in 0..local_count {
         builder.set_srcloc(cur_srcloc(reader));
         let (count, ty) = reader.read_local_decl(&mut locals_total)?;
-        declare_locals(builder, count, ty, &mut next_local);
+        declare_locals(builder, count, ty, &mut next_local)?;
     }
 
     Ok(())
@@ -161,7 +161,7 @@ fn declare_locals(
     count: u32,
     wasm_type: wasmparser::Type,
     next_local: &mut usize,
-) {
+) -> WasmResult<()> {
     // All locals are initialized to 0.
     use wasmparser::Type::*;
     let zeroval = match wasm_type {
@@ -169,7 +169,7 @@ fn declare_locals(
         I64 => builder.ins().iconst(ir::types::I64, 0),
         F32 => builder.ins().f32const(ir::immediates::Ieee32::with_bits(0)),
         F64 => builder.ins().f64const(ir::immediates::Ieee64::with_bits(0)),
-        _ => panic!("invalid local type"),
+        _ => return Err(WasmError::Unsupported("unsupported local type")),
     };
 
     let ty = builder.func.dfg.value_type(zeroval);
@@ -179,6 +179,7 @@ fn declare_locals(
         builder.def_var(local, zeroval);
         *next_local += 1;
     }
+    Ok(())
 }
 
 /// Parse the function body in `reader`.
