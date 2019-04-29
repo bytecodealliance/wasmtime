@@ -20,6 +20,7 @@ target-lexicon = "0.3.0"
 cast = { version = "0.2.2", default-features = false }
 log = { version = "0.4.6", default-features = false }
 libc = "0.2.50"
+errno = "0.2.4"
 
 [build-dependencies]
 cmake = "0.1.35"
