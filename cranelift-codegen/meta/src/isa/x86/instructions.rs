@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::cdsl::formats::FormatRegistry;
-use crate::cdsl::inst::{InstructionBuilder as Inst, InstructionGroup};
+use crate::cdsl::instructions::{InstructionBuilder as Inst, InstructionGroup};
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};

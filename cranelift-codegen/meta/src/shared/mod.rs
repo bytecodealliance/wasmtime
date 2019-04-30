@@ -9,7 +9,7 @@ pub mod settings;
 pub mod types;
 
 use crate::cdsl::formats::FormatRegistry;
-use crate::cdsl::inst::InstructionGroup;
+use crate::cdsl::instructions::InstructionGroup;
 use crate::cdsl::operands::OperandKind;
 use crate::cdsl::settings::SettingGroup;
 use crate::cdsl::xform::TransformGroups;

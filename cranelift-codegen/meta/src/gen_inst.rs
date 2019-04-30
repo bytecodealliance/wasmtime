@@ -1,6 +1,6 @@
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::{FormatRegistry, InstructionFormat};
-use crate::cdsl::inst::{Instruction, InstructionGroup};
+use crate::cdsl::instructions::{Instruction, InstructionGroup};
 use crate::cdsl::operands::Operand;
 use crate::cdsl::typevar::{TypeSet, TypeVar};
 use crate::constant_hash;
