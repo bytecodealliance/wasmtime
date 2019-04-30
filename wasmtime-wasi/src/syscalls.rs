@@ -3,7 +3,7 @@ use crate::instantiate::WASIState;
 use cranelift_codegen::ir::types::{Type, I32, I64};
 use host;
 use host_impls;
-use std::{ptr, slice, str};
+use std::{mem, ptr, slice, str};
 use translate::*;
 use wasm32;
 use wasmtime_runtime::VMContext;
@@ -1344,10 +1344,12 @@ syscalls! {
             Ok(in_) => in_,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_out = match decode_event_slice(vmctx, out, nsubscriptions) {
-            Ok(out) => out,
+        let (out, out_len) = match decode_event_slice(vmctx, out, nsubscriptions) {
+            Ok((out, out_len)) => (out, out_len),
             Err(e) => return return_encoded_errno(e),
         };
+        let mut host_out = Vec::new();
+        host_out.resize(out_len, mem::zeroed());
         let mut host_nevents = 0;
         if let Err(e) = decode_usize_byref(vmctx, nevents) {
             return return_encoded_errno(e);
@@ -1366,13 +1368,14 @@ syscalls! {
         trace!("     | *nevents={:?}", host_nevents);
         encode_usize_byref(vmctx, nevents, host_nevents);
 
+        host_out.truncate(host_nevents);
         if log_enabled!(log::Level::Trace) {
             for (index, _event) in host_out.iter().enumerate() {
                 // TODO: Format the output for tracing.
                 trace!("     | *out[{}]=...", index);
             }
         }
-        encode_event_slice(vmctx, out, host_out);
+        encode_event_slice(out, host_out);
 
         return_encoded_errno(e)
     }
