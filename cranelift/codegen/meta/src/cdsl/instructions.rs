@@ -12,6 +12,40 @@ use std::ops;
 use std::rc::Rc;
 use std::slice;
 
+pub struct InstructionGroupBuilder<'format_reg> {
+    _name: &'static str,
+    _doc: &'static str,
+    format_registry: &'format_reg FormatRegistry,
+    instructions: Vec<Instruction>,
+}
+
+impl<'format_reg> InstructionGroupBuilder<'format_reg> {
+    pub fn new(
+        name: &'static str,
+        doc: &'static str,
+        format_registry: &'format_reg FormatRegistry,
+    ) -> Self {
+        Self {
+            _name: name,
+            _doc: doc,
+            format_registry,
+            instructions: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, builder: InstructionBuilder) {
+        self.instructions.push(builder.finish(self.format_registry));
+    }
+
+    pub fn finish(self) -> InstructionGroup {
+        InstructionGroup {
+            _name: self._name,
+            _doc: self._doc,
+            instructions: self.instructions,
+        }
+    }
+}
+
 /// Every instruction must belong to exactly one instruction group. A given
 /// target architecture can support instructions from multiple groups, and it
 /// does not necessarily support all instructions in a group.
@@ -22,18 +56,6 @@ pub struct InstructionGroup {
 }
 
 impl InstructionGroup {
-    pub fn new(name: &'static str, doc: &'static str) -> Self {
-        Self {
-            _name: name,
-            _doc: doc,
-            instructions: Vec::new(),
-        }
-    }
-
-    pub fn push(&mut self, inst: Instruction) {
-        self.instructions.push(inst);
-    }
-
     pub fn iter(&self) -> slice::Iter<Instruction> {
         self.instructions.iter()
     }
@@ -278,7 +300,7 @@ impl InstructionBuilder {
         self
     }
 
-    pub fn finish(self, format_registry: &FormatRegistry) -> Instruction {
+    fn finish(self, format_registry: &FormatRegistry) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_else(Vec::new);
         let operands_out = self.operands_out.unwrap_or_else(Vec::new);
 

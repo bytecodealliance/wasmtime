@@ -1,14 +1,17 @@
 #![allow(non_snake_case)]
 
 use crate::cdsl::formats::FormatRegistry;
-use crate::cdsl::instructions::{InstructionBuilder as Inst, InstructionGroup};
+use crate::cdsl::instructions::{
+    InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
+};
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::types;
 
 pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
-    let mut ig = InstructionGroup::new("x86", "x86 specific instruction set");
+    let mut ig =
+        InstructionGroupBuilder::new("x86", "x86 specific instruction set", format_registry);
 
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
 
@@ -39,8 +42,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         )
         .operands_in(vec![nlo, nhi, d])
         .operands_out(vec![q, r])
-        .can_trap(true)
-        .finish(format_registry),
+        .can_trap(true),
     );
 
     ig.push(
@@ -59,8 +61,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         )
         .operands_in(vec![nlo, nhi, d])
         .operands_out(vec![q, r])
-        .can_trap(true)
-        .finish(format_registry),
+        .can_trap(true),
     );
 
     let argL = &operand("argL", iWord);
@@ -79,8 +80,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         "#,
         )
         .operands_in(vec![argL, argR])
-        .operands_out(vec![resLo, resHi])
-        .finish(format_registry),
+        .operands_out(vec![resLo, resHi]),
     );
 
     ig.push(
@@ -94,8 +94,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         "#,
         )
         .operands_in(vec![argL, argR])
-        .operands_out(vec![resLo, resHi])
-        .finish(format_registry),
+        .operands_out(vec![resLo, resHi]),
     );
 
     let Float = &TypeVar::new(
@@ -131,8 +130,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         "#,
         )
         .operands_in(vec![x])
-        .operands_out(vec![a])
-        .finish(format_registry),
+        .operands_out(vec![a]),
     );
 
     let x = &operand("x", Float);
@@ -154,8 +152,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         "#,
         )
         .operands_in(vec![x, y])
-        .operands_out(vec![a])
-        .finish(format_registry),
+        .operands_out(vec![a]),
     );
 
     ig.push(
@@ -173,8 +170,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         "#,
         )
         .operands_in(vec![x, y])
-        .operands_out(vec![a])
-        .finish(format_registry),
+        .operands_out(vec![a]),
     );
 
     let x = &operand("x", iWord);
@@ -193,8 +189,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         )
         .operands_in(vec![x])
         .other_side_effects(true)
-        .can_store(true)
-        .finish(format_registry),
+        .can_store(true),
     );
 
     ig.push(
@@ -212,8 +207,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         )
         .operands_out(vec![x])
         .other_side_effects(true)
-        .can_load(true)
-        .finish(format_registry),
+        .can_load(true),
     );
 
     let y = &operand("y", iWord);
@@ -233,8 +227,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
     "#,
         )
         .operands_in(vec![x])
-        .operands_out(vec![y, rflags])
-        .finish(format_registry),
+        .operands_out(vec![y, rflags]),
     );
 
     ig.push(
@@ -246,9 +239,8 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
     "#,
         )
         .operands_in(vec![x])
-        .operands_out(vec![y, rflags])
-        .finish(format_registry),
+        .operands_out(vec![y, rflags]),
     );
 
-    ig
+    ig.finish()
 }
