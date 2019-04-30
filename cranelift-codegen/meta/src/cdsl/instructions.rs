@@ -54,11 +54,11 @@ pub struct PolymorphicInfo {
 
 pub struct InstructionContent {
     /// Instruction mnemonic, also becomes opcode name.
-    pub name: &'static str,
+    pub name: String,
     pub camel_name: String,
 
     /// Documentation string.
-    doc: &'static str,
+    doc: String,
 
     /// Input operands. This can be a mix of SSA value operands and other operand kinds.
     pub operands_in: Vec<Operand>,
@@ -115,15 +115,15 @@ impl ops::Deref for Instruction {
 }
 
 impl Instruction {
-    pub fn snake_name(&self) -> &'static str {
+    pub fn snake_name(&self) -> &str {
         if self.name == "return" {
             "return_"
         } else {
-            self.name
+            &self.name
         }
     }
 
-    pub fn doc_comment_first_line(&self) -> &'static str {
+    pub fn doc_comment_first_line(&self) -> &str {
         for line in self.doc.split("\n") {
             let stripped = line.trim();
             if stripped.len() > 0 {
@@ -162,7 +162,7 @@ impl fmt::Display for Instruction {
             fmt.write_str(" = ")?;
         }
 
-        fmt.write_str(self.name)?;
+        fmt.write_str(&self.name)?;
 
         if self.operands_in.len() > 0 {
             let operands_in = self
@@ -180,8 +180,8 @@ impl fmt::Display for Instruction {
 }
 
 pub struct InstructionBuilder {
-    name: &'static str,
-    doc: &'static str,
+    name: String,
+    doc: String,
     operands_in: Option<Vec<Operand>>,
     operands_out: Option<Vec<Operand>>,
     constraints: Option<Vec<Constraint>>,
@@ -200,10 +200,10 @@ pub struct InstructionBuilder {
 }
 
 impl InstructionBuilder {
-    pub fn new(name: &'static str, doc: &'static str) -> Self {
+    pub fn new<S: Into<String>>(name: S, doc: S) -> Self {
         Self {
-            name,
-            doc,
+            name: name.into(),
+            doc: doc.into(),
             operands_in: None,
             operands_out: None,
             constraints: None,
@@ -310,10 +310,11 @@ impl InstructionBuilder {
         // Infer from output operands whether an instruciton clobbers CPU flags or not.
         let writes_cpu_flags = operands_out.iter().any(|op| op.is_cpu_flags());
 
+        let camel_name = camel_case(&self.name);
         Instruction {
             content: Rc::new(InstructionContent {
                 name: self.name,
-                camel_name: camel_case(self.name),
+                camel_name,
                 doc: self.doc,
                 operands_in,
                 operands_out,
