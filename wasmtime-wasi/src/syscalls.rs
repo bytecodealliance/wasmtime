@@ -2,6 +2,7 @@ use crate::host::{argv_environ_values, fd_prestats, fd_table};
 use crate::instantiate::WASIState;
 use cranelift_codegen::ir::types::{Type, I32, I64};
 use host;
+use host_impls;
 use std::{mem, ptr, slice, str};
 use translate::*;
 use wasm32;
@@ -573,10 +574,11 @@ syscalls! {
 
         let vmctx = &mut *vmctx;
         let curfds = get_curfds(vmctx);
+        let prestats = get_prestats(vmctx);
         let from = decode_fd(from);
         let to = decode_fd(to);
 
-        let e = host::wasmtime_ssp_fd_renumber(curfds, from, to);
+        let e = host::wasmtime_ssp_fd_renumber(curfds, prestats, from, to);
 
         return_encoded_errno(e)
     }
@@ -912,7 +914,7 @@ syscalls! {
         let fs_rights_base = decode_rights(fs_rights_base);
         let fs_rights_inheriting = decode_rights(fs_rights_inheriting);
         let fs_flags = decode_fdflags(fs_flags);
-        let mut host_fd = 0;
+        let mut host_fd = wasm32::__wasi_fd_t::max_value();
         if let Err(e) = decode_fd_byref(vmctx, fd) {
             return return_encoded_errno(e);
         }
@@ -1385,7 +1387,7 @@ syscalls! {
 
         // TODO: Rather than call __wasi_proc_exit here, we should trigger a
         // stack unwind similar to a trap.
-        host::wasmtime_ssp_proc_exit(rval);
+        host_impls::wasmtime_ssp_proc_exit(rval);
     }
 
     pub unsafe extern "C" fn proc_raise(
@@ -1414,7 +1416,7 @@ syscalls! {
     }
 
     pub unsafe extern "C" fn sched_yield(_vmctx: *mut VMContext,) -> wasm32::__wasi_errno_t {
-        let e = host::wasmtime_ssp_sched_yield();
+        let e = host_impls::wasmtime_ssp_sched_yield();
 
         return_encoded_errno(e)
     }
