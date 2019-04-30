@@ -1,5 +1,5 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::inst::InstructionGroup;
+use crate::cdsl::instructions::InstructionGroup;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};

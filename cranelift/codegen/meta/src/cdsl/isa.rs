@@ -1,5 +1,5 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::inst::InstructionGroup;
+use crate::cdsl::instructions::InstructionGroup;
 use crate::cdsl::regs::IsaRegs;
 use crate::cdsl::settings::SettingGroup;
 use crate::cdsl::xform::{TransformGroupIndex, TransformGroups};

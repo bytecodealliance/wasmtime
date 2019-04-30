@@ -1,7 +1,7 @@
 use crate::cdsl::ast::{
     Apply, DefIndex, DefPool, DummyDef, DummyExpr, Expr, PatternPosition, VarIndex, VarPool,
 };
-use crate::cdsl::inst::Instruction;
+use crate::cdsl::instructions::Instruction;
 use crate::cdsl::type_inference::{infer_transform, TypeEnvironment};
 use crate::cdsl::typevar::TypeVar;
 
@@ -404,7 +404,7 @@ impl TransformGroups {
 #[should_panic]
 fn test_double_custom_legalization() {
     use crate::cdsl::formats::{FormatRegistry, InstructionFormatBuilder};
-    use crate::cdsl::inst::InstructionBuilder;
+    use crate::cdsl::instructions::InstructionBuilder;
 
     let mut format = FormatRegistry::new();
     format.insert(InstructionFormatBuilder::new("nullary"));

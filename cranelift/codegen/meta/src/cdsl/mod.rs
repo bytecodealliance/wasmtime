@@ -7,7 +7,7 @@
 pub mod ast;
 pub mod cpu_modes;
 pub mod formats;
-pub mod inst;
+pub mod instructions;
 pub mod isa;
 pub mod operands;
 pub mod regs;
