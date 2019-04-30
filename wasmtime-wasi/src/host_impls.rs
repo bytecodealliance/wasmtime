@@ -88,8 +88,64 @@ fn convert_errno(error: Errno) -> host::__wasi_errno_t {
     }
 }
 
+fn fd_prestats_get_entry(
+    pt: &host::fd_prestats,
+    fd: host::__wasi_fd_t,
+) -> Option<&host::fd_prestat> {
+    // Test for file descriptor existence
+    if fd as usize >= pt.size {
+        return None;
+    }
+
+    let prestat = unsafe { &*pt.prestats.add(fd as usize) };
+    if prestat.dir == ::std::ptr::null() {
+        return None;
+    }
+
+    Some(prestat)
+}
+
+macro_rules! rwlock_rdlock {
+    ($prestats:expr) => {
+        unsafe {
+            host::rwlock_rdlock(&mut (*$prestats).lock as *mut host::rwlock);
+        }
+    };
+}
+
+macro_rules! rwlock_unlock {
+    ($prestats:expr) => {
+        unsafe {
+            host::rwlock_unlock(&mut (*$prestats).lock as *mut host::rwlock);
+        }
+    };
+}
+
 pub fn wasmtime_ssp_proc_exit(rval: wasm32::__wasi_exitcode_t) {
     ::std::process::exit(rval as i32)
+}
+
+pub fn wasmtime_ssp_fd_prestat_get(
+    prestats: &mut host::fd_prestats,
+    fd: host::__wasi_fd_t,
+    buf: &mut host::__wasi_prestat_t,
+) -> host::__wasi_errno_t {
+    rwlock_rdlock!(prestats);
+
+    let ret_code = if let Some(prestat) = fd_prestats_get_entry(prestats, fd) {
+        (*buf).pr_type = host::__WASI_PREOPENTYPE_DIR as host::__wasi_preopentype_t;
+        unsafe {
+            let dir_name = ::std::ffi::CStr::from_ptr((*prestat).dir).to_str().unwrap();
+            (*buf).u.dir.pr_name_len = dir_name.len();
+        }
+        host::__WASI_ESUCCESS
+    } else {
+        host::__WASI_EBADF
+    };
+
+    rwlock_unlock!(prestats);
+
+    ret_code
 }
 
 pub fn wasmtime_ssp_sched_yield() -> host::__wasi_errno_t {

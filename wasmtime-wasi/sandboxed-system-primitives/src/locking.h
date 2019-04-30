@@ -83,21 +83,21 @@ struct LOCKABLE rwlock {
   pthread_rwlock_t object;
 };
 
-static inline void rwlock_init(struct rwlock *lock) REQUIRES_UNLOCKED(*lock) {
+void rwlock_init(struct rwlock *lock) REQUIRES_UNLOCKED(*lock) {
   pthread_rwlock_init(&lock->object, NULL);
 }
 
-static inline void rwlock_rdlock(struct rwlock *lock)
+void rwlock_rdlock(struct rwlock *lock)
     LOCKS_SHARED(*lock) NO_LOCK_ANALYSIS {
   pthread_rwlock_rdlock(&lock->object);
 }
 
-static inline void rwlock_wrlock(struct rwlock *lock)
+void rwlock_wrlock(struct rwlock *lock)
     LOCKS_EXCLUSIVE(*lock) NO_LOCK_ANALYSIS {
   pthread_rwlock_wrlock(&lock->object);
 }
 
-static inline void rwlock_unlock(struct rwlock *lock)
+void rwlock_unlock(struct rwlock *lock)
     UNLOCKS(*lock) NO_LOCK_ANALYSIS {
   pthread_rwlock_unlock(&lock->object);
 }
