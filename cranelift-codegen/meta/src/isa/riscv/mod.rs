@@ -1,5 +1,5 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::instructions::InstructionGroup;
+use crate::cdsl::instructions::InstructionGroupBuilder;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
@@ -86,7 +86,12 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let settings = define_settings(&shared_defs.settings);
     let regs = define_registers();
 
-    let inst_group = InstructionGroup::new("riscv", "riscv specific instruction set");
+    let inst_group = InstructionGroupBuilder::new(
+        "riscv",
+        "riscv specific instruction set",
+        &shared_defs.format_registry,
+    )
+    .finish();
 
     // CPU modes for 32-bit and 64-bit operation.
     let mut rv_32 = CpuMode::new("RV32");
