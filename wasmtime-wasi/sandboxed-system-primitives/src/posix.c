@@ -243,10 +243,6 @@ __wasi_errno_t wasmtime_ssp_clock_time_get(
   return 0;
 }
 
-struct fd_prestat {
-  const char *dir;
-};
-
 void fd_prestats_init(
     struct fd_prestats *pt
 ) {
@@ -651,32 +647,6 @@ static __wasi_errno_t fd_table_insert_fd(
     fo->directory.handle = NULL;
   }
   return fd_table_insert(ft, fo, rights_base, rights_inheriting, out);
-}
-
-__wasi_errno_t wasmtime_ssp_fd_prestat_get(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-    struct fd_prestats *prestats,
-#endif
-    __wasi_fd_t fd,
-    __wasi_prestat_t *buf
-) {
-  rwlock_rdlock(&prestats->lock);
-  struct fd_prestat *prestat;
-  __wasi_errno_t error = fd_prestats_get_entry(prestats, fd, &prestat);
-  if (error != 0) {
-    rwlock_unlock(&prestats->lock);
-    return error;
-  }
-
-  *buf = (__wasi_prestat_t) {
-    .pr_type = __WASI_PREOPENTYPE_DIR,
-  };
-
-  buf->u.dir.pr_name_len = strlen(prestat->dir);
-
-  rwlock_unlock(&prestats->lock);
-
-  return 0;
 }
 
 __wasi_errno_t wasmtime_ssp_fd_prestat_dir_name(

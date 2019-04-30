@@ -380,7 +380,7 @@ syscalls! {
             return return_encoded_errno(e);
         }
 
-        let e = host::wasmtime_ssp_fd_prestat_get(prestats, fd, &mut host_buf);
+        let e = host_impls::wasmtime_ssp_fd_prestat_get(&mut *prestats, fd, &mut host_buf);
 
         encode_prestat_byref(vmctx, buf, host_buf);
 
