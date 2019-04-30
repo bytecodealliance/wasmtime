@@ -565,7 +565,7 @@ fn gen_opcodes<'a>(
 
     // Generate an opcode hash table for looking up opcodes by name.
     let hash_table =
-        constant_hash::generate_table(&all_inst, |inst| constant_hash::simple_hash(inst.name));
+        constant_hash::generate_table(&all_inst, |inst| constant_hash::simple_hash(&inst.name));
     fmtln!(
         fmt,
         "const OPCODE_HASH_TABLE: [Option<Opcode>; {}] = [",
