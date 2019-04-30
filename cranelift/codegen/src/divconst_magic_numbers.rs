@@ -55,7 +55,7 @@ pub fn magic_u32(d: u32) -> MU32 {
             q1 = u32::wrapping_add(u32::wrapping_mul(2, q1), 1);
             r1 = u32::wrapping_sub(u32::wrapping_mul(2, r1), nc);
         } else {
-            q1 = 2 * q1;
+            q1 = u32::wrapping_mul(2, q1);
             r1 = 2 * r1;
         }
         if r2 + 1 >= d - r2 {
@@ -101,7 +101,7 @@ pub fn magic_u64(d: u64) -> MU64 {
             q1 = u64::wrapping_add(u64::wrapping_mul(2, q1), 1);
             r1 = u64::wrapping_sub(u64::wrapping_mul(2, r1), nc);
         } else {
-            q1 = 2 * q1;
+            q1 = u64::wrapping_mul(2, q1);
             r1 = 2 * r1;
         }
         if r2 + 1 >= d - r2 {
@@ -522,73 +522,129 @@ mod tests {
     #[test]
     fn test_magic_generators_dont_panic() {
         // The point of this is to check that the magic number generators
-        // don't panic with integer wraparounds, especially at boundary
-        // cases for their arguments. The actual results are thrown away.
-        let mut total: u64 = 0;
+        // don't panic with integer wraparounds, especially at boundary cases
+        // for their arguments. The actual results are thrown away, although
+        // we force `total` to be used, so that rustc can't optimise the
+        // entire computation away.
+
         // Testing UP magic_u32
+        let mut total: u64 = 0;
         for x in 2..(200 * 1000u32) {
             let m = magic_u32(x);
             total = total ^ (m.mul_by as u64);
             total = total + (m.shift_by as u64);
-            total = total - (if m.do_add { 123 } else { 456 });
+            total = total + (if m.do_add { 123 } else { 456 });
         }
-        assert_eq!(total, 1747815691);
+        assert_eq!(total, 2481999609);
+
+        total = 0;
+        // Testing MIDPOINT magic_u32
+        for x in 0x8000_0000u32 - 10 * 1000u32..0x8000_0000u32 + 10 * 1000u32 {
+            let m = magic_u32(x);
+            total = total ^ (m.mul_by as u64);
+            total = total + (m.shift_by as u64);
+            total = total + (if m.do_add { 123 } else { 456 });
+        }
+        assert_eq!(total, 2399809723);
+
+        total = 0;
         // Testing DOWN magic_u32
         for x in 0..(200 * 1000u32) {
             let m = magic_u32(0xFFFF_FFFFu32 - x);
             total = total ^ (m.mul_by as u64);
             total = total + (m.shift_by as u64);
-            total = total - (if m.do_add { 123 } else { 456 });
+            total = total + (if m.do_add { 123 } else { 456 });
         }
-        assert_eq!(total, 2210292772);
+        assert_eq!(total, 271138267);
 
         // Testing UP magic_u64
+        total = 0;
         for x in 2..(200 * 1000u64) {
             let m = magic_u64(x);
             total = total ^ m.mul_by;
             total = total + (m.shift_by as u64);
-            total = total - (if m.do_add { 123 } else { 456 });
+            total = total + (if m.do_add { 123 } else { 456 });
         }
-        assert_eq!(total, 7430004084791260605);
+        assert_eq!(total, 7430004086976261161);
+
+        total = 0;
+        // Testing MIDPOINT magic_u64
+        for x in 0x8000_0000_0000_0000u64 - 10 * 1000u64..0x8000_0000_0000_0000u64 + 10 * 1000u64 {
+            let m = magic_u64(x);
+            total = total ^ m.mul_by;
+            total = total + (m.shift_by as u64);
+            total = total + (if m.do_add { 123 } else { 456 });
+        }
+        assert_eq!(total, 10312117246769520603);
+
         // Testing DOWN magic_u64
+        total = 0;
         for x in 0..(200 * 1000u64) {
             let m = magic_u64(0xFFFF_FFFF_FFFF_FFFFu64 - x);
             total = total ^ m.mul_by;
             total = total + (m.shift_by as u64);
-            total = total - (if m.do_add { 123 } else { 456 });
+            total = total + (if m.do_add { 123 } else { 456 });
         }
-        assert_eq!(total, 7547519887519825919);
+        assert_eq!(total, 1126603594357269734);
 
         // Testing UP magic_s32
+        total = 0;
         for x in 0..(200 * 1000i32) {
             let m = magic_s32(-0x8000_0000i32 + x);
             total = total ^ (m.mul_by as u64);
             total = total + (m.shift_by as u64);
         }
-        assert_eq!(total, 10899224186731671235);
+        assert_eq!(total, 18446744069953376812);
+
+        total = 0;
+        // Testing MIDPOINT magic_s32
+        for x in 0..(200 * 1000i32) {
+            let x2 = -100 * 1000i32 + x;
+            if x2 != -1 && x2 != 0 && x2 != 1 {
+                let m = magic_s32(x2);
+                total = total ^ (m.mul_by as u64);
+                total = total + (m.shift_by as u64);
+            }
+        }
+        assert_eq!(total, 351839350);
+
         // Testing DOWN magic_s32
+        total = 0;
         for x in 0..(200 * 1000i32) {
             let m = magic_s32(0x7FFF_FFFFi32 - x);
             total = total ^ (m.mul_by as u64);
             total = total + (m.shift_by as u64);
         }
-        assert_eq!(total, 7547519887517897369);
+        assert_eq!(total, 18446744072916880714);
 
         // Testing UP magic_s64
+        total = 0;
         for x in 0..(200 * 1000i64) {
             let m = magic_s64(-0x8000_0000_0000_0000i64 + x);
             total = total ^ (m.mul_by as u64);
             total = total + (m.shift_by as u64);
         }
-        assert_eq!(total, 8029756891368555163);
+        assert_eq!(total, 17929885647724831014);
+
+        total = 0;
+        // Testing MIDPOINT magic_s64
+        for x in 0..(200 * 1000i64) {
+            let x2 = -100 * 1000i64 + x;
+            if x2 != -1 && x2 != 0 && x2 != 1 {
+                let m = magic_s64(x2);
+                total = total ^ (m.mul_by as u64);
+                total = total + (m.shift_by as u64);
+            }
+        }
+        assert_eq!(total, 18106042338125661964);
+
         // Testing DOWN magic_s64
+        total = 0;
         for x in 0..(200 * 1000i64) {
             let m = magic_s64(0x7FFF_FFFF_FFFF_FFFFi64 - x);
             total = total ^ (m.mul_by as u64);
             total = total + (m.shift_by as u64);
         }
-        // Force `total` -- and hence, the entire computation -- to
-        // be used, so that rustc can't optimise it out.
-        assert_eq!(total, 7547519887532559585u64);
+        assert_eq!(total, 563301797155560970);
     }
 }
