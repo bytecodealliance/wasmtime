@@ -83,3 +83,6 @@ pub const __WASI_ETIMEDOUT: __wasi_errno_t = 73;
 pub const __WASI_ETXTBSY: __wasi_errno_t = 74;
 pub const __WASI_EXDEV: __wasi_errno_t = 75;
 pub const __WASI_ENOTCAPABLE: __wasi_errno_t = 76;
+
+// pub type __wasi_preopentype_t = u8;
+pub const __WASI_PREOPENTYPE_DIR: __wasi_preopentype_t = 0;

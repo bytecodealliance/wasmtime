@@ -103,7 +103,8 @@ fn main() {
         .blacklist_item("__WASI_ETIMEDOUT")
         .blacklist_item("__WASI_ETXTBSY")
         .blacklist_item("__WASI_EXDEV")
-        .blacklist_item("__WASI_ENOTCAPABLE");
+        .blacklist_item("__WASI_ENOTCAPABLE")
+        .blacklist_item("__WASI_PREOPENTYPE_DIR");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
