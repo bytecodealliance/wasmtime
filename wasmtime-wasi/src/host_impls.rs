@@ -133,7 +133,7 @@ pub fn wasmtime_ssp_fd_prestat_get(
     rwlock_rdlock!(prestats);
 
     let ret_code = if let Some(prestat) = fd_prestats_get_entry(prestats, fd) {
-        (*buf).pr_type = host::__WASI_PREOPENTYPE_DIR as host::__wasi_preopentype_t;
+        (*buf).pr_type = host::__WASI_PREOPENTYPE_DIR;
         unsafe {
             let dir_name = ::std::ffi::CStr::from_ptr((*prestat).dir).to_str().unwrap();
             (*buf).u.dir.pr_name_len = dir_name.len();
