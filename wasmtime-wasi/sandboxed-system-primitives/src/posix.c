@@ -274,8 +274,10 @@ static bool fd_prestats_grow(
       return false;
 
     // Mark all new file descriptors as unused.
-    for (size_t i = pt->size; i < size; ++i)
-      prestats[i].dir = NULL;
+    for (size_t i = pt->size; i < size; ++i) {
+      prestats[i].dir_name = NULL;
+      prestats[i].dir_name_len = 0;
+    }
     pt->prestats = prestats;
     pt->size = size;
   }
@@ -295,7 +297,8 @@ bool fd_prestats_insert(
     return false;
   }
 
-  pt->prestats[fd].dir = strdup(dir);
+  pt->prestats[fd].dir_name = strdup(dir);
+  pt->prestats[fd].dir_name_len = strlen(dir);
   rwlock_unlock(&pt->lock);
   return true;
 }
@@ -310,7 +313,7 @@ static __wasi_errno_t fd_prestats_get_entry(
   if (fd >= pt->size)
     return __WASI_EBADF;
   struct fd_prestat *prestat = &pt->prestats[fd];
-  if (prestat->dir == NULL)
+  if (prestat->dir_name == NULL)
     return __WASI_EBADF;
 
   *ret = prestat;
@@ -664,12 +667,12 @@ __wasi_errno_t wasmtime_ssp_fd_prestat_dir_name(
     rwlock_unlock(&prestats->lock);
     return error;
   }
-  if (path_len != strlen(prestat->dir)) {
+  if (path_len != prestat->dir_name_len) {
     rwlock_unlock(&prestats->lock);
     return EINVAL;
   }
 
-  memcpy(path, prestat->dir, path_len);
+  memcpy(path, prestat->dir_name, path_len);
 
   rwlock_unlock(&prestats->lock);
 

@@ -21,7 +21,8 @@ struct fd_entry;
 struct syscalls;
 
 struct fd_prestat {
-  const char *dir;
+  const char *dir_name;
+  size_t dir_name_len;
 };
 
 struct fd_table {
