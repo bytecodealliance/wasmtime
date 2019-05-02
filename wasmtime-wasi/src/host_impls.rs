@@ -147,6 +147,31 @@ pub fn wasmtime_ssp_fd_prestat_get(
     ret_code
 }
 
+pub fn wasmtime_ssp_fd_prestat_dir_name(
+    prestats: &mut host::fd_prestats,
+    fd: host::__wasi_fd_t,
+    path: &mut [host::char],
+) -> host::__wasi_errno_t {
+    rwlock_rdlock!(prestats);
+
+    let ret_code = if let Some(prestat) = fd_prestats_get_entry(prestats, fd) {
+        if path.len() != prestat.dir_name_len {
+            host::__WASI_EINVAL
+        } else {
+            path.copy_from_slice(unsafe {
+                ::std::slice::from_raw_parts(prestat.dir_name, prestat.dir_name_len)
+            });
+            host::__WASI_ESUCCESS
+        }
+    } else {
+        host::__WASI_EBADF
+    };
+
+    rwlock_unlock!(prestats);
+
+    ret_code
+}
+
 pub fn wasmtime_ssp_sched_yield() -> host::__wasi_errno_t {
     unsafe {
         if libc::sched_yield() < 0 {

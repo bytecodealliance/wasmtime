@@ -404,7 +404,11 @@ syscalls! {
 
         trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
 
-        let e = host::wasmtime_ssp_fd_prestat_dir_name(prestats, fd, path, path_len);
+        let e = host_impls::wasmtime_ssp_fd_prestat_dir_name(
+            &mut *prestats,
+            fd,
+            ::std::slice::from_raw_parts_mut(path, path_len),
+        );
 
         return_encoded_errno(e)
     }

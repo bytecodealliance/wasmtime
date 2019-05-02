@@ -652,33 +652,6 @@ static __wasi_errno_t fd_table_insert_fd(
   return fd_table_insert(ft, fo, rights_base, rights_inheriting, out);
 }
 
-__wasi_errno_t wasmtime_ssp_fd_prestat_dir_name(
-#if !defined(WASMTIME_SSP_STATIC_CURFDS)
-    struct fd_prestats *prestats,
-#endif
-    __wasi_fd_t fd,
-    char *path,
-    size_t path_len
-) {
-  rwlock_rdlock(&prestats->lock);
-  struct fd_prestat *prestat;
-  __wasi_errno_t error = fd_prestats_get_entry(prestats, fd, &prestat);
-  if (error != 0) {
-    rwlock_unlock(&prestats->lock);
-    return error;
-  }
-  if (path_len != prestat->dir_name_len) {
-    rwlock_unlock(&prestats->lock);
-    return EINVAL;
-  }
-
-  memcpy(path, prestat->dir_name, path_len);
-
-  rwlock_unlock(&prestats->lock);
-
-  return 0;
-}
-
 __wasi_errno_t wasmtime_ssp_fd_close(
 #if !defined(WASMTIME_SSP_STATIC_CURFDS)
     struct fd_table *curfds,
