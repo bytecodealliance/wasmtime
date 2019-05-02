@@ -647,4 +647,439 @@ mod tests {
         }
         assert_eq!(total, 563301797155560970);
     }
+
+    #[test]
+    fn test_magic_generators_give_correct_numbers() {
+        // For a variety of values for both `n` and `d`, compute the magic
+        // numbers for `d`, and in effect interpret them so as to compute
+        // `n / d`.  Check that that equals the value of `n / d` computed
+        // directly by the hardware.  This serves to check that the magic
+        // number generates work properly.  In total, 50,148,000 tests are
+        // done.
+
+        // Some constants
+        const MIN_U32: u32 = 0;
+        const MAX_U32: u32 = 0xFFFF_FFFFu32;
+        const MAX_U32_HALF: u32 = 0x8000_0000u32; // more or less
+
+        const MIN_S32: i32 = 0x8000_0000u32 as i32;
+        const MAX_S32: i32 = 0x7FFF_FFFFu32 as i32;
+
+        const MIN_U64: u64 = 0;
+        const MAX_U64: u64 = 0xFFFF_FFFF_FFFF_FFFFu64;
+        const MAX_U64_HALF: u64 = 0x8000_0000_0000_0000u64; // ditto
+
+        const MIN_S64: i64 = 0x8000_0000_0000_0000u64 as i64;
+        const MAX_S64: i64 = 0x7FFF_FFFF_FFFF_FFFFu64 as i64;
+
+        // These generate reference results for signed/unsigned 32/64 bit
+        // division, rounding towards zero.
+        fn div_u32(x: u32, y: u32) -> u32 {
+            return x / y;
+        }
+        fn div_s32(x: i32, y: i32) -> i32 {
+            return x / y;
+        }
+        fn div_u64(x: u64, y: u64) -> u64 {
+            return x / y;
+        }
+        fn div_s64(x: i64, y: i64) -> i64 {
+            return x / y;
+        }
+
+        // Returns the high half of a 32 bit unsigned widening multiply.
+        fn mulhw_u32(x: u32, y: u32) -> u32 {
+            let x64: u64 = x as u64;
+            let y64: u64 = y as u64;
+            let r64: u64 = x64 * y64;
+            (r64 >> 32) as u32
+        }
+
+        // Returns the high half of a 32 bit signed widening multiply.
+        fn mulhw_s32(x: i32, y: i32) -> i32 {
+            let x64: i64 = x as i64;
+            let y64: i64 = y as i64;
+            let r64: i64 = x64 * y64;
+            (r64 >> 32) as i32
+        }
+
+        // Returns the high half of a 64 bit unsigned widening multiply.
+        fn mulhw_u64(x: u64, y: u64) -> u64 {
+            let t0: u64 = x & 0xffffffffu64;
+            let t1: u64 = x >> 32;
+            let t2: u64 = y & 0xffffffffu64;
+            let t3: u64 = y >> 32;
+            let t4: u64 = t0 * t2;
+            let t5: u64 = t1 * t2 + (t4 >> 32);
+            let t6: u64 = t5 & 0xffffffffu64;
+            let t7: u64 = t5 >> 32;
+            let t8: u64 = t0 * t3 + t6;
+            let t9: u64 = t1 * t3 + t7 + (t8 >> 32);
+            t9
+        }
+
+        // Returns the high half of a 64 bit signed widening multiply.
+        fn mulhw_s64(x: i64, y: i64) -> i64 {
+            let t0: u64 = x as u64 & 0xffffffffu64;
+            let t1: i64 = x >> 32;
+            let t2: u64 = y as u64 & 0xffffffffu64;
+            let t3: i64 = y >> 32;
+            let t4: u64 = t0 * t2;
+            let t5: i64 = t1 * t2 as i64 + (t4 >> 32) as i64;
+            let t6: u64 = t5 as u64 & 0xffffffffu64;
+            let t7: i64 = t5 >> 32;
+            let t8: i64 = t0 as i64 * t3 + t6 as i64;
+            let t9: i64 = t1 * t3 + t7 + (t8 >> 32);
+            t9
+        }
+
+        // Compute the magic numbers for `d` and then use them to compute and
+        // check `n / d` for around 1000 values of `n`, using unsigned 32-bit
+        // division.
+        fn test_magic_u32_inner(d: u32, n_tests_done: &mut i32) {
+            // Advance the numerator (the `n` in `n / d`) so as to test
+            // densely near the range ends (and, in the signed variants, near
+            // zero) but not so densely away from those regions.
+            fn advance_n_u32(x: u32) -> u32 {
+                if x < MIN_U32 + 110 {
+                    return x + 1;
+                }
+                if x < MIN_U32 + 1700 {
+                    return x + 23;
+                }
+                if x < MAX_U32 - 1700 {
+                    let xd: f64 = (x as f64) * 1.06415927;
+                    return if xd >= (MAX_U32 - 1700) as f64 {
+                        MAX_U32 - 1700
+                    } else {
+                        xd as u32
+                    };
+                }
+                if x < MAX_U32 - 110 {
+                    return x + 23;
+                }
+                u32::wrapping_add(x, 1)
+            }
+
+            let magic: MU32 = magic_u32(d);
+            let mut n: u32 = MIN_U32;
+            loop {
+                *n_tests_done += 1;
+                // Compute and check `q = n / d` using `magic`.
+                let mut q: u32 = mulhw_u32(n, magic.mul_by);
+                if magic.do_add {
+                    assert!(magic.shift_by >= 1 && magic.shift_by <= 32);
+                    let mut t: u32 = n - q;
+                    t >>= 1;
+                    t = t + q;
+                    q = t >> (magic.shift_by - 1);
+                } else {
+                    assert!(magic.shift_by >= 0 && magic.shift_by <= 31);
+                    q >>= magic.shift_by;
+                }
+
+                assert_eq!(q, div_u32(n, d));
+
+                n = advance_n_u32(n);
+                if n == MIN_U32 {
+                    break;
+                }
+            }
+        }
+
+        // Compute the magic numbers for `d` and then use them to compute and
+        // check `n / d` for around 1000 values of `n`, using signed 32-bit
+        // division.
+        fn test_magic_s32_inner(d: i32, n_tests_done: &mut i32) {
+            // See comment on advance_n_u32 above.
+            fn advance_n_s32(x: i32) -> i32 {
+                if x >= 0 && x <= 29 {
+                    return x + 1;
+                }
+                if x < MIN_S32 + 110 {
+                    return x + 1;
+                }
+                if x < MIN_S32 + 1700 {
+                    return x + 23;
+                }
+                if x < MAX_S32 - 1700 {
+                    let mut xd: f64 = x as f64;
+                    xd = if xd < 0.0 {
+                        xd / 1.06415927
+                    } else {
+                        xd * 1.06415927
+                    };
+                    return if xd >= (MAX_S32 - 1700) as f64 {
+                        MAX_S32 - 1700
+                    } else {
+                        xd as i32
+                    };
+                }
+                if x < MAX_S32 - 110 {
+                    return x + 23;
+                }
+                if x == MAX_S32 {
+                    return MIN_S32;
+                }
+                x + 1
+            }
+
+            let magic: MS32 = magic_s32(d);
+            let mut n: i32 = MIN_S32;
+            loop {
+                *n_tests_done += 1;
+                // Compute and check `q = n / d` using `magic`.
+                let mut q: i32 = mulhw_s32(n, magic.mul_by);
+                if d > 0 && magic.mul_by < 0 {
+                    q = q + n;
+                } else if d < 0 && magic.mul_by > 0 {
+                    q = q - n;
+                }
+                assert!(magic.shift_by >= 0 && magic.shift_by <= 31);
+                q = q >> magic.shift_by;
+                let mut t: u32 = q as u32;
+                t = t >> 31;
+                q = q + (t as i32);
+
+                assert_eq!(q, div_s32(n, d));
+
+                n = advance_n_s32(n);
+                if n == MIN_S32 {
+                    break;
+                }
+            }
+        }
+
+        // Compute the magic numbers for `d` and then use them to compute and
+        // check `n / d` for around 1000 values of `n`, using unsigned 64-bit
+        // division.
+        fn test_magic_u64_inner(d: u64, n_tests_done: &mut i32) {
+            // See comment on advance_n_u32 above.
+            fn advance_n_u64(x: u64) -> u64 {
+                if x < MIN_U64 + 110 {
+                    return x + 1;
+                }
+                if x < MIN_U64 + 1700 {
+                    return x + 23;
+                }
+                if x < MAX_U64 - 1700 {
+                    let xd: f64 = (x as f64) * 1.06415927;
+                    return if xd >= (MAX_U64 - 1700) as f64 {
+                        MAX_U64 - 1700
+                    } else {
+                        xd as u64
+                    };
+                }
+                if x < MAX_U64 - 110 {
+                    return x + 23;
+                }
+                u64::wrapping_add(x, 1)
+            }
+
+            let magic: MU64 = magic_u64(d);
+            let mut n: u64 = MIN_U64;
+            loop {
+                *n_tests_done += 1;
+                // Compute and check `q = n / d` using `magic`.
+                let mut q = mulhw_u64(n, magic.mul_by);
+                if magic.do_add {
+                    assert!(magic.shift_by >= 1 && magic.shift_by <= 64);
+                    let mut t: u64 = n - q;
+                    t >>= 1;
+                    t = t + q;
+                    q = t >> (magic.shift_by - 1);
+                } else {
+                    assert!(magic.shift_by >= 0 && magic.shift_by <= 63);
+                    q >>= magic.shift_by;
+                }
+
+                assert_eq!(q, div_u64(n, d));
+
+                n = advance_n_u64(n);
+                if n == MIN_U64 {
+                    break;
+                }
+            }
+        }
+
+        // Compute the magic numbers for `d` and then use them to compute and
+        // check `n / d` for around 1000 values of `n`, using signed 64-bit
+        // division.
+        fn test_magic_s64_inner(d: i64, n_tests_done: &mut i32) {
+            // See comment on advance_n_u32 above.
+            fn advance_n_s64(x: i64) -> i64 {
+                if x >= 0 && x <= 29 {
+                    return x + 1;
+                }
+                if x < MIN_S64 + 110 {
+                    return x + 1;
+                }
+                if x < MIN_S64 + 1700 {
+                    return x + 23;
+                }
+                if x < MAX_S64 - 1700 {
+                    let mut xd: f64 = x as f64;
+                    xd = if xd < 0.0 {
+                        xd / 1.06415927
+                    } else {
+                        xd * 1.06415927
+                    };
+                    return if xd >= (MAX_S64 - 1700) as f64 {
+                        MAX_S64 - 1700
+                    } else {
+                        xd as i64
+                    };
+                }
+                if x < MAX_S64 - 110 {
+                    return x + 23;
+                }
+                if x == MAX_S64 {
+                    return MIN_S64;
+                }
+                x + 1
+            }
+
+            let magic: MS64 = magic_s64(d);
+            let mut n: i64 = MIN_S64;
+            loop {
+                *n_tests_done += 1;
+                // Compute and check `q = n / d` using `magic`. */
+                let mut q: i64 = mulhw_s64(n, magic.mul_by);
+                if d > 0 && magic.mul_by < 0 {
+                    q = q + n;
+                } else if d < 0 && magic.mul_by > 0 {
+                    q = q - n;
+                }
+                assert!(magic.shift_by >= 0 && magic.shift_by <= 63);
+                q = q >> magic.shift_by;
+                let mut t: u64 = q as u64;
+                t = t >> 63;
+                q = q + (t as i64);
+
+                assert_eq!(q, div_s64(n, d));
+
+                n = advance_n_s64(n);
+                if n == MIN_S64 {
+                    break;
+                }
+            }
+        }
+
+        // Using all the above support machinery, actually run the tests.
+
+        let mut n_tests_done: i32 = 0;
+
+        // u32 division tests
+        {
+            // 2 .. 3k
+            let mut d: u32 = 2;
+            for _ in 0..3 * 1000 {
+                test_magic_u32_inner(d, &mut n_tests_done);
+                d += 1;
+            }
+
+            // across the midpoint: midpoint - 3k .. midpoint + 3k
+            d = MAX_U32_HALF - 3 * 1000;
+            for _ in 0..2 * 3 * 1000 {
+                test_magic_u32_inner(d, &mut n_tests_done);
+                d += 1;
+            }
+
+            // MAX_U32 - 3k .. MAX_U32 (in reverse order)
+            d = MAX_U32;
+            for _ in 0..3 * 1000 {
+                test_magic_u32_inner(d, &mut n_tests_done);
+                d -= 1;
+            }
+        }
+
+        // s32 division tests
+        {
+            // MIN_S32 .. MIN_S32 + 3k
+            let mut d: i32 = MIN_S32;
+            for _ in 0..3 * 1000 {
+                test_magic_s32_inner(d, &mut n_tests_done);
+                d += 1;
+            }
+
+            // -3k .. -2 (in reverse order)
+            d = -2;
+            for _ in 0..3 * 1000 {
+                test_magic_s32_inner(d, &mut n_tests_done);
+                d -= 1;
+            }
+
+            // 2 .. 3k
+            d = 2;
+            for _ in 0..3 * 1000 {
+                test_magic_s32_inner(d, &mut n_tests_done);
+                d += 1;
+            }
+
+            // MAX_S32 - 3k .. MAX_S32 (in reverse order)
+            d = MAX_S32;
+            for _ in 0..3 * 1000 {
+                test_magic_s32_inner(d, &mut n_tests_done);
+                d -= 1;
+            }
+        }
+
+        // u64 division tests
+        {
+            // 2 .. 3k
+            let mut d: u64 = 2;
+            for _ in 0..3 * 1000 {
+                test_magic_u64_inner(d, &mut n_tests_done);
+                d += 1;
+            }
+
+            // across the midpoint: midpoint - 3k .. midpoint + 3k
+            d = MAX_U64_HALF - 3 * 1000;
+            for _ in 0..2 * 3 * 1000 {
+                test_magic_u64_inner(d, &mut n_tests_done);
+                d += 1;
+            }
+
+            // mAX_U64 - 3000 .. mAX_U64 (in reverse order)
+            d = MAX_U64;
+            for _ in 0..3 * 1000 {
+                test_magic_u64_inner(d, &mut n_tests_done);
+                d -= 1;
+            }
+        }
+
+        // s64 division tests
+        {
+            // MIN_S64 .. MIN_S64 + 3k
+            let mut d: i64 = MIN_S64;
+            for _ in 0..3 * 1000 {
+                test_magic_s64_inner(d, &mut n_tests_done);
+                d += 1;
+            }
+
+            // -3k .. -2 (in reverse order)
+            d = -2;
+            for _ in 0..3 * 1000 {
+                test_magic_s64_inner(d, &mut n_tests_done);
+                d -= 1;
+            }
+
+            // 2 .. 3k
+            d = 2;
+            for _ in 0..3 * 1000 {
+                test_magic_s64_inner(d, &mut n_tests_done);
+                d += 1;
+            }
+
+            // MAX_S64 - 3k .. MAX_S64 (in reverse order)
+            d = MAX_S64;
+            for _ in 0..3 * 1000 {
+                test_magic_s64_inner(d, &mut n_tests_done);
+                d -= 1;
+            }
+        }
+
+        assert_eq!(n_tests_done, 50_148_000);
+    }
+
 }
