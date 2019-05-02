@@ -12,7 +12,8 @@ WebAssembly's characteristic sandboxing to include I/O.
 
 See the [WASI Overview](WASI-overview.md) for more detailed background
 information, and the [WASI Tutorial](WASI-tutorial.md) for a walkthrough
-showing how various pieces fit together.
+showing how various pieces fit together, written in C. For Rust version,
+see [rust-wasi-tutorial](https://github.com/kubkon/rust-wasi-tutorial).
 
 Note that everything here is a prototype, and while a lot of stuff works,
 there are numerous missing features and some rough edges. For example,
