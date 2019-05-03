@@ -68,17 +68,9 @@ pub enum WasmError {
     #[fail(display = "Implementation limit exceeded")]
     ImplLimitExceeded,
 
-    /// Any user-defined error. Requires an std build, where failure::Error is defined.
-    #[cfg(feature = "std")]
+    /// Any user-defined error.
     #[fail(display = "User error: {}", _0)]
-    User(failure::Error),
-}
-
-#[cfg(feature = "std")]
-impl From<failure::Error> for WasmError {
-    fn from(err: failure::Error) -> Self {
-        WasmError::User(err)
-    }
+    User(std::string::String),
 }
 
 impl From<BinaryReaderError> for WasmError {
