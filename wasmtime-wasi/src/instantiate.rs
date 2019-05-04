@@ -1,32 +1,22 @@
-use crate::host::{
-    argv_environ_init, argv_environ_values, fd_prestats, fd_prestats_init, fd_prestats_insert,
-    fd_table, fd_table_init, fd_table_insert_existing,
-};
 use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::CString;
-use std::mem;
+use std::fs::File;
 use std::rc::Rc;
 use syscalls;
 use target_lexicon::HOST;
+use wasi_common::WasiCtxBuilder;
 use wasmtime_environ::{translate_signature, Export, Module};
 use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMFunctionBody};
-
-pub(crate) struct WASIState {
-    pub curfds: Box<fd_table>,
-    pub prestats: Box<fd_prestats>,
-    pub argv_environ: Box<argv_environ_values>,
-}
 
 /// Return an instance implementing the "wasi" interface.
 pub fn instantiate_wasi(
     prefix: &str,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
-    preopened_dirs: &[(String, libc::c_int)],
+    preopened_dirs: &[(String, File)],
     argv: &[String],
     environ: &[(String, String)],
 ) -> Result<InstanceHandle, InstantiationError> {
@@ -110,54 +100,29 @@ pub fn instantiate_wasi(
     let imports = Imports::none();
     let data_initializers = Vec::new();
     let signatures = PrimaryMap::new();
-    let mut curfds = Box::new(unsafe { mem::zeroed::<fd_table>() });
-    let mut prestats = Box::new(unsafe { mem::zeroed::<fd_prestats>() });
-    let mut argv_environ = Box::new(unsafe { mem::zeroed::<argv_environ_values>() });
 
-    unsafe {
-        let argv_environ: &mut argv_environ_values = &mut *argv_environ;
-        let (argv_offsets, argv_buf, environ_offsets, environ_buf) =
-            allocate_argv_environ(argv, environ);
-        argv_environ_init(
-            argv_environ,
-            argv_offsets.as_ptr(),
-            argv_offsets.len(),
-            argv_buf.as_ptr(),
-            argv_buf.len(),
-            environ_offsets.as_ptr(),
-            environ_offsets.len(),
-            environ_buf.as_ptr(),
-            environ_buf.len(),
-        );
+    let args: Vec<&str> = argv.iter().map(AsRef::as_ref).collect();
+    let mut wasi_ctx_builder = WasiCtxBuilder::new().args(&args).inherit_stdio();
 
-        let curfds: *mut fd_table = &mut *curfds;
-        fd_table_init(curfds);
-
-        let prestats: *mut fd_prestats = &mut *prestats;
-        fd_prestats_init(prestats);
-
-        // Prepopulate curfds with stdin, stdout, and stderr file descriptors.
-        assert!(fd_table_insert_existing(curfds, 0, 0));
-        assert!(fd_table_insert_existing(curfds, 1, 1));
-        assert!(fd_table_insert_existing(curfds, 2, 2));
-
-        let mut wasm_fd = 3;
-        for (dir, fd) in preopened_dirs {
-            assert!(fd_table_insert_existing(curfds, wasm_fd, *fd));
-            assert!(fd_prestats_insert(
-                prestats,
-                CString::new(dir.as_str()).unwrap().as_ptr(),
-                wasm_fd,
-            ));
-            wasm_fd += 1;
-        }
+    for (k, v) in environ {
+        wasi_ctx_builder = wasi_ctx_builder.env(k, v);
     }
 
-    let host_state = WASIState {
-        curfds,
-        prestats,
-        argv_environ,
-    };
+    for (dir, f) in preopened_dirs {
+        wasi_ctx_builder = wasi_ctx_builder.preopened_dir(
+            f.try_clone().map_err(|err| {
+                InstantiationError::Resource(format!(
+                    "couldn't clone an instance handle to pre-opened dir: {}",
+                    err
+                ))
+            })?,
+            dir,
+        );
+    }
+
+    let wasi_ctx = wasi_ctx_builder.build().map_err(|err| {
+        InstantiationError::Resource(format!("couldn't assemble WASI context object: {}", err))
+    })?;
 
     InstanceHandle::new(
         Rc::new(module),
@@ -167,37 +132,6 @@ pub fn instantiate_wasi(
         &data_initializers,
         signatures.into_boxed_slice(),
         None,
-        Box::new(host_state),
+        Box::new(wasi_ctx),
     )
-}
-
-fn allocate_argv_environ(
-    argv: &[String],
-    environ: &[(String, String)],
-) -> (Vec<usize>, Vec<libc::c_char>, Vec<usize>, Vec<libc::c_char>) {
-    let mut argv_offsets = Vec::new();
-    let mut argv_buf = Vec::new();
-    let mut environ_offsets = Vec::new();
-    let mut environ_buf = Vec::new();
-
-    for arg in argv {
-        argv_offsets.push(argv_buf.len());
-        for c in arg.bytes() {
-            argv_buf.push(c as libc::c_char);
-        }
-        argv_buf.push('\0' as libc::c_char);
-    }
-    for (key, value) in environ {
-        environ_offsets.push(environ_buf.len());
-        for c in key.bytes() {
-            environ_buf.push(c as libc::c_char);
-        }
-        environ_buf.push('=' as libc::c_char);
-        for c in value.bytes() {
-            environ_buf.push(c as libc::c_char);
-        }
-        environ_buf.push('\0' as libc::c_char);
-    }
-
-    (argv_offsets, argv_buf, environ_offsets, environ_buf)
 }

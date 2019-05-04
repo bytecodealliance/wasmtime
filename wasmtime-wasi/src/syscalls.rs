@@ -1,45 +1,42 @@
-use crate::host::{argv_environ_values, fd_prestats, fd_table};
-use crate::instantiate::WASIState;
 use cranelift_codegen::ir::types::{Type, I32, I64};
-use host;
-use host_impls;
-use std::{mem, ptr, slice, str};
-use translate::*;
-use wasm32;
-use wasmtime_runtime::VMContext;
-
-fn str_for_trace<'str>(ptr: *const i8, len: usize) -> Result<&'str str, str::Utf8Error> {
-    str::from_utf8(unsafe { slice::from_raw_parts(ptr as *const u8, len) })
-}
+use wasi_common::{host, hostcalls, memory, wasm32, WasiCtx};
+use wasmtime_runtime::{Export, VMContext};
 
 fn return_encoded_errno(e: host::__wasi_errno_t) -> wasm32::__wasi_errno_t {
-    let errno = encode_errno(e);
+    let errno = memory::enc_errno(e);
     trace!("    -> errno={}", wasm32::strerror(errno));
     errno
 }
 
-unsafe fn get_curfds(vmctx: *mut VMContext) -> *mut fd_table {
-    (&mut *(&mut *vmctx)
-        .host_state()
-        .downcast_mut::<WASIState>()
-        .unwrap()
-        .curfds) as *mut fd_table
+fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, host::__wasi_errno_t> {
+    unsafe {
+        vmctx.host_state().downcast_mut::<WasiCtx>().ok_or_else(|| {
+            println!("!!! no host state named WasiCtx available");
+            host::__WASI_EINVAL
+        })
+    }
 }
 
-unsafe fn get_prestats(vmctx: *mut VMContext) -> *mut fd_prestats {
-    (&mut *(&mut *vmctx)
-        .host_state()
-        .downcast_mut::<WASIState>()
-        .unwrap()
-        .prestats) as *mut fd_prestats
-}
-
-unsafe fn get_argv_environ(vmctx: *mut VMContext) -> *mut argv_environ_values {
-    (&mut *(&mut *vmctx)
-        .host_state()
-        .downcast_mut::<WASIState>()
-        .unwrap()
-        .argv_environ) as *mut argv_environ_values
+fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], host::__wasi_errno_t> {
+    unsafe {
+        match vmctx.lookup_global_export("memory") {
+            Some(Export::Memory {
+                definition,
+                vmctx: _,
+                memory: _,
+            }) => Ok(std::slice::from_raw_parts_mut(
+                (*definition).base,
+                (*definition).current_length,
+            )),
+            x => {
+                println!(
+                    "!!! no export named __wasi_memory, or the export isn't a mem: {:?}",
+                    x
+                );
+                Err(host::__WASI_EINVAL)
+            }
+        }
+    }
 }
 
 pub trait AbiRet {
@@ -157,7 +154,6 @@ macro_rules! syscalls {
 }
 
 syscalls! {
-
     pub unsafe extern "C" fn args_get(
         vmctx: *mut VMContext,
         argv: wasm32::uintptr_t,
@@ -169,34 +165,17 @@ syscalls! {
             argv_buf,
         );
 
-        let vmctx = &mut *vmctx;
-        let argv_environ = get_argv_environ(vmctx);
-        let argc = match cast::u32((*argv_environ).argc) {
-            Ok(argc) => argc,
-            Err(_) => return wasm32::__WASI_ENOMEM,
-        };
-        let argv_buf_size = match cast::u32((*argv_environ).argv_buf_size) {
-            Ok(argc) => argc,
-            Err(_) => return wasm32::__WASI_ENOMEM,
-        };
-
-        let (host_argv_buf, _argv_buf_size) = match decode_char_slice(vmctx, argv_buf, argv_buf_size) {
-            Ok((argv_buf, argv_buf_size)) => (argv_buf, argv_buf_size),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        // Add 1 so that we can add an extra NULL pointer at the end.
-        let (argv, _argc) = match decode_charstar_slice(vmctx, argv, argc + 1) {
-            Ok((argv, argc)) => (argv, argc),
+
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_argv = Vec::new();
-        host_argv.resize((*argv_environ).argc + 1, ptr::null_mut());
 
-        let e = host::wasmtime_ssp_args_get(argv_environ, host_argv.as_mut_ptr(), host_argv_buf);
-
-        encode_charstar_slice(argv, host_argv, argv_buf, host_argv_buf);
-
-        return_encoded_errno(e)
+        hostcalls::args_get(wasi_ctx, memory, argv, argv_buf)
     }
 
     pub unsafe extern "C" fn args_sizes_get(
@@ -210,28 +189,17 @@ syscalls! {
             argv_buf_size,
         );
 
-        let vmctx = &mut *vmctx;
-        let mut host_argc = 0;
-        if let Err(e) = decode_usize_byref(vmctx, argc) {
-            return return_encoded_errno(e);
-        }
-        let mut host_argv_buf_size = 0;
-        if let Err(e) = decode_usize_byref(vmctx, argv_buf_size) {
-            return return_encoded_errno(e);
-        }
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let vmctx = &mut *vmctx;
-        let argv_environ = get_argv_environ(vmctx);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_args_sizes_get(argv_environ, &mut host_argc, &mut host_argv_buf_size);
-
-        trace!("     | *argc={:?}", host_argc);
-        encode_usize_byref(vmctx, argc, host_argc);
-
-        trace!("     | *argv_buf_size={:?}", host_argv_buf_size);
-        encode_usize_byref(vmctx, argv_buf_size, host_argv_buf_size);
-
-        return_encoded_errno(e)
+        hostcalls::args_sizes_get(wasi_ctx, memory, argc, argv_buf_size)
     }
 
     pub unsafe extern "C" fn clock_res_get(
@@ -245,19 +213,12 @@ syscalls! {
             resolution,
         );
 
-        let vmctx = &mut *vmctx;
-        let clock_id = decode_clockid(clock_id);
-        let mut host_resolution = 0;
-        if let Err(e) = decode_timestamp_byref(vmctx, resolution) {
-            return return_encoded_errno(e);
-        }
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_clock_res_get(clock_id, &mut host_resolution);
-
-        trace!("     | *resolution={:?}", host_resolution);
-        encode_timestamp_byref(vmctx, resolution, host_resolution);
-
-        return_encoded_errno(e)
+        hostcalls::clock_res_get(memory, clock_id, resolution)
     }
 
     pub unsafe extern "C" fn clock_time_get(
@@ -273,20 +234,12 @@ syscalls! {
             time,
         );
 
-        let vmctx = &mut *vmctx;
-        let clock_id = decode_clockid(clock_id);
-        let precision = decode_timestamp(precision);
-        let mut host_time = 0;
-        if let Err(e) = decode_timestamp_byref(vmctx, time) {
-            return return_encoded_errno(e);
-        }
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_clock_time_get(clock_id, precision, &mut host_time);
-
-        trace!("     | *time={:?}", host_time);
-        encode_timestamp_byref(vmctx, time, host_time);
-
-        return_encoded_errno(e)
+        hostcalls::clock_time_get(memory, clock_id, precision, time)
     }
 
     pub unsafe extern "C" fn environ_get(
@@ -300,34 +253,17 @@ syscalls! {
             environ_buf,
         );
 
-        let vmctx = &mut *vmctx;
-        let argv_environ = get_argv_environ(vmctx);
-        let environ_count = match cast::u32((*argv_environ).environ_count) {
-            Ok(host_environ_count) => host_environ_count,
-            Err(_) => return wasm32::__WASI_ENOMEM,
-        };
-        let environ_buf_size = match cast::u32((*argv_environ).environ_buf_size) {
-            Ok(host_environ_buf_size) => host_environ_buf_size,
-            Err(_) => return wasm32::__WASI_ENOMEM,
-        };
-
-        let (host_environ_buf, _environ_buf_len) = match decode_char_slice(vmctx, environ_buf, environ_buf_size) {
-            Ok((environ_buf, environ_buf_len)) => (environ_buf, environ_buf_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        // Add 1 so that we can add an extra NULL pointer at the end.
-        let (environ, _environ_count) = match decode_charstar_slice(vmctx, environ, environ_count + 1) {
-            Ok((environ, environ_count)) => (environ, environ_count),
+
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_environ = Vec::new();
-        host_environ.resize((*argv_environ).environ_count + 1, ptr::null_mut());
 
-        let e = host::wasmtime_ssp_environ_get(argv_environ, host_environ.as_mut_ptr(), host_environ_buf);
-
-        encode_charstar_slice(environ, host_environ, environ_buf, host_environ_buf);
-
-        return_encoded_errno(e)
+        hostcalls::environ_get(wasi_ctx, memory, environ, environ_buf)
     }
 
     pub unsafe extern "C" fn environ_sizes_get(
@@ -341,28 +277,17 @@ syscalls! {
             environ_buf_size,
         );
 
-        let vmctx = &mut *vmctx;
-        let mut host_environ_count = 0;
-        if let Err(e) = decode_usize_byref(vmctx, environ_count) {
-            return return_encoded_errno(e);
-        }
-        let mut host_environ_buf_size = 0;
-        if let Err(e) = decode_usize_byref(vmctx, environ_buf_size) {
-            return return_encoded_errno(e);
-        }
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let vmctx = &mut *vmctx;
-        let argv_environ = get_argv_environ(vmctx);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_environ_sizes_get(argv_environ, &mut host_environ_count, &mut host_environ_buf_size);
-
-        trace!("     | *environ_count={:?}", host_environ_count);
-        encode_usize_byref(vmctx, environ_count, host_environ_count);
-
-        trace!("     | *environ_buf_size={:?}", host_environ_buf_size);
-        encode_usize_byref(vmctx, environ_buf_size, host_environ_buf_size);
-
-        return_encoded_errno(e)
+        hostcalls::environ_sizes_get(wasi_ctx, memory, environ_count, environ_buf_size)
     }
 
     pub unsafe extern "C" fn fd_prestat_get(
@@ -372,19 +297,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_prestat_get(fd={:?}, buf={:#x?})", fd, buf);
 
-        let vmctx = &mut *vmctx;
-        let prestats = get_prestats(vmctx);
-        let fd = decode_fd(fd);
-        let mut host_buf = std::mem::zeroed();
-        if let Err(e) = decode_prestat_byref(vmctx, buf) {
-            return return_encoded_errno(e);
-        }
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host_impls::wasmtime_ssp_fd_prestat_get(&mut *prestats, fd, &mut host_buf);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        encode_prestat_byref(vmctx, buf, host_buf);
-
-        return_encoded_errno(e)
+        hostcalls::fd_prestat_get(wasi_ctx, memory, fd, buf)
     }
 
     pub unsafe extern "C" fn fd_prestat_dir_name(
@@ -395,22 +318,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_prestat_dir_name(fd={:?}, path={:#x?}, path_len={})", fd, path, path_len);
 
-        let vmctx = &mut *vmctx;
-        let prestats = get_prestats(vmctx);
-        let (path, path_len) = match decode_char_slice(vmctx, path, path_len) {
-            Ok((path, path_len)) => (path, path_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
 
-        trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host_impls::wasmtime_ssp_fd_prestat_dir_name(
-            &mut *prestats,
-            fd,
-            ::std::slice::from_raw_parts_mut(path, path_len),
-        );
-
-        return_encoded_errno(e)
+        hostcalls::fd_prestat_dir_name(wasi_ctx, memory, fd, path, path_len)
     }
 
     pub unsafe extern "C" fn fd_close(
@@ -419,14 +337,12 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_close(fd={:?})", fd);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let prestats = get_prestats(vmctx);
-        let fd = decode_fd(fd);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_close(curfds, prestats, fd);
-
-        return_encoded_errno(e)
+        hostcalls::fd_close(wasi_ctx, fd)
     }
 
     pub unsafe extern "C" fn fd_datasync(
@@ -435,13 +351,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_datasync(fd={:?})", fd);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_datasync(curfds, fd);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::fd_datasync(wasi_ctx, memory, fd)
     }
 
     pub unsafe extern "C" fn fd_pread(
@@ -461,32 +381,25 @@ syscalls! {
             nread
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let iovs = match decode_iovec_slice(vmctx, iovs, iovs_len) {
-            Ok(iovs) => iovs,
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let offset = decode_filesize(offset);
-        let mut host_nread = 0;
-        if let Err(e) = decode_usize_byref(vmctx, nread) {
-            return return_encoded_errno(e);
-        }
 
-        let e = host::wasmtime_ssp_fd_pread(
-            curfds,
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
+
+        hostcalls::fd_pread(
+            wasi_ctx,
+            memory,
             fd,
-            iovs.as_ptr(),
-            iovs.len(),
+            iovs,
+            iovs_len,
             offset,
-            &mut host_nread,
-        );
-
-        trace!("     | *nread={:?}", host_nread);
-        encode_usize_byref(vmctx, nread, host_nread);
-
-        return_encoded_errno(e)
+            nread
+        )
     }
 
     pub unsafe extern "C" fn fd_pwrite(
@@ -506,32 +419,25 @@ syscalls! {
             nwritten
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let iovs = match decode_ciovec_slice(vmctx, iovs, iovs_len) {
-            Ok(iovs) => iovs,
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let offset = decode_filesize(offset);
-        let mut host_nwritten = 0;
-        if let Err(e) = decode_usize_byref(vmctx, nwritten) {
-            return return_encoded_errno(e);
-        }
 
-        let e = host::wasmtime_ssp_fd_pwrite(
-            curfds,
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
+
+        hostcalls::fd_pwrite(
+            wasi_ctx,
+            memory,
             fd,
-            iovs.as_ptr(),
-            iovs.len(),
+            iovs,
+            iovs_len,
             offset,
-            &mut host_nwritten,
-        );
-
-        trace!("     | *nwritten={:?}", host_nwritten);
-        encode_usize_byref(vmctx, nwritten, host_nwritten);
-
-        return_encoded_errno(e)
+            nwritten
+        )
     }
 
     pub unsafe extern "C" fn fd_read(
@@ -549,24 +455,17 @@ syscalls! {
             nread
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let iovs = match decode_iovec_slice(vmctx, iovs, iovs_len) {
-            Ok(iovs) => iovs,
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_nread = 0;
-        if let Err(e) = decode_usize_byref(vmctx, nread) {
-            return return_encoded_errno(e);
-        }
 
-        let e = host::wasmtime_ssp_fd_read(curfds, fd, iovs.as_ptr(), iovs.len(), &mut host_nread);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        trace!("     | *nread={:?}", host_nread);
-        encode_usize_byref(vmctx, nread, host_nread);
-
-        return_encoded_errno(e)
+        hostcalls::fd_read(wasi_ctx, memory, fd, iovs, iovs_len, nread)
     }
 
     pub unsafe extern "C" fn fd_renumber(
@@ -576,15 +475,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_renumber(from={:?}, to={:?})", from, to);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let prestats = get_prestats(vmctx);
-        let from = decode_fd(from);
-        let to = decode_fd(to);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_renumber(curfds, prestats, from, to);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::fd_renumber(wasi_ctx, memory, from, to)
     }
 
     pub unsafe extern "C" fn fd_seek(
@@ -602,22 +503,17 @@ syscalls! {
             newoffset
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let offset = decode_filedelta(offset);
-        let whence = decode_whence(whence);
-        let mut host_newoffset = 0;
-        if let Err(e) = decode_filesize_byref(vmctx, newoffset) {
-            return return_encoded_errno(e);
-        }
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_seek(curfds, fd, offset, whence, &mut host_newoffset);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        trace!("     | *newoffset={:?}", host_newoffset);
-        encode_filesize_byref(vmctx, newoffset, host_newoffset);
-
-        return_encoded_errno(e)
+        hostcalls::fd_seek(wasi_ctx, memory, fd, offset, whence, newoffset)
     }
 
     pub unsafe extern "C" fn fd_tell(
@@ -627,20 +523,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let mut host_newoffset = 0;
-        if let Err(e) = decode_filesize_byref(vmctx, newoffset) {
-            return return_encoded_errno(e);
-        }
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_tell(curfds, fd, &mut host_newoffset);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        trace!("     | *newoffset={:?}", host_newoffset);
-        encode_filesize_byref(vmctx, newoffset, host_newoffset);
-
-        return_encoded_errno(e)
+        hostcalls::fd_tell(wasi_ctx, memory, fd, newoffset)
     }
 
     pub unsafe extern "C" fn fd_fdstat_get(
@@ -650,20 +543,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_fdstat_get(fd={:?}, buf={:#x?})", fd, buf);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let mut host_buf = std::mem::zeroed();
-        if let Err(e) = decode_fdstat_byref(vmctx, buf) {
-            return return_encoded_errno(e);
-        }
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_fdstat_get(curfds, fd, &mut host_buf);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        trace!("     | *buf={:?}", host_buf);
-        encode_fdstat_byref(vmctx, buf, host_buf);
-
-        return_encoded_errno(e)
+        hostcalls::fd_fdstat_get(wasi_ctx, memory, fd, buf)
     }
 
     pub unsafe extern "C" fn fd_fdstat_set_flags(
@@ -677,14 +567,12 @@ syscalls! {
             flags
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let flags = decode_fdflags(flags);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_fdstat_set_flags(curfds, fd, flags);
-
-        return_encoded_errno(e)
+        hostcalls::fd_fdstat_set_flags(wasi_ctx, fd, flags)
     }
 
     pub unsafe extern "C" fn fd_fdstat_set_rights(
@@ -700,15 +588,23 @@ syscalls! {
             fs_rights_inheriting
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let fs_rights_base = decode_rights(fs_rights_base);
-        let fs_rights_inheriting = decode_rights(fs_rights_inheriting);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_fdstat_set_rights(curfds, fd, fs_rights_base, fs_rights_inheriting);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::fd_fdstat_set_rights(
+            wasi_ctx,
+            memory,
+            fd,
+            fs_rights_base,
+            fs_rights_inheriting
+        )
     }
 
     pub unsafe extern "C" fn fd_sync(
@@ -717,13 +613,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_sync(fd={:?})", fd);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_sync(curfds, fd);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::fd_sync(wasi_ctx, memory, fd)
     }
 
     pub unsafe extern "C" fn fd_write(
@@ -741,24 +641,17 @@ syscalls! {
             nwritten
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let iovs = match decode_ciovec_slice(vmctx, iovs, iovs_len) {
-            Ok(iovs) => iovs,
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_nwritten = 0;
-        if let Err(e) = decode_usize_byref(vmctx, nwritten) {
-            return return_encoded_errno(e);
-        }
 
-        let e = host::wasmtime_ssp_fd_write(curfds, fd, iovs.as_ptr(), iovs.len(), &mut host_nwritten);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        trace!("     | *nwritten={:?}", host_nwritten);
-        encode_usize_byref(vmctx, nwritten, host_nwritten);
-
-        return_encoded_errno(e)
+        hostcalls::fd_write(wasi_ctx, memory, fd, iovs, iovs_len, nwritten)
     }
 
     pub unsafe extern "C" fn fd_advise(
@@ -776,16 +669,17 @@ syscalls! {
             advice
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let offset = decode_filesize(offset);
-        let len = decode_filesize(len);
-        let advice = decode_advice(advice);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_advise(curfds, fd, offset, len, advice);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::fd_advise(wasi_ctx, memory, fd, offset, len, advice)
     }
 
     pub unsafe extern "C" fn fd_allocate(
@@ -796,15 +690,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_allocate(fd={:?}, offset={}, len={})", fd, offset, len);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let offset = decode_filesize(offset);
-        let len = decode_filesize(len);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_allocate(curfds, fd, offset, len);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::fd_allocate(wasi_ctx, memory, fd, offset, len)
     }
 
     pub unsafe extern "C" fn path_create_directory(
@@ -820,19 +716,17 @@ syscalls! {
             path_len,
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let (path, path_len) = match decode_char_slice(vmctx, path, path_len) {
-            Ok((path, path_len)) => (path, path_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
 
-        trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_path_create_directory(curfds, fd, path, path_len);
-
-        return_encoded_errno(e)
+        hostcalls::path_create_directory(wasi_ctx, memory, fd, path, path_len)
     }
 
     pub unsafe extern "C" fn path_link(
@@ -856,27 +750,27 @@ syscalls! {
             path_len1
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd0 = decode_fd(fd0);
-        let flags0 = decode_lookupflags(flags0);
-        let (path0, path_len0) = match decode_char_slice(vmctx, path0, path_len0) {
-            Ok((path0, path_len0)) => (path0, path_len0),
-            Err(e) => return return_encoded_errno(e),
-        };
-        let fd1 = decode_fd(fd1);
-        let (path1, path_len1) = match decode_char_slice(vmctx, path1, path_len1) {
-            Ok((path1, path_len1)) => (path1, path_len1),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
 
-        trace!("     | (path0,path_len0)={:?}", str_for_trace(path0, path_len0));
-        trace!("     | (path1,path_len1)={:?}", str_for_trace(path1, path_len1));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e =
-            host::wasmtime_ssp_path_link(curfds, fd0, flags0, path0, path_len0, fd1, path1, path_len1);
-
-        return_encoded_errno(e)
+        hostcalls::path_link(
+            wasi_ctx,
+            memory,
+            fd0,
+            flags0,
+            path0,
+            path_len0,
+            fd1,
+            path1,
+            path_len1
+        )
     }
 
     // TODO: When multi-value happens, switch to that instead of passing
@@ -906,27 +800,19 @@ syscalls! {
             fd
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let dirfd = decode_fd(dirfd);
-        let dirflags = decode_lookupflags(dirflags);
-        let (path, path_len) = match decode_char_slice(vmctx, path, path_len) {
-            Ok((path, path_len)) => (path, path_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let oflags = decode_oflags(oflags);
-        let fs_rights_base = decode_rights(fs_rights_base);
-        let fs_rights_inheriting = decode_rights(fs_rights_inheriting);
-        let fs_flags = decode_fdflags(fs_flags);
-        let mut host_fd = wasm32::__wasi_fd_t::max_value();
-        if let Err(e) = decode_fd_byref(vmctx, fd) {
-            return return_encoded_errno(e);
-        }
 
-        trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_path_open(
-            curfds,
+        hostcalls::path_open(
+            wasi_ctx,
+            memory,
             dirfd,
             dirflags,
             path,
@@ -935,13 +821,8 @@ syscalls! {
             fs_rights_base,
             fs_rights_inheriting,
             fs_flags,
-            &mut host_fd,
-        );
-
-        trace!("     | *fd={:?}", host_fd);
-        encode_fd_byref(vmctx, fd, host_fd);
-
-        return_encoded_errno(e)
+            fd
+        )
     }
 
     pub unsafe extern "C" fn fd_readdir(
@@ -961,34 +842,25 @@ syscalls! {
             buf_used,
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let (buf, buf_len) = match decode_char_slice(vmctx, buf, buf_len) {
-            Ok((buf, buf_len)) => (buf, buf_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let cookie = decode_dircookie(cookie);
-        let mut host_buf_used = 0;
-        if let Err(e) = decode_usize_byref(vmctx, buf_used) {
-            return return_encoded_errno(e);
-        }
 
-        trace!("     | (buf,buf_len)={:?}", str_for_trace(buf, buf_len));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_readdir(
-            curfds,
+        hostcalls::fd_readdir(
+            wasi_ctx,
+            memory,
             fd,
-            buf as *mut host::void,
+            buf,
             buf_len,
             cookie,
-            &mut host_buf_used,
-        );
-
-        trace!("     | *buf_used={:?}", host_buf_used);
-        encode_usize_byref(vmctx, buf_used, host_buf_used);
-
-        return_encoded_errno(e)
+            buf_used
+        )
     }
 
     pub unsafe extern "C" fn path_readlink(
@@ -1010,39 +882,26 @@ syscalls! {
             buf_used,
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let (path, path_len) = match decode_char_slice(vmctx, path, path_len) {
-            Ok((path, path_len)) => (path, path_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let (buf, buf_len) = match decode_char_slice(vmctx, buf, buf_len) {
-            Ok((buf, buf_len)) => (buf, buf_len),
+
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_buf_used = 0;
-        if let Err(e) = decode_usize_byref(vmctx, buf_used) {
-            return return_encoded_errno(e);
-        }
 
-        trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
-
-        let e = host::wasmtime_ssp_path_readlink(
-            curfds,
+        hostcalls::path_readlink(
+            wasi_ctx,
+            memory,
             fd,
             path,
             path_len,
             buf,
             buf_len,
-            &mut host_buf_used,
-        );
-
-        trace!("     | *buf_used={:?}", host_buf_used);
-        trace!("     | (buf,*buf_used)={:?}", str_for_trace(buf, host_buf_used));
-        encode_usize_byref(vmctx, buf_used, host_buf_used);
-
-        return_encoded_errno(e)
+            buf_used
+        )
     }
 
     pub unsafe extern "C" fn path_rename(
@@ -1064,25 +923,26 @@ syscalls! {
             path_len1,
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd0 = decode_fd(fd0);
-        let (path0, path_len0) = match decode_char_slice(vmctx, path0, path_len0) {
-            Ok((path0, path_len0)) => (path0, path_len0),
-            Err(e) => return return_encoded_errno(e),
-        };
-        let fd1 = decode_fd(fd1);
-        let (path1, path_len1) = match decode_char_slice(vmctx, path1, path_len1) {
-            Ok((path1, path_len1)) => (path1, path_len1),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
 
-        trace!("     | (path0,path_len0)={:?}", str_for_trace(path0, path_len0));
-        trace!("     | (path1,path_len1)={:?}", str_for_trace(path1, path_len1));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_path_rename(curfds, fd0, path0, path_len0, fd1, path1, path_len1);
-
-        return_encoded_errno(e)
+        hostcalls::path_rename(
+            wasi_ctx,
+            memory,
+            fd0,
+            path0,
+            path_len0,
+            fd1,
+            path1,
+            path_len1
+        )
     }
 
     pub unsafe extern "C" fn fd_filestat_get(
@@ -1092,20 +952,17 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_filestat_get(fd={:?}, buf={:#x?})", fd, buf);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let mut host_buf = std::mem::zeroed();
-        if let Err(e) = decode_filestat_byref(vmctx, buf) {
-            return return_encoded_errno(e);
-        }
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_filestat_get(curfds, fd, &mut host_buf);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        trace!("     | *buf={:?}", host_buf);
-        encode_filestat_byref(vmctx, buf, host_buf);
-
-        return_encoded_errno(e)
+        hostcalls::fd_filestat_get(wasi_ctx, memory, fd, buf)
     }
 
     pub unsafe extern "C" fn fd_filestat_set_times(
@@ -1122,16 +979,17 @@ syscalls! {
             fstflags
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let st_atim = decode_timestamp(st_atim);
-        let st_mtim = decode_timestamp(st_mtim);
-        let fstflags = decode_fstflags(fstflags);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_filestat_set_times(curfds, fd, st_atim, st_mtim, fstflags);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::fd_filestat_set_times(wasi_ctx, memory, fd, st_atim, st_mtim, fstflags)
     }
 
     pub unsafe extern "C" fn fd_filestat_set_size(
@@ -1145,14 +1003,17 @@ syscalls! {
             size
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let size = decode_filesize(size);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_fd_filestat_set_size(curfds, fd, size);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::fd_filestat_set_size(wasi_ctx, memory, fd, size)
     }
 
     pub unsafe extern "C" fn path_filestat_get(
@@ -1172,27 +1033,17 @@ syscalls! {
             buf
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let flags = decode_lookupflags(flags);
-        let (path, path_len) = match decode_char_slice(vmctx, path, path_len) {
-            Ok((path, path_len)) => (path, path_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let mut host_buf = std::mem::zeroed();
-        if let Err(e) = decode_filestat_byref(vmctx, buf) {
-            return return_encoded_errno(e);
-        }
 
-        trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_path_filestat_get(curfds, fd, flags, path, path_len, &mut host_buf);
-
-        trace!("     | *buf={:?}", host_buf);
-        encode_filestat_byref(vmctx, buf, host_buf);
-
-        return_encoded_errno(e)
+        hostcalls::path_filestat_get(wasi_ctx, memory, fd, flags, path, path_len, buf)
     }
 
     pub unsafe extern "C" fn path_filestat_set_times(
@@ -1215,23 +1066,27 @@ syscalls! {
             fstflags
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let flags = decode_lookupflags(flags);
-        let (path, path_len) = match decode_char_slice(vmctx, path, path_len) {
-            Ok((path, path_len)) => (path, path_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let st_atim = decode_timestamp(st_atim);
-        let st_mtim = decode_timestamp(st_mtim);
-        let fstflags = decode_fstflags(fstflags);
 
-        trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_path_filestat_set_times(curfds, fd, flags, path, path_len, st_atim, st_mtim, fstflags);
-
-        return_encoded_errno(e)
+        hostcalls::path_filestat_set_times(
+            wasi_ctx,
+            memory,
+            fd,
+            flags,
+            path,
+            path_len,
+            st_atim,
+            st_mtim,
+            fstflags
+        )
     }
 
     pub unsafe extern "C" fn path_symlink(
@@ -1251,24 +1106,25 @@ syscalls! {
             path_len1
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let (path0, path_len0) = match decode_char_slice(vmctx, path0, path_len0) {
-            Ok((path0, path_len0)) => (path0, path_len0),
-            Err(e) => return return_encoded_errno(e),
-        };
-        let fd = decode_fd(fd);
-        let (path1, path_len1) = match decode_char_slice(vmctx, path1, path_len1) {
-            Ok((path1, path_len1)) => (path1, path_len1),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
 
-        trace!("     | (path0,path_len0)={:?}", str_for_trace(path0, path_len0));
-        trace!("     | (path1,path_len1)={:?}", str_for_trace(path1, path_len1));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_path_symlink(curfds, path0, path_len0, fd, path1, path_len1);
-
-        return_encoded_errno(e)
+        hostcalls::path_symlink(
+            wasi_ctx,
+            memory,
+            path0,
+            path_len0,
+            fd,
+            path1,
+            path_len1
+        )
     }
 
     pub unsafe extern "C" fn path_unlink_file(
@@ -1284,19 +1140,17 @@ syscalls! {
             path_len
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let (path, path_len) = match decode_char_slice(vmctx, path, path_len) {
-            Ok((path, path_len)) => (path, path_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
 
-        trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_path_unlink_file(curfds, fd, path, path_len);
-
-        return_encoded_errno(e)
+        hostcalls::path_unlink_file(wasi_ctx, memory, fd, path, path_len)
     }
 
     pub unsafe extern "C" fn path_remove_directory(
@@ -1312,19 +1166,17 @@ syscalls! {
             path_len
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let fd = decode_fd(fd);
-        let (path, path_len) = match decode_char_slice(vmctx, path, path_len) {
-            Ok((path, path_len)) => (path, path_len),
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
 
-        trace!("     | (path,path_len)={:?}", str_for_trace(path, path_len));
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_path_remove_directory(curfds, fd, path, path_len);
-
-        return_encoded_errno(e)
+        hostcalls::path_remove_directory(wasi_ctx, memory, fd, path, path_len)
     }
 
     pub unsafe extern "C" fn poll_oneoff(
@@ -1342,63 +1194,37 @@ syscalls! {
             nevents,
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let in_ = match decode_subscription_slice(vmctx, in_, nsubscriptions) {
-            Ok(in_) => in_,
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
             Err(e) => return return_encoded_errno(e),
         };
-        let (out, out_len) = match decode_event_slice(vmctx, out, nsubscriptions) {
-            Ok((out, out_len)) => (out, out_len),
-            Err(e) => return return_encoded_errno(e),
-        };
-        let mut host_out = Vec::new();
-        host_out.resize(out_len, mem::zeroed());
-        let mut host_nevents = 0;
-        if let Err(e) = decode_usize_byref(vmctx, nevents) {
-            return return_encoded_errno(e);
-        }
 
-        assert!(in_.len() == host_out.len());
-
-        let e = host::wasmtime_ssp_poll_oneoff(
-            curfds,
-            in_.as_ptr(),
-            host_out.as_mut_ptr(),
-            in_.len(),
-            &mut host_nevents,
-        );
-
-        trace!("     | *nevents={:?}", host_nevents);
-        encode_usize_byref(vmctx, nevents, host_nevents);
-
-        host_out.truncate(host_nevents);
-        if log_enabled!(log::Level::Trace) {
-            for (index, _event) in host_out.iter().enumerate() {
-                // TODO: Format the output for tracing.
-                trace!("     | *out[{}]=...", index);
-            }
-        }
-        encode_event_slice(out, host_out);
-
-        return_encoded_errno(e)
+        hostcalls::poll_oneoff(memory, in_, out, nsubscriptions, nevents)
     }
 
     pub unsafe extern "C" fn proc_exit(_vmctx: *mut VMContext, rval: u32,) -> () {
         trace!("proc_exit(rval={:?})", rval);
 
-        let rval = decode_exitcode(rval);
-
-        // TODO: Rather than call __wasi_proc_exit here, we should trigger a
-        // stack unwind similar to a trap.
-        host_impls::wasmtime_ssp_proc_exit(rval);
+        hostcalls::proc_exit(rval)
     }
 
     pub unsafe extern "C" fn proc_raise(
-        _vmctx: *mut VMContext,
-        _sig: wasm32::__wasi_signal_t,
+        vmctx: *mut VMContext,
+        sig: wasm32::__wasi_signal_t,
     ) -> wasm32::__wasi_errno_t {
-        unimplemented!("__wasi_proc_raise");
+        trace!("proc_raise(sig={:?})", sig);
+
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
+
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
+
+        hostcalls::proc_raise(wasi_ctx, memory, sig)
     }
 
     pub unsafe extern "C" fn random_get(
@@ -1408,21 +1234,18 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("random_get(buf={:#x?}, buf_len={:?})", buf, buf_len);
 
-        let vmctx = &mut *vmctx;
-        let (buf, buf_len) = match decode_char_slice(vmctx, buf, buf_len) {
-            Ok((buf, buf_len)) => (buf, buf_len),
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
             Err(e) => return return_encoded_errno(e),
         };
 
-        let e = host::wasmtime_ssp_random_get(buf as *mut host::void, buf_len);
-
-        return_encoded_errno(e)
+        hostcalls::random_get(memory, buf, buf_len)
     }
 
     pub unsafe extern "C" fn sched_yield(_vmctx: *mut VMContext,) -> wasm32::__wasi_errno_t {
-        let e = host_impls::wasmtime_ssp_sched_yield();
+        trace!("sched_yield(void)");
 
-        return_encoded_errno(e)
+        hostcalls::sched_yield()
     }
 
     pub unsafe extern "C" fn sock_recv(
@@ -1441,33 +1264,26 @@ syscalls! {
             ro_datalen, ro_flags
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let sock = decode_fd(sock);
-        let ri_data = match decode_iovec_slice(vmctx, ri_data, ri_data_len) {
-            Ok(ri_data) => ri_data,
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let ri_flags = decode_riflags(ri_flags);
-        let mut host_ro_datalen = 0;
-        if let Err(e) = decode_usize_byref(vmctx, ro_datalen) {
-            return return_encoded_errno(e);
-        }
-        let mut host_ro_flags = 0;
-        if let Err(e) = decode_roflags_byref(vmctx, ro_flags) {
-            return return_encoded_errno(e);
-        }
 
-        let e = host::wasmtime_ssp_sock_recv(curfds, sock, ri_data.as_ptr(), ri_data.len(), ri_flags,
-                                             &mut host_ro_datalen, &mut host_ro_flags);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        // TODO: Format the output for tracing.
-        trace!("     | *ro_datalen={}", host_ro_datalen);
-        trace!("     | *ro_flags={}", host_ro_flags);
-        encode_usize_byref(vmctx, ro_datalen, host_ro_datalen);
-        encode_roflags_byref(vmctx, ro_flags, host_ro_flags);
-
-        return_encoded_errno(e)
+        hostcalls::sock_recv(
+            wasi_ctx,
+            memory,
+            sock,
+            ri_data,
+            ri_data_len,
+            ri_flags,
+            ro_datalen,
+            ro_flags
+        )
     }
 
     pub unsafe extern "C" fn sock_send(
@@ -1484,25 +1300,25 @@ syscalls! {
             si_data, si_data_len, si_flags, so_datalen,
         );
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let sock = decode_fd(sock);
-        let si_data = match decode_ciovec_slice(vmctx, si_data, si_data_len) {
-            Ok(si_data) => si_data,
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
             Err(e) => return return_encoded_errno(e),
         };
-        let si_flags = decode_siflags(si_flags);
-        let mut host_so_datalen = 0;
-        if let Err(e) = decode_usize_byref(vmctx, so_datalen) {
-            return return_encoded_errno(e);
-        }
 
-        let e = host::wasmtime_ssp_sock_send(curfds, sock, si_data.as_ptr(), si_data.len(), si_flags, &mut host_so_datalen);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        trace!("     | *so_datalen={:?}", host_so_datalen);
-        encode_usize_byref(vmctx, so_datalen, host_so_datalen);
-
-        return_encoded_errno(e)
+        hostcalls::sock_send(
+            wasi_ctx,
+            memory,
+            sock,
+            si_data,
+            si_data_len,
+            si_flags,
+            so_datalen
+        )
     }
 
     pub unsafe extern "C" fn sock_shutdown(
@@ -1512,13 +1328,16 @@ syscalls! {
     ) -> wasm32::__wasi_errno_t {
         trace!("sock_shutdown(sock={:?}, how={:?})", sock, how);
 
-        let vmctx = &mut *vmctx;
-        let curfds = get_curfds(vmctx);
-        let sock = decode_fd(sock);
-        let how = decode_sdflags(how);
+        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
+            Ok(ctx) => ctx,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        let e = host::wasmtime_ssp_sock_shutdown(curfds, sock, how);
+        let memory = match get_memory(&mut *vmctx) {
+            Ok(memory) => memory,
+            Err(e) => return return_encoded_errno(e),
+        };
 
-        return_encoded_errno(e)
+        hostcalls::sock_shutdown(wasi_ctx, memory, sock, how)
     }
 }
