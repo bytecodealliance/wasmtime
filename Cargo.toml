@@ -1,0 +1,22 @@
+[package]
+name = "wasi-common"
+version = "0.1.0"
+authors = ["Adam C. Foltzer <acfoltzer@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>"]
+edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies]
+cast = "0.2"
+clap = "2.23"
+failure = "0.1"
+human-size = "0.4"
+libc = "0.2"
+nix = "0.13"
+rand = "0.6"
+
+[build-dependencies]
+bindgen = "0.49.0"
+
+[lib]
+name = "wasi_common"
+crate-type = ["rlib", "staticlib", "cdylib"]
