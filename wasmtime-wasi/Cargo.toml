@@ -13,18 +13,12 @@ readme = "README.md"
 wasmtime-runtime = { path = "../wasmtime-runtime" }
 wasmtime-environ = { path = "../wasmtime-environ" }
 wasmtime-jit = { path = "../wasmtime-jit" }
+wasi-common = { git = "https://github.com/CraneStation/wasi-common" }
 cranelift-codegen = "0.30.0"
 cranelift-entity = "0.30.0"
 cranelift-wasm = "0.30.0"
 target-lexicon = "0.3.0"
-cast = { version = "0.2.2", default-features = false }
 log = { version = "0.4.6", default-features = false }
-libc = "0.2.50"
-errno = "0.2.4"
-
-[build-dependencies]
-cmake = "0.1.35"
-bindgen = "0.49.0"
 
 [badges]
 maintenance = { status = "experimental" }

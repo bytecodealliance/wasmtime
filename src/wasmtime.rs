@@ -37,11 +37,10 @@ use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
-use errno::errno;
 use file_per_thread_logger;
 use pretty_env_logger;
 use std::error::Error;
-use std::ffi::{CString, OsStr};
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -114,22 +113,15 @@ fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
     })
 }
 
-fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(String, libc::c_int)> {
+fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(String, File)> {
     let mut preopen_dirs = Vec::new();
 
     for dir in flag_dir {
-        let fd = unsafe {
-            libc::open(
-                CString::new(dir.as_bytes()).unwrap().as_ptr(),
-                libc::O_RDONLY | libc::O_DIRECTORY,
-            )
-        };
-        if fd < 0 {
-            println!("error while pre-opening directory {}: {}", dir, errno());
+        let preopen_dir = File::open(dir).unwrap_or_else(|err| {
+            println!("error while pre-opening directory {}: {}", dir, err);
             exit(1);
-        }
-
-        preopen_dirs.push((dir.clone(), fd));
+        });
+        preopen_dirs.push((dir.clone(), preopen_dir));
     }
 
     for mapdir in flag_mapdir {
@@ -139,18 +131,11 @@ fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(Str
             exit(1);
         }
         let (key, value) = (parts[0], parts[1]);
-        let fd = unsafe {
-            libc::open(
-                CString::new(value.as_bytes()).unwrap().as_ptr(),
-                libc::O_RDONLY | libc::O_DIRECTORY,
-            )
-        };
-        if fd < 0 {
-            println!("error while pre-opening directory {}: {}", value, errno());
+        let preopen_dir = File::open(value).unwrap_or_else(|err| {
+            println!("error while pre-opening directory {}: {}", value, err);
             exit(1);
-        }
-
-        preopen_dirs.push((key.to_string(), fd));
+        });
+        preopen_dirs.push((key.to_string(), preopen_dir));
     }
 
     preopen_dirs
