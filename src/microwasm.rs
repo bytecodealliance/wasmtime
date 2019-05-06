@@ -305,7 +305,7 @@ pub enum NameTag {
 
 pub type WasmLabel = (u32, NameTag);
 
-type OperatorFromWasm = Operator<WasmLabel>;
+pub type OperatorFromWasm = Operator<WasmLabel>;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum BrTarget<L> {

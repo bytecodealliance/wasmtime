@@ -5,9 +5,10 @@ use crate::error::Error;
 use crate::microwasm::*;
 use crate::module::{ModuleContext, SigType, Signature};
 use cranelift_codegen::binemit;
+use dynasmrt::DynasmApi;
 use either::{Either, Left, Right};
 use multi_mut::HashMapMultiMut;
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, fmt, hash::Hash, mem};
 
 #[derive(Debug)]
 struct Block {
@@ -73,7 +74,7 @@ where
     )
 }
 
-pub fn translate<M, I, L>(
+pub fn translate<M, I, L: Send + Sync + 'static>(
     session: &mut CodeGenSession<M>,
     reloc_sink: &mut dyn binemit::RelocSink,
     func_idx: u32,
@@ -107,7 +108,12 @@ where
     let mut body = body.into_iter().peekable();
 
     let module_context = &*session.module_context;
+    let mut op_offset_map = mem::replace(&mut session.op_offset_map, vec![]);
     let ctx = &mut session.new_context(func_idx, reloc_sink);
+    op_offset_map.push((
+        ctx.asm.offset(),
+        Box::new(format!("Function {}:", func_idx)),
+    ));
 
     let params = func_type
         .params()
@@ -126,8 +132,6 @@ where
         Block {
             label: BrTarget::Return,
             params: num_returns as u32,
-            // TODO: This only works for integers
-            //
             calling_convention: Some(Left(BlockCallingConvention::function_start(ret_locs(
                 func_type.returns().iter().map(|t| t.to_microwasm_type()),
             )))),
@@ -145,6 +149,26 @@ where
                 .expect("Label defined before being declared");
             block.is_next = true;
         }
+
+        struct DisassemblyOpFormatter<Label>(Operator<Label>);
+
+        impl<Label> fmt::Display for DisassemblyOpFormatter<Label>
+        where
+            Operator<Label>: fmt::Display,
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                match self.0 {
+                    Operator::Label(_) => write!(f, "{}", self.0),
+                    Operator::Block { .. } => write!(f, "{:5}\t{}", "", self.0),
+                    _ => write!(f, "{:5}\t  {}", "", self.0),
+                }
+            }
+        }
+
+        op_offset_map.push((
+            ctx.asm.offset(),
+            Box::new(DisassemblyOpFormatter(op.clone())),
+        ));
 
         match op {
             Operator::Unreachable => {
@@ -763,6 +787,8 @@ where
     }
 
     ctx.epilogue();
+
+    mem::replace(&mut session.op_offset_map, op_offset_map);
 
     Ok(())
 }

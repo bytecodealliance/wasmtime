@@ -55,7 +55,7 @@ mod op32 {
                     }
 
                     fn lit_reg(a: i32, b: i32) -> bool {
-                                                let translated = translate_wat(&format!("
+                        let translated = translate_wat(&format!("
                             (module (func (param i32) (result i32)
                                 (i32.{op} (i32.const {left}) (get_local 0))))
                         ", op = OP, left = a));
@@ -66,7 +66,7 @@ mod op32 {
                     }
 
                     fn reg_lit(a: i32, b: i32) -> bool {
-                                                let translated = translate_wat(&format!("
+                        let translated = translate_wat(&format!("
                             (module (func (param i32) (result i32)
                                 (i32.{op} (get_local 0) (i32.const {right}))))
                         ", op = OP, right = b));
@@ -101,7 +101,7 @@ mod op32 {
                     }
 
                     fn lit(a: u32) -> bool {
-                                                let translated = translate_wat(&format!(concat!("
+                        let translated = translate_wat(&format!(concat!("
                             (module (func (result i32)
                                 (i32.",stringify!($name)," (i32.const {val}))))
                         "), val = a));

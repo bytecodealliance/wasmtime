@@ -10,6 +10,7 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     convert::TryFrom,
+    fmt::Display,
     iter::{self, FromIterator},
     mem,
     ops::RangeInclusive,
@@ -518,6 +519,7 @@ pub struct FunctionEnd {
 pub struct CodeGenSession<'module, M> {
     assembler: Assembler,
     pub module_context: &'module M,
+    pub op_offset_map: Vec<(AssemblyOffset, Box<dyn Display + Send + Sync>)>,
     labels: Labels,
     func_starts: Vec<(Option<AssemblyOffset>, DynamicLabel)>,
 }
@@ -531,6 +533,7 @@ impl<'module, M> CodeGenSession<'module, M> {
 
         CodeGenSession {
             assembler,
+            op_offset_map: Default::default(),
             labels: Default::default(),
             func_starts,
             module_context,
@@ -575,6 +578,7 @@ impl<'module, M> CodeGenSession<'module, M> {
         Ok(TranslatedCodeSection {
             exec_buf,
             func_starts,
+            op_offset_map: self.op_offset_map,
             // TODO
             relocatable_accesses: vec![],
         })
@@ -594,11 +598,11 @@ struct RelocateAccess {
     address: RelocateAddress,
 }
 
-#[derive(Debug)]
 pub struct TranslatedCodeSection {
     exec_buf: ExecutableBuffer,
     func_starts: Vec<AssemblyOffset>,
     relocatable_accesses: Vec<RelocateAccess>,
+    op_offset_map: Vec<(AssemblyOffset, Box<dyn Display + Send + Sync>)>,
 }
 
 impl TranslatedCodeSection {
@@ -626,7 +630,7 @@ impl TranslatedCodeSection {
     }
 
     pub fn disassemble(&self) {
-        crate::disassemble::disassemble(&*self.exec_buf).unwrap();
+        crate::disassemble::disassemble(&*self.exec_buf, &self.op_offset_map).unwrap();
     }
 }
 
@@ -651,7 +655,7 @@ type Labels = HashMap<
 >;
 
 pub struct Context<'this, M> {
-    asm: &'this mut Assembler,
+    pub asm: &'this mut Assembler,
     reloc_sink: &'this mut dyn binemit::RelocSink,
     module_context: &'this M,
     current_function: u32,
@@ -2325,10 +2329,22 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             let end_label = self.create_label();
 
             if count > 0 {
+                // TODO: Handle this failing (because we might have all registers used for block
+                //       args we can't rely on this succeeding)
                 let selector_reg = self.into_temp_reg(GPRType::Rq, selector).unwrap();
                 selector = ValueLocation::Reg(selector_reg);
 
-                let tmp = self.take_reg(I64).unwrap();
+                let (tmp, pop_tmp) = if let Some(reg) = self.take_reg(I64) {
+                    (reg, false)
+                } else {
+                    let out_reg = if selector_reg == RAX { RCX } else { RAX };
+
+                    dynasm!(self.asm
+                        ; push Rq(out_reg.rq().unwrap())
+                    );
+
+                    (out_reg, true)
+                };
 
                 self.immediate_to_reg(tmp, (count as u32).into());
                 dynasm!(self.asm
@@ -2339,11 +2355,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         Rq(selector_reg.rq().unwrap()) * 5
                     ]
                     ; add Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                );
+
+                if pop_tmp {
+                    dynasm!(self.asm
+                        ; pop Rq(tmp.rq().unwrap())
+                    );
+                }
+
+                self.block_state.regs.release(tmp);
+
+                dynasm!(self.asm
                     ; jmp Rq(selector_reg.rq().unwrap())
                 ; start_label:
                 );
-
-                self.block_state.regs.release(tmp);
 
                 for target in targets {
                     let label = target
@@ -2743,14 +2768,21 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ; mov DWORD [rsp + out_offset], i as i32
                     );
                 } else {
-                    let scratch = self.take_reg(I64).unwrap();
+                    if let Some(scratch) = self.take_reg(I64) {
+                        dynasm!(self.asm
+                            ; mov Rq(scratch.rq().unwrap()), QWORD i
+                            ; mov [rsp + out_offset], Rq(scratch.rq().unwrap())
+                        );
 
-                    dynasm!(self.asm
-                        ; mov Rq(scratch.rq().unwrap()), QWORD i
-                        ; mov [rsp + out_offset], Rq(scratch.rq().unwrap())
-                    );
-
-                    self.block_state.regs.release(scratch);
+                        self.block_state.regs.release(scratch);
+                    } else {
+                        dynasm!(self.asm
+                            ; push rax
+                            ; mov rax, QWORD i
+                            ; mov [rsp + out_offset], rax
+                            ; pop rax
+                        );
+                    }
                 }
             }
             (ValueLocation::Stack(in_offset), CCLoc::Reg(out_reg)) => {
@@ -2978,7 +3010,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     fn into_temp_loc(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> CCLoc {
         match val {
-            ValueLocation::Stack(o) => CCLoc::Stack(o),
             _ => {
                 if let Some(gpr) = self.into_temp_reg(ty, val) {
                     CCLoc::Reg(gpr)
