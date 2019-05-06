@@ -438,7 +438,7 @@ pub fn dec_subscription(
 ) -> Result<host::__wasi_subscription_t, host::__wasi_errno_t> {
     let userdata = dec_userdata(subscription.userdata);
     let type_ = dec_eventtype(subscription.type_);
-    let u_orig = subscription.__bindgen_anon_1;
+    let u_orig = subscription.u;
     let u = match type_ {
         wasm32::__WASI_EVENTTYPE_CLOCK => host::__wasi_subscription_t___wasi_subscription_u {
             clock: unsafe {
@@ -467,8 +467,8 @@ pub fn enc_event(event: host::__wasi_event_t) -> wasm32::__wasi_event_t {
         userdata: enc_userdata(event.userdata),
         type_: enc_eventtype(event.type_),
         error: enc_errno(event.error),
-        __bindgen_anon_1: wasm32::__wasi_event_t__bindgen_ty_1 {
-            fd_readwrite: wasm32::__wasi_event_t__bindgen_ty_1__bindgen_ty_1 {
+        u: wasm32::__wasi_event_t___wasi_event_u {
+            fd_readwrite: wasm32::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
                 nbytes: enc_filesize(fd_readwrite.nbytes),
                 flags: enc_eventrwflags(fd_readwrite.flags),
                 __bindgen_padding_0: [0; 3],
