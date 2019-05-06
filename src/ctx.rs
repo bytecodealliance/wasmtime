@@ -12,8 +12,8 @@ use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::path::{Path, PathBuf};
 
 pub trait VmContext {
-    fn as_wasi_ctx(&self) -> &WasiCtx;
-    fn as_wasi_ctx_mut(&mut self) -> &mut WasiCtx;
+    fn as_wasi_ctx(&self) -> *const WasiCtx;
+    fn as_wasi_ctx_mut(&mut self) -> *mut WasiCtx;
 
     unsafe fn dec_ptr(
         &mut self,
