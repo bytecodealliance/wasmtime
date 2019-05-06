@@ -7,7 +7,8 @@ use cranelift_codegen::binemit::{
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, Init, Linkage, ModuleNamespace, ModuleResult,
+    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
+    ModuleResult,
 };
 use cranelift_native;
 #[cfg(not(windows))]
@@ -222,12 +223,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         &*self.isa
     }
 
-    fn declare_function(&mut self, _name: &str, _linkage: Linkage) {
+    fn declare_function(&mut self, _id: FuncId, _name: &str, _linkage: Linkage) {
         // Nothing to do.
     }
 
     fn declare_data(
         &mut self,
+        _id: DataId,
         _name: &str,
         _linkage: Linkage,
         _writable: bool,
@@ -238,6 +240,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn define_function(
         &mut self,
+        _id: FuncId,
         name: &str,
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
@@ -283,6 +286,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn define_data(
         &mut self,
+        _id: DataId,
         _name: &str,
         writable: bool,
         align: Option<u8>,
@@ -372,6 +376,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn finalize_function(
         &mut self,
+        _id: FuncId,
         func: &Self::CompiledFunction,
         namespace: &ModuleNamespace<Self>,
     ) -> Self::FinalizedFunction {
@@ -425,6 +430,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn finalize_data(
         &mut self,
+        _id: DataId,
         data: &Self::CompiledData,
         namespace: &ModuleNamespace<Self>,
     ) -> Self::FinalizedData {

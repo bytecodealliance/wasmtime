@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 /// convention in the embedding VM's runtime library.
 ///
 /// This list is likely to grow over time.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum LibCall {
     /// probe for stack overflow. These are emitted for functions which need
