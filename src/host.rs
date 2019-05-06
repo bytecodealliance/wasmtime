@@ -224,7 +224,7 @@ pub const RIGHTS_ALL: __wasi_rights_t = __WASI_RIGHT_FD_DATASYNC
     | __WASI_RIGHT_SOCK_SHUTDOWN;
 
 // Block and character device interaction is outside the scope of
-// CloudABI. Simply allow everything.
+// WASI. Simply allow everything.
 pub const RIGHTS_BLOCK_DEVICE_BASE: __wasi_rights_t = RIGHTS_ALL;
 pub const RIGHTS_BLOCK_DEVICE_INHERITING: __wasi_rights_t = RIGHTS_ALL;
 pub const RIGHTS_CHARACTER_DEVICE_BASE: __wasi_rights_t = RIGHTS_ALL;
