@@ -8,8 +8,8 @@ use cranelift_codegen::binemit::{
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, Init, Linkage, ModuleError, ModuleNamespace,
-    ModuleResult,
+    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
+    ModuleNamespace, ModuleResult,
 };
 use faerie;
 use failure::Error;
@@ -123,13 +123,20 @@ impl Backend for FaerieBackend {
         &*self.isa
     }
 
-    fn declare_function(&mut self, name: &str, linkage: Linkage) {
+    fn declare_function(&mut self, _id: FuncId, name: &str, linkage: Linkage) {
         self.artifact
             .declare(name, translate_function_linkage(linkage))
             .expect("inconsistent declarations");
     }
 
-    fn declare_data(&mut self, name: &str, linkage: Linkage, writable: bool, align: Option<u8>) {
+    fn declare_data(
+        &mut self,
+        _id: DataId,
+        name: &str,
+        linkage: Linkage,
+        writable: bool,
+        align: Option<u8>,
+    ) {
         self.artifact
             .declare(name, translate_data_linkage(linkage, writable, align))
             .expect("inconsistent declarations");
@@ -137,6 +144,7 @@ impl Backend for FaerieBackend {
 
     fn define_function(
         &mut self,
+        _id: FuncId,
         name: &str,
         ctx: &cranelift_codegen::Context,
         namespace: &ModuleNamespace<Self>,
@@ -194,6 +202,7 @@ impl Backend for FaerieBackend {
 
     fn define_data(
         &mut self,
+        _id: DataId,
         name: &str,
         _writable: bool,
         _align: Option<u8>,
@@ -274,6 +283,7 @@ impl Backend for FaerieBackend {
 
     fn finalize_function(
         &mut self,
+        _id: FuncId,
         _func: &FaerieCompiledFunction,
         _namespace: &ModuleNamespace<Self>,
     ) {
@@ -284,7 +294,12 @@ impl Backend for FaerieBackend {
         // Nothing to do.
     }
 
-    fn finalize_data(&mut self, _data: &FaerieCompiledData, _namespace: &ModuleNamespace<Self>) {
+    fn finalize_data(
+        &mut self,
+        _id: DataId,
+        _data: &FaerieCompiledData,
+        _namespace: &ModuleNamespace<Self>,
+    ) {
         // Nothing to do.
     }
 

@@ -1,6 +1,8 @@
 //! Defines the `Backend` trait.
 
 use crate::DataContext;
+use crate::DataId;
+use crate::FuncId;
 use crate::Linkage;
 use crate::ModuleNamespace;
 use crate::ModuleResult;
@@ -56,16 +58,24 @@ where
     fn isa(&self) -> &dyn TargetIsa;
 
     /// Declare a function.
-    fn declare_function(&mut self, name: &str, linkage: Linkage);
+    fn declare_function(&mut self, id: FuncId, name: &str, linkage: Linkage);
 
     /// Declare a data object.
-    fn declare_data(&mut self, name: &str, linkage: Linkage, writable: bool, align: Option<u8>);
+    fn declare_data(
+        &mut self,
+        id: DataId,
+        name: &str,
+        linkage: Linkage,
+        writable: bool,
+        align: Option<u8>,
+    );
 
     /// Define a function, producing the function body from the given `Context`.
     ///
     /// Functions must be declared before being defined.
     fn define_function(
         &mut self,
+        id: FuncId,
         name: &str,
         ctx: &Context,
         namespace: &ModuleNamespace<Self>,
@@ -77,6 +87,7 @@ where
     /// Data objects must be declared before being defined.
     fn define_data(
         &mut self,
+        id: DataId,
         name: &str,
         writable: bool,
         align: Option<u8>,
@@ -107,6 +118,7 @@ where
     /// and `Export` entities referenced to be defined.
     fn finalize_function(
         &mut self,
+        id: FuncId,
         func: &Self::CompiledFunction,
         namespace: &ModuleNamespace<Self>,
     ) -> Self::FinalizedFunction;
@@ -118,6 +130,7 @@ where
     /// `Local` and `Export` entities referenced to be defined.
     fn finalize_data(
         &mut self,
+        id: DataId,
         data: &Self::CompiledData,
         namespace: &ModuleNamespace<Self>,
     ) -> Self::FinalizedData;

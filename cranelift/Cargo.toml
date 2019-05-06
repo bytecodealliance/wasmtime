@@ -29,6 +29,7 @@ cranelift-native = { path = "cranelift-native", version = "0.42.0" }
 cranelift-filetests = { path = "cranelift-filetests", version = "0.42.0" }
 cranelift-module = { path = "cranelift-module", version = "0.42.0" }
 cranelift-faerie = { path = "cranelift-faerie", version = "0.42.0" }
+cranelift-object = { path = "cranelift-object", version = "0.42.0" }
 cranelift-simplejit = { path = "cranelift-simplejit", version = "0.42.0" }
 cranelift-preopt = { path = "cranelift-preopt", version = "0.42.0" }
 cranelift = { path = "cranelift-umbrella", version = "0.42.0" }

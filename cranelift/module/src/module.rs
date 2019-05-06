@@ -224,25 +224,31 @@ impl<B> ModuleContents<B>
 where
     B: Backend,
 {
-    fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
+    fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 0);
-            let func = FuncId::from_u32(index);
-            &self.functions[func]
+            FuncId::from_u32(index)
         } else {
             panic!("unexpected ExternalName kind {}", name)
         }
     }
 
-    /// Get the `DataDeclaration` for the function named by `name`.
-    fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
+    fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 1);
-            let data = DataId::from_u32(index);
-            &self.data_objects[data]
+            DataId::from_u32(index)
         } else {
             panic!("unexpected ExternalName kind {}", name)
         }
+    }
+
+    fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
+        &self.functions[self.get_function_id(name)]
+    }
+
+    /// Get the `DataDeclaration` for the function named by `name`.
+    fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
+        &self.data_objects[self.get_data_id(name)]
     }
 }
 
@@ -259,12 +265,22 @@ impl<'a, B> ModuleNamespace<'a, B>
 where
     B: Backend,
 {
+    /// Get the `FuncId` for the function named by `name`.
+    pub fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
+        self.contents.get_function_id(name)
+    }
+
+    /// Get the `DataId` for the data object named by `name`.
+    pub fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
+        self.contents.get_data_id(name)
+    }
+
     /// Get the `FunctionDeclaration` for the function named by `name`.
     pub fn get_function_decl(&self, name: &ir::ExternalName) -> &FunctionDeclaration {
         &self.contents.get_function_info(name).decl
     }
 
-    /// Get the `DataDeclaration` for the function named by `name`.
+    /// Get the `DataDeclaration` for the data object named by `name`.
     pub fn get_data_decl(&self, name: &ir::ExternalName) -> &DataDeclaration {
         &self.contents.get_data_info(name).decl
     }
@@ -407,7 +423,8 @@ where
                 FuncOrDataId::Func(id) => {
                     let existing = &mut self.contents.functions[id];
                     existing.merge(linkage, signature)?;
-                    self.backend.declare_function(name, existing.decl.linkage);
+                    self.backend
+                        .declare_function(id, name, existing.decl.linkage);
                     Ok(id)
                 }
                 FuncOrDataId::Data(..) => {
@@ -424,7 +441,7 @@ where
                     compiled: None,
                 });
                 entry.insert(FuncOrDataId::Func(id));
-                self.backend.declare_function(name, linkage);
+                self.backend.declare_function(id, name, linkage);
                 Ok(id)
             }
         }
@@ -451,6 +468,7 @@ where
                     let existing = &mut self.contents.data_objects[id];
                     existing.merge(linkage, writable, align);
                     self.backend.declare_data(
+                        id,
                         name,
                         existing.decl.linkage,
                         existing.decl.writable,
@@ -474,7 +492,8 @@ where
                     compiled: None,
                 });
                 entry.insert(FuncOrDataId::Data(id));
-                self.backend.declare_data(name, linkage, writable, align);
+                self.backend
+                    .declare_data(id, name, linkage, writable, align);
                 Ok(id)
             }
         }
@@ -536,7 +555,6 @@ where
             );
             ModuleError::Compilation(e)
         })?;
-
         let info = &self.contents.functions[func];
         if info.compiled.is_some() {
             return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
@@ -546,6 +564,7 @@ where
         }
 
         let compiled = Some(self.backend.define_function(
+            func,
             &info.decl.name,
             ctx,
             &ModuleNamespace::<B> {
@@ -570,6 +589,7 @@ where
                 return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
             }
             Some(self.backend.define_data(
+                data,
                 &info.decl.name,
                 info.decl.writable,
                 info.decl.align,
@@ -638,6 +658,7 @@ where
             let info = &self.contents.functions[func];
             debug_assert!(info.decl.linkage.is_definable());
             self.backend.finalize_function(
+                func,
                 info.compiled
                     .as_ref()
                     .expect("function must be compiled before it can be finalized"),
@@ -650,6 +671,7 @@ where
             let info = &self.contents.data_objects[data];
             debug_assert!(info.decl.linkage.is_definable());
             self.backend.finalize_data(
+                data,
                 info.compiled
                     .as_ref()
                     .expect("data object must be compiled before it can be finalized"),
