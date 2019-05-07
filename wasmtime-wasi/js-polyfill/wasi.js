@@ -31,6 +31,17 @@ function handleWASIExit(e) {
     }
 }
 
+// Safari doesn't have instantiateStreaming
+function wasi_instantiateStreaming(response, imports) {
+    if (WebAssembly && WebAssembly.instantiateStreaming) {
+        return WebAssembly.instantiateStreaming(response, imports);
+    }
+    return response.arrayBuffer()
+        .then(function(buffer) {
+            return WebAssembly.instantiate(buffer, imports);
+        });
+}
+
 // The current guest wasm instance.
 var currentInstance;
 
