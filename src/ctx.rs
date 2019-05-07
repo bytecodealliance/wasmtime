@@ -225,12 +225,12 @@ impl WasiCtx {
             // validate rights
             if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0
             {
-                Err(host::__WASI_ENOTCAPABLE as host::__wasi_errno_t)
+                Err(host::__WASI_ENOTCAPABLE)
             } else {
                 Ok(fe)
             }
         } else {
-            Err(host::__WASI_EBADF as host::__wasi_errno_t)
+            Err(host::__WASI_EBADF)
         }
     }
 
@@ -244,7 +244,7 @@ impl WasiCtx {
             if let Some(next_fd) = fd.checked_add(1) {
                 fd = next_fd;
             } else {
-                return Err(host::__WASI_EMFILE as host::__wasi_errno_t);
+                return Err(host::__WASI_EMFILE);
             }
         }
         self.fds.insert(fd, fe);

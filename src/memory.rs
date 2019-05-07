@@ -19,7 +19,7 @@ use std::slice;
 
 macro_rules! bail_errno {
     ( $errno:ident ) => {
-        return Err(host::$errno as host::__wasi_errno_t);
+        return Err(host::$errno);
     };
 }
 
@@ -56,13 +56,13 @@ pub unsafe fn dec_slice_of<T>(
 ) -> Result<(*mut T, usize), host::__wasi_errno_t> {
     // check alignment, and that length doesn't overflow
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(host::__WASI_EINVAL as host::__wasi_errno_t);
+        return Err(host::__WASI_EINVAL);
     }
     let len = dec_usize(len);
     let len_bytes = if let Some(len) = size_of::<T>().checked_mul(len) {
         len
     } else {
-        return Err(host::__WASI_EOVERFLOW as host::__wasi_errno_t);
+        return Err(host::__WASI_EOVERFLOW);
     };
 
     let ptr = (*vmctx).dec_ptr(ptr, len_bytes)? as *mut T;
@@ -77,13 +77,13 @@ pub unsafe fn enc_slice_of<T>(
 ) -> Result<(), host::__wasi_errno_t> {
     // check alignment
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(host::__WASI_EINVAL as host::__wasi_errno_t);
+        return Err(host::__WASI_EINVAL);
     }
     // check that length doesn't overflow
     let len_bytes = if let Some(len) = size_of::<T>().checked_mul(slice.len()) {
         len
     } else {
-        return Err(host::__WASI_EOVERFLOW as host::__wasi_errno_t);
+        return Err(host::__WASI_EOVERFLOW);
     };
 
     // get the pointer into guest memory, and copy the bytes
@@ -319,11 +319,11 @@ pub fn dec_prestat(
                 },
             };
             Ok(host::__wasi_prestat_t {
-                pr_type: host::__WASI_PREOPENTYPE_DIR as host::__wasi_preopentype_t,
+                pr_type: host::__WASI_PREOPENTYPE_DIR,
                 u,
             })
         }
-        _ => Err(host::__WASI_EINVAL as host::__wasi_errno_t),
+        _ => Err(host::__WASI_EINVAL),
     }
 }
 
@@ -337,7 +337,7 @@ pub unsafe fn dec_prestat_byref(
 pub fn enc_prestat(
     prestat: host::__wasi_prestat_t,
 ) -> Result<wasm32::__wasi_prestat_t, host::__wasi_errno_t> {
-    match prestat.pr_type as u32 {
+    match prestat.pr_type {
         host::__WASI_PREOPENTYPE_DIR => {
             let u = wasm32::__wasi_prestat_t___wasi_prestat_u {
                 dir: wasm32::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
@@ -345,11 +345,11 @@ pub fn enc_prestat(
                 },
             };
             Ok(wasm32::__wasi_prestat_t {
-                pr_type: wasm32::__WASI_PREOPENTYPE_DIR as wasm32::__wasi_preopentype_t,
+                pr_type: wasm32::__WASI_PREOPENTYPE_DIR,
                 u,
             })
         }
-        _ => Err(host::__WASI_EINVAL as host::__wasi_errno_t),
+        _ => Err(host::__WASI_EINVAL),
     }
 }
 

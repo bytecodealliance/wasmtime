@@ -28,14 +28,14 @@ impl FromRawFd for FdEntry {
         let flags = OFlag::from_bits_truncate(flags_bits);
         let accmode = flags & OFlag::O_ACCMODE;
         if accmode == OFlag::O_RDONLY {
-            rights_base &= !host::__WASI_RIGHT_FD_WRITE as host::__wasi_rights_t;
+            rights_base &= !host::__WASI_RIGHT_FD_WRITE;
         } else if accmode == OFlag::O_WRONLY {
-            rights_base &= !host::__WASI_RIGHT_FD_READ as host::__wasi_rights_t;
+            rights_base &= !host::__WASI_RIGHT_FD_READ;
         }
 
         FdEntry {
             fd_object: FdObject {
-                ty: ty as u8,
+                ty: ty,
                 rawfd,
                 needs_close: true,
             },
@@ -107,7 +107,7 @@ pub unsafe fn determine_type_rights(
                     host::RIGHTS_SOCKET_BASE,
                     host::RIGHTS_SOCKET_INHERITING,
                 ),
-                _ => return Err(host::__WASI_EINVAL as host::__wasi_errno_t),
+                _ => return Err(host::__WASI_EINVAL),
             }
         } else if ft.is_fifo() {
             (
@@ -116,14 +116,10 @@ pub unsafe fn determine_type_rights(
                 host::RIGHTS_SOCKET_INHERITING,
             )
         } else {
-            return Err(host::__WASI_EINVAL as host::__wasi_errno_t);
+            return Err(host::__WASI_EINVAL);
         }
     };
-    Ok((
-        ty as host::__wasi_filetype_t,
-        rights_base,
-        rights_inheriting,
-    ))
+    Ok((ty, rights_base, rights_inheriting))
 }
 
 #[derive(Clone, Debug)]

@@ -24,12 +24,6 @@ use std::os::unix::prelude::{FromRawFd, OsStrExt, OsStringExt, RawFd};
 use std::time::SystemTime;
 use std::{cmp, slice};
 
-#[cfg(target_os = "linux")]
-const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
-
-#[cfg(not(target_os = "linux"))]
-const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_SYNC;
-
 pub unsafe fn proc_exit(_vmctx: &mut VmContext, rval: wasm32::__wasi_exitcode_t) -> () {
     std::process::exit(dec_exitcode(rval) as i32);
 }
@@ -328,14 +322,14 @@ pub unsafe fn fd_seek(
 
     let host_newoffset = {
         use nix::unistd::{lseek, Whence};
-        let nwhence = match whence as u32 {
+        let nwhence = match whence {
             host::__WASI_WHENCE_CUR => Whence::SeekCur,
             host::__WASI_WHENCE_END => Whence::SeekEnd,
             host::__WASI_WHENCE_SET => Whence::SeekSet,
             _ => return wasm32::__WASI_EINVAL,
         };
 
-        let rights = if offset == 0 && whence as u32 == host::__WASI_WHENCE_CUR {
+        let rights = if offset == 0 && whence == host::__WASI_WHENCE_CUR {
             host::__WASI_RIGHT_FD_TELL
         } else {
             host::__WASI_RIGHT_FD_SEEK | host::__WASI_RIGHT_FD_TELL
@@ -367,7 +361,7 @@ pub unsafe fn fd_prestat_get(
     match (*ctx).get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
         Ok(fe) => {
             if let Some(po_path) = &fe.preopen_path {
-                if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY as host::__wasi_filetype_t {
+                if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
                     return wasm32::__WASI_ENOTDIR;
                 }
                 unsafe {
@@ -375,7 +369,7 @@ pub unsafe fn fd_prestat_get(
                         vmctx,
                         prestat_ptr,
                         host::__wasi_prestat_t {
-                            pr_type: host::__WASI_PREOPENTYPE_DIR as host::__wasi_preopentype_t,
+                            pr_type: host::__WASI_PREOPENTYPE_DIR,
                             u: host::__wasi_prestat_t___wasi_prestat_u {
                                 dir:
                                     host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
@@ -406,7 +400,7 @@ pub unsafe fn fd_prestat_dir_name(
     match (*(*vmctx).as_wasi_ctx()).get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
         Ok(fe) => {
             if let Some(po_path) = &fe.preopen_path {
-                if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY as host::__wasi_filetype_t {
+                if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
                     return wasm32::__WASI_ENOTDIR;
                 }
                 let path_bytes = po_path.as_os_str().as_bytes();
@@ -532,14 +526,12 @@ pub unsafe fn path_open(
     let fs_flags = dec_fdflags(fs_flags);
 
     // which open mode do we need?
-    let read = fs_rights_base
-        & ((host::__WASI_RIGHT_FD_READ | host::__WASI_RIGHT_FD_READDIR) as host::__wasi_rights_t)
-        != 0;
+    let read = fs_rights_base & (host::__WASI_RIGHT_FD_READ | host::__WASI_RIGHT_FD_READDIR) != 0;
     let write = fs_rights_base
-        & ((host::__WASI_RIGHT_FD_DATASYNC
+        & (host::__WASI_RIGHT_FD_DATASYNC
             | host::__WASI_RIGHT_FD_WRITE
             | host::__WASI_RIGHT_FD_ALLOCATE
-            | host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE) as host::__wasi_rights_t)
+            | host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE)
         != 0;
 
     let mut nix_all_oflags = if read && write {
@@ -554,26 +546,26 @@ pub unsafe fn path_open(
     nix_all_oflags.insert(OFlag::O_NOFOLLOW);
 
     // which rights are needed on the dirfd?
-    let mut needed_base = host::__WASI_RIGHT_PATH_OPEN as host::__wasi_rights_t;
+    let mut needed_base = host::__WASI_RIGHT_PATH_OPEN;
     let mut needed_inheriting = fs_rights_base | fs_rights_inheriting;
 
     // convert open flags
     let nix_oflags = host::nix_from_oflags(oflags);
     nix_all_oflags.insert(nix_oflags);
     if nix_all_oflags.contains(OFlag::O_CREAT) {
-        needed_base |= host::__WASI_RIGHT_PATH_CREATE_FILE as host::__wasi_rights_t;
+        needed_base |= host::__WASI_RIGHT_PATH_CREATE_FILE;
     }
     if nix_all_oflags.contains(OFlag::O_TRUNC) {
-        needed_inheriting |= host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE as host::__wasi_rights_t;
+        needed_inheriting |= host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
     nix_all_oflags.insert(host::nix_from_fdflags(fs_flags));
     if nix_all_oflags.contains(OFlag::O_DSYNC) {
-        needed_inheriting |= host::__WASI_RIGHT_FD_DATASYNC as host::__wasi_rights_t;
+        needed_inheriting |= host::__WASI_RIGHT_FD_DATASYNC;
     }
-    if nix_all_oflags.intersects(O_RSYNC | OFlag::O_SYNC) {
-        needed_inheriting |= host::__WASI_RIGHT_FD_SYNC as host::__wasi_rights_t;
+    if nix_all_oflags.intersects(host::O_RSYNC | OFlag::O_SYNC) {
+        needed_inheriting |= host::__WASI_RIGHT_FD_SYNC;
     }
 
     let path = match unsafe { dec_slice_of::<u8>(vmctx, path_ptr, path_len) } {
@@ -751,12 +743,7 @@ pub unsafe fn poll_oneoff(
         }
     };
     if ready == 0 {
-        return poll_oneoff_handle_timeout_event(
-            &mut *vmctx,
-            output_slice,
-            nevents,
-            timeout,
-        );
+        return poll_oneoff_handle_timeout_event(&mut *vmctx, output_slice, nevents, timeout);
     }
     let events = fd_events.iter().zip(poll_fds.iter()).take(ready);
     poll_oneoff_handle_fd_event(&mut *vmctx, output_slice, nevents, events)
@@ -812,7 +799,7 @@ pub unsafe fn path_filestat_get(
         dirfd,
         dirflags,
         path,
-        host::__WASI_RIGHT_PATH_FILESTAT_GET as host::__wasi_rights_t,
+        host::__WASI_RIGHT_PATH_FILESTAT_GET,
         0,
         false,
     ) {
@@ -855,8 +842,7 @@ pub unsafe fn path_create_directory(
         dirfd,
         0,
         path,
-        (host::__WASI_RIGHT_PATH_OPEN | host::__WASI_RIGHT_PATH_CREATE_DIRECTORY)
-            as host::__wasi_rights_t,
+        host::__WASI_RIGHT_PATH_OPEN | host::__WASI_RIGHT_PATH_CREATE_DIRECTORY,
         0,
         false,
     ) {
@@ -893,7 +879,7 @@ pub unsafe fn path_unlink_file(
         dirfd,
         0,
         path,
-        host::__WASI_RIGHT_PATH_UNLINK_FILE as host::__wasi_rights_t,
+        host::__WASI_RIGHT_PATH_UNLINK_FILE,
         0,
         false,
     ) {
@@ -1140,14 +1126,11 @@ pub fn path_get<P: AsRef<OsStr>>(
                 }
                 // path is empty
                 (Some([]), None) => {
-                    return ret_error(&mut dir_stack, host::__WASI_ENOENT as host::__wasi_errno_t);
+                    return ret_error(&mut dir_stack, host::__WASI_ENOENT);
                 }
                 // path starts with `/`, is absolute
                 (Some([]), Some(_)) => {
-                    return ret_error(
-                        &mut dir_stack,
-                        host::__WASI_ENOTCAPABLE as host::__wasi_errno_t,
-                    );
+                    return ret_error(&mut dir_stack, host::__WASI_ENOTCAPABLE);
                 }
                 // the final component of the path with no trailing slash
                 (Some(component), None) => component.to_vec(),
@@ -1185,10 +1168,7 @@ pub fn path_get<P: AsRef<OsStr>>(
 
                 // we're not allowed to pop past the original directory
                 if dir_stack.is_empty() {
-                    return ret_error(
-                        &mut dir_stack,
-                        host::__WASI_ENOTCAPABLE as host::__wasi_errno_t,
-                    );
+                    return ret_error(&mut dir_stack, host::__WASI_ENOTCAPABLE);
                 } else {
                     nix::unistd::close(dirfd).unwrap_or_else(|e| {
                         dbg!(e);
@@ -1224,10 +1204,7 @@ pub fn path_get<P: AsRef<OsStr>>(
                             Ok(link_path) => {
                                 symlink_expansions += 1;
                                 if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                    return ret_error(
-                                        &mut dir_stack,
-                                        host::__WASI_ELOOP as host::__wasi_errno_t,
-                                    );
+                                    return ret_error(&mut dir_stack, host::__WASI_ELOOP);
                                 }
 
                                 let mut link_path = link_path.as_bytes().to_vec();
@@ -1272,10 +1249,7 @@ pub fn path_get<P: AsRef<OsStr>>(
                         Ok(link_path) => {
                             symlink_expansions += 1;
                             if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                return ret_error(
-                                    &mut dir_stack,
-                                    host::__WASI_ELOOP as host::__wasi_errno_t,
-                                );
+                                return ret_error(&mut dir_stack, host::__WASI_ELOOP);
                             }
 
                             let mut link_path = link_path.as_bytes().to_vec();
