@@ -1,11 +1,11 @@
 # wasi-common
 
-This repo strips away those bits of [lucet-wasi](https://github.com/fastly/lucet/tree/master/lucet-wasi)
+This repo strips away those bits of [lucet-wasi](https://github.com/fastly/lucet/tree/5d3efb6005391a7c71d585732a5507b00db6bb1e/lucet-wasi)
 which can potentially be encapsulated in a separated crate with potential plug'n'play use in both
 [Lucet](https://github.com/fastly/lucet)
 and [Wasmtime](https://github.com/CraneStation/wasmtime) projects.
 
-This repo is strictly experimental.
+This repo is strictly experimental, and based on [5d3efb6005](https://github.com/fastly/lucet/commit/5d3efb6005391a7c71d585732a5507b00db6bb1e) git revision.
 
 ## Supported syscalls
 
