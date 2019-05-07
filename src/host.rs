@@ -678,10 +678,17 @@ pub fn nix_from_filetype(sflags: __wasi_filetype_t) -> nix::sys::stat::SFlag {
 }
 
 pub fn filestat_from_nix(filestat: nix::sys::stat::FileStat) -> __wasi_filestat_t {
+    use std::convert::TryFrom;
+
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
+    let dev = __wasi_device_t::try_from(filestat.st_dev)
+        .expect("FileStat::st_dev is trivially convertible to __wasi_device_t");
+    let ino = __wasi_inode_t::try_from(filestat.st_ino)
+        .expect("FileStat::st_ino is trivially convertible to __wasi_inode_t");
+
     __wasi_filestat_t {
-        st_dev: filestat.st_dev as __wasi_device_t,
-        st_ino: filestat.st_ino as __wasi_inode_t,
+        st_dev: dev,
+        st_ino: ino,
         st_nlink: filestat.st_nlink as __wasi_linkcount_t,
         st_size: filestat.st_size as __wasi_filesize_t,
         st_atim: filestat.st_atime as __wasi_timestamp_t,
