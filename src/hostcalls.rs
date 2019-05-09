@@ -10,6 +10,7 @@
 
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
+#![allow(unused)]
 use crate::ctx::VmContext;
 use crate::fdentry::{determine_type_rights, FdEntry};
 use crate::memory::*;
@@ -895,6 +896,224 @@ pub unsafe fn path_unlink_file(
         0 => wasm32::__WASI_ESUCCESS,
         _ => wasm32::errno_from_nix(errno::Errno::last()),
     }
+}
+
+pub unsafe fn fd_datasync(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_datasync")
+}
+
+pub unsafe fn fd_pread(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    iovs: wasm32::uintptr_t,
+    iovs_len: wasm32::size_t,
+    offset: wasm32::__wasi_filesize_t,
+    nread: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_pread")
+}
+
+pub unsafe fn fd_pwrite(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    iovs: wasm32::uintptr_t,
+    iovs_len: wasm32::size_t,
+    offset: wasm32::__wasi_filesize_t,
+    nwritten: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_pwrite")
+}
+
+pub unsafe fn fd_renumber(
+    vmctx: *mut VmContext,
+    from: wasm32::__wasi_fd_t,
+    to: wasm32::__wasi_fd_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_renumber")
+}
+
+pub unsafe fn fd_tell(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    newoffset: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_tell")
+}
+
+pub unsafe fn fd_fdstat_set_rights(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    fs_rights_base: wasm32::__wasi_rights_t,
+    fs_rights_inheriting: wasm32::__wasi_rights_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_fdstat_set_rights")
+}
+
+pub unsafe fn fd_sync(vmctx: *mut VmContext, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_sync")
+}
+
+pub unsafe fn fd_advise(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    offset: wasm32::__wasi_filesize_t,
+    len: wasm32::__wasi_filesize_t,
+    advice: wasm32::__wasi_advice_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_advise")
+}
+
+pub unsafe fn fd_allocate(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    offset: wasm32::__wasi_filesize_t,
+    len: wasm32::__wasi_filesize_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_allocate")
+}
+
+pub unsafe fn path_link(
+    vmctx: *mut VmContext,
+    fd0: wasm32::__wasi_fd_t,
+    flags0: wasm32::__wasi_lookupflags_t,
+    path0: wasm32::uintptr_t,
+    path_len0: wasm32::size_t,
+    fd1: wasm32::__wasi_fd_t,
+    path1: wasm32::uintptr_t,
+    path_len1: wasm32::size_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("path_link")
+}
+
+pub unsafe fn fd_readdir(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    buf: wasm32::uintptr_t,
+    buf_len: wasm32::size_t,
+    cookie: wasm32::__wasi_dircookie_t,
+    buf_used: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_readdir")
+}
+
+pub unsafe fn path_readlink(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    path: wasm32::uintptr_t,
+    path_len: wasm32::size_t,
+    buf: wasm32::uintptr_t,
+    buf_len: wasm32::size_t,
+    buf_used: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("path_readlink")
+}
+
+pub unsafe fn path_rename(
+    vmctx: *mut VmContext,
+    fd0: wasm32::__wasi_fd_t,
+    path0: wasm32::uintptr_t,
+    path_len0: wasm32::size_t,
+    fd1: wasm32::__wasi_fd_t,
+    path1: wasm32::uintptr_t,
+    path_len1: wasm32::size_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("path_rename")
+}
+
+pub unsafe fn fd_filestat_set_times(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    st_atim: wasm32::__wasi_timestamp_t,
+    st_mtim: wasm32::__wasi_timestamp_t,
+    fstflags: wasm32::__wasi_fstflags_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_filestat_set_times")
+}
+
+pub unsafe fn fd_filestat_set_size(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    size: wasm32::__wasi_filesize_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("fd_filestat_set_size")
+}
+
+pub unsafe fn path_filestat_set_times(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    flags: wasm32::__wasi_lookupflags_t,
+    path: wasm32::uintptr_t,
+    path_len: wasm32::size_t,
+    st_atim: wasm32::__wasi_timestamp_t,
+    st_mtim: wasm32::__wasi_timestamp_t,
+    fstflags: wasm32::__wasi_fstflags_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("path_filestat_set_times")
+}
+
+pub unsafe fn path_symlink(
+    vmctx: *mut VmContext,
+    path0: wasm32::uintptr_t,
+    path_len0: wasm32::size_t,
+    fd: wasm32::__wasi_fd_t,
+    path1: wasm32::uintptr_t,
+    path_len1: wasm32::size_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("path_symlink")
+}
+
+pub unsafe fn path_remove_directory(
+    vmctx: *mut VmContext,
+    fd: wasm32::__wasi_fd_t,
+    path: wasm32::uintptr_t,
+    path_len: wasm32::size_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("path_remove_directory")
+}
+
+pub unsafe fn proc_raise(
+    _vmctx: *mut VmContext,
+    _sig: wasm32::__wasi_signal_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("proc_raise")
+}
+
+pub unsafe fn sched_yield(_vmctx: *mut VmContext) -> wasm32::__wasi_errno_t {
+    unimplemented!("sched_yield")
+}
+
+pub unsafe fn sock_recv(
+    vmctx: *mut VmContext,
+    sock: wasm32::__wasi_fd_t,
+    ri_data: wasm32::uintptr_t,
+    ri_data_len: wasm32::size_t,
+    ri_flags: wasm32::__wasi_riflags_t,
+    ro_datalen: wasm32::uintptr_t,
+    ro_flags: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("sock_recv")
+}
+
+pub unsafe fn sock_send(
+    vmctx: *mut VmContext,
+    sock: wasm32::__wasi_fd_t,
+    si_data: wasm32::uintptr_t,
+    si_data_len: wasm32::size_t,
+    si_flags: wasm32::__wasi_siflags_t,
+    so_datalen: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("sock_send")
+}
+
+pub unsafe fn sock_shutdown(
+    vmctx: *mut VmContext,
+    sock: wasm32::__wasi_fd_t,
+    how: wasm32::__wasi_sdflags_t,
+) -> wasm32::__wasi_errno_t {
+    unimplemented!("sock_shutdown")
 }
 
 // define the `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`
