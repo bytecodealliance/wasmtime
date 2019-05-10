@@ -198,6 +198,16 @@ pub struct WasiCtx {
     pub env: Vec<CString>,
 }
 
+impl Default for WasiCtx {
+    fn default() -> Self {
+        Self {
+            fds: HashMap::new(),
+            args: Vec::new(),
+            env: Vec::new(),
+        }
+    }
+}
+
 impl WasiCtx {
     /// Make a new `WasiCtx` with some default settings.
     ///

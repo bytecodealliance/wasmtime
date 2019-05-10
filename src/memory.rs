@@ -9,7 +9,7 @@
 //!
 //! This sort of manual encoding will hopefully be obsolete once the IDL is developed.
 
-use crate::ctx::VmContext;
+use crate::vmctx::VmContextView;
 use crate::{host, wasm32};
 
 use cast;
@@ -23,26 +23,47 @@ macro_rules! bail_errno {
     };
 }
 
+pub unsafe fn dec_ptr(
+    vmctx: &VmContextView,
+    ptr: wasm32::uintptr_t,
+    len: usize,
+) -> Result<*mut u8, host::__wasi_errno_t> {
+    let mut heap = vmctx.memory_mut();
+
+    // check that `len` fits in the wasm32 address space
+    if len > wasm32::UINTPTR_MAX as usize {
+        bail_errno!(__WASI_EOVERFLOW);
+    }
+
+    // check that `ptr` and `ptr + len` are both within the guest heap
+    if ptr as usize > heap.len() || ptr as usize + len > heap.len() {
+        bail_errno!(__WASI_EFAULT);
+    }
+
+    // translate the pointer
+    Ok(heap.as_mut_ptr().offset(ptr as isize))
+}
+
 pub unsafe fn dec_ptr_to<T>(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     ptr: wasm32::uintptr_t,
 ) -> Result<*mut T, host::__wasi_errno_t> {
     // check that the ptr is aligned
     if ptr as usize % align_of::<T>() != 0 {
         bail_errno!(__WASI_EINVAL);
     }
-    (*vmctx).dec_ptr(ptr, size_of::<T>()).map(|p| p as *mut T)
+    dec_ptr(vmctx, ptr, size_of::<T>()).map(|p| p as *mut T)
 }
 
 pub unsafe fn dec_pointee<T>(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     ptr: wasm32::uintptr_t,
 ) -> Result<T, host::__wasi_errno_t> {
     dec_ptr_to::<T>(vmctx, ptr).map(|p| p.read())
 }
 
 pub unsafe fn enc_pointee<T>(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     ptr: wasm32::uintptr_t,
     t: T,
 ) -> Result<(), host::__wasi_errno_t> {
@@ -50,7 +71,7 @@ pub unsafe fn enc_pointee<T>(
 }
 
 pub unsafe fn dec_slice_of<T>(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     ptr: wasm32::uintptr_t,
     len: wasm32::size_t,
 ) -> Result<(*mut T, usize), host::__wasi_errno_t> {
@@ -65,13 +86,13 @@ pub unsafe fn dec_slice_of<T>(
         return Err(host::__WASI_EOVERFLOW);
     };
 
-    let ptr = (*vmctx).dec_ptr(ptr, len_bytes)? as *mut T;
+    let ptr = dec_ptr(vmctx, ptr, len_bytes)? as *mut T;
 
     Ok((ptr, len))
 }
 
 pub unsafe fn enc_slice_of<T>(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     slice: &[T],
     ptr: wasm32::uintptr_t,
 ) -> Result<(), host::__wasi_errno_t> {
@@ -87,7 +108,7 @@ pub unsafe fn enc_slice_of<T>(
     };
 
     // get the pointer into guest memory, and copy the bytes
-    let ptr = (*vmctx).dec_ptr(ptr, len_bytes)? as *mut libc::c_void;
+    let ptr = dec_ptr(vmctx, ptr, len_bytes)? as *mut libc::c_void;
     libc::memcpy(ptr, slice.as_ptr() as *const libc::c_void, len_bytes);
 
     Ok(())
@@ -100,7 +121,7 @@ macro_rules! dec_enc_scalar {
         }
 
         pub unsafe fn $dec_byref(
-            vmctx: *mut VmContext,
+            vmctx: &VmContextView,
             ptr: wasm32::uintptr_t,
         ) -> Result<host::$ty, host::__wasi_errno_t> {
             dec_pointee::<wasm32::$ty>(vmctx, ptr).map($dec)
@@ -111,7 +132,7 @@ macro_rules! dec_enc_scalar {
         }
 
         pub unsafe fn $enc_byref(
-            vmctx: *mut VmContext,
+            vmctx: &VmContextView,
             ptr: wasm32::uintptr_t,
             x: host::$ty,
         ) -> Result<(), host::__wasi_errno_t> {
@@ -121,18 +142,18 @@ macro_rules! dec_enc_scalar {
 }
 
 pub unsafe fn dec_ciovec(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     ciovec: &wasm32::__wasi_ciovec_t,
 ) -> Result<host::__wasi_ciovec_t, host::__wasi_errno_t> {
     let len = dec_usize(ciovec.buf_len);
     Ok(host::__wasi_ciovec_t {
-        buf: (*vmctx).dec_ptr(ciovec.buf, len)? as *const host::void,
+        buf: dec_ptr(vmctx, ciovec.buf, len)? as *const host::void,
         buf_len: len,
     })
 }
 
 pub unsafe fn dec_ciovec_slice(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     ptr: wasm32::uintptr_t,
     len: wasm32::size_t,
 ) -> Result<Vec<host::__wasi_ciovec_t>, host::__wasi_errno_t> {
@@ -206,7 +227,7 @@ pub fn dec_filestat(filestat: wasm32::__wasi_filestat_t) -> host::__wasi_filesta
 }
 
 pub unsafe fn dec_filestat_byref(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     filestat_ptr: wasm32::uintptr_t,
 ) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
     dec_pointee::<wasm32::__wasi_filestat_t>(vmctx, filestat_ptr).map(dec_filestat)
@@ -226,7 +247,7 @@ pub fn enc_filestat(filestat: host::__wasi_filestat_t) -> wasm32::__wasi_filesta
 }
 
 pub unsafe fn enc_filestat_byref(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     filestat_ptr: wasm32::uintptr_t,
     host_filestat: host::__wasi_filestat_t,
 ) -> Result<(), host::__wasi_errno_t> {
@@ -244,7 +265,7 @@ pub fn dec_fdstat(fdstat: wasm32::__wasi_fdstat_t) -> host::__wasi_fdstat_t {
 }
 
 pub unsafe fn dec_fdstat_byref(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     fdstat_ptr: wasm32::uintptr_t,
 ) -> Result<host::__wasi_fdstat_t, host::__wasi_errno_t> {
     dec_pointee::<wasm32::__wasi_fdstat_t>(vmctx, fdstat_ptr).map(dec_fdstat)
@@ -261,7 +282,7 @@ pub fn enc_fdstat(fdstat: host::__wasi_fdstat_t) -> wasm32::__wasi_fdstat_t {
 }
 
 pub unsafe fn enc_fdstat_byref(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     fdstat_ptr: wasm32::uintptr_t,
     host_fdstat: host::__wasi_fdstat_t,
 ) -> Result<(), host::__wasi_errno_t> {
@@ -328,7 +349,7 @@ pub fn dec_prestat(
 }
 
 pub unsafe fn dec_prestat_byref(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     prestat_ptr: wasm32::uintptr_t,
 ) -> Result<host::__wasi_prestat_t, host::__wasi_errno_t> {
     dec_pointee::<wasm32::__wasi_prestat_t>(vmctx, prestat_ptr).and_then(dec_prestat)
@@ -354,7 +375,7 @@ pub fn enc_prestat(
 }
 
 pub unsafe fn enc_prestat_byref(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     prestat_ptr: wasm32::uintptr_t,
     host_prestat: host::__wasi_prestat_t,
 ) -> Result<(), host::__wasi_errno_t> {
@@ -386,7 +407,7 @@ pub fn enc_usize(size: usize) -> wasm32::size_t {
 }
 
 pub unsafe fn enc_usize_byref(
-    vmctx: *mut VmContext,
+    vmctx: &VmContextView,
     usize_ptr: wasm32::uintptr_t,
     host_usize: usize,
 ) -> Result<(), host::__wasi_errno_t> {

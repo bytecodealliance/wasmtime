@@ -11,9 +11,9 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 #![allow(unused)]
-use crate::ctx::VmContext;
 use crate::fdentry::{determine_type_rights, FdEntry};
 use crate::memory::*;
+use crate::vmctx::VmContextView;
 use crate::{host, wasm32};
 
 use cast::From as _0;
@@ -25,21 +25,21 @@ use std::os::unix::prelude::{FromRawFd, OsStrExt, OsStringExt, RawFd};
 use std::time::SystemTime;
 use std::{cmp, slice};
 
-pub unsafe fn proc_exit(_vmctx: &mut VmContext, rval: wasm32::__wasi_exitcode_t) -> () {
+pub unsafe fn proc_exit(_vmctx: &mut VmContextView, rval: wasm32::__wasi_exitcode_t) -> () {
     std::process::exit(dec_exitcode(rval) as i32);
 }
 
 pub unsafe fn args_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     argv_ptr: wasm32::uintptr_t,
     argv_buf: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    let ctx = (*vmctx).as_wasi_ctx();
+    let ctx = vmctx.get_wasi_ctx();
 
     let mut argv_buf_offset = 0;
     let mut argv = vec![];
 
-    for arg in (*ctx).args.iter() {
+    for arg in ctx.args.iter() {
         let arg_bytes = arg.as_bytes_with_nul();
         let arg_ptr = argv_buf + argv_buf_offset;
 
@@ -67,13 +67,13 @@ pub unsafe fn args_get(
 }
 
 pub unsafe fn args_sizes_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     argc_ptr: wasm32::uintptr_t,
     argv_buf_size_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    let ctx = (*vmctx).as_wasi_ctx();
+    let ctx = vmctx.get_wasi_ctx();
 
-    let argc = (*ctx).args.len();
+    let argc = ctx.args.len();
     let argv_size = (*ctx)
         .args
         .iter()
@@ -92,7 +92,7 @@ pub unsafe fn args_sizes_get(
 }
 
 pub unsafe fn clock_res_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     clock_id: wasm32::__wasi_clockid_t,
     resolution_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
@@ -134,7 +134,7 @@ pub unsafe fn clock_res_get(
 }
 
 pub unsafe fn clock_time_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     clock_id: wasm32::__wasi_clockid_t,
     // ignored for now, but will be useful once we put optional limits on precision to reduce side
     // channels
@@ -171,16 +171,16 @@ pub unsafe fn clock_time_get(
 }
 
 pub unsafe fn environ_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     environ_ptr: wasm32::uintptr_t,
     environ_buf: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    let ctx = (*vmctx).as_wasi_ctx();
+    let ctx = vmctx.get_wasi_ctx();
 
     let mut environ_buf_offset = 0;
     let mut environ = vec![];
 
-    for pair in (*ctx).env.iter() {
+    for pair in ctx.env.iter() {
         let env_bytes = pair.as_bytes_with_nul();
         let env_ptr = environ_buf + environ_buf_offset;
 
@@ -208,14 +208,14 @@ pub unsafe fn environ_get(
 }
 
 pub unsafe fn environ_sizes_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     environ_count_ptr: wasm32::uintptr_t,
     environ_size_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    let ctx = (*vmctx).as_wasi_ctx();
+    let ctx = vmctx.get_wasi_ctx();
 
-    let environ_count = (*ctx).env.len();
-    if let Some(environ_size) = (*ctx).env.iter().try_fold(0, |acc: u32, pair| {
+    let environ_count = ctx.env.len();
+    if let Some(environ_size) = ctx.env.iter().try_fold(0, |acc: u32, pair| {
         acc.checked_add(pair.as_bytes_with_nul().len() as u32)
     }) {
         unsafe {
@@ -232,16 +232,19 @@ pub unsafe fn environ_sizes_get(
     }
 }
 
-pub unsafe fn fd_close(vmctx: *mut VmContext, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
-    let ctx = (*vmctx).as_wasi_ctx_mut();
+pub unsafe fn fd_close(
+    vmctx: &mut VmContextView,
+    fd: wasm32::__wasi_fd_t,
+) -> wasm32::__wasi_errno_t {
+    let mut ctx = vmctx.get_wasi_ctx_mut();
     let fd = dec_fd(fd);
-    if let Some(fdent) = (*ctx).fds.get(&fd) {
+    if let Some(fdent) = ctx.fds.get(&fd) {
         // can't close preopened files
         if fdent.preopen_path.is_some() {
             return wasm32::__WASI_ENOTSUP;
         }
     }
-    if let Some(mut fdent) = (*ctx).fds.remove(&fd) {
+    if let Some(mut fdent) = ctx.fds.remove(&fd) {
         fdent.fd_object.needs_close = false;
         match nix::unistd::close(fdent.fd_object.rawfd) {
             Ok(_) => wasm32::__WASI_ESUCCESS,
@@ -253,7 +256,7 @@ pub unsafe fn fd_close(vmctx: *mut VmContext, fd: wasm32::__wasi_fd_t) -> wasm32
 }
 
 pub unsafe fn fd_fdstat_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     fdstat_ptr: wasm32::uintptr_t, // *mut wasm32::__wasi_fdstat_t
 ) -> wasm32::__wasi_errno_t {
@@ -263,8 +266,8 @@ pub unsafe fn fd_fdstat_get(
         Err(e) => return enc_errno(e),
     };
 
-    let ctx = (*vmctx).as_wasi_ctx_mut();
-    let errno = if let Some(fe) = (*ctx).fds.get(&host_fd) {
+    let ctx = vmctx.get_wasi_ctx();
+    let errno = if let Some(fe) = ctx.fds.get(&host_fd) {
         host_fdstat.fs_filetype = fe.fd_object.ty;
         host_fdstat.fs_rights_base = fe.rights_base;
         host_fdstat.fs_rights_inheriting = fe.rights_inheriting;
@@ -289,7 +292,7 @@ pub unsafe fn fd_fdstat_get(
 }
 
 pub unsafe fn fd_fdstat_set_flags(
-    vmctx: &mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     fdflags: wasm32::__wasi_fdflags_t,
 ) -> wasm32::__wasi_errno_t {
@@ -297,9 +300,9 @@ pub unsafe fn fd_fdstat_set_flags(
     let host_fdflags = dec_fdflags(fdflags);
     let nix_flags = host::nix_from_fdflags(host_fdflags);
 
-    let ctx = (*vmctx).as_wasi_ctx_mut();
+    let ctx = vmctx.get_wasi_ctx();
 
-    if let Some(fe) = (*ctx).fds.get(&host_fd) {
+    if let Some(fe) = ctx.fds.get(&host_fd) {
         match nix::fcntl::fcntl(fe.fd_object.rawfd, nix::fcntl::F_SETFL(nix_flags)) {
             Ok(_) => wasm32::__WASI_ESUCCESS,
             Err(e) => wasm32::errno_from_nix(e.as_errno().unwrap()),
@@ -310,13 +313,13 @@ pub unsafe fn fd_fdstat_set_flags(
 }
 
 pub unsafe fn fd_seek(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     offset: wasm32::__wasi_filedelta_t,
     whence: wasm32::__wasi_whence_t,
     newoffset: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    let ctx = (*vmctx).as_wasi_ctx_mut();
+    let ctx = vmctx.get_wasi_ctx();
     let fd = dec_fd(fd);
     let offset = dec_filedelta(offset);
     let whence = dec_whence(whence);
@@ -335,7 +338,7 @@ pub unsafe fn fd_seek(
         } else {
             host::__WASI_RIGHT_FD_SEEK | host::__WASI_RIGHT_FD_TELL
         };
-        match (*ctx).get_fd_entry(fd, rights.into(), 0) {
+        match ctx.get_fd_entry(fd, rights.into(), 0) {
             Ok(fe) => match lseek(fe.fd_object.rawfd, offset, nwhence) {
                 Ok(newoffset) => newoffset,
                 Err(e) => return wasm32::errno_from_nix(e.as_errno().unwrap()),
@@ -352,14 +355,14 @@ pub unsafe fn fd_seek(
 }
 
 pub unsafe fn fd_prestat_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     prestat_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    let ctx = (*vmctx).as_wasi_ctx();
+    let ctx = vmctx.get_wasi_ctx();
     let fd = dec_fd(fd);
     // TODO: is this the correct right for this?
-    match (*ctx).get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
+    match ctx.get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
         Ok(fe) => {
             if let Some(po_path) = &fe.preopen_path {
                 if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
@@ -391,14 +394,17 @@ pub unsafe fn fd_prestat_get(
 }
 
 pub unsafe fn fd_prestat_dir_name(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     path_ptr: wasm32::uintptr_t,
     path_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
     let fd = dec_fd(fd);
 
-    match (*(*vmctx).as_wasi_ctx()).get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
+    match vmctx
+        .get_wasi_ctx()
+        .get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0)
+    {
         Ok(fe) => {
             if let Some(po_path) = &fe.preopen_path {
                 if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
@@ -422,7 +428,7 @@ pub unsafe fn fd_prestat_dir_name(
 }
 
 pub unsafe fn fd_read(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     iovs_ptr: wasm32::uintptr_t,
     iovs_len: wasm32::size_t,
@@ -436,8 +442,8 @@ pub unsafe fn fd_read(
         Err(e) => return enc_errno(e),
     };
 
-    let ctx = (*vmctx).as_wasi_ctx_mut();
-    let fe = match (*ctx).get_fd_entry(fd, host::__WASI_RIGHT_FD_READ.into(), 0) {
+    let mut ctx = vmctx.get_wasi_ctx_mut();
+    let fe = match ctx.get_fd_entry(fd, host::__WASI_RIGHT_FD_READ.into(), 0) {
         Ok(fe) => fe,
         Err(e) => return enc_errno(e),
     };
@@ -454,7 +460,7 @@ pub unsafe fn fd_read(
 
     if host_nread == 0 {
         // we hit eof, so remove the fdentry from the context
-        let mut fe = (*ctx).fds.remove(&fd).expect("file entry is still there");
+        let mut fe = ctx.fds.remove(&fd).expect("file entry is still there");
         fe.fd_object.needs_close = false;
     }
 
@@ -466,7 +472,7 @@ pub unsafe fn fd_read(
 }
 
 pub unsafe fn fd_write(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     iovs_ptr: wasm32::uintptr_t,
     iovs_len: wasm32::size_t,
@@ -480,8 +486,8 @@ pub unsafe fn fd_write(
         Err(e) => return enc_errno(e),
     };
 
-    let ctx = (*vmctx).as_wasi_ctx();
-    let fe = match (*ctx).get_fd_entry(fd, host::__WASI_RIGHT_FD_WRITE.into(), 0) {
+    let ctx = vmctx.get_wasi_ctx();
+    let fe = match ctx.get_fd_entry(fd, host::__WASI_RIGHT_FD_WRITE.into(), 0) {
         Ok(fe) => fe,
         Err(e) => return enc_errno(e),
     };
@@ -504,7 +510,7 @@ pub unsafe fn fd_write(
 }
 
 pub unsafe fn path_open(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     dirfd: wasm32::__wasi_fd_t,
     dirflags: wasm32::__wasi_lookupflags_t,
     path_ptr: wasm32::uintptr_t,
@@ -627,7 +633,7 @@ pub unsafe fn path_open(
             let mut fe = unsafe { FdEntry::from_raw_fd(new_fd) };
             fe.rights_base &= max_base;
             fe.rights_inheriting &= max_inheriting;
-            match (*(*vmctx).as_wasi_ctx_mut()).insert_fd_entry(fe) {
+            match vmctx.get_wasi_ctx_mut().insert_fd_entry(fe) {
                 Ok(fd) => fd,
                 Err(e) => return enc_errno(e),
             }
@@ -642,14 +648,14 @@ pub unsafe fn path_open(
 }
 
 pub unsafe fn random_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     buf_ptr: wasm32::uintptr_t,
     buf_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
     use rand::{thread_rng, RngCore};
 
     let buf_len = dec_usize(buf_len);
-    let buf_ptr = match unsafe { (*vmctx).dec_ptr(buf_ptr, buf_len) } {
+    let buf_ptr = match unsafe { dec_ptr(vmctx, buf_ptr, buf_len) } {
         Ok(ptr) => ptr,
         Err(e) => return enc_errno(e),
     };
@@ -662,7 +668,7 @@ pub unsafe fn random_get(
 }
 
 pub unsafe fn poll_oneoff(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     input: wasm32::uintptr_t,
     output: wasm32::uintptr_t,
     nsubscriptions: wasm32::size_t,
@@ -751,16 +757,16 @@ pub unsafe fn poll_oneoff(
 }
 
 pub unsafe fn fd_filestat_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     filestat_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
     use nix::sys::stat::fstat;
 
     let host_fd = dec_fd(fd);
-    let ctx = (*vmctx).as_wasi_ctx_mut();
+    let ctx = vmctx.get_wasi_ctx_mut();
 
-    let errno = if let Some(fe) = (*ctx).fds.get(&host_fd) {
+    let errno = if let Some(fe) = ctx.fds.get(&host_fd) {
         match fstat(fe.fd_object.rawfd) {
             Err(e) => wasm32::errno_from_nix(e.as_errno().unwrap()),
             Ok(filestat) => {
@@ -779,7 +785,7 @@ pub unsafe fn fd_filestat_get(
 }
 
 pub unsafe fn path_filestat_get(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     dirfd: wasm32::__wasi_fd_t,
     dirflags: wasm32::__wasi_lookupflags_t,
     path_ptr: wasm32::uintptr_t,
@@ -825,7 +831,7 @@ pub unsafe fn path_filestat_get(
 }
 
 pub unsafe fn path_create_directory(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     dirfd: wasm32::__wasi_fd_t,
     path_ptr: wasm32::uintptr_t,
     path_len: wasm32::size_t,
@@ -862,7 +868,7 @@ pub unsafe fn path_create_directory(
 }
 
 pub unsafe fn path_unlink_file(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     dirfd: wasm32::__wasi_fd_t,
     path_ptr: wasm32::uintptr_t,
     path_len: wasm32::size_t,
@@ -899,14 +905,14 @@ pub unsafe fn path_unlink_file(
 }
 
 pub unsafe fn fd_datasync(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
 ) -> wasm32::__wasi_errno_t {
     unimplemented!("fd_datasync")
 }
 
 pub unsafe fn fd_pread(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     iovs: wasm32::uintptr_t,
     iovs_len: wasm32::size_t,
@@ -917,7 +923,7 @@ pub unsafe fn fd_pread(
 }
 
 pub unsafe fn fd_pwrite(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     iovs: wasm32::uintptr_t,
     iovs_len: wasm32::size_t,
@@ -928,7 +934,7 @@ pub unsafe fn fd_pwrite(
 }
 
 pub unsafe fn fd_renumber(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     from: wasm32::__wasi_fd_t,
     to: wasm32::__wasi_fd_t,
 ) -> wasm32::__wasi_errno_t {
@@ -936,7 +942,7 @@ pub unsafe fn fd_renumber(
 }
 
 pub unsafe fn fd_tell(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     newoffset: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
@@ -944,7 +950,7 @@ pub unsafe fn fd_tell(
 }
 
 pub unsafe fn fd_fdstat_set_rights(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     fs_rights_base: wasm32::__wasi_rights_t,
     fs_rights_inheriting: wasm32::__wasi_rights_t,
@@ -952,12 +958,15 @@ pub unsafe fn fd_fdstat_set_rights(
     unimplemented!("fd_fdstat_set_rights")
 }
 
-pub unsafe fn fd_sync(vmctx: *mut VmContext, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
+pub unsafe fn fd_sync(
+    vmctx: &mut VmContextView,
+    fd: wasm32::__wasi_fd_t,
+) -> wasm32::__wasi_errno_t {
     unimplemented!("fd_sync")
 }
 
 pub unsafe fn fd_advise(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     offset: wasm32::__wasi_filesize_t,
     len: wasm32::__wasi_filesize_t,
@@ -967,7 +976,7 @@ pub unsafe fn fd_advise(
 }
 
 pub unsafe fn fd_allocate(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     offset: wasm32::__wasi_filesize_t,
     len: wasm32::__wasi_filesize_t,
@@ -976,7 +985,7 @@ pub unsafe fn fd_allocate(
 }
 
 pub unsafe fn path_link(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd0: wasm32::__wasi_fd_t,
     flags0: wasm32::__wasi_lookupflags_t,
     path0: wasm32::uintptr_t,
@@ -989,7 +998,7 @@ pub unsafe fn path_link(
 }
 
 pub unsafe fn fd_readdir(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     buf: wasm32::uintptr_t,
     buf_len: wasm32::size_t,
@@ -1000,7 +1009,7 @@ pub unsafe fn fd_readdir(
 }
 
 pub unsafe fn path_readlink(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     path: wasm32::uintptr_t,
     path_len: wasm32::size_t,
@@ -1012,7 +1021,7 @@ pub unsafe fn path_readlink(
 }
 
 pub unsafe fn path_rename(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd0: wasm32::__wasi_fd_t,
     path0: wasm32::uintptr_t,
     path_len0: wasm32::size_t,
@@ -1024,7 +1033,7 @@ pub unsafe fn path_rename(
 }
 
 pub unsafe fn fd_filestat_set_times(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     st_atim: wasm32::__wasi_timestamp_t,
     st_mtim: wasm32::__wasi_timestamp_t,
@@ -1034,7 +1043,7 @@ pub unsafe fn fd_filestat_set_times(
 }
 
 pub unsafe fn fd_filestat_set_size(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     size: wasm32::__wasi_filesize_t,
 ) -> wasm32::__wasi_errno_t {
@@ -1042,7 +1051,7 @@ pub unsafe fn fd_filestat_set_size(
 }
 
 pub unsafe fn path_filestat_set_times(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     flags: wasm32::__wasi_lookupflags_t,
     path: wasm32::uintptr_t,
@@ -1055,7 +1064,7 @@ pub unsafe fn path_filestat_set_times(
 }
 
 pub unsafe fn path_symlink(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     path0: wasm32::uintptr_t,
     path_len0: wasm32::size_t,
     fd: wasm32::__wasi_fd_t,
@@ -1066,7 +1075,7 @@ pub unsafe fn path_symlink(
 }
 
 pub unsafe fn path_remove_directory(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     fd: wasm32::__wasi_fd_t,
     path: wasm32::uintptr_t,
     path_len: wasm32::size_t,
@@ -1075,18 +1084,18 @@ pub unsafe fn path_remove_directory(
 }
 
 pub unsafe fn proc_raise(
-    _vmctx: *mut VmContext,
+    _vmctx: &mut VmContextView,
     _sig: wasm32::__wasi_signal_t,
 ) -> wasm32::__wasi_errno_t {
     unimplemented!("proc_raise")
 }
 
-pub unsafe fn sched_yield(_vmctx: *mut VmContext) -> wasm32::__wasi_errno_t {
+pub unsafe fn sched_yield(_vmctx: &mut VmContextView) -> wasm32::__wasi_errno_t {
     unimplemented!("sched_yield")
 }
 
 pub unsafe fn sock_recv(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     sock: wasm32::__wasi_fd_t,
     ri_data: wasm32::uintptr_t,
     ri_data_len: wasm32::size_t,
@@ -1098,7 +1107,7 @@ pub unsafe fn sock_recv(
 }
 
 pub unsafe fn sock_send(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     sock: wasm32::__wasi_fd_t,
     si_data: wasm32::uintptr_t,
     si_data_len: wasm32::size_t,
@@ -1109,7 +1118,7 @@ pub unsafe fn sock_send(
 }
 
 pub unsafe fn sock_shutdown(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     sock: wasm32::__wasi_fd_t,
     how: wasm32::__wasi_sdflags_t,
 ) -> wasm32::__wasi_errno_t {
@@ -1146,7 +1155,7 @@ struct FdEventData {
 }
 
 fn poll_oneoff_handle_timeout_event(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     output_slice: &mut [wasm32::__wasi_event_t],
     nevents: wasm32::uintptr_t,
     timeout: Option<ClockEventData>,
@@ -1177,7 +1186,7 @@ fn poll_oneoff_handle_timeout_event(
 }
 
 fn poll_oneoff_handle_fd_event<'t>(
-    vmctx: *mut VmContext,
+    vmctx: &mut VmContextView,
     output_slice: &mut [wasm32::__wasi_event_t],
     nevents: wasm32::uintptr_t,
     events: impl Iterator<Item = (&'t FdEventData, &'t nix::poll::PollFd)>,
@@ -1263,7 +1272,7 @@ fn poll_oneoff_handle_fd_event<'t>(
 ///
 /// This is a workaround for not having Capsicum support in the OS.
 pub fn path_get<P: AsRef<OsStr>>(
-    vmctx: &VmContext,
+    vmctx: &VmContextView,
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
     path: P,
@@ -1307,9 +1316,8 @@ pub fn path_get<P: AsRef<OsStr>>(
         Err(errno)
     }
 
-    let ctx = (*vmctx).as_wasi_ctx();
-
-    let dirfe = unsafe { (*ctx).get_fd_entry(dirfd, needed_base, needed_inheriting)? };
+    let ctx = vmctx.get_wasi_ctx();
+    let dirfe = ctx.get_fd_entry(dirfd, needed_base, needed_inheriting)?;
 
     // Stack of directory file descriptors. Index 0 always corresponds with the directory provided
     // to this function. Entering a directory causes a file descriptor to be pushed, while handling
