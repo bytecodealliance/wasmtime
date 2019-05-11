@@ -1,6 +1,5 @@
 use crate::fdentry::FdEntry;
 use crate::host;
-use crate::wasm32;
 
 use failure::{bail, format_err, Error};
 use nix::unistd::dup;
@@ -10,17 +9,6 @@ use std::fs::File;
 use std::io::{stderr, stdin, stdout};
 use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::path::{Path, PathBuf};
-
-pub trait VmContext {
-    fn as_wasi_ctx(&self) -> *const WasiCtx;
-    fn as_wasi_ctx_mut(&mut self) -> *mut WasiCtx;
-
-    unsafe fn dec_ptr(
-        &mut self,
-        ptr: wasm32::uintptr_t,
-        len: usize,
-    ) -> Result<*mut u8, host::__wasi_errno_t>;
-}
 
 pub struct WasiCtxBuilder {
     fds: HashMap<host::__wasi_fd_t, FdEntry>,
@@ -196,16 +184,6 @@ pub struct WasiCtx {
     pub fds: HashMap<host::__wasi_fd_t, FdEntry>,
     pub args: Vec<CString>,
     pub env: Vec<CString>,
-}
-
-impl Default for WasiCtx {
-    fn default() -> Self {
-        Self {
-            fds: HashMap::new(),
-            args: Vec::new(),
-            env: Vec::new(),
-        }
-    }
 }
 
 impl WasiCtx {
