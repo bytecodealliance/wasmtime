@@ -1,16 +1,21 @@
 # WASI tutorial
 We'll split the tutorial into two parts: in the first part we'll walk through
-compiling C and Rust programs to WASI, and in the second part how to execute
-the compiled WebAssembly module using `wasmtime` runtime.
+compiling C and Rust programs to WASI and executing the compiled WebAssembly module
+using `wasmtime` runtime. In the second part we will discuss the compilation of a
+simpler WebAssembly program written using the WebAssembly text format, and executing
+this using the `wasmtime` runtime.
 
 - [WASI tutorial](#wasi-tutorial)
-  - [Compiling to WASI](#compiling-to-wasi)
-    - [From C](#from-c)
-    - [From Rust](#from-rust)
-  - [Executing in `wasmtime` runtime](#executing-in-wasmtime-runtime)
+  - [Running common languages with WASI](#running-common-languages-with-wasi)
+    - [Compiling to WASI](#compiling-to-wasi)
+        - [From C](#from-c)
+        - [From Rust](#from-rust)
+    - [Executing in `wasmtime` runtime](#executing-in-wasmtime-runtime)
+  - [Web assembly text example](#web-assembly-text-example)
 
+## Running common languages with WASI
 ## Compiling to WASI
-### From C
+#### From C
 Let's start with a simple C program which performs a file copy, which will
 show to compile and run programs, as well as perform simple sandbox
 configuration. The C code here uses standard POSIX APIs, and doesn't have
@@ -87,7 +92,7 @@ demo.wasm: WebAssembly (wasm) binary module version 0x1 (MVP)
 ```
 
 
-### From Rust
+#### From Rust
 The same effect can be achieved with Rust. Firstly, go ahead and create a new
 binary crate:
 
@@ -244,3 +249,68 @@ The capability model is very powerful, and what's shown here is just the beginni
 In the future, we'll be exposing much more functionality, including finer-grained
 capabilities, capabilities for network ports, and the ability for applications to
 explicitly request capabilities.
+
+## Web assembly text example
+
+In this example we will look at compiling the WebAssembly text format into wasm, and
+running the compiled WebAssembly module using the `wasmtime` runtime. This example
+makes use of WASI's `fd_write` implementation to write `hello world` to stdout.
+
+First, create a new `demo.wat` file:
+
+```wat
+(module
+    ;; Import the required fd_write WASI function which will write the given io vectors to stdout
+    ;; The function signature for fd_write is:
+    ;; (File Descriptor, *iovs, iovs_len, nwritten) -> Returns number of bytes written
+    (import "wasi_unstable" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
+
+    (memory 1)
+    (export "memory" (memory 0))
+
+    ;; Write 'hello world\n' to memory at an offset of 8 bytes
+    ;; Note the trailing newline which is required for the text to appear
+    (data (i32.const 8) "hello world\n")
+
+    (func $main (export "_start")
+        ;; Creating a new io vector within linear memory
+        (i32.store (i32.const 0) (i32.const 8))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
+        (i32.store (i32.const 4) (i32.const 12))  ;; iov.iov_len - The length of the 'hello world\n' string
+
+        (call $fd_write
+            (i32.const 1) ;; file_descriptor - 1 for stdout
+            (i32.const 0) ;; *iovs - The pointer to the iov array, which is stored at memory location 0
+            (i32.const 1) ;; iovs_len - We're printing 1 string stored in an iov - so one.
+            (i32.const 20) ;; nwritten - A place in memory to store the number of bytes writen
+        )
+        drop ;; Discard the number of bytes written from the top the stack
+    )
+)
+```
+
+`wasmtime` can directly execute `.wat` files:
+
+```
+$ wasmtime demo.wat
+hello world
+```
+
+Or, you can compile the `.wat` WebAssembly text format into the wasm binary format
+yourself using the [wabt] command line tools:
+
+```
+$ wat2wasm demo.wat
+```
+
+The created `.wasm` file can now be executed with `wasmtime` directly like so:
+
+```
+$ wasmtime demo.wasm
+hello world
+```
+
+To run this example within the browser, simply upload the compiled `.wasm` file to
+the [WASI browser polyfill].
+
+[wabt]: https://github.com/WebAssembly/wabt
+[WASI browser polyfill]: https://wasi.dev/polyfill/
