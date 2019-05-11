@@ -28,8 +28,8 @@ as with "cargo build --release". For information on installing clang, see
 [rust-bindgen's documentation](https://github.com/rust-lang/rust-bindgen/blob/master/book/src/requirements.md).
 
 There are Rust, C, and C++ toolchains that can compile programs with WASI. See
-[here][WASI intro] for more information, and [here][WASI tutorial] for a
-tutorial on compiling and running programs using WASI and wasmtime, as
+the [WASI intro][WASI intro] for more information, and the [WASI tutorial][WASI tutorial]
+for a tutorial on compiling and running programs using WASI and wasmtime, as
 well as an overview of the filesystem sandboxing system.
 
 Wasmtime does not yet implement Spectre mitigations, such as those being
