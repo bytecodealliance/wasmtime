@@ -42,7 +42,7 @@ pub fn args_get(
         let arg_bytes = arg.as_bytes_with_nul();
         let arg_ptr = argv_buf + argv_buf_offset;
 
-        if let Err(e) = unsafe { enc_slice_of(memory, arg_bytes, arg_ptr) } {
+        if let Err(e) = enc_slice_of(memory, arg_bytes, arg_ptr) {
             return enc_errno(e);
         }
 
@@ -58,11 +58,9 @@ pub fn args_get(
         }
     }
 
-    unsafe {
-        enc_slice_of(memory, argv.as_slice(), argv_ptr)
-            .map(|_| wasm32::__WASI_ESUCCESS)
-            .unwrap_or_else(|e| e)
-    }
+    enc_slice_of(memory, argv.as_slice(), argv_ptr)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(|e| e)
 }
 
 pub fn args_sizes_get(
@@ -78,13 +76,11 @@ pub fn args_sizes_get(
         .map(|arg| arg.as_bytes_with_nul().len())
         .sum();
 
-    unsafe {
-        if let Err(e) = enc_usize_byref(memory, argc_ptr, argc) {
-            return enc_errno(e);
-        }
-        if let Err(e) = enc_usize_byref(memory, argv_buf_size_ptr, argv_size) {
-            return enc_errno(e);
-        }
+    if let Err(e) = enc_usize_byref(memory, argc_ptr, argc) {
+        return enc_errno(e);
+    }
+    if let Err(e) = enc_usize_byref(memory, argv_buf_size_ptr, argv_size) {
+        return enc_errno(e);
     }
     wasm32::__WASI_ESUCCESS
 }
@@ -115,20 +111,17 @@ pub fn clock_res_get(
     (timespec.tv_sec as host::__wasi_timestamp_t)
         .checked_mul(1_000_000_000)
         .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-        .map(|resolution| {
+        .map_or(wasm32::__WASI_EOVERFLOW, |resolution| {
             // a supported clock can never return zero; this case will probably never get hit, but
             // make sure we follow the spec
             if resolution == 0 {
                 wasm32::__WASI_EINVAL
             } else {
-                unsafe {
-                    enc_timestamp_byref(memory, resolution_ptr, resolution)
-                        .map(|_| wasm32::__WASI_ESUCCESS)
-                        .unwrap_or_else(|e| e)
-                }
+                enc_timestamp_byref(memory, resolution_ptr, resolution)
+                    .map(|_| wasm32::__WASI_ESUCCESS)
+                    .unwrap_or_else(|e| e)
             }
         })
-        .unwrap_or(wasm32::__WASI_EOVERFLOW)
 }
 
 pub fn clock_time_get(
@@ -160,12 +153,11 @@ pub fn clock_time_get(
     (timespec.tv_sec as host::__wasi_timestamp_t)
         .checked_mul(1_000_000_000)
         .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-        .map(|time| unsafe {
+        .map_or(wasm32::__WASI_EOVERFLOW, |time| {
             enc_timestamp_byref(memory, time_ptr, time)
                 .map(|_| wasm32::__WASI_ESUCCESS)
                 .unwrap_or_else(|e| e)
         })
-        .unwrap_or(wasm32::__WASI_EOVERFLOW)
 }
 
 pub fn environ_get(
@@ -181,7 +173,7 @@ pub fn environ_get(
         let env_bytes = pair.as_bytes_with_nul();
         let env_ptr = environ_buf + environ_buf_offset;
 
-        if let Err(e) = unsafe { enc_slice_of(memory, env_bytes, env_ptr) } {
+        if let Err(e) = enc_slice_of(memory, env_bytes, env_ptr) {
             return enc_errno(e);
         }
 
@@ -197,11 +189,9 @@ pub fn environ_get(
         }
     }
 
-    unsafe {
-        enc_slice_of(memory, environ.as_slice(), environ_ptr)
-            .map(|_| wasm32::__WASI_ESUCCESS)
-            .unwrap_or_else(|e| e)
-    }
+    enc_slice_of(memory, environ.as_slice(), environ_ptr)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(|e| e)
 }
 
 pub fn environ_sizes_get(
@@ -214,13 +204,11 @@ pub fn environ_sizes_get(
     if let Some(environ_size) = wasi_ctx.env.iter().try_fold(0, |acc: u32, pair| {
         acc.checked_add(pair.as_bytes_with_nul().len() as u32)
     }) {
-        unsafe {
-            if let Err(e) = enc_usize_byref(memory, environ_count_ptr, environ_count) {
-                return enc_errno(e);
-            }
-            if let Err(e) = enc_usize_byref(memory, environ_size_ptr, environ_size as usize) {
-                return enc_errno(e);
-            }
+        if let Err(e) = enc_usize_byref(memory, environ_count_ptr, environ_count) {
+            return enc_errno(e);
+        }
+        if let Err(e) = enc_usize_byref(memory, environ_size_ptr, environ_size as usize) {
+            return enc_errno(e);
         }
         wasm32::__WASI_ESUCCESS
     } else {
@@ -254,7 +242,7 @@ pub fn fd_fdstat_get(
     fdstat_ptr: wasm32::uintptr_t, // *mut wasm32::__wasi_fdstat_t
 ) -> wasm32::__wasi_errno_t {
     let host_fd = dec_fd(fd);
-    let mut host_fdstat = match unsafe { dec_fdstat_byref(memory, fdstat_ptr) } {
+    let mut host_fdstat = match dec_fdstat_byref(memory, fdstat_ptr) {
         Ok(host_fdstat) => host_fdstat,
         Err(e) => return enc_errno(e),
     };
@@ -275,10 +263,8 @@ pub fn fd_fdstat_get(
         wasm32::__WASI_EBADF
     };
 
-    unsafe {
-        enc_fdstat_byref(memory, fdstat_ptr, host_fdstat)
-            .expect("can write back into the pointer we read from");
-    }
+    enc_fdstat_byref(memory, fdstat_ptr, host_fdstat)
+        .expect("can write back into the pointer we read from");
 
     errno
 }
@@ -337,11 +323,9 @@ pub fn fd_seek(
         }
     };
 
-    unsafe {
-        enc_filesize_byref(memory, newoffset, host_newoffset as u64)
-            .map(|_| wasm32::__WASI_ESUCCESS)
-            .unwrap_or_else(|e| e)
-    }
+    enc_filesize_byref(memory, newoffset, host_newoffset as u64)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(|e| e)
 }
 
 pub fn fd_prestat_get(
@@ -358,23 +342,20 @@ pub fn fd_prestat_get(
                 if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
                     return wasm32::__WASI_ENOTDIR;
                 }
-                unsafe {
-                    enc_prestat_byref(
-                        memory,
-                        prestat_ptr,
-                        host::__wasi_prestat_t {
-                            pr_type: host::__WASI_PREOPENTYPE_DIR,
-                            u: host::__wasi_prestat_t___wasi_prestat_u {
-                                dir:
-                                    host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
-                                        pr_name_len: po_path.as_os_str().as_bytes().len(),
-                                    },
+                enc_prestat_byref(
+                    memory,
+                    prestat_ptr,
+                    host::__wasi_prestat_t {
+                        pr_type: host::__WASI_PREOPENTYPE_DIR,
+                        u: host::__wasi_prestat_t___wasi_prestat_u {
+                            dir: host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
+                                pr_name_len: po_path.as_os_str().as_bytes().len(),
                             },
                         },
-                    )
-                    .map(|_| wasm32::__WASI_ESUCCESS)
-                    .unwrap_or_else(|e| e)
-                }
+                    },
+                )
+                .map(|_| wasm32::__WASI_ESUCCESS)
+                .unwrap_or_else(|e| e)
             } else {
                 wasm32::__WASI_ENOTSUP
             }
@@ -402,11 +383,9 @@ pub fn fd_prestat_dir_name(
                 if path_bytes.len() > dec_usize(path_len) {
                     return wasm32::__WASI_ENAMETOOLONG;
                 }
-                unsafe {
-                    enc_slice_of(memory, path_bytes, path_ptr)
-                        .map(|_| wasm32::__WASI_ESUCCESS)
-                        .unwrap_or_else(|e| e)
-                }
+                enc_slice_of(memory, path_bytes, path_ptr)
+                    .map(|_| wasm32::__WASI_ESUCCESS)
+                    .unwrap_or_else(|e| e)
             } else {
                 wasm32::__WASI_ENOTSUP
             }
@@ -426,7 +405,7 @@ pub fn fd_read(
     use nix::sys::uio::{readv, IoVec};
 
     let fd = dec_fd(fd);
-    let mut iovs = match unsafe { dec_ciovec_slice(memory, iovs_ptr, iovs_len) } {
+    let mut iovs = match dec_ciovec_slice(memory, iovs_ptr, iovs_len) {
         Ok(iovs) => iovs,
         Err(e) => return enc_errno(e),
     };
@@ -452,11 +431,9 @@ pub fn fd_read(
         fe.fd_object.needs_close = false;
     }
 
-    unsafe {
-        enc_usize_byref(memory, nread, host_nread)
-            .map(|_| wasm32::__WASI_ESUCCESS)
-            .unwrap_or_else(|e| e)
-    }
+    enc_usize_byref(memory, nread, host_nread)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(|e| e)
 }
 
 pub fn fd_write(
@@ -470,7 +447,7 @@ pub fn fd_write(
     use nix::sys::uio::{writev, IoVec};
 
     let fd = dec_fd(fd);
-    let iovs = match unsafe { dec_ciovec_slice(memory, iovs_ptr, iovs_len) } {
+    let iovs = match dec_ciovec_slice(memory, iovs_ptr, iovs_len) {
         Ok(iovs) => iovs,
         Err(e) => return enc_errno(e),
     };
@@ -490,11 +467,9 @@ pub fn fd_write(
         Err(e) => return wasm32::errno_from_nix(e.as_errno().unwrap()),
     };
 
-    unsafe {
-        enc_usize_byref(memory, nwritten, host_nwritten)
-            .map(|_| wasm32::__WASI_ESUCCESS)
-            .unwrap_or_else(|e| e)
-    }
+    enc_usize_byref(memory, nwritten, host_nwritten)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(|e| e)
 }
 
 pub fn path_open(
@@ -564,7 +539,7 @@ pub fn path_open(
         needed_inheriting |= host::__WASI_RIGHT_FD_SYNC;
     }
 
-    let path = match unsafe { dec_slice_of::<u8>(memory, path_ptr, path_len) } {
+    let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
         Ok((ptr, len)) => OsStr::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) }),
         Err(e) => return enc_errno(e),
     };
@@ -630,11 +605,9 @@ pub fn path_open(
         }
     };
 
-    unsafe {
-        enc_fd_byref(memory, fd_out_ptr, guest_fd)
-            .map(|_| wasm32::__WASI_ESUCCESS)
-            .unwrap_or_else(|e| e)
-    }
+    enc_fd_byref(memory, fd_out_ptr, guest_fd)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(|e| e)
 }
 
 pub fn random_get(
@@ -645,7 +618,7 @@ pub fn random_get(
     use rand::{thread_rng, RngCore};
 
     let buf_len = dec_usize(buf_len);
-    let buf_ptr = match unsafe { dec_ptr(memory, buf_ptr, buf_len) } {
+    let buf_ptr = match dec_ptr(memory, buf_ptr, buf_len) {
         Ok(ptr) => ptr,
         Err(e) => return enc_errno(e),
     };
@@ -667,14 +640,13 @@ pub fn poll_oneoff(
     if nsubscriptions as u64 > wasm32::__wasi_filesize_t::max_value() {
         return wasm32::__WASI_EINVAL;
     }
-    unsafe { enc_pointee(memory, nevents, 0) }.unwrap();
+    enc_pointee(memory, nevents, 0).unwrap();
     let input_slice_ =
-        unsafe { dec_slice_of::<wasm32::__wasi_subscription_t>(memory, input, nsubscriptions) }
-            .unwrap();
+        dec_slice_of::<wasm32::__wasi_subscription_t>(memory, input, nsubscriptions).unwrap();
     let input_slice = unsafe { slice::from_raw_parts(input_slice_.0, input_slice_.1) };
 
     let output_slice_ =
-        unsafe { dec_slice_of::<wasm32::__wasi_event_t>(memory, output, nsubscriptions) }.unwrap();
+        dec_slice_of::<wasm32::__wasi_event_t>(memory, output, nsubscriptions).unwrap();
     let output_slice = unsafe { slice::from_raw_parts_mut(output_slice_.0, output_slice_.1) };
 
     let input: Vec<_> = input_slice.iter().map(|x| dec_subscription(x)).collect();
@@ -727,7 +699,7 @@ pub fn poll_oneoff(
         delay: cmp::min(delay, c_int::max_value() as u128),
         userdata,
     });
-    let poll_timeout = timeout.map(|timeout| timeout.delay as c_int).unwrap_or(-1);
+    let poll_timeout = timeout.map_or(-1, |timeout| timeout.delay as c_int);
     let ready = loop {
         match nix::poll::poll(&mut poll_fds, poll_timeout) {
             Err(_) => {
@@ -761,10 +733,8 @@ pub fn fd_filestat_get(
             Err(e) => wasm32::errno_from_nix(e.as_errno().unwrap()),
             Ok(filestat) => {
                 let host_filestat = host::filestat_from_nix(filestat);
-                unsafe {
-                    enc_filestat_byref(memory, filestat_ptr, host_filestat)
-                        .expect("can write into the pointer");
-                }
+                enc_filestat_byref(memory, filestat_ptr, host_filestat)
+                    .expect("can write into the pointer");
                 wasm32::__WASI_ESUCCESS
             }
         }
@@ -788,7 +758,7 @@ pub fn path_filestat_get(
 
     let dirfd = dec_fd(dirfd);
     let dirflags = dec_lookupflags(dirflags);
-    let path = match unsafe { dec_slice_of::<u8>(memory, path_ptr, path_len) } {
+    let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
         Ok((ptr, len)) => OsStr::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) }),
         Err(e) => return enc_errno(e),
     };
@@ -813,10 +783,8 @@ pub fn path_filestat_get(
         Err(e) => wasm32::errno_from_nix(e.as_errno().unwrap()),
         Ok(filestat) => {
             let host_filestat = host::filestat_from_nix(filestat);
-            unsafe {
-                enc_filestat_byref(memory, filestat_ptr, host_filestat)
-                    .expect("can write into the pointer");
-            }
+            enc_filestat_byref(memory, filestat_ptr, host_filestat)
+                .expect("can write into the pointer");
             wasm32::__WASI_ESUCCESS
         }
     }
@@ -833,7 +801,7 @@ pub fn path_create_directory(
     use nix::libc::mkdirat;
 
     let dirfd = dec_fd(dirfd);
-    let path = match unsafe { dec_slice_of::<u8>(memory, path_ptr, path_len) } {
+    let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
         Ok((ptr, len)) => OsStr::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) }),
         Err(e) => return enc_errno(e),
     };
@@ -872,7 +840,7 @@ pub fn path_unlink_file(
     use nix::libc::unlinkat;
 
     let dirfd = dec_fd(dirfd);
-    let path = match unsafe { dec_slice_of::<u8>(memory, path_ptr, path_len) } {
+    let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
         Ok((ptr, len)) => OsStr::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) }),
         Err(e) => return enc_errno(e),
     };
@@ -1191,12 +1159,12 @@ fn poll_oneoff_handle_timeout_event(
             },
         };
         output_slice[0] = enc_event(output_event);
-        if let Err(e) = unsafe { enc_pointee(memory, nevents, 1) } {
+        if let Err(e) = enc_pointee(memory, nevents, 1) {
             return enc_errno(e);
         }
     } else {
         // shouldn't happen
-        if let Err(e) = unsafe { enc_pointee(memory, nevents, 0) } {
+        if let Err(e) = enc_pointee(memory, nevents, 0) {
             return enc_errno(e);
         }
     }
@@ -1280,7 +1248,7 @@ fn poll_oneoff_handle_fd_event<'t>(
         *output_slice_cur.next().unwrap() = enc_event(output_event);
         revents_count += 1;
     }
-    if let Err(e) = unsafe { enc_pointee(memory, nevents, revents_count) } {
+    if let Err(e) = enc_pointee(memory, nevents, revents_count) {
         return enc_errno(e);
     }
     wasm32::__WASI_ESUCCESS
