@@ -5,7 +5,7 @@ os:
     - osx
 language: rust
 rust:
-    - 1.32.0
+    - 1.34.0
     - beta
     - nightly
 matrix:
