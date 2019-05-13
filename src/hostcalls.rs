@@ -542,13 +542,12 @@ pub fn path_open(
     }
 
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok((ptr, len)) => OsStr::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) }),
+        Ok(slice) => OsStr::from_bytes(slice),
         Err(e) => return enc_errno(e),
     };
 
     let (dir, path) = match path_get(
         wasi_ctx,
-        memory,
         dirfd,
         dirflags,
         path,
@@ -619,13 +618,10 @@ pub fn random_get(
 ) -> wasm32::__wasi_errno_t {
     use rand::{thread_rng, RngCore};
 
-    let buf_len = dec_usize(buf_len);
-    let buf_ptr = match dec_ptr(memory, buf_ptr, buf_len) {
-        Ok(ptr) => ptr,
+    let buf = match dec_slice_of_mut::<u8>(memory, buf_ptr, buf_len) {
+        Ok(buf) => buf,
         Err(e) => return enc_errno(e),
     };
-
-    let buf = unsafe { std::slice::from_raw_parts_mut(buf_ptr, buf_len) };
 
     thread_rng().fill_bytes(buf);
 
@@ -643,15 +639,13 @@ pub fn poll_oneoff(
         return wasm32::__WASI_EINVAL;
     }
     enc_pointee(memory, nevents, 0).unwrap();
-    let input_slice_ =
+    let input_slice =
         dec_slice_of::<wasm32::__wasi_subscription_t>(memory, input, nsubscriptions).unwrap();
-    let input_slice = unsafe { slice::from_raw_parts(input_slice_.0, input_slice_.1) };
-
-    let output_slice_ =
-        dec_slice_of::<wasm32::__wasi_event_t>(memory, output, nsubscriptions).unwrap();
-    let output_slice = unsafe { slice::from_raw_parts_mut(output_slice_.0, output_slice_.1) };
 
     let input: Vec<_> = input_slice.iter().map(|x| dec_subscription(x)).collect();
+
+    let output_slice =
+        dec_slice_of_mut::<wasm32::__wasi_event_t>(memory, output, nsubscriptions).unwrap();
 
     let timeout = input
         .iter()
@@ -713,11 +707,16 @@ pub fn poll_oneoff(
             Ok(ready) => break ready as usize,
         }
     };
-    if ready == 0 {
-        return poll_oneoff_handle_timeout_event(memory, output_slice, nevents, timeout);
+    let events_count = if ready == 0 {
+        poll_oneoff_handle_timeout_event(output_slice, nevents, timeout)
+    } else {
+        let events = fd_events.iter().zip(poll_fds.iter()).take(ready);
+        poll_oneoff_handle_fd_event(output_slice, nevents, events)
+    };
+    if let Err(e) = enc_pointee(memory, nevents, events_count) {
+        return enc_errno(e);
     }
-    let events = fd_events.iter().zip(poll_fds.iter()).take(ready);
-    poll_oneoff_handle_fd_event(memory, output_slice, nevents, events)
+    wasm32::__WASI_ESUCCESS
 }
 
 pub fn fd_filestat_get(
@@ -761,12 +760,11 @@ pub fn path_filestat_get(
     let dirfd = dec_fd(dirfd);
     let dirflags = dec_lookupflags(dirflags);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok((ptr, len)) => OsStr::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) }),
+        Ok(slice) => OsStr::from_bytes(slice),
         Err(e) => return enc_errno(e),
     };
     let (dir, path) = match path_get(
         wasi_ctx,
-        memory,
         dirfd,
         dirflags,
         path,
@@ -804,12 +802,11 @@ pub fn path_create_directory(
 
     let dirfd = dec_fd(dirfd);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok((ptr, len)) => OsStr::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) }),
+        Ok(slice) => OsStr::from_bytes(slice),
         Err(e) => return enc_errno(e),
     };
     let (dir, path) = match path_get(
         wasi_ctx,
-        memory,
         dirfd,
         0,
         path,
@@ -843,12 +840,11 @@ pub fn path_unlink_file(
 
     let dirfd = dec_fd(dirfd);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok((ptr, len)) => OsStr::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) }),
+        Ok(slice) => OsStr::from_bytes(slice),
         Err(e) => return enc_errno(e),
     };
     let (dir, path) = match path_get(
         wasi_ctx,
-        memory,
         dirfd,
         0,
         path,
@@ -1143,11 +1139,10 @@ struct FdEventData {
 }
 
 fn poll_oneoff_handle_timeout_event(
-    memory: &mut [u8],
     output_slice: &mut [wasm32::__wasi_event_t],
     nevents: wasm32::uintptr_t,
     timeout: Option<ClockEventData>,
-) -> wasm32::__wasi_errno_t {
+) -> wasm32::size_t {
     if let Some(ClockEventData { userdata, .. }) = timeout {
         let output_event = host::__wasi_event_t {
             userdata,
@@ -1161,24 +1156,18 @@ fn poll_oneoff_handle_timeout_event(
             },
         };
         output_slice[0] = enc_event(output_event);
-        if let Err(e) = enc_pointee(memory, nevents, 1) {
-            return enc_errno(e);
-        }
+        1
     } else {
         // shouldn't happen
-        if let Err(e) = enc_pointee(memory, nevents, 0) {
-            return enc_errno(e);
-        }
+        0
     }
-    wasm32::__WASI_ESUCCESS
 }
 
 fn poll_oneoff_handle_fd_event<'t>(
-    memory: &mut [u8],
     output_slice: &mut [wasm32::__wasi_event_t],
     nevents: wasm32::uintptr_t,
     events: impl Iterator<Item = (&'t FdEventData, &'t nix::poll::PollFd)>,
-) -> wasm32::__wasi_errno_t {
+) -> wasm32::size_t {
     let mut output_slice_cur = output_slice.iter_mut();
     let mut revents_count = 0;
     for (fd_event, poll_fd) in events {
@@ -1250,10 +1239,7 @@ fn poll_oneoff_handle_fd_event<'t>(
         *output_slice_cur.next().unwrap() = enc_event(output_event);
         revents_count += 1;
     }
-    if let Err(e) = enc_pointee(memory, nevents, revents_count) {
-        return enc_errno(e);
-    }
-    wasm32::__WASI_ESUCCESS
+    revents_count
 }
 
 /// Normalizes a path to ensure that the target path is located under the directory provided.
@@ -1261,7 +1247,6 @@ fn poll_oneoff_handle_fd_event<'t>(
 /// This is a workaround for not having Capsicum support in the OS.
 pub fn path_get<P: AsRef<OsStr>>(
     wasi_ctx: &WasiCtx,
-    memory: &mut [u8],
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
     path: P,

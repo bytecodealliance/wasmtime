@@ -23,7 +23,22 @@ macro_rules! bail_errno {
     };
 }
 
-pub fn dec_ptr(
+fn dec_ptr(
+    memory: &[u8],
+    ptr: wasm32::uintptr_t,
+    len: usize,
+) -> Result<*const u8, host::__wasi_errno_t> {
+    // check for overflow
+    let checked_len = (ptr as usize).checked_add(len).ok_or(host::__WASI_EFAULT)?;
+
+    // translate the pointer
+    memory
+        .get(ptr as usize..checked_len)
+        .ok_or(host::__WASI_EFAULT)
+        .map(|mem| mem.as_ptr())
+}
+
+fn dec_ptr_mut(
     memory: &mut [u8],
     ptr: wasm32::uintptr_t,
     len: usize,
@@ -38,7 +53,19 @@ pub fn dec_ptr(
         .map(|mem| mem.as_mut_ptr())
 }
 
-pub fn dec_ptr_to<'memory, T>(
+fn dec_ptr_to<'memory, T>(
+    memory: &'memory [u8],
+    ptr: wasm32::uintptr_t,
+) -> Result<&'memory T, host::__wasi_errno_t> {
+    // check that the ptr is aligned
+    if ptr as usize % align_of::<T>() != 0 {
+        bail_errno!(__WASI_EINVAL);
+    }
+
+    dec_ptr(memory, ptr, size_of::<T>()).map(|p| unsafe { &*(p as *const T) })
+}
+
+fn dec_ptr_to_mut<'memory, T>(
     memory: &'memory mut [u8],
     ptr: wasm32::uintptr_t,
 ) -> Result<&'memory mut T, host::__wasi_errno_t> {
@@ -47,13 +74,10 @@ pub fn dec_ptr_to<'memory, T>(
         bail_errno!(__WASI_EINVAL);
     }
 
-    dec_ptr(memory, ptr, size_of::<T>()).map(|p| unsafe { &mut *(p as *mut T) })
+    dec_ptr_mut(memory, ptr, size_of::<T>()).map(|p| unsafe { &mut *(p as *mut T) })
 }
 
-pub fn dec_pointee<T>(
-    memory: &mut [u8],
-    ptr: wasm32::uintptr_t,
-) -> Result<T, host::__wasi_errno_t> {
+pub fn dec_pointee<T>(memory: &[u8], ptr: wasm32::uintptr_t) -> Result<T, host::__wasi_errno_t> {
     dec_ptr_to::<T>(memory, ptr).map(|p| unsafe { ptr::read(p) })
 }
 
@@ -62,14 +86,13 @@ pub fn enc_pointee<T>(
     ptr: wasm32::uintptr_t,
     t: T,
 ) -> Result<(), host::__wasi_errno_t> {
-    dec_ptr_to::<T>(memory, ptr).map(|p| unsafe { ptr::write(p, t) })
+    dec_ptr_to_mut::<T>(memory, ptr).map(|p| unsafe { ptr::write(p, t) })
 }
 
-pub fn dec_slice_of<'memory, T>(
-    memory: &'memory mut [u8],
+fn check_slice_of<T>(
     ptr: wasm32::uintptr_t,
     len: wasm32::size_t,
-) -> Result<(&'memory mut T, usize), host::__wasi_errno_t> {
+) -> Result<(usize, usize), host::__wasi_errno_t> {
     // check alignment, and that length doesn't overflow
     if ptr as usize % align_of::<T>() != 0 {
         return Err(host::__WASI_EINVAL);
@@ -81,8 +104,27 @@ pub fn dec_slice_of<'memory, T>(
         return Err(host::__WASI_EOVERFLOW);
     };
 
-    let ptr = dec_ptr(memory, ptr, len_bytes)? as *mut T;
-    Ok((unsafe { &mut *ptr }, len))
+    Ok((len, len_bytes))
+}
+
+pub fn dec_slice_of<'memory, T>(
+    memory: &'memory [u8],
+    ptr: wasm32::uintptr_t,
+    len: wasm32::size_t,
+) -> Result<&'memory [T], host::__wasi_errno_t> {
+    let (len, len_bytes) = check_slice_of::<T>(ptr, len)?;
+    let ptr = dec_ptr(memory, ptr, len_bytes)? as *const T;
+    Ok(unsafe { slice::from_raw_parts(ptr, len) })
+}
+
+pub fn dec_slice_of_mut<'memory, T>(
+    memory: &'memory mut [u8],
+    ptr: wasm32::uintptr_t,
+    len: wasm32::size_t,
+) -> Result<&'memory mut [T], host::__wasi_errno_t> {
+    let (len, len_bytes) = check_slice_of::<T>(ptr, len)?;
+    let ptr = dec_ptr_mut(memory, ptr, len_bytes)? as *mut T;
+    Ok(unsafe { slice::from_raw_parts_mut(ptr, len) })
 }
 
 pub fn enc_slice_of<T>(
@@ -102,7 +144,7 @@ pub fn enc_slice_of<T>(
     };
 
     // get the pointer into guest memory, and copy the bytes
-    let ptr = dec_ptr(memory, ptr, len_bytes)? as *mut libc::c_void;
+    let ptr = dec_ptr_mut(memory, ptr, len_bytes)? as *mut libc::c_void;
     unsafe {
         libc::memcpy(ptr, slice.as_ptr() as *const libc::c_void, len_bytes);
     }
@@ -138,7 +180,7 @@ macro_rules! dec_enc_scalar {
 }
 
 pub fn dec_ciovec(
-    memory: &mut [u8],
+    memory: &[u8],
     ciovec: &wasm32::__wasi_ciovec_t,
 ) -> Result<host::__wasi_ciovec_t, host::__wasi_errno_t> {
     let len = dec_usize(ciovec.buf_len);
@@ -149,12 +191,11 @@ pub fn dec_ciovec(
 }
 
 pub fn dec_ciovec_slice(
-    memory: &mut [u8],
+    memory: &[u8],
     ptr: wasm32::uintptr_t,
     len: wasm32::size_t,
 ) -> Result<Vec<host::__wasi_ciovec_t>, host::__wasi_errno_t> {
     let slice = dec_slice_of::<wasm32::__wasi_ciovec_t>(memory, ptr, len)?;
-    let slice = unsafe { slice::from_raw_parts(slice.0, slice.1) };
     slice.iter().map(|iov| dec_ciovec(memory, iov)).collect()
 }
 
