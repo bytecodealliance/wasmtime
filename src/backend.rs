@@ -4120,6 +4120,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         I64
     );
 
+    // TODO: Do this without emitting `mov`
     fn cleanup_gprs(&mut self, gprs: impl Iterator<Item = (GPR, GPR)>) {
         for (src, dst) in gprs {
             self.copy_value(ValueLocation::Reg(src), CCLoc::Reg(dst));
@@ -4160,8 +4161,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     //       to move `RAX` back afterwards).
     fn full_div(
         &mut self,
+        dividend: ValueLocation,
         divisor: ValueLocation,
-        quotient: ValueLocation,
         do_div: impl FnOnce(&mut Self, ValueLocation),
     ) -> (
         ValueLocation,
@@ -4183,12 +4184,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.block_state.regs.release(RDX);
         self.block_state.regs.release(RAX);
 
-        if let ValueLocation::Reg(r) = quotient {
+        if let ValueLocation::Reg(r) = dividend {
             self.block_state.regs.mark_used(r);
         }
 
         let should_save_rax =
-            quotient != ValueLocation::Reg(RAX) && !self.block_state.regs.is_free(RAX);
+            dividend != ValueLocation::Reg(RAX) && !self.block_state.regs.is_free(RAX);
 
         let saved_rax = if should_save_rax {
             let new_reg = self.take_reg(I32).unwrap();
@@ -4201,8 +4202,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.block_state.regs.mark_used(RAX);
-        self.copy_value(quotient, CCLoc::Reg(RAX));
-        self.free_value(quotient);
+        self.copy_value(dividend, CCLoc::Reg(RAX));
+        self.free_value(dividend);
 
         let should_save_rdx = !self.block_state.regs.is_free(RDX);
 
@@ -4234,13 +4235,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn i32_full_div_u(
         &mut self,
         divisor: ValueLocation,
-        quotient: ValueLocation,
+        dividend: ValueLocation,
     ) -> (
         ValueLocation,
         ValueLocation,
         impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
-        self.full_div(divisor, quotient, |this, divisor| match divisor {
+        self.full_div(dividend, divisor, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
@@ -4262,13 +4263,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn i32_full_div_s(
         &mut self,
         divisor: ValueLocation,
-        quotient: ValueLocation,
+        dividend: ValueLocation,
     ) -> (
         ValueLocation,
         ValueLocation,
         impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
-        self.full_div(divisor, quotient, |this, divisor| match divisor {
+        self.full_div(dividend, divisor, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
@@ -4290,13 +4291,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn i64_full_div_u(
         &mut self,
         divisor: ValueLocation,
-        quotient: ValueLocation,
+        dividend: ValueLocation,
     ) -> (
         ValueLocation,
         ValueLocation,
         impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
-        self.full_div(divisor, quotient, |this, divisor| match divisor {
+        self.full_div(dividend, divisor, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
@@ -4318,13 +4319,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn i64_full_div_s(
         &mut self,
         divisor: ValueLocation,
-        quotient: ValueLocation,
+        dividend: ValueLocation,
     ) -> (
         ValueLocation,
         ValueLocation,
         impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
     ) {
-        self.full_div(divisor, quotient, |this, divisor| match divisor {
+        self.full_div(dividend, divisor, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
