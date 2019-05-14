@@ -10,3 +10,4 @@ rusty-tags.*
 docs/_build
 *~
 \#*\#
+.vscode

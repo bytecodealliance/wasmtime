@@ -3230,10 +3230,161 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.push(out);
     }
 
-    unop!(i32_clz, lzcnt, Rd, u32, u32::leading_zeros);
-    unop!(i64_clz, lzcnt, Rq, u64, |a: u64| a.leading_zeros() as u64);
-    unop!(i32_ctz, tzcnt, Rd, u32, u32::trailing_zeros);
-    unop!(i64_ctz, tzcnt, Rq, u64, |a: u64| a.trailing_zeros() as u64);
+    pub fn i32_clz(&mut self) {
+        let val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) =>
+                ValueLocation::Immediate(
+                    ((imm.as_int().unwrap() as i32).leading_zeros() as i32).into()
+                ),
+            ValueLocation::Stack(offset) => {
+                let offset = self.adjusted_offset(offset);
+                let temp = self.take_reg(I32).unwrap();
+                let temp_2 = self.take_reg(I32).unwrap();
+
+                dynasm!(self.asm
+                    ; bsr Rd(temp.rq().unwrap()), [rsp + offset]
+                    ; mov Rd(temp_2.rq().unwrap()), DWORD 0x3fu64 as _
+                    ; cmove Rd(temp.rq().unwrap()), Rd(temp_2.rq().unwrap())
+                    ; mov Rd(temp_2.rq().unwrap()), DWORD 0x1fu64 as _
+                    ; xor Rd(temp.rq().unwrap()), Rd(temp_2.rq().unwrap())
+                );
+                ValueLocation::Reg(temp)
+            }
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let reg = self.into_reg(GPRType::Rq, val).unwrap();
+                let temp = self.take_reg(I32).unwrap();
+
+                dynasm!(self.asm
+                    ; bsr Rd(temp.rq().unwrap()), Rd(reg.rq().unwrap())
+                    ; mov Rd(reg.rq().unwrap()), DWORD 0x3fu64 as _
+                    ; cmove Rd(temp.rq().unwrap()), Rd(reg.rq().unwrap())
+                    ; mov Rd(reg.rq().unwrap()), DWORD 0x1fu64 as _
+                    ; xor Rd(temp.rq().unwrap()), Rd(reg.rq().unwrap())
+                );
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+        self.push(out_val);
+    }
+
+    pub fn i64_clz(&mut self) {
+        let val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) =>
+                ValueLocation::Immediate(
+                    ((imm.as_int().unwrap() as u64).leading_zeros() as u64).into()
+                ),
+            ValueLocation::Stack(offset) => {
+                let offset = self.adjusted_offset(offset);
+                let temp = self.take_reg(I64).unwrap();
+                let temp_2 = self.take_reg(I64).unwrap();
+
+                dynasm!(self.asm
+                    ; bsr Rq(temp.rq().unwrap()), [rsp + offset]
+                    ; mov Rq(temp_2.rq().unwrap()), QWORD 0x7fu64 as _
+                    ; cmove Rq(temp.rq().unwrap()), Rq(temp_2.rq().unwrap())
+                    ; mov Rq(temp_2.rq().unwrap()), QWORD 0x3fu64 as _
+                    ; xor Rq(temp.rq().unwrap()), Rq(temp_2.rq().unwrap())
+                );
+                ValueLocation::Reg(temp)
+            }
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let reg = self.into_reg(GPRType::Rq, val).unwrap();
+                let temp = self.take_reg(I64).unwrap();
+
+                dynasm!(self.asm
+                    ; bsr Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; mov Rq(reg.rq().unwrap()), QWORD 0x7fu64 as _
+                    ; cmove Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; mov Rq(reg.rq().unwrap()), QWORD 0x3fu64 as _
+                    ; xor Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
+                );
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+        self.push(out_val);
+    }
+
+    pub fn i32_ctz(&mut self) {
+        let val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) =>
+                ValueLocation::Immediate(
+                    ((imm.as_int().unwrap() as u32).trailing_zeros() as u32).into()
+                ),
+            ValueLocation::Stack(offset) => {
+                let offset = self.adjusted_offset(offset);
+                let temp = self.take_reg(I32).unwrap();
+                let temp_zero_val = self.take_reg(I32).unwrap();
+
+                dynasm!(self.asm
+                    ; bsf Rd(temp.rq().unwrap()), [rsp + offset]
+                    ; mov Rd(temp_zero_val.rq().unwrap()), DWORD 0x20u32 as _
+                    ; cmove Rd(temp.rq().unwrap()), Rd(temp_zero_val.rq().unwrap())
+                );
+                ValueLocation::Reg(temp)
+            }
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let reg = self.into_reg(GPRType::Rq, val).unwrap();
+                let temp = self.take_reg(I32).unwrap();
+
+                dynasm!(self.asm
+                    ; bsf Rd(temp.rq().unwrap()), Rd(reg.rq().unwrap())
+                    ; mov Rd(reg.rq().unwrap()), DWORD 0x20u32 as _
+                    ; cmove Rd(temp.rq().unwrap()), Rd(reg.rq().unwrap())
+                );
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+        self.push(out_val);
+    }
+
+    pub fn i64_ctz(&mut self) {
+        let val = self.pop();
+
+        let out_val = match val {
+            ValueLocation::Immediate(imm) =>
+                ValueLocation::Immediate(
+                    ((imm.as_int().unwrap() as u64).trailing_zeros() as u64).into()
+                ),
+            ValueLocation::Stack(offset) => {
+                let offset = self.adjusted_offset(offset);
+                let temp = self.take_reg(I64).unwrap();
+                let temp_zero_val = self.take_reg(I64).unwrap();
+
+                dynasm!(self.asm
+                    ; bsf Rq(temp.rq().unwrap()), [rsp + offset]
+                    ; mov Rq(temp_zero_val.rq().unwrap()), QWORD 0x40u64 as _
+                    ; cmove Rq(temp.rq().unwrap()), Rq(temp_zero_val.rq().unwrap())
+                );
+                ValueLocation::Reg(temp)
+            }
+            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+                let reg = self.into_reg(GPRType::Rq, val).unwrap();
+                let temp = self.take_reg(I64).unwrap();
+
+                dynasm!(self.asm
+                    ; bsf Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
+                    ; mov Rq(reg.rq().unwrap()), QWORD 0x40u64 as _
+                    ; cmove Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
+                );
+                ValueLocation::Reg(temp)
+            }
+        };
+
+        self.free_value(val);
+        self.push(out_val);
+    }
 
     pub fn i32_extend_u(&mut self) {
         let val = self.pop();
