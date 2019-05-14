@@ -2,7 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{ArgCaptured, FnArg, Pat, PatIdent, Type, TypeReference};
+use syn::{ArgCaptured, FnArg, Pat, PatIdent, Type, TypeReference, TypeSlice};
 
 #[proc_macro_attribute]
 pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenStream {
@@ -36,11 +36,31 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
                 if let Type::Reference(ty @ TypeReference { .. }) = &ty {
                     // if we're here, then we found a &-ref
                     // so substitute it for *mut since we're exporting to C
-                    let elem = &ty.elem;
-                    arg_type.push(quote!(*mut #elem));
-                    // we need to properly dereference the substituted raw
-                    // pointer if we are to properly call the hostcall fn
-                    call_arg_ident.push(quote!(&mut *#ident));
+                    let elem = &*ty.elem;
+                    if let Type::Slice(elem @ TypeSlice { .. }) = &elem {
+                        // slice: &[type] or &mut [type]
+                        // in C it requires a signature *mut type
+                        let elem = &elem.elem;
+                        arg_type.push(quote!(*mut #elem));
+                        // since it's a slice, we'll need to do more work here
+                        // simple dereferencing is not enough
+                        // firstly, we need to add a len arg to C fn
+                        // secondly, we need to invoke std::slice::from_raw_parts_mut(..)
+                        let concatenated = format!("{}_len", ident);
+                        let len_ident = syn::Ident::new(&concatenated, ident.span());
+                        call_arg_ident.push(quote! {
+                            std::slice::from_raw_parts_mut(#ident, #len_ident)
+                        });
+                        arg_ident.push(quote!(#len_ident));
+                        arg_type.push(quote!(usize));
+                    } else {
+                        // & or &mut type
+                        // so simply substitute with *mut type
+                        arg_type.push(quote!(*mut #elem));
+                        // we need to properly dereference the substituted raw
+                        // pointer if we are to properly call the hostcall fn
+                        call_arg_ident.push(quote!(&mut *#ident));
+                    }
                 } else {
                     arg_type.push(quote!(#ty));
                     // non-&-ref type, so preserve whatever the arg was

@@ -45,7 +45,7 @@ cargo build
 
 # Run the tests. We run these in debug mode so that assertions are enabled.
 banner "Rust unit tests"
-RUST_BACKTRACE=1 cargo test
+RUST_BACKTRACE=1 cargo test --all
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/wasi-common/index.html"
