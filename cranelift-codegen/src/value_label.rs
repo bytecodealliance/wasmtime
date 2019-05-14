@@ -11,8 +11,11 @@ use std::vec::Vec;
 /// Value location range.
 #[derive(Debug, Clone, Copy)]
 pub struct ValueLocRange {
+    /// The ValueLoc containing a ValueLabel during this range.
     pub loc: ValueLoc,
+    /// The start of the range.
     pub start: u32,
+    /// The end of the range.
     pub end: u32,
 }
 
