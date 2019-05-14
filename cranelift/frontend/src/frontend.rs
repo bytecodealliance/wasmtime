@@ -334,6 +334,8 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Set label for Value
+    ///
+    /// This will not do anything unless `func.dfg.collect_debug_info` is called first.
     pub fn set_val_label(&mut self, val: Value, label: ValueLabel) {
         if let Some(values_labels) = self.func.dfg.values_labels.as_mut() {
             use std::collections::hash_map::Entry;
