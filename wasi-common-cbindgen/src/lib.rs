@@ -2,21 +2,21 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{FnArg, ArgCaptured, Pat, PatIdent, TypeReference, Type, Token};
 use std::collections::HashMap;
+use syn::{ArgCaptured, FnArg, Pat, PatIdent, Token, Type, TypeReference};
 
 #[proc_macro_attribute]
 pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenStream {
     assert!(attr.is_empty());
 
     let function = syn::parse_macro_input!(function as syn::ItemFn);
-    
+
     // generate C fn name prefixed with __wasi_
     let ident = &function.ident;
     let concatenated = format!("__wasi_{}", ident);
     let c_fn_ident = syn::Ident::new(&concatenated, ident.span());
 
-    // capture signature
+    // capture input args
     let mut arg_ident = Vec::new();
     let mut arg_type = Vec::new();
     for input in &function.decl.inputs {
@@ -43,8 +43,8 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
         }
     }
 
-    println!("{:#?}", arg_ident);
-    println!("{:#?}", arg_type);
+    // capture output arg
+    let output = &function.decl.output;
 
     let result = quote! {
         #function
@@ -53,7 +53,8 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
             #(
                 #arg_ident: #arg_type,
             )*
-        ) {
+        ) #output {
+
             
         }
     };
