@@ -68,6 +68,7 @@ pub fn args_get(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn args_sizes_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -90,6 +91,7 @@ pub fn args_sizes_get(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn clock_res_get(
     memory: &mut [u8],
     clock_id: wasm32::__wasi_clockid_t,
@@ -129,6 +131,7 @@ pub fn clock_res_get(
         })
 }
 
+#[wasi_common_cbindgen]
 pub fn clock_time_get(
     memory: &mut [u8],
     clock_id: wasm32::__wasi_clockid_t,
@@ -165,6 +168,7 @@ pub fn clock_time_get(
         })
 }
 
+#[wasi_common_cbindgen]
 pub fn environ_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -199,6 +203,7 @@ pub fn environ_get(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn environ_sizes_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -221,6 +226,7 @@ pub fn environ_sizes_get(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
     let fd = dec_fd(fd);
     if let Some(fdent) = wasi_ctx.fds.get(&fd) {
@@ -240,6 +246,7 @@ pub fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wa
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_fdstat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -274,6 +281,7 @@ pub fn fd_fdstat_get(
     errno
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_fdstat_set_flags(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
@@ -293,6 +301,7 @@ pub fn fd_fdstat_set_flags(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_seek(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -333,6 +342,7 @@ pub fn fd_seek(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_prestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -369,6 +379,7 @@ pub fn fd_prestat_get(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_prestat_dir_name(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -399,6 +410,7 @@ pub fn fd_prestat_dir_name(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_read(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
@@ -441,6 +453,7 @@ pub fn fd_read(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_write(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -477,6 +490,7 @@ pub fn fd_write(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn path_open(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
@@ -614,6 +628,7 @@ pub fn path_open(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn random_get(
     memory: &mut [u8],
     buf_ptr: wasm32::uintptr_t,
@@ -631,6 +646,7 @@ pub fn random_get(
     return wasm32::__WASI_ESUCCESS;
 }
 
+#[wasi_common_cbindgen]
 pub fn poll_oneoff(
     memory: &mut [u8],
     input: wasm32::uintptr_t,
@@ -722,6 +738,7 @@ pub fn poll_oneoff(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_filestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -748,6 +765,7 @@ pub fn fd_filestat_get(
     errno
 }
 
+#[wasi_common_cbindgen]
 pub fn path_filestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -793,6 +811,7 @@ pub fn path_filestat_get(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn path_create_directory(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -831,6 +850,7 @@ pub fn path_create_directory(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn path_unlink_file(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -869,6 +889,7 @@ pub fn path_unlink_file(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_datasync(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -877,6 +898,7 @@ pub fn fd_datasync(
     unimplemented!("fd_datasync")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_pread(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -889,6 +911,7 @@ pub fn fd_pread(
     unimplemented!("fd_pread")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_pwrite(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -901,6 +924,7 @@ pub fn fd_pwrite(
     unimplemented!("fd_pwrite")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_renumber(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -910,6 +934,7 @@ pub fn fd_renumber(
     unimplemented!("fd_renumber")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_tell(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -919,6 +944,7 @@ pub fn fd_tell(
     unimplemented!("fd_tell")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_fdstat_set_rights(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -929,6 +955,7 @@ pub fn fd_fdstat_set_rights(
     unimplemented!("fd_fdstat_set_rights")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_sync(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -937,6 +964,7 @@ pub fn fd_sync(
     unimplemented!("fd_sync")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_advise(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -948,6 +976,7 @@ pub fn fd_advise(
     unimplemented!("fd_advise")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_allocate(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -958,6 +987,7 @@ pub fn fd_allocate(
     unimplemented!("fd_allocate")
 }
 
+#[wasi_common_cbindgen]
 pub fn path_link(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -972,6 +1002,7 @@ pub fn path_link(
     unimplemented!("path_link")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_readdir(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -984,6 +1015,7 @@ pub fn fd_readdir(
     unimplemented!("fd_readdir")
 }
 
+#[wasi_common_cbindgen]
 pub fn path_readlink(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -997,6 +1029,7 @@ pub fn path_readlink(
     unimplemented!("path_readlink")
 }
 
+#[wasi_common_cbindgen]
 pub fn path_rename(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1010,6 +1043,7 @@ pub fn path_rename(
     unimplemented!("path_rename")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_filestat_set_times(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1021,6 +1055,7 @@ pub fn fd_filestat_set_times(
     unimplemented!("fd_filestat_set_times")
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_filestat_set_size(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1030,6 +1065,7 @@ pub fn fd_filestat_set_size(
     unimplemented!("fd_filestat_set_size")
 }
 
+#[wasi_common_cbindgen]
 pub fn path_filestat_set_times(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1044,6 +1080,7 @@ pub fn path_filestat_set_times(
     unimplemented!("path_filestat_set_times")
 }
 
+#[wasi_common_cbindgen]
 pub fn path_symlink(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1056,6 +1093,7 @@ pub fn path_symlink(
     unimplemented!("path_symlink")
 }
 
+#[wasi_common_cbindgen]
 pub fn path_remove_directory(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1066,6 +1104,7 @@ pub fn path_remove_directory(
     unimplemented!("path_remove_directory")
 }
 
+#[wasi_common_cbindgen]
 pub fn proc_raise(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1074,10 +1113,12 @@ pub fn proc_raise(
     unimplemented!("proc_raise")
 }
 
+#[wasi_common_cbindgen]
 pub fn sched_yield() -> wasm32::__wasi_errno_t {
     unimplemented!("sched_yield")
 }
 
+#[wasi_common_cbindgen]
 pub fn sock_recv(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1091,6 +1132,7 @@ pub fn sock_recv(
     unimplemented!("sock_recv")
 }
 
+#[wasi_common_cbindgen]
 pub fn sock_send(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1103,6 +1145,7 @@ pub fn sock_send(
     unimplemented!("sock_send")
 }
 
+#[wasi_common_cbindgen]
 pub fn sock_shutdown(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
