@@ -29,14 +29,14 @@ toolchains will be able to implement WASI as well!
 To install a WASI-enabled Rust toolchain:
 
 ```
-rustup target add wasm32-unknown-wasi --toolchain nightly
-cargo +nightly build --target wasm32-unknown-wasi
+rustup target add wasm32-wasi --toolchain nightly
+cargo +nightly build --target wasm32-wasi
 ```
 
 Until now, Rust's WebAssembly support has had two main options, the
 Emscripten-based option, and the wasm32-unknown-unknown option. The latter
 option is lighter-weight, but only supports `no_std`. WASI enables a new
-wasm32-unknown-wasi target, which is similar to wasm32-unknown-unknown in
+wasm32-wasi target, which is similar to wasm32-unknown-unknown in
 that it doesn't depend on Emscripten, but it can use WASI to provide a
 decent subset of libstd.
 
