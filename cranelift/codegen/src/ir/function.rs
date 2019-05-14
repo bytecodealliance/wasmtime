@@ -228,7 +228,8 @@ pub struct DisplayFunctionAnnotations<'a> {
 }
 
 impl<'a> DisplayFunctionAnnotations<'a> {
-    fn default() -> Self {
+    /// Create a DisplayFunctionAnnotations with all fields set to None.
+    pub fn default() -> Self {
         DisplayFunctionAnnotations {
             isa: None,
             value_ranges: None,
