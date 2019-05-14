@@ -10,6 +10,7 @@ edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
+wasi-common-cbindgen = { path = "wasi-common-cbindgen" }
 cast = "0.2"
 failure = "0.1"
 libc = "0.2"
@@ -19,3 +20,5 @@ rand = "0.6"
 [lib]
 name = "wasi_common"
 crate-type = ["rlib", "staticlib", "cdylib"]
+
+[workspace]

@@ -24,13 +24,16 @@ use std::ffi::{OsStr, OsString};
 use std::os::unix::prelude::{FromRawFd, OsStrExt, OsStringExt, RawFd};
 use std::time::SystemTime;
 use std::{cmp, slice};
+use wasi_common_cbindgen::wasi_common_cbindgen;
 
+#[wasi_common_cbindgen]
 pub fn proc_exit(rval: wasm32::__wasi_exitcode_t) -> () {
     // TODO: Rather than call std::process::exit here, we should trigger a
     // stack unwind similar to a trap.
     std::process::exit(dec_exitcode(rval) as i32);
 }
 
+#[wasi_common_cbindgen]
 pub fn args_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
