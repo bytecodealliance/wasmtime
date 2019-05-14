@@ -784,6 +784,16 @@ impl InstanceHandle {
         self.instance().vmctx_ptr()
     }
 
+    /// Return a reference-counting pointer to a module.
+    pub fn module(&self) -> Rc<Module> {
+        self.instance().module.clone()
+    }
+
+    /// Return a reference to a module.
+    pub fn module_ref(&self) -> &Module {
+        &self.instance().module
+    }
+
     /// Return a mutable reference to the vmctx used by compiled wasm code.
     pub fn vmctx_mut(&mut self) -> &mut VMContext {
         self.instance_mut().vmctx_mut()
