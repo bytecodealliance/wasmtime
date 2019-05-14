@@ -10,6 +10,9 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
 
     let function = syn::parse_macro_input!(function as syn::ItemFn);
 
+    // capture visibility
+    let vis = &function.vis;
+
     // generate C fn name prefixed with __wasi_
     let fn_ident = &function.ident;
     let concatenated = format!("__wasi_{}", fn_ident);
@@ -54,7 +57,7 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
     let result = quote! {
         #function
 
-        pub unsafe extern "C" fn #c_fn_ident(
+        #vis unsafe extern "C" fn #c_fn_ident(
             #(
                 #arg_ident: #arg_type,
             )*
