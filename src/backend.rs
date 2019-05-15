@@ -3236,7 +3236,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let out_val = match val {
             ValueLocation::Immediate(imm) =>
                 ValueLocation::Immediate(
-                    ((imm.as_int().unwrap() as i32).leading_zeros() as i32).into()
+                    imm.as_i32().unwrap().leading_zeros().into()
                 ),
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
@@ -3250,6 +3250,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; mov Rd(temp_2.rq().unwrap()), DWORD 0x1fu64 as _
                     ; xor Rd(temp.rq().unwrap()), Rd(temp_2.rq().unwrap())
                 );
+                self.free_value(ValueLocation::Reg(temp_2));
                 ValueLocation::Reg(temp)
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
@@ -3277,7 +3278,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let out_val = match val {
             ValueLocation::Immediate(imm) =>
                 ValueLocation::Immediate(
-                    ((imm.as_int().unwrap() as u64).leading_zeros() as u64).into()
+                    imm.as_i64().unwrap().leading_zeros().into()
                 ),
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
@@ -3291,6 +3292,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; mov Rq(temp_2.rq().unwrap()), QWORD 0x3fu64 as _
                     ; xor Rq(temp.rq().unwrap()), Rq(temp_2.rq().unwrap())
                 );
+                self.free_value(ValueLocation::Reg(temp_2));
                 ValueLocation::Reg(temp)
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
@@ -3318,7 +3320,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let out_val = match val {
             ValueLocation::Immediate(imm) =>
                 ValueLocation::Immediate(
-                    ((imm.as_int().unwrap() as u32).trailing_zeros() as u32).into()
+                    imm.as_i32().unwrap().trailing_zeros().into()
                 ),
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
@@ -3330,6 +3332,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; mov Rd(temp_zero_val.rq().unwrap()), DWORD 0x20u32 as _
                     ; cmove Rd(temp.rq().unwrap()), Rd(temp_zero_val.rq().unwrap())
                 );
+                self.free_value(ValueLocation::Reg(temp_zero_val));
                 ValueLocation::Reg(temp)
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
@@ -3355,7 +3358,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let out_val = match val {
             ValueLocation::Immediate(imm) =>
                 ValueLocation::Immediate(
-                    ((imm.as_int().unwrap() as u64).trailing_zeros() as u64).into()
+                    imm.as_i64().unwrap().trailing_zeros().into()
                 ),
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
@@ -3367,6 +3370,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; mov Rq(temp_zero_val.rq().unwrap()), QWORD 0x40u64 as _
                     ; cmove Rq(temp.rq().unwrap()), Rq(temp_zero_val.rq().unwrap())
                 );
+                self.free_value(ValueLocation::Reg(temp_zero_val));
                 ValueLocation::Reg(temp)
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
