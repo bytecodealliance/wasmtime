@@ -40,4 +40,4 @@ before_script:
     - rustfmt +stable --version
 script: ./test-all.sh
 cache:
-    cargo: true
+    cargo: false
