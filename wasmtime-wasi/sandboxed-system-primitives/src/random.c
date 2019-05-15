@@ -15,6 +15,8 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "random.h"
@@ -25,10 +27,24 @@ void random_buf(void *buf, size_t len) {
   arc4random_buf(buf, len);
 }
 
-#elif CONFIG_HAS_GETENTROPY
+#elif CONFIG_HAS_GETRANDOM
+
+#include <sys/random.h>
 
 void random_buf(void *buf, size_t len) {
-  getentropy(buf, len);
+  for (;;) {
+     ssize_t x = getrandom(buf, len, 0);
+     if (x < 0) {
+         if (errno == EINTR)
+             continue;
+         fprintf(stderr, "getrandom failed: %s", strerror(errno));
+         abort();
+     }
+     if (x == len)
+         return;
+     buf = (void *)((unsigned char *)buf + x);
+     len -= x;
+  }
 }
 
 #else
