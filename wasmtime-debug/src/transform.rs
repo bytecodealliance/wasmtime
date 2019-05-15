@@ -568,8 +568,11 @@ where
     }
     for (die_id, attr_name, offset) in pending_die_refs {
         let die = comp_unit.get_mut(die_id);
-        let unit_id = die_ref_map[&offset];
-        die.set(attr_name, write::AttributeValue::ThisUnitEntryRef(unit_id));
+        // TODO we probably loosing DW_AT_abstract_origin and DW_AT_type references
+        // here, find out if we drop stuff we don't need to.
+        if let Some(unit_id) = die_ref_map.get(&offset) {
+            die.set(attr_name, write::AttributeValue::ThisUnitEntryRef(*unit_id));
+        }
     }
     Ok(())
 }
