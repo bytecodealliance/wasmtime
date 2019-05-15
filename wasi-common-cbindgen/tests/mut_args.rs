@@ -13,7 +13,7 @@ fn main() {
     let given = unsafe {
         let given = Box::new(2);
         let raw = Box::into_raw(given);
-        __wasi_mut_args(raw);
+        wasi_common_mut_args(raw);
         Box::from_raw(raw)
     };
     assert_eq!(*given, *expected);

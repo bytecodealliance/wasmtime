@@ -13,7 +13,7 @@ fn main() {
 
     let given: &mut [u8] = &mut [0, 0];
     unsafe {
-        __wasi_array_args(given.as_mut_ptr(), given.len());
+        wasi_common_array_args(given.as_mut_ptr(), given.len());
     }
 
     assert_eq!(given, expected);

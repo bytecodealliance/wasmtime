@@ -8,5 +8,5 @@ fn val_args(a: usize, b: usize) -> usize {
 }
 
 fn main() {
-    assert_eq!(unsafe { __wasi_val_args(1, 2) }, val_args(1, 2));
+    assert_eq!(unsafe { wasi_common_val_args(1, 2) }, val_args(1, 2));
 }

@@ -12,7 +12,7 @@ fn main() {
     let expected = ref_args(a.as_ref());
     let given = unsafe {
         let raw = Box::into_raw(a);
-        let res = __wasi_ref_args(raw);
+        let res = wasi_common_ref_args(raw);
         Box::from_raw(raw);
         res
     };

@@ -15,7 +15,7 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
 
     // generate C fn name prefixed with __wasi_
     let fn_ident = &function.ident;
-    let concatenated = format!("__wasi_{}", fn_ident);
+    let concatenated = format!("wasi_common_{}", fn_ident);
     let c_fn_ident = syn::Ident::new(&concatenated, fn_ident.span());
 
     // capture input args

@@ -8,5 +8,5 @@ fn no_args() -> u32 {
 }
 
 fn main() {
-    assert_eq!(unsafe { __wasi_no_args() }, no_args());
+    assert_eq!(unsafe { wasi_common_no_args() }, no_args());
 }
