@@ -20,15 +20,15 @@
 #define CONFIG_HAS_ARC4RANDOM_BUF 0
 #endif
 
-// On Linux, prefer to use getentropy, though it isn't available in
+// On Linux, prefer to use getrandom, though it isn't available in
 // GLIBC before 2.25.
 #if defined(__linux__) && \
     (!defined(__GLIBC__) || \
      __GLIBC__ > 2 || \
      (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25))
-#define CONFIG_HAS_GETENTROPY 1
+#define CONFIG_HAS_GETRANDOM 1
 #else
-#define CONFIG_HAS_GETENTROPY 0
+#define CONFIG_HAS_GETRANDOM 0
 #endif
 
 #if defined(__CloudABI__)
