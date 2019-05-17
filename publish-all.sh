@@ -13,7 +13,7 @@ version="0.1.0"
 
 # Update all of the Cargo.toml files.
 #
-# The main Cargo.toml in the top-level directory is the wasmtime-tools crate which we don't publish.
+# The main Cargo.toml in the top-level directory is the wasmtime crate which we don't publish.
 echo "Updating crate versions to $version"
 for crate in . wasmtime-*; do
     # Update the version number of this crate to $version.
