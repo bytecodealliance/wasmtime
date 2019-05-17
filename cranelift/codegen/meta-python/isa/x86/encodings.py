@@ -490,8 +490,10 @@ X86_64.enc(base.x_return, *r.ret(0xc3))
 #
 # Branches
 #
-enc_both(base.jump, r.jmpb, 0xeb)
-enc_both(base.jump, r.jmpd, 0xe9)
+X86_32.enc(base.jump, *r.jmpb(0xeb))
+X86_64.enc(base.jump, *r.jmpb(0xeb))
+X86_32.enc(base.jump, *r.jmpd(0xe9))
+X86_64.enc(base.jump, *r.jmpd(0xe9))
 
 enc_both(base.brif, r.brib, 0x70)
 enc_both(base.brif, r.brid, 0x0f, 0x80)
