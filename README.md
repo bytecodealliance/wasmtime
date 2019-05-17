@@ -22,53 +22,15 @@ Please note that the library requires Rust compiler version at least 1.34.0.
 
 ## Supported syscalls
 
-We support a subset of the [WASI API], though we are working on new hostcalls
-on a regular basis. We currently implement:
+We currently support the entire [WASI API] with the exception of socket hostcalls:
+- `sock_recv`
+- `sock_send`
+- `sock_shutdown`
 
-- `args_get`
-- `args_sizes_get`
-- `clock_res_get`
-- `clock_time_get`
-- `environ_get`
-- `environ_sizes_get`
-- `fd_close`
-- `fd_datasync`
-- `fd_pread`
-- `fd_pwrite`
-- `fd_read`
-- `fd_renumber`
-- `fd_seek`
-- `fd_tell`
-- `fd_fdstat_get`
-- `fd_fdstat_set_flags`
-- `fd_fdstat_set_rights`
-- `fd_sync`
-- `fd_write`
-- `fd_advise`
-- `fd_allocate`
-- `path_create_directory`
-- `path_link`
-- `path_open`
-- `fd_readdir`
-- `path_readlink`
-- `path_rename`
-- `fd_filestat_get`
-- `fd_filestat_set_times`
-- `fd_filestat_set_size`
-- `path_filestat_get`
-- `path_filestat_set_times`
-- `path_symlink`
-- `path_unlink_file`
-- `path_remove_directory`
-- `poll_oneoff`
-- `fd_prestat_get`
-- `fd_prestat_dir_name`
-- `proc_exit`
-- `random_get`
-- `sched_yield`
+We expect these to be implemented when network access is standardised.
 
-This is enough to run basic C and Rust programs, including those that use command-line arguments,
-environment variables, stdio, and basic file operations.
+We also currently do not support the `proc_raise` hostcall, as it is expected to
+be dropped entirely from WASI.
 
 ## Third-Party Code
 Significant parts of our hostcall implementations are derived from the C implementations in
