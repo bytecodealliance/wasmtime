@@ -103,7 +103,7 @@ function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] ba
 [Op1umr#89,%rdx]                    v100 = copy v79
 @00a4 [RexOp1rmov#89]               regmove v100, %rdx -> %rdi
 @00a4 [RexOp1rmov#89]               regmove v99, %rcx -> %rsi
-@00a4 [RexOp1jmpd#e9]               jump ebb3(v100, v99); bin: 40 e9 ffffff2c
+@00a4 [Op1jmpd#e9]                  jump ebb3(v100, v99); bin: e9 ffffff2d
 
                                 ebb9:
 @00a7 [-]                           fallthrough ebb4
