@@ -713,11 +713,14 @@ pub fn path_open(
         Err(e) => return enc_errno(e),
     };
 
+    // Call openat. Use mode 0o666 so that we follow whatever the user's
+    // umask is, but don't set the executable flag, because it isn't yet
+    // meaningful for WASI programs to create executable files.
     let new_fd = match openat(
         dir,
         path.as_os_str(),
         nix_all_oflags,
-        Mode::from_bits_truncate(0o777),
+        Mode::from_bits_truncate(0o666),
     ) {
         Ok(fd) => fd,
         Err(e) => {
