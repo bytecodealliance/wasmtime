@@ -658,7 +658,7 @@ pub fn path_open(
         & (host::__WASI_RIGHT_FD_DATASYNC
             | host::__WASI_RIGHT_FD_WRITE
             | host::__WASI_RIGHT_FD_ALLOCATE
-            | host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE)
+            | host::__WASI_RIGHT_FD_FILESTAT_SET_SIZE)
         != 0;
 
     let mut nix_all_oflags = if read && write {
@@ -683,7 +683,7 @@ pub fn path_open(
         needed_base |= host::__WASI_RIGHT_PATH_CREATE_FILE;
     }
     if nix_all_oflags.contains(OFlag::O_TRUNC) {
-        needed_inheriting |= host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+        needed_base |= host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
