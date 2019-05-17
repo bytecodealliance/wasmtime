@@ -165,7 +165,7 @@ function free_iovs(host_iovs, iovs_len, iovs) {
     for (let i = 0; i < iovs_len; ++i) {
         let buf = HEAP32[(host_iovs + i * 8 + 0) >> 2];
         let len = HEAP32[(host_iovs + i * 8 + 4) >> 2];
-        let ptr = GUEST_HEAP32[(host_iovs + i * 8 + 0) >> 2];
+        let ptr = GUEST_HEAP32[(iovs + i * 8 + 0) >> 2];
         copyout_bytes(ptr, buf, len);
     }
     _free(host_iovs);
@@ -240,7 +240,7 @@ fd_pread: function(fd, iovs, iovs_len, offset, nread) {
     let host_nread = _malloc(4);
     let ret = ___wasi_fd_pread(fd, host_iovs, iovs_len, offset, host_nread);
     copyout_i32(nread, host_nread);
-    free_iovs(host_iovs, iovs_len);
+    free_iovs(host_iovs, iovs_len, iovs);
     return ret;
 },
 
@@ -258,7 +258,7 @@ fd_read: function(fd, iovs, iovs_len, nread) {
     let host_nread = _malloc(4);
     let ret = ___wasi_fd_read(fd, host_iovs, iovs_len, host_nread);
     copyout_i32(nread, host_nread);
-    free_iovs(host_iovs, iovs_len);
+    free_iovs(host_iovs, iovs_len, iovs);
     return ret;
 },
 
@@ -477,7 +477,7 @@ sock_recv: function(sock, ri_data, ri_data_len, ri_flags, ro_datalen, ro_flags) 
     let host_ro_datalen = _malloc(4);
     let ret = ___wasi_sock_recv(sock, host_ri_data, ri_data_len, ri_flags, host_ro_data, ro_flags);
     copyout_i32(ro_datalen, host_ro_datalen);
-    free_iovs(host_ri_data, ri_data_len);
+    free_iovs(host_ri_data, ri_data_len, ri_data);
     return ret;
 },
 
