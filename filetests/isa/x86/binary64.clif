@@ -602,6 +602,17 @@ ebb0:
     [-,%r8]              v520 = ushr_imm v4, 63   ; bin: 49 c1 e8 3f
 
 
+    ; Rotate immediates
+    ; asm: rolq $12, %rsi
+    [-,%rsi]             v5101 = rotl_imm v2, 12   ; bin: 48 c1 c6 0c
+    ; asm: rolq $13, %r8
+    [-,%r8]              v5102 = rotl_imm v4, 13   ; bin: 49 c1 c0 0d
+    ; asm: rorq $32, %rsi
+    [-,%rsi]             v5103 = rotr_imm v2, 32   ; bin: 48 c1 ce 20
+    ; asm: rorq $33, %r8
+    [-,%r8]              v5104 = rotr_imm v4, 33   ; bin: 49 c1 c8 21
+
+
     ; Load Complex
     [-,%rax]            v521 = iconst.i64 1
     [-,%rbx]            v522 = iconst.i64 1

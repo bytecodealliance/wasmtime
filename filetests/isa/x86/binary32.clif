@@ -432,6 +432,12 @@ ebb0:
     ; asm: shrl $8, %esi
     [-,%rsi]             v515 = ushr_imm v2, 8    ; bin: c1 ee 08
 
+    ; Rotate immediates
+    ; asm: rolq $12, %esi
+    [-,%rsi]             v5101 = rotl_imm v2, 12   ; bin: c1 c6 0c
+    ; asm: rorq $5, %esi
+    [-,%rsi]             v5103 = rotr_imm v2, 5    ; bin: c1 ce 05
+
     ; Load Complex
     [-,%rax]            v521 = iconst.i32 1
     [-,%rbx]            v522 = iconst.i32 1
