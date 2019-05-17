@@ -737,6 +737,23 @@ pub fn path_open(
                         return wasm32::__WASI_ENXIO;
                     }
                 }
+                // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
+                // on a symlink.
+                Some(Errno::ENOTDIR)
+                    if !(nix_all_oflags & (OFlag::O_NOFOLLOW | OFlag::O_DIRECTORY)).is_empty() =>
+                {
+                    if let Ok(stat) = fstatat(dir, path.as_os_str(), AtFlags::AT_SYMLINK_NOFOLLOW) {
+                        if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFLNK) {
+                            return wasm32::__WASI_ELOOP;
+                        }
+                    }
+                    return wasm32::__WASI_ENOTDIR;
+                }
+                // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
+                // a symlink.
+                Some(Errno::EMLINK) if !(nix_all_oflags & OFlag::O_NOFOLLOW).is_empty() => {
+                    return wasm32::__WASI_ELOOP;
+                }
                 Some(e) => return wasm32::errno_from_nix(e),
                 None => return wasm32::__WASI_ENOSYS,
             }

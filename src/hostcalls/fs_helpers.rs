@@ -158,8 +158,11 @@ pub fn path_get<P: AsRef<OsStr>>(
                         continue;
                     }
                     Err(e)
+                        // Check to see if it was a symlink. Linux indicates
+                        // this with ENOTDIR because of the O_DIRECTORY flag.
                         if e.as_errno() == Some(Errno::ELOOP)
-                            || e.as_errno() == Some(Errno::EMLINK) =>
+                            || e.as_errno() == Some(Errno::EMLINK)
+                            || e.as_errno() == Some(Errno::ENOTDIR) =>
                     {
                         // attempt symlink expansion
                         match readlinkat(
