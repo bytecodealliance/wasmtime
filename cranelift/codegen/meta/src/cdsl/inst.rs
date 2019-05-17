@@ -373,7 +373,7 @@ fn verify_polymorphic(
             let tv = operands_in[op_num].type_var().unwrap();
             let free_typevar = tv.free_typevar();
             if (free_typevar.is_some() && tv == &free_typevar.unwrap())
-                || !tv.singleton_type().is_none()
+                || tv.singleton_type().is_some()
             {
                 match verify_ctrl_typevar(tv, &value_opnums, &operands_in, &operands_out) {
                     Ok(typevars) => {

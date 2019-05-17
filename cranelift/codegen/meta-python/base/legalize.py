@@ -261,23 +261,6 @@ for binop in [iadd_imm, imul_imm, udiv_imm, urem_imm]:
 for binop in [sdiv_imm, srem_imm]:
     widen_imm(True, binop)
 
-# Use expand instead of widen, because widen only gets applied for i8 and i16
-# base type vars, but these take f32 and f64 as base type var.
-for ty in [types.f32, types.f64]:
-    for int_ty in [types.i8, types.i16]:
-        expand.legalize(
-            a << insts.fcvt_from_uint.bind(ty).bind(int_ty)(b),
-            Rtl(
-                x << uextend.i32(b),
-                a << insts.fcvt_from_uint.bind(ty).i32(x),
-            ))
-        expand.legalize(
-            a << insts.fcvt_from_sint.bind(ty).bind(int_ty)(b),
-            Rtl(
-                x << sextend.i32(b),
-                a << insts.fcvt_from_sint.bind(ty).i32(x),
-            ))
-
 widen_imm(False, irsub_imm)
 
 # bit ops
@@ -491,6 +474,26 @@ expand.legalize(
             (a, b2) << isub_bout(a1, b_int),
             b << bor(b1, b2)
         ))
+
+# Expansions for fcvt_from_{u,s}int for smaller integer types.
+# These use expand and not widen because the controlling type variable for
+# these instructions are f32/f64, which are legalized as part of the expand
+# group.
+for dest_ty in [types.f32, types.f64]:
+    for src_ty in [types.i8, types.i16]:
+        expand.legalize(
+            a << insts.fcvt_from_uint.bind(dest_ty).bind(src_ty)(b),
+            Rtl(
+                x << uextend.i32(b),
+                a << insts.fcvt_from_uint.bind(dest_ty).i32(x),
+            ))
+
+        expand.legalize(
+            a << insts.fcvt_from_sint.bind(dest_ty).bind(src_ty)(b),
+            Rtl(
+                x << sextend.i32(b),
+                a << insts.fcvt_from_sint.bind(dest_ty).i32(x),
+            ))
 
 # Expansions for immediate operands that are out of range.
 for inst_imm,      inst in [

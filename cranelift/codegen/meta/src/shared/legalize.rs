@@ -62,6 +62,8 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     let f32const = insts.by_name("f32const");
     let f64const = insts.by_name("f64const");
     let fcopysign = insts.by_name("fcopysign");
+    let fcvt_from_sint = insts.by_name("fcvt_from_sint");
+    let fcvt_from_uint = insts.by_name("fcvt_from_uint");
     let fneg = insts.by_name("fneg");
     let iadd = insts.by_name("iadd");
     let iadd_carry = insts.by_name("iadd_carry");
@@ -511,6 +513,32 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
             def!(b = bor(b1, b2)),
         ],
     );
+
+    // Expansions for fcvt_from_{u,s}int for smaller integer types.
+    // These use expand and not widen because the controlling type variable for
+    // these instructions are f32/f64, which are legalized as part of the expand
+    // group.
+    for &dest_ty in &[F32, F64] {
+        for &src_ty in &[I8, I16] {
+            let bound_inst = bind(bind(fcvt_from_uint, dest_ty), src_ty);
+            expand.legalize(
+                def!(a = bound_inst(b)),
+                vec![
+                    def!(x = uextend.I32(b)),
+                    def!(a = fcvt_from_uint.dest_ty(x)),
+                ],
+            );
+
+            let bound_inst = bind(bind(fcvt_from_sint, dest_ty), src_ty);
+            expand.legalize(
+                def!(a = bound_inst(b)),
+                vec![
+                    def!(x = sextend.I32(b)),
+                    def!(a = fcvt_from_sint.dest_ty(x)),
+                ],
+            );
+        }
+    }
 
     // Expansions for immediate operands that are out of range.
     for &(inst_imm, inst) in &[
