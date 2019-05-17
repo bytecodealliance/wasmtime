@@ -233,6 +233,8 @@ for inst,           rrr in [
     X86_64.enc(inst.i32.any, *r.rc(0xd3, rrr=rrr))
 
 for inst,           rrr in [
+        (base.rotl_imm, 0),
+        (base.rotr_imm, 1),
         (base.ishl_imm, 4),
         (base.ushr_imm, 5),
         (base.sshr_imm, 7)]:
