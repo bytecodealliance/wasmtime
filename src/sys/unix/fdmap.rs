@@ -1,7 +1,17 @@
 use crate::host;
+
 use std::fs::File;
-use std::os::unix::prelude::{FileTypeExt, FromRawFd, IntoRawFd, RawFd};
+use std::os::unix::prelude::{FileTypeExt, FromRawFd, IntoRawFd, RawFd, AsRawFd};
 use std::path::PathBuf;
+use std::collections::HashMap;
+
+#[derive(Clone, Debug)]
+pub struct FdObject {
+    pub ty: host::__wasi_filetype_t,
+    pub rawfd: RawFd,
+    pub needs_close: bool,
+    // TODO: directories
+}
 
 #[derive(Clone, Debug)]
 pub struct FdEntry {
@@ -11,15 +21,32 @@ pub struct FdEntry {
     pub preopen_path: Option<PathBuf>,
 }
 
+#[derive(Debug)]
+pub struct FdMap {
+    entries: HashMap<host::__wasi_fd_t, FdEntry>,
+}
+
+impl Drop for FdObject {
+    fn drop(&mut self) {
+        if self.needs_close {
+            nix::unistd::close(self.rawfd).unwrap_or_else(|e| eprintln!("FdObject::drop(): {}", e));
+        }
+    }
+}
+
 impl FdEntry {
-    pub fn from_file(file: File) -> FdEntry {
-        unsafe { FdEntry::from_raw_fd(file.into_raw_fd()) }
+    pub fn from_file(file: File) -> Self {
+        unsafe { Self::from_raw_fd(file.into_raw_fd()) }
+    }
+
+    pub fn duplicate<F: AsRawFd>(fd: &F) -> Self {
+        unsafe { Self::from_raw_fd(nix::unistd::dup(fd.as_raw_fd()).unwrap()) }
     }
 }
 
 impl FromRawFd for FdEntry {
     // TODO: make this a different function with error handling, rather than using the trait method
-    unsafe fn from_raw_fd(rawfd: RawFd) -> FdEntry {
+    unsafe fn from_raw_fd(rawfd: RawFd) -> Self {
         let (ty, mut rights_base, rights_inheriting) =
             determine_type_rights(rawfd).expect("can determine file rights");
 
@@ -33,7 +60,7 @@ impl FromRawFd for FdEntry {
             rights_base &= !host::__WASI_RIGHT_FD_READ;
         }
 
-        FdEntry {
+        Self {
             fd_object: FdObject {
                 ty: ty,
                 rawfd,
@@ -122,18 +149,62 @@ pub unsafe fn determine_type_rights(
     Ok((ty, rights_base, rights_inheriting))
 }
 
-#[derive(Clone, Debug)]
-pub struct FdObject {
-    pub ty: host::__wasi_filetype_t,
-    pub rawfd: RawFd,
-    pub needs_close: bool,
-    // TODO: directories
-}
-
-impl Drop for FdObject {
-    fn drop(&mut self) {
-        if self.needs_close {
-            nix::unistd::close(self.rawfd).unwrap_or_else(|e| eprintln!("FdObject::drop(): {}", e));
+impl FdMap {
+    pub fn new() -> Self {
+        Self {
+            entries: HashMap::new()
         }
+    }
+
+    pub(crate) fn insert_fd_entry_at(&mut self, fd: host::__wasi_fd_t, fe: FdEntry) {
+        self.entries.insert(fd, fe);
+    }
+
+    pub(crate) fn get(&self, fd: &host::__wasi_fd_t) -> Option<&FdEntry> {
+        self.entries.get(fd)
+    }
+
+    pub(crate) fn get_mut(&mut self, fd: &host::__wasi_fd_t) -> Option<&mut FdEntry> {
+        self.entries.get_mut(fd)
+    }
+
+    pub(crate) fn remove(&mut self, fd: &host::__wasi_fd_t) -> Option<FdEntry> {
+        self.entries.remove(fd)
+    }
+
+    pub fn get_fd_entry(
+        &self,
+        fd: host::__wasi_fd_t,
+        rights_base: host::__wasi_rights_t,
+        rights_inheriting: host::__wasi_rights_t,
+    ) -> Result<&FdEntry, host::__wasi_errno_t> {
+        if let Some(fe) = self.entries.get(&fd) {
+            // validate rights
+            if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0
+            {
+                Err(host::__WASI_ENOTCAPABLE)
+            } else {
+                Ok(fe)
+            }
+        } else {
+            Err(host::__WASI_EBADF)
+        }
+    }
+
+    pub fn insert_fd_entry(
+        &mut self,
+        fe: FdEntry,
+    ) -> Result<host::__wasi_fd_t, host::__wasi_errno_t> {
+        // never insert where stdio handles usually are
+        let mut fd = 3;
+        while self.entries.contains_key(&fd) {
+            if let Some(next_fd) = fd.checked_add(1) {
+                fd = next_fd;
+            } else {
+                return Err(host::__WASI_EMFILE);
+            }
+        }
+        self.entries.insert(fd, fe);
+        Ok(fd)
     }
 }

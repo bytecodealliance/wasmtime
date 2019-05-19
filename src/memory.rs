@@ -1,15 +1,6 @@
 //! Functions to go back and forth between WASI types in host and wasm32 representations.
-//!
-//! This module is an adaptation of the `wasmtime-wasi` module
-//! [`translate.rs`](https://github.com/CraneStation/wasmtime-wasi/blob/1a6ecf3a0378d71f3fc1ba25ce76a2b43e4166b8/lib/wasi/src/translate.rs);
-//! its license file `LICENSE.wasmtime-wasi` is included in this project.
-//!
-//! Any of these functions that take a `Vmctx` argument are only meant to be called from within a
-//! hostcall.
-//!
-//! This sort of manual encoding will hopefully be obsolete once the IDL is developed.
-
 use crate::{host, wasm32};
+pub use crate::sys::memory::*;
 
 use cast;
 use cast::From as _0;
@@ -587,33 +578,3 @@ dec_enc_scalar!(
     enc_dircookie,
     enc_dircookie_byref
 );
-
-#[cfg(target_os = "linux")]
-pub fn dirent_from_host(
-    host_entry: &nix::libc::dirent,
-) -> Result<wasm32::__wasi_dirent_t, host::__wasi_errno_t> {
-    let mut entry = unsafe { std::mem::zeroed::<wasm32::__wasi_dirent_t>() };
-    let d_namlen = unsafe { std::ffi::CStr::from_ptr(host_entry.d_name.as_ptr()) }
-        .to_bytes()
-        .len();
-    if d_namlen > u32::max_value() as usize {
-        return Err(host::__WASI_EIO);
-    }
-    entry.d_ino = enc_inode(host_entry.d_ino);
-    entry.d_next = enc_dircookie(host_entry.d_off as u64);
-    entry.d_namlen = enc_u32(d_namlen as u32);
-    entry.d_type = enc_filetype(host_entry.d_type);
-    Ok(entry)
-}
-
-#[cfg(not(target_os = "linux"))]
-pub fn dirent_from_host(
-    host_entry: &nix::libc::dirent,
-) -> Result<wasm32::__wasi_dirent_t, host::__wasi_errno_t> {
-    let mut entry = unsafe { std::mem::zeroed::<wasm32::__wasi_dirent_t>() };
-    entry.d_ino = enc_inode(host_entry.d_ino);
-    entry.d_next = enc_dircookie(host_entry.d_seekoff);
-    entry.d_namlen = enc_u32(u32::from(host_entry.d_namlen));
-    entry.d_type = enc_filetype(host_entry.d_type);
-    Ok(entry)
-}

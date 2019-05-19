@@ -3,6 +3,7 @@
 
 use crate::ctx::WasiCtx;
 use crate::host;
+use crate::sys::host as host_impl;
 
 use nix::libc::{self, c_long};
 use std::ffi::{OsStr, OsString};
@@ -191,7 +192,7 @@ pub fn path_get<P: AsRef<OsStr>>(
                             Err(e) => {
                                 return ret_error(
                                     &mut dir_stack,
-                                    host::errno_from_nix(e.as_errno().unwrap()),
+                                    host_impl::errno_from_nix(e.as_errno().unwrap()),
                                 );
                             }
                         }
@@ -199,7 +200,7 @@ pub fn path_get<P: AsRef<OsStr>>(
                     Err(e) => {
                         return ret_error(
                             &mut dir_stack,
-                            host::errno_from_nix(e.as_errno().unwrap()),
+                            host_impl::errno_from_nix(e.as_errno().unwrap()),
                         );
                     }
                 }
@@ -237,7 +238,7 @@ pub fn path_get<P: AsRef<OsStr>>(
                             let errno = e.as_errno().unwrap();
                             if errno != Errno::EINVAL && errno != Errno::ENOENT {
                                 // only return an error if this path is not actually a symlink
-                                return ret_error(&mut dir_stack, host::errno_from_nix(errno));
+                                return ret_error(&mut dir_stack, host_impl::errno_from_nix(errno));
                             }
                         }
                     }

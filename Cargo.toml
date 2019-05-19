@@ -14,8 +14,14 @@ wasi-common-cbindgen = { path = "wasi-common-cbindgen" }
 cast = "0.2"
 failure = "0.1"
 libc = "0.2"
-nix = "0.13"
 rand = "0.6"
+cfg-if = "0.1.9"
+
+[target.'cfg(unix)'.dependencies]
+nix = "0.13"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features=["std", "handleapi", "processthreadsapi", "winbase", "ws2def", "fileapi"] }
 
 [lib]
 name = "wasi_common"
