@@ -356,12 +356,7 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
 
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        hostcalls::fd_datasync(wasi_ctx, memory, fd)
+        hostcalls::fd_datasync(wasi_ctx, fd)
     }
 
     pub unsafe extern "C" fn fd_pread(
@@ -480,12 +475,7 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
 
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        hostcalls::fd_renumber(wasi_ctx, memory, from, to)
+        hostcalls::fd_renumber(wasi_ctx, from, to)
     }
 
     pub unsafe extern "C" fn fd_seek(
@@ -593,14 +583,8 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
 
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
         hostcalls::fd_fdstat_set_rights(
             wasi_ctx,
-            memory,
             fd,
             fs_rights_base,
             fs_rights_inheriting
@@ -618,12 +602,7 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
 
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        hostcalls::fd_sync(wasi_ctx, memory, fd)
+        hostcalls::fd_sync(wasi_ctx, fd)
     }
 
     pub unsafe extern "C" fn fd_write(
@@ -674,12 +653,7 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
 
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        hostcalls::fd_advise(wasi_ctx, memory, fd, offset, len, advice)
+        hostcalls::fd_advise(wasi_ctx,  fd, offset, len, advice)
     }
 
     pub unsafe extern "C" fn fd_allocate(
@@ -695,12 +669,7 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
 
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        hostcalls::fd_allocate(wasi_ctx, memory, fd, offset, len)
+        hostcalls::fd_allocate(wasi_ctx, fd, offset, len)
     }
 
     pub unsafe extern "C" fn path_create_directory(
@@ -984,12 +953,7 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
 
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        hostcalls::fd_filestat_set_times(wasi_ctx, memory, fd, st_atim, st_mtim, fstflags)
+        hostcalls::fd_filestat_set_times(wasi_ctx, fd, st_atim, st_mtim, fstflags)
     }
 
     pub unsafe extern "C" fn fd_filestat_set_size(
@@ -1008,12 +972,7 @@ syscalls! {
             Err(e) => return return_encoded_errno(e),
         };
 
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        hostcalls::fd_filestat_set_size(wasi_ctx, memory, fd, size)
+        hostcalls::fd_filestat_set_size(wasi_ctx, fd, size)
     }
 
     pub unsafe extern "C" fn path_filestat_get(
