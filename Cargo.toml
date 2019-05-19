@@ -2,13 +2,12 @@
 name = "wasmtime"
 authors = ["The Wasmtime Project Developers"]
 version = "0.1.0"
-description = "Command-line interface for the wasmtime crate"
+description = "Command-line interface for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
 categories = ["wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 edition = "2018"
-publish = false
 
 [[bin]]
 name = "wasmtime"
