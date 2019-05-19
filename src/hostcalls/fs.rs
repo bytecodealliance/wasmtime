@@ -344,13 +344,13 @@ pub fn fd_fdstat_set_flags(
 
 #[wasi_common_cbindgen]
 pub fn fd_fdstat_set_rights(
-    wasi_ctx: &WasiCtx,
+    wasi_ctx: &mut WasiCtx,
     fd: wasm32::__wasi_fd_t,
     fs_rights_base: wasm32::__wasi_rights_t,
     fs_rights_inheriting: wasm32::__wasi_rights_t,
 ) -> wasm32::__wasi_errno_t {
     let host_fd = dec_fd(fd);
-    let fe = match wasi_ctx.fds.get(&host_fd) {
+    let fe = match wasi_ctx.fds.get_mut(&host_fd) {
         Some(fe) => fe,
         None => return wasm32::__WASI_EBADF,
     };
@@ -359,6 +359,9 @@ pub fn fd_fdstat_set_rights(
     {
         return wasm32::__WASI_ENOTCAPABLE;
     }
+
+    fe.rights_base = fs_rights_base;
+    fe.rights_inheriting = fs_rights_inheriting;
     wasm32::__WASI_ESUCCESS
 }
 
