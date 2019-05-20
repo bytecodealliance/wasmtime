@@ -6,6 +6,7 @@ use crate::ctx::WasiCtx;
 use crate::wasm32;
 use wasi_common_cbindgen::wasi_common_cbindgen;
 
+#[wasi_common_cbindgen]
 pub fn sock_recv(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -19,6 +20,7 @@ pub fn sock_recv(
     unimplemented!("sock_recv")
 }
 
+#[wasi_common_cbindgen]
 pub fn sock_send(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -31,6 +33,7 @@ pub fn sock_send(
     unimplemented!("sock_send")
 }
 
+#[wasi_common_cbindgen]
 pub fn sock_shutdown(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],

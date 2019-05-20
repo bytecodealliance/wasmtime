@@ -1,9 +1,11 @@
 //! Functions to go back and forth between WASI types in host and wasm32 representations.
+#![allow(unused)]
 use crate::{host, wasm32};
-pub use crate::sys::memory::*;
+
+// NOTE avoid shadowing `std::convert::From` - cf. rust-lang/rfcs#1311
+use cast::From as _0;
 
 use cast;
-use cast::From as _0;
 use std::mem::{align_of, size_of};
 use std::ptr;
 use std::slice;

@@ -1,18 +1,19 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
-use crate::sys::fdmap::{determine_type_rights, FdEntry};
-use crate::sys::host as host_impl;
+use super::fdentry::{determine_type_rights, FdEntry};
+use super::fs_helpers::*;
+use super::host_impl;
 
 use crate::ctx::WasiCtx;
 use crate::memory::*;
 use crate::{host, wasm32};
 
-use super::fs_helpers::*;
-
 use nix::libc::{self, c_long, c_void, off_t};
 use std::ffi::OsStr;
 use std::os::unix::prelude::{FromRawFd, OsStrExt};
+use wasi_common_cbindgen::wasi_common_cbindgen;
 
+#[wasi_common_cbindgen]
 pub fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
     let fd = dec_fd(fd);
     if let Some(fdent) = wasi_ctx.fds.get(&fd) {
@@ -32,6 +33,7 @@ pub fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wa
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
     let host_fd = dec_fd(fd);
     let rights = host::__WASI_RIGHT_FD_DATASYNC;
@@ -57,6 +59,7 @@ pub fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__was
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_pread(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -106,6 +109,7 @@ pub fn fd_pread(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_pwrite(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -147,6 +151,7 @@ pub fn fd_pwrite(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_read(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
@@ -189,6 +194,7 @@ pub fn fd_read(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_renumber(
     wasi_ctx: &mut WasiCtx,
     from: wasm32::__wasi_fd_t,
@@ -213,6 +219,7 @@ pub fn fd_renumber(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_seek(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -253,6 +260,7 @@ pub fn fd_seek(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_tell(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -279,6 +287,7 @@ pub fn fd_tell(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_fdstat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -313,6 +322,7 @@ pub fn fd_fdstat_get(
     errno
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_fdstat_set_flags(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
@@ -332,6 +342,7 @@ pub fn fd_fdstat_set_flags(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_fdstat_set_rights(
     wasi_ctx: &mut WasiCtx,
     fd: wasm32::__wasi_fd_t,
@@ -354,6 +365,7 @@ pub fn fd_fdstat_set_rights(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
     let host_fd = dec_fd(fd);
     let rights = host::__WASI_RIGHT_FD_SYNC;
@@ -368,6 +380,7 @@ pub fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_er
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_write(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -404,6 +417,7 @@ pub fn fd_write(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_advise(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
@@ -462,6 +476,7 @@ pub fn fd_advise(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_allocate(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
@@ -514,6 +529,7 @@ pub fn fd_allocate(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn path_create_directory(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -552,6 +568,7 @@ pub fn path_create_directory(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn path_link(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -613,6 +630,7 @@ pub fn path_link(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn path_open(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
@@ -770,6 +788,7 @@ pub fn path_open(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_readdir(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -817,10 +836,11 @@ pub fn fd_readdir(
         if host_entry.is_null() {
             break;
         }
-        let entry: wasm32::__wasi_dirent_t = match dirent_from_host(&unsafe { *host_entry }) {
-            Ok(entry) => entry,
-            Err(e) => return enc_errno(e),
-        };
+        let entry: wasm32::__wasi_dirent_t =
+            match host_impl::dirent_from_host(&unsafe { *host_entry }) {
+                Ok(entry) => entry,
+                Err(e) => return enc_errno(e),
+            };
         let name_len = entry.d_namlen as usize;
         let required_space = std::mem::size_of_val(&entry) + name_len;
         if required_space > left {
@@ -849,6 +869,7 @@ pub fn fd_readdir(
         .unwrap_or_else(|e| e)
 }
 
+#[wasi_common_cbindgen]
 pub fn path_readlink(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -892,6 +913,7 @@ pub fn path_readlink(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn path_rename(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -948,6 +970,7 @@ pub fn path_rename(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_filestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -974,6 +997,7 @@ pub fn fd_filestat_get(
     errno
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_filestat_set_times(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
@@ -1030,6 +1054,7 @@ pub fn fd_filestat_set_times(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_filestat_set_size(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
@@ -1053,6 +1078,7 @@ pub fn fd_filestat_set_size(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn path_filestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1098,6 +1124,7 @@ pub fn path_filestat_get(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn path_filestat_set_times(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1171,6 +1198,7 @@ pub fn path_filestat_set_times(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn path_symlink(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1211,6 +1239,7 @@ pub fn path_symlink(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn path_unlink_file(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1249,6 +1278,7 @@ pub fn path_unlink_file(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn path_remove_directory(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1280,6 +1310,7 @@ pub fn path_remove_directory(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_prestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1316,6 +1347,7 @@ pub fn fd_prestat_get(
     }
 }
 
+#[wasi_common_cbindgen]
 pub fn fd_prestat_dir_name(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],

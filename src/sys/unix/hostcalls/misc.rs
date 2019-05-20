@@ -1,15 +1,17 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
+use super::host_impl;
 
 use crate::memory::*;
 use crate::{host, wasm32};
-use crate::sys::host as host_impl;
 
 use nix::convert_ioctl_res;
 use nix::libc::{self, c_int};
 use std::cmp;
 use std::time::SystemTime;
+use wasi_common_cbindgen::wasi_common_cbindgen;
 
+#[wasi_common_cbindgen]
 pub fn clock_res_get(
     memory: &mut [u8],
     clock_id: wasm32::__wasi_clockid_t,
@@ -49,6 +51,7 @@ pub fn clock_res_get(
         })
 }
 
+#[wasi_common_cbindgen]
 pub fn clock_time_get(
     memory: &mut [u8],
     clock_id: wasm32::__wasi_clockid_t,
@@ -85,6 +88,7 @@ pub fn clock_time_get(
         })
 }
 
+#[wasi_common_cbindgen]
 pub fn poll_oneoff(
     memory: &mut [u8],
     input: wasm32::uintptr_t,
@@ -176,6 +180,7 @@ pub fn poll_oneoff(
     wasm32::__WASI_ESUCCESS
 }
 
+#[wasi_common_cbindgen]
 pub fn sched_yield() -> wasm32::__wasi_errno_t {
     unsafe { libc::sched_yield() };
     wasm32::__WASI_ESUCCESS

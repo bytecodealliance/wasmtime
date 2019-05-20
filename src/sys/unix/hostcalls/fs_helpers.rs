@@ -1,9 +1,9 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 
+use super::host_impl;
 use crate::ctx::WasiCtx;
 use crate::host;
-use crate::sys::host as host_impl;
 
 use nix::libc::{self, c_long};
 use std::ffi::{OsStr, OsString};

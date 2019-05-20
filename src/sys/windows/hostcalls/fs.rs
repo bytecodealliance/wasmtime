@@ -1,19 +1,25 @@
 #![allow(non_camel_case_types)]
+#![allow(unused_unsafe)]
+#![allow(unused)]
+use super::host_impl;
+use super::host_impl::IoVec;
+
 use crate::ctx::WasiCtx;
-use crate::wasm32;
+use crate::memory::*;
+use crate::{host, wasm32};
 
-use crate::sys::hostcalls as hostcalls_impl;
-
+use std::cmp;
+use std::os::windows::prelude::OsStrExt;
 use wasi_common_cbindgen::wasi_common_cbindgen;
 
 #[wasi_common_cbindgen]
 pub fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_close(wasi_ctx, fd)
+    unimplemented!("fd_close")
 }
 
 #[wasi_common_cbindgen]
 pub fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_datasync(wasi_ctx, fd)
+    unimplemented!("fd_datasync")
 }
 
 #[wasi_common_cbindgen]
@@ -26,7 +32,7 @@ pub fn fd_pread(
     offset: wasm32::__wasi_filesize_t,
     nread: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_pread(wasi_ctx, memory, fd, iovs_ptr, iovs_len, offset, nread)
+    unimplemented!("fd_pread")
 }
 
 #[wasi_common_cbindgen]
@@ -39,7 +45,7 @@ pub fn fd_pwrite(
     offset: wasm32::__wasi_filesize_t,
     nwritten: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_pwrite(wasi_ctx, memory, fd, iovs_ptr, iovs_len, offset, nwritten)
+    unimplemented!("fd_pwrite")
 }
 
 #[wasi_common_cbindgen]
@@ -51,7 +57,7 @@ pub fn fd_read(
     iovs_len: wasm32::size_t,
     nread: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_read(wasi_ctx, memory, fd, iovs_ptr, iovs_len, nread)
+    unimplemented!("fd_read")
 }
 
 #[wasi_common_cbindgen]
@@ -60,7 +66,7 @@ pub fn fd_renumber(
     from: wasm32::__wasi_fd_t,
     to: wasm32::__wasi_fd_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_renumber(wasi_ctx, from, to)
+    unimplemented!("fd_renumber")
 }
 
 #[wasi_common_cbindgen]
@@ -72,7 +78,7 @@ pub fn fd_seek(
     whence: wasm32::__wasi_whence_t,
     newoffset: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_seek(wasi_ctx, memory, fd, offset, whence, newoffset)
+    unimplemented!("fd_seek")
 }
 
 #[wasi_common_cbindgen]
@@ -82,7 +88,7 @@ pub fn fd_tell(
     fd: wasm32::__wasi_fd_t,
     newoffset: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_tell(wasi_ctx, memory, fd, newoffset)
+    unimplemented!("fd_tell")
 }
 
 #[wasi_common_cbindgen]
@@ -90,9 +96,9 @@ pub fn fd_fdstat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
-    fdstat_ptr: wasm32::uintptr_t,
+    fdstat_ptr: wasm32::uintptr_t, // *mut wasm32::__wasi_fdstat_t
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_fdstat_get(wasi_ctx, memory, fd, fdstat_ptr)
+    unimplemented!("fd_fdstat_get")
 }
 
 #[wasi_common_cbindgen]
@@ -101,7 +107,7 @@ pub fn fd_fdstat_set_flags(
     fd: wasm32::__wasi_fd_t,
     fdflags: wasm32::__wasi_fdflags_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_fdstat_set_flags(wasi_ctx, fd, fdflags)
+    unimplemented!("fd_fdstat_set_flags")
 }
 
 #[wasi_common_cbindgen]
@@ -111,12 +117,12 @@ pub fn fd_fdstat_set_rights(
     fs_rights_base: wasm32::__wasi_rights_t,
     fs_rights_inheriting: wasm32::__wasi_rights_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_fdstat_set_rights(wasi_ctx, fd, fs_rights_base, fs_rights_inheriting)
+    unimplemented!("fd_fdstat_set_rights")
 }
 
 #[wasi_common_cbindgen]
 pub fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_sync(wasi_ctx, fd)
+    unimplemented!("fd_sync")
 }
 
 #[wasi_common_cbindgen]
@@ -128,7 +134,46 @@ pub fn fd_write(
     iovs_len: wasm32::size_t,
     nwritten: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_write(wasi_ctx, memory, fd, iovs_ptr, iovs_len, nwritten)
+    use winapi::shared::minwindef::{DWORD, LPVOID};
+    use winapi::shared::ws2def::WSABUF;
+    use winapi::um::fileapi::WriteFile;
+
+    let fd = dec_fd(fd);
+    let mut iovs = match dec_iovec_slice(memory, iovs_ptr, iovs_len) {
+        Ok(iovs) => iovs,
+        Err(e) => return enc_errno(e),
+    };
+
+    let fe = match wasi_ctx.get_fd_entry(fd, host::__WASI_RIGHT_FD_WRITE.into(), 0) {
+        Ok(fe) => fe,
+        Err(e) => return enc_errno(e),
+    };
+
+    let iovs: Vec<IoVec> = iovs
+        .iter()
+        .map(|iov| unsafe { host_impl::iovec_to_win(iov) })
+        .collect();
+
+    let buf = iovs
+        .iter()
+        .find(|b| !b.as_slice().is_empty())
+        .map_or(&[][..], |b| b.as_slice());
+
+    let mut host_nwritten = 0;
+    let len = cmp::min(buf.len(), <DWORD>::max_value() as usize) as DWORD;
+    unsafe {
+        WriteFile(
+            fe.fd_object.raw_handle,
+            buf.as_ptr() as LPVOID,
+            len,
+            &mut host_nwritten,
+            std::ptr::null_mut(),
+        )
+    };
+
+    enc_usize_byref(memory, nwritten, host_nwritten as usize)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(|e| e)
 }
 
 #[wasi_common_cbindgen]
@@ -139,7 +184,7 @@ pub fn fd_advise(
     len: wasm32::__wasi_filesize_t,
     advice: wasm32::__wasi_advice_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_advise(wasi_ctx, fd, offset, len, advice)
+    unimplemented!("fd_advise")
 }
 
 #[wasi_common_cbindgen]
@@ -149,7 +194,7 @@ pub fn fd_allocate(
     offset: wasm32::__wasi_filesize_t,
     len: wasm32::__wasi_filesize_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_allocate(wasi_ctx, fd, offset, len)
+    unimplemented!("fd_allocate")
 }
 
 #[wasi_common_cbindgen]
@@ -160,7 +205,7 @@ pub fn path_create_directory(
     path_ptr: wasm32::uintptr_t,
     path_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_create_directory(wasi_ctx, memory, dirfd, path_ptr, path_len)
+    unimplemented!("path_create_directory")
 }
 
 #[wasi_common_cbindgen]
@@ -168,24 +213,14 @@ pub fn path_link(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     old_dirfd: wasm32::__wasi_fd_t,
-    old_flags: wasm32::__wasi_lookupflags_t,
+    _old_flags: wasm32::__wasi_lookupflags_t,
     old_path_ptr: wasm32::uintptr_t,
     old_path_len: wasm32::size_t,
     new_dirfd: wasm32::__wasi_fd_t,
     new_path_ptr: wasm32::uintptr_t,
     new_path_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_link(
-        wasi_ctx,
-        memory,
-        old_dirfd,
-        old_flags,
-        old_path_ptr,
-        old_path_len,
-        new_dirfd,
-        new_path_ptr,
-        new_path_len,
-    )
+    unimplemented!("path_link")
 }
 
 #[wasi_common_cbindgen]
@@ -202,19 +237,7 @@ pub fn path_open(
     fs_flags: wasm32::__wasi_fdflags_t,
     fd_out_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_open(
-        wasi_ctx,
-        memory,
-        dirfd,
-        dirflags,
-        path_ptr,
-        path_len,
-        oflags,
-        fs_rights_base,
-        fs_rights_inheriting,
-        fs_flags,
-        fd_out_ptr,
-    )
+    unimplemented!("path_open")
 }
 
 #[wasi_common_cbindgen]
@@ -227,7 +250,7 @@ pub fn fd_readdir(
     cookie: wasm32::__wasi_dircookie_t,
     buf_used: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_readdir(wasi_ctx, memory, fd, buf, buf_len, cookie, buf_used)
+    unimplemented!("fd_readdir")
 }
 
 #[wasi_common_cbindgen]
@@ -241,9 +264,7 @@ pub fn path_readlink(
     buf_len: wasm32::size_t,
     buf_used: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_readlink(
-        wasi_ctx, memory, dirfd, path_ptr, path_len, buf_ptr, buf_len, buf_used,
-    )
+    unimplemented!("path_readlink")
 }
 
 #[wasi_common_cbindgen]
@@ -257,16 +278,7 @@ pub fn path_rename(
     new_path_ptr: wasm32::uintptr_t,
     new_path_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_rename(
-        wasi_ctx,
-        memory,
-        old_dirfd,
-        old_path_ptr,
-        old_path_len,
-        new_dirfd,
-        new_path_ptr,
-        new_path_len,
-    )
+    unimplemented!("path_rename")
 }
 
 #[wasi_common_cbindgen]
@@ -276,7 +288,7 @@ pub fn fd_filestat_get(
     fd: wasm32::__wasi_fd_t,
     filestat_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_filestat_get(wasi_ctx, memory, fd, filestat_ptr)
+    unimplemented!("fd_filestat_get")
 }
 
 #[wasi_common_cbindgen]
@@ -287,7 +299,7 @@ pub fn fd_filestat_set_times(
     st_mtim: wasm32::__wasi_timestamp_t,
     fst_flags: wasm32::__wasi_fstflags_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_filestat_set_times(wasi_ctx, fd, st_atim, st_mtim, fst_flags)
+    unimplemented!("fd_filestat_set_times")
 }
 
 #[wasi_common_cbindgen]
@@ -296,7 +308,7 @@ pub fn fd_filestat_set_size(
     fd: wasm32::__wasi_fd_t,
     st_size: wasm32::__wasi_filesize_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_filestat_set_size(wasi_ctx, fd, st_size)
+    unimplemented!("fd_filestat_set_size")
 }
 
 #[wasi_common_cbindgen]
@@ -309,15 +321,7 @@ pub fn path_filestat_get(
     path_len: wasm32::size_t,
     filestat_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_filestat_get(
-        wasi_ctx,
-        memory,
-        dirfd,
-        dirflags,
-        path_ptr,
-        path_len,
-        filestat_ptr,
-    )
+    unimplemented!("path_filestat_get")
 }
 
 #[wasi_common_cbindgen]
@@ -332,9 +336,7 @@ pub fn path_filestat_set_times(
     st_mtim: wasm32::__wasi_timestamp_t,
     fst_flags: wasm32::__wasi_fstflags_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_filestat_set_times(
-        wasi_ctx, memory, dirfd, dirflags, path_ptr, path_len, st_atim, st_mtim, fst_flags,
-    )
+    unimplemented!("path_filestat_set_times")
 }
 
 #[wasi_common_cbindgen]
@@ -347,15 +349,7 @@ pub fn path_symlink(
     new_path_ptr: wasm32::uintptr_t,
     new_path_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_symlink(
-        wasi_ctx,
-        memory,
-        old_path_ptr,
-        old_path_len,
-        dirfd,
-        new_path_ptr,
-        new_path_len,
-    )
+    unimplemented!("path_symlink")
 }
 
 #[wasi_common_cbindgen]
@@ -366,7 +360,7 @@ pub fn path_unlink_file(
     path_ptr: wasm32::uintptr_t,
     path_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_unlink_file(wasi_ctx, memory, dirfd, path_ptr, path_len)
+    unimplemented!("path_unlink_file")
 }
 
 #[wasi_common_cbindgen]
@@ -377,7 +371,7 @@ pub fn path_remove_directory(
     path_ptr: wasm32::uintptr_t,
     path_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::path_remove_directory(wasi_ctx, memory, dirfd, path_ptr, path_len)
+    unimplemented!("path_remove_directory")
 }
 
 #[wasi_common_cbindgen]
@@ -387,7 +381,35 @@ pub fn fd_prestat_get(
     fd: wasm32::__wasi_fd_t,
     prestat_ptr: wasm32::uintptr_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_prestat_get(wasi_ctx, memory, fd, prestat_ptr)
+    let fd = dec_fd(fd);
+    // TODO: is this the correct right for this?
+    match wasi_ctx.get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
+        Ok(fe) => {
+            if let Some(po_path) = &fe.preopen_path {
+                if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
+                    return wasm32::__WASI_ENOTDIR;
+                }
+                enc_prestat_byref(
+                    memory,
+                    prestat_ptr,
+                    host::__wasi_prestat_t {
+                        pr_type: host::__WASI_PREOPENTYPE_DIR,
+                        u: host::__wasi_prestat_t___wasi_prestat_u {
+                            dir: host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
+                                // TODO: clean up
+                                pr_name_len: po_path.as_os_str().encode_wide().count() * 2,
+                            },
+                        },
+                    },
+                )
+                .map(|_| wasm32::__WASI_ESUCCESS)
+                .unwrap_or_else(|e| e)
+            } else {
+                wasm32::__WASI_ENOTSUP
+            }
+        }
+        Err(e) => enc_errno(e),
+    }
 }
 
 #[wasi_common_cbindgen]
@@ -398,5 +420,33 @@ pub fn fd_prestat_dir_name(
     path_ptr: wasm32::uintptr_t,
     path_len: wasm32::size_t,
 ) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::fd_prestat_dir_name(wasi_ctx, memory, fd, path_ptr, path_len)
+    let fd = dec_fd(fd);
+
+    match wasi_ctx.get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
+        Ok(fe) => {
+            if let Some(po_path) = &fe.preopen_path {
+                if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
+                    return wasm32::__WASI_ENOTDIR;
+                }
+                // TODO: clean up
+                let path_bytes = &po_path
+                    .as_os_str()
+                    .encode_wide()
+                    .map(u16::to_le_bytes)
+                    .fold(Vec::new(), |mut acc, bytes| {
+                        acc.extend_from_slice(&bytes);
+                        acc
+                    });
+                if path_bytes.len() > dec_usize(path_len) {
+                    return wasm32::__WASI_ENAMETOOLONG;
+                }
+                enc_slice_of(memory, path_bytes, path_ptr)
+                    .map(|_| wasm32::__WASI_ESUCCESS)
+                    .unwrap_or_else(|e| e)
+            } else {
+                wasm32::__WASI_ENOTSUP
+            }
+        }
+        Err(e) => enc_errno(e),
+    }
 }

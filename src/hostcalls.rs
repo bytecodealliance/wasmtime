@@ -3,11 +3,12 @@ use crate::ctx::WasiCtx;
 use crate::memory::*;
 use crate::wasm32;
 
-use crate::sys::hostcalls as hostcalls_impl;
-
+// NOTE avoid shadowing `std::convert::From` - cf. rust-lang/rfcs#1311
 use cast::From as _0;
 
 use wasi_common_cbindgen::wasi_common_cbindgen;
+
+pub use crate::sys::hostcalls::*;
 
 #[wasi_common_cbindgen]
 pub fn args_get(
@@ -65,25 +66,6 @@ pub fn args_sizes_get(
         return enc_errno(e);
     }
     wasm32::__WASI_ESUCCESS
-}
-
-#[wasi_common_cbindgen]
-pub fn clock_res_get(
-    memory: &mut [u8],
-    clock_id: wasm32::__wasi_clockid_t,
-    resolution_ptr: wasm32::uintptr_t,
-) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::clock_res_get(memory, clock_id, resolution_ptr)
-}
-
-#[wasi_common_cbindgen]
-pub fn clock_time_get(
-    memory: &mut [u8],
-    clock_id: wasm32::__wasi_clockid_t,
-    precision: wasm32::__wasi_timestamp_t,
-    time_ptr: wasm32::uintptr_t,
-) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::clock_time_get(memory, clock_id, precision, time_ptr)
 }
 
 #[wasi_common_cbindgen]
@@ -145,17 +127,6 @@ pub fn environ_sizes_get(
 }
 
 #[wasi_common_cbindgen]
-pub fn poll_oneoff(
-    memory: &mut [u8],
-    input: wasm32::uintptr_t,
-    output: wasm32::uintptr_t,
-    nsubscriptions: wasm32::size_t,
-    nevents: wasm32::uintptr_t,
-) -> wasm32::__wasi_errno_t {
-    hostcalls_impl::poll_oneoff(memory, input, output, nsubscriptions, nevents)
-}
-
-#[wasi_common_cbindgen]
 pub fn proc_exit(rval: wasm32::__wasi_exitcode_t) -> () {
     // TODO: Rather than call std::process::exit here, we should trigger a
     // stack unwind similar to a trap.
@@ -169,11 +140,6 @@ pub fn proc_raise(
     _sig: wasm32::__wasi_signal_t,
 ) -> wasm32::__wasi_errno_t {
     unimplemented!("proc_raise")
-}
-
-#[wasi_common_cbindgen]
-pub fn sched_yield() -> wasm32::__wasi_errno_t {
-    hostcalls_impl::sched_yield()
 }
 
 #[wasi_common_cbindgen]

@@ -1,9 +1,8 @@
 use crate::host;
 
 use std::fs::File;
-use std::os::unix::prelude::{FileTypeExt, FromRawFd, IntoRawFd, RawFd, AsRawFd};
+use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, IntoRawFd, RawFd};
 use std::path::PathBuf;
-use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct FdObject {
@@ -19,11 +18,6 @@ pub struct FdEntry {
     pub rights_base: host::__wasi_rights_t,
     pub rights_inheriting: host::__wasi_rights_t,
     pub preopen_path: Option<PathBuf>,
-}
-
-#[derive(Debug)]
-pub struct FdMap {
-    entries: HashMap<host::__wasi_fd_t, FdEntry>,
 }
 
 impl Drop for FdObject {
@@ -147,64 +141,4 @@ pub unsafe fn determine_type_rights(
         }
     };
     Ok((ty, rights_base, rights_inheriting))
-}
-
-impl FdMap {
-    pub fn new() -> Self {
-        Self {
-            entries: HashMap::new()
-        }
-    }
-
-    pub(crate) fn insert_fd_entry_at(&mut self, fd: host::__wasi_fd_t, fe: FdEntry) {
-        self.entries.insert(fd, fe);
-    }
-
-    pub(crate) fn get(&self, fd: &host::__wasi_fd_t) -> Option<&FdEntry> {
-        self.entries.get(fd)
-    }
-
-    pub(crate) fn get_mut(&mut self, fd: &host::__wasi_fd_t) -> Option<&mut FdEntry> {
-        self.entries.get_mut(fd)
-    }
-
-    pub(crate) fn remove(&mut self, fd: &host::__wasi_fd_t) -> Option<FdEntry> {
-        self.entries.remove(fd)
-    }
-
-    pub fn get_fd_entry(
-        &self,
-        fd: host::__wasi_fd_t,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
-    ) -> Result<&FdEntry, host::__wasi_errno_t> {
-        if let Some(fe) = self.entries.get(&fd) {
-            // validate rights
-            if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0
-            {
-                Err(host::__WASI_ENOTCAPABLE)
-            } else {
-                Ok(fe)
-            }
-        } else {
-            Err(host::__WASI_EBADF)
-        }
-    }
-
-    pub fn insert_fd_entry(
-        &mut self,
-        fe: FdEntry,
-    ) -> Result<host::__wasi_fd_t, host::__wasi_errno_t> {
-        // never insert where stdio handles usually are
-        let mut fd = 3;
-        while self.entries.contains_key(&fd) {
-            if let Some(next_fd) = fd.checked_add(1) {
-                fd = next_fd;
-            } else {
-                return Err(host::__WASI_EMFILE);
-            }
-        }
-        self.entries.insert(fd, fe);
-        Ok(fd)
-    }
 }
