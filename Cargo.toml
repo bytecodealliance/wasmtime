@@ -31,6 +31,7 @@ wasmtime-jit = { path = "wasmtime-jit" }
 wasmtime-obj = { path = "wasmtime-obj" }
 wasmtime-wast = { path = "wasmtime-wast" }
 wasmtime-wasi = { path = "wasmtime-wasi" }
+wasmtime-wasi-c = { path = "wasmtime-wasi-c" }
 docopt = "1.0.1"
 serde = "1.0.75"
 serde_derive = "1.0.75"
