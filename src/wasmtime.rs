@@ -50,6 +50,7 @@ use std::process::exit;
 use wabt;
 use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wasi::instantiate_wasi;
+use wasmtime_wasi_c::instantiate_wasi_c;
 use wasmtime_wast::instantiate_spectest;
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
@@ -62,8 +63,8 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-odg] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-odg] [--wasi-common] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-odg] [--wasi-common] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
     wasmtime --help | --version
 
 Options:
@@ -71,6 +72,7 @@ Options:
     -o, --optimize      runs optimization passes on the translated functions
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
+    --wasi-common       enable the wasi-common implementation of WASI
     --preload=<wasm>    load an additional wasm module before loading the main module
     --env=<env>         pass an environment variable (\"key=value\") to the program
     --dir=<dir>         grant access to the given host directory
@@ -92,6 +94,7 @@ struct Args {
     flag_env: Vec<String>,
     flag_dir: Vec<String>,
     flag_mapdir: Vec<String>,
+    flag_wasi_common: bool,
 }
 
 fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -228,20 +231,15 @@ fn main() {
     let preopen_dirs = compute_preopen_dirs(&args.flag_dir, &args.flag_mapdir);
     let argv = compute_argv(&args.arg_file, &args.arg_arg);
     let environ = compute_environ(&args.flag_env);
-    context.name_instance(
-        "wasi_unstable".to_owned(),
-        instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)
-            .expect("instantiating wasi"),
-    );
 
-    // FIXME: Also recognize "env", for compatibility with clang/llvm 8.0. And use
-    // "__wasi_" prefixes for compatibility with prototype reference-sysroot.
-    let global_exports = context.get_global_exports();
-    context.name_instance(
-        "env".to_owned(),
-        instantiate_wasi("__wasi_", global_exports, &preopen_dirs, &argv, &environ)
-            .expect("instantiating wasi"),
-    );
+    let wasi = if args.flag_wasi_common {
+        instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)
+    } else {
+        instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)
+    }
+    .expect("instantiating wasi");
+
+    context.name_instance("wasi_unstable".to_owned(), wasi);
 
     // Enable/disable producing of debug info.
     context.set_debug_info(args.flag_g);
