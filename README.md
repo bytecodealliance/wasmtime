@@ -1,8 +1,10 @@
 # wasi-common
-[![build-status]][travis] [![rustc-1.34]][rustc]
+[![travis-build-status]][travis] [![appveyor-build-status]][appveyor] [![rustc-1.34]][rustc]
 
-[build-status]: https://travis-ci.org/CraneStation/wasi-common.svg?branch=master
+[travis-build-status]: https://travis-ci.org/CraneStation/wasi-common.svg?branch=master
 [travis]: https://travis-ci.org/CraneStation/wasi-common
+[appveyor-build-status]: https://ci.appveyor.com/api/projects/status/github/cranestation/wasi-common?svg=true
+[appveyor]: https://ci.appveyor.com/project/cranestation/wasi-common
 [rustc-1.34]: https://img.shields.io/badge/rustc-1.34+-lightgray.svg
 [rustc]: https://blog.rust-lang.org/2019/04/11/Rust-1.34.0.html
 [Wasmtime]: https://github.com/CraneStation/wasmtime
@@ -22,7 +24,9 @@ Please note that the library requires Rust compiler version at least 1.34.0.
 
 ## Supported syscalls
 
-We currently support the entire [WASI API] with the exception of socket hostcalls:
+### *nix
+In our *nix implementation, we currently support the entire [WASI API]
+with the exception of socket hostcalls:
 - `sock_recv`
 - `sock_send`
 - `sock_shutdown`
@@ -31,6 +35,11 @@ We expect these to be implemented when network access is standardised.
 
 We also currently do not support the `proc_raise` hostcall, as it is expected to
 be dropped entirely from WASI.
+
+### Windows
+In our Windows implementation, we currently support the minimal subset of [WASI API]
+which allows for running the very basic "Hello world!" style WASM apps. More coming shortly,
+so stay tuned!
 
 ## Third-Party Code
 Significant parts of our hostcall implementations are derived from the C implementations in
