@@ -6,9 +6,8 @@ set -euo pipefail
 # - Check code formatting.
 # - Make a debug build.
 # - Make a release build.
-# - Run unit tests for all Rust crates (including the filetests)
+# - Run unit tests for all Rust crates
 # - Build API documentation.
-# - Optionally, run fuzzing.
 #
 # All tests run by this script should be passing at all times.
 
