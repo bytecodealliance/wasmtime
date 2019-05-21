@@ -45,6 +45,9 @@ errno = "0.2.4"
 [target.'cfg(unix)'.dependencies]
 wasmtime-wasi-c = { path = "wasmtime-wasi-c" }
 
+[target.'cfg(windows)'.dependencies]
+winapi = "0.3"
+
 [workspace]
 
 [features]

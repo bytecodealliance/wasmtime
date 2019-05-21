@@ -118,11 +118,38 @@ fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
     })
 }
 
+fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
+    #[cfg(windows)]
+    {
+        use std::fs::OpenOptions;
+        use std::os::windows::fs::OpenOptionsExt;
+        use winapi::um::winbase::FILE_FLAG_BACKUP_SEMANTICS;
+
+        // To open a directory using CreateFile2, specify the
+        // FILE_FLAG_BACKUP_SEMANTICS flag as part of dwFileFlags...
+        // cf. https://docs.microsoft.com/en-us/windows/desktop/api/fileapi/nf-fileapi-createfile2
+        OpenOptions::new()
+            .create(false)
+            .write(true)
+            .read(true)
+            .attributes(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)
+    }
+    #[cfg(unix)]
+    {
+        File::open(path)
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        unimplemented!("this OS is currently not supported by Wasmtime")
+    }
+}
+
 fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(String, File)> {
     let mut preopen_dirs = Vec::new();
 
     for dir in flag_dir {
-        let preopen_dir = File::open(dir).unwrap_or_else(|err| {
+        let preopen_dir = preopen_dir(dir).unwrap_or_else(|err| {
             println!("error while pre-opening directory {}: {}", dir, err);
             exit(1);
         });
@@ -136,7 +163,7 @@ fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(Str
             exit(1);
         }
         let (key, value) = (parts[0], parts[1]);
-        let preopen_dir = File::open(value).unwrap_or_else(|err| {
+        let preopen_dir = preopen_dir(value).unwrap_or_else(|err| {
             println!("error while pre-opening directory {}: {}", value, err);
             exit(1);
         });
