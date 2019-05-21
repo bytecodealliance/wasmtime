@@ -29,8 +29,7 @@ any knowledge of WASI, WebAssembly, or sandboxing.
 #include <fcntl.h>
 #include <errno.h>
 
-int
-main(int argc, char **argv) {
+int main(int argc, char **argv) {
     int n, m;
     char buf[BUFSIZ];
 
