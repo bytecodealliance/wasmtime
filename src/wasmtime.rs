@@ -50,8 +50,10 @@ use std::process::exit;
 use wabt;
 use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wasi::instantiate_wasi;
-use wasmtime_wasi_c::instantiate_wasi_c;
 use wasmtime_wast::instantiate_spectest;
+
+#[cfg(unix)]
+use wasmtime_wasi_c::instantiate_wasi_c;
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
 
@@ -235,7 +237,14 @@ fn main() {
     let wasi = if args.flag_wasi_common {
         instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)
     } else {
-        instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)
+        #[cfg(unix)]
+        {
+            instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)
+        }
+        #[cfg(not(unix))]
+        {
+            unimplemented!("wasmtime-wasi-c requires a *nix")
+        }
     }
     .expect("instantiating wasi");
 
