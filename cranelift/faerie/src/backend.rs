@@ -138,9 +138,9 @@ impl Backend for FaerieBackend {
         name: &str,
         ctx: &cranelift_codegen::Context,
         namespace: &ModuleNamespace<Self>,
-        code_size: u32,
+        total_size: u32,
     ) -> ModuleResult<FaerieCompiledFunction> {
-        let mut code: Vec<u8> = vec![0; code_size as usize];
+        let mut code: Vec<u8> = vec![0; total_size as usize];
 
         // Non-lexical lifetimes would obviate the braces here.
         {
@@ -153,7 +153,7 @@ impl Backend for FaerieBackend {
             };
 
             if let Some(ref mut trap_manifest) = self.trap_manifest {
-                let mut trap_sink = FaerieTrapSink::new(name, code_size);
+                let mut trap_sink = FaerieTrapSink::new(name, total_size);
                 unsafe {
                     ctx.emit_to_memory(
                         &*self.isa,

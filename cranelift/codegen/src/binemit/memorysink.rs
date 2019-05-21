@@ -14,7 +14,7 @@
 //! relocations to a `RelocSink` trait object. Relocations are less frequent than the
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 
-use super::{Addend, CodeOffset, CodeSink, Reloc};
+use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
 use crate::ir::{ExternalName, JumpTable, SourceLoc, TrapCode};
 use core::ptr::write_unaligned;
 
@@ -30,12 +30,14 @@ use core::ptr::write_unaligned;
 /// Note that `MemoryCodeSink` writes multi-byte values in the native byte order of the host. This
 /// is not the right thing to do for cross compilation.
 pub struct MemoryCodeSink<'a> {
+    /// Pointer to start of sink's preallocated memory.
     data: *mut u8,
+    /// Offset is isize because its major consumer needs it in that form.
     offset: isize,
-    /// Size of the machine code portion of output
-    pub code_size: isize,
     relocs: &'a mut RelocSink,
     traps: &'a mut TrapSink,
+    /// Information about the generated code and read-only data.
+    pub info: CodeInfo,
 }
 
 impl<'a> MemoryCodeSink<'a> {
@@ -47,7 +49,12 @@ impl<'a> MemoryCodeSink<'a> {
         Self {
             data,
             offset: 0,
-            code_size: 0,
+            info: CodeInfo {
+                code_size: 0,
+                jumptables_size: 0,
+                rodata_size: 0,
+                total_size: 0,
+            },
             relocs,
             traps,
         }
@@ -75,40 +82,35 @@ pub trait TrapSink {
     fn trap(&mut self, _: CodeOffset, _: SourceLoc, _: TrapCode);
 }
 
+impl<'a> MemoryCodeSink<'a> {
+    fn write<T>(&mut self, x: T) {
+        unsafe {
+            #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+            write_unaligned(self.data.offset(self.offset) as *mut T, x);
+            self.offset += std::mem::size_of::<T>() as isize;
+        }
+    }
+}
+
 impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn offset(&self) -> CodeOffset {
         self.offset as CodeOffset
     }
 
     fn put1(&mut self, x: u8) {
-        unsafe {
-            write_unaligned(self.data.offset(self.offset), x);
-        }
-        self.offset += 1;
+        self.write(x);
     }
 
     fn put2(&mut self, x: u16) {
-        unsafe {
-            #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-            write_unaligned(self.data.offset(self.offset) as *mut u16, x);
-        }
-        self.offset += 2;
+        self.write(x);
     }
 
     fn put4(&mut self, x: u32) {
-        unsafe {
-            #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-            write_unaligned(self.data.offset(self.offset) as *mut u32, x);
-        }
-        self.offset += 4;
+        self.write(x);
     }
 
     fn put8(&mut self, x: u64) {
-        unsafe {
-            #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-            write_unaligned(self.data.offset(self.offset) as *mut u64, x);
-        }
-        self.offset += 8;
+        self.write(x);
     }
 
     fn reloc_ebb(&mut self, rel: Reloc, ebb_offset: CodeOffset) {
@@ -131,8 +133,17 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.traps.trap(ofs, srcloc, code);
     }
 
+    fn begin_jumptables(&mut self) {
+        self.info.code_size = self.offset();
+    }
+
     fn begin_rodata(&mut self) {
-        self.code_size = self.offset;
+        self.info.jumptables_size = self.offset() - self.info.code_size;
+    }
+
+    fn end_codegen(&mut self) {
+        self.info.rodata_size = self.offset() - self.info.jumptables_size;
+        self.info.total_size = self.offset();
     }
 }
 
