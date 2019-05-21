@@ -65,7 +65,7 @@ fn handle_module(
         let mut mem = vec![];
 
         // Compile and encode the result to machine code.
-        let (code_size, rodata_size) = context
+        let code_info = context
             .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
             .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
 
@@ -74,7 +74,14 @@ fn handle_module(
         }
 
         if flag_disasm {
-            print_all(isa, &mem, code_size, rodata_size, &relocs, &traps)?;
+            print_all(
+                isa,
+                &mem,
+                code_info.code_size,
+                code_info.jumptables_size + code_info.rodata_size,
+                &relocs,
+                &traps,
+            )?;
         }
     }
 

@@ -5,8 +5,7 @@
 
 use crate::match_directive::match_directive;
 use crate::subtest::{Context, SubTest, SubtestResult};
-use cranelift_codegen::binemit;
-use cranelift_codegen::binemit::{CodeSink, RegDiversions};
+use cranelift_codegen::binemit::{self, CodeInfo, CodeSink, RegDiversions};
 use cranelift_codegen::dbg::DisplayList;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -96,9 +95,12 @@ impl binemit::CodeSink for TextSink {
         write!(self.text, "{} ", code).unwrap();
     }
 
-    fn begin_rodata(&mut self) {
+    fn begin_jumptables(&mut self) {
         self.code_size = self.offset
     }
+
+    fn begin_rodata(&mut self) {}
+    fn end_codegen(&mut self) {}
 }
 
 impl SubTest for TestBinEmit {
@@ -164,7 +166,7 @@ impl SubTest for TestBinEmit {
         }
 
         // Relax branches and compute EBB offsets based on the encodings.
-        let code_size = binemit::relax_branches(&mut func, isa)
+        let CodeInfo { total_size, .. } = binemit::relax_branches(&mut func, isa)
             .map_err(|e| pretty_error(&func, context.isa, e))?;
 
         // Collect all of the 'bin:' directives on instructions.
@@ -288,7 +290,7 @@ impl SubTest for TestBinEmit {
             }
         }
 
-        sink.begin_rodata();
+        sink.begin_jumptables();
 
         for (jt, jt_data) in func.jump_tables.iter() {
             let jt_offset = func.jt_offsets[jt];
@@ -298,10 +300,15 @@ impl SubTest for TestBinEmit {
             }
         }
 
-        if sink.offset != code_size {
+        sink.begin_rodata();
+        // TODO: Read-only (constant pool) data.
+
+        sink.end_codegen();
+
+        if sink.offset != total_size {
             return Err(format!(
                 "Expected code size {}, got {}",
-                code_size, sink.offset
+                total_size, sink.offset
             ));
         }
 
