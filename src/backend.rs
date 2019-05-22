@@ -3234,14 +3234,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let val = self.pop();
 
         let out_val = match val {
-            ValueLocation::Immediate(imm) =>
-                ValueLocation::Immediate(
-                    imm.as_i32().unwrap().leading_zeros().into()
-                ),
+            ValueLocation::Immediate(imm) => {
+                ValueLocation::Immediate(imm.as_i32().unwrap().leading_zeros().into())
+            }
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
                 let temp = self.take_reg(I32).unwrap();
-                
 
                 if is_x86_feature_detected!("lzcnt") {
                     dynasm!(self.asm
@@ -3292,10 +3290,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let val = self.pop();
 
         let out_val = match val {
-            ValueLocation::Immediate(imm) =>
-                ValueLocation::Immediate(
-                    imm.as_i64().unwrap().leading_zeros().into()
-                ),
+            ValueLocation::Immediate(imm) => {
+                ValueLocation::Immediate(imm.as_i64().unwrap().leading_zeros().into())
+            }
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
                 let temp = self.take_reg(I64).unwrap();
@@ -3328,7 +3325,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ; lzcnt Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
                     );
                     ValueLocation::Reg(temp)
-                } else { 
+                } else {
                     dynasm!(self.asm
                         ; bsr Rq(temp.rq().unwrap()), Rq(reg.rq().unwrap())
                         ; mov Rq(reg.rq().unwrap()), QWORD 0x7fu64 as _
@@ -3349,10 +3346,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let val = self.pop();
 
         let out_val = match val {
-            ValueLocation::Immediate(imm) =>
-                ValueLocation::Immediate(
-                    imm.as_i32().unwrap().trailing_zeros().into()
-                ),
+            ValueLocation::Immediate(imm) => {
+                ValueLocation::Immediate(imm.as_i32().unwrap().trailing_zeros().into())
+            }
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
                 let temp = self.take_reg(I32).unwrap();
@@ -3402,14 +3398,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let val = self.pop();
 
         let out_val = match val {
-            ValueLocation::Immediate(imm) =>
-                ValueLocation::Immediate(
-                    imm.as_i64().unwrap().trailing_zeros().into()
-                ),
+            ValueLocation::Immediate(imm) => {
+                ValueLocation::Immediate(imm.as_i64().unwrap().trailing_zeros().into())
+            }
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
                 let temp = self.take_reg(I64).unwrap();
-                
+
                 if is_x86_feature_detected!("lzcnt") {
                     dynasm!(self.asm
                         ; tzcnt Rq(temp.rq().unwrap()), [rsp + offset]
@@ -3426,8 +3421,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     self.free_value(ValueLocation::Reg(temp_zero_val));
                     ValueLocation::Reg(temp)
                 }
-
-                
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = self.into_reg(GPRType::Rq, val).unwrap();
@@ -5482,4 +5475,3 @@ impl IntoLabel for (LabelValue, LabelValue) {
         Box::new(const_values(self.0, self.1))
     }
 }
-
