@@ -20,7 +20,7 @@ API proposal called [WebAssembly System Interface], or WASI.
 Wasmtime includes a git submodule; in order to build it, it's necessary to
 obtain a full checkout, like this:
 ```
-git clone --recurse-submodules https://github.com/CraneStation/wasmtime.git.
+git clone --recurse-submodules https://github.com/CraneStation/wasmtime.git
 ```
 
 To build Wasmtime, install cmake and clang, and then build with cargo, such
