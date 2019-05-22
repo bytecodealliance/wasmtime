@@ -77,8 +77,10 @@ which is configured to target WASI and use the WASI sysroot by default, so we ca
 compile our program like so:
 
 ```
-$ clang demo.c -o demo.wasm
+$ clang demo.c --sysroot <path to sysroot> -o demo.wasm
 ```
+
+The sysroot is folder is located in `opt/wasi-sdk/share/sysroot/`.
 
 A few things to note here. First, this is just regular clang, configured to use
 a WebAssembly target and sysroot. Second, the output name specified with the "-o"
