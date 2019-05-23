@@ -4,7 +4,7 @@ use crate::cdsl::formats::{
 };
 use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
-use crate::cdsl::types::ValueType;
+use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::TypeVar;
 
 use std::fmt;
@@ -597,4 +597,60 @@ impl InstructionPredicate {
             None => "true".into(),
         }
     }
+}
+
+pub enum ApplyTarget {
+    Inst(Instruction),
+    Bound(BoundInstruction),
+}
+
+impl ApplyTarget {
+    pub fn inst(&self) -> &Instruction {
+        match &self {
+            ApplyTarget::Inst(inst) => inst,
+            ApplyTarget::Bound(bound_inst) => &bound_inst.inst,
+        }
+    }
+}
+
+impl Into<ApplyTarget> for &Instruction {
+    fn into(self) -> ApplyTarget {
+        ApplyTarget::Inst(self.clone())
+    }
+}
+
+impl Into<ApplyTarget> for BoundInstruction {
+    fn into(self) -> ApplyTarget {
+        ApplyTarget::Bound(self)
+    }
+}
+
+pub fn bind(target: impl Into<ApplyTarget>, lane_type: impl Into<LaneType>) -> BoundInstruction {
+    let value_type = ValueType::from(lane_type.into());
+
+    let (inst, value_types) = match target.into() {
+        ApplyTarget::Inst(inst) => (inst, vec![value_type]),
+        ApplyTarget::Bound(bound_inst) => {
+            let mut new_value_types = bound_inst.value_types;
+            new_value_types.push(value_type);
+            (bound_inst.inst, new_value_types)
+        }
+    };
+
+    match &inst.polymorphic_info {
+        Some(poly) => {
+            assert!(
+                value_types.len() <= 1 + poly.other_typevars.len(),
+                format!("trying to bind too many types for {}", inst.name)
+            );
+        }
+        None => {
+            panic!(format!(
+                "trying to bind a type for {} which is not a polymorphic instruction",
+                inst.name
+            ));
+        }
+    }
+
+    BoundInstruction { inst, value_types }
 }
