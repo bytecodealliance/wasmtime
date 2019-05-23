@@ -599,38 +599,39 @@ impl InstructionPredicate {
     }
 }
 
-pub enum ApplyTarget {
+/// An instruction specification, containing an instruction that has bound types or not.
+pub enum InstSpec {
     Inst(Instruction),
     Bound(BoundInstruction),
 }
 
-impl ApplyTarget {
+impl InstSpec {
     pub fn inst(&self) -> &Instruction {
         match &self {
-            ApplyTarget::Inst(inst) => inst,
-            ApplyTarget::Bound(bound_inst) => &bound_inst.inst,
+            InstSpec::Inst(inst) => inst,
+            InstSpec::Bound(bound_inst) => &bound_inst.inst,
         }
     }
 }
 
-impl Into<ApplyTarget> for &Instruction {
-    fn into(self) -> ApplyTarget {
-        ApplyTarget::Inst(self.clone())
+impl Into<InstSpec> for &Instruction {
+    fn into(self) -> InstSpec {
+        InstSpec::Inst(self.clone())
     }
 }
 
-impl Into<ApplyTarget> for BoundInstruction {
-    fn into(self) -> ApplyTarget {
-        ApplyTarget::Bound(self)
+impl Into<InstSpec> for BoundInstruction {
+    fn into(self) -> InstSpec {
+        InstSpec::Bound(self)
     }
 }
 
-pub fn bind(target: impl Into<ApplyTarget>, lane_type: impl Into<LaneType>) -> BoundInstruction {
+pub fn bind(target: impl Into<InstSpec>, lane_type: impl Into<LaneType>) -> BoundInstruction {
     let value_type = ValueType::from(lane_type.into());
 
     let (inst, value_types) = match target.into() {
-        ApplyTarget::Inst(inst) => (inst, vec![value_type]),
-        ApplyTarget::Bound(bound_inst) => {
+        InstSpec::Inst(inst) => (inst, vec![value_type]),
+        InstSpec::Bound(bound_inst) => {
             let mut new_value_types = bound_inst.value_types;
             new_value_types.push(value_type);
             (bound_inst.inst, new_value_types)
