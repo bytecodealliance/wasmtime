@@ -1,5 +1,5 @@
 use crate::cdsl::formats::FormatRegistry;
-use crate::cdsl::inst::{ApplyTarget, Instruction, InstructionPredicate};
+use crate::cdsl::inst::{InstSpec, Instruction, InstructionPredicate};
 use crate::cdsl::operands::{OperandKind, OperandKindFields};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{TypeSetBuilder, TypeVar};
@@ -375,10 +375,10 @@ pub struct Apply {
 }
 
 impl Apply {
-    pub fn new(target: ApplyTarget, args: Vec<Expr>) -> Self {
+    pub fn new(target: InstSpec, args: Vec<Expr>) -> Self {
         let (inst, value_types) = match target.into() {
-            ApplyTarget::Inst(inst) => (inst, Vec::new()),
-            ApplyTarget::Bound(bound_inst) => (bound_inst.inst, bound_inst.value_types),
+            InstSpec::Inst(inst) => (inst, Vec::new()),
+            InstSpec::Bound(bound_inst) => (bound_inst.inst, bound_inst.value_types),
         };
 
         // Basic check on number of arguments.
@@ -520,7 +520,7 @@ impl Apply {
 pub enum DummyExpr {
     Var(DummyVar),
     Literal(Literal),
-    Apply(ApplyTarget, Vec<DummyExpr>),
+    Apply(InstSpec, Vec<DummyExpr>),
 }
 
 #[derive(Clone)]
@@ -553,7 +553,7 @@ pub struct ExprBuilder {
 }
 
 impl ExprBuilder {
-    pub fn apply(inst: ApplyTarget, args: Vec<DummyExpr>) -> Self {
+    pub fn apply(inst: InstSpec, args: Vec<DummyExpr>) -> Self {
         let expr = DummyExpr::Apply(inst, args);
         Self { expr }
     }
