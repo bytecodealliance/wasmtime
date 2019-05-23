@@ -1,5 +1,5 @@
 use crate::cdsl::ast::{var, ExprBuilder, Literal};
-use crate::cdsl::inst::{bind, Instruction, InstructionGroup};
+use crate::cdsl::inst::{Instruction, InstructionGroup};
 use crate::cdsl::xform::{TransformGroupBuilder, TransformGroups};
 
 use crate::shared::OperandKinds;
@@ -352,7 +352,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     for &extend_op in &[uextend, sextend] {
         // The sign extension operators have two typevars: the result has one and controls the
         // instruction, then the input has one.
-        let bound = bind(bind(extend_op, I16), I8);
+        let bound = extend_op.bind(I16).bind(I8);
         widen.legalize(
             def!(a = bound(b)),
             vec![def!(c = extend_op.I32(b)), def!(a = ireduce(c))],
@@ -520,7 +520,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     // group.
     for &dest_ty in &[F32, F64] {
         for &src_ty in &[I8, I16] {
-            let bound_inst = bind(bind(fcvt_from_uint, dest_ty), src_ty);
+            let bound_inst = fcvt_from_uint.bind(dest_ty).bind(src_ty);
             expand.legalize(
                 def!(a = bound_inst(b)),
                 vec![
@@ -529,7 +529,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
                 ],
             );
 
-            let bound_inst = bind(bind(fcvt_from_sint, dest_ty), src_ty);
+            let bound_inst = fcvt_from_sint.bind(dest_ty).bind(src_ty);
             expand.legalize(
                 def!(a = bound_inst(b)),
                 vec![

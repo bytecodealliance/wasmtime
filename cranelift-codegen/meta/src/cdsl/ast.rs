@@ -574,7 +574,7 @@ macro_rules! def_rhs {
 
     // inst.type(a, b, c)
     ($inst:ident.$type:ident($($src:expr),*)) => {
-        ExprBuilder::apply(bind($inst, $type).into(), vec![$($src.clone().into()),*])
+        ExprBuilder::apply($inst.bind($type).into(), vec![$($src.clone().into()),*])
     };
 }
 
