@@ -143,6 +143,10 @@ impl Instruction {
             None => Vec::new(),
         }
     }
+
+    pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
+        bind(self.clone(), lane_type.into(), Vec::new())
+    }
 }
 
 impl fmt::Display for Instruction {
@@ -339,6 +343,12 @@ impl InstructionBuilder {
 pub struct BoundInstruction {
     pub inst: Instruction,
     pub value_types: Vec<ValueType>,
+}
+
+impl BoundInstruction {
+    pub fn bind(self, lane_type: impl Into<LaneType>) -> BoundInstruction {
+        bind(self.inst, lane_type.into(), self.value_types)
+    }
 }
 
 /// Check if this instruction is polymorphic, and verify its use of type variables.
@@ -626,18 +636,13 @@ impl Into<InstSpec> for BoundInstruction {
     }
 }
 
-pub fn bind(target: impl Into<InstSpec>, lane_type: impl Into<LaneType>) -> BoundInstruction {
-    let value_type = ValueType::from(lane_type.into());
-
-    let (inst, value_types) = match target.into() {
-        InstSpec::Inst(inst) => (inst, vec![value_type]),
-        InstSpec::Bound(bound_inst) => {
-            let mut new_value_types = bound_inst.value_types;
-            new_value_types.push(value_type);
-            (bound_inst.inst, new_value_types)
-        }
-    };
-
+/// Helper bind reused by {Bound,}Instruction::bind.
+fn bind(
+    inst: Instruction,
+    lane_type: LaneType,
+    mut value_types: Vec<ValueType>,
+) -> BoundInstruction {
+    value_types.push(ValueType::from(lane_type));
     match &inst.polymorphic_info {
         Some(poly) => {
             assert!(
@@ -652,6 +657,5 @@ pub fn bind(target: impl Into<InstSpec>, lane_type: impl Into<LaneType>) -> Boun
             ));
         }
     }
-
     BoundInstruction { inst, value_types }
 }
