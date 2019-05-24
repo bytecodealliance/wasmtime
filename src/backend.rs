@@ -2329,9 +2329,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             let end_label = self.create_label();
 
             if count > 0 {
-                // TODO: Handle this failing (because we might have all registers used for block
-                //       args we can't rely on this succeeding)
-                let selector_reg = self.into_temp_reg(GPRType::Rq, selector).unwrap();
+                let (selector_reg, pop_selector) = self
+                    .into_temp_reg(GPRType::Rq, selector)
+                    .map(|r| (r, false))
+                    .unwrap_or_else(|| {
+                        self.push_physical(ValueLocation::Reg(RAX));
+                        self.block_state.regs.mark_used(RAX);
+                        (RAX, true)
+                    });
                 selector = ValueLocation::Reg(selector_reg);
 
                 let (tmp, pop_tmp) = if let Some(reg) = self.take_reg(I64) {
@@ -2339,9 +2344,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 } else {
                     let out_reg = if selector_reg == RAX { RCX } else { RAX };
 
-                    dynasm!(self.asm
-                        ; push Rq(out_reg.rq().unwrap())
-                    );
+                    self.push_physical(ValueLocation::Reg(out_reg));
+                    self.block_state.regs.mark_used(out_reg);
 
                     (out_reg, true)
                 };
@@ -2361,9 +2365,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     dynasm!(self.asm
                         ; pop Rq(tmp.rq().unwrap())
                     );
+                } else {
+                    self.block_state.regs.release(tmp);
                 }
 
-                self.block_state.regs.release(tmp);
+                if pop_selector {
+                    dynasm!(self.asm
+                        ; pop Rq(selector_reg.rq().unwrap())
+                    );
+                }
 
                 dynasm!(self.asm
                     ; jmp Rq(selector_reg.rq().unwrap())
@@ -2896,8 +2906,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     store!(store64, Rq, movq, QWORD);
 
     fn push_physical(&mut self, value: ValueLocation) -> ValueLocation {
-        self.block_state.depth.reserve(1);
-        let out_offset = -(self.block_state.depth.0 as i32);
+        let out_offset = -(self.block_state.depth.0 as i32 + 1);
         match value {
             ValueLocation::Reg(_) | ValueLocation::Immediate(_) | ValueLocation::Cond(_) => {
                 if let Some(gpr) = self.into_reg(GPRType::Rq, value) {
@@ -2920,6 +2929,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 );
             }
         }
+
+        self.block_state.depth.reserve(1);
 
         ValueLocation::Stack(out_offset)
     }
@@ -4360,7 +4371,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         QWORD
     );
 
-    /// Returned divisor is guaranteed not to be `RAX`
     // TODO: With a proper SSE-like "Value" system we could do this way better (we wouldn't have
     //       to move `RAX` back afterwards).
     fn full_div(
@@ -5083,15 +5093,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                     self.block_state.regs.mark_used(r);
                 }
+
                 self.copy_value(src, dst);
                 self.free_value(src);
             }
 
             if pending.len() == start_len {
-                unimplemented!(
-                    "We can't handle cycles in the register allocator: {:?}",
-                    pending
-                );
+                let (src, _) = *pending.first().unwrap();
+                let new_src = self.push_physical(src);
+                for (old_src, _) in pending.iter_mut() {
+                    if *old_src == src {
+                        *old_src = new_src;
+                    }
+                }
             }
         }
 
