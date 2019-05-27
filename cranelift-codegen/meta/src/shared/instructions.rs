@@ -1254,6 +1254,21 @@ pub fn define(
         .finish(format_registry),
     );
 
+    ig.push(
+        Inst::new(
+            "copy_nop",
+            r#"
+        Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
+        into a no-op.  This instruction is for use only within Cranelift itself.
+
+        This instruction copies its input, preserving the value type.
+        "#,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a])
+        .finish(format_registry),
+    );
+
     let delta = &operand("delta", Int);
 
     ig.push(

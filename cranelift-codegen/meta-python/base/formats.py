@@ -75,6 +75,8 @@ TableAddr = InstructionFormat(table, VALUE, offset32)
 
 RegMove = InstructionFormat(VALUE, ('src', regunit), ('dst', regunit))
 CopySpecial = InstructionFormat(('src', regunit), ('dst', regunit))
+CopyNop = InstructionFormat(
+        ('src', entities.stack_slot), ('dst', entities.stack_slot))
 RegSpill = InstructionFormat(
         VALUE, ('src', regunit), ('dst', entities.stack_slot))
 RegFill = InstructionFormat(
