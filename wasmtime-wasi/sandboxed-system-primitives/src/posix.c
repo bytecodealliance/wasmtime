@@ -2003,7 +2003,13 @@ static void convert_timestamp(
   in /= 1000000000;
 
   // Clamp to the maximum in case it would overflow our system's time_t.
-  out->tv_sec = in < NUMERIC_MAX(time_t) ? in : NUMERIC_MAX(time_t);
+  time_t time_max;
+  switch (sizeof(time_t)) {
+      case sizeof(int32_t): time_max = INT32_MAX;
+      case sizeof(int64_t): time_max = INT64_MAX;
+      default: assert(0 && "Unrecognized time_t type");
+  }
+  out->tv_sec = in < time_max ? in : time_max;
 }
 
 // Converts the provided timestamps and flags to a set of arguments for
