@@ -65,8 +65,8 @@ use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
-    types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, JumpTable, Opcode, SigRef,
-    StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
+    types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, InstructionData, JumpTable,
+    Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
@@ -1079,6 +1079,9 @@ impl<'a> Verifier<'a> {
         self.typecheck_return(inst, errors).is_ok();
         self.typecheck_special(inst, ctrl_type, errors).is_ok();
 
+        // Misuses of copy_nop instructions are fatal
+        self.typecheck_copy_nop(inst, errors)?;
+
         Ok(())
     }
 
@@ -1465,6 +1468,43 @@ impl<'a> Verifier<'a> {
                 }
             }
             _ => {}
+        }
+        Ok(())
+    }
+
+    fn typecheck_copy_nop(
+        &self,
+        inst: Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        if let InstructionData::Unary {
+            opcode: Opcode::CopyNop,
+            arg,
+        } = self.func.dfg[inst]
+        {
+            let dst_vals = self.func.dfg.inst_results(inst);
+            if dst_vals.len() != 1 {
+                return fatal!(errors, inst, "copy_nop must produce exactly one result");
+            }
+            let dst_val = dst_vals[0];
+            if self.func.dfg.value_type(dst_val) != self.func.dfg.value_type(arg) {
+                return fatal!(errors, inst, "copy_nop src and dst types must be the same");
+            }
+            let src_loc = self.func.locations[arg];
+            let dst_loc = self.func.locations[dst_val];
+            let locs_ok = match (src_loc, dst_loc) {
+                (ValueLoc::Stack(src_slot), ValueLoc::Stack(dst_slot)) => src_slot == dst_slot,
+                _ => false,
+            };
+            if !locs_ok {
+                return fatal!(
+                    errors,
+                    inst,
+                    "copy_nop must refer to identical stack slots, but found {:?} vs {:?}",
+                    src_loc,
+                    dst_loc
+                );
+            }
         }
         Ok(())
     }

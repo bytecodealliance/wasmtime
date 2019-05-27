@@ -13,7 +13,7 @@ use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{SparseMap, SparseMapValue};
 use crate::ir::{AbiParam, ArgumentLoc, InstBuilder};
-use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value};
+use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value, ValueLoc};
 use crate::isa::RegClass;
 use crate::isa::{ConstraintKind, EncInfo, Encoding, RecipeConstraints, TargetIsa};
 use crate::regalloc::affinity::Affinity;
@@ -211,6 +211,42 @@ impl<'a> Context<'a> {
         debug_assert!(self.candidates.is_empty());
         self.find_candidates(inst, constraints);
 
+        // If we find a copy from a stack slot to the same stack slot, replace
+        // it with a `copy_nop` but otherwise ignore it.  In particular, don't
+        // generate a reload immediately followed by a spill.  The `copy_nop`
+        // has a zero-length encoding, so will disappear at emission time.
+        if let InstructionData::Unary {
+            opcode: Opcode::Copy,
+            arg,
+        } = self.cur.func.dfg[inst]
+        {
+            let dst_vals = self.cur.func.dfg.inst_results(inst);
+            if dst_vals.len() == 1 {
+                let can_transform = match (
+                    self.cur.func.locations[arg],
+                    self.cur.func.locations[dst_vals[0]],
+                ) {
+                    (ValueLoc::Stack(src_slot), ValueLoc::Stack(dst_slot)) => src_slot == dst_slot,
+                    _ => false,
+                };
+                if can_transform {
+                    // Convert the instruction into a `copy_nop`.
+                    self.cur.func.dfg.replace(inst).copy_nop(arg);
+                    let ok = self.cur.func.update_encoding(inst, self.cur.isa).is_ok();
+                    debug_assert!(ok);
+
+                    // And move on to the next insn.
+                    self.reloads.clear();
+                    let _ = tracker.process_inst(inst, &self.cur.func.dfg, self.liveness);
+                    self.cur.next_inst();
+                    self.candidates.clear();
+                    return;
+                }
+            }
+        }
+
+        // Deal with all instructions not special-cased by the immediately
+        // preceding fragment.
         if let InstructionData::Unary {
             opcode: Opcode::Copy,
             ..

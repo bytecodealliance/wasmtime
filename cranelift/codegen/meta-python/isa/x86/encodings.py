@@ -341,6 +341,13 @@ enc_x86_64(x86.pop.i64, r.popq, 0x58)
 X86_64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
 X86_32.enc(base.copy_special, *r.copysp(0x89))
 
+# Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
+# into a no-op.
+X86_64.enc(base.copy_nop.i64, r.stacknull, 0)
+X86_64.enc(base.copy_nop.i32, r.stacknull, 0)
+X86_64.enc(base.copy_nop.f64, r.stacknull, 0)
+X86_64.enc(base.copy_nop.f32, r.stacknull, 0)
+
 # Adjust SP down by a dynamic value (or up, with a negative operand).
 X86_32.enc(base.adjust_sp_down.i32, *r.adjustsp(0x29))
 X86_64.enc(base.adjust_sp_down.i64, *r.adjustsp.rex(0x29, w=1))
