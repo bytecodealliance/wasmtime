@@ -46,6 +46,9 @@
 #include "rights.h"
 #include "str.h"
 
+// static_assert is not defined in older compilers.
+#ifdef static_assert
+
 // struct iovec must have the same layout as __wasi_iovec_t.
 static_assert(offsetof(struct iovec, iov_base) ==
                   offsetof(__wasi_iovec_t, buf),
@@ -77,6 +80,8 @@ static_assert(sizeof(((struct iovec *)0)->iov_len) ==
               "Size mismatch");
 static_assert(sizeof(struct iovec) == sizeof(__wasi_ciovec_t),
               "Size mismatch");
+
+#endif
 
 #if defined(WASMTIME_SSP_STATIC_CURFDS)
 static __thread struct fd_table *curfds;
