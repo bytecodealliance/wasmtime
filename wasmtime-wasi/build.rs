@@ -6,7 +6,9 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
-    let dst = Config::new("sandboxed-system-primitives").build();
+    let dst = Config::new("sandboxed-system-primitives")
+        .cflag("-std=gnu99")
+        .build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-lib=static=SandboxedSystemPrimitives");
