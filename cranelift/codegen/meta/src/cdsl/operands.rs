@@ -95,7 +95,7 @@ impl OperandBuilder {
         self.doc = Some(doc.into());
         self
     }
-    pub fn finish(self) -> Operand {
+    pub fn build(self) -> Operand {
         let doc = match self.doc {
             Some(doc) => Some(doc),
             None => match &self.kind.fields {
@@ -215,7 +215,7 @@ impl OperandKindBuilder {
         self
     }
 
-    pub fn finish(self) -> OperandKind {
+    pub fn build(self) -> OperandKind {
         let default_member = match self.default_member {
             Some(default_member) => Some(default_member),
             None => match &self.fields {
@@ -261,7 +261,7 @@ impl OperandKindBuilder {
 
 impl Into<OperandKind> for &TypeVar {
     fn into(self) -> OperandKind {
-        OperandKindBuilder::new("value", OperandKindFields::TypeVar(self.into())).finish()
+        OperandKindBuilder::new("value", OperandKindFields::TypeVar(self.into())).build()
     }
 }
 impl Into<OperandKind> for &OperandKind {
@@ -272,7 +272,7 @@ impl Into<OperandKind> for &OperandKind {
 
 /// Helper to create an operand in definitions files.
 pub fn create_operand(name: &'static str, kind: impl Into<OperandKind>) -> Operand {
-    OperandBuilder::new(name, kind.into()).finish()
+    OperandBuilder::new(name, kind.into()).build()
 }
 
 /// Helper to create an operand with a documentation in definitions files.
@@ -281,5 +281,5 @@ pub fn create_operand_doc(
     kind: impl Into<OperandKind>,
     doc: &'static str,
 ) -> Operand {
-    OperandBuilder::new(name, kind.into()).doc(doc).finish()
+    OperandBuilder::new(name, kind.into()).doc(doc).build()
 }

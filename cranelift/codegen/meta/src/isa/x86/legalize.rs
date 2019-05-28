@@ -289,5 +289,5 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
         ],
     );
 
-    group.finish_and_add_to(&mut shared.transform_groups);
+    group.build_and_add_to(&mut shared.transform_groups);
 }

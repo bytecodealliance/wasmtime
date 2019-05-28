@@ -34,10 +34,10 @@ impl<'format_reg> InstructionGroupBuilder<'format_reg> {
     }
 
     pub fn push(&mut self, builder: InstructionBuilder) {
-        self.instructions.push(builder.finish(self.format_registry));
+        self.instructions.push(builder.build(self.format_registry));
     }
 
-    pub fn finish(self) -> InstructionGroup {
+    pub fn build(self) -> InstructionGroup {
         InstructionGroup {
             _name: self._name,
             _doc: self._doc,
@@ -300,7 +300,7 @@ impl InstructionBuilder {
         self
     }
 
-    fn finish(self, format_registry: &FormatRegistry) -> Instruction {
+    fn build(self, format_registry: &FormatRegistry) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_else(Vec::new);
         let operands_out = self.operands_out.unwrap_or_else(Vec::new);
 

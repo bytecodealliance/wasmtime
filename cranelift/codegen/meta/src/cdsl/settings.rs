@@ -315,7 +315,7 @@ impl SettingGroupBuilder {
     /// 2. in the list above.
     ///
     /// Assign `byte_offset` and `bit_offset` fields in all settings.
-    pub fn finish(self) -> SettingGroup {
+    pub fn build(self) -> SettingGroup {
         let mut group = SettingGroup {
             name: self.name,
             settings: Vec::new(),

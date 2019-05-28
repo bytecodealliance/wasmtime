@@ -56,7 +56,7 @@ pub fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let Bool = &TypeVar::new(
@@ -65,19 +65,19 @@ pub fn define(
         TypeSetBuilder::new()
             .bools(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let iB = &TypeVar::new(
         "iB",
         "A scalar integer type",
-        TypeSetBuilder::new().ints(Interval::All).finish(),
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
     let iAddr = &TypeVar::new(
         "iAddr",
         "An integer address type",
-        TypeSetBuilder::new().ints(32..64).finish(),
+        TypeSetBuilder::new().ints(32..64).build(),
     );
 
     let Testable = &TypeVar::new(
@@ -86,7 +86,7 @@ pub fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .bools(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let TxN = &TypeVar::new(
@@ -98,7 +98,7 @@ pub fn define(
             .bools(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(false)
-            .finish(),
+            .build(),
     );
 
     let Any = &TypeVar::new(
@@ -110,7 +110,7 @@ pub fn define(
             .bools(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(true)
-            .finish(),
+            .build(),
     );
 
     let Mem = &TypeVar::new(
@@ -120,7 +120,7 @@ pub fn define(
             .ints(Interval::All)
             .floats(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let MemTo = &TypeVar::new(
@@ -130,7 +130,7 @@ pub fn define(
             .ints(Interval::All)
             .floats(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let addr = &operand("addr", iAddr);
@@ -261,7 +261,7 @@ pub fn define(
     let Entry = &TypeVar::new(
         "Entry",
         "A scalar integer type",
-        TypeSetBuilder::new().ints(Interval::All).finish(),
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
     let entry = &operand_doc("entry", Entry, "entry of jump table");
@@ -589,7 +589,7 @@ pub fn define(
     let iExt8 = &TypeVar::new(
         "iExt8",
         "An integer type with more than 8 bits",
-        TypeSetBuilder::new().ints(16..64).finish(),
+        TypeSetBuilder::new().ints(16..64).build(),
     );
     let x = &operand("x", iExt8);
     let a = &operand("a", iExt8);
@@ -679,7 +679,7 @@ pub fn define(
     let iExt16 = &TypeVar::new(
         "iExt16",
         "An integer type with more than 16 bits",
-        TypeSetBuilder::new().ints(32..64).finish(),
+        TypeSetBuilder::new().ints(32..64).build(),
     );
     let x = &operand("x", iExt16);
     let a = &operand("a", iExt16);
@@ -769,7 +769,7 @@ pub fn define(
     let iExt32 = &TypeVar::new(
         "iExt32",
         "An integer type with more than 32 bits",
-        TypeSetBuilder::new().ints(64..64).finish(),
+        TypeSetBuilder::new().ints(64..64).build(),
     );
     let x = &operand("x", iExt32);
     let a = &operand("a", iExt32);
@@ -939,7 +939,7 @@ pub fn define(
     let HeapOffset = &TypeVar::new(
         "HeapOffset",
         "An unsigned heap offset",
-        TypeSetBuilder::new().ints(32..64).finish(),
+        TypeSetBuilder::new().ints(32..64).build(),
     );
 
     let H = &operand("H", heap);
@@ -968,7 +968,7 @@ pub fn define(
     let TableOffset = &TypeVar::new(
         "TableOffset",
         "An unsigned table offset",
-        TypeSetBuilder::new().ints(32..64).finish(),
+        TypeSetBuilder::new().ints(32..64).build(),
     );
     let T = &operand("T", table);
     let p = &operand("p", TableOffset);
@@ -1337,7 +1337,7 @@ pub fn define(
             .bools(Interval::All)
             .simd_lanes(1..128)
             .includes_scalars(true)
-            .finish(),
+            .build(),
     );
 
     let x = &operand_doc("x", Any128, "Low-numbered lanes");
@@ -1903,7 +1903,7 @@ pub fn define(
             .bools(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(true)
-            .finish(),
+            .build(),
     );
     let x = &operand("x", bits);
     let y = &operand("y", bits);
@@ -2272,7 +2272,7 @@ pub fn define(
         TypeSetBuilder::new()
             .floats(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let Cond = &operand("Cond", floatcc);
     let x = &operand("x", Float);
@@ -2628,7 +2628,7 @@ pub fn define(
         TypeSetBuilder::new()
             .bools(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let BoolTo = &TypeVar::new(
@@ -2637,7 +2637,7 @@ pub fn define(
         TypeSetBuilder::new()
             .bools(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let x = &operand("x", Bool);
@@ -2665,7 +2665,7 @@ pub fn define(
         TypeSetBuilder::new()
             .bools(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let x = &operand("x", Bool);
     let a = &operand("a", BoolTo);
@@ -2692,7 +2692,7 @@ pub fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let x = &operand("x", Bool);
     let a = &operand("a", IntTo);
@@ -2731,7 +2731,7 @@ pub fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let IntTo = &TypeVar::new(
@@ -2740,7 +2740,7 @@ pub fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let x = &operand("x", Int);
     let a = &operand("a", IntTo);
@@ -2771,7 +2771,7 @@ pub fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let x = &operand("x", Int);
     let a = &operand("a", IntTo);
@@ -2822,7 +2822,7 @@ pub fn define(
         TypeSetBuilder::new()
             .floats(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let x = &operand("x", Float);
     let a = &operand("a", FloatTo);
@@ -2976,7 +2976,7 @@ pub fn define(
         TypeSetBuilder::new()
             .ints(16..64)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let x = &operand("x", WideInt);
     let lo = &operand_doc("lo", &WideInt.half_width(), "The low bits of `x`");
@@ -3006,7 +3006,7 @@ pub fn define(
         TypeSetBuilder::new()
             .ints(8..32)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
 
     let lo = &operand("lo", NarrowInt);
@@ -3033,5 +3033,5 @@ pub fn define(
         .is_ghost(true),
     );
 
-    ig.finish()
+    ig.build()
 }

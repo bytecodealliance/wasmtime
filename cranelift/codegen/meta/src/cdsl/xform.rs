@@ -348,7 +348,7 @@ impl TransformGroupBuilder {
         self.transforms.push(transform);
     }
 
-    pub fn finish_and_add_to(self, owner: &mut TransformGroups) -> TransformGroupIndex {
+    pub fn build_and_add_to(self, owner: &mut TransformGroups) -> TransformGroupIndex {
         let next_id = owner.next_key();
         owner.add(TransformGroup {
             name: self.name,
@@ -410,7 +410,7 @@ fn test_double_custom_legalization() {
     format.insert(InstructionFormatBuilder::new("nullary"));
     let mut inst_group = InstructionGroupBuilder::new("test", "", &format);
     inst_group.push(InstructionBuilder::new("dummy", "doc"));
-    let inst_group = inst_group.finish();
+    let inst_group = inst_group.build();
     let dummy_inst = inst_group.by_name("dummy");
 
     let mut transform_group = TransformGroupBuilder::new("test", "doc");

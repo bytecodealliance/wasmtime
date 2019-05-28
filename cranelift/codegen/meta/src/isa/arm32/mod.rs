@@ -8,7 +8,7 @@ use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let setting = SettingGroupBuilder::new("arm32");
-    setting.finish()
+    setting.build()
 }
 
 fn define_regs() -> IsaRegs {
@@ -45,7 +45,7 @@ fn define_regs() -> IsaRegs {
     let builder = RegClassBuilder::new_toplevel("FLAG", flag_reg);
     regs.add_class(builder);
 
-    regs.finish()
+    regs.build()
 }
 
 pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
@@ -57,7 +57,7 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
         "arm32 specific instruction set",
         &shared_defs.format_registry,
     )
-    .finish();
+    .build();
 
     // CPU modes for 32-bit ARM and Thumb2.
     let mut a32 = CpuMode::new("A32");

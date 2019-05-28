@@ -18,7 +18,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
     let iWord = &TypeVar::new(
         "iWord",
         "A scalar integer machine word",
-        TypeSetBuilder::new().ints(32..64).finish(),
+        TypeSetBuilder::new().ints(32..64).build(),
     );
     let nlo = &operand_doc("nlo", iWord, "Low part of numerator");
     let nhi = &operand_doc("nhi", iWord, "High part of numerator");
@@ -103,7 +103,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         TypeSetBuilder::new()
             .floats(Interval::All)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let IntTo = &TypeVar::new(
         "IntTo",
@@ -111,7 +111,7 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         TypeSetBuilder::new()
             .ints(32..64)
             .simd_lanes(Interval::All)
-            .finish(),
+            .build(),
     );
     let x = &operand("x", Float);
     let a = &operand("a", IntTo);
@@ -242,5 +242,5 @@ pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
         .operands_out(vec![y, rflags]),
     );
 
-    ig.finish()
+    ig.build()
 }

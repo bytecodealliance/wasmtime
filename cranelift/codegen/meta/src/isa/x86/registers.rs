@@ -38,5 +38,5 @@ pub fn define() -> IsaRegs {
     let builder = RegClassBuilder::subclass_of("FPR8", fpr, 0, 8);
     regs.add_class(builder);
 
-    regs.finish()
+    regs.build()
 }
