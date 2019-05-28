@@ -45,7 +45,7 @@ impl FuncTranslator {
     ///
     /// See [the WebAssembly specification][wasm].
     ///
-    /// [wasm]: https://webassembly.github.io/spec/binary/modules.html#code-section
+    /// [wasm]: https://webassembly.github.io/spec/core/binary/modules.html#code-section
     ///
     /// The Cranelift IR function `func` should be completely empty except for the `func.signature`
     /// and `func.name` fields. The signature may contain special-purpose arguments which are not
