@@ -8,7 +8,7 @@ use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let setting = SettingGroupBuilder::new("arm64");
-    setting.finish()
+    setting.build()
 }
 
 fn define_registers() -> IsaRegs {
@@ -41,7 +41,7 @@ fn define_registers() -> IsaRegs {
     let builder = RegClassBuilder::new_toplevel("FLAG", flag_reg);
     regs.add_class(builder);
 
-    regs.finish()
+    regs.build()
 }
 
 pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
@@ -53,7 +53,7 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
         "arm64 specific instruction set",
         &shared_defs.format_registry,
     )
-    .finish();
+    .build();
 
     let mut a64 = CpuMode::new("A64");
 

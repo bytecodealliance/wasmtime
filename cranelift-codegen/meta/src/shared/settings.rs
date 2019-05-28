@@ -160,5 +160,5 @@ pub fn define() -> SettingGroup {
         true,
     );
 
-    settings.finish()
+    settings.build()
 }

@@ -135,7 +135,7 @@ impl InstructionFormatBuilder {
         self
     }
 
-    pub fn finish(self) -> InstructionFormat {
+    pub fn build(self) -> InstructionFormat {
         let typevar_operand = if self.typevar_operand.is_some() {
             self.typevar_operand
         } else if self.has_value_list || self.num_value_operands > 0 {
@@ -213,7 +213,7 @@ impl FormatRegistry {
             );
         }
 
-        let format = inst_format.finish();
+        let format = inst_format.build();
 
         // Compute key.
         let imm_keys = format

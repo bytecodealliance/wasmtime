@@ -57,7 +57,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         predicate!(shared_enable_simd && supports_f && supports_d),
     );
 
-    setting.finish()
+    setting.build()
 }
 
 fn define_registers() -> IsaRegs {
@@ -79,7 +79,7 @@ fn define_registers() -> IsaRegs {
     let builder = RegClassBuilder::new_toplevel("FPR", float_regs);
     regs.add_class(builder);
 
-    regs.finish()
+    regs.build()
 }
 
 pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
@@ -91,7 +91,7 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
         "riscv specific instruction set",
         &shared_defs.format_registry,
     )
-    .finish();
+    .build();
 
     // CPU modes for 32-bit and 64-bit operation.
     let mut rv_32 = CpuMode::new("RV32");

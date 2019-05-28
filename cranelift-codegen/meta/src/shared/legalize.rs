@@ -766,8 +766,8 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
 
     let mut groups = TransformGroups::new();
 
-    narrow.finish_and_add_to(&mut groups);
-    let expand_id = expand.finish_and_add_to(&mut groups);
+    narrow.build_and_add_to(&mut groups);
+    let expand_id = expand.build_and_add_to(&mut groups);
 
     // Expansions using CPU flags.
     let mut expand_flags = TransformGroupBuilder::new(
@@ -802,12 +802,12 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
         ],
     );
 
-    expand_flags.finish_and_add_to(&mut groups);
+    expand_flags.build_and_add_to(&mut groups);
 
     // XXX The order of declarations unfortunately matters to be compatible with the Python code.
-    // When it's all migrated, we can put this next to the narrow/expand finish_and_add_to calls
+    // When it's all migrated, we can put this next to the narrow/expand build_and_add_to calls
     // above.
-    widen.finish_and_add_to(&mut groups);
+    widen.build_and_add_to(&mut groups);
 
     groups
 }

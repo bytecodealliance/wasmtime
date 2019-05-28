@@ -11,7 +11,7 @@ pub fn define() -> Vec<OperandKind> {
     // IntType type.
     let imm64 = Builder::new_imm("imm64")
         .doc("A 64-bit immediate integer.")
-        .finish();
+        .build();
     kinds.push(imm64);
 
     // An unsigned 8-bit immediate integer operand.
@@ -20,13 +20,13 @@ pub fn define() -> Vec<OperandKind> {
     // immediate bit counts on shift instructions.
     let uimm8 = Builder::new_imm("uimm8")
         .doc("An 8-bit immediate unsigned integer.")
-        .finish();
+        .build();
     kinds.push(uimm8);
 
     // An unsigned 32-bit immediate integer operand.
     let uimm32 = Builder::new_imm("uimm32")
         .doc("A 32-bit immediate unsigned integer.")
-        .finish();
+        .build();
     kinds.push(uimm32);
 
     // A 32-bit immediate signed offset.
@@ -36,7 +36,7 @@ pub fn define() -> Vec<OperandKind> {
     let offset32 = Builder::new_imm("offset32")
         .doc("A 32-bit immediate signed offset.")
         .default_member("offset")
-        .finish();
+        .build();
     kinds.push(offset32);
 
     // A 32-bit immediate floating point operand.
@@ -44,7 +44,7 @@ pub fn define() -> Vec<OperandKind> {
     // IEEE 754-2008 binary32 interchange format.
     let ieee32 = Builder::new_imm("ieee32")
         .doc("A 32-bit immediate floating point number.")
-        .finish();
+        .build();
     kinds.push(ieee32);
 
     // A 64-bit immediate floating point operand.
@@ -52,7 +52,7 @@ pub fn define() -> Vec<OperandKind> {
     // IEEE 754-2008 binary64 interchange format.
     let ieee64 = Builder::new_imm("ieee64")
         .doc("A 64-bit immediate floating point number.")
-        .finish();
+        .build();
     kinds.push(ieee64);
 
     // An immediate boolean operand.
@@ -62,7 +62,7 @@ pub fn define() -> Vec<OperandKind> {
     let boolean = Builder::new_imm("boolean")
         .doc("An immediate boolean.")
         .rust_type("bool")
-        .finish();
+        .build();
     kinds.push(boolean);
 
     // A condition code for comparing integer values.
@@ -83,7 +83,7 @@ pub fn define() -> Vec<OperandKind> {
         .doc("An integer comparison condition code.")
         .default_member("cond")
         .rust_type("ir::condcodes::IntCC")
-        .finish();
+        .build();
     kinds.push(intcc);
 
     // A condition code for comparing floating point values.  This enumerated operand kind is used
@@ -107,7 +107,7 @@ pub fn define() -> Vec<OperandKind> {
         .doc("A floating point comparison condition code")
         .default_member("cond")
         .rust_type("ir::condcodes::FloatCC")
-        .finish();
+        .build();
     kinds.push(floatcc);
 
     // Flags for memory operations like :clif:inst:`load` and :clif:inst:`store`.
@@ -115,14 +115,14 @@ pub fn define() -> Vec<OperandKind> {
         .doc("Memory operation flags")
         .default_member("flags")
         .rust_type("ir::MemFlags")
-        .finish();
+        .build();
     kinds.push(memflags);
 
     // A register unit in the current target ISA.
     let regunit = Builder::new_imm("regunit")
         .doc("A register unit in the target ISA")
         .rust_type("isa::RegUnit")
-        .finish();
+        .build();
     kinds.push(regunit);
 
     // A trap code indicating the reason for trapping.
@@ -138,7 +138,7 @@ pub fn define() -> Vec<OperandKind> {
         .doc("A trap reason code.")
         .default_member("code")
         .rust_type("ir::TrapCode")
-        .finish();
+        .build();
     kinds.push(trapcode);
 
     return kinds;

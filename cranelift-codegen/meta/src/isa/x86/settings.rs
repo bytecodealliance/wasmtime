@@ -83,5 +83,5 @@ pub fn define(shared: &SettingGroup) -> SettingGroup {
         ),
     );
 
-    settings.finish()
+    settings.build()
 }
