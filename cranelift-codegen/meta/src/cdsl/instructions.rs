@@ -551,12 +551,39 @@ fn verify_ctrl_typevar(
     Ok(other_typevars)
 }
 
-/// A basic node in an instruction predicate: either an atom, or an AND of two conditions.
-pub enum InstructionPredicateNode {
-    /// Is the field member (first member) equal to the actual argument (which name is the second
-    /// field)?
-    IsFieldEqual(String, String),
+pub enum FormatPredicateKind {
+    /// Is the field member equal to the expected value (stored here)?
+    IsEqual(String),
+}
 
+pub struct FormatPredicateNode {
+    _format_name: &'static str,
+    field_name: &'static str,
+    kind: FormatPredicateKind,
+}
+
+impl FormatPredicateNode {
+    fn new(
+        _format_name: &'static str,
+        field_name: &'static str,
+        kind: FormatPredicateKind,
+    ) -> Self {
+        Self {
+            _format_name,
+            field_name,
+            kind,
+        }
+    }
+    fn rust_predicate(&self) -> String {
+        match &self.kind {
+            FormatPredicateKind::IsEqual(arg) => {
+                format!("crate::predicates::is_equal({}, {})", self.field_name, arg)
+            }
+        }
+    }
+}
+
+pub enum TypePredicateNode {
     /// Is the value argument (at the index designated by the first member) the same type as the
     /// type name (second member)?
     TypeVarCheck(usize, String),
@@ -564,6 +591,27 @@ pub enum InstructionPredicateNode {
     /// Is the controlling type variable the same type as the one designated by the type name
     /// (only member)?
     CtrlTypeVarCheck(String),
+}
+
+impl TypePredicateNode {
+    fn rust_predicate(&self) -> String {
+        match self {
+            TypePredicateNode::TypeVarCheck(index, value_type_name) => format!(
+                "func.dfg.value_type(args[{}]) == {}",
+                index, value_type_name
+            ),
+            TypePredicateNode::CtrlTypeVarCheck(value_type_name) => {
+                format!("func.dfg.ctrl_typevar(inst) == {}", value_type_name)
+            }
+        }
+    }
+}
+
+/// A basic node in an instruction predicate: either an atom, or an AND of two conditions.
+pub enum InstructionPredicateNode {
+    FormatPredicate(FormatPredicateNode),
+
+    TypePredicate(TypePredicateNode),
 
     /// A combination of two other predicates.
     And(Vec<InstructionPredicateNode>),
@@ -572,17 +620,8 @@ pub enum InstructionPredicateNode {
 impl InstructionPredicateNode {
     fn rust_predicate(&self) -> String {
         match self {
-            InstructionPredicateNode::IsFieldEqual(field_name, arg) => {
-                let new_args = vec![field_name.clone(), arg.clone()];
-                format!("crate::predicates::is_equal({})", new_args.join(", "))
-            }
-            InstructionPredicateNode::TypeVarCheck(index, value_type_name) => format!(
-                "func.dfg.value_type(args[{}]) == {}",
-                index, value_type_name
-            ),
-            InstructionPredicateNode::CtrlTypeVarCheck(value_type_name) => {
-                format!("func.dfg.ctrl_typevar(inst) == {}", value_type_name)
-            }
+            InstructionPredicateNode::FormatPredicate(node) => node.rust_predicate(),
+            InstructionPredicateNode::TypePredicate(node) => node.rust_predicate(),
             InstructionPredicateNode::And(nodes) => nodes
                 .iter()
                 .map(|x| x.rust_predicate())
@@ -614,18 +653,28 @@ impl InstructionPredicate {
             .next()
             .unwrap()
             .0;
-        InstructionPredicateNode::TypeVarCheck(index, value_type.rust_name())
+        InstructionPredicateNode::TypePredicate(TypePredicateNode::TypeVarCheck(
+            index,
+            value_type.rust_name(),
+        ))
     }
 
     pub fn new_is_field_equal(
+        format_name: &'static str,
         format_field: &FormatField,
         imm_value: String,
     ) -> InstructionPredicateNode {
-        InstructionPredicateNode::IsFieldEqual(format_field.member.into(), imm_value)
+        InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
+            format_name,
+            format_field.member,
+            FormatPredicateKind::IsEqual(imm_value),
+        ))
     }
 
     pub fn new_ctrl_typevar_check(value_type: &ValueType) -> InstructionPredicateNode {
-        InstructionPredicateNode::CtrlTypeVarCheck(value_type.rust_name())
+        InstructionPredicateNode::TypePredicate(TypePredicateNode::CtrlTypeVarCheck(
+            value_type.rust_name(),
+        ))
     }
 
     pub fn and(mut self, new_node: InstructionPredicateNode) -> Self {

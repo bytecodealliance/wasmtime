@@ -449,6 +449,7 @@ impl Apply {
                 continue;
             }
             pred = pred.and(InstructionPredicate::new_is_field_equal(
+                iform.name,
                 &format_field,
                 arg.to_rust_code(var_pool),
             ));
