@@ -2650,7 +2650,6 @@ __wasi_errno_t wasmtime_ssp_args_get(
   for (size_t i = 0; i < argv_environ->argc; ++i) {
     argv[i] = argv_buf + (argv_environ->argv[i] - argv_environ->argv_buf);
   }
-  argv[argv_environ->argc] = NULL;
   memcpy(argv_buf, argv_environ->argv_buf, argv_environ->argv_buf_size);
   return __WASI_ESUCCESS;
 }
@@ -2677,7 +2676,6 @@ __wasi_errno_t wasmtime_ssp_environ_get(
   for (size_t i = 0; i < argv_environ->environ_count; ++i) {
     environ[i] = environ_buf + (argv_environ->environ[i] - argv_environ->environ_buf);
   }
-  environ[argv_environ->environ_count] = NULL;
   memcpy(environ_buf, argv_environ->environ_buf, argv_environ->environ_buf_size);
   return __WASI_ESUCCESS;
 }
