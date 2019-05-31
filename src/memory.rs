@@ -1,11 +1,7 @@
 //! Functions to go back and forth between WASI types in host and wasm32 representations.
 #![allow(unused)]
 use crate::{host, wasm32};
-
-// NOTE avoid shadowing `std::convert::From` - cf. rust-lang/rfcs#1311
-use cast::From as _0;
-
-use cast;
+use std::convert::TryFrom;
 use std::mem::{align_of, size_of};
 use std::ptr;
 use std::slice;
@@ -457,11 +453,11 @@ pub fn enc_u32(x: u32) -> u32 {
 }
 
 pub fn dec_usize(size: wasm32::size_t) -> usize {
-    cast::usize(u32::from_le(size))
+    usize::try_from(u32::from_le(size)).unwrap()
 }
 
 pub fn enc_usize(size: usize) -> wasm32::size_t {
-    wasm32::size_t::cast(size).unwrap()
+    wasm32::size_t::try_from(size).unwrap()
 }
 
 pub fn enc_usize_byref(

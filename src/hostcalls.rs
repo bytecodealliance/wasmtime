@@ -2,9 +2,7 @@
 use crate::ctx::WasiCtx;
 use crate::memory::*;
 use crate::wasm32;
-
-// NOTE avoid shadowing `std::convert::From` - cf. rust-lang/rfcs#1311
-use cast::From as _0;
+use std::convert::TryFrom;
 
 use wasi_common_cbindgen::wasi_common_cbindgen;
 
@@ -31,7 +29,7 @@ pub fn args_get(
         argv.push(arg_ptr);
 
         argv_buf_offset = if let Some(new_offset) = argv_buf_offset.checked_add(
-            wasm32::uintptr_t::cast(arg_bytes.len())
+            wasm32::uintptr_t::try_from(arg_bytes.len())
                 .expect("cast overflow would have been caught by `enc_slice_of` above"),
         ) {
             new_offset
@@ -89,7 +87,7 @@ pub fn environ_get(
         environ.push(env_ptr);
 
         environ_buf_offset = if let Some(new_offset) = environ_buf_offset.checked_add(
-            wasm32::uintptr_t::cast(env_bytes.len())
+            wasm32::uintptr_t::try_from(env_bytes.len())
                 .expect("cast overflow would have been caught by `enc_slice_of` above"),
         ) {
             new_offset
