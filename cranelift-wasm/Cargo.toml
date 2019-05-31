@@ -19,7 +19,6 @@ hashmap_core = { version = "0.1.9", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 log = { version = "0.4.6", default-features = false }
-cast = { version = "0.2.2", default-features = false }
 
 [dev-dependencies]
 wabt = "0.7.0"

@@ -11,7 +11,7 @@ use crate::translation_utils::{
     DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex,
 };
-use cast;
+use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
@@ -196,7 +196,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         index: GlobalIndex,
     ) -> WasmResult<GlobalVariable> {
         // Just create a dummy `vmctx` global.
-        let offset = cast::i32((index.index() * 8) + 8).unwrap().into();
+        let offset = i32::try_from((index.index() * 8) + 8).unwrap().into();
         let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
         Ok(GlobalVariable::Memory {
             gv: vmctx,
