@@ -149,7 +149,7 @@ pub fn path_get<P: AsRef<OsStr>>(
                     || (component.ends_with(b"/") && !needs_final_component) =>
             {
                 match openat(
-                    *dir_stack.first().expect("dir_stack is never empty"),
+                    *dir_stack.last().expect("dir_stack is never empty"),
                     component,
                     OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW,
                     Mode::empty(),
