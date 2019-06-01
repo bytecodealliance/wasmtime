@@ -4,8 +4,9 @@
 
 use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
 use cranelift_codegen;
+use cranelift_codegen::binemit::{self, CodeInfo};
+use cranelift_codegen::ir;
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::{binemit, ir};
 use cranelift_reader::TestCommand;
 use log::info;
 use std::borrow::Cow;
@@ -38,13 +39,13 @@ impl SubTest for TestCompile {
         let isa = context.isa.expect("compile needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
-        let code_size = comp_ctx
+        let CodeInfo { total_size, .. } = comp_ctx
             .compile(isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
 
         info!(
             "Generated {} bytes of code:\n{}",
-            code_size,
+            total_size,
             comp_ctx.func.display(isa)
         );
 
@@ -56,10 +57,10 @@ impl SubTest for TestCompile {
             &mut sink,
         );
 
-        if sink.offset != code_size {
+        if sink.offset != total_size {
             return Err(format!(
                 "Expected code size {}, got {}",
-                code_size, sink.offset
+                total_size, sink.offset
             ));
         }
 
@@ -105,5 +106,7 @@ impl binemit::CodeSink for SizeSink {
     }
     fn reloc_jt(&mut self, _reloc: binemit::Reloc, _jt: ir::JumpTable) {}
     fn trap(&mut self, _code: ir::TrapCode, _srcloc: ir::SourceLoc) {}
+    fn begin_jumptables(&mut self) {}
     fn begin_rodata(&mut self) {}
+    fn end_codegen(&mut self) {}
 }

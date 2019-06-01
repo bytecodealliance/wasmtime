@@ -8,8 +8,9 @@
 use super::HashMap;
 use crate::data_context::DataContext;
 use crate::Backend;
+use cranelift_codegen::binemit::{self, CodeInfo};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
-use cranelift_codegen::{binemit, ir, isa, CodegenError, Context};
+use cranelift_codegen::{ir, isa, CodegenError, Context};
 use failure::Fail;
 use log::info;
 use std::borrow::ToOwned;
@@ -519,7 +520,7 @@ where
 
     /// Define a function, producing the function body from the given `Context`.
     ///
-    /// Returns the size of the function's code.
+    /// Returns the size of the function's code and constant data.
     ///
     /// Note: After calling this function the given `Context` will contain the compiled function.
     pub fn define_function(
@@ -527,7 +528,7 @@ where
         func: FuncId,
         ctx: &mut Context,
     ) -> ModuleResult<binemit::CodeOffset> {
-        let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
+        let CodeInfo { total_size, .. } = ctx.compile(self.backend.isa()).map_err(|e| {
             info!(
                 "defining function {}: {}",
                 func,
@@ -550,12 +551,12 @@ where
             &ModuleNamespace::<B> {
                 contents: &self.contents,
             },
-            code_size,
+            total_size,
         )?);
 
         self.contents.functions[func].compiled = compiled;
         self.functions_to_finalize.push(func);
-        Ok(code_size)
+        Ok(total_size)
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.

@@ -27,7 +27,7 @@
 //! ebb23:
 //! ```
 
-use crate::binemit::CodeOffset;
+use crate::binemit::{CodeInfo, CodeOffset};
 use crate::cursor::{Cursor, FuncCursor};
 use crate::ir::{Function, InstructionData, Opcode};
 use crate::isa::{EncInfo, TargetIsa};
@@ -40,7 +40,7 @@ use log::debug;
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
 /// Fill in the `func.offsets` table so the function is ready for binary emission.
-pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
+pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<CodeInfo> {
     let _tt = timing::relax_branches();
 
     let encinfo = isa.encoding_info();
@@ -109,6 +109,9 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<Cod
         }
     }
 
+    let code_size = offset;
+    let jumptables = offset;
+
     for (jt, jt_data) in func.jump_tables.iter() {
         func.jt_offsets[jt] = offset;
         // TODO: this should be computed based on the min size needed to hold
@@ -116,7 +119,19 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<Cod
         offset += jt_data.len() as u32 * 4;
     }
 
-    Ok(offset)
+    let jumptables_size = offset - jumptables;
+    let rodata = offset;
+
+    // TODO: Once we have constant pools we'll do some processing here to update offset.
+
+    let rodata_size = offset - rodata;
+
+    Ok(CodeInfo {
+        code_size,
+        jumptables_size,
+        rodata_size,
+        total_size: offset,
+    })
 }
 
 /// Convert `jump` instructions to `fallthrough` instructions where possible and verify that any

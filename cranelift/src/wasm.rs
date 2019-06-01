@@ -176,16 +176,16 @@ fn handle_module(
                 return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
             }
         } else {
-            let (code_size, rodata_size) = context
+            let code_info = context
                 .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
                 .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
 
             if flag_print_size {
                 println!(
                     "Function #{} code size: {} bytes",
-                    func_index, code_size + rodata_size
+                    func_index, code_info.total_size,
                 );
-                total_module_code_size += code_size + rodata_size;
+                total_module_code_size += code_info.total_size;
                 println!(
                     "Function #{} bytecode size: {} bytes",
                     func_index,
@@ -194,7 +194,7 @@ fn handle_module(
             }
 
             if flag_print_disasm {
-                saved_sizes = Some((code_size, rodata_size));
+                saved_sizes = Some((code_info.code_size, code_info.jumptables_size + code_info.rodata_size));
             }
         }
 

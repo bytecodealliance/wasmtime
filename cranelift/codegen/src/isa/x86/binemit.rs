@@ -339,4 +339,5 @@ fn disp4<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS
 fn jt_disp4<CS: CodeSink + ?Sized>(jt: JumpTable, func: &Function, sink: &mut CS) {
     let delta = func.jt_offsets[jt].wrapping_sub(sink.offset() + 4);
     sink.put4(delta);
+    sink.reloc_jt(Reloc::X86PCRelRodata4, jt);
 }

@@ -10,7 +10,7 @@
 //! single ISA instance.
 
 use crate::binemit::{
-    relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink,
+    relax_branches, shrink_instructions, CodeInfo, MemoryCodeSink, RelocSink, TrapSink,
 };
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
@@ -93,20 +93,21 @@ impl Context {
     /// This function calls `compile` and `emit_to_memory`, taking care to resize `mem` as
     /// needed, so it provides a safe interface.
     ///
-    /// Returns the size of the function's code and the size of the read-only data.
+    /// Returns information about the function's code and read-only data.
     pub fn compile_and_emit(
         &mut self,
         isa: &TargetIsa,
         mem: &mut Vec<u8>,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
-    ) -> CodegenResult<(CodeOffset, CodeOffset)> {
-        let total_size = self.compile(isa)?;
+    ) -> CodegenResult<CodeInfo> {
+        let info = self.compile(isa)?;
         let old_len = mem.len();
-        mem.resize(old_len + total_size as usize, 0);
-        let code_size =
+        mem.resize(old_len + info.total_size as usize, 0);
+        let new_info =
             unsafe { self.emit_to_memory(isa, mem.as_mut_ptr().add(old_len), relocs, traps) };
-        Ok((code_size, total_size - code_size))
+        debug_assert!(new_info == info);
+        Ok(info)
     }
 
     /// Compile the function.
@@ -115,8 +116,8 @@ impl Context {
     /// represented by `isa`. This does not include the final step of emitting machine code into a
     /// code sink.
     ///
-    /// Returns the size of the function's code and read-only data.
-    pub fn compile(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
+    /// Returns information about the function's code and read-only data.
+    pub fn compile(&mut self, isa: &TargetIsa) -> CodegenResult<CodeInfo> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
 
@@ -160,18 +161,18 @@ impl Context {
     /// This function is unsafe since it does not perform bounds checking on the memory buffer,
     /// and it can't guarantee that the `mem` pointer is valid.
     ///
-    /// Returns the size of the function's code.
+    /// Returns information about the emitted code and data.
     pub unsafe fn emit_to_memory(
         &self,
         isa: &TargetIsa,
         mem: *mut u8,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
-    ) -> CodeOffset {
+    ) -> CodeInfo {
         let _tt = timing::binemit();
         let mut sink = MemoryCodeSink::new(mem, relocs, traps);
         isa.emit_function_to_memory(&self.func, &mut sink);
-        sink.code_size as CodeOffset
+        sink.info
     }
 
     /// Run the verifier on the function.
@@ -325,12 +326,13 @@ impl Context {
         Ok(())
     }
 
-    /// Run the branch relaxation pass and return the final code size.
-    pub fn relax_branches(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
-        let code_size = relax_branches(&mut self.func, isa)?;
+    /// Run the branch relaxation pass and return information about the function's code and
+    /// read-only data.
+    pub fn relax_branches(&mut self, isa: &TargetIsa) -> CodegenResult<CodeInfo> {
+        let info = relax_branches(&mut self.func, isa)?;
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
-        Ok(code_size)
+        Ok(info)
     }
 
     /// Builds ranges and location for specified value labels.
