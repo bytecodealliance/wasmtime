@@ -80,16 +80,16 @@ compile our program like so:
 $ clang demo.c -o demo.wasm
 ```
 
-If you would want to extract it elsewhere, you can specify the directory like so
+If you would want to extract it elsewhere, you can specify the sysroot directory like so
 
 ```
 $ clang demo.c --sysroot <path to sysroot> -o demo.wasm
 ```
 
-If you're using the wasi-sdk, the sysroot folder is located in `opt/wasi-sdk/share/sysroot/` on Linux and mac.
+If you're using the wasi-sdk, the sysroot directory is located in `opt/wasi-sdk/share/sysroot/` on Linux and mac.
 
-A few things to note here. First, this is just regular clang, configured to use
-a WebAssembly target and sysroot. Second, the output name specified with the "-o"
+This is just regular clang, configured to use
+a WebAssembly target and sysroot. The output name specified with the "-o"
 flag can be anything you want, and *does not* need to contain the `.wasm` extension.
 In fact, the output of clang here is a standard WebAssembly module:
 
