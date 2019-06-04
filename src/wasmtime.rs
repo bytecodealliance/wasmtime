@@ -48,6 +48,7 @@ use std::path::Component;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use wabt;
+use wasi_common::preopen_dir;
 use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wasi::instantiate_wasi;
 use wasmtime_wast::instantiate_spectest;
@@ -116,33 +117,6 @@ fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
     } else {
         wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?
     })
-}
-
-fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
-    #[cfg(windows)]
-    {
-        use std::fs::OpenOptions;
-        use std::os::windows::fs::OpenOptionsExt;
-        use winapi::um::winbase::FILE_FLAG_BACKUP_SEMANTICS;
-
-        // To open a directory using CreateFile2, specify the
-        // FILE_FLAG_BACKUP_SEMANTICS flag as part of dwFileFlags...
-        // cf. https://docs.microsoft.com/en-us/windows/desktop/api/fileapi/nf-fileapi-createfile2
-        OpenOptions::new()
-            .create(false)
-            .write(true)
-            .read(true)
-            .attributes(FILE_FLAG_BACKUP_SEMANTICS)
-            .open(path)
-    }
-    #[cfg(unix)]
-    {
-        File::open(path)
-    }
-    #[cfg(not(any(windows, unix)))]
-    {
-        unimplemented!("this OS is currently not supported by Wasmtime")
-    }
 }
 
 fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(String, File)> {
