@@ -342,11 +342,23 @@ X86_64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
 X86_32.enc(base.copy_special, *r.copysp(0x89))
 
 # Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
-# into a no-op.
-X86_64.enc(base.copy_nop.i64, r.stacknull, 0)
-X86_64.enc(base.copy_nop.i32, r.stacknull, 0)
-X86_64.enc(base.copy_nop.f64, r.stacknull, 0)
-X86_64.enc(base.copy_nop.f32, r.stacknull, 0)
+# into a no-op.  Ideally we could to make this encoding available for
+# all types, and write `base.copy_nop.any`, but it appears that the
+# controlling type variable must not polymorphic.  So we make do with
+# the following limited set, and guard the generating transformation in
+# regalloc/reload.rs accordingly.
+#
+# The same encoding is generated for both the 64- and 32-bit architectures.
+# Note that we can't use `enc_both` here, because that attempts to create a
+# variant with a REX prefix in the 64-bit-architecture case.  But since
+# there's no actual instruction for the REX prefix to modify the meaning of,
+# it will modify the meaning of whatever instruction happens to follow this
+# one, which is obviously wrong.  Note also that we can and indeed *must*
+# claim that there's a 64-bit encoding for the 32-bit arch case, even though
+# no such single instruction actually exists for the 32-bit arch case.
+for ty in [types.i64, types.i32, types.i16, types.i8, types.f64, types.f32]:
+    X86_64.enc(base.copy_nop.bind(ty), r.stacknull, 0)
+    X86_32.enc(base.copy_nop.bind(ty), r.stacknull, 0)
 
 # Adjust SP down by a dynamic value (or up, with a negative operand).
 X86_32.enc(base.adjust_sp_down.i32, *r.adjustsp(0x29))
