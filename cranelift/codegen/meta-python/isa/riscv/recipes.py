@@ -223,3 +223,8 @@ GPfi = EncRecipe(
         'GPfi', Unary, base_size=4,
         ins=Stack(GPR), outs=GPR,
         emit='unimplemented!();')
+
+# Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
+# into a no-op.
+stacknull = EncRecipe('stacknull', Unary, base_size=0,
+                      ins=Stack(GPR), outs=Stack(GPR), emit='')
