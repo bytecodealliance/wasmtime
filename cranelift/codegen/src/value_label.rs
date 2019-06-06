@@ -81,7 +81,7 @@ where
 pub fn build_value_labels_ranges<T>(
     func: &Function,
     regalloc: &Context,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) -> ValueLabelsRanges
 where
     T: From<SourceLoc> + Deref<Target = SourceLoc> + Ord + Copy,

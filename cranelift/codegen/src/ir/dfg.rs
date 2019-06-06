@@ -426,7 +426,7 @@ impl DataFlowGraph {
     }
 
     /// Returns an object that displays `inst`.
-    pub fn display_inst<'a, I: Into<Option<&'a TargetIsa>>>(
+    pub fn display_inst<'a, I: Into<Option<&'a dyn TargetIsa>>>(
         &'a self,
         inst: Inst,
         isa: I,
@@ -909,7 +909,7 @@ impl EbbData {
 }
 
 /// Object that can display an instruction.
-pub struct DisplayInst<'a>(&'a DataFlowGraph, Option<&'a TargetIsa>, Inst);
+pub struct DisplayInst<'a>(&'a DataFlowGraph, Option<&'a dyn TargetIsa>, Inst);
 
 impl<'a> fmt::Display for DisplayInst<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

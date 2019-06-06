@@ -13,7 +13,7 @@ use std::borrow::Cow;
 /// The result is verified by filecheck.
 struct TestCat;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "cat");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))

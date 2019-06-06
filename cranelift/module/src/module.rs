@@ -690,7 +690,7 @@ where
     }
 
     /// Return the target isa
-    pub fn isa(&self) -> &isa::TargetIsa {
+    pub fn isa(&self) -> &dyn isa::TargetIsa {
         self.backend.isa()
     }
 

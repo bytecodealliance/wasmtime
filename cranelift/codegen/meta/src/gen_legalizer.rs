@@ -410,7 +410,7 @@ fn gen_transform_group<'a>(
         fmt.line("inst: crate::ir::Inst,");
         fmt.line("func: &mut crate::ir::Function,");
         fmt.line("cfg: &mut crate::flowgraph::ControlFlowGraph,");
-        fmt.line("isa: &crate::isa::TargetIsa,");
+        fmt.line("isa: &dyn crate::isa::TargetIsa,");
     });
     fmtln!(fmt, ") -> bool {");
 

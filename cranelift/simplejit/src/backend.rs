@@ -23,9 +23,9 @@ const READONLY_DATA_ALIGNMENT: u8 = 0x1;
 
 /// A builder for `SimpleJITBackend`.
 pub struct SimpleJITBuilder {
-    isa: Box<TargetIsa>,
+    isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
-    libcall_names: Box<Fn(ir::LibCall) -> String>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
 }
 
 impl SimpleJITBuilder {
@@ -35,7 +35,7 @@ impl SimpleJITBuilder {
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
-    pub fn new(libcall_names: Box<Fn(ir::LibCall) -> String>) -> Self {
+    pub fn new(libcall_names: Box<dyn Fn(ir::LibCall) -> String>) -> Self {
         let flag_builder = settings::builder();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {}", msg);
@@ -56,7 +56,10 @@ impl SimpleJITBuilder {
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
-    pub fn with_isa(isa: Box<TargetIsa>, libcall_names: Box<Fn(ir::LibCall) -> String>) -> Self {
+    pub fn with_isa(
+        isa: Box<dyn TargetIsa>,
+        libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+    ) -> Self {
         debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
         let symbols = HashMap::new();
         Self {
@@ -108,9 +111,9 @@ impl SimpleJITBuilder {
 ///
 /// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITBackend` instances.
 pub struct SimpleJITBackend {
-    isa: Box<TargetIsa>,
+    isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
-    libcall_names: Box<Fn(ir::LibCall) -> String>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     code_memory: Memory,
     readonly_memory: Memory,
     writable_memory: Memory,
@@ -205,7 +208,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         }
     }
 
-    fn isa(&self) -> &TargetIsa {
+    fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
 

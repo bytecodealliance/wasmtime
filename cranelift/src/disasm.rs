@@ -85,7 +85,7 @@ cfg_if! {
         use capstone::prelude::*;
         use target_lexicon::Architecture;
 
-        fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
+        fn get_disassembler(isa: &dyn TargetIsa) -> Result<Capstone, String> {
             let cs = match isa.triple().architecture {
                 Architecture::Riscv32 | Architecture::Riscv64 => {
                     return Err(String::from("No disassembler for RiscV"))
@@ -117,7 +117,7 @@ cfg_if! {
             cs.map_err(|err| err.to_string())
         }
 
-        pub fn print_disassembly(isa: &TargetIsa, mem: &[u8]) -> Result<(), String> {
+        pub fn print_disassembly(isa: &dyn TargetIsa, mem: &[u8]) -> Result<(), String> {
             let mut cs = get_disassembler(isa)?;
 
             println!("\nDisassembly of {} bytes:", mem.len());
@@ -156,7 +156,7 @@ cfg_if! {
             Ok(())
         }
     } else {
-        pub fn print_disassembly(_: &TargetIsa, _: &[u8]) -> Result<(), String> {
+        pub fn print_disassembly(_: &dyn TargetIsa, _: &[u8]) -> Result<(), String> {
             println!("\nNo disassembly available.");
             Ok(())
         }
@@ -164,7 +164,7 @@ cfg_if! {
 }
 
 pub fn print_all(
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     mem: &[u8],
     code_size: u32,
     rodata_size: u32,

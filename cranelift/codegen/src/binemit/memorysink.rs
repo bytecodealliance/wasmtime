@@ -34,8 +34,8 @@ pub struct MemoryCodeSink<'a> {
     data: *mut u8,
     /// Offset is isize because its major consumer needs it in that form.
     offset: isize,
-    relocs: &'a mut RelocSink,
-    traps: &'a mut TrapSink,
+    relocs: &'a mut dyn RelocSink,
+    traps: &'a mut dyn TrapSink,
     /// Information about the generated code and read-only data.
     pub info: CodeInfo,
 }
@@ -45,7 +45,11 @@ impl<'a> MemoryCodeSink<'a> {
     ///
     /// This function is unsafe since `MemoryCodeSink` does not perform bounds checking on the
     /// memory buffer, and it can't guarantee that the `data` pointer is valid.
-    pub unsafe fn new(data: *mut u8, relocs: &'a mut RelocSink, traps: &'a mut TrapSink) -> Self {
+    pub unsafe fn new(
+        data: *mut u8,
+        relocs: &'a mut dyn RelocSink,
+        traps: &'a mut dyn TrapSink,
+    ) -> Self {
         Self {
             data,
             offset: 0,

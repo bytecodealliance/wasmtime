@@ -346,7 +346,7 @@ pub struct FlagsOrIsa<'a> {
     pub flags: &'a Flags,
 
     /// The ISA may not be present.
-    pub isa: Option<&'a TargetIsa>,
+    pub isa: Option<&'a dyn TargetIsa>,
 }
 
 impl<'a> From<&'a Flags> for FlagsOrIsa<'a> {
@@ -355,8 +355,8 @@ impl<'a> From<&'a Flags> for FlagsOrIsa<'a> {
     }
 }
 
-impl<'a> From<&'a TargetIsa> for FlagsOrIsa<'a> {
-    fn from(isa: &'a TargetIsa) -> FlagsOrIsa {
+impl<'a> From<&'a dyn TargetIsa> for FlagsOrIsa<'a> {
+    fn from(isa: &'a dyn TargetIsa) -> FlagsOrIsa {
         FlagsOrIsa {
             flags: isa.flags(),
             isa: Some(isa),

@@ -19,12 +19,12 @@ pub enum IsaSpec {
 
     /// The parsed file does contain `isa` commands.
     /// Each `isa` command is used to configure a `TargetIsa` trait object.
-    Some(Vec<Box<TargetIsa>>),
+    Some(Vec<Box<dyn TargetIsa>>),
 }
 
 impl IsaSpec {
     /// If the `IsaSpec` contains exactly 1 `TargetIsa` we return a reference to it
-    pub fn unique_isa(&self) -> Option<&TargetIsa> {
+    pub fn unique_isa(&self) -> Option<&dyn TargetIsa> {
         if let IsaSpec::Some(ref isa_vec) = *self {
             if isa_vec.len() == 1 {
                 return Some(&*isa_vec[0]);
@@ -35,7 +35,11 @@ impl IsaSpec {
 }
 
 /// Parse an iterator of command line options and apply them to `config`.
-pub fn parse_options<'a, I>(iter: I, config: &mut Configurable, loc: Location) -> ParseResult<()>
+pub fn parse_options<'a, I>(
+    iter: I,
+    config: &mut dyn Configurable,
+    loc: Location,
+) -> ParseResult<()>
 where
     I: Iterator<Item = &'a str>,
 {

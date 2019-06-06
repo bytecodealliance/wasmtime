@@ -23,7 +23,7 @@ use core::cmp::Ordering;
 /// We don't verify that live ranges are minimal. This would require recomputing live ranges for
 /// all values.
 pub fn verify_liveness(
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     func: &Function,
     cfg: &ControlFlowGraph,
     liveness: &Liveness,
@@ -42,7 +42,7 @@ pub fn verify_liveness(
 }
 
 struct LivenessVerifier<'a> {
-    isa: &'a TargetIsa,
+    isa: &'a dyn TargetIsa,
     func: &'a Function,
     cfg: &'a ControlFlowGraph,
     liveness: &'a Liveness,

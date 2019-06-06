@@ -13,7 +13,7 @@ use std::borrow::Cow;
 
 struct TestCompile;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "compile");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))

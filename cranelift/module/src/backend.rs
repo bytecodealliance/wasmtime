@@ -53,7 +53,7 @@ where
     fn new(_: Self::Builder) -> Self;
 
     /// Return the `TargetIsa` to compile for.
-    fn isa(&self) -> &TargetIsa;
+    fn isa(&self) -> &dyn TargetIsa;
 
     /// Declare a function.
     fn declare_function(&mut self, name: &str, linkage: Linkage);
@@ -135,7 +135,7 @@ where
 
 /// Default names for `ir::LibCall`s. A function by this name is imported into the object as
 /// part of the translation of a `ir::ExternalName::LibCall` variant.
-pub fn default_libcall_names() -> Box<Fn(ir::LibCall) -> String> {
+pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String> {
     Box::new(move |libcall| match libcall {
         ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
         ir::LibCall::CeilF32 => "ceilf".to_owned(),

@@ -18,7 +18,7 @@ use std::fmt::Write;
 
 struct TestBinEmit;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "binemit");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))

@@ -14,7 +14,7 @@ pub fn expand_call(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) {
     // Unpack the instruction.
     let (func_ref, old_args) = match func.dfg[inst] {

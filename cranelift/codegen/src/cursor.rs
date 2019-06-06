@@ -657,12 +657,12 @@ pub struct EncCursor<'f> {
     pub func: &'f mut ir::Function,
 
     /// The target ISA that will be used to encode instructions.
-    pub isa: &'f TargetIsa,
+    pub isa: &'f dyn TargetIsa,
 }
 
 impl<'f> EncCursor<'f> {
     /// Create a new `EncCursor` pointing nowhere.
-    pub fn new(func: &'f mut ir::Function, isa: &'f TargetIsa) -> Self {
+    pub fn new(func: &'f mut ir::Function, isa: &'f dyn TargetIsa) -> Self {
         Self {
             pos: CursorPosition::Nowhere,
             srcloc: Default::default(),

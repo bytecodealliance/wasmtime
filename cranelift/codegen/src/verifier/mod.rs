@@ -266,7 +266,7 @@ struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
     expected_domtree: DominatorTree,
-    isa: Option<&'a TargetIsa>,
+    isa: Option<&'a dyn TargetIsa>,
 }
 
 impl<'a> Verifier<'a> {

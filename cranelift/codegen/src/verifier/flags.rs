@@ -24,7 +24,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 pub fn verify_flags(
     func: &ir::Function,
     cfg: &ControlFlowGraph,
-    isa: Option<&isa::TargetIsa>,
+    isa: Option<&dyn isa::TargetIsa>,
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
     let _tt = timing::verify_flags();

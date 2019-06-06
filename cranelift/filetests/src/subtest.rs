@@ -25,7 +25,7 @@ pub struct Context<'a> {
 
     /// Target ISA to test against. Only guaranteed to be present for sub-tests whose `needs_isa`
     /// method returned `true`. For other sub-tests, this is set if the test file has a unique ISA.
-    pub isa: Option<&'a TargetIsa>,
+    pub isa: Option<&'a dyn TargetIsa>,
 }
 
 impl<'a> Context<'a> {

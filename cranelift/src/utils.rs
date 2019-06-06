@@ -42,7 +42,7 @@ pub fn read_to_end<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
 /// Like `FlagsOrIsa`, but holds ownership.
 pub enum OwnedFlagsOrIsa {
     Flags(settings::Flags),
-    Isa(Box<TargetIsa>),
+    Isa(Box<dyn TargetIsa>),
 }
 
 impl OwnedFlagsOrIsa {

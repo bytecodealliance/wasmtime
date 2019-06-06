@@ -113,11 +113,11 @@ struct Context<'a> {
     /// information. This is only `Some` if exactly one set of `isa` directives were found in the
     /// prologue (it is valid to have directives for multiple different targets, but in that case
     /// we couldn't know which target the provided encodings are intended for)
-    unique_isa: Option<&'a TargetIsa>,
+    unique_isa: Option<&'a dyn TargetIsa>,
 }
 
 impl<'a> Context<'a> {
-    fn new(f: Function, unique_isa: Option<&'a TargetIsa>) -> Self {
+    fn new(f: Function, unique_isa: Option<&'a dyn TargetIsa>) -> Self {
         Self {
             function: f,
             map: SourceMap::new(),
@@ -720,7 +720,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a register unit either by number `%15` or by name `%rax`.
-    fn match_regunit(&mut self, isa: Option<&TargetIsa>) -> ParseResult<RegUnit> {
+    fn match_regunit(&mut self, isa: Option<&dyn TargetIsa>) -> ParseResult<RegUnit> {
         if let Some(Token::Name(name)) = self.token() {
             self.consume();
             match isa {
@@ -891,7 +891,7 @@ impl<'a> Parser<'a> {
     /// This is the top-level parse function matching the whole contents of a file.
     pub fn parse_function_list(
         &mut self,
-        unique_isa: Option<&TargetIsa>,
+        unique_isa: Option<&dyn TargetIsa>,
     ) -> ParseResult<Vec<(Function, Details<'a>)>> {
         let mut list = Vec::new();
         while self.token().is_some() {
@@ -911,7 +911,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_function(
         &mut self,
-        unique_isa: Option<&TargetIsa>,
+        unique_isa: Option<&dyn TargetIsa>,
     ) -> ParseResult<(Function, Details<'a>)> {
         // Begin gathering comments.
         // Make sure we don't include any comments before the `function` keyword.
@@ -999,7 +999,7 @@ impl<'a> Parser<'a> {
     //
     // signature ::=  * "(" [paramlist] ")" ["->" retlist] [callconv]
     //
-    fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> ParseResult<Signature> {
+    fn parse_signature(&mut self, unique_isa: Option<&dyn TargetIsa>) -> ParseResult<Signature> {
         // Calling convention defaults to `fast`, but can be changed.
         let mut sig = Signature::new(CallConv::Fast);
 
@@ -1033,7 +1033,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_abi_param_list(
         &mut self,
-        unique_isa: Option<&TargetIsa>,
+        unique_isa: Option<&dyn TargetIsa>,
     ) -> ParseResult<Vec<AbiParam>> {
         let mut list = Vec::new();
 
@@ -1050,7 +1050,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parse a single argument type with flags.
-    fn parse_abi_param(&mut self, unique_isa: Option<&TargetIsa>) -> ParseResult<AbiParam> {
+    fn parse_abi_param(&mut self, unique_isa: Option<&dyn TargetIsa>) -> ParseResult<AbiParam> {
         // abi-param ::= * type { flag } [ argumentloc ]
         let mut arg = AbiParam::new(self.match_type("expected parameter type")?);
 
@@ -1079,7 +1079,7 @@ impl<'a> Parser<'a> {
     // Parse an argument location specifier; either a register or a byte offset into the stack.
     fn parse_argument_location(
         &mut self,
-        unique_isa: Option<&TargetIsa>,
+        unique_isa: Option<&dyn TargetIsa>,
     ) -> ParseResult<ArgumentLoc> {
         // argumentloc ::= '[' regname | uimm32 ']'
         if self.optional(Token::LBracket) {
@@ -1426,7 +1426,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_signature_decl(
         &mut self,
-        unique_isa: Option<&TargetIsa>,
+        unique_isa: Option<&dyn TargetIsa>,
     ) -> ParseResult<(SigRef, Signature)> {
         let sig = self.match_sig("expected signature number: sig«n»")?;
         self.match_token(Token::Equal, "expected '=' in signature decl")?;

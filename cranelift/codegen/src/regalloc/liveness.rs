@@ -195,7 +195,7 @@ type LiveRangeSet = SparseMap<Value, LiveRange>;
 fn get_or_create<'a>(
     lrset: &'a mut LiveRangeSet,
     value: Value,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     func: &Function,
     encinfo: &EncInfo,
 ) -> &'a mut LiveRange {
@@ -389,7 +389,7 @@ impl Liveness {
 
     /// Compute the live ranges of all SSA values used in `func`.
     /// This clears out any existing analysis stored in this data structure.
-    pub fn compute(&mut self, isa: &TargetIsa, func: &mut Function, cfg: &ControlFlowGraph) {
+    pub fn compute(&mut self, isa: &dyn TargetIsa, func: &mut Function, cfg: &ControlFlowGraph) {
         let _tt = timing::ra_liveness();
         self.ranges.clear();
 

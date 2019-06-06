@@ -107,7 +107,7 @@ pub fn get_libcall_funcref(
     libcall: LibCall,
     func: &mut Function,
     inst: Inst,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) -> FuncRef {
     find_funcref(libcall, func).unwrap_or_else(|| make_funcref_for_inst(libcall, func, inst, isa))
 }
@@ -119,7 +119,7 @@ pub fn get_probestack_funcref(
     func: &mut Function,
     reg_type: Type,
     arg_reg: RegUnit,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) -> FuncRef {
     find_funcref(LibCall::Probestack, func)
         .unwrap_or_else(|| make_funcref_for_probestack(func, reg_type, arg_reg, isa))
@@ -147,7 +147,7 @@ fn make_funcref_for_probestack(
     func: &mut Function,
     reg_type: Type,
     arg_reg: RegUnit,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) -> FuncRef {
     let mut sig = Signature::new(CallConv::Probestack);
     let rax = AbiParam::special_reg(reg_type, ArgumentPurpose::Normal, arg_reg);
@@ -163,7 +163,7 @@ fn make_funcref_for_inst(
     libcall: LibCall,
     func: &mut Function,
     inst: Inst,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) -> FuncRef {
     let mut sig = Signature::new(isa.default_call_conv());
     for &v in func.dfg.inst_args(inst) {
@@ -177,7 +177,12 @@ fn make_funcref_for_inst(
 }
 
 /// Create a funcref for `libcall`.
-fn make_funcref(libcall: LibCall, func: &mut Function, sig: Signature, isa: &TargetIsa) -> FuncRef {
+fn make_funcref(
+    libcall: LibCall,
+    func: &mut Function,
+    sig: Signature,
+    isa: &dyn TargetIsa,
+) -> FuncRef {
     let sigref = func.import_signature(sig);
 
     func.import_function(ExtFuncData {
