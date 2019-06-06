@@ -2,16 +2,23 @@
 
 use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::{
-    InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
+    AllInstructions, InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
 };
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::types;
 
-pub fn define(format_registry: &FormatRegistry) -> InstructionGroup {
-    let mut ig =
-        InstructionGroupBuilder::new("x86", "x86 specific instruction set", format_registry);
+pub fn define(
+    mut all_instructions: &mut AllInstructions,
+    format_registry: &FormatRegistry,
+) -> InstructionGroup {
+    let mut ig = InstructionGroupBuilder::new(
+        "x86",
+        "x86 specific instruction set",
+        &mut all_instructions,
+        format_registry,
+    );
 
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
 

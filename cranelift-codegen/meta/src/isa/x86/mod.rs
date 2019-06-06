@@ -15,7 +15,10 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let settings = settings::define(&shared_defs.settings);
     let regs = registers::define();
 
-    let inst_group = instructions::define(&shared_defs.format_registry);
+    let inst_group = instructions::define(
+        &mut shared_defs.all_instructions,
+        &shared_defs.format_registry,
+    );
     legalize::define(shared_defs, &inst_group);
 
     // CPU modes for 32-bit and 64-bit operations.

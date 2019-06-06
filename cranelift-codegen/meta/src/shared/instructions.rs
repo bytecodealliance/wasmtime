@@ -2,7 +2,7 @@
 
 use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::{
-    InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
+    AllInstructions, InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
 };
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::type_inference::Constraint::WiderOrEq;
@@ -11,12 +11,17 @@ use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::{types, OperandKinds};
 
 pub fn define(
+    all_instructions: &mut AllInstructions,
     format_registry: &FormatRegistry,
     immediates: &OperandKinds,
     entities: &OperandKinds,
 ) -> InstructionGroup {
-    let mut ig =
-        InstructionGroupBuilder::new("base", "Shared base instruction set", format_registry);
+    let mut ig = InstructionGroupBuilder::new(
+        "base",
+        "Shared base instruction set",
+        all_instructions,
+        format_registry,
+    );
 
     // Operand kind shorthands.
     let intcc = immediates.by_name("intcc");

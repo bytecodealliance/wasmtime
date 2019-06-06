@@ -35,16 +35,7 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
     // Per ISA definitions.
     let isas = isa::define(isas, &mut shared_defs);
 
-    let mut all_inst_groups = vec![&shared_defs.instructions];
-    all_inst_groups.extend(isas.iter().map(|isa| &isa.instructions));
-
-    gen_inst::generate(
-        all_inst_groups,
-        &shared_defs.format_registry,
-        "opcodes.rs",
-        "inst_builder.rs",
-        &out_dir,
-    )?;
+    gen_inst::generate(&shared_defs, "opcodes.rs", "inst_builder.rs", &out_dir)?;
 
     gen_legalizer::generate(
         &isas,
