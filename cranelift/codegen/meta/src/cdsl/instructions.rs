@@ -1,3 +1,10 @@
+use std::fmt;
+use std::ops;
+use std::rc::Rc;
+use std::slice;
+
+use cranelift_entity::{entity_impl, PrimaryMap};
+
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::{
     FormatField, FormatRegistry, InstructionFormat, InstructionFormatIndex,
@@ -7,41 +14,49 @@ use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::TypeVar;
 
-use std::fmt;
-use std::ops;
-use std::rc::Rc;
-use std::slice;
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct OpcodeNumber(u32);
+entity_impl!(OpcodeNumber);
 
-pub struct InstructionGroupBuilder<'format_reg> {
+pub type AllInstructions = PrimaryMap<OpcodeNumber, Instruction>;
+
+pub struct InstructionGroupBuilder<'format_reg, 'all_inst> {
     _name: &'static str,
     _doc: &'static str,
     format_registry: &'format_reg FormatRegistry,
-    instructions: Vec<Instruction>,
+    all_instructions: &'all_inst mut AllInstructions,
+    own_instructions: Vec<Instruction>,
 }
 
-impl<'format_reg> InstructionGroupBuilder<'format_reg> {
+impl<'format_reg, 'all_inst> InstructionGroupBuilder<'format_reg, 'all_inst> {
     pub fn new(
         name: &'static str,
         doc: &'static str,
+        all_instructions: &'all_inst mut AllInstructions,
         format_registry: &'format_reg FormatRegistry,
     ) -> Self {
         Self {
             _name: name,
             _doc: doc,
             format_registry,
-            instructions: Vec::new(),
+            all_instructions,
+            own_instructions: Vec::new(),
         }
     }
 
     pub fn push(&mut self, builder: InstructionBuilder) {
-        self.instructions.push(builder.build(self.format_registry));
+        let opcode_number = OpcodeNumber(self.all_instructions.next_key().as_u32());
+        let inst = builder.build(self.format_registry, opcode_number);
+        // Note this clone is cheap, since Instruction is a Rc<> wrapper for InstructionContent.
+        self.own_instructions.push(inst.clone());
+        self.all_instructions.push(inst);
     }
 
     pub fn build(self) -> InstructionGroup {
         InstructionGroup {
             _name: self._name,
             _doc: self._doc,
-            instructions: self.instructions,
+            instructions: self.own_instructions,
         }
     }
 }
@@ -78,6 +93,7 @@ pub struct InstructionContent {
     /// Instruction mnemonic, also becomes opcode name.
     pub name: String,
     pub camel_name: String,
+    pub opcode_number: OpcodeNumber,
 
     /// Documentation string.
     doc: String,
@@ -300,7 +316,7 @@ impl InstructionBuilder {
         self
     }
 
-    fn build(self, format_registry: &FormatRegistry) -> Instruction {
+    fn build(self, format_registry: &FormatRegistry, opcode_number: OpcodeNumber) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_else(Vec::new);
         let operands_out = self.operands_out.unwrap_or_else(Vec::new);
 
@@ -333,10 +349,12 @@ impl InstructionBuilder {
         let writes_cpu_flags = operands_out.iter().any(|op| op.is_cpu_flags());
 
         let camel_name = camel_case(&self.name);
+
         Instruction {
             content: Rc::new(InstructionContent {
                 name: self.name,
                 camel_name,
+                opcode_number,
                 doc: self.doc,
                 operands_in,
                 operands_out,

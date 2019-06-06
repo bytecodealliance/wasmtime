@@ -308,7 +308,9 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     hash_entries.extend(group.settings.iter().map(|x| SettingOrPreset::Setting(x)));
     hash_entries.extend(group.presets.iter().map(|x| SettingOrPreset::Preset(x)));
 
-    let hash_table = generate_table(&hash_entries, |entry| simple_hash(entry.name()));
+    let hash_table = generate_table(hash_entries.iter(), hash_entries.len(), |entry| {
+        simple_hash(entry.name())
+    });
     fmtln!(fmt, "static HASH_TABLE: [u16; {}] = [", hash_table.len());
     fmt.indent(|fmt| {
         for h in &hash_table {

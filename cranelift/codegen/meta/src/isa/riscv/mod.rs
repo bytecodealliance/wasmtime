@@ -89,6 +89,7 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let inst_group = InstructionGroupBuilder::new(
         "riscv",
         "riscv specific instruction set",
+        &mut shared_defs.all_instructions,
         &shared_defs.format_registry,
     )
     .build();
