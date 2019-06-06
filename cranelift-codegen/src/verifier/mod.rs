@@ -580,7 +580,7 @@ impl<'a> Verifier<'a> {
         }
 
         for &res in self.func.dfg.inst_results(inst) {
-            self.verify_inst_result(inst, res, errors).is_ok();
+            self.verify_inst_result(inst, res, errors)?;
         }
 
         match self.func.dfg[inst] {
@@ -1073,11 +1073,11 @@ impl<'a> Verifier<'a> {
         };
 
         // Typechecking instructions is never fatal
-        self.typecheck_results(inst, ctrl_type, errors).is_ok();
-        self.typecheck_fixed_args(inst, ctrl_type, errors).is_ok();
-        self.typecheck_variable_args(inst, errors).is_ok();
-        self.typecheck_return(inst, errors).is_ok();
-        self.typecheck_special(inst, ctrl_type, errors).is_ok();
+        let _ = self.typecheck_results(inst, ctrl_type, errors);
+        let _ = self.typecheck_fixed_args(inst, ctrl_type, errors);
+        let _ = self.typecheck_variable_args(inst, errors);
+        let _ = self.typecheck_return(inst, errors);
+        let _ = self.typecheck_special(inst, ctrl_type, errors);
 
         // Misuses of copy_nop instructions are fatal
         self.typecheck_copy_nop(inst, errors)?;
