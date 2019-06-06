@@ -41,7 +41,7 @@ fn legalize_inst(
     inst: ir::Inst,
     pos: &mut FuncCursor,
     cfg: &mut ControlFlowGraph,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) -> bool {
     let opcode = pos.func.dfg[inst].opcode();
 
@@ -83,7 +83,7 @@ fn legalize_inst(
 /// - Transform any instructions that don't have a legal representation in `isa`.
 /// - Fill out `func.encodings`.
 ///
-pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &TargetIsa) {
+pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &dyn TargetIsa) {
     let _tt = timing::legalize();
     debug_assert!(cfg.is_valid());
 
@@ -129,7 +129,7 @@ fn expand_cond_trap(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &TargetIsa,
+    _isa: &dyn TargetIsa,
 ) {
     // Parse the instruction.
     let trapz;
@@ -179,7 +179,7 @@ fn expand_br_table(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) {
     if isa.flags().jump_tables_enabled() {
         expand_br_table_jt(inst, func, cfg, isa);
@@ -193,7 +193,7 @@ fn expand_br_table_jt(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) {
     use crate::ir::condcodes::IntCC;
 
@@ -239,7 +239,7 @@ fn expand_br_table_conds(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &TargetIsa,
+    _isa: &dyn TargetIsa,
 ) {
     use crate::ir::condcodes::IntCC;
 
@@ -280,7 +280,7 @@ fn expand_select(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &TargetIsa,
+    _isa: &dyn TargetIsa,
 ) {
     let (ctrl, tval, fval) = match func.dfg[inst] {
         ir::InstructionData::Ternary {
@@ -315,7 +315,7 @@ fn expand_br_icmp(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &TargetIsa,
+    _isa: &dyn TargetIsa,
 ) {
     let (cond, a, b, destination, ebb_args) = match func.dfg[inst] {
         ir::InstructionData::BranchIcmp {
@@ -350,7 +350,7 @@ fn expand_fconst(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
-    _isa: &TargetIsa,
+    _isa: &dyn TargetIsa,
 ) {
     let ty = func.dfg.value_type(func.dfg.first_result(inst));
     debug_assert!(!ty.is_vector(), "Only scalar fconst supported: {}", ty);
@@ -378,7 +378,7 @@ fn expand_stack_load(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) {
     let ty = func.dfg.value_type(func.dfg.first_result(inst));
     let addr_ty = isa.pointer_type();
@@ -410,7 +410,7 @@ fn expand_stack_store(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) {
     let addr_ty = isa.pointer_type();
 

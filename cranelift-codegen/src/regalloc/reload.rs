@@ -65,7 +65,7 @@ impl Reload {
     /// Run the reload algorithm over `func`.
     pub fn run(
         &mut self,
-        isa: &TargetIsa,
+        isa: &dyn TargetIsa,
         func: &mut Function,
         domtree: &DominatorTree,
         liveness: &mut Liveness,
@@ -466,7 +466,7 @@ fn handle_abi_args(
     abi_types: &[AbiParam],
     var_args: &[Value],
     offset: usize,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     liveness: &Liveness,
 ) {
     debug_assert_eq!(abi_types.len(), var_args.len());

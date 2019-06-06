@@ -15,7 +15,7 @@ pub fn expand_table_addr(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
-    _isa: &TargetIsa,
+    _isa: &dyn TargetIsa,
 ) {
     // Unpack the instruction.
     let (table, index, element_offset) = match func.dfg[inst] {

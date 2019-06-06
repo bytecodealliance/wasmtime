@@ -27,7 +27,7 @@ use wasmparser::{
 /// Parses the Type section of the wasm module.
 pub fn parse_type_section(
     types: TypeSectionReader,
-    environ: &mut ModuleEnvironment,
+    environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
     environ.reserve_signatures(types.get_count());
 
@@ -60,7 +60,7 @@ pub fn parse_type_section(
 /// Parses the Import section of the wasm module.
 pub fn parse_import_section<'data>(
     imports: ImportSectionReader<'data>,
-    environ: &mut ModuleEnvironment<'data>,
+    environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
     environ.reserve_imports(imports.get_count());
 
@@ -122,7 +122,7 @@ pub fn parse_import_section<'data>(
 /// Parses the Function section of the wasm module.
 pub fn parse_function_section(
     functions: FunctionSectionReader,
-    environ: &mut ModuleEnvironment,
+    environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
     environ.reserve_func_types(functions.get_count());
 
@@ -137,7 +137,7 @@ pub fn parse_function_section(
 /// Parses the Table section of the wasm module.
 pub fn parse_table_section(
     tables: TableSectionReader,
-    environ: &mut ModuleEnvironment,
+    environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
     environ.reserve_tables(tables.get_count());
 
@@ -159,7 +159,7 @@ pub fn parse_table_section(
 /// Parses the Memory section of the wasm module.
 pub fn parse_memory_section(
     memories: MemorySectionReader,
-    environ: &mut ModuleEnvironment,
+    environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
     environ.reserve_memories(memories.get_count());
 
@@ -178,7 +178,7 @@ pub fn parse_memory_section(
 /// Parses the Global section of the wasm module.
 pub fn parse_global_section(
     globals: GlobalSectionReader,
-    environ: &mut ModuleEnvironment,
+    environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
     environ.reserve_globals(globals.get_count());
 
@@ -215,7 +215,7 @@ pub fn parse_global_section(
 /// Parses the Export section of the wasm module.
 pub fn parse_export_section<'data>(
     exports: ExportSectionReader<'data>,
-    environ: &mut ModuleEnvironment<'data>,
+    environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
     environ.reserve_exports(exports.get_count());
 
@@ -243,7 +243,7 @@ pub fn parse_export_section<'data>(
 }
 
 /// Parses the Start section of the wasm module.
-pub fn parse_start_section(index: u32, environ: &mut ModuleEnvironment) -> WasmResult<()> {
+pub fn parse_start_section(index: u32, environ: &mut dyn ModuleEnvironment) -> WasmResult<()> {
     environ.declare_start_func(FuncIndex::from_u32(index));
     Ok(())
 }
@@ -251,7 +251,7 @@ pub fn parse_start_section(index: u32, environ: &mut ModuleEnvironment) -> WasmR
 /// Parses the Element section of the wasm module.
 pub fn parse_element_section<'data>(
     elements: ElementSectionReader<'data>,
-    environ: &mut ModuleEnvironment,
+    environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
     environ.reserve_table_elements(elements.get_count());
 
@@ -292,7 +292,7 @@ pub fn parse_element_section<'data>(
 /// Parses the Code section of the wasm module.
 pub fn parse_code_section<'data>(
     code: CodeSectionReader<'data>,
-    environ: &mut ModuleEnvironment<'data>,
+    environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
     for body in code {
         let mut reader = body?.get_binary_reader();
@@ -306,7 +306,7 @@ pub fn parse_code_section<'data>(
 /// Parses the Data section of the wasm module.
 pub fn parse_data_section<'data>(
     data: DataSectionReader<'data>,
-    environ: &mut ModuleEnvironment<'data>,
+    environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
     environ.reserve_data_initializers(data.get_count());
 

@@ -37,7 +37,7 @@ use cranelift_codegen::{isa::TargetIsa, settings::FlagsOrIsa, CodegenResult, Con
 /// Since this can be resource intensive (and code-size inflating),
 /// it is separated from `Context::compile` to allow DCE to remove it
 /// if it's not used.
-pub fn optimize(ctx: &mut Context, isa: &TargetIsa) -> CodegenResult<()> {
+pub fn optimize(ctx: &mut Context, isa: &dyn TargetIsa) -> CodegenResult<()> {
     ctx.verify_if(isa)?;
     fold_constants(ctx, isa)?;
 

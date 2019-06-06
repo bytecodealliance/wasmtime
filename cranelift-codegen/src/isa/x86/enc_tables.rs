@@ -115,7 +115,7 @@ fn expand_sdivrem(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    isa: &isa::TargetIsa,
+    isa: &dyn isa::TargetIsa,
 ) {
     let (x, y, is_srem) = match func.dfg[inst] {
         ir::InstructionData::Binary {
@@ -225,7 +225,7 @@ fn expand_udivrem(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
-    isa: &isa::TargetIsa,
+    isa: &dyn isa::TargetIsa,
 ) {
     let (x, y, is_urem) = match func.dfg[inst] {
         ir::InstructionData::Binary {
@@ -278,7 +278,7 @@ fn expand_minmax(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &isa::TargetIsa,
+    _isa: &dyn isa::TargetIsa,
 ) {
     let (x, y, x86_opc, bitwise_opc) = match func.dfg[inst] {
         ir::InstructionData::Binary {
@@ -370,7 +370,7 @@ fn expand_fcvt_from_uint(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &isa::TargetIsa,
+    _isa: &dyn isa::TargetIsa,
 ) {
     let x;
     match func.dfg[inst] {
@@ -441,7 +441,7 @@ fn expand_fcvt_to_sint(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &isa::TargetIsa,
+    _isa: &dyn isa::TargetIsa,
 ) {
     use crate::ir::immediates::{Ieee32, Ieee64};
 
@@ -536,7 +536,7 @@ fn expand_fcvt_to_sint_sat(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &isa::TargetIsa,
+    _isa: &dyn isa::TargetIsa,
 ) {
     use crate::ir::immediates::{Ieee32, Ieee64};
 
@@ -655,7 +655,7 @@ fn expand_fcvt_to_uint(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &isa::TargetIsa,
+    _isa: &dyn isa::TargetIsa,
 ) {
     use crate::ir::immediates::{Ieee32, Ieee64};
 
@@ -736,7 +736,7 @@ fn expand_fcvt_to_uint_sat(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &isa::TargetIsa,
+    _isa: &dyn isa::TargetIsa,
 ) {
     use crate::ir::immediates::{Ieee32, Ieee64};
 

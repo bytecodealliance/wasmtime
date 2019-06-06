@@ -27,10 +27,10 @@ pub enum FaerieTrapCollection {
 
 /// A builder for `FaerieBackend`.
 pub struct FaerieBuilder {
-    isa: Box<TargetIsa>,
+    isa: Box<dyn TargetIsa>,
     name: String,
     collect_traps: FaerieTrapCollection,
-    libcall_names: Box<Fn(ir::LibCall) -> String>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
 }
 
 impl FaerieBuilder {
@@ -48,10 +48,10 @@ impl FaerieBuilder {
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
     pub fn new(
-        isa: Box<TargetIsa>,
+        isa: Box<dyn TargetIsa>,
         name: String,
         collect_traps: FaerieTrapCollection,
-        libcall_names: Box<Fn(ir::LibCall) -> String>,
+        libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     ) -> ModuleResult<Self> {
         if !isa.flags().is_pic() {
             return Err(ModuleError::Backend(
@@ -71,10 +71,10 @@ impl FaerieBuilder {
 ///
 /// See the `FaerieBuilder` for a convenient way to construct `FaerieBackend` instances.
 pub struct FaerieBackend {
-    isa: Box<TargetIsa>,
+    isa: Box<dyn TargetIsa>,
     artifact: faerie::Artifact,
     trap_manifest: Option<FaerieTrapManifest>,
-    libcall_names: Box<Fn(ir::LibCall) -> String>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
 }
 
 pub struct FaerieCompiledFunction {
@@ -117,7 +117,7 @@ impl Backend for FaerieBackend {
         }
     }
 
-    fn isa(&self) -> &TargetIsa {
+    fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
 
@@ -361,7 +361,7 @@ struct FaerieRelocSink<'a> {
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
     namespace: &'a ModuleNamespace<'a, FaerieBackend>,
-    libcall_names: &'a Fn(ir::LibCall) -> String,
+    libcall_names: &'a dyn Fn(ir::LibCall) -> String,
 }
 
 impl<'a> RelocSink for FaerieRelocSink<'a> {

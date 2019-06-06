@@ -141,13 +141,13 @@ pub enum LookupError {
 pub struct Builder {
     triple: Triple,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, settings::Builder) -> Box<TargetIsa>,
+    constructor: fn(Triple, settings::Flags, settings::Builder) -> Box<dyn TargetIsa>,
 }
 
 impl Builder {
     /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
     /// fully configured `TargetIsa` trait object.
-    pub fn finish(self, shared_flags: settings::Flags) -> Box<TargetIsa> {
+    pub fn finish(self, shared_flags: settings::Flags) -> Box<dyn TargetIsa> {
         (self.constructor)(self.triple, shared_flags, self.setup)
     }
 }
@@ -167,7 +167,7 @@ impl settings::Configurable for Builder {
 ///
 /// The `Encodings` iterator returns a legalization function to call.
 pub type Legalize =
-    fn(ir::Inst, &mut ir::Function, &mut flowgraph::ControlFlowGraph, &TargetIsa) -> bool;
+    fn(ir::Inst, &mut ir::Function, &mut flowgraph::ControlFlowGraph, &dyn TargetIsa) -> bool;
 
 /// This struct provides information that a frontend may need to know about a target to
 /// produce Cranelift IR for the target.
@@ -367,7 +367,7 @@ pub trait TargetIsa: fmt::Display + Sync {
         func: &ir::Function,
         inst: ir::Inst,
         divert: &mut regalloc::RegDiversions,
-        sink: &mut binemit::CodeSink,
+        sink: &mut dyn binemit::CodeSink,
     );
 
     /// Emit a whole function into memory.

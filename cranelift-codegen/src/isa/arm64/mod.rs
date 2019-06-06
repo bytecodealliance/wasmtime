@@ -39,7 +39,7 @@ fn isa_constructor(
     triple: Triple,
     shared_flags: shared_settings::Flags,
     builder: shared_settings::Builder,
-) -> Box<TargetIsa> {
+) -> Box<dyn TargetIsa> {
     Box::new(Isa {
         triple,
         isa_flags: settings::Flags::new(&shared_flags, builder),
@@ -106,7 +106,7 @@ impl TargetIsa for Isa {
         func: &ir::Function,
         inst: ir::Inst,
         divert: &mut regalloc::RegDiversions,
-        sink: &mut CodeSink,
+        sink: &mut dyn CodeSink,
     ) {
         binemit::emit_inst(func, inst, divert, sink)
     }

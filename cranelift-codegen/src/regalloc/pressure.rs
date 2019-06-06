@@ -281,7 +281,7 @@ mod tests {
     use target_lexicon::triple;
 
     // Make an arm32 `TargetIsa`, if possible.
-    fn arm32() -> Option<Box<TargetIsa>> {
+    fn arm32() -> Option<Box<dyn TargetIsa>> {
         use crate::isa;
         use crate::settings;
 
@@ -294,7 +294,7 @@ mod tests {
     }
 
     // Get a register class by name.
-    fn rc_by_name(isa: &TargetIsa, name: &str) -> RegClass {
+    fn rc_by_name(isa: &dyn TargetIsa, name: &str) -> RegClass {
         isa.register_info()
             .classes
             .iter()

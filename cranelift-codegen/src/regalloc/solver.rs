@@ -406,7 +406,7 @@ impl fmt::Display for Move {
 
 impl fmt::Debug for Move {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let as_display: &fmt::Display = self;
+        let as_display: &dyn fmt::Display = self;
         as_display.fmt(f)
     }
 }
@@ -1139,7 +1139,7 @@ mod tests {
     use target_lexicon::triple;
 
     // Make an arm32 `TargetIsa`, if possible.
-    fn arm32() -> Option<Box<TargetIsa>> {
+    fn arm32() -> Option<Box<dyn TargetIsa>> {
         use crate::isa;
         use crate::settings;
 

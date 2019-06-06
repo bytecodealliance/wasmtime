@@ -238,7 +238,7 @@ impl fmt::Display for AnyEntity {
 
 impl fmt::Debug for AnyEntity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        (self as &fmt::Display).fmt(f)
+        (self as &dyn fmt::Display).fmt(f)
     }
 }
 

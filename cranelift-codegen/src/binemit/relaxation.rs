@@ -40,7 +40,7 @@ use log::debug;
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
 /// Fill in the `func.offsets` table so the function is ready for binary emission.
-pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<CodeInfo> {
+pub fn relax_branches(func: &mut Function, isa: &dyn TargetIsa) -> CodegenResult<CodeInfo> {
     let _tt = timing::relax_branches();
 
     let encinfo = isa.encoding_info();
@@ -174,7 +174,7 @@ fn relax_branch(
     offset: CodeOffset,
     dest_offset: CodeOffset,
     encinfo: &EncInfo,
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
 ) -> CodeOffset {
     let inst = cur.current_inst().unwrap();
     debug!(

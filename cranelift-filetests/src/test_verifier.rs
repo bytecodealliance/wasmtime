@@ -19,7 +19,7 @@ use std::fmt::Write;
 
 struct TestVerifier;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "verifier");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))

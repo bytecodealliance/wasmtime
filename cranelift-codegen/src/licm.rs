@@ -17,7 +17,7 @@ use std::vec::Vec;
 /// loop-invariant instructions out of them.
 /// Changes the CFG and domtree in-place during the operation.
 pub fn do_licm(
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
     domtree: &mut DominatorTree,
@@ -64,7 +64,7 @@ pub fn do_licm(
 // Insert a pre-header before the header, modifying the function layout and CFG to reflect it.
 // A jump instruction to the header is placed at the end of the pre-header.
 fn create_pre_header(
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     header: Ebb,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,

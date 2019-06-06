@@ -49,7 +49,7 @@ impl<F: Forest> Path<F> {
         key: F::Key,
         root: Node,
         pool: &NodePool<F>,
-        comp: &Comparator<F::Key>,
+        comp: &dyn Comparator<F::Key>,
     ) -> Option<F::Value> {
         let mut node = root;
         for level in 0.. {

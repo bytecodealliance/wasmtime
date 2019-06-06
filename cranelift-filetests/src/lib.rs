@@ -110,7 +110,7 @@ pub fn run_passes(
 ///
 /// This function knows how to create all of the possible `test <foo>` commands that can appear in
 /// a `.clif` test file.
-fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<subtest::SubTest>> {
+fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::SubTest>> {
     match parsed.command {
         "binemit" => test_binemit::subtest(parsed),
         "cat" => test_cat::subtest(parsed),

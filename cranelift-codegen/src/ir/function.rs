@@ -155,7 +155,10 @@ impl Function {
     }
 
     /// Return an object that can display this function with correct ISA-specific annotations.
-    pub fn display<'a, I: Into<Option<&'a TargetIsa>>>(&'a self, isa: I) -> DisplayFunction<'a> {
+    pub fn display<'a, I: Into<Option<&'a dyn TargetIsa>>>(
+        &'a self,
+        isa: I,
+    ) -> DisplayFunction<'a> {
         DisplayFunction(self, isa.into().into())
     }
 
@@ -202,13 +205,13 @@ impl Function {
     }
 
     /// Wrapper around `encode` which assigns `inst` the resulting encoding.
-    pub fn update_encoding(&mut self, inst: ir::Inst, isa: &TargetIsa) -> Result<(), Legalize> {
+    pub fn update_encoding(&mut self, inst: ir::Inst, isa: &dyn TargetIsa) -> Result<(), Legalize> {
         self.encode(inst, isa).map(|e| self.encodings[inst] = e)
     }
 
     /// Wrapper around `TargetIsa::encode` for encoding an existing instruction
     /// in the `Function`.
-    pub fn encode(&self, inst: ir::Inst, isa: &TargetIsa) -> Result<Encoding, Legalize> {
+    pub fn encode(&self, inst: ir::Inst, isa: &dyn TargetIsa) -> Result<Encoding, Legalize> {
         isa.encode(&self, &self.dfg[inst], self.dfg.ctrl_typevar(inst))
     }
 
@@ -221,7 +224,7 @@ impl Function {
 /// Additional annotations for function display.
 pub struct DisplayFunctionAnnotations<'a> {
     /// Enable ISA annotations.
-    pub isa: Option<&'a TargetIsa>,
+    pub isa: Option<&'a dyn TargetIsa>,
 
     /// Enable value labels annotations.
     pub value_ranges: Option<&'a ValueLabelsRanges>,
@@ -237,8 +240,8 @@ impl<'a> DisplayFunctionAnnotations<'a> {
     }
 }
 
-impl<'a> From<Option<&'a TargetIsa>> for DisplayFunctionAnnotations<'a> {
-    fn from(isa: Option<&'a TargetIsa>) -> DisplayFunctionAnnotations {
+impl<'a> From<Option<&'a dyn TargetIsa>> for DisplayFunctionAnnotations<'a> {
+    fn from(isa: Option<&'a dyn TargetIsa>) -> DisplayFunctionAnnotations {
         DisplayFunctionAnnotations {
             isa,
             value_ranges: None,

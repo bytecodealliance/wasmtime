@@ -35,7 +35,7 @@ use std::vec::Vec;
 /// This changes all signatures to be ABI-compliant with full `ArgumentLoc` annotations. It doesn't
 /// change the entry block arguments, calls, or return instructions, so this can leave the function
 /// in a state with type discrepancies.
-pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
+pub fn legalize_signatures(func: &mut Function, isa: &dyn TargetIsa) {
     legalize_signature(&mut func.signature, true, isa);
     for sig_data in func.dfg.signatures.values_mut() {
         legalize_signature(sig_data, false, isa);
@@ -49,14 +49,14 @@ pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
 
 /// Legalize the libcall signature, which we may generate on the fly after
 /// `legalize_signatures` has been called.
-pub fn legalize_libcall_signature(signature: &mut Signature, isa: &TargetIsa) {
+pub fn legalize_libcall_signature(signature: &mut Signature, isa: &dyn TargetIsa) {
     legalize_signature(signature, false, isa);
 }
 
 /// Legalize the given signature.
 ///
 /// `current` is true if this is the signature for the current function.
-fn legalize_signature(signature: &mut Signature, current: bool, isa: &TargetIsa) {
+fn legalize_signature(signature: &mut Signature, current: bool, isa: &dyn TargetIsa) {
     isa.legalize_signature(signature, current);
 }
 

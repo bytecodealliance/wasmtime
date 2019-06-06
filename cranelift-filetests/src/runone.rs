@@ -102,10 +102,10 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
 
 // Given a slice of tests, generate a vector of (test, flags, isa) tuples.
 fn test_tuples<'a>(
-    tests: &'a [Box<SubTest>],
+    tests: &'a [Box<dyn SubTest>],
     isa_spec: &'a IsaSpec,
     no_isa_flags: &'a Flags,
-) -> SubtestResult<Vec<(&'a SubTest, &'a Flags, Option<&'a TargetIsa>)>> {
+) -> SubtestResult<Vec<(&'a dyn SubTest, &'a Flags, Option<&'a dyn TargetIsa>)>> {
     let mut out = Vec::new();
     for test in tests {
         if test.needs_isa() {
@@ -131,7 +131,7 @@ fn test_tuples<'a>(
 }
 
 fn run_one_test<'a>(
-    tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
+    tuple: (&'a dyn SubTest, &'a Flags, Option<&'a dyn TargetIsa>),
     func: Cow<Function>,
     context: &mut Context<'a>,
 ) -> SubtestResult<()> {

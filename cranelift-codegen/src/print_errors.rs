@@ -17,8 +17,8 @@ use std::vec::Vec;
 /// Pretty-print a verifier error.
 pub fn pretty_verifier_error<'a>(
     func: &ir::Function,
-    isa: Option<&TargetIsa>,
-    func_w: Option<Box<FuncWriter + 'a>>,
+    isa: Option<&dyn TargetIsa>,
+    func_w: Option<Box<dyn FuncWriter + 'a>>,
     errors: VerifierErrors,
 ) -> String {
     let mut errors = errors.0;
@@ -44,14 +44,14 @@ pub fn pretty_verifier_error<'a>(
     w
 }
 
-struct PrettyVerifierError<'a>(Box<FuncWriter + 'a>, &'a mut Vec<VerifierError>);
+struct PrettyVerifierError<'a>(Box<dyn FuncWriter + 'a>, &'a mut Vec<VerifierError>);
 
 impl<'a> FuncWriter for PrettyVerifierError<'a> {
     fn write_ebb_header(
         &mut self,
-        w: &mut Write,
+        w: &mut dyn Write,
         func: &Function,
-        isa: Option<&TargetIsa>,
+        isa: Option<&dyn TargetIsa>,
         ebb: Ebb,
         indent: usize,
     ) -> fmt::Result {
@@ -60,10 +60,10 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
 
     fn write_instruction(
         &mut self,
-        w: &mut Write,
+        w: &mut dyn Write,
         func: &Function,
         aliases: &SecondaryMap<Value, Vec<Value>>,
-        isa: Option<&TargetIsa>,
+        isa: Option<&dyn TargetIsa>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
@@ -72,10 +72,10 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
 
     fn write_entity_definition(
         &mut self,
-        w: &mut Write,
+        w: &mut dyn Write,
         func: &Function,
         entity: AnyEntity,
-        value: &fmt::Display,
+        value: &dyn fmt::Display,
     ) -> fmt::Result {
         pretty_preamble_error(w, func, entity, value, &mut *self.0, self.1)
     }
@@ -83,12 +83,12 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
 
 /// Pretty-print a function verifier error for a given EBB.
 fn pretty_ebb_header_error(
-    w: &mut Write,
+    w: &mut dyn Write,
     func: &Function,
-    isa: Option<&TargetIsa>,
+    isa: Option<&dyn TargetIsa>,
     cur_ebb: Ebb,
     indent: usize,
-    func_w: &mut FuncWriter,
+    func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
@@ -121,13 +121,13 @@ fn pretty_ebb_header_error(
 
 /// Pretty-print a function verifier error for a given instruction.
 fn pretty_instruction_error(
-    w: &mut Write,
+    w: &mut dyn Write,
     func: &Function,
     aliases: &SecondaryMap<Value, Vec<Value>>,
-    isa: Option<&TargetIsa>,
+    isa: Option<&dyn TargetIsa>,
     cur_inst: Inst,
     indent: usize,
-    func_w: &mut FuncWriter,
+    func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
@@ -159,11 +159,11 @@ fn pretty_instruction_error(
 }
 
 fn pretty_preamble_error(
-    w: &mut Write,
+    w: &mut dyn Write,
     func: &Function,
     entity: AnyEntity,
-    value: &fmt::Display,
-    func_w: &mut FuncWriter,
+    value: &dyn fmt::Display,
+    func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
@@ -195,7 +195,7 @@ fn pretty_preamble_error(
 
 /// Prints:
 ///    ;   ^~~~~~
-fn print_arrow(w: &mut Write, entity: &str) -> fmt::Result {
+fn print_arrow(w: &mut dyn Write, entity: &str) -> fmt::Result {
     write!(w, ";")?;
 
     let indent = entity.len() - entity.trim_start().len();
@@ -212,13 +212,13 @@ fn print_arrow(w: &mut Write, entity: &str) -> fmt::Result {
 
 /// Prints:
 ///    ; error: [ERROR BODY]
-fn print_error(w: &mut Write, err: VerifierError) -> fmt::Result {
+fn print_error(w: &mut dyn Write, err: VerifierError) -> fmt::Result {
     writeln!(w, "; error: {}", err.to_string())?;
     Ok(())
 }
 
 /// Pretty-print a Cranelift error.
-pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CodegenError) -> String {
+pub fn pretty_error(func: &ir::Function, isa: Option<&dyn TargetIsa>, err: CodegenError) -> String {
     if let CodegenError::Verifier(e) = err {
         pretty_verifier_error(func, isa, None, e)
     } else {

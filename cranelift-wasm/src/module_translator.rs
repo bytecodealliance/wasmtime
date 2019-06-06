@@ -13,7 +13,7 @@ use wasmparser::{ModuleReader, SectionCode};
 /// [`Function`](../codegen/ir/function/struct.Function.html).
 pub fn translate_module<'data>(
     data: &'data [u8],
-    environ: &mut ModuleEnvironment<'data>,
+    environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
     let _tt = timing::wasm_translate_module();
     let mut reader = ModuleReader::new(data)?;
