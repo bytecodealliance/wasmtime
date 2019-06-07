@@ -1,12 +1,11 @@
 #![allow(non_camel_case_types)]
 use crate::ctx::WasiCtx;
 use crate::memory::*;
+use crate::sys::hostcalls_impl;
 use crate::wasm32;
 use std::convert::TryFrom;
 
 use wasi_common_cbindgen::wasi_common_cbindgen;
-
-pub use crate::sys::hostcalls::*;
 
 #[wasi_common_cbindgen]
 pub fn args_get(
@@ -40,7 +39,7 @@ pub fn args_get(
 
     enc_slice_of(memory, argv.as_slice(), argv_ptr)
         .map(|_| wasm32::__WASI_ESUCCESS)
-        .unwrap_or_else(|e| e)
+        .unwrap_or_else(enc_errno)
 }
 
 #[wasi_common_cbindgen]
@@ -98,7 +97,7 @@ pub fn environ_get(
 
     enc_slice_of(memory, environ.as_slice(), environ_ptr)
         .map(|_| wasm32::__WASI_ESUCCESS)
-        .unwrap_or_else(|e| e)
+        .unwrap_or_else(enc_errno)
 }
 
 #[wasi_common_cbindgen]
@@ -156,4 +155,85 @@ pub fn random_get(
     thread_rng().fill_bytes(buf);
 
     return wasm32::__WASI_ESUCCESS;
+}
+
+#[wasi_common_cbindgen]
+pub fn clock_res_get(
+    memory: &mut [u8],
+    clock_id: wasm32::__wasi_clockid_t,
+    resolution_ptr: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    let clock_id = dec_clockid(clock_id);
+    let resolution = match hostcalls_impl::clock_res_get(clock_id) {
+        Ok(resolution) => resolution,
+        Err(e) => return enc_errno(e),
+    };
+
+    enc_timestamp_byref(memory, resolution_ptr, resolution)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(enc_errno)
+}
+
+#[wasi_common_cbindgen]
+pub fn clock_time_get(
+    memory: &mut [u8],
+    clock_id: wasm32::__wasi_clockid_t,
+    // ignored for now, but will be useful once we put optional limits on precision to reduce side
+    // channels
+    _precision: wasm32::__wasi_timestamp_t,
+    time_ptr: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    let clock_id = dec_clockid(clock_id);
+    let time = match hostcalls_impl::clock_time_get(clock_id) {
+        Ok(time) => time,
+        Err(e) => return enc_errno(e),
+    };
+
+    enc_timestamp_byref(memory, time_ptr, time)
+        .map(|_| wasm32::__WASI_ESUCCESS)
+        .unwrap_or_else(enc_errno)
+}
+
+#[wasi_common_cbindgen]
+pub fn poll_oneoff(
+    memory: &mut [u8],
+    input: wasm32::uintptr_t,
+    output: wasm32::uintptr_t,
+    nsubscriptions: wasm32::size_t,
+    nevents: wasm32::uintptr_t,
+) -> wasm32::__wasi_errno_t {
+    if nsubscriptions as u64 > wasm32::__wasi_filesize_t::max_value() {
+        return wasm32::__WASI_EINVAL;
+    }
+    if let Err(e) = enc_pointee(memory, nevents, 0) {
+        return enc_errno(e);
+    }
+    let input_slice =
+        match dec_slice_of::<wasm32::__wasi_subscription_t>(memory, input, nsubscriptions) {
+            Ok(input_slice) => input_slice,
+            Err(e) => return enc_errno(e),
+        };
+    let input: Vec<_> = input_slice.iter().map(dec_subscription).collect();
+    let output_slice =
+        match dec_slice_of_mut::<wasm32::__wasi_event_t>(memory, output, nsubscriptions) {
+            Ok(output_slice) => output_slice,
+            Err(e) => return enc_errno(e),
+        };
+    let events_count = match hostcalls_impl::poll_oneoff(input, output_slice) {
+        Ok(events_count) => events_count,
+        Err(e) => return enc_errno(e),
+    };
+
+    match enc_pointee(memory, nevents, events_count) {
+        Ok(()) => wasm32::__WASI_ESUCCESS,
+        Err(e) => enc_errno(e),
+    }
+}
+
+#[wasi_common_cbindgen]
+pub fn sched_yield() -> wasm32::__wasi_errno_t {
+    match hostcalls_impl::sched_yield() {
+        Ok(()) => wasm32::__WASI_ESUCCESS,
+        Err(e) => enc_errno(e),
+    }
 }

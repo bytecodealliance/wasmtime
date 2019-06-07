@@ -6,6 +6,9 @@ use crate::host;
 use crate::memory;
 use crate::wasm32;
 
+use std::ffi::{OsStr, OsString};
+use std::os::unix::prelude::OsStrExt;
+
 pub fn errno_from_nix(errno: nix::errno::Errno) -> host::__wasi_errno_t {
     match errno {
         nix::errno::Errno::EPERM => host::__WASI_EPERM,
@@ -271,4 +274,12 @@ pub fn dirent_from_host(
     entry.d_namlen = memory::enc_u32(u32::from(host_entry.d_namlen));
     entry.d_type = memory::enc_filetype(host_entry.d_type);
     Ok(entry)
+}
+
+pub fn path_from_raw(raw_path: &[u8]) -> OsString {
+    OsStr::from_bytes(raw_path).to_owned()
+}
+
+pub fn path_to_raw<P: AsRef<OsStr>>(path: P) -> Vec<u8> {
+    path.as_ref().as_bytes().to_vec()
 }

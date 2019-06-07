@@ -1,12 +1,12 @@
-pub mod fdentry;
-mod host_impl;
-pub mod hostcalls;
+pub(crate) mod fdentry;
+pub(crate) mod host_impl;
+pub(crate) mod hostcalls_impl;
 
 use std::fs::File;
 use std::io;
 use std::path::Path;
 
-pub fn dev_null() -> File {
+pub(crate) fn dev_null() -> File {
     File::open("NUL").expect("failed to open NUL")
 }
 

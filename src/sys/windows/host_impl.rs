@@ -4,7 +4,9 @@
 #![allow(unused)]
 use crate::host;
 
+use std::ffi::{OsStr, OsString};
 use std::marker::PhantomData;
+use std::os::windows::prelude::{OsStrExt, OsStringExt};
 use std::slice;
 use winapi::shared::{ntdef, ws2def};
 
@@ -81,4 +83,18 @@ pub unsafe fn iovec_to_win<'a>(iovec: &'a host::__wasi_iovec_t) -> IoVec<'a> {
 pub unsafe fn iovec_to_win_mut<'a>(iovec: &'a mut host::__wasi_iovec_t) -> IoVecMut<'a> {
     let slice = slice::from_raw_parts_mut(iovec.buf as *mut u8, iovec.buf_len);
     IoVecMut::new(slice)
+}
+
+pub fn path_from_raw(raw_path: &[u8]) -> OsString {
+    OsString::from_wide(&raw_path.iter().map(|&x| x as u16).collect::<Vec<u16>>())
+}
+
+pub fn path_to_raw<P: AsRef<OsStr>>(path: P) -> Vec<u8> {
+    path.as_ref()
+        .encode_wide()
+        .map(u16::to_le_bytes)
+        .fold(Vec::new(), |mut acc, bytes| {
+            acc.extend_from_slice(&bytes);
+            acc
+        })
 }
