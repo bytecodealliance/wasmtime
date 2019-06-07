@@ -533,7 +533,15 @@ impl RelocSink for SimpleJITRelocSink {
         });
     }
 
-    fn reloc_jt(&mut self, _offset: CodeOffset, _reloc: Reloc, _jt: ir::JumpTable) {
-        unimplemented!();
+    fn reloc_jt(&mut self, _offset: CodeOffset, reloc: Reloc, _jt: ir::JumpTable) {
+        match reloc {
+            Reloc::X86PCRelRodata4 => {
+                // Not necessary to record this unless we are going to split apart code and its
+                // jumptbl/rodata.
+            }
+            _ => {
+                panic!("Unhandled reloc");
+            }
+        }
     }
 }
