@@ -1,8 +1,8 @@
 use crate::module::{MemoryPlan, MemoryStyle, Module, TableStyle};
 use crate::vmoffsets::VMOffsets;
 use crate::WASM_PAGE_SIZE;
-use cast;
 use core::clone::Clone;
+use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
@@ -353,8 +353,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_table_index(index) {
                 let base_offset =
-                    cast::i32(self.offsets.vmctx_vmtable_definition_base(def_index)).unwrap();
-                let current_elements_offset = cast::i32(
+                    i32::try_from(self.offsets.vmctx_vmtable_definition_base(def_index)).unwrap();
+                let current_elements_offset = i32::try_from(
                     self.offsets
                         .vmctx_vmtable_definition_current_elements(def_index),
                 )
@@ -364,7 +364,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let from_offset = self.offsets.vmctx_vmtable_import_from(index);
                 let table = func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
-                    offset: Offset32::new(cast::i32(from_offset).unwrap()),
+                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
                     readonly: true,
                 });
@@ -410,8 +410,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
                 let base_offset =
-                    cast::i32(self.offsets.vmctx_vmmemory_definition_base(def_index)).unwrap();
-                let current_length_offset = cast::i32(
+                    i32::try_from(self.offsets.vmctx_vmmemory_definition_base(def_index)).unwrap();
+                let current_length_offset = i32::try_from(
                     self.offsets
                         .vmctx_vmmemory_definition_current_length(def_index),
                 )
@@ -421,7 +421,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
                 let memory = func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
-                    offset: Offset32::new(cast::i32(from_offset).unwrap()),
+                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
                     readonly: true,
                 });
@@ -488,13 +488,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let (ptr, offset) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_global_index(index) {
-                let offset = cast::i32(self.offsets.vmctx_vmglobal_definition(def_index)).unwrap();
+                let offset =
+                    i32::try_from(self.offsets.vmctx_vmglobal_definition(def_index)).unwrap();
                 (vmctx, offset)
             } else {
                 let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
                 let global = func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
-                    offset: Offset32::new(cast::i32(from_offset).unwrap()),
+                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
                     readonly: true,
                 });
@@ -548,7 +549,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let vmctx = self.vmctx(pos.func);
                 let base = pos.ins().global_value(pointer_type, vmctx);
                 let offset =
-                    cast::i32(self.offsets.vmctx_vmshared_signature_id(sig_index)).unwrap();
+                    i32::try_from(self.offsets.vmctx_vmshared_signature_id(sig_index)).unwrap();
 
                 // Load the caller ID.
                 let mut mem_flags = ir::MemFlags::trusted();
@@ -627,12 +628,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // Load the callee address.
         let body_offset =
-            cast::i32(self.offsets.vmctx_vmfunction_import_body(callee_index)).unwrap();
+            i32::try_from(self.offsets.vmctx_vmfunction_import_body(callee_index)).unwrap();
         let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
 
         // First append the callee vmctx address.
         let vmctx_offset =
-            cast::i32(self.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
+            i32::try_from(self.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
         let vmctx = pos.ins().load(pointer_type, mem_flags, base, vmctx_offset);
         real_call_args.push(vmctx);
 

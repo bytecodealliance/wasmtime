@@ -1,6 +1,7 @@
 use crate::func_environ::FuncEnvironment;
 use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
 use crate::tunables::Tunables;
+use core::convert::TryFrom;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
@@ -93,7 +94,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result
             .module
             .signatures
-            .reserve_exact(cast::usize(num));
+            .reserve_exact(usize::try_from(num).unwrap());
     }
 
     fn declare_signature(&mut self, sig: ir::Signature) {
@@ -168,10 +169,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn reserve_func_types(&mut self, num: u32) {
-        self.result.module.functions.reserve_exact(cast::usize(num));
+        self.result
+            .module
+            .functions
+            .reserve_exact(usize::try_from(num).unwrap());
         self.result
             .function_body_inputs
-            .reserve_exact(cast::usize(num));
+            .reserve_exact(usize::try_from(num).unwrap());
     }
 
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {
@@ -182,7 +186,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result
             .module
             .table_plans
-            .reserve_exact(cast::usize(num));
+            .reserve_exact(usize::try_from(num).unwrap());
     }
 
     fn declare_table(&mut self, table: Table) {
@@ -194,7 +198,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result
             .module
             .memory_plans
-            .reserve_exact(cast::usize(num));
+            .reserve_exact(usize::try_from(num).unwrap());
     }
 
     fn declare_memory(&mut self, memory: Memory) {
@@ -203,7 +207,10 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn reserve_globals(&mut self, num: u32) {
-        self.result.module.globals.reserve_exact(cast::usize(num));
+        self.result
+            .module
+            .globals
+            .reserve_exact(usize::try_from(num).unwrap());
     }
 
     fn declare_global(&mut self, global: Global) {
@@ -211,7 +218,10 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn reserve_exports(&mut self, num: u32) {
-        self.result.module.exports.reserve(cast::usize(num));
+        self.result
+            .module
+            .exports
+            .reserve(usize::try_from(num).unwrap());
     }
 
     fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) {
@@ -251,7 +261,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result
             .module
             .table_elements
-            .reserve_exact(cast::usize(num));
+            .reserve_exact(usize::try_from(num).unwrap());
     }
 
     fn declare_table_elements(
@@ -284,7 +294,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn reserve_data_initializers(&mut self, num: u32) {
         self.result
             .data_initializers
-            .reserve_exact(cast::usize(num));
+            .reserve_exact(usize::try_from(num).unwrap());
     }
 
     fn declare_data_initialization(

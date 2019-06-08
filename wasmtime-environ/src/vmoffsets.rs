@@ -2,7 +2,7 @@
 //! module.
 
 use crate::module::Module;
-use cast;
+use core::convert::TryFrom;
 use cranelift_codegen::ir;
 use cranelift_wasm::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
@@ -11,11 +11,11 @@ use cranelift_wasm::{
 
 #[cfg(target_pointer_width = "32")]
 fn cast_to_u32(sz: usize) -> u32 {
-    cast::u32(sz)
+    u32::try_from(sz).unwrap()
 }
 #[cfg(target_pointer_width = "64")]
 fn cast_to_u32(sz: usize) -> u32 {
-    match cast::u32(sz) {
+    match u32::try_from(sz) {
         Ok(x) => x,
         Err(_) => panic!("overflow in cast from usize to u32"),
     }
