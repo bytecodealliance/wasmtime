@@ -565,7 +565,22 @@ impl<'module, M> CodeGenSession<'module, M> {
         }
     }
 
-    pub fn into_translated_code_section(self) -> Result<TranslatedCodeSection, Error> {
+    fn finalize(&mut self) {
+        let mut values = self.labels.values_mut().collect::<Vec<_>>();
+        values.sort_unstable_by_key(|(_, align, _)| *align);
+        for (label, align, func) in values {
+            if let Some(mut func) = func.take() {
+                dynasm!(self.assembler
+                    ; .align *align as usize
+                );
+                self.assembler.dynamic_label(label.0);
+                func(&mut self.assembler);
+            }
+        }
+    }
+
+    pub fn into_translated_code_section(mut self) -> Result<TranslatedCodeSection, Error> {
+        self.finalize();
         let exec_buf = self
             .assembler
             .finalize()
@@ -2150,6 +2165,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             return;
         }
 
+        if let ValueLocation::Cond(loc) = val {
+            self.push(ValueLocation::Cond(!loc));
+            return;
+        }
+
         let reg = self.into_reg(I32, val).unwrap();
         let out = self.take_reg(I32).unwrap();
 
@@ -2171,6 +2191,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             self.push(ValueLocation::Immediate(
                 (if i == 0 { 1i32 } else { 0 }).into(),
             ));
+            return;
+        }
+
+        if let ValueLocation::Cond(loc) = val {
+            self.push(ValueLocation::Cond(!loc));
             return;
         }
 
@@ -5352,20 +5377,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
     }
 
-    /// Writes the function epilogue (right now all this does is add the trap label that the
-    /// conditional traps in `call_indirect` use)
     pub fn epilogue(&mut self) {
-        let mut values = self.labels.values_mut().collect::<Vec<_>>();
-        values.sort_unstable_by_key(|(_, align, _)| *align);
-        for (label, align, func) in values {
-            if let Some(mut func) = func.take() {
-                dynasm!(self.asm
-                    ; .align *align as usize
-                );
-                self.asm.dynamic_label(label.0);
-                func(&mut self.asm);
-            }
-        }
     }
 
     pub fn trap(&mut self) {
