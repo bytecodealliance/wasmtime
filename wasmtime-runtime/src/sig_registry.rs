@@ -2,9 +2,9 @@
 //! signature checking.
 
 use crate::vmcontext::VMSharedSignatureIndex;
-use cast;
 use cranelift_codegen::ir;
 use std::collections::{hash_map, HashMap};
+use std::convert::TryFrom;
 
 /// WebAssembly requires that the caller and callee signatures in an indirect
 /// call must match. To implement this efficiently, keep a registry of all
@@ -29,10 +29,7 @@ impl SignatureRegistry {
         match self.signature_hash.entry(sig.clone()) {
             hash_map::Entry::Occupied(entry) => *entry.get(),
             hash_map::Entry::Vacant(entry) => {
-                #[cfg(target_pointer_width = "32")]
-                let sig_id = VMSharedSignatureIndex::new(cast::u32(len));
-                #[cfg(target_pointer_width = "64")]
-                let sig_id = VMSharedSignatureIndex::new(cast::u32(len).unwrap());
+                let sig_id = VMSharedSignatureIndex::new(u32::try_from(len).unwrap());
                 entry.insert(sig_id);
                 sig_id
             }
