@@ -1,4 +1,3 @@
-extern crate cast;
 extern crate cranelift_codegen;
 extern crate cranelift_entity;
 extern crate cranelift_wasm;
