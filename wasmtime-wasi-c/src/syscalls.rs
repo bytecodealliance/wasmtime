@@ -956,10 +956,8 @@ syscalls! {
             &mut host_fd,
         );
 
-        if u32::from(e) == host::__WASI_ESUCCESS {
-            trace!("     | *fd={:?}", host_fd);
-            encode_fd_byref(vmctx, fd, host_fd);
-        }
+        trace!("     | *fd={:?}", host_fd);
+        encode_fd_byref(vmctx, fd, host_fd);
 
         return_encoded_errno(e)
     }
