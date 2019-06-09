@@ -4,6 +4,7 @@
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
+use std::convert::TryFrom;
 use std::string::String;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
@@ -101,9 +102,9 @@ impl LinearMemory {
             return None;
         }
 
-        let delta_bytes = cast::usize(delta) * WASM_PAGE_SIZE as usize;
-        let prev_bytes = cast::usize(prev_pages) * WASM_PAGE_SIZE as usize;
-        let new_bytes = cast::usize(new_pages) * WASM_PAGE_SIZE as usize;
+        let delta_bytes = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
+        let prev_bytes = usize::try_from(prev_pages).unwrap() * WASM_PAGE_SIZE as usize;
+        let new_bytes = usize::try_from(new_pages).unwrap() * WASM_PAGE_SIZE as usize;
 
         if new_bytes > self.mmap.len() - self.offset_guard_size {
             // If the new size is within the declared maximum, but needs more memory than we
