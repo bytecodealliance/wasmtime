@@ -1,6 +1,5 @@
-use cast;
-use cast::From as _0;
 use host;
+use std::convert::TryFrom;
 use std::mem::{align_of, size_of, zeroed};
 use std::slice;
 use wasm32;
@@ -85,7 +84,7 @@ pub unsafe fn decode_slice_of<T>(
     ptr: wasm32::uintptr_t,
     len: wasm32::size_t,
 ) -> Result<(*mut T, usize), host::__wasi_errno_t> {
-    let len = cast::usize(len);
+    let len = usize::try_from(len).unwrap();
 
     let ptr = decode_ptr(
         vmctx,
@@ -98,7 +97,7 @@ pub unsafe fn decode_slice_of<T>(
 }
 
 pub fn encode_usize(len: usize) -> wasm32::size_t {
-    cast::u32(len).unwrap()
+    u32::try_from(len).unwrap()
 }
 
 pub fn encode_device(device: host::__wasi_device_t) -> wasm32::__wasi_device_t {
@@ -274,7 +273,7 @@ pub unsafe fn decode_ciovec(
     vmctx: &mut VMContext,
     ciovec: &wasm32::__wasi_ciovec_t,
 ) -> Result<host::__wasi_ciovec_t, host::__wasi_errno_t> {
-    let len = cast::usize(ciovec.buf_len);
+    let len = usize::try_from(ciovec.buf_len).unwrap();
     Ok(host::__wasi_ciovec_t {
         buf: decode_ptr(vmctx, ciovec.buf, len, 1)? as *const host::void,
         buf_len: len,
@@ -285,7 +284,7 @@ pub unsafe fn decode_iovec(
     vmctx: &mut VMContext,
     iovec: &wasm32::__wasi_iovec_t,
 ) -> Result<host::__wasi_iovec_t, host::__wasi_errno_t> {
-    let len = cast::usize(iovec.buf_len);
+    let len = usize::try_from(iovec.buf_len).unwrap();
     Ok(host::__wasi_iovec_t {
         buf: decode_ptr(vmctx, iovec.buf, len, 1)? as *mut host::void,
         buf_len: len,
@@ -416,7 +415,7 @@ pub unsafe fn encode_fd_byref(
     fd_ptr: wasm32::uintptr_t,
     fd: host::__wasi_fd_t,
 ) {
-    encode_pointee::<wasm32::__wasi_fd_t>(vmctx, fd_ptr, wasm32::size_t::cast(fd))
+    encode_pointee::<wasm32::__wasi_fd_t>(vmctx, fd_ptr, wasm32::size_t::try_from(fd).unwrap())
 }
 
 pub unsafe fn decode_timestamp_byref(
@@ -434,7 +433,7 @@ pub unsafe fn encode_timestamp_byref(
     encode_pointee::<wasm32::__wasi_timestamp_t>(
         vmctx,
         timestamp_ptr,
-        wasm32::__wasi_timestamp_t::cast(host_timestamp),
+        wasm32::__wasi_timestamp_t::try_from(host_timestamp).unwrap(),
     )
 }
 
@@ -453,7 +452,7 @@ pub unsafe fn encode_filesize_byref(
     encode_pointee::<wasm32::__wasi_filesize_t>(
         vmctx,
         filesize_ptr,
-        wasm32::__wasi_filesize_t::cast(host_filesize),
+        wasm32::__wasi_filesize_t::try_from(host_filesize).unwrap(),
     )
 }
 
@@ -472,7 +471,7 @@ pub unsafe fn encode_roflags_byref(
     encode_pointee::<wasm32::__wasi_roflags_t>(
         vmctx,
         roflags_ptr,
-        wasm32::__wasi_roflags_t::cast(host_roflags),
+        wasm32::__wasi_roflags_t::try_from(host_roflags).unwrap(),
     )
 }
 
@@ -488,7 +487,11 @@ pub unsafe fn encode_usize_byref(
     usize_ptr: wasm32::uintptr_t,
     host_usize: usize,
 ) {
-    encode_pointee::<wasm32::size_t>(vmctx, usize_ptr, wasm32::size_t::cast(host_usize).unwrap())
+    encode_pointee::<wasm32::size_t>(
+        vmctx,
+        usize_ptr,
+        wasm32::size_t::try_from(host_usize).unwrap(),
+    )
 }
 
 pub unsafe fn decode_prestat_byref(

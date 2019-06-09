@@ -2,6 +2,7 @@ use crate::host::{argv_environ_values, fd_prestats, fd_table};
 use crate::instantiate::WASIState;
 use cranelift_codegen::ir::types::{Type, I32, I64};
 use host;
+use std::convert::TryFrom;
 use std::{mem, ptr, slice, str};
 use translate::*;
 use wasm32;
@@ -170,11 +171,11 @@ syscalls! {
 
         let vmctx = &mut *vmctx;
         let argv_environ = get_argv_environ(vmctx);
-        let argc = match cast::u32((*argv_environ).argc) {
+        let argc = match u32::try_from((*argv_environ).argc) {
             Ok(argc) => argc,
             Err(_) => return wasm32::__WASI_ENOMEM,
         };
-        let argv_buf_size = match cast::u32((*argv_environ).argv_buf_size) {
+        let argv_buf_size = match u32::try_from((*argv_environ).argv_buf_size) {
             Ok(argc) => argc,
             Err(_) => return wasm32::__WASI_ENOMEM,
         };
@@ -307,11 +308,11 @@ syscalls! {
 
         let vmctx = &mut *vmctx;
         let argv_environ = get_argv_environ(vmctx);
-        let environ_count = match cast::u32((*argv_environ).environ_count) {
+        let environ_count = match u32::try_from((*argv_environ).environ_count) {
             Ok(host_environ_count) => host_environ_count,
             Err(_) => return wasm32::__WASI_ENOMEM,
         };
-        let environ_buf_size = match cast::u32((*argv_environ).environ_buf_size) {
+        let environ_buf_size = match u32::try_from((*argv_environ).environ_buf_size) {
             Ok(host_environ_buf_size) => host_environ_buf_size,
             Err(_) => return wasm32::__WASI_ENOMEM,
         };
