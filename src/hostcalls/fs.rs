@@ -492,7 +492,7 @@ pub fn path_open(
         Err(e) => return enc_errno(e),
     };
 
-    let fe = match hostcalls_impl::path_open(
+    match hostcalls_impl::path_open(
         wasi_ctx,
         dirfd,
         dirflags,
@@ -504,18 +504,24 @@ pub fn path_open(
         needed_inheriting,
         fs_flags,
     ) {
-        Ok(fe) => fe,
-        Err(e) => return enc_errno(e),
-    };
+        Ok(fe) => {
+            let guest_fd = match wasi_ctx.insert_fd_entry(fe) {
+                Ok(fd) => fd,
+                Err(e) => return enc_errno(e),
+            };
 
-    let guest_fd = match wasi_ctx.insert_fd_entry(fe) {
-        Ok(fd) => fd,
-        Err(e) => return enc_errno(e),
-    };
+            enc_fd_byref(memory, fd_out_ptr, guest_fd)
+                .map(|_| wasm32::__WASI_ESUCCESS)
+                .unwrap_or_else(enc_errno)
+        }
+        Err(e) => {
+            if let Err(e) = enc_fd_byref(memory, fd_out_ptr, wasm32::__wasi_fd_t::max_value()) {
+                return enc_errno(e);
+            }
 
-    enc_fd_byref(memory, fd_out_ptr, guest_fd)
-        .map(|_| wasm32::__WASI_ESUCCESS)
-        .unwrap_or_else(enc_errno)
+            enc_errno(e)
+        }
+    }
 }
 
 #[wasi_common_cbindgen]

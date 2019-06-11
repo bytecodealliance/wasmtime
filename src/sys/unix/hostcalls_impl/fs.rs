@@ -353,7 +353,7 @@ pub(crate) fn path_open(
         needed_base |= host::__WASI_RIGHT_PATH_CREATE_FILE;
     }
     if nix_all_oflags.contains(OFlag::O_TRUNC) {
-        needed_inheriting |= host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+        needed_base |= host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
@@ -778,7 +778,34 @@ pub(crate) fn path_unlink_file(
     // nix doesn't expose unlinkat() yet
     match unsafe { unlinkat(dir, path_cstr.as_ptr(), 0) } {
         0 => Ok(()),
-        _ => Err(host_impl::errno_from_nix(errno::Errno::last())),
+        _ => {
+            let mut e = errno::Errno::last();
+
+            #[cfg(not(linux))]
+            {
+                // Non-Linux implementations may return EPERM when attempting to remove a
+                // directory without REMOVEDIR. While that's what POSIX specifies, it's
+                // less useful. Adjust this to EISDIR. It doesn't matter that this is not
+                // atomic with the unlinkat, because if the file is removed and a directory
+                // is created before fstatat sees it, we're racing with that change anyway
+                // and unlinkat could have legitimately seen the directory if the race had
+                // turned out differently.
+                use nix::fcntl::AtFlags;
+                use nix::sys::stat::{fstatat, SFlag};
+
+                if e == errno::Errno::EPERM {
+                    if let Ok(stat) = fstatat(dir, path.as_os_str(), AtFlags::AT_SYMLINK_NOFOLLOW) {
+                        if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFDIR) {
+                            e = errno::Errno::EISDIR;
+                        }
+                    } else {
+                        e = errno::Errno::last();
+                    }
+                }
+            }
+
+            Err(host_impl::errno_from_nix(e))
+        }
     }
 }
 
