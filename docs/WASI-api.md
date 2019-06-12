@@ -1596,9 +1596,11 @@ Used by many functions in this API.
 As in POSIX, three file descriptor numbers are provided to instances
 on startup -- 0, 1, and 2, (a.k.a. `STDIN_FILENO`, `STDOUT_FILENO`,
 and `STDERR_FILENO`). Starting at 3 follow a possibly-entry sequence
-of preopened file descriptors provided by the host environment;
+of preopened file descriptors provided by the host environment or the argument passed to the wasmtime command;
 information about these may be obtained through
 [`__wasi_fd_prestat_get()`](#fd_prestat_get).
+
+i.e., if we have called `wasmtime --dir=. <some command inside>`  we can specify `3` that will refer to the `--dir` value.
 
 Other than these, WASI implementations are not required to allocate
 new file descriptors in ascending order.
