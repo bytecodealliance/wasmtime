@@ -51,6 +51,8 @@ pub enum Int {
     I32 = 32,
     /// 64-bit int.
     I64 = 64,
+    /// 128-bit int.
+    I128 = 128,
 }
 
 /// This provides an iterator through all of the supported int variants.
@@ -72,6 +74,7 @@ impl Iterator for IntIterator {
             1 => Some(Int::I16),
             2 => Some(Int::I32),
             3 => Some(Int::I64),
+            4 => Some(Int::I128),
             _ => return None,
         };
         self.index += 1;
@@ -199,6 +202,7 @@ mod iter_tests {
         assert_eq!(int_iter.next(), Some(Int::I16));
         assert_eq!(int_iter.next(), Some(Int::I32));
         assert_eq!(int_iter.next(), Some(Int::I64));
+        assert_eq!(int_iter.next(), Some(Int::I128));
         assert_eq!(int_iter.next(), None);
     }
 

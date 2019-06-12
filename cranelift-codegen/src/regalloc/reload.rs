@@ -233,7 +233,7 @@ impl<'a> Context<'a> {
                             let dst_ty = self.cur.func.dfg.value_type(dst_val);
                             debug_assert!(src_ty == dst_ty);
                             // This limits the transformation to copies of the
-                            // types: I64 I32 I16 I8 F64 and F32, since that's
+                            // types: I128 I64 I32 I16 I8 F64 and F32, since that's
                             // the set of `copy_nop` encodings available.
                             src_ty.is_int() || src_ty.is_float()
                         }
