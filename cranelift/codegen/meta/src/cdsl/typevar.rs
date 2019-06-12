@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::cdsl::types::{BVType, LaneType, ReferenceType, SpecialType, ValueType};
 
 const MAX_LANES: u16 = 256;
-const MAX_BITS: u16 = 64;
+const MAX_BITS: u16 = 128;
 const MAX_BITVEC: u16 = MAX_BITS * MAX_LANES;
 
 /// Type variables can be used in place of concrete types when defining

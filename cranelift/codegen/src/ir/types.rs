@@ -63,6 +63,7 @@ impl Type {
             B16 | I16 => 4,
             B32 | I32 | F32 | R32 => 5,
             B64 | I64 | F64 | R64 => 6,
+            I128 => 7,
             _ => 0,
         }
     }
@@ -75,6 +76,7 @@ impl Type {
             B16 | I16 => 16,
             B32 | I32 | F32 | R32 => 32,
             B64 | I64 | F64 | R64 => 64,
+            I128 => 128,
             _ => 0,
         }
     }
@@ -86,6 +88,7 @@ impl Type {
             16 => Some(I16),
             32 => Some(I32),
             64 => Some(I64),
+            128 => Some(I128),
             _ => None,
         }
     }
@@ -132,6 +135,7 @@ impl Type {
             I16 => I8,
             I32 => I16,
             I64 => I32,
+            I128 => I64,
             F64 => F32,
             B16 => B8,
             B32 => B16,
@@ -147,6 +151,7 @@ impl Type {
             I8 => I16,
             I16 => I32,
             I32 => I64,
+            I64 => I128,
             F32 => F64,
             B8 => B16,
             B16 => B32,
@@ -190,7 +195,7 @@ impl Type {
     /// Is this a scalar integer type?
     pub fn is_int(self) -> bool {
         match self {
-            I8 | I16 | I32 | I64 => true,
+            I8 | I16 | I32 | I64 | I128 => true,
             _ => false,
         }
     }
@@ -374,6 +379,7 @@ mod tests {
         assert_eq!(I16, I16.lane_type());
         assert_eq!(I32, I32.lane_type());
         assert_eq!(I64, I64.lane_type());
+        assert_eq!(I128, I128.lane_type());
         assert_eq!(F32, F32.lane_type());
         assert_eq!(F64, F64.lane_type());
         assert_eq!(B1, B1.by(8).unwrap().lane_type());
@@ -394,6 +400,7 @@ mod tests {
         assert_eq!(I16.lane_bits(), 16);
         assert_eq!(I32.lane_bits(), 32);
         assert_eq!(I64.lane_bits(), 64);
+        assert_eq!(I128.lane_bits(), 128);
         assert_eq!(F32.lane_bits(), 32);
         assert_eq!(F64.lane_bits(), 64);
         assert_eq!(R32.lane_bits(), 32);
@@ -415,6 +422,7 @@ mod tests {
         assert_eq!(I32.half_width(), Some(I16));
         assert_eq!(I32X4.half_width(), Some(I16X4));
         assert_eq!(I64.half_width(), Some(I32));
+        assert_eq!(I128.half_width(), Some(I64));
         assert_eq!(F32.half_width(), None);
         assert_eq!(F64.half_width(), Some(F32));
 
@@ -430,7 +438,8 @@ mod tests {
         assert_eq!(I16.double_width(), Some(I32));
         assert_eq!(I32.double_width(), Some(I64));
         assert_eq!(I32X4.double_width(), Some(I64X4));
-        assert_eq!(I64.double_width(), None);
+        assert_eq!(I64.double_width(), Some(I128));
+        assert_eq!(I128.double_width(), None);
         assert_eq!(F32.double_width(), Some(F64));
         assert_eq!(F64.double_width(), None);
     }
@@ -465,6 +474,7 @@ mod tests {
         assert_eq!(I16.to_string(), "i16");
         assert_eq!(I32.to_string(), "i32");
         assert_eq!(I64.to_string(), "i64");
+        assert_eq!(I128.to_string(), "i128");
         assert_eq!(F32.to_string(), "f32");
         assert_eq!(F64.to_string(), "f64");
         assert_eq!(R32.to_string(), "r32");
