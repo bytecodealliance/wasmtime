@@ -5,9 +5,9 @@ function u0:0(i128) -> i128 fast {
 ebb0(v0: i128):
     v1 = iconst.i64 0
     v2 = iconst.i64 42
-    v3 = iconcat.i64 v1, v2
+    v3 = iconcat.i64 v2, v1
     return v3
     ; check: v1 = iconst.i64 0
     ; check: v2 = iconst.i64 42
-    ; check: return v1, v2, v7
+    ; check: return v2, v1, v7
 }
