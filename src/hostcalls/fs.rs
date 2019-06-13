@@ -580,16 +580,20 @@ pub fn path_readlink(
         Ok(slice) => host_impl::path_from_raw(slice).to_owned(),
         Err(e) => return enc_errno(e),
     };
-    let rights = host::__WASI_RIGHT_PATH_READLINK;
     let mut buf = match dec_slice_of_mut::<u8>(memory, buf_ptr, buf_len) {
         Ok(slice) => slice,
         Err(e) => return enc_errno(e),
     };
-    let host_bufused =
-        match hostcalls_impl::path_readlink(wasi_ctx, dirfd, path.as_os_str(), rights, &mut buf) {
-            Ok(host_bufused) => host_bufused,
-            Err(e) => return enc_errno(e),
-        };
+    let host_bufused = match hostcalls_impl::path_readlink(
+        wasi_ctx,
+        dirfd,
+        path.as_os_str(),
+        host::__WASI_RIGHT_PATH_READLINK,
+        &mut buf,
+    ) {
+        Ok(host_bufused) => host_bufused,
+        Err(e) => return enc_errno(e),
+    };
     match enc_usize_byref(memory, buf_used, host_bufused) {
         Ok(_) => wasm32::__WASI_ESUCCESS,
         Err(e) => enc_errno(e),

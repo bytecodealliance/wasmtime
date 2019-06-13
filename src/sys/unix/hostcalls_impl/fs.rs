@@ -516,18 +516,43 @@ pub(crate) fn path_readlink(
     rights: host::__wasi_rights_t,
     buf: &mut [u8],
 ) -> Result<usize, host::__wasi_errno_t> {
-    use nix::fcntl::readlinkat;
+    use nix::errno::Errno;
 
     let (dir, path) = match path_get(wasi_ctx, dirfd, 0, path, rights, 0, false) {
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
 
-    let target_path = match readlinkat(dir, path.as_os_str(), buf) {
-        Err(e) => return Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
-        Ok(target_path) => target_path,
+    let path_cstr = match std::ffi::CString::new(path.as_bytes()) {
+        Ok(path_cstr) => path_cstr,
+        Err(_) => return Err(host::__WASI_EINVAL),
     };
-    Ok(target_path.len())
+
+    // Linux requires that the buffer size is positive, whereas POSIX does not.
+    // Use a fake buffer to store the results if the size is zero.
+    // TODO: instead of using raw libc::readlinkat call here, this should really
+    // be fixed in `nix` crate
+    let fakebuf: &mut [u8] = &mut [0];
+    let buf_len = buf.len();
+    let len = unsafe {
+        libc::readlinkat(
+            dir,
+            path_cstr.as_ptr() as *const libc::c_char,
+            if buf_len == 0 {
+                fakebuf.as_mut_ptr()
+            } else {
+                buf.as_mut_ptr()
+            } as *mut libc::c_char,
+            if buf_len == 0 { fakebuf.len() } else { buf_len },
+        )
+    };
+
+    if len < 0 {
+        Err(host_impl::errno_from_nix(Errno::last()))
+    } else {
+        let len = len as usize;
+        Ok(if len < buf_len { len } else { buf_len })
+    }
 }
 
 pub(crate) fn path_rename(
