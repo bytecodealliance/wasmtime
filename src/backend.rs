@@ -725,7 +725,7 @@ macro_rules! int_div {
 
             let div = match div {
                 ValueLocation::Reg(div)  => {
-                    if saved.any(|(_, dst)| dst == div) {
+                    if saved.clone().any(|dst| dst == div) {
                         let new = self.take_reg(I32).unwrap();
                         dynasm!(self.asm
                             ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
@@ -769,7 +769,7 @@ macro_rules! int_div {
 
             let div = match div {
                 ValueLocation::Reg(div)  => {
-                    if saved.any(|(_, dst)| dst == div) {
+                    if saved.clone().any(|dst| dst == div) {
                         let new = self.take_reg(I32).unwrap();
                         dynasm!(self.asm
                             ; mov Rq(new.rq().unwrap()), Rq(div.rq().unwrap())
@@ -810,7 +810,7 @@ macro_rules! int_div {
 
             let rem = match rem {
                 ValueLocation::Reg(rem)  => {
-                    if saved.any(|(_, dst)| dst == rem) {
+                    if saved.clone().any(|dst| dst == rem) {
                         let new = self.take_reg(I32).unwrap();
                         dynasm!(self.asm
                             ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
@@ -884,7 +884,7 @@ macro_rules! int_div {
 
             let rem = match rem {
                 ValueLocation::Reg(rem) => {
-                    if saved.any(|(_, dst)| dst == rem) {
+                    if saved.clone().any(|dst| dst == rem) {
                         let new = self.take_reg(I32).unwrap();
                         dynasm!(self.asm
                             ; mov Rq(new.rq().unwrap()), Rq(rem.rq().unwrap())
@@ -4361,11 +4361,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     );
 
     // TODO: Do this without emitting `mov`
-    fn cleanup_gprs(&mut self, gprs: impl Iterator<Item = (GPR, GPR)>) {
-        for (src, dst) in gprs {
-            self.copy_value(ValueLocation::Reg(src), CCLoc::Reg(dst));
-            self.block_state.regs.release(src);
-            self.block_state.regs.mark_used(dst);
+    fn cleanup_gprs(&mut self, gprs: impl Iterator<Item = GPR>) {
+        for gpr in gprs {
+            dynasm!(self.asm
+                ; pop Rq(gpr.rq().unwrap())
+            );
+            self.block_state.depth.free(1);
+            self.block_state.regs.mark_used(gpr);
         }
     }
 
@@ -4401,73 +4403,61 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn full_div(
         &mut self,
         dividend: ValueLocation,
-        divisor: ValueLocation,
+        mut divisor: ValueLocation,
         do_div: impl FnOnce(&mut Self, ValueLocation),
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
+        impl Iterator<Item = GPR> + Clone + 'this,
     ) {
+        // To stop `take_reg` from allocating either of these necessary registers
         self.block_state.regs.mark_used(RAX);
         self.block_state.regs.mark_used(RDX);
-        let divisor = if divisor == ValueLocation::Reg(RAX) || divisor == ValueLocation::Reg(RDX) {
-            let new_reg = self.take_reg(I32).unwrap();
+        if divisor == ValueLocation::Reg(RAX) || divisor == ValueLocation::Reg(RDX) {
+            let new_reg = self.take_reg(GPRType::Rq).unwrap();
             self.copy_value(divisor, CCLoc::Reg(new_reg));
             self.free_value(divisor);
-            ValueLocation::Reg(new_reg)
-        } else if let ValueLocation::Stack(_) = divisor {
-            divisor
-        } else {
-            ValueLocation::Reg(self.into_reg(I32, divisor).unwrap())
-        };
-        self.block_state.regs.release(RDX);
-        self.block_state.regs.release(RAX);
 
-        if let ValueLocation::Reg(r) = dividend {
-            self.block_state.regs.mark_used(r);
+            divisor = ValueLocation::Reg(new_reg);
         }
+        self.block_state.regs.release(RAX);
+        self.block_state.regs.release(RDX);
 
-        let should_save_rax =
-            dividend != ValueLocation::Reg(RAX) && !self.block_state.regs.is_free(RAX);
-
-        let saved_rax = if should_save_rax {
-            let new_reg = self.take_reg(I32).unwrap();
-            dynasm!(self.asm
-                ; mov Rq(new_reg.rq().unwrap()), rax
-            );
-            Some(new_reg)
-        } else {
+        let saved_rax = if self.block_state.regs.is_free(RAX) {
             None
+        } else {
+            self.block_state.depth.reserve(1);
+            dynasm!(self.asm
+                ; push rax
+            );
+            Some(())
         };
 
-        self.block_state.regs.mark_used(RAX);
+        let saved_rdx = if self.block_state.regs.is_free(RDX) {
+            None
+        } else {
+            self.block_state.depth.reserve(1);
+            dynasm!(self.asm
+                ; push rdx
+            );
+            Some(())
+        };
+
         self.copy_value(dividend, CCLoc::Reg(RAX));
         self.free_value(dividend);
-
-        let should_save_rdx = !self.block_state.regs.is_free(RDX);
-
-        let saved_rdx = if should_save_rdx {
-            let new_reg = self.take_reg(I32).unwrap();
-            dynasm!(self.asm
-                ; mov Rq(new_reg.rq().unwrap()), rdx
-            );
-            Some(new_reg)
-        } else {
-            None
-        };
+        // To stop `take_reg` from allocating either of these necessary registers
+        self.block_state.regs.mark_used(RAX);
+        self.block_state.regs.mark_used(RDX);
 
         do_div(self, divisor);
-
-        self.free_value(divisor);
-        self.block_state.regs.mark_used(RDX);
 
         (
             ValueLocation::Reg(RAX),
             ValueLocation::Reg(RDX),
-            saved_rax
-                .map(|s| (s, RAX))
+            saved_rdx
+                .map(|_| RDX)
                 .into_iter()
-                .chain(saved_rdx.map(|s| (s, RDX))),
+                .chain(saved_rax.map(|_| RAX)),
         )
     }
 
@@ -4478,7 +4468,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
+        impl Iterator<Item = GPR> + Clone + 'this,
     ) {
         self.full_div(dividend, divisor, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
@@ -4488,14 +4478,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; div DWORD [rsp + offset]
                 );
             }
-            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+            ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = this.into_reg(I32, divisor).unwrap();
                 dynasm!(this.asm
                     ; xor edx, edx
                     ; div Rd(r.rq().unwrap())
                 );
+                this.free_value(ValueLocation::Reg(r));
             }
-            ValueLocation::Immediate(_) => unreachable!(),
         })
     }
 
@@ -4506,7 +4496,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
+        impl Iterator<Item = GPR> + Clone + 'this,
     ) {
         self.full_div(dividend, divisor, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
@@ -4516,14 +4506,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; idiv DWORD [rsp + offset]
                 );
             }
-            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+            ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = this.into_reg(I32, divisor).unwrap();
                 dynasm!(this.asm
                     ; cdq
                     ; idiv Rd(r.rq().unwrap())
                 );
+                this.free_value(ValueLocation::Reg(r));
             }
-            ValueLocation::Immediate(_) => unreachable!(),
         })
     }
 
@@ -4534,7 +4524,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
+        impl Iterator<Item = GPR> + Clone + 'this,
     ) {
         self.full_div(dividend, divisor, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
@@ -4544,14 +4534,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; div QWORD [rsp + offset]
                 );
             }
-            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+            ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = this.into_reg(I64, divisor).unwrap();
                 dynasm!(this.asm
                     ; xor rdx, rdx
                     ; div Rq(r.rq().unwrap())
                 );
             }
-            ValueLocation::Immediate(_) => unreachable!(),
         })
     }
 
@@ -4562,7 +4551,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) -> (
         ValueLocation,
         ValueLocation,
-        impl Iterator<Item = (GPR, GPR)> + Clone + 'this,
+        impl Iterator<Item = GPR> + Clone + 'this,
     ) {
         self.full_div(dividend, divisor, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
@@ -4572,14 +4561,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; idiv QWORD [rsp + offset]
                 );
             }
-            ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
+            ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = this.into_reg(I64, divisor).unwrap();
                 dynasm!(this.asm
                     ; cqo
                     ; idiv Rq(r.rq().unwrap())
                 );
             }
-            ValueLocation::Immediate(_) => unreachable!(),
         })
     }
 
@@ -5377,8 +5365,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
     }
 
-    pub fn epilogue(&mut self) {
-    }
+    pub fn epilogue(&mut self) {}
 
     pub fn trap(&mut self) {
         let trap_label = self.trap_label();
@@ -5502,3 +5489,4 @@ impl IntoLabel for (LabelValue, LabelValue) {
         Box::new(const_values(self.0, self.1))
     }
 }
+
