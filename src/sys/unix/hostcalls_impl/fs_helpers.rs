@@ -7,7 +7,8 @@ use crate::host;
 
 use nix::libc::{self, c_long};
 use std::ffi::{OsStr, OsString};
-use std::os::unix::prelude::{OsStrExt, OsStringExt, RawFd};
+use std::os::unix::prelude::{OsStrExt, RawFd};
+use std::path::{Component, Path};
 
 /// Normalizes a path to ensure that the target path is located under the directory provided.
 ///
@@ -57,6 +58,11 @@ pub fn path_get<P: AsRef<OsStr>>(
         Err(errno)
     }
 
+    if path.as_ref().as_bytes().contains(&b'\0') {
+        // if contains NUL, return EILSEQ
+        return Err(host::__WASI_EILSEQ);
+    }
+
     let dirfe = wasi_ctx.get_fd_entry(dirfd, needed_base, needed_inheriting)?;
 
     // Stack of directory file descriptors. Index 0 always corresponds with the directory provided
@@ -67,7 +73,7 @@ pub fn path_get<P: AsRef<OsStr>>(
 
     // Stack of paths left to process. This is initially the `path` argument to this function, but
     // any symlinks we encounter are processed by pushing them on the stack.
-    let mut path_stack = vec![path.as_ref().to_owned().into_vec()];
+    let mut path_stack = vec![path.as_ref().to_owned()];
 
     // Track the number of symlinks we've expanded, so we can return `ELOOP` after too many.
     let mut symlink_expansions = 0;
@@ -78,189 +84,157 @@ pub fn path_get<P: AsRef<OsStr>>(
     // TODO: rewrite this using a custom posix path type, with a component iterator that respects
     // trailing slashes. This version does way too much allocation, and is way too fiddly.
     loop {
-        let component = if let Some(cur_path) = path_stack.pop() {
-            // eprintln!(
-            //     "cur_path = {:?}",
-            //     std::str::from_utf8(cur_path.as_slice()).unwrap()
-            // );
-            let mut split = cur_path.splitn(2, |&c| c == '/' as u8);
-            let head = split.next();
-            let tail = split.next();
-            match (head, tail) {
-                (None, _) => {
-                    // split always returns at least a singleton iterator with an empty slice
-                    panic!("unreachable");
-                }
-                // path is empty
-                (Some([]), None) => {
-                    return ret_error(&mut dir_stack, host::__WASI_ENOENT);
-                }
-                // path starts with `/`, is absolute
-                (Some([]), Some(_)) => {
-                    return ret_error(&mut dir_stack, host::__WASI_ENOTCAPABLE);
-                }
-                // the final component of the path with no trailing slash
-                (Some(component), None) => component.to_vec(),
-                (Some(component), Some(rest)) => {
-                    if rest.iter().all(|&c| c == '/' as u8) {
-                        // the final component of the path with trailing slashes; put one trailing
-                        // slash back on
-                        let mut component = component.to_vec();
-                        component.push('/' as u8);
-                        component
-                    } else {
-                        // non-final component; push the rest back on the stack
-                        path_stack.push(rest.to_vec());
-                        component.to_vec()
+        match path_stack.pop() {
+            Some(cur_path) => {
+                // eprintln!("cur_path = {:?}", cur_path);
+
+                let ends_with_slash = cur_path.as_bytes().ends_with(b"/");
+                let mut components = Path::new(&cur_path).components();
+                let head = match components.next() {
+                    None => return ret_error(&mut dir_stack, host::__WASI_ENOENT),
+                    Some(p) => p,
+                };
+                let tail = components.as_path();
+
+                if tail.components().next().is_some() {
+                    let mut tail = tail.as_os_str().to_owned();
+                    if ends_with_slash {
+                        tail.push("/");
                     }
+                    path_stack.push(tail);
                 }
-            }
-        } else {
-            // if the path stack is ever empty, we return rather than going through the loop again
-            panic!("unreachable");
-        };
 
-        // eprintln!(
-        //     "component = {:?}",
-        //     std::str::from_utf8(component.as_slice()).unwrap()
-        // );
-
-        match component.as_slice() {
-            b"." => {
-                // skip component
-            }
-            b".." => {
-                // pop a directory
-                let dirfd = dir_stack.pop().expect("dir_stack is never empty");
-
-                // we're not allowed to pop past the original directory
-                if dir_stack.is_empty() {
-                    return ret_error(&mut dir_stack, host::__WASI_ENOTCAPABLE);
-                } else {
-                    nix::unistd::close(dirfd).unwrap_or_else(|e| {
-                        dbg!(e);
-                    });
-                }
-            }
-            // should the component be a directory? it should if there is more path left to process, or
-            // if it has a trailing slash and `needs_final_component` is not set
-            component
-                if !path_stack.is_empty()
-                    || (component.ends_with(b"/") && !needs_final_component) =>
-            {
-                match openat(
-                    *dir_stack.last().expect("dir_stack is never empty"),
-                    component,
-                    OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW,
-                    Mode::empty(),
-                ) {
-                    Ok(new_dir) => {
-                        dir_stack.push(new_dir);
+                match head {
+                    Component::Prefix(_) | Component::RootDir => {
+                        // path is absolute!
+                        return ret_error(&mut dir_stack, host::__WASI_ENOTCAPABLE);
+                    }
+                    Component::CurDir => {
+                        // "." so skip
                         continue;
                     }
-                    Err(e)
-                        // Check to see if it was a symlink. Linux indicates
-                        // this with ENOTDIR because of the O_DIRECTORY flag.
-                        if e.as_errno() == Some(Errno::ELOOP)
-                            || e.as_errno() == Some(Errno::EMLINK)
-                            || e.as_errno() == Some(Errno::ENOTDIR) =>
-                    {
-                        // attempt symlink expansion
-                        match readlinkat(
-                            *dir_stack.last().expect("dir_stack is never empty"),
-                            component,
-                            readlink_buf.as_mut_slice(),
-                        ) {
-                            Ok(link_path) => {
-                                symlink_expansions += 1;
-                                if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                    return ret_error(&mut dir_stack, host::__WASI_ELOOP);
-                                }
+                    Component::ParentDir => {
+                        // ".." so pop a dir
+                        let dirfd = dir_stack.pop().expect("dir_stack is never empty");
 
-                                let mut link_path = link_path.as_bytes().to_vec();
-
-                                // append a trailing slash if the component leading to it has one, so
-                                // that we preserve any ENOTDIR that might come from trying to open a
-                                // non-directory
-                                if component.ends_with(b"/") {
-                                    link_path.push('/' as u8);
-                                }
-
-                                path_stack.push(link_path);
-                                continue;
-                            }
-                            Err(e) => {
-                                return ret_error(
-                                    &mut dir_stack,
-                                    host_impl::errno_from_nix(e.as_errno().unwrap()),
-                                );
-                            }
+                        // we're not allowed to pop past the original directory
+                        if dir_stack.is_empty() {
+                            return ret_error(&mut dir_stack, host::__WASI_ENOTCAPABLE);
+                        } else {
+                            nix::unistd::close(dirfd).unwrap_or_else(|e| {
+                                dbg!(e);
+                            });
                         }
                     }
-                    Err(e) => {
-                        return ret_error(
-                            &mut dir_stack,
-                            host_impl::errno_from_nix(e.as_errno().unwrap()),
-                        );
+                    Component::Normal(head) => {
+                        let mut head = OsString::from(head);
+                        if ends_with_slash {
+                            // preserve trailing slash
+                            head.push("/");
+                        }
+
+                        if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
+                            match openat(
+                                *dir_stack.last().expect("dir_stack is never empty"),
+                                head.as_os_str(),
+                                OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW,
+                                Mode::empty(),
+                            ) {
+                                Ok(new_dir) => {
+                                    dir_stack.push(new_dir);
+                                    continue;
+                                }
+                                Err(e)
+                                    // Check to see if it was a symlink. Linux indicates
+                                    // this with ENOTDIR because of the O_DIRECTORY flag.
+                                    if e.as_errno() == Some(Errno::ELOOP)
+                                        || e.as_errno() == Some(Errno::EMLINK)
+                                        || e.as_errno() == Some(Errno::ENOTDIR) =>
+                                {
+                                    // attempt symlink expansion
+                                    match readlinkat(
+                                        *dir_stack.last().expect("dir_stack is never empty"),
+                                        head.as_os_str(),
+                                        readlink_buf.as_mut_slice(),
+                                    ) {
+                                        Ok(link_path) => {
+                                            symlink_expansions += 1;
+                                            if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
+                                                return ret_error(&mut dir_stack, host::__WASI_ELOOP);
+                                            }
+
+                                            let mut link_path = OsString::from(link_path);
+                                            if head.as_bytes().ends_with(b"/") {
+                                                link_path.push("/");
+                                            }
+
+                                            path_stack.push(link_path);
+                                            continue;
+                                        }
+                                        Err(e) => {
+                                            return ret_error(
+                                                &mut dir_stack,
+                                                host_impl::errno_from_nix(e.as_errno().unwrap()),
+                                            );
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    return ret_error(
+                                        &mut dir_stack,
+                                        host_impl::errno_from_nix(e.as_errno().unwrap()),
+                                    );
+                                }
+                            }
+                        } else if ends_with_slash
+                            || (dirflags & host::__WASI_LOOKUP_SYMLINK_FOLLOW) != 0
+                        {
+                            // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
+                            // symlink expansion
+                            match readlinkat(
+                                *dir_stack.last().expect("dir_stack is never empty"),
+                                head.as_os_str(),
+                                readlink_buf.as_mut_slice(),
+                            ) {
+                                Ok(link_path) => {
+                                    symlink_expansions += 1;
+                                    if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
+                                        return ret_error(&mut dir_stack, host::__WASI_ELOOP);
+                                    }
+                                    let mut link_path = OsString::from(link_path);
+                                    if head.as_bytes().ends_with(b"/") {
+                                        link_path.push("/");
+                                    }
+
+                                    path_stack.push(link_path);
+                                    continue;
+                                }
+                                Err(e) => {
+                                    let errno = e.as_errno().unwrap();
+                                    if errno != Errno::EINVAL && errno != Errno::ENOENT {
+                                        // only return an error if this path is not actually a symlink
+                                        return ret_error(
+                                            &mut dir_stack,
+                                            host_impl::errno_from_nix(errno),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
+                        // not a symlink, so we're done;
+                        return Ok((ret_dir_success(&mut dir_stack), head));
                     }
                 }
             }
-            // the final component
-            component => {
-                // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
-                // symlink expansion
-                if component.ends_with(b"/") || (dirflags & host::__WASI_LOOKUP_SYMLINK_FOLLOW) != 0
-                {
-                    match readlinkat(
-                        *dir_stack.last().expect("dir_stack is never empty"),
-                        component,
-                        readlink_buf.as_mut_slice(),
-                    ) {
-                        Ok(link_path) => {
-                            symlink_expansions += 1;
-                            if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                return ret_error(&mut dir_stack, host::__WASI_ELOOP);
-                            }
-
-                            let mut link_path = link_path.as_bytes().to_vec();
-
-                            // append a trailing slash if the component leading to it has one, so
-                            // that we preserve any ENOTDIR that might come from trying to open a
-                            // non-directory
-                            if component.ends_with(b"/") {
-                                link_path.push('/' as u8);
-                            }
-
-                            path_stack.push(link_path);
-                            continue;
-                        }
-                        Err(e) => {
-                            let errno = e.as_errno().unwrap();
-                            if errno != Errno::EINVAL && errno != Errno::ENOENT {
-                                // only return an error if this path is not actually a symlink
-                                return ret_error(&mut dir_stack, host_impl::errno_from_nix(errno));
-                            }
-                        }
-                    }
-                }
-
-                // not a symlink, so we're done;
+            None => {
+                // no further components to process. means we've hit a case like "." or "a/..", or if the
+                // input path has trailing slashes and `needs_final_component` is not set
                 return Ok((
                     ret_dir_success(&mut dir_stack),
-                    OsStr::from_bytes(component).to_os_string(),
+                    OsStr::new(".").to_os_string(),
                 ));
             }
-        }
-
-        if path_stack.is_empty() {
-            // no further components to process. means we've hit a case like "." or "a/..", or if the
-            // input path has trailing slashes and `needs_final_component` is not set
-            return Ok((
-                ret_dir_success(&mut dir_stack),
-                OsStr::new(".").to_os_string(),
-            ));
-        } else {
-            continue;
         }
     }
 }

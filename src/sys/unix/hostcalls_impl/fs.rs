@@ -337,10 +337,10 @@ pub(crate) fn path_open(
 
     let mut nix_all_oflags = if read && write {
         OFlag::O_RDWR
-    } else if read {
-        OFlag::O_RDONLY
-    } else {
+    } else if write {
         OFlag::O_WRONLY
+    } else {
+        OFlag::O_RDONLY
     };
 
     // on non-Capsicum systems, we always want nofollow
