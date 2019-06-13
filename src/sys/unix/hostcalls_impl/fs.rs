@@ -78,6 +78,14 @@ pub(crate) fn fd_renumber(
         Some(fe_to) => fe_to,
         None => return Err(host::__WASI_EBADF),
     };
+
+    // Don't allow renumbering over a pre-opened resource.
+    // TODO: Eventually, we do want to permit this, once libpreopen in
+    // userspace is capable of removing entries from its tables as well.
+    if fe_from.preopen_path.is_some() || fe_to.preopen_path.is_some() {
+        return Err(host::__WASI_ENOTSUP);
+    }
+
     if let Err(e) = nix::unistd::dup2(fe_from.fd_object.rawfd, fe_to.fd_object.rawfd) {
         return Err(host_impl::errno_from_nix(e.as_errno().unwrap()));
     }
