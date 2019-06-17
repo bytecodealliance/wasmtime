@@ -65,20 +65,44 @@ fn legalize_inst(
             _ => panic!("Expected isplit: {}", pos.func.dfg.display_inst(inst, None)),
         };
 
-        let res = pos.func.dfg.inst_results(inst).to_vec();
-        assert_eq!(res.len(), 2);
-        let (resl, resh) = (res[0], res[1]); // Prevent borrowck error
+        let should_replace = match pos.func.dfg.value_def(arg) {
+            ir::ValueDef::Result(inst, num) => {
+                if let ir::InstructionData::Binary { opcode, args, .. } = pos.func.dfg[inst] {
+                    opcode == ir::Opcode::Iconcat
+                } else {
+                    // `arg` was not created by an `iconcat` instruction. Don't try to resolve it,
+                    // as otherwise `split::isplit` will re-insert the original `isplit`, causing
+                    // an endless loop.
+                    false
+                }
+            }
+            ir::ValueDef::Param(ebb, num) => true,
+        };
 
-        let curpos = pos.position();
-        let srcloc = pos.srcloc();
-        let (xl, xh) = split::isplit(pos.func, cfg, curpos, srcloc, arg);
+        if should_replace {
+            let res = pos.func.dfg.inst_results(inst).to_vec();
+            assert_eq!(res.len(), 2);
+            let (resl, resh) = (res[0], res[1]); // Prevent borrowck error
 
-        pos.func.dfg.clear_results(inst);
-        pos.remove_inst();
-        pos.func.dfg.change_to_alias(resl, xl);
-        pos.func.dfg.change_to_alias(resh, xh);
+            dbg!(pos.position());
 
-        return true;
+            // Remove old isplit
+            pos.func.dfg.clear_results(inst);
+            pos.remove_inst();
+
+            dbg!(pos.position());
+
+            let curpos = pos.position();
+            let srcloc = pos.srcloc();
+            let (xl, xh) = split::isplit(pos.func, cfg, curpos, srcloc, arg);
+
+            pos.func.dfg.change_to_alias(resl, xl);
+            pos.func.dfg.change_to_alias(resh, xh);
+
+            dbg!(&pos.func);
+
+            return true;
+        }
     }
 
     match pos.func.update_encoding(inst, isa) {
