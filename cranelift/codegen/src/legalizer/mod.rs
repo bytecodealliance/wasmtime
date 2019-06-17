@@ -57,6 +57,31 @@ fn legalize_inst(
         }
     } else if opcode.is_branch() {
         split::simplify_branch_arguments(&mut pos.func.dfg, inst);
+    } else if opcode == ir::Opcode::Isplit {
+        pos.use_srcloc(inst);
+
+        let arg = match pos.func.dfg[inst] {
+            ir::InstructionData::Unary {
+                arg,
+                ..
+            } => pos.func.dfg.resolve_aliases(arg),
+            _ => panic!("Expected isplit: {}", pos.func.dfg.display_inst(inst, None)),
+        };
+
+        let res = pos.func.dfg.inst_results(inst).to_vec();
+        assert_eq!(res.len(), 2);
+        let (resl, resh) = (res[0], res[1]); // Prevent borrowck error
+
+        let curpos = pos.position();
+        let srcloc = pos.srcloc();
+        let (xl, xh) = split::isplit(pos.func, cfg, curpos, srcloc, arg);
+
+        pos.func.dfg.clear_results(inst);
+        pos.remove_inst();
+        pos.func.dfg.change_to_alias(resl, xl);
+        pos.func.dfg.change_to_alias(resh, xh);
+
+        return true;
     }
 
     match pos.func.update_encoding(inst, isa) {
