@@ -10,7 +10,7 @@ use target_lexicon::{PointerWidth, Triple};
 /// field is present put no type is needed, such as the controlling type variable for a
 /// non-polymorphic instruction.
 ///
-/// Basic integer types: `I8`, `I16`, `I32`, and `I64`. These types are sign-agnostic.
+/// Basic integer types: `I8`, `I16`, `I32`, `I64`, and `I128`. These types are sign-agnostic.
 ///
 /// Basic floating point types: `F32` and `F64`. IEEE single and double precision.
 ///
