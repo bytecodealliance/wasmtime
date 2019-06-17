@@ -61,10 +61,7 @@ fn legalize_inst(
         pos.use_srcloc(inst);
 
         let arg = match pos.func.dfg[inst] {
-            ir::InstructionData::Unary {
-                arg,
-                ..
-            } => pos.func.dfg.resolve_aliases(arg),
+            ir::InstructionData::Unary { arg, .. } => pos.func.dfg.resolve_aliases(arg),
             _ => panic!("Expected isplit: {}", pos.func.dfg.display_inst(inst, None)),
         };
 
