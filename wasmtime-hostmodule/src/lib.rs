@@ -209,8 +209,8 @@
 //! # Ok::<(), InstantiationError>(())
 //! ```
 //!
-//! It should be noted that you _cannot_ call `.build` twice on the same builder using different exports
-//! - the `host_data` that is returned must be passed into `InstanceHandle::new` in order for functions
+//! It should be noted that you _cannot_ call `.build` twice on the same builder using different exports -
+//! the `host_data` that is returned must be passed into `InstanceHandle::new` in order for functions
 //! to work properly. If you want to combine two export definition lists and instantiate the results,
 //! use the `+` operator:
 //!
