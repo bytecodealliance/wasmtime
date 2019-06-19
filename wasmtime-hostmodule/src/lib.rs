@@ -642,20 +642,31 @@ macro_rules! impl_functionlike_traits {
             {
                 use std::{mem, ptr::NonNull};
 
-                (|vmctx: &mut VMContext, $first_a: $first_a $(, $rest_a: $rest_a)*| {
+                extern "C" fn trampoline<__F0, __C0, HostData0, $first_a $(, $rest_a)*>(
+                    vmctx: &mut VMContext,
+                    $first_a: $first_a $(, $rest_a: $rest_a)*
+                ) -> __F0::Output
+                where
+                    __F0: CallMut<Args = ($first_a, $($rest_a),*)>,
+                    HostData0: hlist::Find<Func<__F0>, __C0> + 'static,
+                {
                     let mut dangling = NonNull::dangling();
-                    let func = if mem::size_of::<__F>() == 0 {
+                    let func = if mem::size_of::<__F0>() == 0 {
                         unsafe { dangling.as_mut() }
                     } else {
-                        &mut hlist::Find::<Func<__F>, __C>::get_mut(
+                        &mut hlist::Find::<Func<__F0>, __C0>::get_mut(
                             unsafe { vmctx.host_state() }
-                                .downcast_mut::<HostData>()
+                                .downcast_mut::<HostData0>()
                                 .expect("Programmer error: Invalid host data"),
                         )
                         .0
                     };
                     func.call_mut(($first_a, $($rest_a),*))
-                }) as fn(&mut VMContext, $first_a, $($rest_a),*) -> __F::Output as _
+                }
+
+                trampoline::<__F, __C, HostData, $first_a $(, $rest_a)*>
+                    as extern "C" fn(&mut VMContext, $first_a, $($rest_a),*) -> __F::Output
+                    as _
             }
         }
 
@@ -704,20 +715,30 @@ macro_rules! impl_functionlike_traits {
             {
                 use std::{mem, ptr::NonNull};
 
-                (|vmctx: &mut VMContext| {
+                extern "C" fn trampoline<__F0, __C0, HostData0>(
+                    vmctx: &mut VMContext,
+                ) -> __F0::Output
+                where
+                    __F0: CallMut<Args = ()>,
+                    HostData0: hlist::Find<Func<__F0>, __C0> + 'static,
+                {
                     let mut dangling = NonNull::dangling();
-                    let func = if mem::size_of::<__F>() == 0 {
+                    let func = if mem::size_of::<__F0>() == 0 {
                         unsafe { dangling.as_mut() }
                     } else {
-                        &mut hlist::Find::<Func<__F>, __C>::get_mut(
+                        &mut hlist::Find::<Func<__F0>, __C0>::get_mut(
                             unsafe { vmctx.host_state() }
-                                .downcast_mut::<HostData>()
+                                .downcast_mut::<HostData0>()
                                 .expect("Programmer error: Invalid host data"),
                         )
                         .0
                     };
                     func.call_mut(())
-                }) as fn(&mut VMContext) -> __F::Output as _
+                }
+
+                trampoline::<__F, __C, HostData>
+                    as extern "C" fn(&mut VMContext) -> __F::Output
+                    as _
             }
         }
 
