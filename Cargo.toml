@@ -23,6 +23,17 @@ nix = "0.13"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features=["std", "handleapi", "processthreadsapi", "winbase", "ws2def", "fileapi"] }
 
+[dev-dependencies]
+wasmtime-runtime = { git = "https://github.com/cranestation/wasmtime" }
+wasmtime-environ = { git = "https://github.com/cranestation/wasmtime" }
+wasmtime-jit = { git = "https://github.com/cranestation/wasmtime" }
+cranelift-codegen = "0.30.0"
+cranelift-entity = "0.30.0"
+cranelift-wasm = "0.30.0"
+cranelift-native = "0.30.0"
+target-lexicon = "0.3.0"
+pretty_env_logger = "0.3"
+
 [lib]
 name = "wasi_common"
 crate-type = ["rlib", "staticlib", "cdylib"]
