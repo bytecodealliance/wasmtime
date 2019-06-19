@@ -49,6 +49,7 @@ wasmtime-wasi-c = { path = "wasmtime-wasi-c" }
 winapi = "0.3"
 
 [workspace]
+members = ["./wasmtime-*"]
 
 [features]
 lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam"]
