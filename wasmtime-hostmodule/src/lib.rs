@@ -547,11 +547,11 @@ impl Default for Mutability {
 /// `BindArgs` from a function or closure by using `BindArgType::bind` passing the argument type list as a
 /// tuple. This is because Rust functions can implement the `Fn*` traits multiple times with different
 /// argument lists, as long as the output type is uniquely identified by the input types.
-pub struct Func<T>(pub T);
+pub struct Func<T: CallMut>(pub T);
 /// A global, the `T` is expected to be an `impl Into<Value>`, so a `u32`, `u64`, `i32`, `i64`, `f32`, `f64`
 /// or (of course) `Value`. You can also implement `Into<Value>` for your own types and use them here, if
 /// you so wish.
-pub struct Global<T>(pub T, pub Mutability);
+pub struct Global<T: Into<Value>>(pub T, pub Mutability);
 
 /// A struct to monomorphise function argument types using a `PhantomData`. This can then be used with
 /// `CallMut`.
@@ -798,6 +798,7 @@ pub trait HasHostData {
 
 impl<F, Rest> HasHostData for Cons<ExportDef<Func<F>>, Rest>
 where
+    F: CallMut,
     Rest: HasHostData,
 {
     type HostData = Cons<Func<F>, <Rest as HasHostData>::HostData>;
@@ -805,6 +806,7 @@ where
 
 impl<T, Rest> HasHostData for Cons<ExportDef<Global<T>>, Rest>
 where
+    T: Into<Value>,
     Rest: HasHostData,
 {
     type HostData = <Rest as HasHostData>::HostData;
