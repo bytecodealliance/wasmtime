@@ -38,7 +38,8 @@
 //!     do_thing: Func(hello_world.bind::<()>()),
 //!     print_and_return: Func(print_and_return.bind::<(i32,)>()),
 //!     counting_func: Func(my_closure.bind::<(u32,)>()),
-//!     my_glob: Global(100u64, Default::default()),
+//!     // To use a runtime value, wrap it in brackets
+//!     ["my-glob"]: Global(100u64, Default::default()),
 //!     memory: Memory {
 //!         minimum: 1,
 //!         maximum: Some(2),
@@ -962,7 +963,13 @@ where
 /// For an example of how to use this, see the documentation at the crate root.
 #[macro_export]
 macro_rules! exports {
-    ($name:ident: $val:expr $(, $k:ident: $v:expr)* $(,)*) => {{
+    ([$name:expr]: $val:expr $(, $k:tt: $v:expr)* $(,)*) => {{
+        $crate::hlist::Cons($crate::ExportDef {
+            name: String::from($name),
+            val: $val,
+        }, exports!($($k:$v),*))
+    }};
+    ($name:ident: $val:expr $(, $k:tt: $v:expr)* $(,)*) => {{
         $crate::hlist::Cons($crate::ExportDef {
             name: stringify!($name).to_owned(),
             val: $val,
