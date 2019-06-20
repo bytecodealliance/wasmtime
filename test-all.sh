@@ -4,7 +4,6 @@ set -euo pipefail
 # This is the top-level test script:
 #
 # - Check code formatting.
-# - Perform checks on Python code.
 # - Make a debug build.
 # - Make a release build.
 # - Run unit tests for all Rust crates (including the filetests)
@@ -12,10 +11,6 @@ set -euo pipefail
 # - Optionally, run fuzzing.
 #
 # All tests run by this script should be passing at all times.
-
-# Disable generation of .pyc files because they cause trouble for vendoring
-# scripts, and this is a build step that isn't run very often anyway.
-export PYTHONDONTWRITEBYTECODE=1
 
 # Repository top-level directory.
 topdir=$(dirname "$0")
@@ -38,20 +33,6 @@ else
     echo "If you are using rustup, rustfmt can be installed via"
     echo "\"rustup component add --toolchain=stable rustfmt-preview\", or see"
     echo "https://github.com/rust-lang-nursery/rustfmt for more information."
-fi
-
-# Check if any Python files have changed since we last checked them.
-tsfile="$topdir/target/meta-checked"
-meta_python="$topdir/cranelift-codegen/meta-python"
-if [ -f "$tsfile" ]; then
-    needcheck=$(find "$meta_python" -name '*.py' -newer "$tsfile")
-else
-    needcheck=yes
-fi
-if [ -n "$needcheck" ]; then
-    banner "Checking python source files"
-    "$meta_python/check.sh"
-    touch "$tsfile" || echo no target directory
 fi
 
 # Make sure the code builds in release mode.
