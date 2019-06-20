@@ -32,7 +32,6 @@ cranelift-entity = "0.30.0"
 cranelift-wasm = "0.30.0"
 cranelift-native = "0.30.0"
 target-lexicon = "0.3.0"
-pretty_env_logger = "0.3"
 
 [lib]
 name = "wasi_common"

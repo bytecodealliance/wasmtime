@@ -64,7 +64,7 @@ fn preopen_workspace(workspace: String) -> (String, File) {
     (".".to_owned(), preopen_dir)
 }
 
-pub fn run_wasm<P: AsRef<Path>>(path: P) {
+pub fn run_test<P: AsRef<Path>>(path: P) {
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
