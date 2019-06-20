@@ -50,8 +50,7 @@ fn main() {
     let crate_dir = cur_dir.as_path();
 
     // Make sure we rebuild if this build script changes (will not happen with
-    // if the path to this file contains non-UTF8 bytes). The `build.py` script
-    // prints out its own dependencies.
+    // if the path to this file contains non-UTF-8 bytes).
     println!(
         "cargo:rerun-if-changed={}",
         crate_dir.join("build.rs").to_str().unwrap()
