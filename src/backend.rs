@@ -156,7 +156,7 @@ pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
     out
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct GPRs {
     bits: u16,
 }
@@ -264,7 +264,7 @@ impl GPRs {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Registers {
     /// Registers at 64 bits and below (al/ah/ax/eax/rax, for example)
     scratch_64: (GPRs, [u8; NUM_GPRS as usize]),
@@ -2488,7 +2488,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 {
                     // TODO: This would be made simpler and more efficient with a proper SSE
                     //       representation.
-                    self.save_regs(&[r], ..=remaining);
+                    self.save_regs(&[r], ..);
                 }
 
                 self.block_state.regs.mark_used(r);
@@ -2652,12 +2652,25 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
             GPR::Rx(r) => {
-                let temp = self.take_reg(I64).unwrap();
+                let (temp, pop) = if let Some(reg) = self.take_reg(I64) {
+                    (reg, false)
+                } else {
+                    dynasm!(self.asm
+                        ; push rax
+                    );
+                    self.block_state.regs.mark_used(RAX);
+                    (RAX, true)
+                };
                 self.immediate_to_reg(temp, val);
                 dynasm!(self.asm
                     ; movq Rx(r), Rq(temp.rq().unwrap())
                 );
                 self.block_state.regs.release(temp);
+                if pop {
+                    dynasm!(self.asm
+                        ; push Rq(temp.rq().unwrap())
+                    );
+                }
             }
         }
     }
@@ -2945,6 +2958,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     );
 
                     self.copy_value(value, CCLoc::Stack(out_offset));
+                    self.free_value(value);
                 }
             }
             ValueLocation::Stack(o) => {
@@ -4367,7 +4381,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 ; pop Rq(gpr.rq().unwrap())
             );
             self.block_state.depth.free(1);
-            self.block_state.regs.mark_used(gpr);
+            // DON'T MARK IT USED HERE! See comment in `full_div`
         }
     }
 
@@ -4399,7 +4413,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     );
 
     // TODO: With a proper SSE-like "Value" system we could do this way better (we wouldn't have
-    //       to move `RAX` back afterwards).
+    //       to move `RAX`/`RDX` back afterwards).
     fn full_div(
         &mut self,
         dividend: ValueLocation,
@@ -4430,6 +4444,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             dynasm!(self.asm
                 ; push rax
             );
+            // DON'T FREE THIS REGISTER HERE - since we don't
+            // remove it from the stack freeing the register
+            // here will cause `take_reg` to allocate it.
             Some(())
         };
 
@@ -4440,8 +4457,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             dynasm!(self.asm
                 ; push rdx
             );
+            // DON'T FREE THIS REGISTER HERE - since we don't
+            // remove it from the stack freeing the register
+            // here will cause `take_reg` to allocate it.
             Some(())
         };
+
+        let saved = saved_rdx
+            .map(|_| RDX)
+            .into_iter()
+            .chain(saved_rax.map(|_| RAX));
 
         self.copy_value(dividend, CCLoc::Reg(RAX));
         self.free_value(dividend);
@@ -4451,14 +4476,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         do_div(self, divisor);
 
-        (
-            ValueLocation::Reg(RAX),
-            ValueLocation::Reg(RDX),
-            saved_rdx
-                .map(|_| RDX)
-                .into_iter()
-                .chain(saved_rax.map(|_| RAX)),
-        )
+        assert!(!self.block_state.regs.is_free(RAX));
+        assert!(!self.block_state.regs.is_free(RDX));
+
+        (ValueLocation::Reg(RAX), ValueLocation::Reg(RDX), saved)
     }
 
     fn i32_full_div_u(
@@ -4540,6 +4561,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; xor rdx, rdx
                     ; div Rq(r.rq().unwrap())
                 );
+                this.free_value(ValueLocation::Reg(r));
             }
         })
     }
@@ -4567,6 +4589,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; cqo
                     ; idiv Rq(r.rq().unwrap())
                 );
+                this.free_value(ValueLocation::Reg(r));
             }
         })
     }
@@ -4816,8 +4839,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         if let ValueLocation::Immediate(i) = cond {
             if i.as_i32().unwrap() == 0 {
+                self.free_value(then);
                 self.push(else_);
             } else {
+                self.free_value(else_);
                 self.push(then);
             }
 
@@ -4831,7 +4856,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 dynasm!(self.asm
                     ; test Rd(cond_reg.rq().unwrap()), Rd(cond_reg.rq().unwrap())
                 );
-
                 self.block_state.regs.release(cond_reg);
 
                 cc::NOT_EQUAL
@@ -4905,7 +4929,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) {
         let locs = arg_locs(args);
 
-        self.save_volatile(locs.len()..);
+        self.save_volatile(..locs.len());
 
         if preserve_vmctx {
             self.block_state.depth.reserve(1);
@@ -5001,7 +5025,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     //       to double up stack space right now.
     /// Saves volatile (i.e. caller-saved) registers before a function call, if they are used.
     fn save_volatile(&mut self, bounds: impl std::ops::RangeBounds<usize>) {
-        self.save_regs(SCRATCH_REGS, bounds);
+        self.save_regs(SCRATCH_REGS, ..);
     }
 
     fn save_regs<I>(&mut self, regs: &I, bounds: impl std::ops::RangeBounds<usize>)
@@ -5015,20 +5039,36 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let (start, end) = (
             match bounds.end_bound() {
                 Unbounded => 0,
-                Included(v) => stack.len() - 1 - v,
-                Excluded(v) => stack.len() - v,
+                Included(v) => stack.len().saturating_sub(1 + v),
+                Excluded(v) => stack.len().saturating_sub(*v),
             },
             match bounds.start_bound() {
                 Unbounded => stack.len(),
-                Included(v) => stack.len() - v,
-                Excluded(v) => stack.len() - 1 - v,
+                Included(v) => stack.len().saturating_sub(*v),
+                Excluded(v) => stack.len().saturating_sub(1 + v),
             },
         );
-        for val in stack[start..end].iter_mut() {
-            if let ValueLocation::Reg(vreg) = *val {
-                if regs.into_iter().any(|r| *r == vreg) {
-                    *val = self.push_physical(*val);
+
+        let mut slice = &mut stack[start..end];
+
+        loop {
+            if let Some((first, rest)) = slice.split_first_mut() {
+                if let ValueLocation::Reg(vreg) = *first {
+                    if regs.into_iter().any(|r| *r == vreg) {
+                        let old = *first;
+                        *first = self.push_physical(old);
+                        for val in &mut *rest {
+                            if *val == old {
+                                self.free_value(*val);
+                                *val = *first;
+                            }
+                        }
+                    }
                 }
+
+                slice = rest;
+            } else {
+                break;
             }
         }
 
@@ -5061,61 +5101,51 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             depth += 1;
         }
 
-        let mut pending = Vec::<(ValueLocation, CCLoc)>::new();
+        let mut pending = Vec::<(ValueLocation, CCLoc)>::with_capacity(out_locs.len());
 
         for &loc in out_locs.iter().rev() {
             let val = self.pop();
 
-            match loc {
-                CCLoc::Stack(offset) => {
-                    let offset = self.adjusted_offset(offset as i32 - depth as i32);
-
-                    if offset == -(WORD_SIZE as i32) {
-                        self.push_physical(val);
-                    } else {
-                        let gpr = self.into_reg(GPRType::Rq, val).unwrap();
-                        dynasm!(self.asm
-                            ; mov [rsp + offset], Rq(gpr.rq().unwrap())
-                        );
-                        self.block_state.regs.release(gpr);
-                    }
-                }
-                CCLoc::Reg(r) => {
-                    if val != ValueLocation::Reg(r) {
-                        if self.block_state.regs.is_free(r) {
-                            self.copy_value(val, loc);
-                            self.block_state.regs.mark_used(r);
-                            self.free_value(val);
-                        } else {
-                            pending.push((val, loc));
-                        }
-                    }
-                }
-            }
+            pending.push((val, loc));
         }
 
         while !pending.is_empty() {
             let start_len = pending.len();
 
             for (src, dst) in mem::replace(&mut pending, vec![]) {
-                if let CCLoc::Reg(r) = dst {
-                    if !self.block_state.regs.is_free(r) {
-                        pending.push((src, dst));
-                        continue;
+                if src != ValueLocation::from(dst) {
+                    if let CCLoc::Reg(r) = dst {
+                        if !self.block_state.regs.is_free(r) {
+                            pending.push((src, dst));
+                            continue;
+                        }
+
+                        self.block_state.regs.mark_used(r);
                     }
 
-                    self.block_state.regs.mark_used(r);
+                    self.copy_value(src, dst);
+                    self.free_value(src);
                 }
-
-                self.copy_value(src, dst);
-                self.free_value(src);
             }
 
             if pending.len() == start_len {
-                let (src, _) = *pending.first().unwrap();
-                let new_src = self.push_physical(src);
+                let src = *pending
+                    .iter()
+                    .filter_map(|(src, _)| {
+                        if let ValueLocation::Reg(reg) = src {
+                            Some(reg)
+                        } else {
+                            None
+                        }
+                    })
+                    .next()
+                    .expect(
+                        "Programmer error: We shouldn't need to push \
+                         intermediate args if we don't have any argument sources in registers",
+                    );
+                let new_src = self.push_physical(ValueLocation::Reg(src));
                 for (old_src, _) in pending.iter_mut() {
-                    if *old_src == src {
+                    if *old_src == ValueLocation::Reg(src) {
                         *old_src = new_src;
                     }
                 }
@@ -5158,7 +5188,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
-        self.save_volatile(locs.len()..);
+        self.save_volatile(..locs.len());
 
         self.block_state.depth.reserve(1);
         dynasm!(self.asm
@@ -5289,7 +5319,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) {
         let locs = arg_locs(arg_types);
 
-        self.save_volatile(locs.len()..);
+        self.save_volatile(..locs.len());
 
         let (_, label) = self.func_starts[defined_index as usize];
 
@@ -5320,7 +5350,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
         let depth = self.block_state.depth.clone();
 
-        self.save_volatile(locs.len()..);
+        self.save_volatile(..locs.len());
         self.pass_outgoing_args(&locs);
 
         let callee = self.take_reg(I64).unwrap();
