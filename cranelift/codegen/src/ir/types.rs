@@ -25,7 +25,7 @@ pub struct Type(u8);
 /// Not a valid type. Can't be loaded or stored. Can't be part of a SIMD vector.
 pub const INVALID: Type = Type(0);
 
-/// Start of the lane types. See also `meta-python/cdsl/types.py`.
+/// Start of the lane types. See also `meta/src/cdsl/types.rs`.
 const LANE_BASE: u8 = 0x70;
 
 /// Start of the 2-lane vector types.

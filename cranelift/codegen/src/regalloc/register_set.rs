@@ -89,9 +89,9 @@ impl RegisterSet {
 
         // Mask out the unavailable units.
         for idx in 0..self.avail.len() {
-            // If a single unit in a register is unavailable, the whole register can't be used.
-            // If a register straddles a word boundary, it will be marked as unavailable.
-            // There's an assertion in `cdsl/registers.py` to check for that.
+            // If a single unit in a register is unavailable, the whole register can't be used.  If
+            // a register straddles a word boundary, it will be marked as unavailable.  There's an
+            // assertion in `cranelift-codegen/meta/src/cdsl/regs.rs` to check for that.
             for i in 0..rc.width {
                 rsi.regs[idx] &= self.avail[idx] >> i;
             }

@@ -1,6 +1,6 @@
 //! Runtime support for precomputed constant hash tables.
 //!
-//! The `cranelift-codegen/meta-python/constant_hash.py` Python module can generate constant hash tables
+//! The `cranelift-codegen/meta/src/constant_hash.rs` Rust crate can generate constant hash tables
 //! using open addressing and quadratic probing. The hash tables are arrays that are guaranteed to:
 //!
 //! - Have a power-of-two size.
@@ -56,7 +56,7 @@ pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(
 }
 
 /// A primitive hash function for matching opcodes.
-/// Must match `cranelift-codegen/meta-python/constant_hash.py` and `cranelift-codegen/meta/constant_hash.rs`.
+/// Must match `cranelift-codegen/meta/src/constant_hash.rs`.
 pub fn simple_hash(s: &str) -> usize {
     let mut h: u32 = 5381;
     for c in s.chars() {
@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        // c.f. `meta-python/constant_hash.py` tests.
+        // c.f. `meta/src/constant_hash.rs` tests.
         assert_eq!(simple_hash("Hello"), 0x2fa70c01);
         assert_eq!(simple_hash("world"), 0x5b0c31d5);
     }

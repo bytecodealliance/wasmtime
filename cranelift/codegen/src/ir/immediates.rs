@@ -1,8 +1,8 @@
 //! Immediate operands for Cranelift instructions
 //!
 //! This module defines the types of immediate operands that can appear on Cranelift instructions.
-//! Each type here should have a corresponding definition in the `cranelift.immediates` Python
-//! module in the meta language.
+//! Each type here should have a corresponding definition in the
+//! `cranelift-codegen/meta/src/shared/immediates` crate in the meta language.
 
 use core::fmt::{self, Display, Formatter};
 use core::mem;

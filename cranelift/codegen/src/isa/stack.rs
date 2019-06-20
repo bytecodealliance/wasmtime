@@ -82,7 +82,7 @@ pub enum StackBase {
 /// This behaves like a set of `StackBase` variants.
 ///
 /// The internal representation as a `u8` is public because stack base masks are used in constant
-/// tables generated from the Python encoding definitions.
+/// tables generated from the meta-language encoding definitions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StackBaseMask(pub u8);
 

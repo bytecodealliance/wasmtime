@@ -1,7 +1,7 @@
 //! Predicate functions for testing instruction fields.
 //!
 //! This module defines functions that are used by the instruction predicates defined by
-//! `cranelift-codegen/meta-python/cdsl/predicates.py` classes.
+//! `cranelift-codegen/meta/src/cdsl/instructions.rs` classes.
 //!
 //! The predicates the operate on integer fields use `Into<i64>` as a shared trait bound. This
 //! bound is implemented by all the native integer types as well as `Imm64`.
