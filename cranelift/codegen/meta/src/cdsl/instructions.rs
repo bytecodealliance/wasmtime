@@ -183,7 +183,10 @@ impl Instruction {
     }
 
     pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
-        bind(self.clone(), lane_type.into(), Vec::new())
+        bind(self.clone(), Some(lane_type.into()), Vec::new())
+    }
+    pub fn bind_any(&self) -> BoundInstruction {
+        bind(self.clone(), None, Vec::new())
     }
 }
 
@@ -380,15 +383,34 @@ impl InstructionBuilder {
     }
 }
 
+/// A thin wrapper like Option<ValueType>, but with more precise semantics.
+#[derive(Clone)]
+pub enum ValueTypeOrAny {
+    ValueType(ValueType),
+    Any,
+}
+
+impl ValueTypeOrAny {
+    pub fn expect(self, msg: &str) -> ValueType {
+        match self {
+            ValueTypeOrAny::ValueType(vt) => vt,
+            ValueTypeOrAny::Any => panic!(format!("Unexpected Any: {}", msg)),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct BoundInstruction {
     pub inst: Instruction,
-    pub value_types: Vec<ValueType>,
+    pub value_types: Vec<ValueTypeOrAny>,
 }
 
 impl BoundInstruction {
     pub fn bind(self, lane_type: impl Into<LaneType>) -> BoundInstruction {
-        bind(self.inst, lane_type.into(), self.value_types)
+        bind(self.inst, Some(lane_type.into()), self.value_types)
+    }
+    pub fn bind_any(self) -> BoundInstruction {
+        bind(self.inst, None, self.value_types)
     }
 }
 
@@ -712,6 +734,12 @@ impl InstSpec {
             InstSpec::Bound(bound_inst) => &bound_inst.inst,
         }
     }
+    pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
+        match self {
+            InstSpec::Inst(inst) => inst.bind(lane_type),
+            InstSpec::Bound(inst) => inst.clone().bind(lane_type),
+        }
+    }
 }
 
 impl Into<InstSpec> for &Instruction {
@@ -729,10 +757,18 @@ impl Into<InstSpec> for BoundInstruction {
 /// Helper bind reused by {Bound,}Instruction::bind.
 fn bind(
     inst: Instruction,
-    lane_type: LaneType,
-    mut value_types: Vec<ValueType>,
+    lane_type: Option<LaneType>,
+    mut value_types: Vec<ValueTypeOrAny>,
 ) -> BoundInstruction {
-    value_types.push(ValueType::from(lane_type));
+    match lane_type {
+        Some(lane_type) => {
+            value_types.push(ValueTypeOrAny::ValueType(lane_type.into()));
+        }
+        None => {
+            value_types.push(ValueTypeOrAny::Any);
+        }
+    }
+
     match &inst.polymorphic_info {
         Some(poly) => {
             assert!(
@@ -747,5 +783,6 @@ fn bind(
             ));
         }
     }
+
     BoundInstruction { inst, value_types }
 }
