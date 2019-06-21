@@ -142,7 +142,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     }
 
     fn end_codegen(&mut self) {
-        self.info.rodata_size = self.offset() - self.info.jumptables_size;
+        self.info.rodata_size = self.offset() - (self.info.jumptables_size + self.info.code_size);
         self.info.total_size = self.offset();
     }
 }
