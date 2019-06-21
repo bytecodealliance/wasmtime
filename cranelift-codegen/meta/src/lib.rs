@@ -12,6 +12,7 @@ mod gen_settings;
 mod gen_types;
 
 mod constant_hash;
+mod default_map;
 mod shared;
 mod unique_table;
 
