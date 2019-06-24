@@ -26,7 +26,7 @@ cmd /c cargo build --release || goto error
 call :banner Debug build
 cmd /c cargo build || goto error
 
-call :banner Rust unit tests
+call :banner Rust unit and integration tests
 set RUST_BACKTRACE=1
 cmd /c cargo test --all || goto error
 

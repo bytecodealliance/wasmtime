@@ -42,7 +42,7 @@ pub fn instantiate<S: AsRef<str>>(
             &[bin_name.as_ref().to_owned(), ".".to_owned()],
             &[],
         )
-        .expect("instantiating wasi"),
+        .map_err(|e| format!("error instantiating WASI: {}", e))?,
     );
 
     // Compile and instantiating a wasm module.
