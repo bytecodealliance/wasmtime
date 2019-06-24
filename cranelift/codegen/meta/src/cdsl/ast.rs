@@ -440,7 +440,7 @@ impl Apply {
         format!("{}({})", self.inst.name, args)
     }
 
-    fn inst_predicate(
+    pub fn inst_predicate(
         &self,
         format_registry: &FormatRegistry,
         var_pool: &VarPool,
@@ -454,8 +454,8 @@ impl Apply {
                 // Ignore free variables for now.
                 continue;
             }
-            pred = pred.and(InstructionPredicate::new_is_field_equal(
-                iform.name,
+            pred = pred.and(InstructionPredicate::new_is_field_equal_ast(
+                iform,
                 &format_field,
                 arg.to_rust_code(var_pool),
             ));
