@@ -1,6 +1,7 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::instructions::InstructionGroupBuilder;
+use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
 use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::recipes::Recipes;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 
@@ -115,5 +116,17 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let cpu_modes = vec![rv_32, rv_64];
 
-    TargetIsa::new("riscv", inst_group, settings, regs, cpu_modes)
+    let recipes = Recipes::new();
+
+    let encodings_predicates = InstructionPredicateMap::new();
+
+    TargetIsa::new(
+        "riscv",
+        inst_group,
+        settings,
+        regs,
+        recipes,
+        cpu_modes,
+        encodings_predicates,
+    )
 }

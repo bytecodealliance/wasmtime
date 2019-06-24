@@ -1,5 +1,7 @@
 use crate::cdsl::cpu_modes::CpuMode;
+use crate::cdsl::instructions::InstructionPredicateMap;
 use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::recipes::Recipes;
 
 use crate::shared::types::Bool::B1;
 use crate::shared::types::Float::{F32, F64};
@@ -51,5 +53,17 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let cpu_modes = vec![x86_64, x86_32];
 
-    TargetIsa::new("x86", inst_group, settings, regs, cpu_modes)
+    let recipes = Recipes::new();
+
+    let encodings_predicates = InstructionPredicateMap::new();
+
+    TargetIsa::new(
+        "x86",
+        inst_group,
+        settings,
+        regs,
+        recipes,
+        cpu_modes,
+        encodings_predicates,
+    )
 }

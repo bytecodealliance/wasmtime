@@ -35,9 +35,24 @@ impl RegBank {
             classes: Vec::new(),
         }
     }
+
+    fn unit_by_name(&self, name: &'static str) -> u8 {
+        let unit = if let Some(found) = self.names.iter().position(|&reg_name| reg_name == name) {
+            found
+        } else {
+            // Try to match without the bank prefix.
+            assert!(name.starts_with(self.prefix));
+            let name_without_prefix = &name[self.prefix.len()..];
+            self.names
+                .iter()
+                .position(|&reg_name| reg_name == name_without_prefix)
+                .expect(&format!("invalid register name {}", name))
+        };
+        self.first_unit + (unit as u8)
+    }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct RegClassIndex(u32);
 entity_impl!(RegClassIndex);
 
@@ -351,5 +366,18 @@ impl IsaRegs {
         classes: PrimaryMap<RegClassIndex, RegClass>,
     ) -> Self {
         Self { banks, classes }
+    }
+
+    pub fn class_by_name(&self, name: &str) -> RegClassIndex {
+        self.classes
+            .values()
+            .find(|&class| class.name == name)
+            .expect(&format!("register class {} not found", name))
+            .index
+    }
+
+    pub fn regunit_by_name(&self, class_index: RegClassIndex, name: &'static str) -> u8 {
+        let bank_index = self.classes.get(class_index).unwrap().bank;
+        self.banks.get(bank_index).unwrap().unit_by_name(name)
     }
 }
