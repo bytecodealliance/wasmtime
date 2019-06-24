@@ -1,13 +1,15 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
+use crate::cdsl::instructions::InstructionGroupBuilder;
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::recipes::Recipes;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 
 use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I32, I64};
 use crate::shared::Definitions as SharedDefinitions;
+
+mod encodings;
+mod recipes;
 
 fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let mut setting = SettingGroupBuilder::new("riscv");
@@ -114,11 +116,16 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     rv_64.legalize_type(F32, expand);
     rv_64.legalize_type(F64, expand);
 
+    let recipes = recipes::define(shared_defs, &regs);
+
+    let encodings = encodings::define(shared_defs, &settings, &recipes);
+    rv_32.set_encodings(encodings.enc32);
+    rv_64.set_encodings(encodings.enc64);
+    let encodings_predicates = encodings.inst_pred_reg.extract();
+
+    let recipes = recipes.collect();
+
     let cpu_modes = vec![rv_32, rv_64];
-
-    let recipes = Recipes::new();
-
-    let encodings_predicates = InstructionPredicateMap::new();
 
     TargetIsa::new(
         "riscv",
