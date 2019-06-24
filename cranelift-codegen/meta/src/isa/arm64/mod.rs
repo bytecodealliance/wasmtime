@@ -1,6 +1,7 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::instructions::InstructionGroupBuilder;
+use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
 use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::recipes::Recipes;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
@@ -64,5 +65,19 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let cpu_modes = vec![a64];
 
-    TargetIsa::new("arm64", inst_group, settings, regs, cpu_modes)
+    // TODO implement arm64 recipes.
+    let recipes = Recipes::new();
+
+    // TODO implement arm64 encodings and predicates.
+    let encodings_predicates = InstructionPredicateMap::new();
+
+    TargetIsa::new(
+        "arm64",
+        inst_group,
+        settings,
+        regs,
+        recipes,
+        cpu_modes,
+        encodings_predicates,
+    )
 }

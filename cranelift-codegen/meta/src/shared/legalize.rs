@@ -804,7 +804,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
 
     expand_flags.build_and_add_to(&mut groups);
 
-    // XXX The order of declarations unfortunately matters to be compatible with the Python code.
+    // TODO The order of declarations unfortunately matters to be compatible with the Python code.
     // When it's all migrated, we can put this next to the narrow/expand build_and_add_to calls
     // above.
     widen.build_and_add_to(&mut groups);

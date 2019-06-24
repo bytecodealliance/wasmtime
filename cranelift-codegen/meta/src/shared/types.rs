@@ -1,6 +1,6 @@
 //! This module predefines all the Cranelift scalar types.
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Bool {
     /// 1-bit bool.
     B1 = 1,
@@ -41,7 +41,7 @@ impl Iterator for BoolIterator {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Int {
     /// 8-bit int.
     I8 = 8,
@@ -79,7 +79,7 @@ impl Iterator for IntIterator {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Float {
     F32 = 32,
     F64 = 64,
