@@ -67,6 +67,20 @@ impl fmt::Display for InstructionFormat {
     }
 }
 
+impl InstructionFormat {
+    pub fn imm_by_name(&self, name: &'static str) -> &FormatField {
+        self.imm_fields
+            .iter()
+            .find(|&field| field.member == name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "unexpected immediate field named {} in instruction format {}",
+                    name, self.name
+                )
+            })
+    }
+}
+
 pub struct InstructionFormatBuilder {
     name: &'static str,
     num_value_operands: usize,
@@ -198,6 +212,14 @@ impl FormatRegistry {
             .sig_to_index
             .get(&sig)
             .expect("unknown InstructionFormat; please define it in shared/formats.rs first")
+    }
+
+    pub fn by_name(&self, name: &str) -> InstructionFormatIndex {
+        self.map
+            .iter()
+            .find(|(_key, value)| value.name == name)
+            .unwrap_or_else(|| panic!("format with name '{}' doesn't exist", name))
+            .0
     }
 
     pub fn get(&self, index: InstructionFormatIndex) -> &InstructionFormat {
