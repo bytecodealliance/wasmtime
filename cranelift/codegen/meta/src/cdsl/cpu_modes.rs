@@ -35,37 +35,6 @@ impl CpuMode {
             .is_none());
     }
 
-    /// Returns a deterministically ordered, deduplicated list of TransformGroupIndex for the
-    /// transitive set of TransformGroup this TargetIsa uses.
-    pub fn transitive_transform_groups(
-        &self,
-        all_groups: &TransformGroups,
-    ) -> Vec<TransformGroupIndex> {
-        let mut roots = Vec::new();
-        if let Some(i) = &self.default_legalize {
-            roots.push(*i);
-        }
-        if let Some(i) = &self.monomorphic_legalize {
-            roots.push(*i);
-        }
-        roots.extend(self.typed_legalize.values().cloned());
-
-        let mut set = HashSet::new();
-        for root in roots {
-            set.insert(root);
-            let mut base = root;
-            // Follow the chain of chain_with.
-            while let Some(chain_with) = &all_groups.get(base).chain_with {
-                set.insert(*chain_with);
-                base = *chain_with;
-            }
-        }
-
-        let mut ret = Vec::from_iter(set);
-        ret.sort();
-        ret
-    }
-
     /// Returns a deterministically ordered, deduplicated list of TransformGroupIndex for the directly
     /// reachable set of TransformGroup this TargetIsa uses.
     pub fn direct_transform_groups(&self) -> Vec<TransformGroupIndex> {
