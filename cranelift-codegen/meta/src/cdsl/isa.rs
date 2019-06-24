@@ -13,6 +13,11 @@ pub struct TargetIsa {
     pub settings: SettingGroup,
     pub regs: IsaRegs,
     pub cpu_modes: Vec<CpuMode>,
+
+    /// TransformGroupIndex are global to all the ISAs, while we want to have indices into the
+    /// local array of transform groups that are directly used. We use this map to get this
+    /// information.
+    pub local_transform_groups: Vec<TransformGroupIndex>,
 }
 
 impl TargetIsa {
@@ -23,12 +28,29 @@ impl TargetIsa {
         regs: IsaRegs,
         cpu_modes: Vec<CpuMode>,
     ) -> Self {
+        // Compute the local TransformGroup index.
+        let mut local_transform_groups = Vec::new();
+        for cpu_mode in &cpu_modes {
+            let transform_groups = cpu_mode.direct_transform_groups();
+            for group_index in transform_groups {
+                // find() is fine here: the number of transform group is < 5 as of June 2019.
+                if local_transform_groups
+                    .iter()
+                    .find(|&val| group_index == *val)
+                    .is_none()
+                {
+                    local_transform_groups.push(group_index);
+                }
+            }
+        }
+
         Self {
             name,
             instructions,
             settings,
             regs,
             cpu_modes,
+            local_transform_groups,
         }
     }
 
@@ -39,9 +61,17 @@ impl TargetIsa {
         all_groups: &TransformGroups,
     ) -> Vec<TransformGroupIndex> {
         let mut set = HashSet::new();
-        for cpu_mode in &self.cpu_modes {
-            set.extend(cpu_mode.transitive_transform_groups(all_groups));
+
+        for &root in self.local_transform_groups.iter() {
+            set.insert(root);
+            let mut base = root;
+            // Follow the chain of chain_with.
+            while let Some(chain_with) = &all_groups.get(base).chain_with {
+                set.insert(*chain_with);
+                base = *chain_with;
+            }
         }
+
         let mut vec = Vec::from_iter(set);
         vec.sort();
         vec
@@ -49,13 +79,14 @@ impl TargetIsa {
 
     /// Returns a deterministically ordered, deduplicated list of TransformGroupIndex for the directly
     /// reachable set of TransformGroup this TargetIsa uses.
-    pub fn direct_transform_groups(&self) -> Vec<TransformGroupIndex> {
-        let mut set = HashSet::new();
-        for cpu_mode in &self.cpu_modes {
-            set.extend(cpu_mode.direct_transform_groups());
-        }
-        let mut vec = Vec::from_iter(set);
-        vec.sort();
-        vec
+    pub fn direct_transform_groups(&self) -> &Vec<TransformGroupIndex> {
+        &self.local_transform_groups
+    }
+
+    pub fn translate_group_index(&self, group_index: TransformGroupIndex) -> usize {
+        self.local_transform_groups
+            .iter()
+            .position(|&val| val == group_index)
+            .expect("TransformGroup unused by this TargetIsa!")
     }
 }

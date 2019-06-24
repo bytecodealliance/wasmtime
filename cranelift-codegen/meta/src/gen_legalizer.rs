@@ -527,7 +527,7 @@ fn gen_isa(
         direct_groups.len()
     );
     fmt.indent(|fmt| {
-        for group_index in direct_groups {
+        for &group_index in direct_groups {
             fmtln!(fmt, "{},", transform_groups.get(group_index).rust_name());
         }
     });
