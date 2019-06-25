@@ -53,7 +53,7 @@ use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wasi::instantiate_wasi;
 use wasmtime_wast::instantiate_spectest;
 
-#[cfg(unix)]
+#[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
@@ -66,8 +66,8 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--wasi-common] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-odg] [--wasi-common] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-odg] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-odg] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
     wasmtime --help | --version
 
 Options:
@@ -75,7 +75,7 @@ Options:
     -o, --optimize      runs optimization passes on the translated functions
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
-    --wasi-common       enable the wasi-common implementation of WASI
+    --wasi-c            enable the wasi-c implementation of WASI
     --preload=<wasm>    load an additional wasm module before loading the main module
     --env=<env>         pass an environment variable (\"key=value\") to the program
     --dir=<dir>         grant access to the given host directory
@@ -97,7 +97,7 @@ struct Args {
     flag_env: Vec<String>,
     flag_dir: Vec<String>,
     flag_mapdir: Vec<String>,
-    flag_wasi_common: bool,
+    flag_wasi_c: bool,
 }
 
 fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -235,17 +235,17 @@ fn main() {
     let argv = compute_argv(&args.arg_file, &args.arg_arg);
     let environ = compute_environ(&args.flag_env);
 
-    let wasi = if args.flag_wasi_common {
-        instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)
-    } else {
-        #[cfg(unix)]
+    let wasi = if args.flag_wasi_c {
+        #[cfg(feature = "wasi-c")]
         {
             instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(feature = "wasi-c"))]
         {
-            unimplemented!("wasmtime-wasi-c requires a *nix")
+            panic!("wasi-c feature not enabled at build time")
         }
+    } else {
+        instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)
     }
     .expect("instantiating wasi");
 
