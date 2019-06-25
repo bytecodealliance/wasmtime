@@ -1,7 +1,4 @@
-mod wasi;
-
 use cranelift_codegen::settings;
-use cranelift_native;
 use wasmtime_jit::Context;
 
 pub fn instantiate<S: AsRef<str>>(
@@ -35,7 +32,7 @@ pub fn instantiate<S: AsRef<str>>(
 
     context.name_instance(
         "wasi_unstable".to_owned(),
-        wasi::instantiate_wasi(
+        wasmtime_wasi::instantiate_wasi(
             "",
             global_exports,
             &get_preopens(workspace)?,
