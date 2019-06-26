@@ -309,7 +309,8 @@ pub fn define(
     "#,
         )
         .operands_in(vec![x, addr, Size, JT])
-        .operands_out(vec![entry]),
+        .operands_out(vec![entry])
+        .can_load(true),
     );
 
     ig.push(
