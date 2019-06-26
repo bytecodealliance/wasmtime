@@ -1,3 +1,0 @@
-[submodule "tests/misc-tests"]
-	path = tests/misc-tests
-	url = https://github.com/kubkon/misc-tests.git

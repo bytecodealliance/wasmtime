@@ -37,6 +37,9 @@ target-lexicon = "0.3.0"
 [patch."https://github.com/CraneStation/wasi-common"]
 wasi-common = { path = "." }
 
+[build-dependencies]
+cfg-if = "0.1.9"
+
 [lib]
 name = "wasi_common"
 crate-type = ["rlib", "staticlib", "cdylib"]

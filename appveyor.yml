@@ -9,7 +9,5 @@ install:
   - rustc -vV
   - cargo -vV
   - rustup component add rustfmt
-  - cd %APPVEYOR_BUILD_FOLDER%
-  - git submodule update --init --recursive
 build: false
 test_script: test-all.bat
