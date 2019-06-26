@@ -515,14 +515,14 @@ where
     };
     let mut skip_at_depth = None;
     while let Some((depth_delta, entry)) = entries.next_dfs()? {
-        let depth_delta = if let Some(depth) = skip_at_depth {
+        let depth_delta = if let Some((depth, cached)) = skip_at_depth {
             let new_depth = depth + depth_delta;
-            if new_depth >= 0 {
-                skip_at_depth = Some(new_depth);
+            if new_depth > 0 {
+                skip_at_depth = Some((new_depth, cached));
                 continue;
             }
             skip_at_depth = None;
-            new_depth
+            new_depth + cached
         } else {
             depth_delta
         };
@@ -530,7 +530,7 @@ where
             let range = get_subprogram_range(entry, addr_tr)?;
             if range.is_none() {
                 // Subprogram was not compiled: discarding all its info.
-                skip_at_depth = Some(0);
+                skip_at_depth = Some((0, depth_delta));
                 continue;
             }
             range
