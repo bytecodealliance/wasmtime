@@ -164,7 +164,7 @@ jump_table_entry = Instruction(
     Currently, the only type supported is entries which are relative to the
     base of the jump table.
     """,
-    ins=(x, addr, Size, JT), outs=entry)
+    ins=(x, addr, Size, JT), outs=entry, can_load=True)
 
 jump_table_base = Instruction(
     'jump_table_base', r"""
