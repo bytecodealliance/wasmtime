@@ -1,10 +1,8 @@
 # wasi-common
-[![travis-build-status]][travis] [![appveyor-build-status]][appveyor] [![rustc-1.36]][rustc]
+[![travis-build-status]][travis] [![rustc-1.36]][rustc]
 
 [travis-build-status]: https://travis-ci.org/CraneStation/wasi-common.svg?branch=master
 [travis]: https://travis-ci.org/CraneStation/wasi-common
-[appveyor-build-status]: https://ci.appveyor.com/api/projects/status/github/cranestation/wasi-common?svg=true
-[appveyor]: https://ci.appveyor.com/project/cranestation/wasi-common
 [rustc-1.36]: https://img.shields.io/badge/rustc-1.36+-lightgray.svg
 [rustc]: https://blog.rust-lang.org/2019/07/04/Rust-1.36.0.html
 [Wasmtime]: https://github.com/CraneStation/wasmtime
