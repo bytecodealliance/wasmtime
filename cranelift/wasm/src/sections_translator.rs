@@ -1,8 +1,8 @@
 //! Helper functions to gather information for each of the non-function sections of a
 //! WebAssembly module.
 //!
-//! The code of theses helper function is straightforward since it is only about reading metadata
-//! about linear memories, tables, globals, etc. and storing them for later use.
+//! The code of these helper functions is straightforward since they only read metadata
+//! about linear memories, tables, globals, etc. and store them for later use.
 //!
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
