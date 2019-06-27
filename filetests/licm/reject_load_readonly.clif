@@ -19,11 +19,14 @@ ebb1(v2: i32, v3: i64):
     v5 = heap_addr.i64 heap0, v4, 1
     v6 = load.i32 aligned readonly v5
     v7 = iadd v2, v6
-    brz v2, ebb2(v2)
+    brz v2, ebb3(v2)
+    jump ebb2
+
+ebb2:
     v8 = isub v2, v4
     jump ebb1(v8, v3)
 
-ebb2(v9: i32):
+ebb3(v9: i32):
     return v9
 }
 
@@ -40,10 +43,13 @@ ebb2(v9: i32):
 ; nextln: ebb1(v2: i32, v3: i64):
 ; nextln:    v6 = load.i32 aligned readonly v5
 ; nextln:    v7 = iadd v2, v6
-; nextln:    brz v2, ebb2(v2)
-; nextln:    v8 = isub v2, v4
+; nextln:    brz v2, ebb3(v2)
+; nextln:    jump ebb2
+; nextln: 
+; nextln: ebb2:
+; nextln:    v8 = isub.i32 v2, v4
 ; nextln:    jump ebb1(v8, v3)
 ; nextln: 
-; nextln: ebb2(v9: i32):
+; nextln: ebb3(v9: i32):
 ; nextln:    return v9
 ; nextln: }

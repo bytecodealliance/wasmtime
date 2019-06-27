@@ -39,6 +39,9 @@ ebb0(v0: i32):
             v19 = iadd v18, v2
             v20 = iadd.i32 v2, v3
 [SBzero#18] brz.i32 v1, ebb1(v20)
+            fallthrough ebb7
+
+         ebb7:
 [Iret#19]   return v19
 }
 
@@ -53,10 +56,10 @@ ebb0(v0: i32):
 ; nextln: 
 ; nextln: ebb1(v1: i32):
 ; nextln:     v4 = iadd.i32 v2, v1
-; nextln:     brz v1, ebb7(v2)
-; nextln:     jump ebb8(v4)
+; nextln:     brz v1, ebb8(v2)
+; nextln:     jump ebb9(v4)
 ; nextln: 
-; nextln: ebb7(v21: i32):
+; nextln: ebb8(v21: i32):
 ; nextln:     v8 = iadd.i32 v6, v1
 ; nextln:     v11 = iadd.i32 v1, v4
 ; nextln:     jump ebb2(v21)
@@ -70,7 +73,7 @@ ebb0(v0: i32):
 ; nextln:     brz.i32 v1, ebb2(v9)
 ; nextln:     jump ebb6(v10)
 ; nextln: 
-; nextln: ebb8(v22: i32):
+; nextln: ebb9(v22: i32):
 ; nextln:     v15 = iadd.i32 v4, v13
 ; nextln:     jump ebb4(v22)
 ; nextln: 
@@ -86,5 +89,8 @@ ebb0(v0: i32):
 ; nextln: ebb6(v18: i32):
 ; nextln:     v19 = iadd v18, v2
 ; nextln:     brz.i32 v1, ebb1(v20)
+; nextln:     fallthrough ebb7
+; nextln: 
+; nextln: ebb7:
 ; nextln:     return v19
 ; nextln: }
