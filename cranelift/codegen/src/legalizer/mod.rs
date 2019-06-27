@@ -21,6 +21,7 @@ use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
 use crate::predicates;
 use crate::timing;
+use std::vec::Vec;
 
 mod boundary;
 mod call;
@@ -36,24 +37,29 @@ use self::heap::expand_heap_addr;
 use self::libcall::expand_as_libcall;
 use self::table::expand_table_addr;
 
-/// Legalize `inst` for `isa`. Return true if any changes to the code were
-/// made; return false if the instruction was successfully encoded as is.
+enum LegalizeInstResult {
+    Done,
+    Legalized,
+    SplitLegalizePending,
+}
+
+/// Legalize `inst` for `isa`.
 fn legalize_inst(
     inst: ir::Inst,
     pos: &mut FuncCursor,
     cfg: &mut ControlFlowGraph,
     isa: &dyn TargetIsa,
-) -> bool {
+) -> LegalizeInstResult {
     let opcode = pos.func.dfg[inst].opcode();
 
     // Check for ABI boundaries that need to be converted to the legalized signature.
     if opcode.is_call() {
         if boundary::handle_call_abi(inst, pos.func, cfg) {
-            return true;
+            return LegalizeInstResult::Legalized;
         }
     } else if opcode.is_return() {
         if boundary::handle_return_abi(inst, pos.func, cfg) {
-            return true;
+            return LegalizeInstResult::Legalized;
         }
     } else if opcode.is_branch() {
         split::simplify_branch_arguments(&mut pos.func.dfg, inst);
@@ -65,48 +71,48 @@ fn legalize_inst(
             _ => panic!("Expected isplit: {}", pos.func.dfg.display_inst(inst, None)),
         };
 
-        let should_replace = match pos.func.dfg.value_def(arg) {
+        match pos.func.dfg.value_def(arg) {
             ir::ValueDef::Result(inst, num) => {
                 if let ir::InstructionData::Binary { opcode, args, .. } = pos.func.dfg[inst] {
-                    opcode == ir::Opcode::Iconcat
+                    if opcode != ir::Opcode::Iconcat {
+                        return LegalizeInstResult::SplitLegalizePending;
+                    }
                 } else {
                     // `arg` was not created by an `iconcat` instruction. Don't try to resolve it,
                     // as otherwise `split::isplit` will re-insert the original `isplit`, causing
                     // an endless loop.
-                    false
+                    return LegalizeInstResult::SplitLegalizePending;
                 }
             }
-            ir::ValueDef::Param(ebb, num) => true,
-        };
-
-        if should_replace {
-            let res = pos.func.dfg.inst_results(inst).to_vec();
-            assert_eq!(res.len(), 2);
-            let (resl, resh) = (res[0], res[1]); // Prevent borrowck error
-
-            dbg!(pos.position());
-
-            // Remove old isplit
-            pos.func.dfg.clear_results(inst);
-            pos.remove_inst();
-
-            dbg!(pos.position());
-
-            let curpos = pos.position();
-            let srcloc = pos.srcloc();
-            let (xl, xh) = split::isplit(pos.func, cfg, curpos, srcloc, arg);
-
-            pos.func.dfg.change_to_alias(resl, xl);
-            pos.func.dfg.change_to_alias(resh, xh);
-
-            dbg!(&pos.func);
-
-            return true;
+            ir::ValueDef::Param(ebb, num) => {},
         }
+
+        let res = pos.func.dfg.inst_results(inst).to_vec();
+        assert_eq!(res.len(), 2);
+        let (resl, resh) = (res[0], res[1]); // Prevent borrowck error
+
+        dbg!(pos.position());
+
+        // Remove old isplit
+        pos.func.dfg.clear_results(inst);
+        pos.remove_inst();
+
+        dbg!(pos.position());
+
+        let curpos = pos.position();
+        let srcloc = pos.srcloc();
+        let (xl, xh) = split::isplit(pos.func, cfg, curpos, srcloc, arg);
+
+        pos.func.dfg.change_to_alias(resl, xl);
+        pos.func.dfg.change_to_alias(resh, xh);
+
+        dbg!(&pos.func);
+
+        return LegalizeInstResult::Legalized;
     }
 
     match pos.func.update_encoding(inst, isa) {
-        Ok(()) => false,
+        Ok(()) => LegalizeInstResult::Done,
         Err(action) => {
             // We should transform the instruction into legal equivalents.
             // If the current instruction was replaced, we need to double back and revisit
@@ -115,12 +121,16 @@ fn legalize_inst(
             // There's a risk of infinite looping here if the legalization patterns are
             // unsound. Should we attempt to detect that?
             if action(inst, pos.func, cfg, isa) {
-                return true;
+                return LegalizeInstResult::Legalized;
             }
 
             // We don't have any pattern expansion for this instruction either.
             // Try converting it to a library call as a last resort.
-            expand_as_libcall(inst, pos.func, isa)
+            if expand_as_libcall(inst, pos.func, isa) {
+                LegalizeInstResult::Legalized
+            } else {
+                LegalizeInstResult::Done
+            }
         }
     }
 }
@@ -139,6 +149,7 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     func.encodings.resize(func.dfg.num_insts());
 
     let mut pos = FuncCursor::new(func);
+    let mut pending_splits = Vec::new();
 
     // Process EBBs in layout order. Some legalization actions may split the current EBB or append
     // new ones to the end. We need to make sure we visit those new EBBs too.
@@ -148,14 +159,25 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
         let mut prev_pos = pos.position();
 
         while let Some(inst) = pos.next_inst() {
-            if legalize_inst(inst, &mut pos, cfg, isa) {
-                // Go back and legalize the inserted return value conversion instructions.
-                pos.set_position(prev_pos);
-            } else {
+            match legalize_inst(inst, &mut pos, cfg, isa) {
                 // Remember this position in case we need to double back.
-                prev_pos = pos.position();
+                LegalizeInstResult::Done => prev_pos = pos.position(),
+
+                // Go back and legalize the inserted return value conversion instructions.
+                LegalizeInstResult::Legalized => pos.set_position(prev_pos),
+
+                // The argument of a `isplit` or `vsplit` instruction didn't resolve to a
+                // `iconcat` or `vconcat` instruction. Try again after legalizing the rest of
+                // the instructions.
+                LegalizeInstResult::SplitLegalizePending => pending_splits.push(inst),
             }
         }
+    }
+
+    // Try legalizing `isplit` and `vsplit` instructions, which could not previously be legalized.
+    for inst in pending_splits {
+        //pos.goto_inst(inst);
+        //legalize_inst(inst, &mut pos, cfg, isa);
     }
 
     // Now that we've lowered all br_tables, we don't need the jump tables anymore.
