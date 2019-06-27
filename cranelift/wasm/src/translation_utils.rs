@@ -119,6 +119,14 @@ pub fn type_to_type(ty: wasmparser::Type) -> Result<ir::Type, ()> {
     })
 }
 
+/// Helper function translating wasmparser block signatures to Cranelift types when possible.
+pub fn blocktype_to_type(ty: wasmparser::TypeOrFuncType) -> Result<ir::Type, ()> {
+    match ty {
+        wasmparser::TypeOrFuncType::Type(ty) => type_to_type(ty),
+        wasmparser::TypeOrFuncType::FuncType(_) => unimplemented!("multi-value block signatures"),
+    }
+}
+
 /// Turns a `wasmparser` `f32` into a `Cranelift` one.
 pub fn f32_translation(x: wasmparser::Ieee32) -> ir::immediates::Ieee32 {
     ir::immediates::Ieee32::with_bits(x.bits())
@@ -130,14 +138,17 @@ pub fn f64_translation(x: wasmparser::Ieee64) -> ir::immediates::Ieee64 {
 }
 
 /// Translate a `wasmparser` type into its `Cranelift` equivalent, when possible
-pub fn num_return_values(ty: wasmparser::Type) -> usize {
+pub fn num_return_values(ty: wasmparser::TypeOrFuncType) -> usize {
     match ty {
-        wasmparser::Type::EmptyBlockType => 0,
-        wasmparser::Type::I32
-        | wasmparser::Type::F32
-        | wasmparser::Type::I64
-        | wasmparser::Type::F64 => 1,
-        _ => panic!("unsupported return value type"),
+        wasmparser::TypeOrFuncType::Type(ty) => match ty {
+            wasmparser::Type::EmptyBlockType => 0,
+            wasmparser::Type::I32
+            | wasmparser::Type::F32
+            | wasmparser::Type::I64
+            | wasmparser::Type::F64 => 1,
+            _ => panic!("unsupported return value type"),
+        },
+        wasmparser::TypeOrFuncType::FuncType(_) => unimplemented!("multi-value block signatures"),
     }
 }
 

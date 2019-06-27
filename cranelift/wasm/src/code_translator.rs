@@ -25,7 +25,9 @@
 use super::{hash_map, HashMap};
 use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
 use crate::state::{ControlStackFrame, TranslationState};
-use crate::translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
+use crate::translation_utils::{
+    blocktype_to_type, f32_translation, f64_translation, num_return_values,
+};
 use crate::translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
@@ -130,7 +132,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ***********************************************************************************/
         Operator::Block { ty } => {
             let next = builder.create_ebb();
-            if let Ok(ty_cre) = type_to_type(ty) {
+            if let Ok(ty_cre) = blocktype_to_type(ty) {
                 builder.append_ebb_param(next, ty_cre);
             }
             state.push_block(next, num_return_values(ty));
@@ -138,7 +140,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
             let next = builder.create_ebb();
-            if let Ok(ty_cre) = type_to_type(ty) {
+            if let Ok(ty_cre) = blocktype_to_type(ty) {
                 builder.append_ebb_param(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
@@ -156,7 +158,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             //   and we add nothing;
             // - either the If have an Else clause, in that case the destination of this jump
             //   instruction will be changed later when we translate the Else operator.
-            if let Ok(ty_cre) = type_to_type(ty) {
+            if let Ok(ty_cre) = blocktype_to_type(ty) {
                 builder.append_ebb_param(if_not, ty_cre);
             }
             state.push_if(jump_inst, if_not, num_return_values(ty));
