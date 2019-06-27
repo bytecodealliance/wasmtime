@@ -10,16 +10,22 @@ ebb1(v10: i32):
     v11 = iconst.i32 1
     v12 = iconst.i32 2
     v13 = iadd v11, v12
-    brz v10, ebb2(v10)
+    brz v10, ebb4(v10)
+    jump ebb2
+
+ebb2:
     v15 = isub v10, v11
-    brz v15, ebb3(v15)
+    brz v15, ebb5(v15)
+    jump ebb3
+
+ebb3:
     v14 = isub v10, v11
     jump ebb1(v14)
 
-ebb2(v20: i32):
+ebb4(v20: i32):
     return v20
 
-ebb3(v30: i32):
+ebb5(v30: i32):
     v31 = iadd v11, v13
     jump ebb1(v30)
 
@@ -33,15 +39,21 @@ ebb3(v30: i32):
 ; nextln:     jump ebb1(v0)
 ; nextln: 
 ; nextln: ebb1(v10: i32):
-; nextln:     brz v10, ebb2(v10)
-; nextln:     v15 = isub v10, v11
-; nextln:     brz v15, ebb3(v15)
-; nextln:     v14 = isub v10, v11
+; nextln:     brz v10, ebb4(v10)
+; nextln:     jump ebb2
+; nextln: 
+; nextln: ebb2:
+; nextln:     v15 = isub.i32 v10, v11
+; nextln:     brz v15, ebb5(v15)
+; nextln:     jump ebb3
+; nextln: 
+; nextln: ebb3:
+; nextln:     v14 = isub.i32 v10, v11
 ; nextln:     jump ebb1(v14)
 ; nextln: 
-; nextln: ebb2(v20: i32):
+; nextln: ebb4(v20: i32):
 ; nextln:     return v20
 ; nextln: 
-; nextln: ebb3(v30: i32):
+; nextln: ebb5(v30: i32):
 ; nextln:     jump ebb1(v30)
 ; nextln: }
