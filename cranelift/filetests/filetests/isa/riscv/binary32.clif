@@ -95,36 +95,77 @@ ebb0(v9999: i32):
     call_indirect sig0, v2()                    ; bin: 000a80e7
 
     brz v1, ebb3
-    brnz v1, ebb1
+    fallthrough ebb4
 
+ebb4:
+    brnz v1, ebb1
+    fallthrough ebb5
+
+ebb5:
     ; jalr %x0, %x1, 0
     return v9999                        ; bin: 00008067
 
 ebb1:
     ; beq 0x000
     br_icmp eq v1, v2, ebb1             ; bin: 01550063
+    fallthrough ebb100
+
+ebb100:
     ; bne 0xffc
     br_icmp ne v1, v2, ebb1             ; bin: ff551ee3
+    fallthrough ebb101
+
+ebb101:
     ; blt 0xff8
     br_icmp slt v1, v2, ebb1            ; bin: ff554ce3
+    fallthrough ebb102
+
+ebb102:
     ; bge 0xff4
     br_icmp sge v1, v2, ebb1            ; bin: ff555ae3
+    fallthrough ebb103
+
+ebb103:
     ; bltu 0xff0
     br_icmp ult v1, v2, ebb1            ; bin: ff5568e3
+    fallthrough ebb104
+
+ebb104:
     ; bgeu 0xfec
     br_icmp uge v1, v2, ebb1            ; bin: ff5576e3
+    fallthrough ebb105
+
+ebb105:
 
     ; Forward branches.
+    fallthrough ebb106
+
+ebb106:
     ; beq 0x018
     br_icmp eq v2, v1, ebb2             ; bin: 00aa8c63
+    fallthrough ebb107
+
+ebb107:
     ; bne 0x014
     br_icmp ne v2, v1, ebb2             ; bin: 00aa9a63
+    fallthrough ebb108
+
+ebb108:
     ; blt 0x010
     br_icmp slt v2, v1, ebb2            ; bin: 00aac863
+    fallthrough ebb109
+
+ebb109:
     ; bge 0x00c
     br_icmp sge v2, v1, ebb2            ; bin: 00aad663
+    fallthrough ebb110
+
+ebb110:
     ; bltu 0x008
     br_icmp ult v2, v1, ebb2            ; bin: 00aae463
+    fallthrough ebb111
+
+ebb111:
     ; bgeu 0x004
     br_icmp uge v2, v1, ebb2            ; bin: 00aaf263
 
@@ -137,6 +178,9 @@ ebb2:
 ebb3:
     ; beq x, %x0
     brz v1, ebb3                        ; bin: 00050063
+    fallthrough ebb6
+
+ebb6:
     ; bne x, %x0
     brnz v1, ebb3                       ; bin: fe051ee3
 
