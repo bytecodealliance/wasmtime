@@ -5,13 +5,16 @@ test verifier
 function %nonsense(i32, i32) -> f32 {
 ; check: digraph "%nonsense" {
 ; regex: I=\binst\d+\b
-; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
+; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb3}"]
 
 ebb0(v1: i32, v2: i32):
     v3 = f64const 0x0.0
     brz v2, ebb2            ; unordered: ebb0:$BRZ -> ebb2
+    jump ebb3               ; unordered: ebb0:$JUMP -> ebb3
+
+ebb3:
     v4 = iconst.i32 0
-    jump ebb1(v4)           ; unordered: ebb0:$JUMP -> ebb1
+    jump ebb1(v4)           ; unordered: ebb3:inst4 -> ebb1
 
 ebb1(v5: i32):
     v6 = imul_imm v5, 4
@@ -22,7 +25,10 @@ ebb1(v5: i32):
     v11 = fadd v9, v10
     v12 = iadd_imm v5, 1
     v13 = icmp ult v12, v2
-    brnz v13, ebb1(v12)     ; unordered: ebb1:inst12 -> ebb1
+    brnz v13, ebb1(v12)     ; unordered: ebb1:inst13 -> ebb1
+    jump ebb4               ; unordered: ebb1:inst14 -> ebb4
+
+ebb4:
     v14 = f64const 0.0
     v15 = f64const 0.0
     v16 = fdiv v14, v15
