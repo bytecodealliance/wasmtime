@@ -7,6 +7,9 @@ function %br_icmp(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
 [Op1icscc#39,%rdx]  v2 = icmp slt v0, v1
 [Op1t8jccd_long#85] brnz v2, ebb1
+[-]                 fallthrough ebb2
+
+ebb2:
 [Op1ret#c3]         return v1
 
 ebb1:
@@ -18,6 +21,9 @@ ebb1:
 ; nextln:    v9 = ifcmp v0, v1
 ; nextln:    v2 = trueif slt v9
 ; nextln:    brif slt v9, ebb1
+; nextln:    fallthrough ebb2
+; nextln: 
+; nextln: ebb2:
 ; nextln:    return v1
 ; nextln: 
 ; nextln: ebb1:
@@ -31,6 +37,9 @@ function %br_icmp_inverse(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
 [Op1icscc#39,%rdx]  v2 = icmp slt v0, v1
 [Op1t8jccd_long#84] brz v2, ebb1
+[-]                 fallthrough ebb2
+
+ebb2:
 [Op1ret#c3]         return v1
 
 ebb1:
@@ -42,6 +51,9 @@ ebb1:
 ; nextln:    v9 = ifcmp v0, v1
 ; nextln:    v2 = trueif slt v9
 ; nextln:    brif sge v9, ebb1
+; nextln:    fallthrough ebb2
+; nextln: 
+; nextln: ebb2:
 ; nextln:    return v1
 ; nextln: 
 ; nextln: ebb1:
@@ -55,6 +67,9 @@ function %br_icmp_imm(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
 [Op1icscc_ib#7083]  v2 = icmp_imm slt v0, 2
 [Op1t8jccd_long#84] brz v2, ebb1
+[-]                 fallthrough ebb2
+
+ebb2:
 [Op1ret#c3]         return v1
 
 ebb1:
@@ -66,6 +81,9 @@ ebb1:
 ; nextln:    v9 = ifcmp_imm v0, 2
 ; nextln:    v2 = trueif slt v9
 ; nextln:    brif sge v9, ebb1
+; nextln:    fallthrough ebb2
+; nextln: 
+; nextln: ebb2:
 ; nextln:    return v1
 ; nextln: 
 ; nextln: ebb1:
@@ -79,6 +97,9 @@ function %br_fcmp(f32, f32) -> f32 {
 ebb0(v0: f32, v1: f32):
 [Op2fcscc#42e,%rdx] v2 = fcmp gt v0, v1
 [Op1t8jccd_long#84] brz v2, ebb1
+[-]                 fallthrough ebb2
+
+ebb2:
 [Op1ret#c3]         return v1
 
 ebb1:
@@ -91,6 +112,9 @@ ebb1:
 ; nextln:    v19 = ffcmp v0, v1
 ; nextln:    v2 = trueff gt v19
 ; nextln:    brff ule v19, ebb1
+; nextln:    fallthrough ebb2
+; nextln: 
+; nextln: ebb2:
 ; nextln:    return v1
 ; nextln: 
 ; nextln: ebb1:
