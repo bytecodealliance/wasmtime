@@ -213,20 +213,23 @@ function %divert(i32) -> i32 system_v {
 ebb0(v0: i32):
     v2 = iconst.i32 0
     v3 = iconst.i32 1
-    jump ebb3(v0, v3, v2)
+    jump ebb1(v0, v3, v2)
 
-ebb3(v4: i32, v5: i32, v6: i32):
-    brz v4, ebb4
+ebb1(v4: i32, v5: i32, v6: i32):
+    brz v4, ebb3
+    fallthrough ebb2
+
+ebb2:
     v7 = iadd v5, v6
     v8 = iadd_imm v4, -1
-    jump ebb3(v8, v7, v5)
+    jump ebb1(v8, v7, v5)
 
-ebb4:
+ebb3:
     return v5
 }
 
 ; check: function %divert
-; check: regmove v5, %rcx -> %rbx
+; check: regmove.i32 v5, %rcx -> %rbx
 ; check: [Op1popq#58,%rbx]                   v15 = x86_pop.i64
 
 ; Stack limit checking

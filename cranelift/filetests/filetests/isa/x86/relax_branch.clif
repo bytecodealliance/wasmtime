@@ -55,6 +55,9 @@ function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] ba
 @004c [Op1r_id#4081,%rcx]           v37 = band_imm v35, 255
 [Op1rcmp_ib#7083,%rflags]           v97 = ifcmp_imm v37, 26
 @0050 [Op1brib#70]                  brif sge v97, ebb6
+@0050 [-]                           fallthrough ebb10
+
+                                ebb10:
 [Op1umr#89,%rcx]                    v101 = copy v18
 @0054 [Op1jmpb#eb]                  jump ebb5(v18, v101)
 
@@ -82,6 +85,9 @@ function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] ba
 [Op1rcmp_ib#7083,%rflags]           v98 = ifcmp_imm v63, 26
 @0084 [RexOp1rmov#89]               regmove v47, %rdi -> %rbx
 @0084 [Op1brib#70]                  brif sge v98, ebb8
+@0084 [-]                           fallthrough ebb11
+
+                                ebb11:
 [RexOp1umr#89,%rdx]                 v103 = copy.i32 v29
 @0088 [Op1jmpb#eb]                  jump ebb7(v29, v10, v21, v103)
 
@@ -99,6 +105,9 @@ function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] ba
 @0098 [Op2urm_noflags_abcd#4b6,%rbx] v77 = bint.i32 v76
 @0099 [RexOp1rr#21,%r10]            v78 = band.i32 v50, v77
 @009a [RexOp1tjccb#74]              brz v78, ebb9
+@009a [-]                           fallthrough ebb12
+
+                                ebb12:
 [RexOp1umr#89,%rcx]                 v99 = copy v81
 [Op1umr#89,%rdx]                    v100 = copy v79
 @00a4 [RexOp1rmov#89]               regmove v100, %rdx -> %rdi
