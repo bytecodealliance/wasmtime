@@ -3,6 +3,8 @@ test domtree
 function %test(i32) {
     ebb0(v0: i32):
         brz v0, ebb1    ; dominates: ebb1
+        jump ebb12      ; dominates: ebb12
+    ebb12:
         brnz v0, ebb2   ; dominates: ebb2 ebb5
         jump ebb3       ; dominates: ebb3
     ebb1:
@@ -18,6 +20,8 @@ function %test(i32) {
         return
     ebb6:
         brz v0, ebb8    ; dominates: ebb11 ebb8
+        jump ebb13      ; dominates: ebb13
+    ebb13:
         brnz v0, ebb9   ; dominates: ebb9
         jump ebb10
     ebb7:
@@ -33,15 +37,17 @@ function %test(i32) {
 }
 
 ; check: domtree_preorder {
-; nextln: ebb0: ebb1 ebb2 ebb3 ebb5
+; nextln: ebb0: ebb1 ebb12
 ; nextln: ebb1: ebb4
 ; nextln: ebb4: ebb6 ebb7 ebb10
-; nextln: ebb6: ebb8 ebb9 ebb11
+; nextln: ebb6: ebb8 ebb13 ebb11
 ; nextln: ebb8:
+; nextln: ebb13: ebb9
 ; nextln: ebb9:
 ; nextln: ebb11:
 ; nextln: ebb7:
 ; nextln: ebb10:
+; nextln: ebb12: ebb2 ebb3 ebb5
 ; nextln: ebb2:
 ; nextln: ebb3:
 ; nextln: ebb5:
