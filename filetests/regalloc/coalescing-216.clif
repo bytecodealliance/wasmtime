@@ -14,15 +14,27 @@ ebb0(v0: i32, v1: i64):
 ebb4(v11: i64, v29: i64):
     v6 = iconst.i32 0
     brz v6, ebb14
+    fallthrough ebb15
+
+ebb15:
     v9 = iconst.i32 -17
     v12 = iconst.i32 0xffff_ffff_ffff_8000
     jump ebb9(v12)
 
 ebb9(v10: i32):
     brnz v10, ebb8(v9, v11, v11)
+    fallthrough ebb16
+
+ebb16:
     brz.i32 v9, ebb13
+    fallthrough ebb17
+
+ebb17:
     v13 = iconst.i32 0
     brnz v13, ebb6(v11, v11)
+    fallthrough ebb18
+
+ebb18:
     v14 = iconst.i32 0
     brz v14, ebb12
     jump ebb11
@@ -40,6 +52,9 @@ ebb13:
 ebb10(v21: i64):
     v16 = iconst.i32 0
     brnz v16, ebb6(v21, v11)
+    fallthrough ebb19
+
+ebb19:
     v17 = iconst.i32 0xffff_ffff_ffff_9f35
     jump ebb8(v17, v21, v11)
 

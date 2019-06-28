@@ -20,6 +20,9 @@ ebb5(v9: f64):
     v6 = iconst.i32 0
     v7 = iconst.i32 1
     brnz v7, ebb4(v6)
+    fallthrough ebb8
+
+ebb8:
     v8 = iconst.i32 0
     jump ebb7(v8)
 
