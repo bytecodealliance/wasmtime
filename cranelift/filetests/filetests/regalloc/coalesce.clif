@@ -12,6 +12,9 @@ ebb0(v0: i32):
     ; not: copy
     ; v0 is used by the branch and passed as an arg - that's no conflict.
     brnz v0, ebb1(v0)
+    fallthrough ebb2
+
+ebb2:
     ; v0 is live across the branch above. That's no conflict.
     v1 = iadd_imm v0, 7
     jump ebb1(v1)
@@ -26,6 +29,9 @@ ebb0(v0: i32):
     ; check: $(cp1=$V) = copy v0
     ; nextln: brnz v0, ebb1($cp1)
     brnz v0, ebb1(v0)
+    fallthrough ebb2
+
+ebb2:
     ; not: copy
     v1 = iadd_imm v0, 7
     jump ebb1(v1)
@@ -42,6 +48,9 @@ ebb0(v0: i32):
     ; check: $(cp1=$V) = copy v0
     ; nextln: brnz v0, ebb1($cp1, v0)
     brnz v0, ebb1(v0, v0)
+    fallthrough ebb2
+
+ebb2:
     v1 = iadd_imm v0, 7
     v2 = iadd_imm v1, 56
     jump ebb1(v1, v2)
@@ -59,6 +68,9 @@ ebb0(v0: i32):
     ; not: copy
     ; check: brnz v0, ebb1($cp0)
     brnz v0, ebb1(v0)
+    fallthrough ebb2
+
+ebb2:
     v1 = iadd_imm v0, 7
     ; v1 and v0 interfere here:
     v2 = iadd_imm v0, 8
@@ -89,6 +101,9 @@ ebb1(v10: i32, v11: i32):
     ; not: copy
     ; check: brnz v13, ebb1($nv11b, v12)
     brnz v13, ebb1(v11, v12)
+    fallthrough ebb2
+
+ebb2:
     return v12
 }
 
@@ -116,7 +131,13 @@ ebb0(v0: i32):
 
 ebb2(v3: i32, v4: i32):
     brnz v3, ebb2(v3, v4)
+    fallthrough ebb3
+
+ebb3:
     v5 = iconst.i32 1
     brnz v3, ebb2(v2, v5)
+    fallthrough ebb4
+
+ebb4:
     return
 }

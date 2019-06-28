@@ -25,6 +25,9 @@ ebb0(v0: i64):
     v20 = iconst.i32 0x4ffe
     v16 = icmp uge v2, v20
     brz v16, ebb5
+    fallthrough ebb9
+
+ebb9:
     trap heap_oob
 
 ebb5:
@@ -44,6 +47,9 @@ ebb3(v7: i32):
     v26 = iconst.i32 0x4ffe
     v22 = icmp uge v7, v26
     brz v22, ebb6
+    fallthrough ebb10
+
+ebb10:
     trap heap_oob
 
 ebb6:
@@ -65,6 +71,9 @@ ebb2:
     v31 = iconst.i32 0x4ffe
     v27 = icmp uge v10, v31
     brz v27, ebb7
+    fallthrough ebb11
+
+ebb11:
     trap heap_oob
 
 ebb7:
@@ -78,6 +87,9 @@ ebb7:
     v36 = iconst.i32 0x4ffe
     v32 = icmp uge v13, v36
     brz v32, ebb8
+    fallthrough ebb12
+
+ebb12:
     trap heap_oob
 
 ebb8:

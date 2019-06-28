@@ -20,6 +20,9 @@ ebb0(v0: i64, v1: f32, v2: f64, v3: i32, v4: i32, v5: i64):
     v44 = iconst.i64 0
     v37 = icmp slt v0, v44
     brnz v37, ebb2
+    fallthrough ebb11
+
+ebb11:
     v38 = fcvt_from_sint.f64 v0
     jump ebb3(v38)
 
@@ -41,6 +44,9 @@ ebb3(v15: f64):
     v54 = iconst.i64 0
     v47 = icmp.i64 slt v13, v54
     brnz v47, ebb4
+    fallthrough ebb12
+
+ebb12:
     v48 = fcvt_from_sint.f64 v13
     jump ebb5(v48)
 
@@ -57,6 +63,9 @@ ebb5(v20: f64):
     v63 = iconst.i64 0
     v56 = icmp.i64 slt v7, v63
     brnz v56, ebb6
+    fallthrough ebb13
+
+ebb13:
     v57 = fcvt_from_sint.f64 v7
     jump ebb7(v57)
 
@@ -82,8 +91,14 @@ ebb7(v21: f64):
     v69 = iconst.i64 0x8000_0000_0000_0000
     v65 = icmp ne v30, v69
     brnz v65, ebb8
+    fallthrough ebb15
+
+ebb15:
     v66 = fcmp uno v29, v29
     brz v66, ebb9
+    fallthrough ebb16
+
+ebb16:
     trap bad_toint
 
 ebb9:
@@ -91,6 +106,9 @@ ebb9:
     v67 = bitcast.f64 v70
     v68 = fcmp gt v67, v29
     brz v68, ebb10
+    fallthrough ebb17
+
+ebb17:
     trap int_ovf
 
 ebb10:
@@ -118,6 +136,9 @@ ebb0(v0: i64):
     v7 = icmp uge v3, v6
     ; If we're unlucky, there are no ABCD registers available for v7 at this branch.
     brz v7, ebb2
+    fallthrough ebb4
+
+ebb4:
     trap oob
 
 ebb2:
@@ -128,6 +149,9 @@ ebb2:
     v11 = iadd v8, v10
     v12 = load.i64 v11
     brnz v12, ebb3
+    fallthrough ebb5
+
+ebb5:
     trap icall_null
 
 ebb3:
