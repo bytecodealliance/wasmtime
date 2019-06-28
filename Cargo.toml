@@ -21,7 +21,8 @@ log = "0.4"
 nix = "0.13"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features=["std", "handleapi", "processthreadsapi", "winbase", "ws2def", "fileapi"] }
+winx = { path = "winx" }
+winapi = "0.3"
 
 [dev-dependencies]
 wasmtime-runtime = { git = "https://github.com/cranestation/wasmtime" }
@@ -45,3 +46,5 @@ name = "wasi_common"
 crate-type = ["rlib", "staticlib", "cdylib"]
 
 [workspace]
+members = ["wasi-common-cbindgen"]
+exclude = ["winx"]

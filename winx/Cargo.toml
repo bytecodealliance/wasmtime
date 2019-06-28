@@ -1,0 +1,9 @@
+[package]
+name = "winx"
+version = "0.1.0"
+authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
+edition = "2018"
+
+[dependencies]
+winapi = { version = "0.3", features = ["std", "errhandlingapi", "handleapi", "processthreadsapi", "securitybaseapi", "winbase", "winerror", "ws2def", "fileapi", "aclapi" ] }
+bitflags = "1.0"

@@ -1,12 +1,9 @@
+use super::host_impl;
 use crate::host;
 
 use std::fs::File;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle};
 use std::path::PathBuf;
-use winapi::shared::minwindef::FALSE;
-use winapi::um::handleapi::DuplicateHandle;
-use winapi::um::processthreadsapi::GetCurrentProcess;
-use winapi::um::winnt::DUPLICATE_SAME_ACCESS;
 
 #[derive(Clone, Debug)]
 pub struct FdObject {
@@ -27,12 +24,8 @@ pub struct FdEntry {
 impl Drop for FdObject {
     fn drop(&mut self) {
         if self.needs_close {
-            unsafe {
-                if winapi::um::handleapi::CloseHandle(self.raw_handle) == 0 {
-                    // TODO: use DWORD WINAPI GetLastError(void) to get error
-                    eprintln!("FdObject::drop(): couldn't close raw Handle");
-                }
-            }
+            winx::handle::close(self.raw_handle)
+                .unwrap_or_else(|e| eprintln!("FdObject::drop(): {}", e))
         }
     }
 }
@@ -43,37 +36,30 @@ impl FdEntry {
     }
 
     pub fn duplicate<F: AsRawHandle>(fd: &F) -> Self {
-        unsafe {
-            let source = fd.as_raw_handle();
-            let mut dest = 0 as RawHandle;
-
-            let cur_proc = GetCurrentProcess();
-            if DuplicateHandle(
-                cur_proc,
-                source,
-                cur_proc,
-                &mut dest,
-                0, // dwDesiredAccess; this flag is ignored if DUPLICATE_SAME_ACCESS is specified
-                FALSE,
-                DUPLICATE_SAME_ACCESS,
-            ) == FALSE
-            {
-                panic!("Couldn't duplicate handle");
-            }
-
-            Self::from_raw_handle(dest)
-        }
+        unsafe { Self::from_raw_handle(winx::handle::dup(fd.as_raw_handle()).unwrap()) }
     }
 }
 
 impl FromRawHandle for FdEntry {
-    // TODO: implement
     unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self {
-        let (ty, rights_base, rights_inheriting) = (
-            host::__WASI_FILETYPE_REGULAR_FILE,
-            host::RIGHTS_REGULAR_FILE_BASE,
-            host::RIGHTS_REGULAR_FILE_INHERITING,
-        );
+        use winx::file::{get_file_access_rights, AccessRight};
+
+        let (ty, mut rights_base, rights_inheriting) =
+            determine_type_rights(raw_handle).expect("can determine type rights");
+
+        if ty != host::__WASI_FILETYPE_CHARACTER_DEVICE {
+            // TODO: is there a way around this? On windows, it seems
+            // we cannot check access rights for stdout/in handles
+            let rights =
+                get_file_access_rights(raw_handle).expect("can determine file access rights");
+            let rights = AccessRight::from_bits_truncate(rights);
+            if rights.contains(AccessRight::FILE_GENERIC_READ) {
+                rights_base |= host::__WASI_RIGHT_FD_READ;
+            }
+            if rights.contains(AccessRight::FILE_GENERIC_WRITE) {
+                rights_base |= host::__WASI_RIGHT_FD_WRITE;
+            }
+        }
 
         Self {
             fd_object: FdObject {
@@ -86,4 +72,58 @@ impl FromRawHandle for FdEntry {
             preopen_path: None,
         }
     }
+}
+
+pub unsafe fn determine_type_rights(
+    raw_handle: RawHandle,
+) -> Result<
+    (
+        host::__wasi_filetype_t,
+        host::__wasi_rights_t,
+        host::__wasi_rights_t,
+    ),
+    host::__wasi_errno_t,
+> {
+    let (ty, rights_base, rights_inheriting) = {
+        let file_type = winx::file::get_file_type(raw_handle).map_err(host_impl::errno_from_win)?;
+        if file_type.is_char() {
+            // character file: LPT device or console
+            // TODO: rule out LPT device
+            (
+                host::__WASI_FILETYPE_CHARACTER_DEVICE,
+                host::RIGHTS_TTY_BASE,
+                host::RIGHTS_TTY_BASE,
+            )
+        } else if file_type.is_disk() {
+            // disk file: file, dir or disk device
+            let file = std::mem::ManuallyDrop::new(File::from_raw_handle(raw_handle));
+            let meta = file.metadata().map_err(|_| host::__WASI_EINVAL)?;
+            if meta.is_dir() {
+                (
+                    host::__WASI_FILETYPE_DIRECTORY,
+                    host::RIGHTS_DIRECTORY_BASE,
+                    host::RIGHTS_DIRECTORY_INHERITING,
+                )
+            } else if meta.is_file() {
+                (
+                    host::__WASI_FILETYPE_REGULAR_FILE,
+                    host::RIGHTS_REGULAR_FILE_BASE,
+                    host::RIGHTS_REGULAR_FILE_INHERITING,
+                )
+            } else {
+                return Err(host::__WASI_EINVAL);
+            }
+        } else if file_type.is_pipe() {
+            // pipe object: socket, named pipe or anonymous pipe
+            // TODO: what about pipes, etc?
+            (
+                host::__WASI_FILETYPE_SOCKET_STREAM,
+                host::RIGHTS_SOCKET_BASE,
+                host::RIGHTS_SOCKET_INHERITING,
+            )
+        } else {
+            return Err(host::__WASI_EINVAL);
+        }
+    };
+    Ok((ty, rights_base, rights_inheriting))
 }

@@ -8,81 +8,125 @@ use std::ffi::{OsStr, OsString};
 use std::marker::PhantomData;
 use std::os::windows::prelude::{OsStrExt, OsStringExt};
 use std::slice;
-use winapi::shared::{ntdef, ws2def};
 
-// these will be obsolete once https://github.com/rust-lang/rust/pull/60334
-// lands in stable
-pub struct IoVec<'a> {
-    vec: ws2def::WSABUF,
-    _p: PhantomData<&'a [u8]>,
-}
-
-pub struct IoVecMut<'a> {
-    vec: ws2def::WSABUF,
-    _p: PhantomData<&'a mut [u8]>,
-}
-
-impl<'a> IoVec<'a> {
-    #[inline]
-    pub fn new(buf: &'a [u8]) -> Self {
-        assert!(buf.len() <= ntdef::ULONG::max_value() as usize);
-        Self {
-            vec: ws2def::WSABUF {
-                len: buf.len() as ntdef::ULONG,
-                buf: buf.as_ptr() as *mut u8 as *mut ntdef::CHAR,
-            },
-            _p: PhantomData,
-        }
-    }
-
-    #[inline]
-    pub fn as_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.vec.buf as *mut u8, self.vec.len as usize) }
+pub fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_errno_t {
+    // TODO: implement error mapping between Windows and WASI
+    use winx::winerror::WinError::*;
+    match error {
+        ERROR_SUCCESS => host::__WASI_ESUCCESS,
+        ERROR_BAD_ENVIRONMENT => host::__WASI_E2BIG,
+        ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND => host::__WASI_ENOENT,
+        ERROR_TOO_MANY_OPEN_FILES => host::__WASI_ENFILE,
+        ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION => host::__WASI_EACCES,
+        ERROR_INVALID_HANDLE | ERROR_INVALID_NAME => host::__WASI_EBADF,
+        ERROR_NOT_ENOUGH_MEMORY | ERROR_OUTOFMEMORY => host::__WASI_ENOMEM,
+        ERROR_DIR_NOT_EMPTY => host::__WASI_ENOTEMPTY,
+        ERROR_DEV_NOT_EXIST => host::__WASI_ENODEV,
+        ERROR_NOT_READY | ERROR_BUSY => host::__WASI_EBUSY,
+        ERROR_NOT_SUPPORTED => host::__WASI_ENOTSUP,
+        ERROR_FILE_EXISTS => host::__WASI_EEXIST,
+        ERROR_BROKEN_PIPE => host::__WASI_EPIPE,
+        ERROR_BUFFER_OVERFLOW => host::__WASI_ENAMETOOLONG,
+        ERROR_DISK_FULL => host::__WASI_ENOSPC,
+        ERROR_SHARING_BUFFER_EXCEEDED => host::__WASI_ENFILE,
+        _ => host::__WASI_ENOTSUP,
     }
 }
 
-impl<'a> IoVecMut<'a> {
-    #[inline]
-    pub fn new(buf: &'a mut [u8]) -> Self {
-        assert!(buf.len() <= ntdef::ULONG::max_value() as usize);
-        Self {
-            vec: ws2def::WSABUF {
-                len: buf.len() as ntdef::ULONG,
-                buf: buf.as_mut_ptr() as *mut u8 as *mut ntdef::CHAR,
-            },
-            _p: PhantomData,
-        }
-    }
-
-    #[inline]
-    pub fn as_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.vec.buf as *mut u8, self.vec.len as usize) }
-    }
-
-    #[inline]
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.vec.buf as *mut u8, self.vec.len as usize) }
-    }
-}
-
-pub unsafe fn ciovec_to_win<'a>(ciovec: &'a host::__wasi_ciovec_t) -> IoVec<'a> {
+pub unsafe fn ciovec_to_win<'a>(ciovec: &'a host::__wasi_ciovec_t) -> winx::io::IoVec<'a> {
     let slice = slice::from_raw_parts(ciovec.buf as *const u8, ciovec.buf_len);
-    IoVec::new(slice)
+    winx::io::IoVec::new(slice)
 }
 
-pub unsafe fn ciovec_to_win_mut<'a>(ciovec: &'a mut host::__wasi_ciovec_t) -> IoVecMut<'a> {
+pub unsafe fn ciovec_to_win_mut<'a>(
+    ciovec: &'a mut host::__wasi_ciovec_t,
+) -> winx::io::IoVecMut<'a> {
     let slice = slice::from_raw_parts_mut(ciovec.buf as *mut u8, ciovec.buf_len);
-    IoVecMut::new(slice)
+    winx::io::IoVecMut::new(slice)
 }
 
-pub unsafe fn iovec_to_win<'a>(iovec: &'a host::__wasi_iovec_t) -> IoVec<'a> {
+pub unsafe fn iovec_to_win<'a>(iovec: &'a host::__wasi_iovec_t) -> winx::io::IoVec<'a> {
     let slice = slice::from_raw_parts(iovec.buf as *const u8, iovec.buf_len);
-    IoVec::new(slice)
+    winx::io::IoVec::new(slice)
 }
 
-pub unsafe fn iovec_to_win_mut<'a>(iovec: &'a mut host::__wasi_iovec_t) -> IoVecMut<'a> {
+pub unsafe fn iovec_to_win_mut<'a>(iovec: &'a mut host::__wasi_iovec_t) -> winx::io::IoVecMut<'a> {
     let slice = slice::from_raw_parts_mut(iovec.buf as *mut u8, iovec.buf_len);
-    IoVecMut::new(slice)
+    winx::io::IoVecMut::new(slice)
+}
+
+pub fn win_from_fdflags(
+    fdflags: host::__wasi_fdflags_t,
+) -> (winx::file::AccessRight, winx::file::FlagsAndAttributes) {
+    use winx::file::{AccessRight, FlagsAndAttributes};
+    // TODO verify this!
+    let mut win_rights = AccessRight::empty();
+    let mut win_flags_attrs = FlagsAndAttributes::empty();
+
+    if fdflags & host::__WASI_FDFLAG_NONBLOCK != 0 {
+        win_flags_attrs.insert(FlagsAndAttributes::FILE_FLAG_OVERLAPPED);
+    }
+    if fdflags & host::__WASI_FDFLAG_APPEND != 0 {
+        win_rights.insert(AccessRight::FILE_APPEND_DATA);
+    }
+    if fdflags & host::__WASI_FDFLAG_DSYNC != 0
+        || fdflags & host::__WASI_FDFLAG_RSYNC != 0
+        || fdflags & host::__WASI_FDFLAG_SYNC != 0
+    {
+        win_rights.insert(AccessRight::SYNCHRONIZE);
+    }
+    (win_rights, win_flags_attrs)
+}
+
+pub fn fdflags_from_win(rights: winx::file::AccessRight) -> host::__wasi_fdflags_t {
+    use winx::file::AccessRight;
+    let mut fdflags = 0;
+    // TODO verify this!
+    if rights.contains(AccessRight::FILE_APPEND_DATA) {
+        fdflags |= host::__WASI_FDFLAG_APPEND;
+    }
+    if rights.contains(AccessRight::SYNCHRONIZE) {
+        fdflags |= host::__WASI_FDFLAG_DSYNC;
+        fdflags |= host::__WASI_FDFLAG_RSYNC;
+        fdflags |= host::__WASI_FDFLAG_SYNC;
+    }
+    // The NONBLOCK equivalent is FILE_FLAG_OVERLAPPED
+    // but it seems winapi doesn't provide a mechanism
+    // for checking whether the handle supports async IO.
+    // On the contrary, I've found some dicsussion online
+    // which suggests that on Windows all handles should
+    // generally be assumed to be opened with async support
+    // and then the program should fallback should that **not**
+    // be the case at the time of the operation.
+    // TODO: this requires further investigation
+    fdflags
+}
+
+pub fn win_from_oflags(
+    oflags: host::__wasi_oflags_t,
+) -> (
+    winx::file::CreationDisposition,
+    winx::file::FlagsAndAttributes,
+) {
+    use winx::file::{CreationDisposition, FlagsAndAttributes};
+
+    let win_flags_attrs = if oflags & host::__WASI_O_DIRECTORY != 0 {
+        FlagsAndAttributes::FILE_FLAG_BACKUP_SEMANTICS
+    } else {
+        FlagsAndAttributes::FILE_ATTRIBUTE_NORMAL
+    };
+
+    let win_disp = if oflags & host::__WASI_O_CREAT != 0 && oflags & host::__WASI_O_EXCL != 0 {
+        CreationDisposition::CREATE_NEW
+    } else if oflags & host::__WASI_O_CREAT != 0 {
+        CreationDisposition::CREATE_ALWAYS
+    } else if oflags & host::__WASI_O_TRUNC != 0 {
+        CreationDisposition::TRUNCATE_EXISTING
+    } else {
+        CreationDisposition::OPEN_EXISTING
+    };
+
+    (win_disp, win_flags_attrs)
 }
 
 pub fn path_from_raw(raw_path: &[u8]) -> OsString {
