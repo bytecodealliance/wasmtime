@@ -1,11 +1,13 @@
 test verifier
 
-function %test(i32) {
+function %test_1(i32) {
     ebb0(v0: i32):
-        jump ebb1       ; error: terminator
+        return          ; error: terminator
         return
-    ebb1:
-        jump ebb2
+}
+function %test_2(i32) {
+    ebb0(v0: i32):
+        jump ebb2       ; error: a terminator instruction was encountered before the end of ebb0
         brz v0, ebb3
     ebb2:
         jump ebb3
@@ -13,7 +15,7 @@ function %test(i32) {
         return
 }
 
-function %test(i32) {    ; Ok
+function %test_3(i32) { ; Ok
     ebb0(v0: i32):
         return
 }
