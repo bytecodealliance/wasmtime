@@ -4,10 +4,10 @@ use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::sections_translator::{
     parse_code_section, parse_data_section, parse_element_section, parse_export_section,
     parse_function_section, parse_global_section, parse_import_section, parse_memory_section,
-    parse_start_section, parse_table_section, parse_type_section,
+    parse_name_section, parse_start_section, parse_table_section, parse_type_section,
 };
 use cranelift_codegen::timing;
-use wasmparser::{ModuleReader, SectionCode};
+use wasmparser::{CustomSectionKind, ModuleReader, SectionCode};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cranelift IR
 /// [`Function`](cranelift_codegen::ir::Function).
@@ -81,6 +81,14 @@ pub fn translate_module<'data>(
                     message: "don't know how to handle the data count section yet",
                     offset: reader.current_position(),
                 });
+            }
+
+            SectionCode::Custom {
+                kind: CustomSectionKind::Name,
+                name: _,
+            } => {
+                let names = section.get_name_section_reader()?;
+                parse_name_section(names, environ)?;
             }
 
             SectionCode::Custom { name, kind: _ } => {

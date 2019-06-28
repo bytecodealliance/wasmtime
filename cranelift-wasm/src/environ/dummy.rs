@@ -17,7 +17,7 @@ use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
-use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
@@ -124,6 +124,9 @@ pub struct DummyEnvironment {
 
     /// Instructs to collect debug data during translation.
     debug_info: bool,
+
+    /// Function names.
+    function_names: SecondaryMap<FuncIndex, String>,
 }
 
 impl DummyEnvironment {
@@ -135,6 +138,7 @@ impl DummyEnvironment {
             func_bytecode_sizes: Vec::new(),
             return_mode,
             debug_info,
+            function_names: SecondaryMap::new(),
         }
     }
 
@@ -151,6 +155,12 @@ impl DummyEnvironment {
     /// Return the number of imported functions within this `DummyEnvironment`.
     pub fn get_num_func_imports(&self) -> usize {
         self.info.imported_funcs.len()
+    }
+
+    /// Return the name of the function, if a name for the function with
+    /// the corresponding index exists.
+    pub fn get_func_name(&self, func_index: FuncIndex) -> Option<&str> {
+        self.function_names.get(func_index).map(String::as_ref)
     }
 }
 
@@ -537,6 +547,11 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         };
         self.func_bytecode_sizes.push(body_bytes.len());
         self.info.function_bodies.push(func);
+        Ok(())
+    }
+
+    fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+        self.function_names[func_index] = String::from(name);
         Ok(())
     }
 }

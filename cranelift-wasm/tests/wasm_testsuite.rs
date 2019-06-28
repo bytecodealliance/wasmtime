@@ -2,7 +2,7 @@ use cranelift_codegen::isa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::verifier;
-use cranelift_wasm::{translate_module, DummyEnvironment, ReturnMode};
+use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::fs;
 use std::fs::File;
 use std::io;
@@ -10,7 +10,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 use target_lexicon::triple;
-use wabt::{wat2wasm_with_features, Features};
+use wabt::{wat2wasm_with_features, Features, Wat2Wasm};
 
 #[test]
 fn testsuite() {
@@ -31,17 +31,42 @@ fn testsuite() {
     let flags = Flags::new(settings::builder());
     for path in paths {
         let path = path.path();
-        handle_module(&path, &flags, ReturnMode::NormalReturns);
+        let data = read_module(&path);
+        handle_module(data, &flags, ReturnMode::NormalReturns);
     }
 }
 
 #[test]
 fn use_fallthrough_return() {
     let flags = Flags::new(settings::builder());
-    handle_module(
-        Path::new("../wasmtests/use_fallthrough_return.wat"),
-        &flags,
-        ReturnMode::FallthroughReturn,
+    let path = Path::new("../wasmtests/use_fallthrough_return.wat");
+    let data = read_module(&path);
+    handle_module(data, &flags, ReturnMode::FallthroughReturn);
+}
+
+#[test]
+fn use_name_section() {
+    let wat = r#"
+        (module $module_name
+            (func $func_name (local $loc_name i32)
+            )
+        )"#;
+    let data = Wat2Wasm::new()
+        .write_debug_names(true)
+        .convert(wat)
+        .unwrap_or_else(|e| panic!("error converting wat to wasm: {:?}", e));
+
+    let flags = Flags::new(settings::builder());
+    let triple = triple!("riscv64");
+    let isa = isa::lookup(triple).unwrap().finish(flags.clone());
+    let return_mode = ReturnMode::NormalReturns;
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), return_mode, false);
+
+    translate_module(data.as_ref(), &mut dummy_environ).unwrap();
+
+    assert_eq!(
+        dummy_environ.get_func_name(FuncIndex::from_u32(0)).unwrap(),
+        "func_name"
     );
 }
 
@@ -52,10 +77,10 @@ fn read_file(path: &Path) -> io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-fn handle_module(path: &Path, flags: &Flags, return_mode: ReturnMode) {
+fn read_module(path: &Path) -> Vec<u8> {
     let mut features = Features::new();
     features.enable_all();
-    let data = match path.extension() {
+    match path.extension() {
         None => {
             panic!("the file extension is not wasm or wat");
         }
@@ -72,7 +97,10 @@ fn handle_module(path: &Path, flags: &Flags, return_mode: ReturnMode) {
             }
             None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
         },
-    };
+    }
+}
+
+fn handle_module(data: Vec<u8>, flags: &Flags, return_mode: ReturnMode) {
     let triple = triple!("riscv64");
     let isa = isa::lookup(triple).unwrap().finish(flags.clone());
     let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), return_mode, false);
