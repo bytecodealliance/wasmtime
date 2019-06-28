@@ -5,11 +5,20 @@ function %iflags(i32) {
 ebb200(v0: i32):
     v1 = ifcmp_imm v0, 17
     brif eq v1, ebb201
+    jump ebb400
+
+ebb400:
     brif ugt v1, ebb202
+    jump ebb401
+
+ebb401:
     v2 = iconst.i32 34
     v3 = ifcmp v0, v2
     v4 = trueif eq v3
     brnz v4, ebb202
+    jump ebb402
+
+ebb402:
     return
 
 ebb201:
@@ -21,7 +30,7 @@ ebb202:
 ; check: v1 = ifcmp_imm v0, 17
 ; check: brif eq v1, ebb201
 ; check: brif ugt v1, ebb202
-; check: v3 = ifcmp v0, v2
+; check: v3 = ifcmp.i32 v0, v2
 ; check: v4 = trueif eq v3
 
 function %fflags(f32) {
@@ -29,9 +38,18 @@ ebb200(v0: f32):
     v1 = f32const 0x34.0p0
     v2 = ffcmp v0, v1
     brff eq v2, ebb201
+    jump ebb400
+
+ebb400:
     brff ord v2, ebb202
+    jump ebb401
+
+ebb401:
     v3 = trueff gt v2
     brnz v3, ebb202
+    jump ebb402
+
+ebb402:
     return
 
 ebb201:
