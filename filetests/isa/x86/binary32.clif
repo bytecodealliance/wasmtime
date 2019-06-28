@@ -472,12 +472,21 @@ ebb0:
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 85 c9 74 0e
+    fallthrough ebb3
+
+ebb3:
     ; asm: testl %esi, %esi
     ; asm: je ebb1
     brz v2, ebb1                                ; bin: 85 f6 74 0a
+    fallthrough ebb4
+
+ebb4:
     ; asm: testl %ecx, %ecx
     ; asm: jne ebb1
     brnz v1, ebb1                               ; bin: 85 c9 75 06
+    fallthrough ebb5
+
+ebb5:
     ; asm: testl %esi, %esi
     ; asm: jne ebb1
     brnz v2, ebb1                               ; bin: 85 f6 75 02
@@ -506,16 +515,27 @@ ebb0:
     ; asm: testl $0xff, %edi
     ; asm: je ebb1
     brz v3, ebb1                                ; bin: f7 c7 000000ff 0f 84 00000015
+    fallthrough ebb2
+
+ebb2:
     ; asm: testb %bl, %bl
     ; asm: je ebb1
     brz v4, ebb1                                ; bin: 84 db 74 11
+    fallthrough ebb3
+
+ebb3:
     ; asm: testl $0xff, %edi
     ; asm: jne ebb1
     brnz v3, ebb1                               ; bin: f7 c7 000000ff 0f 85 00000005
+    fallthrough ebb4
+
+ebb4:
     ; asm: testb %bl, %bl
     ; asm: jne ebb1
     brnz v4, ebb1                               ; bin: 84 db 75 01
+    fallthrough ebb5
 
+ebb5:
     return
 
 ebb1:
@@ -537,24 +557,54 @@ ebb1:
 
     ; asm: je ebb1
     brif eq v11, ebb1                           ; bin: 74 fa
+    jump ebb2
+
+ebb2:
     ; asm: jne ebb1
     brif ne v11, ebb1                           ; bin: 75 f8
+    jump ebb3
+
+ebb3:
     ; asm: jl ebb1
     brif slt v11, ebb1                          ; bin: 7c f6
+    jump ebb4
+
+ebb4:
     ; asm: jge ebb1
     brif sge v11, ebb1                          ; bin: 7d f4
+    jump ebb5
+
+ebb5:
     ; asm: jg ebb1
     brif sgt v11, ebb1                          ; bin: 7f f2
+    jump ebb6
+
+ebb6:
     ; asm: jle ebb1
     brif sle v11, ebb1                          ; bin: 7e f0
+    jump ebb7
+
+ebb7:
     ; asm: jb ebb1
     brif ult v11, ebb1                          ; bin: 72 ee
+    jump ebb8
+
+ebb8:
     ; asm: jae ebb1
     brif uge v11, ebb1                          ; bin: 73 ec
+    jump ebb9
+
+ebb9:
     ; asm: ja ebb1
     brif ugt v11, ebb1                          ; bin: 77 ea
+    jump ebb10
+
+ebb10:
     ; asm: jbe ebb1
     brif ule v11, ebb1                          ; bin: 76 e8
+    jump ebb11
+
+ebb11:
 
     ; asm: sete %bl
     [-,%rbx]            v20 = trueif eq v11                           ; bin: 0f 94 c3
