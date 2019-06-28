@@ -468,6 +468,14 @@ pub trait ModuleEnvironment<'data> {
         data: &'data [u8],
     ) -> WasmResult<()>;
 
+    /// Declares the name of a function to the environment.
+    ///
+    /// By default this does nothing, but implementations can use this to read
+    /// the function name subsection of the custom name section if desired.
+    fn declare_func_name(&mut self, _func_index: FuncIndex, _name: &'data str) -> WasmResult<()> {
+        Ok(())
+    }
+
     /// Indicates that a custom section has been found in the wasm file
     fn custom_section(&mut self, name: &'data str, data: &'data [u8]) -> WasmResult<()> {
         drop((name, data));
