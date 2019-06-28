@@ -16,6 +16,8 @@ function %test(i32) {
         jump ebb5
     ebb5:
         brz v0, ebb4
+        jump ebb6     ; dominates: ebb6
+    ebb6:
         return
 }
 ; Fall-through-first, prune-at-source DFT:
@@ -28,7 +30,9 @@ function %test(i32) {
 ;                 ebb2:brz v3, ebb1 -
 ;                 ebb2:brz v4, ebb4 {
 ;                     ebb2: jump ebb5 {
-;                         ebb5 {}
+;                         ebb5: jump ebb6 {
+;                             ebb6 {}
+;                         }
 ;                     }
 ;                     ebb4 {}
 ;                 }
@@ -43,6 +47,7 @@ function %test(i32) {
 ; } ebb0
 ;
 ; check: cfg_postorder:
+; sameln: ebb6
 ; sameln: ebb5
 ; sameln: ebb3
 ; sameln: ebb4
@@ -56,7 +61,8 @@ function %test(i32) {
 ; nextln: ebb2:
 ; nextln: ebb4:
 ; nextln: ebb3:
-; nextln: ebb5:
+; nextln: ebb5: ebb6
+; nextln: ebb6:
 ; nextln: }
 
 function %loop2(i32) system_v {
@@ -72,10 +78,14 @@ function %loop2(i32) system_v {
         jump ebb4
     ebb4:
         brz v0, ebb3
+        jump ebb8       ; dominates: ebb8
+    ebb8:
         brnz v0, ebb5
         jump ebb6       ; dominates: ebb6
     ebb5:
         brz v0, ebb4
+        jump ebb9       ; dominates: ebb9
+    ebb9:
         trap user0
     ebb6:
         jump ebb7       ; dominates: ebb7
@@ -83,9 +93,11 @@ function %loop2(i32) system_v {
         return
 }
 ; check: cfg_postorder:
+; sameln: ebb9
 ; sameln: ebb5
 ; sameln: ebb7
 ; sameln: ebb6
+; sameln: ebb8
 ; sameln: ebb3
 ; sameln: ebb4
 ; sameln: ebb2
@@ -96,9 +108,11 @@ function %loop2(i32) system_v {
 ; nextln: ebb0: ebb1 ebb2 ebb4 ebb3 ebb5
 ; nextln: ebb1:
 ; nextln: ebb2:
-; nextln: ebb4: ebb6
+; nextln: ebb4: ebb8
+; nextln: ebb8: ebb6
 ; nextln: ebb6: ebb7
 ; nextln: ebb7:
 ; nextln: ebb3:
-; nextln: ebb5:
+; nextln: ebb5: ebb9
+; nextln: ebb9:
 ; nextln: }

@@ -6,8 +6,14 @@ function %test(i32) {
         jump ebb1       ; dominates: ebb1
     ebb1:
         brz v0, ebb2    ; dominates: ebb2 ebb7
+        jump ebb20      ; dominates: ebb20
+    ebb20:
         brnz v0, ebb3   ; dominates: ebb3
+        jump ebb21      ; dominates: ebb21
+    ebb21:
         brz v0, ebb4    ; dominates: ebb4
+        jump ebb22      ; dominates: ebb22
+    ebb22:
         brnz v0, ebb5   ; dominates: ebb5
         jump ebb6       ; dominates: ebb6
     ebb2:
@@ -22,7 +28,11 @@ function %test(i32) {
         jump ebb7
     ebb7:
         brnz v0, ebb8   ; dominates: ebb8 ebb12
+        jump ebb23      ; dominates: ebb23
+    ebb23:
         brz v0, ebb9    ; dominates: ebb9
+        jump ebb24      ; dominates: ebb24
+    ebb24:
         brnz v0, ebb10  ; dominates: ebb10
         jump ebb11      ; dominates: ebb11
     ebb8:
@@ -43,16 +53,21 @@ function %test(i32) {
 ; check: domtree_preorder {
 ; nextln: ebb0: ebb13 ebb1
 ; nextln: ebb13:
-; nextln: ebb1: ebb2 ebb3 ebb4 ebb5 ebb6 ebb7
+; nextln: ebb1: ebb2 ebb20 ebb7
 ; nextln: ebb2:
+; nextln: ebb20: ebb3 ebb21
 ; nextln: ebb3:
+; nextln: ebb21: ebb4 ebb22
 ; nextln: ebb4:
+; nextln: ebb22: ebb5 ebb6
 ; nextln: ebb5:
 ; nextln: ebb6:
-; nextln: ebb7: ebb8 ebb9 ebb10 ebb12 ebb11
+; nextln: ebb7: ebb8 ebb23 ebb12
 ; nextln: ebb8:
+; nextln: ebb23: ebb9 ebb24
 ; nextln: ebb9:
+; nextln: ebb24: ebb10 ebb11
 ; nextln: ebb10:
-; nextln: ebb12:
 ; nextln: ebb11:
+; nextln: ebb12:
 ; nextln: }

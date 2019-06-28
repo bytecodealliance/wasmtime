@@ -3,6 +3,8 @@ test domtree
 function %loop1(i32) {
     ebb0(v0: i32):
         brz v0, ebb1    ; dominates: ebb1 ebb6
+        jump ebb10      ; dominates: ebb10
+    ebb10:
         brnz v0, ebb2   ; dominates: ebb2 ebb9
         jump ebb3       ; dominates: ebb3
     ebb1:
@@ -14,10 +16,14 @@ function %loop1(i32) {
         jump ebb9
     ebb4:
         brz v0, ebb4
+        jump ebb11      ; dominates: ebb11
+    ebb11:
         brnz v0, ebb6
         jump ebb7
     ebb5:
         brz v0, ebb7
+        jump ebb12      ; dominates: ebb12
+    ebb12:
         brnz v0, ebb8
         jump ebb9
     ebb6:
@@ -31,16 +37,19 @@ function %loop1(i32) {
 }
 
 ; check: domtree_preorder {
-; nextln: ebb0: ebb1 ebb2 ebb6 ebb3 ebb9
+; nextln: ebb0: ebb1 ebb10 ebb6
 ; nextln: ebb1:
+; nextln: ebb10: ebb2 ebb3 ebb9
 ; nextln: ebb2: ebb4 ebb5 ebb7 ebb8
-; nextln: ebb4:
-; nextln: ebb5:
+; nextln: ebb4: ebb11
+; nextln: ebb11:
+; nextln: ebb5: ebb12
+; nextln: ebb12:
 ; nextln: ebb7:
 ; nextln: ebb8:
-; nextln: ebb6:
 ; nextln: ebb3:
 ; nextln: ebb9:
+; nextln: ebb6:
 ; nextln: }
 
 function %loop2(i32) system_v {
@@ -59,9 +68,12 @@ function %loop2(i32) system_v {
         jump ebb5
     ebb5:
         brz v0, ebb4
+        jump ebb6       ; dominates: ebb6
+    ebb6:
         return
 }
 ; check: cfg_postorder:
+; sameln: ebb6
 ; sameln: ebb5
 ; sameln: ebb3
 ; sameln: ebb4
@@ -75,5 +87,6 @@ function %loop2(i32) system_v {
 ; nextln: ebb2:
 ; nextln: ebb4:
 ; nextln: ebb3:
-; nextln: ebb5:
+; nextln: ebb5: ebb6
+; nextln: ebb6:
 ; nextln: }
