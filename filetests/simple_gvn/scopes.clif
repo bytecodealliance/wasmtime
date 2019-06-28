@@ -5,6 +5,9 @@ ebb0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32):
     v5 = iconst.i32 16
     ; check: v5 = iconst.i32 16
     brz v0, ebb1
+    jump ebb5
+
+ebb5:
     v6 = iconst.i32 17
     ; check: v6 = iconst.i32 17
     v7 = iconst.i32 16
@@ -30,6 +33,9 @@ ebb2:
     v14 = iconst.i32 16
     ; not: v14 = iconst.i32 16
     brz v1, ebb3
+    jump ebb6
+
+ebb6:
     v15 = iconst.i32 20
     ; check: v15 = iconst.i32 20
     v16 = iconst.i32 19
