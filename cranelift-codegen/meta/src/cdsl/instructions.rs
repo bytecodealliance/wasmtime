@@ -14,7 +14,7 @@ use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::types::{LaneType, ReferenceType, ValueType, VectorType};
 use crate::cdsl::typevar::TypeVar;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct OpcodeNumber(u32);
 entity_impl!(OpcodeNumber);
 
