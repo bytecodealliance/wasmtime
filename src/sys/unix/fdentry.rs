@@ -79,10 +79,9 @@ pub unsafe fn determine_type_rights(
     host::__wasi_errno_t,
 > {
     let (ty, rights_base, rights_inheriting) = {
-        let file = File::from_raw_fd(rawfd);
-        let ft = file.metadata().unwrap().file_type();
         // we just make a `File` here for convenience; we don't want it to close when it drops
-        std::mem::forget(file);
+        let file = std::mem::ManuallyDrop::new(File::from_raw_fd(rawfd));
+        let ft = file.metadata().unwrap().file_type();
         if ft.is_block_device() {
             (
                 host::__WASI_FILETYPE_BLOCK_DEVICE,
