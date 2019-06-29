@@ -247,16 +247,16 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
             def!((xl, xh) = isplit(x)),
             def!(
                 a = icmp_imm(
-                    Literal::enumerator_for(intcc, "eq"),
+                    Literal::enumerator_for(&imm.intcc, "eq"),
                     xl,
-                    Literal::constant(imm64, 0)
+                    Literal::constant(&imm.imm64, 0)
                 )
             ),
             def!(
                 b = icmp_imm(
-                    Literal::enumerator_for(intcc, "eq"),
+                    Literal::enumerator_for(&imm.intcc, "eq"),
                     xh,
-                    Literal::constant(imm64, 0)
+                    Literal::constant(&imm.imm64, 0)
                 )
             ),
             def!(c = band(a, b)),
@@ -270,6 +270,30 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
             def!((xl, xh) = isplit(x)),
             def!(brnz(xl, ebb, vararg)),
             def!(brnz(xh, ebb, vararg)),
+        ],
+    );
+
+    // FIXME generalize to any offset once offset+8 can be represented
+    narrow.legalize(
+        def!(a = load.I128(flags, ptr, Literal::constant(&imm.offset32, 0))),
+        vec![
+            def!(al = load.I64(flags, ptr, Literal::constant(&imm.offset32, 0))),
+            def!(ah = load.I64(flags, ptr, Literal::constant(&imm.offset32, 8))),
+            // `iconcat` expects the same byte order as stored in memory,
+            // so no need to swap depending on endianness.
+            def!(a = iconcat(al, ah)),
+        ],
+    );
+
+    // FIXME generalize to any offset once offset+8 can be represented
+    narrow.legalize(
+        def!(store.I128(flags, a, ptr, Literal::constant(&imm.offset32, 0))),
+        vec![
+            // `isplit` gives the same byte order as stored in memory,
+            // so no need to swap depending on endianness.
+            def!((al, ah) = isplit(a)),
+            def!(store.I64(flags, al, ptr, Literal::constant(&imm.offset32, 0))),
+            def!(store.I64(flags, ah, ptr, Literal::constant(&imm.offset32, 8))),
         ],
     );
 
