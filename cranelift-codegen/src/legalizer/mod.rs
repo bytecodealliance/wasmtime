@@ -84,7 +84,7 @@ fn legalize_inst(
                     return LegalizeInstResult::SplitLegalizePending;
                 }
             }
-            ir::ValueDef::Param(ebb, num) => {},
+            ir::ValueDef::Param(ebb, num) => {}
         }
 
         let res = pos.func.dfg.inst_results(inst).to_vec();

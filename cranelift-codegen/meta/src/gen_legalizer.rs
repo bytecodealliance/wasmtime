@@ -112,7 +112,9 @@ fn unwrap_inst(
     assert_eq!(inst.operands_in.len(), apply.args.len());
     for (i, op) in inst.operands_in.iter().enumerate() {
         if op.is_varargs() {
-            let name = var_pool.get(apply.args[i].maybe_var().expect("vararg without name")).name;
+            let name = var_pool
+                .get(apply.args[i].maybe_var().expect("vararg without name"))
+                .name;
             fmtln!(fmt, "let {} = &{};", name, name);
         }
     }
