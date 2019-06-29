@@ -174,8 +174,8 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 
     // Try legalizing `isplit` and `vsplit` instructions, which could not previously be legalized.
     for inst in pending_splits {
-        //pos.goto_inst(inst);
-        //legalize_inst(inst, &mut pos, cfg, isa);
+        pos.goto_inst(inst);
+        legalize_inst(inst, &mut pos, cfg, isa);
     }
 
     // Now that we've lowered all br_tables, we don't need the jump tables anymore.
