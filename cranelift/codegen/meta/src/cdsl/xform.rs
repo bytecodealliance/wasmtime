@@ -185,7 +185,9 @@ fn rewrite_expr(
         dummy_args.len(),
         "number of arguments in instruction {} is incorrect\nexpected: {:?}",
         apply_target.inst().name,
-        apply_target.inst().operands_in
+        apply_target
+            .inst()
+            .operands_in
             .iter()
             .map(|operand| format!("{}: {}", operand.name, operand.kind.name))
             .collect::<Vec<_>>(),

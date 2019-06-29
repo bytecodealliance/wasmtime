@@ -129,15 +129,18 @@ fn split_any(
     result
 }
 
-pub fn split_ebb_params(
-    func: &mut ir::Function,
-    cfg: &ControlFlowGraph,
-    ebb: Ebb,
-) {
+pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Ebb) {
     let mut repairs = Vec::new();
     let pos = &mut FuncCursor::new(func).at_top(ebb);
 
-    for (num, ebb_param) in pos.func.dfg.ebb_params(ebb).to_vec().into_iter().enumerate() {
+    for (num, ebb_param) in pos
+        .func
+        .dfg
+        .ebb_params(ebb)
+        .to_vec()
+        .into_iter()
+        .enumerate()
+    {
         let ty = pos.func.dfg.value_type(ebb_param);
         if ty != ir::types::I128 {
             continue;
@@ -149,11 +152,7 @@ pub fn split_ebb_params(
     perform_repairs(pos, cfg, repairs);
 }
 
-fn perform_repairs(
-    pos: &mut FuncCursor,
-    cfg: &ControlFlowGraph,
-    mut repairs: Vec<Repair>,
-) {
+fn perform_repairs(pos: &mut FuncCursor, cfg: &ControlFlowGraph, mut repairs: Vec<Repair>) {
     // We have split the value requested, and now we may need to fix some EBB predecessors.
     while let Some(repair) = repairs.pop() {
         for BasicBlock { inst, .. } in cfg.pred_iter(repair.ebb) {
