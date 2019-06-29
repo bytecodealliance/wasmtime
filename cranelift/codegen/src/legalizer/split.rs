@@ -124,6 +124,36 @@ fn split_any(
     let pos = &mut FuncCursor::new(func).at_position(pos).with_srcloc(srcloc);
     let result = split_value(pos, value, concat, &mut repairs);
 
+    perform_repairs(pos, cfg, repairs);
+
+    result
+}
+
+pub fn split_ebb_params(
+    func: &mut ir::Function,
+    cfg: &ControlFlowGraph,
+    ebb: Ebb,
+) {
+    let mut repairs = Vec::new();
+    let pos = &mut FuncCursor::new(func).at_top(ebb);
+
+    for (num, ebb_param) in pos.func.dfg.ebb_params(ebb).to_vec().into_iter().enumerate() {
+        let ty = pos.func.dfg.value_type(ebb_param);
+        if ty != ir::types::I128 {
+            continue;
+        }
+
+        split_ebb_param(pos, ebb, num, ebb_param, Opcode::Iconcat, &mut repairs);
+    }
+
+    perform_repairs(pos, cfg, repairs);
+}
+
+fn perform_repairs(
+    pos: &mut FuncCursor,
+    cfg: &ControlFlowGraph,
+    mut repairs: Vec<Repair>,
+) {
     // We have split the value requested, and now we may need to fix some EBB predecessors.
     while let Some(repair) = repairs.pop() {
         for BasicBlock { inst, .. } in cfg.pred_iter(repair.ebb) {
@@ -181,8 +211,6 @@ fn split_any(
             pos.func.dfg[inst].put_value_list(args);
         }
     }
-
-    result
 }
 
 /// Split a single value using the integer or vector semantics given by the `concat` opcode.
@@ -215,40 +243,7 @@ fn split_value(
             // This is an EBB parameter. We can split the parameter value unless this is the entry
             // block.
             if pos.func.layout.entry_block() != Some(ebb) {
-                // We are going to replace the parameter at `num` with two new arguments.
-                // Determine the new value types.
-                let ty = pos.func.dfg.value_type(value);
-                let split_type = match concat {
-                    Opcode::Iconcat => ty.half_width().expect("Invalid type for isplit"),
-                    Opcode::Vconcat => ty.half_vector().expect("Invalid type for vsplit"),
-                    _ => panic!("Unhandled concat opcode: {}", concat),
-                };
-
-                // Since the `repairs` stack potentially contains other parameter numbers for
-                // `ebb`, avoid shifting and renumbering EBB parameters. It could invalidate other
-                // `repairs` entries.
-                //
-                // Replace the original `value` with the low part, and append the high part at the
-                // end of the argument list.
-                let lo = pos.func.dfg.replace_ebb_param(value, split_type);
-                let hi_num = pos.func.dfg.num_ebb_params(ebb);
-                let hi = pos.func.dfg.append_ebb_param(ebb, split_type);
-                reuse = Some((lo, hi));
-
-                // Now the original value is dangling. Insert a concatenation instruction that can
-                // compute it from the two new parameters. This also serves as a record of what we
-                // did so a future call to this function doesn't have to redo the work.
-                //
-                // Note that it is safe to move `pos` here since `reuse` was set above, so we don't
-                // need to insert a split instruction before returning.
-                pos.goto_first_inst(ebb);
-                pos.ins()
-                    .with_result(value)
-                    .Binary(concat, split_type, lo, hi);
-
-                // Finally, splitting the EBB parameter is not enough. We also have to repair all
-                // of the predecessor instructions that branch here.
-                add_repair(concat, split_type, ebb, num, hi_num, repairs);
+                reuse = Some(split_ebb_param(pos, ebb, num, value, concat, repairs));
             }
         }
     }
@@ -265,6 +260,51 @@ fn split_value(
             _ => panic!("Unhandled concat opcode: {}", concat),
         }
     }
+}
+
+fn split_ebb_param(
+    pos: &mut FuncCursor,
+    ebb: Ebb,
+    param_num: usize,
+    value: Value,
+    concat: Opcode,
+    repairs: &mut Vec<Repair>,
+) -> (Value, Value) {
+    // We are going to replace the parameter at `num` with two new arguments.
+    // Determine the new value types.
+    let ty = pos.func.dfg.value_type(value);
+    let split_type = match concat {
+        Opcode::Iconcat => ty.half_width().expect("Invalid type for isplit"),
+        Opcode::Vconcat => ty.half_vector().expect("Invalid type for vsplit"),
+        _ => panic!("Unhandled concat opcode: {}", concat),
+    };
+
+    // Since the `repairs` stack potentially contains other parameter numbers for
+    // `ebb`, avoid shifting and renumbering EBB parameters. It could invalidate other
+    // `repairs` entries.
+    //
+    // Replace the original `value` with the low part, and append the high part at the
+    // end of the argument list.
+    let lo = pos.func.dfg.replace_ebb_param(value, split_type);
+    let hi_num = pos.func.dfg.num_ebb_params(ebb);
+    let hi = pos.func.dfg.append_ebb_param(ebb, split_type);
+
+    // Now the original value is dangling. Insert a concatenation instruction that can
+    // compute it from the two new parameters. This also serves as a record of what we
+    // did so a future call to this function doesn't have to redo the work.
+    //
+    // Note that it is safe to move `pos` here since `reuse` was set above, so we don't
+    // need to insert a split instruction before returning.
+    pos.goto_first_inst(ebb);
+    pos.ins()
+        .with_result(value)
+        .Binary(concat, split_type, lo, hi);
+
+    // Finally, splitting the EBB parameter is not enough. We also have to repair all
+    // of the predecessor instructions that branch here.
+    add_repair(concat, split_type, ebb, param_num, hi_num, repairs);
+
+    (lo, hi)
 }
 
 // Add a repair entry to the work list.
