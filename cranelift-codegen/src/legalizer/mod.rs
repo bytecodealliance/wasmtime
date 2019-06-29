@@ -91,13 +91,9 @@ fn legalize_inst(
         assert_eq!(res.len(), 2);
         let (resl, resh) = (res[0], res[1]); // Prevent borrowck error
 
-        dbg!(pos.position());
-
         // Remove old isplit
         pos.func.dfg.clear_results(inst);
         pos.remove_inst();
-
-        dbg!(pos.position());
 
         let curpos = pos.position();
         let srcloc = pos.srcloc();
@@ -105,8 +101,6 @@ fn legalize_inst(
 
         pos.func.dfg.change_to_alias(resl, xl);
         pos.func.dfg.change_to_alias(resh, xh);
-
-        dbg!(&pos.func);
 
         return LegalizeInstResult::Legalized;
     }
