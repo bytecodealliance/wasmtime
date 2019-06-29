@@ -8,6 +8,7 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 
 use std::fmt;
 
+#[derive(Debug)]
 pub enum Expr {
     Var(VarIndex),
     Literal(Literal),
@@ -363,6 +364,7 @@ impl VarPool {
 ///
 /// An `Apply` AST expression is created by using function call syntax on instructions. This
 /// applies to both bound and unbound polymorphic instructions.
+#[derive(Debug)]
 pub struct Apply {
     pub inst: Instruction,
     pub args: Vec<Expr>,
