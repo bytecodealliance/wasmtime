@@ -72,8 +72,11 @@ fn legalize_inst(
         };
 
         match pos.func.dfg.value_def(arg) {
-            ir::ValueDef::Result(inst, num) => {
-                if let ir::InstructionData::Binary { opcode, args, .. } = pos.func.dfg[inst] {
+            ir::ValueDef::Result(inst, _num) => {
+                if let ir::InstructionData::Binary {
+                    opcode, args: _, ..
+                } = pos.func.dfg[inst]
+                {
                     if opcode != ir::Opcode::Iconcat {
                         return LegalizeInstResult::SplitLegalizePending;
                     }
@@ -84,7 +87,7 @@ fn legalize_inst(
                     return LegalizeInstResult::SplitLegalizePending;
                 }
             }
-            ir::ValueDef::Param(ebb, num) => {}
+            ir::ValueDef::Param(_ebb, _num) => {}
         }
 
         let res = pos.func.dfg.inst_results(inst).to_vec();
