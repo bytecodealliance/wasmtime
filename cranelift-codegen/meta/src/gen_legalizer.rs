@@ -61,10 +61,10 @@ fn unwrap_inst(
             fmtln!(fmt, "{},", field.member);
         }
 
-        if iform.num_value_operands == 1 {
-            fmt.line("arg,");
-        } else if iform.has_value_list || iform.num_value_operands > 1 {
+        if iform.has_value_list || iform.num_value_operands > 1 {
             fmt.line("ref args,");
+        } else if iform.num_value_operands == 1 {
+            fmt.line("arg,");
         }
 
         fmt.line("..");
@@ -87,6 +87,11 @@ fn unwrap_inst(
                 } else if op.is_value() {
                     let n = inst.value_opnums.iter().position(|&i| i == op_num).unwrap();
                     fmtln!(fmt, "func.dfg.resolve_aliases(args[{}]),", n);
+                } else if op.is_varargs() {
+                    let n = inst.imm_opnums.iter().chain(inst.value_opnums.iter()).max().map(|n| n + 1).unwrap_or(0);
+                    fmtln!(fmt, "\
+                        args.iter().skip({}).map(|&arg| func.dfg.resolve_aliases(arg)).collect::<Vec<_>>(),\
+                    ", n);
                 }
             }
 
@@ -103,6 +108,14 @@ fn unwrap_inst(
         fmt.line(r#"unreachable!("bad instruction format")"#);
     });
     fmtln!(fmt, "};");
+
+    assert_eq!(inst.operands_in.len(), apply.args.len());
+    for (i, op) in inst.operands_in.iter().enumerate() {
+        if op.is_varargs() {
+            let name = var_pool.get(apply.args[i].maybe_var().expect("vararg without name")).name;
+            fmtln!(fmt, "let {} = &{};", name, name);
+        }
+    }
 
     for &op_num in &inst.value_opnums {
         let arg = &apply.args[op_num];
