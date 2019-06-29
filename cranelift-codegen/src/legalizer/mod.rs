@@ -174,6 +174,10 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
         }
     }
 
+    while let Some(ebb) = pos.next_ebb() {
+        split::split_ebb_params(pos.func, cfg, ebb);
+    }
+
     // Try legalizing `isplit` and `vsplit` instructions, which could not previously be legalized.
     for inst in pending_splits {
         //pos.goto_inst(inst);
