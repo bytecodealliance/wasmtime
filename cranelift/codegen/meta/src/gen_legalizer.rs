@@ -415,6 +415,11 @@ fn gen_transform<'a>(
             fmt.line("let removed = pos.remove_inst();");
             fmt.line("debug_assert_eq!(removed, inst);");
         }
+
+        if transform.def_pool.get(transform.src).apply.inst.is_branch {
+            fmt.line("cfg.recompute_ebb(pos.func, pos.current_ebb().unwrap());");
+        }
+
         fmt.line("return true;");
     });
     fmt.line("}");
