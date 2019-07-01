@@ -13,10 +13,10 @@ readme = "README.md"
 wasmtime-runtime = { path = "../wasmtime-runtime" }
 wasmtime-environ = { path = "../wasmtime-environ" }
 wasmtime-jit = { path = "../wasmtime-jit" }
-cranelift-codegen = "0.30.0"
-cranelift-entity = "0.30.0"
-cranelift-wasm = "0.30.0"
-target-lexicon = "0.3.0"
+cranelift-codegen = "0.32.0"
+cranelift-entity = "0.32.0"
+cranelift-wasm = "0.32.0"
+target-lexicon = "0.4.0"
 log = { version = "0.4.6", default-features = false }
 libc = "0.2.50"
 
