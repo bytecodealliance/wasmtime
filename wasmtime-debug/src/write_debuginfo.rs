@@ -6,7 +6,7 @@ use gimli::write::{
 };
 use gimli::RunTimeEndian;
 
-use faerie::artifact::Decl;
+use faerie::artifact::{Decl, SectionKind};
 use faerie::*;
 
 struct DebugReloc {
@@ -21,7 +21,7 @@ macro_rules! decl_section {
         $artifact
             .declare_with(
                 SectionId::$section.name(),
-                Decl::debug_section(),
+                Decl::section(SectionKind::Debug),
                 $name.0.writer.into_vec(),
             )
             .unwrap();

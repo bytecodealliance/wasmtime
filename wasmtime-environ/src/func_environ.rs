@@ -346,7 +346,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         self.target_config
     }
 
-    fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> ir::Table {
+    fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table> {
         let pointer_type = self.pointer_type();
 
         let (ptr, base_offset, current_elements_offset) = {
@@ -394,16 +394,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
         };
 
-        func.create_table(ir::TableData {
+        Ok(func.create_table(ir::TableData {
             base_gv,
             min_size: Uimm64::new(0),
             bound_gv,
             element_size: Uimm64::new(element_size),
             index_type: I32,
-        })
+        }))
     }
 
-    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap {
+    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<ir::Heap> {
         let pointer_type = self.pointer_type();
 
         let (ptr, base_offset, current_length_offset) = {
@@ -473,16 +473,20 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             global_type: pointer_type,
             readonly: readonly_base,
         });
-        func.create_heap(ir::HeapData {
+        Ok(func.create_heap(ir::HeapData {
             base: heap_base,
             min_size: 0.into(),
             offset_guard_size,
             style: heap_style,
             index_type: I32,
-        })
+        }))
     }
 
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
+    fn make_global(
+        &mut self,
+        func: &mut ir::Function,
+        index: GlobalIndex,
+    ) -> WasmResult<GlobalVariable> {
         let pointer_type = self.pointer_type();
 
         let (ptr, offset) = {
@@ -503,28 +507,36 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
         };
 
-        GlobalVariable::Memory {
+        Ok(GlobalVariable::Memory {
             gv: ptr,
             offset: offset.into(),
             ty: self.module.globals[index].ty,
-        }
+        })
     }
 
-    fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
-        func.import_signature(self.module.signatures[index].clone())
+    fn make_indirect_sig(
+        &mut self,
+        func: &mut ir::Function,
+        index: SignatureIndex,
+    ) -> WasmResult<ir::SigRef> {
+        Ok(func.import_signature(self.module.signatures[index].clone()))
     }
 
-    fn make_direct_func(&mut self, func: &mut ir::Function, index: FuncIndex) -> ir::FuncRef {
+    fn make_direct_func(
+        &mut self,
+        func: &mut ir::Function,
+        index: FuncIndex,
+    ) -> WasmResult<ir::FuncRef> {
         let sigidx = self.module.functions[index];
         let signature = func.import_signature(self.module.signatures[sigidx].clone());
         let name = get_func_name(index);
-        func.import_function(ir::ExtFuncData {
+        Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,
             // We currently allocate all code segments independently, so nothing
             // is colocated.
             colocated: false,
-        })
+        }))
     }
 
     fn translate_call_indirect(

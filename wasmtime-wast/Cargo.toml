@@ -12,15 +12,15 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = "0.30.0"
-cranelift-native = "0.30.0"
-cranelift-wasm = "0.30.0"
-cranelift-entity = "0.30.0"
+cranelift-codegen = "0.32.0"
+cranelift-native = "0.32.0"
+cranelift-wasm = "0.32.0"
+cranelift-entity = "0.32.0"
 wasmtime-jit = { path = "../wasmtime-jit" }
 wasmtime-runtime = { path = "../wasmtime-runtime" }
 wasmtime-environ = { path = "../wasmtime-environ" }
 wabt = "0.7"
-target-lexicon = "0.3.0"
+target-lexicon = "0.4.0"
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
 
