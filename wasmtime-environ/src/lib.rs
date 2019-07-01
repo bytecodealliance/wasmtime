@@ -51,7 +51,9 @@ pub mod cranelift;
 #[cfg(feature = "lightbeam")]
 pub mod lightbeam;
 
-pub use crate::address_map::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
+pub use crate::address_map::{
+    FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges,
+};
 pub use crate::cache::conf as cache_conf;
 pub use crate::compilation::{
     Compilation, CompileError, Compiler, Relocation, RelocationTarget, Relocations,

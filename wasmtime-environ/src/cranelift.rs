@@ -1,6 +1,8 @@
 //! Support for compiling with Cranelift.
 
-use crate::address_map::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
+use crate::address_map::{
+    FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ValueLabelsRanges,
+};
 use crate::cache::{ModuleCacheData, ModuleCacheEntry};
 use crate::compilation::{
     CodeAndJTOffsets, Compilation, CompileError, Relocation, RelocationTarget, Relocations,
@@ -90,8 +92,13 @@ impl RelocSink {
     }
 }
 
-fn get_address_transform(context: &Context, isa: &isa::TargetIsa) -> Vec<InstructionAddressMap> {
-    let mut result = Vec::new();
+fn get_function_address_map<'data>(
+    context: &Context,
+    data: &FunctionBodyData<'data>,
+    body_len: usize,
+    isa: &isa::TargetIsa,
+) -> FunctionAddressMap {
+    let mut instructions = Vec::new();
 
     let func = &context.func;
     let mut ebbs = func.layout.ebbs().collect::<Vec<_>>();
@@ -101,14 +108,27 @@ fn get_address_transform(context: &Context, isa: &isa::TargetIsa) -> Vec<Instruc
     for ebb in ebbs {
         for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
             let srcloc = func.srclocs[inst];
-            result.push(InstructionAddressMap {
+            instructions.push(InstructionAddressMap {
                 srcloc,
                 code_offset: offset as usize,
                 code_len: size as usize,
             });
         }
     }
-    result
+
+    // Generate artificial srcloc for function start/end to identify boundary
+    // within module. Similar to FuncTranslator::cur_srcloc(): it will wrap around
+    // if byte code is larger than 4 GB.
+    let start_srcloc = ir::SourceLoc::new(data.module_offset as u32);
+    let end_srcloc = ir::SourceLoc::new((data.module_offset + data.data.len()) as u32);
+
+    FunctionAddressMap {
+        instructions,
+        start_srcloc,
+        end_srcloc,
+        body_offset: 0,
+        body_len,
+    }
 }
 
 /// A compiler that compiles a WebAssembly module with Cranelift, translating the Wasm to Cranelift IR,
@@ -123,7 +143,16 @@ impl crate::compilation::Compiler for Cranelift {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
-    ) -> Result<(Compilation, Relocations, ModuleAddressMap), CompileError> {
+    ) -> Result<
+        (
+            Compilation,
+            Relocations,
+            ModuleAddressMap,
+            ValueLabelsRanges,
+            PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+        ),
+        CompileError,
+    > {
         let cache_entry = ModuleCacheEntry::new(
             module,
             &function_body_inputs,
@@ -138,6 +167,8 @@ impl crate::compilation::Compiler for Cranelift {
                 let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
                 let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
                 let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
+                let mut value_ranges = PrimaryMap::with_capacity(function_body_inputs.len());
+                let mut stack_slots = PrimaryMap::with_capacity(function_body_inputs.len());
 
                 function_body_inputs
                     .into_iter()
@@ -149,6 +180,9 @@ impl crate::compilation::Compiler for Cranelift {
                         context.func.name = get_func_name(func_index);
                         context.func.signature =
                             module.signatures[module.functions[func_index]].clone();
+                        if generate_debug_info {
+                            context.func.collect_debug_info();
+                        }
 
                         let mut trans = FuncTranslator::new();
                         trans
@@ -171,36 +205,48 @@ impl crate::compilation::Compiler for Cranelift {
 
                         let address_transform = if generate_debug_info {
                             let body_len = code_buf.len();
-                            let at = get_address_transform(&context, isa);
-
-                            Some(FunctionAddressMap {
-                                instructions: at,
-                                body_offset: 0,
-                                body_len,
-                            })
+                            Some(get_function_address_map(&context, input, body_len, isa))
                         } else {
                             None
                         };
+
+                        let ranges = if generate_debug_info {
+                            Some(
+                                context
+                                    .build_value_labels_ranges(isa)
+                                    .map_err(CompileError::Codegen)?,
+                            )
+                        } else {
+                            None
+                        };
+
+                        let stack_slots = context.func.stack_slots.clone();
 
                         Ok((
                             code_buf,
                             jt_offsets,
                             reloc_sink.func_relocs,
                             address_transform,
+                            ranges,
+                            stack_slots,
                         ))
                     })
                     .collect::<Result<Vec<_>, CompileError>>()?
                     .into_iter()
-                    .for_each(|(function, func_jt_offsets, relocs, address_transform)| {
-                        functions.push(CodeAndJTOffsets {
-                            body: function,
-                            jt_offsets: func_jt_offsets,
-                        });
-                        relocations.push(relocs);
-                        if let Some(address_transform) = address_transform {
-                            address_transforms.push(address_transform);
-                        }
-                    });
+                    .for_each(
+                        |(function, func_jt_offsets, relocs, address_transform, ranges, sss)| {
+                            functions.push(CodeAndJTOffsets {
+                                body: function,
+                                jt_offsets: func_jt_offsets,
+                            });
+                            relocations.push(relocs);
+                            if let Some(address_transform) = address_transform {
+                                address_transforms.push(address_transform);
+                            }
+                            value_ranges.push(ranges.unwrap_or(std::collections::HashMap::new()));
+                            stack_slots.push(sss);
+                        },
+                    );
 
                 // TODO: Reorganize where we create the Vec for the resolved imports.
 
@@ -208,6 +254,8 @@ impl crate::compilation::Compiler for Cranelift {
                     Compilation::new(functions),
                     relocations,
                     address_transforms,
+                    value_ranges,
+                    stack_slots,
                 ));
                 cache_entry.update_data(&data);
                 data
