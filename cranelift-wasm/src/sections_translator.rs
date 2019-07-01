@@ -7,10 +7,10 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use crate::environ::{ModuleEnvironment, WasmResult};
+use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::translation_utils::{
-    type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex,
-    Table, TableElementType, TableIndex,
+    tabletype_to_type, type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory,
+    MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex,
 };
 use core::convert::TryFrom;
 use cranelift_codegen::ir::{self, AbiParam, Signature};
@@ -51,7 +51,7 @@ pub fn parse_type_section(
                 }));
                 environ.declare_signature(sig);
             }
-            ref s => panic!("unsupported type: {:?}", s),
+            _ => return Err(WasmError::Unsupported("unsupported type in type section")),
         }
     }
     Ok(())
@@ -101,9 +101,9 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Table(ref tab) => {
                 environ.declare_table_import(
                     Table {
-                        ty: match type_to_type(tab.element_type) {
-                            Ok(t) => TableElementType::Val(t),
-                            Err(()) => TableElementType::Func,
+                        ty: match tabletype_to_type(tab.element_type)? {
+                            Some(t) => TableElementType::Val(t),
+                            None => TableElementType::Func,
                         },
                         minimum: tab.limits.initial,
                         maximum: tab.limits.maximum,
@@ -144,9 +144,9 @@ pub fn parse_table_section(
     for entry in tables {
         let table = entry?;
         environ.declare_table(Table {
-            ty: match type_to_type(table.element_type) {
-                Ok(t) => TableElementType::Val(t),
-                Err(()) => TableElementType::Func,
+            ty: match tabletype_to_type(table.element_type)? {
+                Some(t) => TableElementType::Val(t),
+                None => TableElementType::Func,
             },
             minimum: table.limits.initial,
             maximum: table.limits.maximum,
