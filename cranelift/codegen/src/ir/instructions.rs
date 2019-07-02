@@ -498,7 +498,7 @@ enum OperandConstraint {
     /// This operand is the same type as the controlling type variable.
     Same,
 
-    /// This operand is `ctrlType.lane_type()`.
+    /// This operand is `ctrlType.lane_of()`.
     LaneOf,
 
     /// This operand is `ctrlType.as_bool()`.
@@ -527,7 +527,7 @@ impl OperandConstraint {
             Concrete(t) => Bound(t),
             Free(vts) => ResolvedConstraint::Free(TYPE_SETS[vts as usize]),
             Same => Bound(ctrl_type),
-            LaneOf => Bound(ctrl_type.lane_type()),
+            LaneOf => Bound(ctrl_type.lane_of()),
             AsBool => Bound(ctrl_type.as_bool()),
             HalfWidth => Bound(ctrl_type.half_width().expect("invalid type for half_width")),
             DoubleWidth => Bound(

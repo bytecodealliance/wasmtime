@@ -44,8 +44,15 @@ impl Type {
         if self.0 < VECTOR_BASE {
             self
         } else {
-            Type(LANE_BASE | (self.0 & 0x0f))
+            Self(LANE_BASE | (self.0 & 0x0f))
         }
+    }
+
+    /// The type transformation that returns the lane type of a type variable; it is just a
+    /// renaming of lane_type() to be used in context where we think in terms of type variable
+    /// transformations.
+    pub fn lane_of(self) -> Self {
+        self.lane_type()
     }
 
     /// Get log_2 of the number of bits in a lane.
