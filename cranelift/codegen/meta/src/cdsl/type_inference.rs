@@ -364,7 +364,6 @@ impl TypeEnvironment {
 
             // Sanity check: translated constraints should refer only to real variables.
             for arg in constraint.typevar_args() {
-                assert!(vars_tv.contains(arg));
                 let arg_free_tv = arg.free_typevar();
                 assert!(arg_free_tv.is_none() || vars_tv.contains(&arg_free_tv.unwrap()));
             }
