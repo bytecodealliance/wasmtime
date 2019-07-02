@@ -62,11 +62,11 @@ pub fn emit_functions(
         .expect("Missing enable_verifier setting");
 
     for (i, _function_relocs) in relocations.iter() {
-        let body = compilation.get(i);
+        let body = &compilation.get(i).body;
         let func_index = module.func_index(i);
         let string_name = format!("_wasm_function_{}", func_index.index());
 
-        obj.define(string_name, body.to_vec())
+        obj.define(string_name, body.clone())
             .map_err(|err| format!("{}", err))?;
     }
 

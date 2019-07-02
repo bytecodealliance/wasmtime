@@ -77,6 +77,7 @@ impl Compiler {
     ) -> Result<
         (
             PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+            PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
             Relocations,
             Option<Vec<u8>>,
         ),
@@ -104,7 +105,7 @@ impl Compiler {
             let mut funcs = Vec::new();
             for (i, allocated) in allocated_functions.into_iter() {
                 let ptr = (*allocated) as *const u8;
-                let body_len = compilation.get(i).len();
+                let body_len = compilation.get(i).body.len();
                 funcs.push((ptr, body_len));
             }
             let bytes = emit_debugsections_image(
@@ -120,7 +121,9 @@ impl Compiler {
             None
         };
 
-        Ok((allocated_functions, relocations, dbg))
+        let jt_offsets = compilation.get_jt_offsets();
+
+        Ok((allocated_functions, jt_offsets, relocations, dbg))
     }
 
     /// Create a trampoline for invoking a function.
@@ -259,7 +262,10 @@ fn allocate_functions(
     // Allocate code for all function in one continuous memory block.
     // First, collect all function bodies into vector to pass to the
     // allocate_copy_of_byte_slices.
-    let bodies = compilation.into_iter().collect::<Vec<&[u8]>>();
+    let bodies = compilation
+        .into_iter()
+        .map(|code_and_jt| &code_and_jt.body[..])
+        .collect::<Vec<&[u8]>>();
     let fat_ptrs = code_memory.allocate_copy_of_byte_slices(&bodies)?;
     // Second, create a PrimaryMap from result vector of pointers.
     let mut result = PrimaryMap::with_capacity(compilation.len());
