@@ -3,6 +3,7 @@
 use crate::resolver::Resolver;
 use core::ptr::write_unaligned;
 use cranelift_codegen::binemit::Reloc;
+use cranelift_codegen::ir::JumpTableOffsets;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
 use std::collections::HashSet;
@@ -20,6 +21,7 @@ use wasmtime_runtime::{
 pub fn link_module(
     module: &Module,
     allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    jt_offsets: &PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
     relocations: Relocations,
     resolver: &mut dyn Resolver,
 ) -> Result<Imports, LinkError> {
@@ -194,7 +196,7 @@ pub fn link_module(
     }
 
     // Apply relocations, now that we have virtual addresses for everything.
-    relocate(allocated_functions, relocations, module);
+    relocate(allocated_functions, jt_offsets, relocations, module);
 
     Ok(Imports::new(
         dependencies,
@@ -299,6 +301,7 @@ fn is_memory_compatible(exported: &MemoryPlan, imported: &MemoryPlan) -> bool {
 /// Performs the relocations inside the function bytecode, provided the necessary metadata.
 fn relocate(
     allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    jt_offsets: &PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
     relocations: PrimaryMap<DefinedFuncIndex, Vec<Relocation>>,
     module: &Module,
 ) {
@@ -335,6 +338,19 @@ fn relocate(
                         other => panic!("unexpected libcall: {}", other),
                     }
                 }
+                RelocationTarget::JumpTable(func_index, jt) => {
+                    match module.defined_func_index(func_index) {
+                        Some(f) => {
+                            let offset = *jt_offsets
+                                .get(f)
+                                .and_then(|ofs| ofs.get(jt))
+                                .expect("func jump table");
+                            let fatptr: *const [VMFunctionBody] = allocated_functions[f];
+                            fatptr as *const VMFunctionBody as usize + offset as usize
+                        }
+                        None => panic!("func index of jump table"),
+                    }
+                }
             };
 
             let fatptr: *const [VMFunctionBody] = allocated_functions[i];
@@ -361,6 +377,9 @@ fn relocate(
                 },
                 #[cfg(target_pointer_width = "32")]
                 Reloc::X86CallPCRel4 => {
+                    // ignore
+                }
+                Reloc::X86PCRelRodata4 => {
                     // ignore
                 }
                 _ => panic!("unsupported reloc kind"),

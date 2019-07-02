@@ -1,7 +1,7 @@
 //! Support for compiling with Cranelift.
 
 use crate::compilation::{
-    AddressTransforms, Compilation, CompileError, FunctionAddressTransform,
+    AddressTransforms, CodeAndJTOffsets, Compilation, CompileError, FunctionAddressTransform,
     InstructionAddressTransform, Relocation, RelocationTarget, Relocations,
 };
 use crate::func_environ::{
@@ -22,6 +22,9 @@ use std::vec::Vec;
 
 /// Implementation of a relocation sink that just saves all the information for later
 pub struct RelocSink {
+    /// Current function index.
+    func_index: FuncIndex,
+
     /// Relocations recorded for the function.
     pub func_relocs: Vec<Relocation>,
 }
@@ -66,20 +69,21 @@ impl binemit::RelocSink for RelocSink {
             addend,
         });
     }
-    fn reloc_jt(
-        &mut self,
-        _offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _jt: ir::JumpTable,
-    ) {
-        panic!("jump tables not yet implemented");
+    fn reloc_jt(&mut self, offset: binemit::CodeOffset, reloc: binemit::Reloc, jt: ir::JumpTable) {
+        self.func_relocs.push(Relocation {
+            reloc,
+            reloc_target: RelocationTarget::JumpTable(self.func_index, jt),
+            offset,
+            addend: 0,
+        });
     }
 }
 
 impl RelocSink {
     /// Return a new `RelocSink` instance.
-    pub fn new() -> Self {
+    pub fn new(func_index: FuncIndex) -> Self {
         Self {
+            func_index,
             func_relocs: Vec::new(),
         }
     }
@@ -147,11 +151,13 @@ impl crate::compilation::Compiler for Cranelift {
                     .map_err(CompileError::Wasm)?;
 
                 let mut code_buf: Vec<u8> = Vec::new();
-                let mut reloc_sink = RelocSink::new();
+                let mut reloc_sink = RelocSink::new(func_index);
                 let mut trap_sink = binemit::NullTrapSink {};
                 context
                     .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
                     .map_err(CompileError::Codegen)?;
+
+                let jt_offsets = context.func.jt_offsets.clone();
 
                 let address_transform = if generate_debug_info {
                     let body_len = code_buf.len();
@@ -165,12 +171,20 @@ impl crate::compilation::Compiler for Cranelift {
                     None
                 };
 
-                Ok((code_buf, reloc_sink.func_relocs, address_transform))
+                Ok((
+                    code_buf,
+                    jt_offsets,
+                    reloc_sink.func_relocs,
+                    address_transform,
+                ))
             })
             .collect::<Result<Vec<_>, CompileError>>()?
             .into_iter()
-            .for_each(|(function, relocs, address_transform)| {
-                functions.push(function);
+            .for_each(|(function, func_jt_offsets, relocs, address_transform)| {
+                functions.push(CodeAndJTOffsets {
+                    body: function,
+                    jt_offsets: func_jt_offsets,
+                });
                 relocations.push(relocs);
                 if let Some(address_transform) = address_transform {
                     address_transforms.push(address_transform);

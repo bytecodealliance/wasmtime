@@ -9,7 +9,17 @@ use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use std::ops::Range;
 use std::vec::Vec;
 
-type Functions = PrimaryMap<DefinedFuncIndex, Vec<u8>>;
+/// Compiled machine code: body and jump table offsets.
+#[derive(Debug, Clone)]
+pub struct CodeAndJTOffsets {
+    /// The function body.
+    pub body: Vec<u8>,
+
+    /// The jump tables offsets (in the body).
+    pub jt_offsets: ir::JumpTableOffsets,
+}
+
+type Functions = PrimaryMap<DefinedFuncIndex, CodeAndJTOffsets>;
 
 /// The result of compiling a WebAssembly module's functions.
 #[derive(Debug)]
@@ -25,23 +35,37 @@ impl Compilation {
     }
 
     /// Allocates the compilation result with the given function bodies.
-    pub fn from_buffer(buffer: Vec<u8>, functions: impl IntoIterator<Item = Range<usize>>) -> Self {
+    pub fn from_buffer(
+        buffer: Vec<u8>,
+        functions: impl IntoIterator<Item = (Range<usize>, ir::JumpTableOffsets)>,
+    ) -> Self {
         Self::new(
             functions
                 .into_iter()
-                .map(|range| buffer[range].to_vec())
+                .map(|(range, jt_offsets)| CodeAndJTOffsets {
+                    body: buffer[range].to_vec(),
+                    jt_offsets,
+                })
                 .collect(),
         )
     }
 
     /// Gets the bytes of a single function
-    pub fn get(&self, func: DefinedFuncIndex) -> &[u8] {
+    pub fn get(&self, func: DefinedFuncIndex) -> &CodeAndJTOffsets {
         &self.functions[func]
     }
 
     /// Gets the number of functions defined.
     pub fn len(&self) -> usize {
         self.functions.len()
+    }
+
+    /// Gets functions jump table offsets.
+    pub fn get_jt_offsets(&self) -> PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets> {
+        self.functions
+            .iter()
+            .map(|(_, code_and_jt)| code_and_jt.jt_offsets.clone())
+            .collect::<PrimaryMap<DefinedFuncIndex, _>>()
     }
 }
 
@@ -61,10 +85,10 @@ pub struct Iter<'a> {
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = &'a [u8];
+    type Item = &'a CodeAndJTOffsets;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iterator.next().map(|(_, b)| &b[..])
+        self.iterator.next().map(|(_, b)| b)
     }
 }
 
@@ -96,6 +120,8 @@ pub enum RelocationTarget {
     Memory32Size,
     /// Function for query current size of an imported 32-bit linear memory.
     ImportedMemory32Size,
+    /// Jump table index.
+    JumpTable(FuncIndex, ir::JumpTable),
 }
 
 /// Relocations to apply to function bodies.

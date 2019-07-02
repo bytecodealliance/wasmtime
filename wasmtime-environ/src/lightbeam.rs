@@ -7,7 +7,7 @@ use crate::module_environ::FunctionBodyData;
 // TODO: Put this in `compilation`
 use crate::cranelift::RelocSink;
 use cranelift_codegen::isa;
-use cranelift_entity::PrimaryMap;
+use cranelift_entity::{PrimaryMap, SecondaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use lightbeam;
 
@@ -30,7 +30,8 @@ impl crate::compilation::Compiler for Lightbeam {
             lightbeam::CodeGenSession::new(function_body_inputs.len() as u32, &env);
 
         for (i, function_body) in &function_body_inputs {
-            let mut reloc_sink = RelocSink::new();
+            let func_index = module.func_index(i);
+            let mut reloc_sink = RelocSink::new(func_index);
 
             lightbeam::translate_function(
                 &mut codegen_session,
@@ -46,8 +47,15 @@ impl crate::compilation::Compiler for Lightbeam {
             .into_translated_code_section()
             .expect("Failed to generate output code. TODO: Stop this from panicking");
 
+        // TODO pass jump table offsets to Compilation::from_buffer() when they
+        // are implemented in lightbeam -- using empty set of offsets for now.
+        let code_section_ranges_and_jt = code_section
+            .funcs()
+            .into_iter()
+            .map(|r| (r, SecondaryMap::new()));
+
         Ok((
-            Compilation::from_buffer(code_section.buffer().to_vec(), code_section.funcs()),
+            Compilation::from_buffer(code_section.buffer().to_vec(), code_section_ranges_and_jt),
             relocations,
             AddressTransforms::new(),
         ))
