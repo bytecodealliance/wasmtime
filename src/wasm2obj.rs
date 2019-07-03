@@ -89,7 +89,7 @@ fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
             d.help(true)
-                .version(Some(String::from("0.0.0")))
+                .version(Some(String::from("0.1.0")))
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
