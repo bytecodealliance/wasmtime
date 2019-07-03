@@ -4,11 +4,12 @@ use faerie::{Artifact, Decl};
 use failure::Error;
 use target_lexicon::{BinaryFormat, Triple};
 
-pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData};
-pub use crate::transform::transform_dwarf;
+pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
+pub use crate::transform::{
+    transform_dwarf, FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ModuleVmctxInfo,
+    ValueLabelsRanges,
+};
 pub use crate::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
-
-use wasmtime_environ::AddressTransforms;
 
 mod address_transform;
 mod read_debuginfo;
@@ -30,11 +31,11 @@ pub fn emit_debugsections(
     obj: &mut Artifact,
     target_config: &TargetFrontendConfig,
     debuginfo_data: &DebugInfoData,
-    at: &AddressTransforms,
+    at: &ModuleAddressMap,
 ) -> Result<(), Error> {
-    let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
     let resolver = FunctionRelocResolver {};
-    emit_dwarf(obj, dwarf, &resolver);
+    let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
+    emit_dwarf(obj, dwarf, &resolver)?;
     Ok(())
 }
 
@@ -53,7 +54,7 @@ pub fn emit_debugsections_image(
     triple: Triple,
     target_config: &TargetFrontendConfig,
     debuginfo_data: &DebugInfoData,
-    at: &AddressTransforms,
+    at: &ModuleAddressMap,
     funcs: &Vec<(*const u8, usize)>,
 ) -> Result<Vec<u8>, Error> {
     let ref func_offsets = funcs
@@ -61,8 +62,8 @@ pub fn emit_debugsections_image(
         .map(|(ptr, _)| *ptr as u64)
         .collect::<Vec<u64>>();
     let mut obj = Artifact::new(triple, String::from("module"));
-    let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
     let resolver = ImageRelocResolver { func_offsets };
+    let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
 
     // Assuming all functions in the same code block, looking min/max of its range.
     assert!(funcs.len() > 0);
@@ -76,7 +77,7 @@ pub fn emit_debugsections_image(
     let body = unsafe { ::std::slice::from_raw_parts(segment_body.0, segment_body.1) };
     obj.declare_with("all", Decl::function(), body.to_vec())?;
 
-    emit_dwarf(&mut obj, dwarf, &resolver);
+    emit_dwarf(&mut obj, dwarf, &resolver)?;
 
     // LLDB is too "magical" about mach-o, generating elf
     let mut bytes = obj.emit_as(BinaryFormat::Elf)?;
