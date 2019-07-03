@@ -1880,7 +1880,7 @@ __wasi_errno_t wasmtime_ssp_fd_readdir(
   }
 
   *bufused = 0;
-  while (nbyte > 0) {
+  while (*bufused < nbyte) {
     // Read the next directory entry.
     errno = 0;
     struct dirent *de = readdir(dp);
