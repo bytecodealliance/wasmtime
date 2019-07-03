@@ -64,10 +64,11 @@ struct Args {
 }
 
 fn main() {
+    let version = env!("CARGO_PKG_VERSION");
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
             d.help(true)
-                .version(Some(String::from("0.0.0")))
+                .version(Some(String::from(version)))
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
