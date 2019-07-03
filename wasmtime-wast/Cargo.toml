@@ -12,10 +12,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = "0.32.0"
-cranelift-native = "0.32.0"
-cranelift-wasm = "0.32.0"
-cranelift-entity = "0.32.0"
+cranelift-codegen = "0.33.0"
+cranelift-native = "0.33.0"
+cranelift-wasm = "0.33.0"
+cranelift-entity = "0.33.0"
 wasmtime-jit = { path = "../wasmtime-jit" }
 wasmtime-runtime = { path = "../wasmtime-runtime" }
 wasmtime-environ = { path = "../wasmtime-environ" }

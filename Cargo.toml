@@ -22,8 +22,8 @@ name = "wasm2obj"
 path = "src/wasm2obj.rs"
 
 [dependencies]
-cranelift-codegen = "0.32.0"
-cranelift-native = "0.32.0"
+cranelift-codegen = "0.33.0"
+cranelift-native = "0.33.0"
 wasmtime-debug = { path = "wasmtime-debug" }
 wasmtime-environ = { path = "wasmtime-environ" }
 wasmtime-runtime = { path = "wasmtime-runtime" }
