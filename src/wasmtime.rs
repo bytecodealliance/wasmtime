@@ -191,7 +191,7 @@ fn compute_environ(flag_env: &[String]) -> Vec<(String, String)> {
 }
 
 fn main() {
-	let version = env!("CARGO_PKG_VERSION");
+    let version = env!("CARGO_PKG_VERSION");
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
             d.help(true)
