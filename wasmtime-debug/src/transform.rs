@@ -1,7 +1,9 @@
 use crate::address_transform::AddressTransform;
 pub use crate::read_debuginfo::DebugInfoData;
+use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetFrontendConfig;
-use cranelift_entity::EntityRef;
+use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_wasm::DefinedFuncIndex;
 use failure::Error;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound::{Included, Unbounded};
@@ -24,13 +26,44 @@ impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where Endian:
 #[fail(display = "Debug info transform error: {}", _0)]
 pub struct TransformError(&'static str);
 
-pub struct TransformedDwarf {
-    pub encoding: gimli::Encoding,
-    pub strings: write::StringTable,
-    pub units: write::UnitTable,
-    pub line_strings: write::LineStringTable,
-    pub range_lists: write::RangeListTable,
+/// Single wasm source location to generated address mapping.
+#[derive(Debug, Clone)]
+pub struct InstructionAddressMap {
+    /// Original source location.
+    pub srcloc: ir::SourceLoc,
+
+    /// Generated instructions offset.
+    pub code_offset: usize,
+
+    /// Generated instructions length.
+    pub code_len: usize,
 }
+
+/// Function and its instructions addresses mappings.
+#[derive(Debug, Clone)]
+pub struct FunctionAddressMap {
+    /// Instructions maps.
+    /// The array is sorted by the InstructionAddressMap::code_offset field.
+    pub instructions: Vec<InstructionAddressMap>,
+
+    /// Generated function body offset if applicable, otherwise 0.
+    pub body_offset: usize,
+
+    /// Generated function body length.
+    pub body_len: usize,
+}
+
+/// Module functions addresses mappings.
+pub type ModuleAddressMap = PrimaryMap<DefinedFuncIndex, FunctionAddressMap>;
+
+/// Module `vmctx` related info.
+pub struct ModuleVmctxInfo {
+    pub memory_offset: i64,
+    pub stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+}
+
+/// Value ranges for functions.
+pub type ValueLabelsRanges = PrimaryMap<DefinedFuncIndex, cranelift_codegen::ValueLabelsRanges>;
 
 struct DebugInputContext<'a, R>
 where
@@ -84,7 +117,7 @@ where
                 write::AttributeValue::Udata(subprogram_range.unwrap().1)
             }
             AttributeValue::Addr(u) => {
-                let addr = addr_tr.translate(u).unwrap_or(write::Address::Absolute(0));
+                let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 if attr.name() == gimli::DW_AT_low_pc {
                     low_pc = Some((u, addr));
                 }
@@ -370,7 +403,7 @@ where
         for (i, map) in addr_tr.map() {
             let symbol = i.index();
             let base_addr = map.offset;
-            out_program.begin_sequence(Some(write::Address::Relative { symbol, addend: 0 }));
+            out_program.begin_sequence(Some(write::Address::Symbol { symbol, addend: 0 }));
             // TODO track and place function declaration line here
             let mut last_address = None;
             for addr_map in map.addresses.iter() {
@@ -440,9 +473,9 @@ where
     let low_pc = entry.attr_value(gimli::DW_AT_low_pc)?;
     if let Some(AttributeValue::Addr(addr)) = low_pc {
         let transformed = addr_tr.translate(addr);
-        if let Some(write::Address::Relative { symbol, .. }) = transformed {
+        if let Some(write::Address::Symbol { symbol, .. }) = transformed {
             let range = addr_tr.func_range(symbol);
-            let addr = write::Address::Relative {
+            let addr = write::Address::Symbol {
                 symbol,
                 addend: range.0 as i64,
             };
@@ -580,8 +613,8 @@ where
 pub fn transform_dwarf(
     target_config: &TargetFrontendConfig,
     di: &DebugInfoData,
-    at: &wasmtime_environ::AddressTransforms,
-) -> Result<TransformedDwarf, Error> {
+    at: &ModuleAddressMap,
+) -> Result<write::Dwarf, Error> {
     let context = DebugInputContext {
         debug_abbrev: &di.dwarf.debug_abbrev,
         debug_str: &di.dwarf.debug_str,
@@ -605,7 +638,6 @@ pub fn transform_dwarf(
     let mut out_strings = write::StringTable::default();
     let mut out_units = write::UnitTable::default();
 
-    let out_range_lists = write::RangeListTable::default();
     let out_line_strings = write::LineStringTable::default();
 
     let mut iter = di.dwarf.debug_info.units();
@@ -620,22 +652,10 @@ pub fn transform_dwarf(
         )?;
     }
 
-    // let unit_range_list = write::RangeList(Vec::new());
-    // let unit_range_list_id = out_range_lists.add(unit_range_list.clone());
-    // let unit = dwarf.units.get_mut(self.unit_id);
-    // let root = unit.root();
-    // let root = unit.get_mut(root);
-    // root.set(
-    //     gimli::DW_AT_ranges,
-    //     AttributeValue::RangeListRef(unit_range_list_id),
-    // );
-
-    //println!("{:?} \n====\n {:?}", di, at);
-    Ok(TransformedDwarf {
-        encoding: out_encoding,
-        strings: out_strings,
+    Ok(write::Dwarf {
         units: out_units,
+        line_programs: vec![],
         line_strings: out_line_strings,
-        range_lists: out_range_lists,
+        strings: out_strings,
     })
 }

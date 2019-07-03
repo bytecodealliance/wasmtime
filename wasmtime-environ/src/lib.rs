@@ -49,8 +49,7 @@ pub mod cranelift;
 pub mod lightbeam;
 
 pub use crate::compilation::{
-    AddressTransforms, Compilation, CompileError, Compiler, InstructionAddressTransform,
-    Relocation, RelocationTarget, Relocations,
+    Compilation, CompileError, Compiler, Relocation, RelocationTarget, Relocations,
 };
 pub use crate::cranelift::Cranelift;
 #[cfg(feature = "lightbeam")]

@@ -1,11 +1,11 @@
 use crate::read_debuginfo::WasmFileInfo;
+use crate::transform::ModuleAddressMap;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;
 use std::collections::BTreeMap;
 use std::ops::Bound::{Included, Unbounded};
 use std::vec::Vec;
-use wasmtime_environ::AddressTransforms;
 
 pub type GeneratedAddress = usize;
 pub type WasmAddress = u64;
@@ -32,7 +32,7 @@ pub struct AddressTransform {
 }
 
 impl AddressTransform {
-    pub fn new(at: &AddressTransforms, wasm_file: &WasmFileInfo) -> Self {
+    pub fn new(at: &ModuleAddressMap, wasm_file: &WasmFileInfo) -> Self {
         let code_section_offset = wasm_file.code_section_offset;
         let function_offsets = &wasm_file.function_offsets_and_sizes;
         let mut lookup = BTreeMap::new();
@@ -50,7 +50,7 @@ impl AddressTransform {
                 (index, ft.body_offset, ft.body_offset),
             );
             let mut fn_map = Vec::new();
-            for t in &ft.locations {
+            for t in &ft.instructions {
                 if t.srcloc.is_default() {
                     // TODO extend some range if possible
                     continue;
@@ -90,7 +90,7 @@ impl AddressTransform {
         }
         let search = self.lookup.range((Unbounded, Included(addr)));
         if let Some((_, value)) = search.last() {
-            return Some(write::Address::Relative {
+            return Some(write::Address::Symbol {
                 symbol: value.0,
                 addend: value.1 as i64,
             });
@@ -106,11 +106,11 @@ impl AddressTransform {
             return None;
         }
         if let (
-            Some(write::Address::Relative {
+            Some(write::Address::Symbol {
                 symbol: s1,
                 addend: a,
             }),
-            Some(write::Address::Relative {
+            Some(write::Address::Symbol {
                 symbol: s2,
                 addend: b,
             }),

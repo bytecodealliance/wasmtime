@@ -1,8 +1,7 @@
 //! Support for compiling with Cranelift.
 
 use crate::compilation::{
-    AddressTransforms, CodeAndJTOffsets, Compilation, CompileError, FunctionAddressTransform,
-    InstructionAddressTransform, Relocation, RelocationTarget, Relocations,
+    CodeAndJTOffsets, Compilation, CompileError, Relocation, RelocationTarget, Relocations,
 };
 use crate::func_environ::{
     get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
@@ -19,6 +18,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::vec::Vec;
+use wasmtime_debug::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
 
 /// Implementation of a relocation sink that just saves all the information for later
 pub struct RelocSink {
@@ -89,10 +89,7 @@ impl RelocSink {
     }
 }
 
-fn get_address_transform(
-    context: &Context,
-    isa: &isa::TargetIsa,
-) -> Vec<InstructionAddressTransform> {
+fn get_address_transform(context: &Context, isa: &isa::TargetIsa) -> Vec<InstructionAddressMap> {
     let mut result = Vec::new();
 
     let func = &context.func;
@@ -103,7 +100,7 @@ fn get_address_transform(
     for ebb in ebbs {
         for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
             let srcloc = func.srclocs[inst];
-            result.push(InstructionAddressTransform {
+            result.push(InstructionAddressMap {
                 srcloc,
                 code_offset: offset as usize,
                 code_len: size as usize,
@@ -125,7 +122,7 @@ impl crate::compilation::Compiler for Cranelift {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
-    ) -> Result<(Compilation, Relocations, AddressTransforms), CompileError> {
+    ) -> Result<(Compilation, Relocations, ModuleAddressMap), CompileError> {
         let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
         let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
         let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
@@ -162,8 +159,9 @@ impl crate::compilation::Compiler for Cranelift {
                 let address_transform = if generate_debug_info {
                     let body_len = code_buf.len();
                     let at = get_address_transform(&context, isa);
-                    Some(FunctionAddressTransform {
-                        locations: at,
+
+                    Some(FunctionAddressMap {
+                        instructions: at,
                         body_offset: 0,
                         body_len,
                     })
