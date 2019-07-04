@@ -1,12 +1,12 @@
 # wasi-common
-[![travis-build-status]][travis] [![appveyor-build-status]][appveyor] [![rustc-1.34]][rustc]
+[![travis-build-status]][travis] [![appveyor-build-status]][appveyor] [![rustc-1.35]][rustc]
 
 [travis-build-status]: https://travis-ci.org/CraneStation/wasi-common.svg?branch=master
 [travis]: https://travis-ci.org/CraneStation/wasi-common
 [appveyor-build-status]: https://ci.appveyor.com/api/projects/status/github/cranestation/wasi-common?svg=true
 [appveyor]: https://ci.appveyor.com/project/cranestation/wasi-common
-[rustc-1.34]: https://img.shields.io/badge/rustc-1.34+-lightgray.svg
-[rustc]: https://blog.rust-lang.org/2019/04/11/Rust-1.34.0.html
+[rustc-1.35]: https://img.shields.io/badge/rustc-1.35+-lightgray.svg
+[rustc]: https://blog.rust-lang.org/2019/05/23/Rust-1.35.0.html
 [Wasmtime]: https://github.com/CraneStation/wasmtime
 [Lucet]: https://github.com/fastly/lucet
 [lucet-wasi]: https://github.com/fastly/lucet/tree/master/lucet-wasi
@@ -20,7 +20,7 @@ such as [Wasmtime] and [Lucet].
 The library is an adaption of [lucet-wasi] crate from the [Lucet] project, and it is
 currently based on [40ae1df][lucet-wasi-tracker] git revision.
 
-Please note that the library requires Rust compiler version at least 1.34.0.
+Please note that the library requires Rust compiler version at least 1.35.0.
 
 ## Supported syscalls
 

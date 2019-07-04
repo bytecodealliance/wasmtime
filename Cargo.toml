@@ -29,10 +29,10 @@ wasmtime-runtime = { git = "https://github.com/cranestation/wasmtime" }
 wasmtime-environ = { git = "https://github.com/cranestation/wasmtime" }
 wasmtime-jit = { git = "https://github.com/cranestation/wasmtime" }
 wasmtime-wasi = { git = "https://github.com/cranestation/wasmtime" }
-cranelift-codegen = "0.30.0"
-cranelift-entity = "0.30.0"
-cranelift-wasm = "0.30.0"
-cranelift-native = "0.30.0"
+cranelift-codegen = "0.33.0"
+cranelift-entity = "0.33.0"
+cranelift-wasm = "0.33.0"
+cranelift-native = "0.33.0"
 target-lexicon = "0.3.0"
 
 [patch."https://github.com/CraneStation/wasi-common"]
