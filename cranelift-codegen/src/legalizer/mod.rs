@@ -19,6 +19,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::types::I32;
 use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
+use crate::predicates;
 use crate::timing;
 
 mod boundary;
