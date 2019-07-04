@@ -14,7 +14,7 @@ ebb0(v0: i32):
     v4 = icmp_imm ne v0, 4
     v5 = icmp_imm sge v0, 5
     brnz v5, ebb1
-    fallthrough ebb2
+    jump ebb2
 
 ebb2:
     return

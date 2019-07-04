@@ -217,7 +217,7 @@ ebb0(v0: i32):
 
 ebb1(v4: i32, v5: i32, v6: i32):
     brz v4, ebb3
-    fallthrough ebb2
+    jump ebb2
 
 ebb2:
     v7 = iadd v5, v6

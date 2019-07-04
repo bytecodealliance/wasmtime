@@ -151,7 +151,7 @@ ebb0(v1: i32):
     ; check: v1 = spill
     v2 = iconst.i32 1
     brnz v1, ebb1(v2, v2, v2, v2, v2, v2, v2, v2, v2, v2, v2, v2)
-    fallthrough ebb2
+    jump ebb2
 
 ebb2:
     return v1
