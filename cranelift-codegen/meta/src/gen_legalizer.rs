@@ -290,8 +290,7 @@ fn emit_dst_inst(def: &Def, def_pool: &DefPool, var_pool: &VarPool, fmt: &mut Fo
             // Unwrapping would have left the results intact.  Replace the whole instruction.
             fmtln!(
                 fmt,
-                "let {} = pos.func.dfg.replace(inst).{};",
-                defined_vars,
+                "pos.func.dfg.replace(inst).{};",
                 def.apply.rust_builder(&def.defined_vars, var_pool)
             );
 
