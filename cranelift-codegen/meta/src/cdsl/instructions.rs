@@ -1169,17 +1169,18 @@ impl InstructionPredicate {
         self
     }
 
-    pub fn rust_predicate(&self, func_str: &str) -> String {
-        match &self.node {
-            Some(root) => root.rust_predicate(func_str),
-            None => "true".into(),
-        }
+    pub fn rust_predicate(&self, func_str: &str) -> Option<String> {
+        self.node.as_ref().map(|root| root.rust_predicate(func_str))
     }
 
-    /// Returns true if the predicate only depends on type parameters (and not on an instruction
-    /// format).
-    pub fn is_type_predicate(&self) -> bool {
-        self.node.as_ref().unwrap().is_type_predicate()
+    /// Returns the type predicate if this is one, or None otherwise.
+    pub fn type_predicate(&self, func_str: &str) -> Option<String> {
+        let node = self.node.as_ref().unwrap();
+        if node.is_type_predicate() {
+            Some(node.rust_predicate(func_str))
+        } else {
+            None
+        }
     }
 
     /// Returns references to all the nodes that are leaves in the condition (i.e. by flattening
