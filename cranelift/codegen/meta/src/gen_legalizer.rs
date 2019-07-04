@@ -51,7 +51,7 @@ fn unwrap_inst(
 
     fmtln!(
         fmt,
-        "let ({}, predicate) = if let crate::ir::InstructionData::{} {{",
+        "let ({}, predicate) = if let ir::InstructionData::{} {{",
         arg_names,
         iform.name
     );
@@ -407,17 +407,16 @@ fn gen_transform_group<'a>(
     // Function arguments.
     fmtln!(fmt, "pub fn {}(", group.name);
     fmt.indent(|fmt| {
-        fmt.line("inst: crate::ir::Inst,");
-        fmt.line("func: &mut crate::ir::Function,");
-        fmt.line("cfg: &mut crate::flowgraph::ControlFlowGraph,");
-        fmt.line("isa: &dyn crate::isa::TargetIsa,");
+        fmt.line("inst: ir::Inst,");
+        fmt.line("func: &mut ir::Function,");
+        fmt.line("cfg: &mut ControlFlowGraph,");
+        fmt.line("isa: &dyn TargetIsa,");
     });
     fmtln!(fmt, ") -> bool {");
 
     // Function body.
     fmt.indent(|fmt| {
-        fmt.line("use crate::ir::InstBuilder;");
-        fmt.line("use crate::cursor::{Cursor, FuncCursor};");
+        fmt.line("use ir::InstBuilder;");
         fmt.line("let mut pos = FuncCursor::new(func).at_inst(inst);");
         fmt.line("pos.use_srcloc(inst);");
 

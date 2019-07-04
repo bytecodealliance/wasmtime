@@ -654,36 +654,32 @@ impl FormatPredicateNode {
     fn rust_predicate(&self) -> String {
         match &self.kind {
             FormatPredicateKind::IsEqual(arg) => {
-                format!("crate::predicates::is_equal({}, {})", self.member_name, arg)
+                format!("predicates::is_equal({}, {})", self.member_name, arg)
             }
             FormatPredicateKind::IsSignedInt(width, scale) => format!(
-                "crate::predicates::is_signed_int({}, {}, {})",
+                "predicates::is_signed_int({}, {}, {})",
                 self.member_name, width, scale
             ),
             FormatPredicateKind::IsUnsignedInt(width, scale) => format!(
-                "crate::predicates::is_unsigned_int({}, {}, {})",
+                "predicates::is_unsigned_int({}, {}, {})",
                 self.member_name, width, scale
             ),
-            FormatPredicateKind::IsZero32BitFloat => format!(
-                "crate::predicates::is_zero_32_bit_float({})",
-                self.member_name
-            ),
-            FormatPredicateKind::IsZero64BitFloat => format!(
-                "crate::predicates::is_zero_64_bit_float({})",
-                self.member_name
-            ),
+            FormatPredicateKind::IsZero32BitFloat => {
+                format!("predicates::is_zero_32_bit_float({})", self.member_name)
+            }
+            FormatPredicateKind::IsZero64BitFloat => {
+                format!("predicates::is_zero_64_bit_float({})", self.member_name)
+            }
             FormatPredicateKind::LengthEquals(num) => format!(
-                "crate::predicates::has_length_of({}, {}, func)",
+                "predicates::has_length_of({}, {}, func)",
                 self.member_name, num
             ),
-            FormatPredicateKind::IsColocatedFunc => format!(
-                "crate::predicates::is_colocated_func({}, func)",
-                self.member_name,
-            ),
-            FormatPredicateKind::IsColocatedData => format!(
-                "crate::predicates::is_colocated_data({}, func)",
-                self.member_name
-            ),
+            FormatPredicateKind::IsColocatedFunc => {
+                format!("predicates::is_colocated_func({}, func)", self.member_name,)
+            }
+            FormatPredicateKind::IsColocatedData => {
+                format!("predicates::is_colocated_data({}, func)", self.member_name)
+            }
         }
     }
 }
