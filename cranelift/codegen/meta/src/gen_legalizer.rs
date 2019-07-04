@@ -1,6 +1,7 @@
-use crate::cdsl::ast::{Def, DefPool, VarPool};
+use crate::cdsl::ast::{Def, DefPool, Expr, VarPool};
 use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::typevar::{TypeSet, TypeVar};
 use crate::cdsl::xform::{Transform, TransformGroup, TransformGroups};
@@ -34,7 +35,7 @@ fn unwrap_inst(
     let iform = format_registry.get(inst.format);
 
     fmt.comment(format!(
-        "Unwrap {}",
+        "Unwrap fields from instruction format {}",
         def.to_comment_string(&transform.var_pool)
     ));
 
@@ -42,19 +43,54 @@ fn unwrap_inst(
     let arg_names = apply
         .args
         .iter()
-        .map(|arg| match arg.maybe_var() {
-            Some(var_index) => var_pool.get(var_index).name.as_ref(),
-            None => "_",
+        .enumerate()
+        .map(|(arg_num, arg)| match &arg {
+            Expr::Var(var_index) => var_pool.get(*var_index).name.as_ref(),
+            Expr::Literal(_) => {
+                let n = inst.imm_opnums.iter().position(|&i| i == arg_num).unwrap();
+                iform.imm_fields[n].member
+            }
         })
         .collect::<Vec<_>>()
         .join(", ");
 
+    // May we need "args" in the values consumed by predicates?
+    let emit_args = iform.num_value_operands >= 1 || iform.has_value_list;
+
+    // We need a tuple:
+    // - if there's at least one value operand, then we emit a variable for the value, and the
+    // value list as args.
+    // - otherwise, if there's the count of immediate operands added to the presence of a value list exceeds one.
+    let need_tuple = if iform.num_value_operands >= 1 {
+        true
+    } else {
+        let mut imm_and_varargs = inst
+            .operands_in
+            .iter()
+            .filter(|op| op.is_immediate())
+            .count();
+        if iform.has_value_list {
+            imm_and_varargs += 1;
+        }
+        imm_and_varargs > 1
+    };
+
+    let maybe_args = if emit_args { ", args" } else { "" };
+    let defined_values = format!("{}{}", arg_names, maybe_args);
+
+    let tuple_or_value = if need_tuple {
+        format!("({})", defined_values)
+    } else {
+        defined_values
+    };
+
     fmtln!(
         fmt,
-        "let ({}, predicate) = if let crate::ir::InstructionData::{} {{",
-        arg_names,
+        "let {} = if let ir::InstructionData::{} {{",
+        tuple_or_value,
         iform.name
     );
+
     fmt.indent(|fmt| {
         // Fields are encoded directly.
         for field in &iform.imm_fields {
@@ -69,47 +105,61 @@ fn unwrap_inst(
 
         fmt.line("..");
         fmt.outdented_line("} = pos.func.dfg[inst] {");
-        fmt.line("let func = &pos.func;");
 
         if iform.has_value_list {
-            fmt.line("let args = args.as_slice(&func.dfg.value_lists);");
+            fmt.line("let args = args.as_slice(&pos.func.dfg.value_lists);");
         } else if iform.num_value_operands == 1 {
             fmt.line("let args = [arg];")
         }
 
         // Generate the values for the tuple.
-        fmt.line("(");
-        fmt.indent(|fmt| {
-            for (op_num, op) in inst.operands_in.iter().enumerate() {
+        let emit_one_value =
+            |fmt: &mut Formatter, needs_comma: bool, op_num: usize, op: &Operand| {
+                let comma = if needs_comma { "," } else { "" };
                 if op.is_immediate() {
                     let n = inst.imm_opnums.iter().position(|&i| i == op_num).unwrap();
-                    fmtln!(fmt, "{},", iform.imm_fields[n].member);
+                    fmtln!(fmt, "{}{}", iform.imm_fields[n].member, comma);
                 } else if op.is_value() {
                     let n = inst.value_opnums.iter().position(|&i| i == op_num).unwrap();
-                    fmtln!(fmt, "func.dfg.resolve_aliases(args[{}]),", n);
+                    fmtln!(fmt, "pos.func.dfg.resolve_aliases(args[{}]),", n);
                 } else if op.is_varargs() {
                     let n = inst.imm_opnums.iter().chain(inst.value_opnums.iter()).max().map(|n| n + 1).unwrap_or(0);
                     // We need to create a `Vec` here, as using a slice would result in a borrowck
                     // error later on.
                     fmtln!(fmt, "\
-                        args.iter().skip({}).map(|&arg| func.dfg.resolve_aliases(arg)).collect::<Vec<_>>(),\
+                        args.iter().skip({}).map(|&arg| pos.func.dfg.resolve_aliases(arg)).collect::<Vec<_>>(),\
                     ", n);
+                } else {
+                    // This is a value list argument.
+                    assert!(iform.has_value_list);
                 }
-            }
+            };
 
-            // Evaluate the instruction predicate if any.
-            fmt.multi_line(
-                &apply
-                    .inst_predicate_with_ctrl_typevar(format_registry, var_pool)
-                    .rust_predicate(),
-            );
-        });
-        fmt.line(")");
+        if need_tuple {
+            fmt.line("(");
+            fmt.indent(|fmt| {
+                for (op_num, op) in inst.operands_in.iter().enumerate() {
+                    let needs_comma = emit_args || op_num + 1 < inst.operands_in.len();
+                    emit_one_value(fmt, needs_comma, op_num, op);
+                }
+                if emit_args {
+                    fmt.line("args");
+                }
+            });
+            fmt.line(")");
+        } else {
+            // Only one of these can be true at the same time, otherwise we'd need a tuple.
+            emit_one_value(fmt, false, 0, &inst.operands_in[0]);
+            if emit_args {
+                fmt.line("args");
+            }
+        }
 
         fmt.outdented_line("} else {");
         fmt.line(r#"unreachable!("bad instruction format")"#);
     });
     fmtln!(fmt, "};");
+    fmt.empty_line();
 
     assert_eq!(inst.operands_in.len(), apply.args.len());
     for (i, op) in inst.operands_in.iter().enumerate() {
@@ -385,21 +435,37 @@ fn emit_dst_inst(def: &Def, def_pool: &DefPool, var_pool: &VarPool, fmt: &mut Fo
 /// `inst: Inst` is the variable to be replaced. It is pointed to by `pos: Cursor`.
 /// `dfg: DataFlowGraph` is available and mutable.
 fn gen_transform<'a>(
+    replace_inst: bool,
     transform: &'a Transform,
     format_registry: &FormatRegistry,
     type_sets: &mut UniqueTable<'a, TypeSet>,
     fmt: &mut Formatter,
 ) {
-    // Unwrap the source instruction, create local variables for the input variables.
-    let replace_inst = unwrap_inst(&transform, format_registry, fmt);
+    // Evaluate the instruction predicate if any.
+    let apply = &transform.def_pool.get(transform.src).apply;
 
-    // Emit any runtime checks; these will rebind `predicate` emitted by unwrap_inst().
+    let inst_predicate = apply
+        .inst_predicate_with_ctrl_typevar(format_registry, &transform.var_pool)
+        .rust_predicate("pos.func");
+
+    let has_extra_constraints = !transform.type_env.constraints.is_empty();
+    if has_extra_constraints {
+        // Extra constraints rely on the predicate being a variable that we can rebind as we add
+        // more constraint predicates.
+        fmt.multi_line(&format!("let predicate = {};", inst_predicate));
+    }
+
+    // Emit any runtime checks; these will rebind `predicate` emitted right above.
     for constraint in &transform.type_env.constraints {
         emit_runtime_typecheck(constraint, type_sets, fmt);
     }
 
     // Guard the actual expansion by `predicate`.
-    fmt.line("if predicate {");
+    if has_extra_constraints {
+        fmt.line("if predicate {");
+    } else {
+        fmt.multi_line(&format!("if {} {{", inst_predicate))
+    }
     fmt.indent(|fmt| {
         // Emit any constants that must be created before use.
         for (name, value) in transform.const_pool.iter() {
@@ -525,8 +591,17 @@ fn gen_transform_group<'a>(
                 for camel_name in sorted_inst_names {
                     fmtln!(fmt, "ir::Opcode::{} => {{", camel_name);
                     fmt.indent(|fmt| {
-                        for transform in inst_to_transforms.get(camel_name).unwrap() {
-                            gen_transform(transform, format_registry, type_sets, fmt);
+                        let transforms = inst_to_transforms.get(camel_name).unwrap();
+
+                        // Unwrap the source instruction, create local variables for the input variables.
+                        let replace_inst = unwrap_inst(&transforms[0], format_registry, fmt);
+                        fmt.empty_line();
+
+                        for (i, transform) in transforms.into_iter().enumerate() {
+                            if i > 0 {
+                                fmt.empty_line();
+                            }
+                            gen_transform(replace_inst, transform, format_registry, type_sets, fmt);
                         }
                     });
                     fmtln!(fmt, "}");
@@ -540,7 +615,7 @@ fn gen_transform_group<'a>(
                 for (inst_camel_name, func_name) in sorted_custom_legalizes {
                     fmtln!(fmt, "ir::Opcode::{} => {{", inst_camel_name);
                     fmt.indent(|fmt| {
-                        fmtln!(fmt, "{}(inst, pos.func, cfg, isa);", func_name);
+                        fmtln!(fmt, "{}(inst, func, cfg, isa);", func_name);
                         fmt.line("return true;");
                     });
                     fmtln!(fmt, "}");
@@ -558,7 +633,7 @@ fn gen_transform_group<'a>(
         match &group.chain_with {
             Some(group_id) => fmtln!(
                 fmt,
-                "{}(inst, pos.func, cfg, isa)",
+                "{}(inst, func, cfg, isa)",
                 transform_groups.get(*group_id).rust_name()
             ),
             None => fmt.line("false"),

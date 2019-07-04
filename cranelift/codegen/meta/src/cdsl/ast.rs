@@ -63,7 +63,7 @@ impl Def {
             format!("({})", results.join(", "))
         };
 
-        format!("{} << {}", results, self.apply.to_comment_string(var_pool))
+        format!("{} := {}", results, self.apply.to_comment_string(var_pool))
     }
 }
 
