@@ -76,9 +76,9 @@ use crate::unique_table::UniqueSeqTable;
 /// The generated code is an `if let` pattern match that falls through if the instruction has an
 /// unexpected format. This should lead to a panic.
 fn emit_instp(instp: &InstructionPredicate, has_func: bool, fmt: &mut Formatter) {
-    if instp.is_type_predicate() {
+    if let Some(type_predicate) = instp.type_predicate("func") {
         fmt.line("let args = inst.arguments(&func.dfg.value_lists);");
-        fmt.line(instp.rust_predicate("func"));
+        fmt.line(type_predicate);
         return;
     }
 
@@ -127,7 +127,7 @@ fn emit_instp(instp: &InstructionPredicate, has_func: bool, fmt: &mut Formatter)
             // Silence dead argument.
             fmt.line("let _ = func;");
         }
-        fmtln!(fmt, "return {};", instp.rust_predicate("func"));
+        fmtln!(fmt, "return {};", instp.rust_predicate("func").unwrap());
     });
     fmtln!(fmt, "}");
 

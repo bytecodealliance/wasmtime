@@ -452,7 +452,11 @@ fn gen_transform<'a>(
     if has_extra_constraints {
         // Extra constraints rely on the predicate being a variable that we can rebind as we add
         // more constraint predicates.
-        fmt.multi_line(&format!("let predicate = {};", inst_predicate));
+        if let Some(pred) = &inst_predicate {
+            fmt.multi_line(&format!("let predicate = {};", pred));
+        } else {
+            fmt.line("let predicate = true;");
+        }
     }
 
     // Emit any runtime checks; these will rebind `predicate` emitted right above.
@@ -460,13 +464,7 @@ fn gen_transform<'a>(
         emit_runtime_typecheck(constraint, type_sets, fmt);
     }
 
-    // Guard the actual expansion by `predicate`.
-    if has_extra_constraints {
-        fmt.line("if predicate {");
-    } else {
-        fmt.multi_line(&format!("if {} {{", inst_predicate))
-    }
-    fmt.indent(|fmt| {
+    let do_expand = |fmt: &mut Formatter| {
         // Emit any constants that must be created before use.
         for (name, value) in transform.const_pool.iter() {
             fmtln!(
@@ -538,8 +536,25 @@ fn gen_transform<'a>(
         }
 
         fmt.line("return true;");
-    });
-    fmt.line("}");
+    };
+
+    // Guard the actual expansion by `predicate`.
+    if has_extra_constraints {
+        fmt.line("if predicate {");
+        fmt.indent(|fmt| {
+            do_expand(fmt);
+        });
+        fmt.line("}");
+    } else if let Some(pred) = &inst_predicate {
+        fmt.multi_line(&format!("if {} {{", pred));
+        fmt.indent(|fmt| {
+            do_expand(fmt);
+        });
+        fmt.line("}");
+    } else {
+        // Unconditional transform (there was no predicate), just emit it.
+        do_expand(fmt);
+    }
 }
 
 fn gen_transform_group<'a>(
