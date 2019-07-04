@@ -7,7 +7,7 @@ function %critical_edge(i32, i32) -> i32 {
 
             ebb0(v0: i32, v7: i32):
 [SBzero#38]   brnz v7, ebb2(v0)
-[-]           fallthrough ebb1
+[UJ#1b]       jump ebb1
 
             ebb1:
 [Iret#19]     return v0
@@ -30,7 +30,7 @@ function %critical_edge(i32, i32) -> i32 {
 ; sameln: function %critical_edge
 ; nextln: ebb0(v0: i32, v7: i32):
 ; nextln:     brnz v7, ebb5(v0)
-; nextln:     fallthrough ebb1
+; nextln:     jump ebb1
 ; nextln: 
 ; nextln: ebb1:
 ; nextln:     return v0

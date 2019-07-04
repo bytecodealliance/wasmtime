@@ -39,7 +39,7 @@ ebb0(v0: i32):
             v19 = iadd v18, v2
             v20 = iadd.i32 v2, v3
 [SBzero#18] brz.i32 v1, ebb1(v20)
-            fallthrough ebb7
+[UJ#1b]     jump ebb7
 
          ebb7:
 [Iret#19]   return v19
@@ -89,7 +89,7 @@ ebb0(v0: i32):
 ; nextln: ebb6(v18: i32):
 ; nextln:     v19 = iadd v18, v2
 ; nextln:     brz.i32 v1, ebb1(v20)
-; nextln:     fallthrough ebb7
+; nextln:     jump ebb7
 ; nextln: 
 ; nextln: ebb7:
 ; nextln:     return v19

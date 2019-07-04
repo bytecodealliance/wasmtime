@@ -8,7 +8,7 @@ ebb0(v0: i32 [%rdi]):
 [Op2seti_abcd#490,%rax]             v1 = trueif eq v3
 [RexOp2urm_noflags#4b6,%rax]        v2 = bint.i32 v1
 [Op1brib#70]                        brif eq v3, ebb1
-[-]                                 fallthrough ebb2
+[Op1jmpb#eb]                        jump ebb2
 
 ebb2:
 [Op1ret#c3]                         return v2

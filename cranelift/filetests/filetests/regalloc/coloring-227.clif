@@ -17,7 +17,7 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
                           ebb6:
 [RexOp1pu_id#b8]              v8 = iconst.i32 0
 [RexOp1tjccb#75]              brnz v8, ebb5
-[-]                           fallthrough ebb20
+[Op1jmpb#eb]                  jump ebb20
 
                           ebb20:
 [RexOp1pu_id#b8]              v9 = iconst.i32 0
@@ -30,12 +30,12 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
 
                           ebb7:
 [RexOp1tjccb#74]              brz.i32 v17, ebb8
-[-]                           fallthrough ebb17
+[Op1jmpb#eb]                  jump ebb17
 
                           ebb17:
 [RexOp1pu_id#b8]              v18 = iconst.i32 0
 [RexOp1tjccb#74]              brz v18, ebb9
-[-]                           fallthrough ebb16
+[Op1jmpb#eb]                  jump ebb16
 
                           ebb16:
 [RexOp1pu_id#b8]              v21 = iconst.i32 0
@@ -72,12 +72,12 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
                           ebb2(v7: i32, v45: i32, v52: i32, v59: i32, v66: i32, v73: i32):
 [RexOp1pu_id#b8]              v44 = iconst.i32 0
 [RexOp1tjccb#74]              brz v44, ebb12
-[-]                           fallthrough ebb18
+[Op1jmpb#eb]                  jump ebb18
 
                           ebb18:
 [RexOp1pu_id#b8]              v50 = iconst.i32 11
 [RexOp1tjccb#74]              brz v50, ebb14
-[-]                           fallthrough ebb19
+[Op1jmpb#eb]                  jump ebb19
 
                           ebb19:
 [RexOp1umr#89]                v82 = uextend.i64 v52
