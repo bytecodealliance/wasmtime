@@ -187,15 +187,11 @@ fn build_derived_expr(tv: &TypeVar) -> String {
         Some(base) => base,
         None => {
             assert!(tv.name.starts_with("typeof_"));
-            return format!("Some({})", tv.name);
+            return format!("{}", tv.name);
         }
     };
     let base_expr = build_derived_expr(&base.type_var);
-    format!(
-        "{}.map(|t: crate::ir::Type| t.{}())",
-        base_expr,
-        base.derived_func.name()
-    )
+    format!("{}.{}()", base_expr, base.derived_func.name())
 }
 
 /// Emit rust code for the given check.
@@ -225,29 +221,18 @@ fn emit_runtime_typecheck<'a, 'b>(
         Constraint::Eq(tv1, tv2) => {
             fmtln!(
                 fmt,
-                "let predicate = predicate && match ({}, {}) {{",
+                "let predicate = predicate && {} == {};",
                 build_derived_expr(tv1),
                 build_derived_expr(tv2)
             );
-            fmt.indent(|fmt| {
-                fmt.line("(Some(a), Some(b)) => a == b,");
-                fmt.comment("On overflow, constraint doesn\'t apply");
-                fmt.line("_ => false,");
-            });
-            fmtln!(fmt, "};");
         }
         Constraint::WiderOrEq(tv1, tv2) => {
             fmtln!(
                 fmt,
-                "let predicate = predicate && match ({}, {}) {{",
+                "let predicate = predicate && {}.wider_or_equal({});",
                 build_derived_expr(tv1),
                 build_derived_expr(tv2)
             );
-            fmt.indent(|fmt| {
-                fmt.line("(Some(a), Some(b)) => a.wider_or_equal(b),");
-                fmt.comment("On overflow, constraint doesn\'t apply");
-                fmt.line("_ => false,");
-            });
             fmtln!(fmt, "};");
         }
     }
