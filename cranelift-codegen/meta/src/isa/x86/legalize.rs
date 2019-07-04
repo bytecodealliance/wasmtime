@@ -212,7 +212,9 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     );
 
     // Population count for baseline x86_64
-    let qv1 = var("qv1");
+    let x = var("x");
+    let r = var("r");
+
     let qv3 = var("qv3");
     let qv4 = var("qv4");
     let qv5 = var("qv5");
@@ -226,7 +228,6 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let qv13 = var("qv13");
     let qv14 = var("qv14");
     let qv15 = var("qv15");
-    let qv16 = var("qv16");
     let qc77 = var("qc77");
     #[allow(non_snake_case)]
     let qc0F = var("qc0F");
@@ -235,12 +236,12 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let imm64_1 = Literal::constant(&imm.imm64, 1);
     let imm64_4 = Literal::constant(&imm.imm64, 4);
     group.legalize(
-        def!(qv16 = popcnt.I64(qv1)),
+        def!(r = popcnt.I64(x)),
         vec![
-            def!(qv3 = ushr_imm(qv1, imm64_1)),
+            def!(qv3 = ushr_imm(x, imm64_1)),
             def!(qc77 = iconst(Literal::constant(&imm.imm64, 0x7777777777777777))),
             def!(qv4 = band(qv3, qc77)),
-            def!(qv5 = isub(qv1, qv4)),
+            def!(qv5 = isub(x, qv4)),
             def!(qv6 = ushr_imm(qv4, imm64_1)),
             def!(qv7 = band(qv6, qc77)),
             def!(qv8 = isub(qv5, qv7)),
@@ -253,11 +254,10 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             def!(qv14 = band(qv13, qc0F)),
             def!(qc01 = iconst(Literal::constant(&imm.imm64, 0x0101010101010101))),
             def!(qv15 = imul(qv14, qc01)),
-            def!(qv16 = ushr_imm(qv15, Literal::constant(&imm.imm64, 56))),
+            def!(r = ushr_imm(qv15, Literal::constant(&imm.imm64, 56))),
         ],
     );
 
-    let lv1 = var("lv1");
     let lv3 = var("lv3");
     let lv4 = var("lv4");
     let lv5 = var("lv5");
@@ -271,19 +271,18 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let lv13 = var("lv13");
     let lv14 = var("lv14");
     let lv15 = var("lv15");
-    let lv16 = var("lv16");
     let lc77 = var("lc77");
     #[allow(non_snake_case)]
     let lc0F = var("lc0F");
     let lc01 = var("lc01");
 
     group.legalize(
-        def!(lv16 = popcnt.I32(lv1)),
+        def!(r = popcnt.I32(x)),
         vec![
-            def!(lv3 = ushr_imm(lv1, imm64_1)),
+            def!(lv3 = ushr_imm(x, imm64_1)),
             def!(lc77 = iconst(Literal::constant(&imm.imm64, 0x77777777))),
             def!(lv4 = band(lv3, lc77)),
-            def!(lv5 = isub(lv1, lv4)),
+            def!(lv5 = isub(x, lv4)),
             def!(lv6 = ushr_imm(lv4, imm64_1)),
             def!(lv7 = band(lv6, lc77)),
             def!(lv8 = isub(lv5, lv7)),
@@ -296,7 +295,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             def!(lv14 = band(lv13, lc0F)),
             def!(lc01 = iconst(Literal::constant(&imm.imm64, 0x01010101))),
             def!(lv15 = imul(lv14, lc01)),
-            def!(lv16 = ushr_imm(lv15, Literal::constant(&imm.imm64, 24))),
+            def!(r = ushr_imm(lv15, Literal::constant(&imm.imm64, 24))),
         ],
     );
 

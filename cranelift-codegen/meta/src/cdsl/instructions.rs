@@ -856,14 +856,14 @@ pub enum TypePredicateNode {
 }
 
 impl TypePredicateNode {
-    fn rust_predicate(&self) -> String {
+    fn rust_predicate(&self, func_str: &str) -> String {
         match self {
             TypePredicateNode::TypeVarCheck(index, value_type_name) => format!(
-                "func.dfg.value_type(args[{}]) == {}",
-                index, value_type_name
+                "{}.dfg.value_type(args[{}]) == {}",
+                func_str, index, value_type_name
             ),
             TypePredicateNode::CtrlTypeVarCheck(value_type_name) => {
-                format!("func.dfg.ctrl_typevar(inst) == {}", value_type_name)
+                format!("{}.dfg.ctrl_typevar(inst) == {}", func_str, value_type_name)
             }
         }
     }
@@ -884,18 +884,18 @@ pub enum InstructionPredicateNode {
 }
 
 impl InstructionPredicateNode {
-    fn rust_predicate(&self) -> String {
+    fn rust_predicate(&self, func_str: &str) -> String {
         match self {
             InstructionPredicateNode::FormatPredicate(node) => node.rust_predicate(),
-            InstructionPredicateNode::TypePredicate(node) => node.rust_predicate(),
+            InstructionPredicateNode::TypePredicate(node) => node.rust_predicate(func_str),
             InstructionPredicateNode::And(nodes) => nodes
                 .iter()
-                .map(|x| x.rust_predicate())
+                .map(|x| x.rust_predicate(func_str))
                 .collect::<Vec<_>>()
                 .join(" && "),
             InstructionPredicateNode::Or(nodes) => nodes
                 .iter()
-                .map(|x| x.rust_predicate())
+                .map(|x| x.rust_predicate(func_str))
                 .collect::<Vec<_>>()
                 .join(" || "),
         }
@@ -1169,9 +1169,9 @@ impl InstructionPredicate {
         self
     }
 
-    pub fn rust_predicate(&self) -> String {
+    pub fn rust_predicate(&self, func_str: &str) -> String {
         match &self.node {
-            Some(root) => root.rust_predicate(),
+            Some(root) => root.rust_predicate(func_str),
             None => "true".into(),
         }
     }

@@ -78,7 +78,7 @@ use crate::unique_table::UniqueSeqTable;
 fn emit_instp(instp: &InstructionPredicate, has_func: bool, fmt: &mut Formatter) {
     if instp.is_type_predicate() {
         fmt.line("let args = inst.arguments(&func.dfg.value_lists);");
-        fmt.line(instp.rust_predicate());
+        fmt.line(instp.rust_predicate("func"));
         return;
     }
 
@@ -127,7 +127,7 @@ fn emit_instp(instp: &InstructionPredicate, has_func: bool, fmt: &mut Formatter)
             // Silence dead argument.
             fmt.line("let _ = func;");
         }
-        fmtln!(fmt, "return {};", instp.rust_predicate());
+        fmtln!(fmt, "return {};", instp.rust_predicate("func"));
     });
     fmtln!(fmt, "}");
 
