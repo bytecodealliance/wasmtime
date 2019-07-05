@@ -12,6 +12,7 @@ pub use crate::transform::{
 pub use crate::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
 
 mod address_transform;
+mod gc;
 mod read_debuginfo;
 mod transform;
 mod write_debuginfo;
