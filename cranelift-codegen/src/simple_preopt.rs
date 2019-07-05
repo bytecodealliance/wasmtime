@@ -501,6 +501,9 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                     .dfg
                     .replace(inst)
                     .BinaryImm(new_opcode, ty, imm, args[0]);
+
+                // Repeat for BinaryImm simplification.
+                simplify(pos, inst);
             } else if let Some(imm) = resolve_imm64_value(&pos.func.dfg, args[0]) {
                 let new_opcode = match opcode {
                     Opcode::Isub => Opcode::IrsubImm,
@@ -519,6 +522,47 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                 if let Some(imm) = resolve_imm64_value(&pos.func.dfg, arg) {
                     // Note this works for both positive and negative immediate values.
                     pos.func.dfg.replace(inst).adjust_sp_down_imm(imm);
+                }
+            }
+            _ => {}
+        },
+
+        InstructionData::BinaryImm { opcode, arg, imm } => match opcode {
+            Opcode::IaddImm
+            | Opcode::ImulImm
+            | Opcode::BorImm
+            | Opcode::BandImm
+            | Opcode::BxorImm => {
+                // Fold binary_op(C2, binary_op(C1, x)) into binary_op(binary_op(C1 | C2), x)
+                if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
+                    if let InstructionData::BinaryImm {
+                        opcode: prev_opcode,
+                        arg: prev_arg,
+                        imm: prev_imm,
+                    } = &pos.func.dfg[arg_inst]
+                    {
+                        if opcode == *prev_opcode {
+                            let ty = pos.func.dfg.ctrl_typevar(inst);
+                            if ty == pos.func.dfg.ctrl_typevar(arg_inst) {
+                                let lhs: i64 = imm.into();
+                                let rhs: i64 = (*prev_imm).into();
+                                let new_imm = match opcode {
+                                    Opcode::BorImm => lhs | rhs,
+                                    Opcode::BandImm => lhs & rhs,
+                                    Opcode::BxorImm => lhs ^ rhs,
+                                    Opcode::IaddImm => lhs.wrapping_add(rhs),
+                                    Opcode::ImulImm => lhs.wrapping_mul(rhs),
+                                    _ => panic!("can't happen"),
+                                };
+                                let new_imm = immediates::Imm64::from(new_imm);
+                                let arg = *prev_arg;
+                                pos.func
+                                    .dfg
+                                    .replace(inst)
+                                    .BinaryImm(opcode, ty, new_imm, arg);
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
