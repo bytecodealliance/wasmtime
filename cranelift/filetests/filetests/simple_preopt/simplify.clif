@@ -78,3 +78,203 @@ ebb0(v0: i32):
 ; nextln:     v2 = irsub_imm v0, 2
 ; nextln:     return v2
 ; nextln: }
+
+;; Sign-extensions.
+
+;; 8 -> 16
+function %uextend_8_16() -> i16 {
+ebb0:
+    v0 = iconst.i16 37
+    v1 = ishl_imm v0, 8
+    v2 = ushr_imm v1, 8
+    return v2
+}
+; sameln: function %uextend_8_16
+; nextln: ebb0:
+; nextln:     v0 = iconst.i16 37
+; nextln:     v1 = ishl_imm v0, 8
+; nextln:     v3 = ireduce.i8 v0
+; nextln:     v2 = uextend.i16 v3
+; nextln:     return v2
+; nextln: }
+
+function %sextend_8_16() -> i16 {
+ebb0:
+    v0 = iconst.i16 37
+    v1 = ishl_imm v0, 8
+    v2 = sshr_imm v1, 8
+    return v2
+}
+; sameln: function %sextend_8_16
+; nextln: ebb0:
+; nextln:     v0 = iconst.i16 37
+; nextln:     v1 = ishl_imm v0, 8
+; nextln:     v3 = ireduce.i8 v0
+; nextln:     v2 = sextend.i16 v3
+; nextln:     return v2
+; nextln: }
+
+;; 8 -> 32
+function %uextend_8_32() -> i32 {
+ebb0:
+    v0 = iconst.i32 37
+    v1 = ishl_imm v0, 24
+    v2 = ushr_imm v1, 24
+    return v2
+}
+; sameln: function %uextend_8_32
+; nextln: ebb0:
+; nextln:     v0 = iconst.i32 37
+; nextln:     v1 = ishl_imm v0, 24
+; nextln:     v3 = ireduce.i8 v0
+; nextln:     v2 = uextend.i32 v3
+; nextln:     return v2
+; nextln: }
+
+function %sextend_8_32() -> i32 {
+ebb0:
+    v0 = iconst.i32 37
+    v1 = ishl_imm v0, 24
+    v2 = sshr_imm v1, 24
+    return v2
+}
+; sameln: function %sextend_8_32
+; nextln: ebb0:
+; nextln:     v0 = iconst.i32 37
+; nextln:     v1 = ishl_imm v0, 24
+; nextln:     v3 = ireduce.i8 v0
+; nextln:     v2 = sextend.i32 v3
+; nextln:     return v2
+; nextln: }
+
+;; 16 -> 32
+function %uextend_16_32() -> i32 {
+ebb0:
+    v0 = iconst.i32 37
+    v1 = ishl_imm v0, 16
+    v2 = ushr_imm v1, 16
+    return v2
+}
+; sameln: function %uextend_16_32
+; nextln: ebb0:
+; nextln:     v0 = iconst.i32 37
+; nextln:     v1 = ishl_imm v0, 16
+; nextln:     v3 = ireduce.i16 v0
+; nextln:     v2 = uextend.i32 v3
+; nextln:     return v2
+; nextln: }
+
+function %sextend_16_32() -> i32 {
+ebb0:
+    v0 = iconst.i32 37
+    v1 = ishl_imm v0, 16
+    v2 = sshr_imm v1, 16
+    return v2
+}
+; sameln: function %sextend_16_32
+; nextln: ebb0:
+; nextln:     v0 = iconst.i32 37
+; nextln:     v1 = ishl_imm v0, 16
+; nextln:     v3 = ireduce.i16 v0
+; nextln:     v2 = sextend.i32 v3
+; nextln:     return v2
+; nextln: }
+
+;; 8 -> 64
+function %uextend_8_64() -> i64 {
+ebb0:
+    v0 = iconst.i64 37
+    v1 = ishl_imm v0, 56
+    v2 = ushr_imm v1, 56
+    return v2
+}
+; sameln: function %uextend_8_64
+; nextln: ebb0:
+; nextln:     v0 = iconst.i64 37
+; nextln:     v1 = ishl_imm v0, 56
+; nextln:     v3 = ireduce.i8 v0
+; nextln:     v2 = uextend.i64 v3
+; nextln:     return v2
+; nextln: }
+
+function %sextend_8_64() -> i64 {
+ebb0:
+    v0 = iconst.i64 37
+    v1 = ishl_imm v0, 56
+    v2 = sshr_imm v1, 56
+    return v2
+}
+; sameln: function %sextend_8_64
+; nextln: ebb0:
+; nextln:     v0 = iconst.i64 37
+; nextln:     v1 = ishl_imm v0, 56
+; nextln:     v3 = ireduce.i8 v0
+; nextln:     v2 = sextend.i64 v3
+; nextln:     return v2
+; nextln: }
+
+;; 16 -> 64
+function %uextend_16_64() -> i64 {
+ebb0:
+    v0 = iconst.i64 37
+    v1 = ishl_imm v0, 48
+    v2 = ushr_imm v1, 48
+    return v2
+}
+; sameln: function %uextend_16_64
+; nextln: ebb0:
+; nextln:     v0 = iconst.i64 37
+; nextln:     v1 = ishl_imm v0, 48
+; nextln:     v3 = ireduce.i16 v0
+; nextln:     v2 = uextend.i64 v3
+; nextln:     return v2
+; nextln: }
+
+function %sextend_16_64() -> i64 {
+ebb0:
+    v0 = iconst.i64 37
+    v1 = ishl_imm v0, 48
+    v2 = sshr_imm v1, 48
+    return v2
+}
+; sameln: function %sextend_16_64
+; nextln: ebb0:
+; nextln:     v0 = iconst.i64 37
+; nextln:     v1 = ishl_imm v0, 48
+; nextln:     v3 = ireduce.i16 v0
+; nextln:     v2 = sextend.i64 v3
+; nextln:     return v2
+; nextln: }
+
+;; 32 -> 64
+function %uextend_32_64() -> i64 {
+ebb0:
+    v0 = iconst.i64 37
+    v1 = ishl_imm v0, 32
+    v2 = ushr_imm v1, 32
+    return v2
+}
+; sameln: function %uextend_32_64
+; nextln: ebb0:
+; nextln:     v0 = iconst.i64 37
+; nextln:     v1 = ishl_imm v0, 32
+; nextln:     v3 = ireduce.i32 v0
+; nextln:     v2 = uextend.i64 v3
+; nextln:     return v2
+; nextln: }
+
+function %sextend_32_64() -> i64 {
+ebb0:
+    v0 = iconst.i64 37
+    v1 = ishl_imm v0, 32
+    v2 = sshr_imm v1, 32
+    return v2
+}
+; sameln: function %sextend_32_64
+; nextln: ebb0:
+; nextln:     v0 = iconst.i64 37
+; nextln:     v1 = ishl_imm v0, 32
+; nextln:     v3 = ireduce.i32 v0
+; nextln:     v2 = sextend.i64 v3
+; nextln:     return v2
+; nextln: }
