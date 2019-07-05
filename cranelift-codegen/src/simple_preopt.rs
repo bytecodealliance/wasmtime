@@ -13,7 +13,7 @@ use crate::ir::{
     dfg::ValueDef,
     immediates,
     instructions::{Opcode, ValueList},
-    types::{I32, I64},
+    types::{I16, I32, I64, I8},
     DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Type, Value,
 };
 use crate::timing;
@@ -466,6 +466,56 @@ fn resolve_imm64_value(dfg: &DataFlowGraph, value: Value) -> Option<immediates::
     None
 }
 
+/// Try to transform [(x << N) >> N] into a (un)signed-extending move.
+/// Returns true if the final instruction has been converted to such a move.
+fn try_fold_extended_move(
+    pos: &mut FuncCursor,
+    inst: Inst,
+    opcode: Opcode,
+    arg: Value,
+    imm: immediates::Imm64,
+) -> bool {
+    if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
+        if let InstructionData::BinaryImm {
+            opcode: Opcode::IshlImm,
+            arg: prev_arg,
+            imm: prev_imm,
+        } = &pos.func.dfg[arg_inst]
+        {
+            if imm != *prev_imm {
+                return false;
+            }
+
+            let dest_ty = pos.func.dfg.ctrl_typevar(inst);
+            if dest_ty != pos.func.dfg.ctrl_typevar(arg_inst) || !dest_ty.is_int() {
+                return false;
+            }
+
+            let imm_bits: i64 = imm.into();
+            let ireduce_ty = match dest_ty.lane_bits() as i64 - imm_bits {
+                8 => I8,
+                16 => I16,
+                32 => I32,
+                _ => return false,
+            };
+            let ireduce_ty = ireduce_ty.by(dest_ty.lane_count()).unwrap();
+
+            // This becomes a no-op, since ireduce_ty has a smaller lane width than
+            // the argument type (also the destination type).
+            let arg = *prev_arg;
+            let narrower_arg = pos.ins().ireduce(ireduce_ty, arg);
+
+            if opcode == Opcode::UshrImm {
+                pos.func.dfg.replace(inst).uextend(dest_ty, narrower_arg);
+            } else {
+                pos.func.dfg.replace(inst).sextend(dest_ty, narrower_arg);
+            }
+            return true;
+        }
+    }
+    false
+}
+
 /// Apply basic simplifications.
 ///
 /// This folds constants with arithmetic to form `_imm` instructions, and other
@@ -563,6 +613,12 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                             }
                         }
                     }
+                }
+            }
+
+            Opcode::UshrImm | Opcode::SshrImm => {
+                if try_fold_extended_move(pos, inst, opcode, arg, imm) {
+                    return;
                 }
             }
             _ => {}
