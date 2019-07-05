@@ -7,7 +7,7 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use failure::Error;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::ops::Bound::{Included, Unbounded};
+use std::iter::FromIterator;
 
 use gimli;
 
@@ -401,6 +401,8 @@ where
             saved_rows.insert(row.address(), saved_row);
         }
 
+        let saved_rows = Vec::from_iter(saved_rows.into_iter());
+
         for (i, map) in addr_tr.map() {
             let symbol = i.index();
             let base_addr = map.offset;
@@ -408,14 +410,17 @@ where
             // TODO track and place function declaration line here
             let mut last_address = None;
             for addr_map in map.addresses.iter() {
-                let mut saved_row = saved_rows.get(&addr_map.wasm);
-                if saved_row.is_none() {
-                    // No direct match -- repeat search with range.
-                    saved_row = saved_rows
-                        .range((Unbounded, Included(addr_map.wasm)))
-                        .last()
-                        .map(|p| p.1);
-                }
+                let saved_row =
+                    match saved_rows.binary_search_by(|entry| entry.0.cmp(&addr_map.wasm)) {
+                        Ok(i) => Some(&saved_rows[i].1),
+                        Err(i) => {
+                            if i > 0 {
+                                Some(&saved_rows[i - 1].1)
+                            } else {
+                                None
+                            }
+                        }
+                    };
                 if let Some(SavedLineProgramRow::Normal {
                     address,
                     op_index,
