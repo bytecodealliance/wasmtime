@@ -83,6 +83,10 @@ impl AddressTransform {
         }
     }
 
+    pub fn can_translate_address(&self, addr: u64) -> bool {
+        self.translate(addr).is_some()
+    }
+
     pub fn translate(&self, addr: u64) -> Option<write::Address> {
         if addr == 0 {
             // It's normally 0 for debug info without the linked code.
