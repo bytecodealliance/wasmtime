@@ -4,7 +4,7 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;
 use std::collections::BTreeMap;
-use std::ops::Bound::{Included, Unbounded};
+use std::iter::FromIterator;
 use std::vec::Vec;
 
 pub type GeneratedAddress = usize;
@@ -26,7 +26,10 @@ pub struct FunctionMap {
 
 #[derive(Debug)]
 pub struct AddressTransform {
-    lookup: BTreeMap<WasmAddress, (SymbolIndex, GeneratedAddress, GeneratedAddress)>,
+    lookup: Vec<(
+        WasmAddress,
+        (SymbolIndex, GeneratedAddress, GeneratedAddress),
+    )>,
     map: PrimaryMap<DefinedFuncIndex, FunctionMap>,
     func_ranges: Vec<(usize, usize)>,
 }
@@ -76,6 +79,9 @@ impl AddressTransform {
                 addresses: fn_map.into_boxed_slice(),
             });
         }
+
+        let lookup = Vec::from_iter(lookup.into_iter());
+
         AddressTransform {
             lookup,
             map,
@@ -92,8 +98,17 @@ impl AddressTransform {
             // It's normally 0 for debug info without the linked code.
             return None;
         }
-        let search = self.lookup.range((Unbounded, Included(addr)));
-        if let Some((_, value)) = search.last() {
+        let found = match self.lookup.binary_search_by(|entry| entry.0.cmp(&addr)) {
+            Ok(i) => Some(&self.lookup[i].1),
+            Err(i) => {
+                if i > 0 {
+                    Some(&self.lookup[i - 1].1)
+                } else {
+                    None
+                }
+            }
+        };
+        if let Some(value) = found {
             return Some(write::Address::Symbol {
                 symbol: value.0,
                 addend: value.1 as i64,
