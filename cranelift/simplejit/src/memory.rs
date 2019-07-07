@@ -28,10 +28,10 @@ impl PtrLen {
     /// suitably sized and aligned for memory protection.
     #[cfg(not(target_os = "windows"))]
     fn with_size(size: usize) -> Result<Self, String> {
+        let mut ptr = ptr::null_mut();
         let page_size = region::page::size();
         let alloc_size = round_up_to_page_size(size, page_size);
         unsafe {
-            let mut ptr: *mut libc::c_void = mem::uninitialized();
             let err = libc::posix_memalign(&mut ptr, page_size, alloc_size);
             if err == 0 {
                 Ok(Self {
