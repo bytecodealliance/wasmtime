@@ -346,7 +346,7 @@ impl Registers {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockCallingConvention {
     pub stack_depth: StackDepth,
     pub arguments: Vec<CCLoc>,
@@ -432,8 +432,6 @@ impl std::ops::Not for CondCode {
     }
 }
 
-// TODO: Allow pushing condition codes to stack? We'd have to immediately
-//       materialise them into a register if anything is pushed above them.
 /// Describes location of a value.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ValueLocation {
@@ -690,11 +688,11 @@ pub struct StackDepth(u32);
 
 impl StackDepth {
     pub fn reserve(&mut self, slots: u32) {
-        self.0 += slots;
+        self.0 = self.0.checked_add(slots).unwrap();
     }
 
     pub fn free(&mut self, slots: u32) {
-        self.0 -= slots;
+        self.0 = self.0.checked_sub(slots).unwrap();
     }
 }
 
@@ -845,10 +843,12 @@ macro_rules! int_div {
 
             let is_neg1 = self.create_label();
 
+            // TODO: This could cause segfaults because of implicit push/pop
             let gen_neg1_case = match divisor {
                 ValueLocation::Immediate(_) => {
                     if divisor.$imm_fn().unwrap() == -1 {
                         self.push(ValueLocation::Immediate((-1 as $signed_ty).into()));
+                        self.free_value(dividend);
                         return;
                     }
 
@@ -1168,7 +1168,7 @@ macro_rules! cmp_i32 {
 macro_rules! cmp_i64 {
     ($name:ident, $flags:expr, $reverse_flags:expr, $const_fallback:expr) => {
         pub fn $name(&mut self) {
-            let right = self.pop();
+            let mut right = self.pop();
             let mut left = self.pop();
 
             let out = if let Some(i) = left.imm_i64() {
@@ -1180,18 +1180,27 @@ macro_rules! cmp_i64 {
                                 ; cmp QWORD [rsp + offset], i
                             );
                         } else {
-                            unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
+                            let lreg = self.into_reg(I32, left).unwrap();
+                            left = ValueLocation::Reg(lreg);
+                            dynasm!(self.asm
+                                ; cmp QWORD [rsp + offset], Rq(lreg.rq().unwrap())
+                            );
                         }
                         ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                         let rreg = self.into_reg(I32, right).unwrap();
+                        right = ValueLocation::Reg(rreg);
                         if let Some(i) = i.try_into() {
                             dynasm!(self.asm
                                 ; cmp Rq(rreg.rq().unwrap()), i
                             );
                         } else {
-                            unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
+                            let lreg = self.into_reg(I32, left).unwrap();
+                            left = ValueLocation::Reg(lreg);
+                            dynasm!(self.asm
+                                ; cmp Rq(rreg.rq().unwrap()), Rq(lreg.rq().unwrap())
+                            );
                         }
                         ValueLocation::Cond($reverse_flags)
                     }
@@ -1218,6 +1227,7 @@ macro_rules! cmp_i64 {
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                         let rreg = self.into_reg(I32, right).unwrap();
+                        right = ValueLocation::Reg(rreg);
                         dynasm!(self.asm
                             ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
                         );
@@ -1229,7 +1239,11 @@ macro_rules! cmp_i64 {
                                     ; cmp Rq(lreg.rq().unwrap()), i
                             );
                         } else {
-                            unimplemented!("Unsupported `cmp` with large 64-bit immediate operand");
+                            let rreg = self.into_reg(I32, right).unwrap();
+                            right = ValueLocation::Reg(rreg);
+                            dynasm!(self.asm
+                                ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
+                            );
                         }
                     }
                 }
@@ -1805,9 +1819,22 @@ macro_rules! load {
                         );
                     }
                     (GPR::Rx(r), Ok(imm)) => {
-                        dynasm!(ctx.asm
-                            ; $xmm_instr Rx(r), $ty [Rq(mem_ptr_reg.rq().unwrap()) + offset + imm]
-                        );
+                        if let Some(combined) = offset.checked_add(imm) {
+                            dynasm!(ctx.asm
+                                ; $xmm_instr Rx(r), $ty [Rq(mem_ptr_reg.rq().unwrap()) + combined]
+                            );
+                        } else {
+                            let offset_reg = ctx.take_reg(GPRType::Rq).unwrap();
+                            dynasm!(ctx.asm
+                                ; mov Rq(offset_reg.rq().unwrap()), offset
+                                ; $xmm_instr Rx(r), $ty [
+                                    Rq(mem_ptr_reg.rq().unwrap()) +
+                                    Rq(offset_reg.rq().unwrap()) +
+                                    imm
+                                ]
+                            );
+                            ctx.block_state.regs.release(offset_reg);
+                        }
                     }
                     (GPR::Rq(r), Err(offset_reg)) => {
                         dynasm!(ctx.asm
@@ -2021,7 +2048,7 @@ impl TryInto<i32> for i64 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VirtualCallingConvention {
     pub stack: Stack,
     pub depth: StackDepth,
@@ -3715,7 +3742,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f32::from_bits(imm.as_f32().unwrap().to_bits()) as i32).into(),
+                (f64::from_bits(imm.as_f64().unwrap().to_bits()) as u32).into(),
             ),
             other => {
                 let reg = self.into_temp_reg(F32, other).unwrap();
@@ -3786,7 +3813,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         rx,
         i64,
         f32,
-        as_i32,
+        as_i64,
         |a| Ieee32::from_bits((a as f32).to_bits())
     );
     conversion!(
@@ -3798,7 +3825,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         rx,
         i64,
         f64,
-        as_i32,
+        as_i64,
         |a| Ieee64::from_bits((a as f64).to_bits())
     );
 
@@ -3807,7 +3834,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f32::from_bits(imm.as_f32().unwrap().to_bits()) as i32).into(),
+                (f32::from_bits(imm.as_f32().unwrap().to_bits()) as i64).into(),
             ),
             other => {
                 let reg = self.into_temp_reg(F32, other).unwrap();
@@ -3846,7 +3873,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                (f64::from_bits(imm.as_f64().unwrap().to_bits()) as i32).into(),
+                (f64::from_bits(imm.as_f64().unwrap().to_bits()) as i64).into(),
             ),
             other => {
                 let reg = self.into_reg(F32, other).unwrap();
@@ -4025,7 +4052,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
-                Ieee32::from_bits((imm.as_i32().unwrap() as u64 as f32).to_bits()).into(),
+                Ieee32::from_bits((imm.as_i64().unwrap() as u64 as f32).to_bits()).into(),
             ),
             _ => {
                 let reg = self.into_reg(I64, val).unwrap();
@@ -4416,8 +4443,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     //       to move `RAX`/`RDX` back afterwards).
     fn full_div(
         &mut self,
-        dividend: ValueLocation,
         mut divisor: ValueLocation,
+        dividend: ValueLocation,
         do_div: impl FnOnce(&mut Self, ValueLocation),
     ) -> (
         ValueLocation,
@@ -4469,9 +4496,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .chain(saved_rax.map(|_| RAX));
 
         self.copy_value(dividend, CCLoc::Reg(RAX));
+        self.block_state.regs.mark_used(RAX);
+
         self.free_value(dividend);
         // To stop `take_reg` from allocating either of these necessary registers
-        self.block_state.regs.mark_used(RAX);
         self.block_state.regs.mark_used(RDX);
 
         do_div(self, divisor);
@@ -4491,7 +4519,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         ValueLocation,
         impl Iterator<Item = GPR> + Clone + 'this,
     ) {
-        self.full_div(dividend, divisor, |this, divisor| match divisor {
+        self.full_div(divisor, dividend, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
@@ -4519,7 +4547,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         ValueLocation,
         impl Iterator<Item = GPR> + Clone + 'this,
     ) {
-        self.full_div(dividend, divisor, |this, divisor| match divisor {
+        self.full_div(divisor, dividend, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
@@ -4547,7 +4575,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         ValueLocation,
         impl Iterator<Item = GPR> + Clone + 'this,
     ) {
-        self.full_div(dividend, divisor, |this, divisor| match divisor {
+        self.full_div(divisor, dividend, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
@@ -4575,7 +4603,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         ValueLocation,
         impl Iterator<Item = GPR> + Clone + 'this,
     ) {
-        self.full_div(dividend, divisor, |this, divisor| match divisor {
+        self.full_div(divisor, dividend, |this, divisor| match divisor {
             ValueLocation::Stack(offset) => {
                 let offset = this.adjusted_offset(offset);
                 dynasm!(this.asm
@@ -4668,7 +4696,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
-        let (left, right) = match left {
+        let (left, mut right) = match left {
             ValueLocation::Reg(_) => (left, right),
             _ => {
                 if right.immediate().is_some() {
@@ -4681,37 +4709,44 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = match right {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let right = self.into_reg(I64, right).unwrap();
-                let left = self.into_temp_reg(I64, left).unwrap();
+                let rreg = self.into_reg(I64, right).unwrap();
+                right = ValueLocation::Reg(rreg);
+                let lreg = self.into_temp_reg(I64, left).unwrap();
                 dynasm!(self.asm
-                    ; imul Rq(left.rq().unwrap()), Rq(right.rq().unwrap())
+                    ; imul Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
                 );
-                left
+                lreg
             }
             ValueLocation::Stack(offset) => {
                 let offset = self.adjusted_offset(offset);
 
-                let left = self.into_temp_reg(I64, left).unwrap();
+                let lreg = self.into_temp_reg(I64, left).unwrap();
                 dynasm!(self.asm
-                    ; imul Rq(left.rq().unwrap()), [rsp + offset]
+                    ; imul Rq(lreg.rq().unwrap()), [rsp + offset]
                 );
-                left
+                lreg
             }
             ValueLocation::Immediate(i) => {
-                let left = self.into_reg(I64, left).unwrap();
-                self.block_state.regs.release(left);
-                let new_reg = self.take_reg(I64).unwrap();
-
                 let i = i.as_i64().unwrap();
                 if let Some(i) = i.try_into() {
-                    dynasm!(self.asm
-                        ; imul Rq(new_reg.rq().unwrap()), Rq(left.rq().unwrap()), i
-                    );
-                } else {
-                    unimplemented!();
-                }
+                    let new_reg = self.take_reg(I64).unwrap();
+                    let lreg = self.into_reg(I64, left).unwrap();
+                    self.block_state.regs.release(lreg);
 
-                new_reg
+                    dynasm!(self.asm
+                        ; imul Rq(new_reg.rq().unwrap()), Rq(lreg.rq().unwrap()), i
+                    );
+
+                    new_reg
+                } else {
+                    let rreg = self.into_reg(I64, right).unwrap();
+                    right = ValueLocation::Reg(rreg);
+                    let lreg = self.into_temp_reg(I64, left).unwrap();
+                    dynasm!(self.asm
+                        ; imul Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
+                    );
+                    lreg
+                }
             }
         };
 

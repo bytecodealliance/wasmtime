@@ -1,5 +1,6 @@
 use crate::backend::{
-    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, VirtualCallingConvention,
+    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, Registers, ValueLocation,
+    VirtualCallingConvention,
 };
 use crate::error::Error;
 use crate::microwasm::*;
@@ -148,6 +149,22 @@ where
                 .get_mut(&BrTarget::Label(label.clone()))
                 .expect("Label defined before being declared");
             block.is_next = true;
+        }
+
+        if let Operator::Label(_) = op {
+        } else {
+            debug_assert_eq!(
+                {
+                    let mut actual_regs = Registers::new();
+                    for val in &ctx.block_state.stack {
+                        if let ValueLocation::Reg(gpr) = val {
+                            actual_regs.mark_used(*gpr);
+                        }
+                    }
+                    actual_regs
+                },
+                ctx.block_state.regs,
+            );
         }
 
         struct DisassemblyOpFormatter<Label>(Operator<Label>);
@@ -445,10 +462,11 @@ where
                         block.actual_num_callers += 1;
 
                         if block.calling_convention.is_some() {
-                            assert!(cc.is_none(), "Can't pass different params to different elements of `br_table` yet");
-                            cc = block.calling_convention
+                            let new_cc = block.calling_convention
                                 .clone()
                                 .map(|cc| (cc, target.to_drop.clone()));
+                            assert!(cc.is_none() || cc == new_cc, "Can't pass different params to different elements of `br_table` yet");
+                            cc = new_cc;
                         }
 
                         if let Some(max) = max_num_callers {
