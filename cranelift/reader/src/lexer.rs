@@ -373,6 +373,7 @@ impl<'a> Lexer<'a> {
             "b16" => types::B16,
             "b32" => types::B32,
             "b64" => types::B64,
+            "b128" => types::B128,
             "r32" => types::R32,
             "r64" => types::R64,
             _ => return None,

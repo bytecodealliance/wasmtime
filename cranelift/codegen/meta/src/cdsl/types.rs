@@ -215,13 +215,14 @@ impl LaneType {
                 LaneType::BoolType(shared_types::Bool::B16) => 2,
                 LaneType::BoolType(shared_types::Bool::B32) => 3,
                 LaneType::BoolType(shared_types::Bool::B64) => 4,
-                LaneType::IntType(shared_types::Int::I8) => 5,
-                LaneType::IntType(shared_types::Int::I16) => 6,
-                LaneType::IntType(shared_types::Int::I32) => 7,
-                LaneType::IntType(shared_types::Int::I64) => 8,
-                LaneType::IntType(shared_types::Int::I128) => 9,
-                LaneType::FloatType(shared_types::Float::F32) => 10,
-                LaneType::FloatType(shared_types::Float::F64) => 11,
+                LaneType::BoolType(shared_types::Bool::B128) => 5,
+                LaneType::IntType(shared_types::Int::I8) => 6,
+                LaneType::IntType(shared_types::Int::I16) => 7,
+                LaneType::IntType(shared_types::Int::I32) => 8,
+                LaneType::IntType(shared_types::Int::I64) => 9,
+                LaneType::IntType(shared_types::Int::I128) => 10,
+                LaneType::FloatType(shared_types::Float::F32) => 11,
+                LaneType::FloatType(shared_types::Float::F64) => 12,
             }
     }
 
@@ -232,6 +233,7 @@ impl LaneType {
             16 => shared_types::Bool::B16,
             32 => shared_types::Bool::B32,
             64 => shared_types::Bool::B64,
+            128 => shared_types::Bool::B128,
             _ => unreachable!("unxpected num bits for bool"),
         })
     }
