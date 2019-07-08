@@ -263,5 +263,13 @@ pub fn define<'formats>(
             .emit("unimplemented!();"),
     );
 
+    // Stack-slot to same stack-slot copy, which is guaranteed to turn into a no-op.
+    recipes.push(
+        EncodingRecipeBuilder::new("stacknull", f_unary, 0)
+            .operands_in(vec![Stack::new(gpr)])
+            .operands_out(vec![Stack::new(gpr)])
+            .emit(""),
+    );
+
     recipes
 }

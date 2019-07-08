@@ -7,7 +7,8 @@ use crate::cdsl::recipes::{EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::SettingGroup;
 
 use crate::shared::types::Bool::B1;
-use crate::shared::types::Int::{I32, I64};
+use crate::shared::types::Float::{F32, F64};
+use crate::shared::types::Int::{I16, I32, I64, I8};
 use crate::shared::Definitions as SharedDefinitions;
 
 use super::recipes::RecipeGroup;
@@ -119,6 +120,7 @@ pub fn define<'defs>(
     let call = shared.by_name("call");
     let call_indirect = shared.by_name("call_indirect");
     let copy = shared.by_name("copy");
+    let copy_nop = shared.by_name("copy_nop");
     let fill = shared.by_name("fill");
     let iadd = shared.by_name("iadd");
     let iadd_imm = shared.by_name("iadd_imm");
@@ -153,6 +155,7 @@ pub fn define<'defs>(
     let r_rshamt = recipes.by_name("Rshamt");
     let r_sb = recipes.by_name("SB");
     let r_sb_zero = recipes.by_name("SBzero");
+    let r_stacknull = recipes.by_name("stacknull");
     let r_u = recipes.by_name("U");
     let r_uj = recipes.by_name("UJ");
     let r_uj_call = recipes.by_name("UJcall");
@@ -378,6 +381,18 @@ pub fn define<'defs>(
     e.add64(enc(copy.bind(B1), r_icopy, opimm_bits(0b000, 0)));
     e.add32(enc(regmove.bind(B1), r_irmov, opimm_bits(0b000, 0)));
     e.add64(enc(regmove.bind(B1), r_irmov, opimm_bits(0b000, 0)));
+
+    // Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
+    // into a no-op.
+    // The same encoding is generated for both the 64- and 32-bit architectures.
+    for &ty in &[I64, I32, I16, I8] {
+        e.add32(enc(copy_nop.bind(ty), r_stacknull, 0));
+        e.add64(enc(copy_nop.bind(ty), r_stacknull, 0));
+    }
+    for &ty in &[F64, F32] {
+        e.add32(enc(copy_nop.bind(ty), r_stacknull, 0));
+        e.add64(enc(copy_nop.bind(ty), r_stacknull, 0));
+    }
 
     e
 }
