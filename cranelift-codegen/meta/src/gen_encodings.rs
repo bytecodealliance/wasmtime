@@ -46,6 +46,7 @@
 
 use std::collections::btree_map;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::TryFrom;
 use std::iter::FromIterator;
 
 use cranelift_entity::EntityRef;
@@ -913,7 +914,7 @@ fn emit_tables(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
         if length <= 0x10000 {
             "u16"
         } else {
-            assert!(length <= 0x100000000, "table too big!");
+            assert!(u32::try_from(length).is_ok(), "table too big!");
             "u32"
         }
     };
