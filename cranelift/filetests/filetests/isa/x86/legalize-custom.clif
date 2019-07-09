@@ -33,6 +33,8 @@ ebb0(v1: i32):
     return
     ; check: ebb0(v1: i32
     ; check: brnz v2, $(new=$EBB)
+    ; check: jump $(trap=$EBB)
+    ; check: $trap:
     ; nextln: trap user7
     ; check: $new:
     ; nextln: return
@@ -45,6 +47,8 @@ ebb0(v1: i32):
     return
     ; check: ebb0(v1: i32
     ; check: brz v2, $(new=$EBB)
+    ; check: jump $(trap=$EBB)
+    ; check: $trap:
     ; nextln: trap user9
     ; check: $new:
     ; nextln: return
