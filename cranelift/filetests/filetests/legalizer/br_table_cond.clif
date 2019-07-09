@@ -4,6 +4,8 @@ set jump_tables_enabled=false
 target x86_64
 
 ; Test that when jump_tables_enables is false, all jump tables are eliminated.
+; regex: V=v\d+
+; regex: EBB=ebb\d+
 
 function u0:0(i64 vmctx) baldrdash {
     gv0 = vmctx
@@ -20,10 +22,32 @@ ebb5:
     trapnz v2, interrupt
     v3 = iconst.i32 0
     br_table v3, ebb3, jt0
+; check:  ebb5:
+; check:    $(val0=$V) = iconst.i32 0
+; nextln:   $(cmp0=$V) = icmp_imm eq $val0, 0
+; nextln:   brnz $cmp0, ebb2
+; nextln:   jump $(fail0=$EBB)
+; check:  $fail0:
+; nextln:   $(cmp1=$V) = icmp_imm.i32 eq $val0, 1
+; nextln:   brnz $cmp1, ebb2
+; nextln:   jump $(fail1=$EBB)
+; check:  $fail1:
+; nextln:   $(cmp2=$V) = icmp_imm.i32 eq $val0, 2
+; nextln:   brnz $cmp2, ebb7
+; nextln:   jump ebb3
 
 ebb7:
     v4 = iconst.i32 0
     br_table v4, ebb3, jt1
+; check:  ebb7:
+; check:    $(val1=$V) = iconst.i32 0
+; nextln:   $(cmp3=$V) = icmp_imm eq $val1, 0
+; nextln:   brnz $cmp3, ebb8
+; nextln:   jump $(fail3=$EBB)
+; check:  $fail3:
+; nextln:   $(cmp4=$V) = icmp_imm.i32 eq $val1, 1
+; nextln:   brnz $cmp4, ebb8
+; nextln:   jump ebb3
 
 ebb8:
     jump ebb5
