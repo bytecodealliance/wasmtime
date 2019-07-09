@@ -29,8 +29,8 @@ toolchains will be able to implement WASI as well!
 To install a WASI-enabled Rust toolchain:
 
 ```
-rustup target add wasm32-wasi --toolchain nightly
-cargo +nightly build --target wasm32-wasi
+rustup target add wasm32-wasi
+cargo build --target wasm32-wasi
 ```
 
 Until now, Rust's WebAssembly support has had two main options, the
