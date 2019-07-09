@@ -100,6 +100,8 @@ ebb0(v0: i32, v999: i64):
     ; Boundscheck code
     ; check: $(oob=$V) = icmp
     ; nextln: brz $oob, $(ok=$EBB)
+    ; nextln: jump $(trap_oob=$EBB)
+    ; check: $trap_oob:
     ; nextln: trap heap_oob
     ; check: $ok:
     ; Checks here are assuming that no pipehole opts fold the load offsets.

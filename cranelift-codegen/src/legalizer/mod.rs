@@ -150,29 +150,45 @@ fn expand_cond_trap(
     // Split the EBB after `inst`:
     //
     //     trapnz arg
+    //     ..
     //
     // Becomes:
     //
-    //     brz arg, new_ebb
-    //     trap
-    //   new_ebb:
+    //     brz arg, new_ebb_resume
+    //     jump new_ebb_trap
     //
+    //   new_ebb_trap:
+    //     trap
+    //
+    //   new_ebb_resume:
+    //     ..
     let old_ebb = func.layout.pp_ebb(inst);
-    let new_ebb = func.dfg.make_ebb();
+    let new_ebb_trap = func.dfg.make_ebb();
+    let new_ebb_resume = func.dfg.make_ebb();
+
+    // Replace trap instruction by the inverted condition.
     if trapz {
-        func.dfg.replace(inst).brnz(arg, new_ebb, &[]);
+        func.dfg.replace(inst).brnz(arg, new_ebb_resume, &[]);
     } else {
-        func.dfg.replace(inst).brz(arg, new_ebb, &[]);
+        func.dfg.replace(inst).brz(arg, new_ebb_resume, &[]);
     }
 
+    // Add jump instruction after the inverted branch.
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
+    pos.ins().jump(new_ebb_trap, &[]);
+
+    // Insert the new label and the unconditional trap terminator.
+    pos.insert_ebb(new_ebb_trap);
     pos.ins().trap(code);
-    pos.insert_ebb(new_ebb);
+
+    // Insert the new label and resume the execution when the trap fails.
+    pos.insert_ebb(new_ebb_resume);
 
     // Finally update the CFG.
     cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, new_ebb);
+    cfg.recompute_ebb(pos.func, new_ebb_resume);
+    cfg.recompute_ebb(pos.func, new_ebb_trap);
 }
 
 /// Jump tables.
