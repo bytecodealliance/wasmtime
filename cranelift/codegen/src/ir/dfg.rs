@@ -25,7 +25,7 @@ use std::collections::HashMap;
 /// instruction results or EBB parameters.
 ///
 /// The layout of EBBs in the function and of instructions in each EBB is recorded by the
-/// `FunctionLayout` data structure which form the other half of the function representation.
+/// `Layout` data structure which forms the other half of the function representation.
 ///
 #[derive(Clone)]
 pub struct DataFlowGraph {
