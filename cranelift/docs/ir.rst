@@ -86,10 +86,9 @@ containing multiple assignments to the same variables into SSA form for
 Cranelift :term:`IR`.
 
 Such variables can also be presented to Cranelift as :term:`stack slot`\s.
-Stack slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
-instructions, and can have their address taken with :inst:`stack_addr`, which
-supports C-like programming languages where local variables can have their
-address taken.
+Stack slots are accessed with the `stack_store` and `stack_load` instructions,
+and can have their address taken with `stack_addr`, which supports C-like
+programming languages where local variables can have their address taken.
 
 .. _value-types:
 
@@ -105,20 +104,20 @@ Boolean types
 
 Boolean values are either true or false.
 
-The :type:`b1` type represents an abstract boolean value. It can only exist as
+The `b1` type represents an abstract boolean value. It can only exist as
 an SSA value, and can't be directly stored in memory. It can, however, be
-converted into an integer with value 0 or 1 by the :inst:`bint` instruction (and
-converted back with :inst:`icmp_imm` with 0).
+converted into an integer with value 0 or 1 by the `bint` instruction (and
+converted back with `icmp_imm` with 0).
 
 Several larger boolean types are also defined, primarily to be used as SIMD
 element types. They can be stored in memory, and are represented as either all
 zero bits or all one bits.
 
-.. autocliftype:: b1
-.. autocliftype:: b8
-.. autocliftype:: b16
-.. autocliftype:: b32
-.. autocliftype:: b64
+- b1
+- b8
+- b16
+- b32
+- b64
 
 Integer types
 -------------
@@ -129,10 +128,10 @@ number, others don't care.
 
 The support for i8 and i16 arithmetic is incomplete and use could lead to bugs.
 
-.. autocliftype:: i8
-.. autocliftype:: i16
-.. autocliftype:: i32
-.. autocliftype:: i64
+- i8
+- i16
+- i32
+- i64
 
 Floating point types
 --------------------
@@ -160,8 +159,8 @@ instructions are encoded as follows:
   and all bits of the trailing significand other than the MSB set to
   nondeterministic values.
 
-.. autocliftype:: f32
-.. autocliftype:: f64
+- f32
+- f64
 
 CPU flags types
 ---------------
@@ -172,15 +171,15 @@ compared.
 
 Since some ISAs don't have CPU flags, these value types should not be used
 until the legalization phase of compilation where the code is adapted to fit
-the target ISA. Use instructions like :inst:`icmp` instead.
+the target ISA. Use instructions like `icmp` instead.
 
 The CPU flags types are also restricted such that two flags values can not be
 live at the same time. After legalization, some instruction encodings will
 clobber the flags, and flags values are not allowed to be live across such
 instructions either. The verifier enforces these rules.
 
-.. autocliftype:: iflags
-.. autocliftype:: fflags
+- iflags
+- fflags
 
 SIMD vector types
 -----------------
@@ -189,42 +188,38 @@ A SIMD vector type represents a vector of values from one of the scalar types
 (boolean, integer, and floating point). Each scalar value in a SIMD type is
 called a *lane*. The number of lanes must be a power of two in the range 2-256.
 
-.. type:: i%Bx%N
+i%Bx%N
+    A SIMD vector of integers. The lane type `iB` is one of the integer
+    types `i8` ... `i64`.
 
-    A SIMD vector of integers. The lane type :type:`iB` is one of the integer
-    types :type:`i8` ... :type:`i64`.
-
-    Some concrete integer vector types are :type:`i32x4`, :type:`i64x8`, and
-    :type:`i16x4`.
+    Some concrete integer vector types are `i32x4`, `i64x8`, and
+    `i16x4`.
 
     The size of a SIMD integer vector in memory is :math:`N B\over 8` bytes.
 
-.. type:: f32x%N
-
+f32x%N
     A SIMD vector of single precision floating point numbers.
 
-    Some concrete :type:`f32` vector types are: :type:`f32x2`, :type:`f32x4`,
-    and :type:`f32x8`.
+    Some concrete `f32` vector types are: `f32x2`, `f32x4`,
+    and `f32x8`.
 
-    The size of a :type:`f32` vector in memory is :math:`4N` bytes.
+    The size of a `f32` vector in memory is :math:`4N` bytes.
 
-.. type:: f64x%N
-
+f64x%N
     A SIMD vector of double precision floating point numbers.
 
-    Some concrete :type:`f64` vector types are: :type:`f64x2`, :type:`f64x4`,
-    and :type:`f64x8`.
+    Some concrete `f64` vector types are: `f64x2`, `f64x4`,
+    and `f64x8`.
 
-    The size of a :type:`f64` vector in memory is :math:`8N` bytes.
+    The size of a `f64` vector in memory is :math:`8N` bytes.
 
-.. type:: b1x%N
-
+b1x%N
     A boolean SIMD vector.
 
     Boolean vectors are used when comparing SIMD vectors. For example,
-    comparing two :type:`i32x4` values would produce a :type:`b1x4` result.
+    comparing two `i32x4` values would produce a `b1x4` result.
 
-    Like the :type:`b1` type, a boolean vector cannot be stored in memory.
+    Like the `b1` type, a boolean vector cannot be stored in memory.
 
 Pseudo-types and type classes
 -----------------------------
@@ -232,40 +227,32 @@ Pseudo-types and type classes
 These are not concrete types, but convenient names used to refer to real types
 in this reference.
 
-.. type:: iAddr
-
+iAddr
     A Pointer-sized integer representing an address.
 
-    This is either :type:`i32`, or :type:`i64`, depending on whether the target
+    This is either `i32`, or `i64`, depending on whether the target
     platform has 32-bit or 64-bit pointers.
 
-.. type:: iB
+iB
+    Any of the scalar integer types `i8` -- `i64`.
 
-    Any of the scalar integer types :type:`i8` -- :type:`i64`.
+Int
+    Any scalar *or vector* integer type: `iB` or `iBxN`.
 
-.. type:: Int
+fB
+    Either of the floating point scalar types: `f32` or `f64`.
 
-    Any scalar *or vector* integer type: :type:`iB` or :type:`iBxN`.
+Float
+    Any scalar *or vector* floating point type: `fB` or `fBxN`.
 
-.. type:: fB
-
-    Either of the floating point scalar types: :type:`f32` or :type:`f64`.
-
-.. type:: Float
-
-    Any scalar *or vector* floating point type: :type:`fB` or :type:`fBxN`.
-
-.. type:: %Tx%N
-
+%Tx%N
     Any SIMD vector type.
 
-.. type:: Mem
+Mem
+    Any type that can be stored in memory: `Int` or `Float`.
 
-    Any type that can be stored in memory: :type:`Int` or :type:`Float`.
-
-.. type:: Testable
-
-    Either :type:`b1` or :type:`iN`.
+Testable
+    Either `b1` or `iN`.
 
 Immediate operand types
 -----------------------
@@ -273,48 +260,41 @@ Immediate operand types
 These types are not part of the normal SSA type system. They are used to
 indicate the different kinds of immediate operands on an instruction.
 
-.. type:: imm64
-
+imm64
     A 64-bit immediate integer. The value of this operand is interpreted as a
     signed two's complement integer. Instruction encodings may limit the valid
     range.
 
-    In the textual format, :type:`imm64` immediates appear as decimal or
+    In the textual format, `imm64` immediates appear as decimal or
     hexadecimal literals using the same syntax as C.
 
-.. type:: offset32
-
+offset32
     A signed 32-bit immediate address offset.
 
-    In the textual format, :type:`offset32` immediates always have an explicit
+    In the textual format, `offset32` immediates always have an explicit
     sign, and a 0 offset may be omitted.
 
-.. type:: ieee32
-
+ieee32
     A 32-bit immediate floating point number in the IEEE 754-2008 binary32
     interchange format. All bit patterns are allowed.
 
-.. type:: ieee64
-
+ieee64
     A 64-bit immediate floating point number in the IEEE 754-2008 binary64
     interchange format. All bit patterns are allowed.
 
-.. type:: bool
-
+bool
     A boolean immediate value, either false or true.
 
-    In the textual format, :type:`bool` immediates appear as 'false'
+    In the textual format, `bool` immediates appear as 'false'
     and 'true'.
 
-.. type:: intcc
+intcc
+    An integer condition code. See the `icmp` instruction for details.
 
-    An integer condition code. See the :inst:`icmp` instruction for details.
+floatcc
+    A floating point condition code. See the `fcmp` instruction for details.
 
-.. type:: floatcc
-
-    A floating point condition code. See the :inst:`fcmp` instruction for details.
-
-The two IEEE floating point immediate types :type:`ieee32` and :type:`ieee64`
+The two IEEE floating point immediate types `ieee32` and `ieee64`
 are displayed as hexadecimal floating point literals in the textual :term:`IR`
 format. Decimal floating point literals are not allowed because some computer
 systems can round differently when converting to binary. The hexadecimal
@@ -324,9 +304,9 @@ to represent all NaN bit patterns:
 Normal numbers
     Compatible with C99: ``-0x1.Tpe`` where ``T`` are the trailing
     significand bits encoded as hexadecimal, and ``e`` is the unbiased exponent
-    as a decimal number. :type:`ieee32` has 23 trailing significand bits. They
+    as a decimal number. `ieee32` has 23 trailing significand bits. They
     are padded with an extra LSB to produce 6 hexadecimal digits. This is not
-    necessary for :type:`ieee64` which has 52 trailing significand bits
+    necessary for `ieee64` which has 52 trailing significand bits
     forming 13 hexadecimal digits with no padding.
 
 Zeros
@@ -358,17 +338,10 @@ arguments, if it has any. Conditional branches only take the branch if their
 condition is satisfied, otherwise execution continues at the following
 instruction in the EBB.
 
-.. autoinst:: jump
-.. autoinst:: brz
-.. autoinst:: brnz
-.. autoinst:: br_icmp
-.. autoinst:: br_table
-
-.. inst:: JT = jump_table [EBB0, EBB1, ..., EBBn]
-
+JT = jump_table [EBB0, EBB1, ..., EBBn]
     Declare a jump table in the :term:`function preamble`.
 
-    This declares a jump table for use by the :inst:`br_table` indirect branch
+    This declares a jump table for use by the `br_table` indirect branch
     instruction. Entries in the table are EBB names.
 
     The EBBs listed must belong to the current function, and they can't have
@@ -382,12 +355,8 @@ instruction in the EBB.
 Traps stop the program because something went wrong. The exact behavior depends
 on the target instruction set architecture and operating system. There are
 explicit trap instructions defined below, but some instructions may also cause
-traps for certain input value. For example, :inst:`udiv` traps when the divisor
+traps for certain input value. For example, `udiv` traps when the divisor
 is zero.
-
-.. autoinst:: trap
-.. autoinst:: trapz
-.. autoinst:: trapnz
 
 
 Function calls
@@ -448,8 +417,7 @@ compilers.
 Functions that are called directly must be declared in the :term:`function
 preamble`:
 
-.. inst:: FN = [colocated] NAME signature
-
+FN = [colocated] NAME signature
     Declare a function so it can be called directly.
 
     If the colocated keyword is present, the symbol's definition will be
@@ -458,11 +426,7 @@ preamble`:
 
     :arg NAME: Name of the function, passed to the linker for resolution.
     :arg signature: Function signature. See below.
-    :result FN: A function identifier that can be used with :inst:`call`.
-
-.. autoinst:: call
-.. autoinst:: x_return
-.. autoinst:: fallthrough_return
+    :result FN: A function identifier that can be used with `call`.
 
 This simple example illustrates direct function calls and signatures:
 
@@ -472,32 +436,23 @@ This simple example illustrates direct function calls and signatures:
 
 Indirect function calls use a signature declared in the preamble.
 
-.. autoinst:: call_indirect
-.. autoinst:: func_addr
-
 .. _memory:
 
 Memory
 ======
 
-Cranelift provides fully general :inst:`load` and :inst:`store` instructions for
-accessing memory, as well as :ref:`extending loads and truncating stores
+Cranelift provides fully general `load` and `store` instructions for accessing
+memory, as well as :ref:`extending loads and truncating stores
 <extload-truncstore>`.
 
 If the memory at the given address is not :term:`addressable`, the behavior of
 these instructions is undefined. If it is addressable but not
 :term:`accessible`, they :term:`trap`.
 
-.. autoinst:: load
-.. autoinst:: store
-
 There are also more restricted operations for accessing specific types of memory
 objects.
 
 Additionally, instructions are provided for handling multi-register addressing.
-
-.. autoinst:: load_complex
-.. autoinst:: store_complex
 
 Memory operation flags
 ----------------------
@@ -505,13 +460,15 @@ Memory operation flags
 Loads and stores can have flags that loosen their semantics in order to enable
 optimizations.
 
-=======  ===========================================
+======== ===========================================
 Flag     Description
-=======  ===========================================
+======== ===========================================
 notrap   Memory is assumed to be :term:`accessible`.
 aligned  Trapping allowed for misaligned accesses.
-readonly The data at the specified address will not modified between when this function is called and exited.
-=======  ===========================================
+readonly The data at the specified address will not
+         modified between when this function is
+         called and exited.
+======== ===========================================
 
 When the ``accessible`` flag is set, the behavior is undefined if the memory
 is not :term:`accessible`.
@@ -530,8 +487,7 @@ allocated in the :term:`function preamble`. Stack slots are not typed, they
 simply represent a contiguous sequence of :term:`accessible` bytes in the stack
 frame.
 
-.. inst:: SS = explicit_slot Bytes, Flags...
-
+SS = explicit_slot Bytes, Flags...
     Allocate a stack slot in the preamble.
 
     If no alignment is specified, Cranelift will pick an appropriate alignment
@@ -541,9 +497,6 @@ frame.
     :flag align(N): Request at least N bytes alignment.
     :result SS: Stack slot index.
 
-.. autoinst:: stack_load
-.. autoinst:: stack_store
-
 The dedicated stack access instructions are easy for the compiler to reason
 about because stack slots and offsets are fixed at compile time. For example,
 the alignment of these stack memory accesses can be inferred from the offsets
@@ -552,9 +505,7 @@ and stack slot alignments.
 It's also possible to obtain the address of a stack slot, which can be used
 in :ref:`unrestricted loads and stores <memory>`.
 
-.. autoinst:: stack_addr
-
-The :inst:`stack_addr` instruction can be used to macro-expand the stack access
+The `stack_addr` instruction can be used to macro-expand the stack access
 instructions before instruction selection::
 
     v0 = stack_load.f64 ss3, 16
@@ -569,7 +520,7 @@ Global values
 -------------
 
 A *global value* is an object whose value is not known at compile time. The
-value is computed at runtime by :inst:`global_value`, possibly using
+value is computed at runtime by `global_value`, possibly using
 information provided by the linker via relocations. There are multiple
 kinds of global values using different methods for determining their value.
 Cranelift does not track the type of a global value, for they are just
@@ -584,8 +535,7 @@ Cranelift functions.
 Chains of global value expressions are possible, but cycles are not allowed.
 They will be caught by the IR verifier.
 
-.. inst:: GV = vmctx
-
+GV = vmctx
     Declare a global value of the address of the VM context struct.
 
     This declares a global value which is the VM context pointer which may
@@ -599,8 +549,7 @@ A global value can also be derived by treating another global variable as a
 struct pointer and loading from one of its fields. This makes it possible to
 chase pointers into VM runtime data structures.
 
-.. inst:: GV = load.Type BaseGV [Offset]
-
+GV = load.Type BaseGV [Offset]
     Declare a global value pointed to by BaseGV plus Offset, with type Type.
 
     It is assumed the BaseGV plus Offset resides in accessible memory with the
@@ -610,15 +559,13 @@ chase pointers into VM runtime data structures.
     :arg Offset: Offset added to the base before loading.
     :result GV: Global value.
 
-.. inst:: GV = iadd_imm BaseGV, Offset
-
+GV = iadd_imm BaseGV, Offset
     Declare a global value which has the value of BaseGV offset by Offset.
 
     :arg BaseGV: Global value providing the base value.
     :arg Offset: Offset added to the base value.
 
-.. inst:: GV = [colocated] symbol Name
-
+GV = [colocated] symbol Name
     Declare a symbolic address global value.
 
     The value of GV is symbolic and will be assigned a relocation, so that
@@ -631,10 +578,6 @@ chase pointers into VM runtime data structures.
     :arg Name: External name.
     :result GV: Global value.
 
-.. autoinst:: global_value
-.. autoinst:: symbol_value
-
-
 Heaps
 -----
 
@@ -644,9 +587,9 @@ in, and all accesses are bounds checked. Cranelift models this through the
 concept of *heaps*.
 
 A heap is declared in the function preamble and can be accessed with the
-:inst:`heap_addr` instruction that :term:`traps` on out-of-bounds accesses or
+`heap_addr` instruction that :term:`traps` on out-of-bounds accesses or
 returns a pointer that is guaranteed to trap. Heap addresses can be smaller than
-the native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
+the native pointer size, for example unsigned `i32` offsets on a 64-bit
 architecture.
 
 .. digraph:: static
@@ -674,11 +617,9 @@ A heap appears as three consecutive ranges of address space:
    not :term:`accessible`.
 
 The *heap bound* is the total size of the mapped and unmapped pages. This is
-the bound that :inst:`heap_addr` checks against. Memory accesses inside the
+the bound that `heap_addr` checks against. Memory accesses inside the
 heap bounds can trap if they hit an unmapped page (which is not
 :term:`accessible`).
-
-.. autoinst:: heap_addr
 
 Two styles of heaps are supported, *static* and *dynamic*. They behave
 differently when resized.
@@ -693,8 +634,7 @@ unmapped pages where the heap can grow up to its maximum size. After the
 unmapped pages follow the offset-guard pages which are also guaranteed to
 generate a trap when accessed.
 
-.. inst:: H = static Base, min MinBytes, bound BoundBytes, offset_guard OffsetGuardBytes
-
+H = static Base, min MinBytes, bound BoundBytes, offset_guard OffsetGuardBytes
     Declare a static heap in the preamble.
 
     :arg Base: Global value holding the heap's base address.
@@ -712,8 +652,7 @@ A *dynamic heap* can be relocated to a different base address when it is
 resized, and its bound can move dynamically. The offset-guard pages move when
 the heap is resized. The bound of a dynamic heap is stored in a global value.
 
-.. inst:: H = dynamic Base, min MinBytes, bound BoundGV, offset_guard OffsetGuardBytes
-
+H = dynamic Base, min MinBytes, bound BoundGV, offset_guard OffsetGuardBytes
     Declare a dynamic heap in the preamble.
 
     :arg Base: Global value holding the heap's base address.
@@ -762,25 +701,22 @@ linear memory. WebAssembly uses *tables* to allow programs to refer to opaque
 values through integer indices.
 
 A table is declared in the function preamble and can be accessed with the
-:inst:`table_addr` instruction that :term:`traps` on out-of-bounds accesses.
+`table_addr` instruction that :term:`traps` on out-of-bounds accesses.
 Table addresses can be smaller than the native pointer size, for example
-unsigned :type:`i32` offsets on a 64-bit architecture.
+unsigned `i32` offsets on a 64-bit architecture.
 
 A table appears as a consecutive range of address space, conceptually
 divided into elements of fixed sizes, which are identified by their index.
 The memory is :term:`accessible`.
 
 The *table bound* is the number of elements currently in the table. This is
-the bound that :inst:`table_addr` checks against.
-
-.. autoinst:: table_addr
+the bound that `table_addr` checks against.
 
 A table can be relocated to a different base address when it is resized, and
 its bound can move dynamically. The bound of a table is stored in a global
 value.
 
-.. inst:: T = dynamic Base, min MinElements, bound BoundGV, element_size ElementSize
-
+T = dynamic Base, min MinElements, bound BoundGV, element_size ElementSize
     Declare a table in the preamble.
 
     :arg Base: Global value holding the table's base address.
@@ -788,85 +724,12 @@ value.
     :arg BoundGV: Global value containing the current heap bound in elements.
     :arg ElementSize: Size of each element.
 
-Operations
-==========
-
-.. autoinst:: select
-.. autoinst:: selectif
-
 Constant materialization
 ------------------------
 
-A few instructions have variants that take immediate operands (e.g.,
-:inst:`band` / :inst:`band_imm`), but in general an instruction is required to
-load a constant into an SSA value.
-
-.. autoinst:: iconst
-.. autoinst:: f32const
-.. autoinst:: f64const
-.. autoinst:: bconst
-
-Vector operations
------------------
-
-.. autoinst:: vsplit
-.. autoinst:: vconcat
-.. autoinst:: vselect
-.. autoinst:: splat
-.. autoinst:: insertlane
-.. autoinst:: extractlane
-
-Integer operations
-------------------
-
-.. autoinst:: icmp
-.. autoinst:: icmp_imm
-.. autoinst:: iadd
-.. autoinst:: iadd_imm
-.. autoinst:: iadd_cin
-.. autoinst:: iadd_cout
-.. autoinst:: iadd_carry
-.. autoinst:: isub
-.. autoinst:: irsub_imm
-.. autoinst:: isub_bin
-.. autoinst:: isub_bout
-.. autoinst:: isub_borrow
-
-.. todo:: Add and subtract with signed overflow.
-
-    For example, see
-    `llvm.sadd.with.overflow.*` and `llvm.ssub.with.overflow.*` in
-    `LLVM <https://llvm.org/docs/LangRef.html#arithmetic-with-overflow-intrinsics>`_.
-
-.. autoinst:: imul
-.. autoinst:: imul_imm
-
-.. todo:: Larger multiplication results.
-
-    For example, ``smulx`` which multiplies :type:`i32` operands to produce a
-    :type:`i64` result. Alternatively, ``smulhi`` and ``smullo`` pairs.
-
-.. autoinst:: udiv
-.. autoinst:: udiv_imm
-.. autoinst:: sdiv
-.. autoinst:: sdiv_imm
-.. autoinst:: urem
-.. autoinst:: urem_imm
-.. autoinst:: srem
-.. autoinst:: srem_imm
-
-.. todo:: Integer minimum / maximum.
-
-    NEON has ``smin``, ``smax``, ``umin``, and ``umax`` instructions. We should
-    replicate those for both scalar and vector integer types. Even if the
-    target ISA doesn't have scalar operations, these are good pattern matching
-    targets.
-
-.. todo:: Saturating arithmetic.
-
-    Mostly for SIMD use, but again these are good patterns for contraction.
-    Something like ``usatadd``, ``usatsub``, ``ssatadd``, and ``ssatsub`` is a
-    good start.
+A few instructions have variants that take immediate operands, but in general
+an instruction is required to load a constant into an SSA value: `iconst`,
+`f32const`, `f64const` and `bconst` serve this purpose.
 
 Bitwise operations
 ------------------
@@ -876,17 +739,6 @@ numbers, and booleans. When operating on integer or floating point types, the
 bitwise operations are working on the binary representation of the values. When
 operating on boolean values, the bitwise operations work as logical operators.
 
-.. autoinst:: band
-.. autoinst:: band_imm
-.. autoinst:: bor
-.. autoinst:: bor_imm
-.. autoinst:: bxor
-.. autoinst:: bxor_imm
-.. autoinst:: bnot
-.. autoinst:: band_not
-.. autoinst:: bor_not
-.. autoinst:: bxor_not
-
 The shift and rotate operations only work on integer types (scalar and vector).
 The shift amount does not have to be the same type as the value being shifted.
 Only the low `B` bits of the shift amount is significant.
@@ -895,36 +747,12 @@ When operating on an integer vector type, the shift amount is still a scalar
 type, and all the lanes are shifted the same amount. The shift amount is masked
 to the number of bits in a *lane*, not the full size of the vector type.
 
-.. autoinst:: rotl
-.. autoinst:: rotl_imm
-.. autoinst:: rotr
-.. autoinst:: rotr_imm
-.. autoinst:: ishl
-.. autoinst:: ishl_imm
-.. autoinst:: ushr
-.. autoinst:: ushr_imm
-.. autoinst:: sshr
-.. autoinst:: sshr_imm
-
-The bit-counting instructions below are scalar only.
-
-.. autoinst:: clz
-.. autoinst:: cls
-.. autoinst:: ctz
-.. autoinst:: popcnt
+The bit-counting instructions are scalar only.
 
 Floating point operations
 -------------------------
 
 These operations generally follow IEEE 754-2008 semantics.
-
-.. autoinst:: fcmp
-.. autoinst:: fadd
-.. autoinst:: fsub
-.. autoinst:: fmul
-.. autoinst:: fdiv
-.. autoinst:: sqrt
-.. autoinst:: fma
 
 Sign bit manipulations
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -932,10 +760,6 @@ Sign bit manipulations
 The sign manipulating instructions work as bitwise operations, so they don't
 have special behavior for signaling NaN operands. The exponent and trailing
 significand bits are always preserved.
-
-.. autoinst:: fneg
-.. autoinst:: fabs
-.. autoinst:: fcopysign
 
 Minimum and maximum
 ~~~~~~~~~~~~~~~~~~~
@@ -946,39 +770,14 @@ return NaN when either input is NaN.
 
 When comparing zeroes, these instructions behave as if :math:`-0.0 < 0.0`.
 
-.. autoinst:: fmin
-.. autoinst:: fmax
-
 Rounding
 ~~~~~~~~
 
 These instructions round their argument to a nearby integral value, still
 represented as a floating point number.
 
-.. autoinst:: ceil
-.. autoinst:: floor
-.. autoinst:: trunc
-.. autoinst:: nearest
-
 Conversion operations
 ---------------------
-
-.. autoinst:: bitcast
-.. autoinst:: breduce
-.. autoinst:: bextend
-.. autoinst:: bint
-.. autoinst:: bmask
-.. autoinst:: ireduce
-.. autoinst:: uextend
-.. autoinst:: sextend
-.. autoinst:: fpromote
-.. autoinst:: fdemote
-.. autoinst:: fcvt_to_uint
-.. autoinst:: fcvt_to_sint
-.. autoinst:: fcvt_to_uint_sat
-.. autoinst:: fcvt_to_sint_sat
-.. autoinst:: fcvt_from_uint
-.. autoinst:: fcvt_from_sint
 
 .. _extload-truncstore:
 
@@ -989,22 +788,12 @@ Most ISAs provide instructions that load an integer value smaller than a registe
 and extends it to the width of the register. Similarly, store instructions that
 only write the low bits of an integer register are common.
 
-In addition to the normal :inst:`load` and :inst:`store` instructions, Cranelift
+In addition to the normal `load` and `store` instructions, Cranelift
 provides extending loads and truncation stores for 8, 16, and 32-bit memory
 accesses.
 
 These instructions succeed, trap, or have undefined behavior, under the same
 conditions as :ref:`normal loads and stores <memory>`.
-
-.. autoinst:: uload8
-.. autoinst:: sload8
-.. autoinst:: istore8
-.. autoinst:: uload16
-.. autoinst:: sload16
-.. autoinst:: istore16
-.. autoinst:: uload32
-.. autoinst:: sload32
-.. autoinst:: istore32
 
 ISA-specific instructions
 =========================
@@ -1016,16 +805,6 @@ x86
 -----
 
 Instructions that can only be used by the x86 target ISA.
-
-.. autoinst:: isa.x86.instructions.sdivmodx
-.. autoinst:: isa.x86.instructions.udivmodx
-.. autoinst:: isa.x86.instructions.cvtt2si
-.. autoinst:: isa.x86.instructions.fmin
-.. autoinst:: isa.x86.instructions.fmax
-.. autoinst:: isa.x86.instructions.bsf
-.. autoinst:: isa.x86.instructions.bsr
-.. autoinst:: isa.x86.instructions.push
-.. autoinst:: isa.x86.instructions.pop
 
 Codegen implementation instructions
 ===================================
@@ -1039,41 +818,17 @@ Legalization operations
 These instructions are used as helpers when legalizing types and operations for
 the target ISA.
 
-.. autoinst:: isplit
-.. autoinst:: iconcat
-
 Special register operations
 ---------------------------
 
 The prologue and epilogue of a function needs to manipulate special registers like the stack
 pointer and the frame pointer. These instructions should not be used in regular code.
 
-.. autoinst:: adjust_sp_down
-.. autoinst:: adjust_sp_up_imm
-.. autoinst:: adjust_sp_down_imm
-.. autoinst:: ifcmp_sp
-.. autoinst:: copy_special
-
-Low-level control flow operations
----------------------------------
-
-.. autoinst:: fallthrough
-
 CPU flag operations
 -------------------
 
 These operations are for working with the "flags" registers of some CPU
 architectures.
-
-.. autoinst:: ifcmp
-.. autoinst:: ifcmp_imm
-.. autoinst:: ffcmp
-.. autoinst:: trueif
-.. autoinst:: trueff
-.. autoinst:: trapif
-.. autoinst:: trapff
-.. autoinst:: brif
-.. autoinst:: brff
 
 Live range splitting
 --------------------
@@ -1084,37 +839,24 @@ value can be quite large, it is sometimes beneficial to split the live range
 into smaller parts.
 
 A live range is split by creating new SSA values that are copies or the
-original value or each other. The copies are created by inserting :inst:`copy`,
-:inst:`spill`, or :inst:`fill` instructions, depending on whether the values
+original value or each other. The copies are created by inserting `copy`,
+`spill`, or `fill` instructions, depending on whether the values
 are assigned to registers or stack slots.
 
 This approach permits SSA form to be preserved throughout the register
 allocation pass and beyond.
 
-.. autoinst:: copy
-.. autoinst:: spill
-.. autoinst:: fill
-
 Register values can be temporarily diverted to other registers by the
-:inst:`regmove` instruction, and to and from stack slots by :inst:`regspill`
-and :inst:`regfill`.
-
-.. autoinst:: regmove
-.. autoinst:: regspill
-.. autoinst:: regfill
-
+`regmove` instruction, and to and from stack slots by `regspill`
+and `regfill`.
 
 Instruction groups
 ==================
 
-All of the shared instructions are part of the :instgroup:`base` instruction
+All of the shared instructions are part of the `base` instruction
 group.
 
-.. autoinstgroup:: base.instructions.GROUP
-
-Target ISAs may define further instructions in their own instruction groups:
-
-.. autoinstgroup:: isa.x86.instructions.GROUP
+Target ISAs may define further instructions in their own instruction groups.
 
 Implementation limits
 =====================
@@ -1272,8 +1014,8 @@ Glossary
         execution somewhere else. Execution never continues at the instruction
         following a terminator instruction.
 
-        The basic terminator instructions are :inst:`br`, :inst:`return`, and
-        :inst:`trap`. Conditional branches and instructions that trap
+        The basic terminator instructions are `br`, `return`, and
+        `trap`. Conditional branches and instructions that trap
         conditionally are not terminator instructions.
 
     trap
