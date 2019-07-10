@@ -11,11 +11,11 @@ ebb0(v0: i32):
     return v1
 }
 
-; converted to a copy
+; converted to a nop
 function %t_udiv32_p1(i32) -> i32 {
 ebb0(v0: i32):
     v1 = udiv_imm v0, 1
-    ; check: copy v0
+    ; check: nop
     return v1
 }
 
@@ -46,11 +46,11 @@ ebb0(v0: i64):
     return v1
 }
 
-; converted to a copy
+; converted to a nop
 function %t_udiv64_p1(i64) -> i64 {
 ebb0(v0: i64):
     v1 = udiv_imm v0, 1
-    ; check: copy v0
+    ; check: nop
     return v1
 }
 
@@ -81,11 +81,11 @@ ebb0(v0: i32):
     return v1
 }
 
-; converted to a copy
+; converted to a nop
 function %t_sdiv32_p1(i32) -> i32 {
 ebb0(v0: i32):
     v1 = sdiv_imm v0, 1
-    ; check: copy v0
+    ; check: nop
     return v1
 }
 
@@ -192,11 +192,11 @@ ebb0(v0: i64):
     return v1
 }
 
-; converted to a copy
+; converted to a nop
 function %t_sdiv64_p1(i64) -> i64 {
 ebb0(v0: i64):
     v1 = sdiv_imm v0, 1
-    ; check: copy v0
+    ; check: nop
     return v1
 }
 

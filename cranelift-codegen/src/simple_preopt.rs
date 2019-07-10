@@ -577,52 +577,95 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
             _ => {}
         },
 
-        InstructionData::BinaryImm { opcode, arg, imm } => match opcode {
-            Opcode::IaddImm
-            | Opcode::ImulImm
-            | Opcode::BorImm
-            | Opcode::BandImm
-            | Opcode::BxorImm => {
-                // Fold binary_op(C2, binary_op(C1, x)) into binary_op(binary_op(C1 | C2), x)
-                if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
-                    if let InstructionData::BinaryImm {
-                        opcode: prev_opcode,
-                        arg: prev_arg,
-                        imm: prev_imm,
-                    } = &pos.func.dfg[arg_inst]
-                    {
-                        if opcode == *prev_opcode {
-                            let ty = pos.func.dfg.ctrl_typevar(inst);
-                            if ty == pos.func.dfg.ctrl_typevar(arg_inst) {
-                                let lhs: i64 = imm.into();
-                                let rhs: i64 = (*prev_imm).into();
-                                let new_imm = match opcode {
-                                    Opcode::BorImm => lhs | rhs,
-                                    Opcode::BandImm => lhs & rhs,
-                                    Opcode::BxorImm => lhs ^ rhs,
-                                    Opcode::IaddImm => lhs.wrapping_add(rhs),
-                                    Opcode::ImulImm => lhs.wrapping_mul(rhs),
-                                    _ => panic!("can't happen"),
-                                };
-                                let new_imm = immediates::Imm64::from(new_imm);
-                                let arg = *prev_arg;
-                                pos.func
-                                    .dfg
-                                    .replace(inst)
-                                    .BinaryImm(opcode, ty, new_imm, arg);
+        InstructionData::BinaryImm { opcode, arg, imm } => {
+            let ty = pos.func.dfg.ctrl_typevar(inst);
+
+            let mut imm = imm;
+            match opcode {
+                Opcode::IaddImm
+                | Opcode::ImulImm
+                | Opcode::BorImm
+                | Opcode::BandImm
+                | Opcode::BxorImm => {
+                    // Fold binary_op(C2, binary_op(C1, x)) into binary_op(binary_op(C1, C2), x)
+                    if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
+                        if let InstructionData::BinaryImm {
+                            opcode: prev_opcode,
+                            arg: prev_arg,
+                            imm: prev_imm,
+                        } = &pos.func.dfg[arg_inst]
+                        {
+                            if opcode == *prev_opcode {
+                                if ty == pos.func.dfg.ctrl_typevar(arg_inst) {
+                                    let lhs: i64 = imm.into();
+                                    let rhs: i64 = (*prev_imm).into();
+                                    let new_imm = match opcode {
+                                        Opcode::BorImm => lhs | rhs,
+                                        Opcode::BandImm => lhs & rhs,
+                                        Opcode::BxorImm => lhs ^ rhs,
+                                        Opcode::IaddImm => lhs.wrapping_add(rhs),
+                                        Opcode::ImulImm => lhs.wrapping_mul(rhs),
+                                        _ => panic!("can't happen"),
+                                    };
+                                    let new_imm = immediates::Imm64::from(new_imm);
+                                    let arg = *prev_arg;
+                                    pos.func
+                                        .dfg
+                                        .replace(inst)
+                                        .BinaryImm(opcode, ty, new_imm, arg);
+                                    imm = new_imm;
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            Opcode::UshrImm | Opcode::SshrImm => {
-                if try_fold_extended_move(pos, inst, opcode, arg, imm) {
+                Opcode::UshrImm | Opcode::SshrImm => {
+                    if try_fold_extended_move(pos, inst, opcode, arg, imm) {
+                        return;
+                    }
+                }
+
+                _ => {}
+            };
+
+            // Replace operations that are no-ops.
+            match (opcode, imm.into()) {
+                (Opcode::IaddImm, 0)
+                | (Opcode::ImulImm, 1)
+                | (Opcode::SdivImm, 1)
+                | (Opcode::UdivImm, 1)
+                | (Opcode::BorImm, 0)
+                | (Opcode::BandImm, -1)
+                | (Opcode::BxorImm, 0)
+                | (Opcode::RotlImm, 0)
+                | (Opcode::RotrImm, 0)
+                | (Opcode::IshlImm, 0)
+                | (Opcode::UshrImm, 0)
+                | (Opcode::SshrImm, 0) => {
+                    // Alias the result value with the original argument.
+                    let results = pos.func.dfg.detach_results(inst);
+                    debug_assert!(results.len(&pos.func.dfg.value_lists) == 1);
+                    let first_result = results.get(0, &pos.func.dfg.value_lists).unwrap();
+                    pos.func.dfg.change_to_alias(first_result, arg);
+
+                    // Replace instruction by a nop.
+                    pos.func.dfg.replace(inst).nop();
                     return;
                 }
+                (Opcode::ImulImm, 0) | (Opcode::BandImm, 0) => {
+                    // Replace by zero.
+                    pos.func.dfg.replace(inst).iconst(ty, 0);
+                    return;
+                }
+                (Opcode::BorImm, -1) => {
+                    // Replace by minus one.
+                    pos.func.dfg.replace(inst).iconst(ty, -1);
+                    return;
+                }
+                _ => {}
             }
-            _ => {}
-        },
+        }
 
         InstructionData::IntCompare { opcode, cond, args } => {
             debug_assert_eq!(opcode, Opcode::Icmp);
