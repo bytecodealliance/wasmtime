@@ -216,14 +216,18 @@ pub fn define(
         Compare scalar integers and branch.
 
         Compare ``x`` and ``y`` in the same way as the `icmp` instruction
-        and take the branch if the condition is true::
+        and take the branch if the condition is true:
 
+        ```text
             br_icmp ugt v1, v2, ebb4(v5, v6)
+        ```
 
-        is semantically equivalent to::
+        is semantically equivalent to:
 
+        ```text
             v10 = icmp ugt, v1, v2
             brnz v10, ebb4(v5, v6)
+        ```
 
         Some RISC architectures like MIPS and RISC-V provide instructions that
         implement all or some of the condition codes. The instruction can also
@@ -1780,9 +1784,9 @@ pub fn define(
 
         Same as `iadd` with an additional carry input. Computes:
 
-        .. math::
-
+        ```text
             a = x + y + c_{in} \pmod 2^B
+        ```
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -1800,10 +1804,10 @@ pub fn define(
 
         Same as `iadd` with an additional carry output.
 
-        .. math::
-
+        ```text
             a &= x + y \pmod 2^B \\
             c_{out} &= x+y >= 2^B
+        ```
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -1821,10 +1825,10 @@ pub fn define(
 
         Same as `iadd` with an additional carry input and output.
 
-        .. math::
-
+        ```text
             a &= x + y + c_{in} \pmod 2^B \\
             c_{out} &= x + y + c_{in} >= 2^B
+        ```
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -1842,9 +1846,9 @@ pub fn define(
 
         Same as `isub` with an additional borrow flag input. Computes:
 
-        .. math::
-
+        ```text
             a = x - (y + b_{in}) \pmod 2^B
+        ```
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -1862,10 +1866,10 @@ pub fn define(
 
         Same as `isub` with an additional borrow flag output.
 
-        .. math::
-
+        ```text
             a &= x - y \pmod 2^B \\
             b_{out} &= x < y
+        ```
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -1883,10 +1887,10 @@ pub fn define(
 
         Same as `isub` with an additional borrow flag input and output.
 
-        .. math::
-
+        ```text
             a &= x - (y + b_{in}) \pmod 2^B \\
             b_{out} &= x < y + b_{in}
+        ```
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2110,9 +2114,10 @@ pub fn define(
 
         When shifting a B-bits integer type, this instruction computes:
 
-        .. math::
-            s &:= y \pmod B,                \\
+        ```text
+            s &:= y \pmod B,
             a &:= x \cdot 2^s \pmod{2^B}.
+        ```
         "#,
         )
         .operands_in(vec![x, y])
@@ -2131,9 +2136,10 @@ pub fn define(
 
         When shifting a B-bits integer type, this instruction computes:
 
-        .. math::
-            s &:= y \pmod B,                \\
+        ```text
+            s &:= y \pmod B,
             a &:= \lfloor x \cdot 2^{-s} \rfloor.
+        ```
         "#,
         )
         .operands_in(vec![x, y])
