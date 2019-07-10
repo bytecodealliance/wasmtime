@@ -7,8 +7,15 @@ Cranelift Meta Language Reference
 .. module:: cdsl
 
 The Cranelift meta language is used to define instructions for Cranelift. It is a
-domain specific language embedded in Python. This document describes the Python
-modules that form the embedded DSL.
+domain specific language embedded in Rust.
+
+.. todo:: Point to the Rust documentation of the meta crate here.
+
+   This document is very out-of-date. Instead, you can have a look at the
+   work-in-progress documentation of the `meta` crate there:
+   https://docs.rs/cranelift-codegen-meta/0.34.0/cranelift_codegen_meta/.
+
+This document describes the Python modules that form the embedded DSL.
 
 The meta language descriptions are Python modules under the
 :file:`cranelift-codegen/meta-python` directory. The descriptions are processed in two
