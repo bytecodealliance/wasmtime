@@ -97,7 +97,7 @@ pub struct InstructionContent {
     pub opcode_number: OpcodeNumber,
 
     /// Documentation string.
-    doc: String,
+    pub doc: String,
 
     /// Input operands. This can be a mix of SSA value operands and other operand kinds.
     pub operands_in: Vec<Operand>,
@@ -160,16 +160,6 @@ impl Instruction {
         } else {
             &self.name
         }
-    }
-
-    pub fn doc_comment_first_line(&self) -> &str {
-        for line in self.doc.split("\n") {
-            let stripped = line.trim();
-            if stripped.len() > 0 {
-                return stripped;
-            }
-        }
-        ""
     }
 
     pub fn all_typevars(&self) -> Vec<&TypeVar> {

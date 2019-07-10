@@ -930,7 +930,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         rtype
     );
 
-    fmt.doc_comment(format!("`{}`\n\n{}", inst, inst.doc_comment_first_line()));
+    fmt.doc_comment(&inst.doc);
     fmt.line("#[allow(non_snake_case)]");
     fmtln!(fmt, "fn {} {{", proto);
     fmt.indent(|fmt| {
