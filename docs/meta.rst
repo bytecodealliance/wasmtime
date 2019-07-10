@@ -4,7 +4,6 @@ Cranelift Meta Language Reference
 
 .. default-domain:: py
 .. highlight:: python
-.. module:: cdsl
 
 The Cranelift meta language is used to define instructions for Cranelift. It is a
 domain specific language embedded in Rust.
@@ -18,24 +17,21 @@ domain specific language embedded in Rust.
 This document describes the Python modules that form the embedded DSL.
 
 The meta language descriptions are Python modules under the
-:file:`cranelift-codegen/meta-python` directory. The descriptions are processed in two
+`cranelift-codegen/meta-python` directory. The descriptions are processed in two
 steps:
 
 1. The Python modules are imported. This has the effect of building static data
    structures in global values in the modules. These static data structures
-   in the :mod:`base` and :mod:`isa` packages use the classes in the
-   :mod:`cdsl` package to describe instruction sets and other properties.
+   in the `base` and `isa` packages use the classes in the
+   `cdsl` package to describe instruction sets and other properties.
 
 2. The static data structures are processed to produce Rust source code and
    constant tables.
 
 The main driver for this source code generation process is the
-:file:`cranelift-codegen/meta-python/build.py` script which is invoked as part of the build
-process if anything in the :file:`cranelift-codegen/meta-python` directory has changed
+`cranelift-codegen/meta-python/build.py` script which is invoked as part of the build
+process if anything in the `cranelift-codegen/meta-python` directory has changed
 since the last build.
-
-
-.. module:: cdsl.settings
 
 Settings
 ========
@@ -43,25 +39,14 @@ Settings
 Settings are used by the environment embedding Cranelift to control the details
 of code generation. Each setting is defined in the meta language so a compact
 and consistent Rust representation can be generated. Shared settings are defined
-in the :mod:`base.settings` module. Some settings are specific to a target ISA,
-and defined in a :file:`settings.py` module under the appropriate
-:file:`cranelift-codegen/meta-python/isa/*` directory.
+in the `base.settings` module. Some settings are specific to a target ISA,
+and defined in a `settings.py` module under the appropriate
+`cranelift-codegen/meta-python/isa/*` directory.
 
 Settings can take boolean on/off values, small numbers, or explicitly enumerated
-symbolic values. Each type is represented by a sub-class of :class:`Setting`:
+symbolic values.
 
-.. inheritance-diagram:: Setting BoolSetting NumSetting EnumSetting
-    :parts: 1
-
-.. autoclass:: Setting
-.. autoclass:: BoolSetting
-.. autoclass:: NumSetting
-.. autoclass:: EnumSetting
-
-All settings must belong to a *group*, represented by a :class:`SettingGroup`
-object.
-
-.. autoclass:: SettingGroup
+All settings must belong to a *group*, represented by a :class:`SettingGroup` object.
 
 Normally, a setting group corresponds to all settings defined in a module. Such
 a module looks like this::
@@ -74,9 +59,6 @@ a module looks like this::
 
     group.close(globals())
 
-
-.. module:: cdsl.instructions
-
 Instruction descriptions
 ========================
 
@@ -84,26 +66,15 @@ New instructions are defined as instances of the :class:`Instruction`
 class. As instruction instances are created, they are added to the currently
 open :class:`InstructionGroup`.
 
-.. autoclass:: InstructionGroup
-    :members:
-
 The basic Cranelift instruction set described in :doc:`ir` is defined by the
-Python module :mod:`base.instructions`. This module has a global value
-:data:`base.instructions.GROUP` which is an :class:`InstructionGroup` instance
+Python module `base.instructions`. This module has a global value
+`base.instructions.GROUP` which is an :class:`InstructionGroup` instance
 containing all the base instructions.
-
-.. autoclass:: Instruction
-
-.. currentmodule:: cdsl.operands
 
 An instruction is defined with a set of distinct input and output operands which
 must be instances of the :class:`Operand` class.
 
-.. autoclass:: Operand
-
 Cranelift uses two separate type systems for operand kinds and SSA values.
-
-.. module:: cdsl.typevar
 
 Type variables
 --------------
@@ -112,9 +83,6 @@ Instruction descriptions can be made polymorphic by using
 :class:`cdsl.operands.Operand` instances that refer to a *type variable*
 instead of a concrete value type. Polymorphism only works for SSA value
 operands. Other operands have a fixed operand kind.
-
-.. autoclass:: TypeVar
-    :members:
 
 If multiple operands refer to the same type variable they will be required to
 have the same concrete type. For example, this defines an integer addition
@@ -138,60 +106,26 @@ There are some practical restrictions on the use of type variables, see
 Immediate operands
 ------------------
 
-.. currentmodule:: cdsl.operands
-
 Immediate instruction operands don't correspond to SSA values, but have values
 that are encoded directly in the instruction. Immediate operands don't
 have types from the :class:`cdsl.types.ValueType` type system; they often have
 enumerated values of a specific type. The type of an immediate operand is
 indicated with an instance of :class:`ImmediateKind`.
 
-.. autoclass:: ImmediateKind
-
-.. automodule:: base.immediates
-    :members:
-
 Entity references
 -----------------
-
-.. currentmodule:: cdsl.operands
 
 Instruction operands can also refer to other entities in the same function. This
 can be extended basic blocks, or entities declared in the function preamble.
 
-.. autoclass:: EntityRefKind
-
-.. automodule:: base.entities
-    :members:
-
 Value types
 -----------
-
-.. currentmodule:: cdsl.types
 
 Concrete value types are represented as instances of :class:`ValueType`. There
 are subclasses to represent scalar and vector types.
 
-.. autoclass:: ValueType
-.. inheritance-diagram:: ValueType LaneType VectorType IntType FloatType BoolType SpecialType FlagsType
-    :parts: 1
-.. autoclass:: LaneType
-    :members:
-.. autoclass:: VectorType
-.. autoclass:: SpecialType
-.. autoclass:: IntType
-.. autoclass:: FloatType
-.. autoclass:: BoolType
-.. autoclass:: FlagsType
-
-.. automodule:: base.types
-    :members:
-
 There are no predefined vector types, but they can be created as needed with
 the :func:`LaneType.by` function.
-
-
-.. module:: cdsl.operands
 
 Instruction representation
 ==========================
@@ -202,24 +136,12 @@ written as Rust code in the ``cranelift.instructions`` module. The instruction
 representation depends on the input operand kinds and whether the instruction
 can produce multiple results.
 
-.. autoclass:: OperandKind
-.. inheritance-diagram:: OperandKind ImmediateKind EntityRefKind
-
 Since all SSA value operands are represented as a `Value` in Rust code, value
-types don't affect the representation. Two special operand kinds are used to
-represent SSA values:
-
-.. autodata:: VALUE
-.. autodata:: VARIABLE_ARGS
-
-.. module:: cdsl.formats
+types don't affect the representation.
 
 When an instruction description is created, it is automatically assigned a
 predefined instruction format which is an instance of
-:class:`InstructionFormat`:
-
-.. autoclass:: InstructionFormat
-
+:class:`InstructionFormat`.
 
 .. _restricted-polymorphism:
 
@@ -264,8 +186,6 @@ controlling type variable, or it can vary independently of the other operands.
 Encodings
 =========
 
-.. currentmodule:: cdsl.isa
-
 Encodings describe how Cranelift instructions are mapped to binary machine code
 for the target architecture. After the legalization pass, all remaining
 instructions are expected to map 1-1 to native instruction encodings. Cranelift
@@ -277,7 +197,7 @@ incompatible encodings. For example, a modern ARMv8 CPU might support three
 different CPU modes: *A64* where instructions are encoded in 32 bits, *A32*
 where all instructions are 32 bits, and *T32* which has a mix of 16-bit and
 32-bit instruction encodings. These are incompatible encoding spaces, and while
-an :clif:inst:`iadd` instruction can be encoded in 32 bits in each of them, it's
+an `iadd` instruction can be encoded in 32 bits in each of them, it's
 not the same 32 bits. It's a judgement call if CPU modes should be modelled as
 separate targets, or as sub-modes of the same target. In the ARMv8 case, the
 different register banks means that it makes sense to model A64 as a separate
@@ -287,8 +207,6 @@ In a given CPU mode, there may be multiple valid encodings of the same
 instruction. Both RISC-V and ARMv8's T32 mode have 32-bit encodings of all
 instructions with 16-bit encodings available for some opcodes if certain
 constraints are satisfied.
-
-.. autoclass:: CPUMode
 
 Encodings are guarded by :term:`sub-target predicate`\s. For example, the RISC-V
 "C" extension which specifies the compressed encodings may not be supported, and
@@ -327,7 +245,7 @@ An :py:class:`Encoding` instance specifies the encoding of a concrete
 instruction. The following properties are used to select instructions to be
 encoded:
 
-- An opcode, i.e. :clif:inst:`iadd_imm`, that must match the instruction's
+- An opcode, i.e. `iadd_imm`, that must match the instruction's
   opcode.
 - Values for any type variables if the opcode represents a polymorphic
   instruction.
@@ -350,8 +268,6 @@ The additional predicates in the :py:class:`EncRecipe` are merged with the
 per-encoding predicates when generating the encoding matcher code. Often
 encodings only need the recipe predicates.
 
-.. autoclass:: EncRecipe
-
 Register constraints
 ====================
 
@@ -371,9 +287,6 @@ Each encoding recipe specifies separate constraints for its value operands and
 result. These constraints are separate from the instruction predicate which can
 only evaluate the instruction's immediate operands.
 
-.. module:: cdsl.registers
-.. autoclass:: RegBank
-
 Register class constraints
 --------------------------
 
@@ -387,8 +300,6 @@ register class::
 
 This defines an encoding recipe for the ``Binary`` instruction format where
 both input operands must be allocated from the ``GPR`` register class.
-
-.. autoclass:: RegClass
 
 Tied register operands
 ----------------------
@@ -420,7 +331,7 @@ Stack operands
 --------------
 
 Cranelift's register allocator can assign an SSA value to a stack slot if there
-isn't enough registers. It will insert :clif:inst:`spill` and :clif:inst:`fill`
+isn't enough registers. It will insert `spill` and `fill`
 instructions as needed to satisfy instruction operand constraints, but it is
 also possible to have instructions that can access stack slots directly::
 
@@ -429,27 +340,14 @@ also possible to have instructions that can access stack slots directly::
 An output stack value implies a store to the stack, an input value implies a
 load.
 
-.. module:: cdsl.isa
-
 Targets
 =======
 
 Cranelift can be compiled with support for multiple target instruction set
 architectures. Each ISA is represented by a :py:class:`cdsl.isa.TargetISA` instance.
 
-.. autoclass:: TargetISA
-
 The definitions for each supported target live in a package under
-:file:`cranelift-codegen/meta-python/isa`.
-
-.. automodule:: isa
-    :members:
-
-.. automodule:: isa.riscv
-.. automodule:: isa.x86
-.. automodule:: isa.arm32
-.. automodule:: isa.arm64
-
+`cranelift-codegen/meta-python/isa`.
 
 Glossary
 ========
