@@ -151,7 +151,7 @@ pub fn define(
         Floating point minimum with x86 semantics.
 
         This is equivalent to the C ternary operator `x < y ? x : y` which
-        differs from :inst:`fmin` when either operand is NaN or when comparing
+        differs from `fmin` when either operand is NaN or when comparing
         +0.0 to -0.0.
 
         When the two operands don't compare as LT, `y` is returned unchanged,
@@ -169,7 +169,7 @@ pub fn define(
         Floating point maximum with x86 semantics.
 
         This is equivalent to the C ternary operator `x > y ? x : y` which
-        differs from :inst:`fmax` when either operand is NaN or when comparing
+        differs from `fmax` when either operand is NaN or when comparing
         +0.0 to -0.0.
 
         When the two operands don't compare as GT, `y` is returned unchanged,
