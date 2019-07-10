@@ -15,10 +15,18 @@ Contents:
 Rust Crate Documentation
 ========================
 
-`cranelift <https://docs.rs/cranelift/>`_
+`cranelift <https://docs.rs/cranelift-codegen/>`_
+    This is an umbrella crate that re-exports the codegen and frontend crates,
+    to make them easier to use.
+
+`cranelift-codegen <https://docs.rs/cranelift-codegen/>`_
     This is the core code generator crate. It takes Cranelift IR as input
     and emits encoded machine instructions, along with symbolic relocations,
     as output.
+
+`cranelift-codegen-meta <https://docs.rs/cranelift-codegen-meta/>`_
+    This crate contains the meta-language utilities and descriptions used by the
+    code generator.
 
 `cranelift-wasm <https://docs.rs/cranelift-wasm/>`_
     This crate translates WebAssembly code into Cranelift IR.

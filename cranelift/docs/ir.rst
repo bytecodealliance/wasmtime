@@ -5,6 +5,13 @@ Cranelift IR Reference
 .. default-domain:: clif
 .. highlight:: clif
 
+.. todo:: Update the IR reference
+
+   This document is likely to be outdated and missing some important
+   information. It is recommended to look at the list of instructions as
+   documented in the `InstBuilder` documentation:
+   https://docs.rs/cranelift-codegen/latest/cranelift_codegen/ir/trait.InstBuilder.html
+
 The Cranelift intermediate representation (:term:`IR`) has two primary forms:
 an *in-memory data structure* that the code generator library is using, and a
 *text format* which is used for test cases and debug output.
