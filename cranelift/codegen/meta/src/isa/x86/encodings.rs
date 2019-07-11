@@ -250,6 +250,17 @@ impl PerCpuModeEncodings {
             self.enc64(inst.clone().bind(I64).bind_any(), template);
         }
     }
+
+    /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand binding) has already happened
+    fn enc_32_64_isap(
+        &mut self,
+        inst: BoundInstruction,
+        template: Template,
+        isap: SettingPredicateNumber,
+    ) {
+        self.enc32_isap(inst.clone(), template.clone(), isap);
+        self.enc64_isap(inst, template, isap);
+    }
 }
 
 // Definitions.
@@ -379,6 +390,8 @@ pub fn define(
     let x86_fmax = x86.by_name("x86_fmax");
     let x86_fmin = x86.by_name("x86_fmin");
     let x86_pop = x86.by_name("x86_pop");
+    let x86_pshufd = x86.by_name("x86_pshufd");
+    let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_push = x86.by_name("x86_push");
     let x86_sdivmodx = x86.by_name("x86_sdivmodx");
     let x86_smulx = x86.by_name("x86_smulx");
@@ -462,6 +475,7 @@ pub fn define(
     let rec_pushq = r.template("pushq");
     let rec_ret = r.template("ret");
     let rec_r_ib = r.template("r_ib");
+    let rec_r_ib_unsigned = r.template("r_ib_unsigned");
     let rec_r_id = r.template("r_id");
     let rec_rcmp = r.template("rcmp");
     let rec_rcmp_ib = r.template("rcmp_ib");
@@ -519,6 +533,7 @@ pub fn define(
     let use_lzcnt = settings.predicate_by_name("use_lzcnt");
     let use_bmi1 = settings.predicate_by_name("use_bmi1");
     let use_sse2 = settings.predicate_by_name("use_sse2");
+    let use_ssse3 = settings.predicate_by_name("use_ssse3");
     let use_sse41 = settings.predicate_by_name("use_sse41");
 
     // Definitions.
@@ -1574,6 +1589,28 @@ pub fn define(
     e.enc_both(fcmp.bind(F64), rec_fcscc.opcodes(vec![0x66, 0x0f, 0x2e]));
     e.enc_both(ffcmp.bind(F32), rec_fcmp.opcodes(vec![0x0f, 0x2e]));
     e.enc_both(ffcmp.bind(F64), rec_fcmp.opcodes(vec![0x66, 0x0f, 0x2e]));
+
+    // SIMD splat: before x86 can use vector data, it must be moved to XMM registers; see
+    // legalize.rs for how this is done; once there, x86_pshuf* (below) is used for broadcasting the
+    // value across the register
+
+    // PSHUFB, 8-bit shuffle using two XMM registers
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
+        let number_of_lanes = 128 / ty.lane_bits();
+        let instruction = x86_pshufb.bind_vector(ty, number_of_lanes);
+        let template = rec_fa.nonrex().opcodes(vec![0x66, 0x0f, 0x38, 0x00]);
+        e.enc32_isap(instruction.clone(), template.clone(), use_ssse3);
+        e.enc64_isap(instruction, template, use_ssse3);
+    }
+
+    // PSHUFD, 32-bit shuffle using one XMM register and a u8 immediate
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 32) {
+        let number_of_lanes = 128 / ty.lane_bits();
+        let instruction = x86_pshufd.bind_vector(ty, number_of_lanes);
+        let template = rec_r_ib_unsigned.nonrex().opcodes(vec![0x66, 0x0f, 0x70]);
+        e.enc32_isap(instruction.clone(), template.clone(), use_sse2);
+        e.enc64_isap(instruction, template, use_sse2);
+    }
 
     // SIMD scalar_to_vector; this uses MOV to copy the scalar value to an XMM register; according
     // to the Intel manual: "When the destination operand is an XMM register, the source operand is

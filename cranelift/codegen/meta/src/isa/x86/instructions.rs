@@ -7,7 +7,7 @@ use crate::cdsl::instructions::{
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
-use crate::shared::types;
+use crate::shared::{immediates, types, OperandKinds};
 
 pub fn define(
     mut all_instructions: &mut AllInstructions,
@@ -247,6 +247,47 @@ pub fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![y, rflags]),
+    );
+
+    let immediates = OperandKinds::from(immediates::define());
+    let uimm8 = immediates.by_name("uimm8");
+    let TxN = &TypeVar::new(
+        "TxN",
+        "A SIMD vector type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .includes_scalars(false)
+            .build(),
+    );
+    let a = &operand_doc("a", TxN, "A vector value (i.e. held in an XMM register)");
+    let b = &operand_doc("b", TxN, "A vector value (i.e. held in an XMM register)");
+    let i = &operand_doc("i", uimm8, "An ordering operand controlling the copying of data from the source to the destination; see PSHUFD in Intel manual for details");
+
+    ig.push(
+        Inst::new(
+            "x86_pshufd",
+            r#"
+    Packed Shuffle Doublewords -- copies data from either memory or lanes in an extended
+    register and re-orders the data according to the passed immediate byte.
+    "#,
+        )
+        .operands_in(vec![a, i]) // TODO allow copying from memory here (need more permissive type than TxN)
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_pshufb",
+            r#"
+    Packed Shuffle Bytes -- re-orders data in an extended register using a shuffle
+    mask from either memory or another extended register
+    "#,
+        )
+        .operands_in(vec![a, b]) // TODO allow re-ordering from memory here (need more permissive type than TxN)
+        .operands_out(vec![a]),
     );
 
     ig.build()
