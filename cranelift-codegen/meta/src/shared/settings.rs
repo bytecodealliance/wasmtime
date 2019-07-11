@@ -84,7 +84,7 @@ pub fn define() -> SettingGroup {
         false,
     );
 
-    settings.add_bool("enable_simd", "Enable the use of SIMD instructions.", true);
+    settings.add_bool("enable_simd", "Enable the use of SIMD instructions.", false);
 
     settings.add_bool(
         "enable_atomics",

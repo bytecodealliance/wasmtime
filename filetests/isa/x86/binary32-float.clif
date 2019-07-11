@@ -1,5 +1,6 @@
 ; Binary emission of 32-bit floating point code.
 test binemit
+set enable_simd
 target i686 haswell
 
 ; The binary encodings can be verified with the command:

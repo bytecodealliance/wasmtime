@@ -387,7 +387,7 @@ mod tests {
              avoid_div_traps = false\n\
              enable_float = true\n\
              enable_nan_canonicalization = false\n\
-             enable_simd = true\n\
+             enable_simd = false\n\
              enable_atomics = true\n\
              allones_funcaddrs = false\n\
              probestack_enabled = true\n\
@@ -395,7 +395,7 @@ mod tests {
              jump_tables_enabled = true\n"
         );
         assert_eq!(f.opt_level(), super::OptLevel::Default);
-        assert_eq!(f.enable_simd(), true);
+        assert_eq!(f.enable_simd(), false);
         assert_eq!(f.baldrdash_prologue_words(), 0);
     }
 

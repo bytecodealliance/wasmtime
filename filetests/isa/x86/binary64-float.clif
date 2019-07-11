@@ -1,6 +1,7 @@
 ; Binary emission of 64-bit floating point code.
 test binemit
 set opt_level=best
+set enable_simd
 target x86_64 haswell
 
 ; The binary encodings can be verified with the command:
