@@ -35,7 +35,9 @@ mod tests {
 
     #[test]
     fn predicates() {
-        let shared = settings::Flags::new(settings::builder());
+        let mut sb = settings::builder();
+        sb.set("enable_simd", "true").unwrap();
+        let shared = settings::Flags::new(sb);
         let mut b = builder();
         b.enable("supports_f").unwrap();
         b.enable("supports_d").unwrap();
