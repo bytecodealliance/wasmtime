@@ -30,6 +30,7 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let expand_flags = shared_defs.transform_groups.by_name("expand_flags");
     let narrow = shared_defs.transform_groups.by_name("narrow");
     let widen = shared_defs.transform_groups.by_name("widen");
+    let x86_narrow = shared_defs.transform_groups.by_name("x86_narrow");
     let x86_expand = shared_defs.transform_groups.by_name("x86_expand");
 
     x86_32.legalize_monomorphic(expand_flags);
@@ -42,7 +43,7 @@ pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     x86_32.legalize_type(F64, x86_expand);
 
     x86_64.legalize_monomorphic(expand_flags);
-    x86_64.legalize_default(narrow);
+    x86_64.legalize_default(x86_narrow);
     x86_64.legalize_type(B1, expand_flags);
     x86_64.legalize_type(I8, widen);
     x86_64.legalize_type(I16, widen);

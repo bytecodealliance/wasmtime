@@ -738,6 +738,12 @@ impl From<f64> for Ieee64 {
     }
 }
 
+impl From<u64> for Ieee64 {
+    fn from(x: u64) -> Self {
+        Ieee64::with_float(f64::from_bits(x))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
