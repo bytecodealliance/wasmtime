@@ -373,6 +373,7 @@ pub fn define<'shared>(
     let f_float_cond_trap = formats.by_name("FloatCondTrap");
     let f_func_addr = formats.by_name("FuncAddr");
     let f_indirect_jump = formats.by_name("IndirectJump");
+    let f_insert_lane = formats.by_name("InsertLane");
     let f_int_compare = formats.by_name("IntCompare");
     let f_int_compare_imm = formats.by_name("IntCompareImm");
     let f_int_cond = formats.by_name("IntCond");
@@ -809,6 +810,27 @@ pub fn define<'shared>(
                     r#"
                     {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
                     modrm_rr(in_reg0, out_reg0, sink);
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
+                ),
+        );
+    }
+
+    // XX /r ib with 8-bit unsigned immediate (e.g. for insertlane)
+    {
+        let format = formats.get(f_insert_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("r_ib_unsigned_r", f_insert_lane, 2)
+                .operands_in(vec![fpr, gpr])
+                .operands_out(vec![0])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                ))
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
+                    modrm_rr(in_reg1, in_reg0, sink);
                     let imm:i64 = lane.into();
                     sink.put1(imm as u8);
                 "#,
