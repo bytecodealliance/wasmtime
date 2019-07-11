@@ -367,6 +367,7 @@ pub fn define<'shared>(
     let f_call = formats.by_name("Call");
     let f_call_indirect = formats.by_name("CallIndirect");
     let f_copy_special = formats.by_name("CopySpecial");
+    let f_extract_lane = formats.by_name("ExtractLane"); // TODO this would preferably retrieve a BinaryImm8 format but because formats are compared structurally and ExtractLane has the same structure this is impossible--if we rename ExtractLane, it may even impact parsing
     let f_float_compare = formats.by_name("FloatCompare");
     let f_float_cond = formats.by_name("FloatCond");
     let f_float_cond_trap = formats.by_name("FloatCondTrap");
@@ -790,6 +791,27 @@ pub fn define<'shared>(
                         let imm: i64 = imm.into();
                         sink.put4(imm as u32);
                     "#,
+                ),
+        );
+    }
+
+    // XX /r ib with 8-bit unsigned immediate (e.g. for pshufd)
+    {
+        let format = formats.get(f_extract_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("r_ib_unsigned", f_extract_lane, 2)
+                .operands_in(vec![fpr])
+                .operands_out(vec![fpr])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                )) // TODO if the format name is changed then "lane" should be renamed to something more appropriate--ordering mask? broadcast immediate?
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
+                    modrm_rr(in_reg0, out_reg0, sink);
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
                 ),
         );
     }
