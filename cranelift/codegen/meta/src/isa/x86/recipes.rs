@@ -800,7 +800,7 @@ pub fn define<'shared>(
     {
         let format = formats.get(f_extract_lane);
         recipes.add_template_recipe(
-            EncodingRecipeBuilder::new("r_ib_unsigned", f_extract_lane, 2)
+            EncodingRecipeBuilder::new("r_ib_unsigned_fpr", f_extract_lane, 2)
                 .operands_in(vec![fpr])
                 .operands_out(vec![fpr])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
@@ -810,6 +810,27 @@ pub fn define<'shared>(
                     r#"
                     {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
                     modrm_rr(in_reg0, out_reg0, sink);
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
+                ),
+        );
+    }
+
+    // XX /r ib with 8-bit unsigned immediate (e.g. for extractlane)
+    {
+        let format = formats.get(f_extract_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("r_ib_unsigned_gpr", f_extract_lane, 2)
+                .operands_in(vec![fpr])
+                .operands_out(vec![gpr])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                ))
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
+                    modrm_rr(out_reg0, in_reg0, sink); // note the flipped register in the ModR/M byte
                     let imm:i64 = lane.into();
                     sink.put1(imm as u8);
                 "#,
