@@ -53,7 +53,7 @@ impl<'builder> RecipeGroup<'builder> {
     pub fn recipe(&self, name: &str) -> &EncodingRecipe {
         self.recipes
             .iter()
-            .find(|recipe| recipe.name == name)
+            .find(|recipe| &recipe.name == name)
             .expect(&format!("unknown recipe name: {}. Try template?", name))
     }
     pub fn template(&self, name: &str) -> &Template {

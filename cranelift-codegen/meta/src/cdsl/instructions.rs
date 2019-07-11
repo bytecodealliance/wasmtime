@@ -79,7 +79,7 @@ impl InstructionGroup {
     pub fn by_name(&self, name: &'static str) -> &Instruction {
         self.instructions
             .iter()
-            .find(|inst| inst.name == name)
+            .find(|inst| &inst.name == name)
             .expect(&format!("unexisting instruction with name {}", name))
     }
 }
@@ -155,7 +155,7 @@ impl ops::Deref for Instruction {
 
 impl Instruction {
     pub fn snake_name(&self) -> &str {
-        if self.name == "return" {
+        if &self.name == "return" {
             "return_"
         } else {
             &self.name
@@ -800,7 +800,7 @@ impl InstructionPredicateNode {
                     ret.extend(node.collect_leaves());
                 }
             }
-            _ => ret.push(&self),
+            _ => ret.push(self),
         }
         ret
     }
