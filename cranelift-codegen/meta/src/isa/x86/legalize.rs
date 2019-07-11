@@ -1,7 +1,8 @@
 use crate::cdsl::ast::{var, ExprBuilder, Literal};
 use crate::cdsl::instructions::InstructionGroup;
+use crate::cdsl::types::ValueType;
 use crate::cdsl::xform::TransformGroupBuilder;
-
+use crate::shared::types::Float::F64;
 use crate::shared::types::Int::{I32, I64};
 use crate::shared::Definitions as SharedDefinitions;
 
@@ -19,9 +20,11 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
     // List of instructions.
     let insts = &shared.instructions;
     let band = insts.by_name("band");
+    let bitcast = insts.by_name("bitcast");
     let bor = insts.by_name("bor");
     let clz = insts.by_name("clz");
     let ctz = insts.by_name("ctz");
+    let f64const = insts.by_name("f64const");
     let fcmp = insts.by_name("fcmp");
     let fcvt_from_uint = insts.by_name("fcvt_from_uint");
     let fcvt_to_sint = insts.by_name("fcvt_to_sint");
@@ -33,11 +36,15 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
     let iadd = insts.by_name("iadd");
     let iconst = insts.by_name("iconst");
     let imul = insts.by_name("imul");
+    let insertlane = insts.by_name("insertlane");
     let isub = insts.by_name("isub");
     let popcnt = insts.by_name("popcnt");
+    let raw_bitcast = insts.by_name("raw_bitcast");
+    let scalar_to_vector = insts.by_name("scalar_to_vector");
     let sdiv = insts.by_name("sdiv");
     let selectif = insts.by_name("selectif");
     let smulhi = insts.by_name("smulhi");
+    let splat = insts.by_name("splat");
     let srem = insts.by_name("srem");
     let udiv = insts.by_name("udiv");
     let umulhi = insts.by_name("umulhi");
@@ -46,6 +53,8 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
 
     let x86_bsf = x86_instructions.by_name("x86_bsf");
     let x86_bsr = x86_instructions.by_name("x86_bsr");
+    let x86_pshufb = x86_instructions.by_name("x86_pshufb");
+    let x86_pshufd = x86_instructions.by_name("x86_pshufd");
     let x86_umulx = x86_instructions.by_name("x86_umulx");
     let x86_smulx = x86_instructions.by_name("x86_smulx");
 
@@ -53,6 +62,8 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
     let floatcc = shared.operand_kinds.by_name("floatcc");
     let imm64 = shared.operand_kinds.by_name("imm64");
     let intcc = shared.operand_kinds.by_name("intcc");
+    let uimm8 = shared.operand_kinds.by_name("uimm8");
+    let ieee64 = shared.operand_kinds.by_name("ieee64");
 
     // Division and remainder.
     //
@@ -290,4 +301,84 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
     );
 
     group.build_and_add_to(&mut shared.transform_groups);
+
+    let mut narrow = TransformGroupBuilder::new(
+        "x86_narrow",
+        r#"
+    Legalize instructions by narrowing.
+
+    Use x86-specific instructions if needed."#,
+    )
+    .isa("x86")
+    .chain_with(shared.transform_groups.by_name("narrow").id);
+
+    // SIMD
+    let uimm8_zero = Literal::constant(uimm8, 0x00);
+    let uimm8_one = Literal::constant(uimm8, 0x01);
+    let ieee64_zero = Literal::constant(ieee64, 0x00);
+    let b = var("b");
+    let c = var("c");
+    let d = var("d");
+
+    // SIMD splat: 8-bits
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
+        let splat_x8x16 = splat.bind_vector(ty, 128 / ty.lane_bits());
+        let bitcast_f64_to_any8x16 = bitcast.bind_vector(ty, 128 / ty.lane_bits()).bind(F64);
+        narrow.legalize(
+            def!(y = splat_x8x16(x)),
+            vec![
+                def!(a = scalar_to_vector(x)), // move into the lowest 8 bits of an XMM register
+                def!(b = f64const(ieee64_zero)), // zero out a different XMM register; the shuffle mask for moving the lowest byte to all other byte lanes is 0x0
+                def!(c = bitcast_f64_to_any8x16(b)), // no instruction emitted; informs the SSA that the 0 in b can be used as a vector of this type
+                def!(y = x86_pshufb(a, c)), // PSHUFB takes two XMM operands, one of which is a shuffle mask (i.e. b)
+            ],
+        );
+    }
+
+    // SIMD splat: 16-bits
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 16) {
+        let splat_x16x8 = splat.bind_vector(ty, 128 / ty.lane_bits());
+        let raw_bitcast_any16x8_to_i32x4 = raw_bitcast
+            .bind_vector(I32, 4)
+            .bind_vector(ty, 128 / ty.lane_bits());
+        let raw_bitcast_i32x4_to_any16x8 = raw_bitcast
+            .bind_vector(ty, 128 / ty.lane_bits())
+            .bind_vector(I32, 4);
+        narrow.legalize(
+            def!(y = splat_x16x8(x)),
+            vec![
+                def!(a = scalar_to_vector(x)), // move into the lowest 16 bits of an XMM register
+                def!(b = insertlane(a, uimm8_one, x)), // insert the value again but in the next lowest 16 bits
+                def!(c = raw_bitcast_any16x8_to_i32x4(b)), // no instruction emitted; pretend this is an I32x4 so we can use PSHUFD
+                def!(d = x86_pshufd(c, uimm8_zero)), // broadcast the bytes in the XMM register with PSHUFD
+                def!(y = raw_bitcast_i32x4_to_any16x8(d)), // no instruction emitted; pretend this is an X16x8 again
+            ],
+        );
+    }
+
+    // SIMD splat: 32-bits
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 32) {
+        let splat_any32x4 = splat.bind_vector(ty, 128 / ty.lane_bits());
+        narrow.legalize(
+            def!(y = splat_any32x4(x)),
+            vec![
+                def!(a = scalar_to_vector(x)), // translate to an x86 MOV to get the value in an XMM register
+                def!(y = x86_pshufd(a, uimm8_zero)), // broadcast the bytes in the XMM register with PSHUF
+            ],
+        );
+    }
+
+    // SIMD splat: 64-bits
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 64) {
+        let splat_any64x2 = splat.bind_vector(ty, 128 / ty.lane_bits());
+        narrow.legalize(
+            def!(y = splat_any64x2(x)),
+            vec![
+                def!(a = scalar_to_vector(x)), // move into the lowest 64 bits of an XMM register
+                def!(y = insertlane(a, uimm8_one, x)), // move into the highest 64 bits of the same XMM register
+            ],
+        );
+    }
+
+    narrow.build_and_add_to(&mut shared.transform_groups);
 }
