@@ -326,6 +326,7 @@ pub fn define(
     let ifcmp_sp = shared.by_name("ifcmp_sp");
     let imul = shared.by_name("imul");
     let indirect_jump_table_br = shared.by_name("indirect_jump_table_br");
+    let insertlane = shared.by_name("insertlane");
     let ireduce = shared.by_name("ireduce");
     let ishl = shared.by_name("ishl");
     let ishl_imm = shared.by_name("ishl_imm");
@@ -476,6 +477,7 @@ pub fn define(
     let rec_ret = r.template("ret");
     let rec_r_ib = r.template("r_ib");
     let rec_r_ib_unsigned = r.template("r_ib_unsigned");
+    let rec_r_ib_unsigned_r = r.template("r_ib_unsigned_r");
     let rec_r_id = r.template("r_id");
     let rec_rcmp = r.template("rcmp");
     let rec_rcmp_ib = r.template("rcmp_ib");
@@ -1624,6 +1626,34 @@ pub fn define(
             e.enc32_isap(instruction.clone(), template.clone(), use_sse2);
         }
         e.enc_x86_64_isap(instruction, template, use_sse2);
+    }
+
+    // SIMD insertlane
+    let mut insertlane_mapping: HashMap<u64, (Vec<u8>, SettingPredicateNumber)> = HashMap::new();
+    insertlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x20], use_sse41)); // PINSRB
+    insertlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc4], use_sse2)); // PINSRW
+    insertlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], use_sse41)); // PINSRD
+    insertlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], use_sse41)); // PINSRQ, only x86_64
+
+    for ty in ValueType::all_lane_types() {
+        if let Some((opcode, isap)) = insertlane_mapping.get(&ty.lane_bits()) {
+            let number_of_lanes = 128 / ty.lane_bits();
+            let instruction = insertlane.bind_vector(ty, number_of_lanes);
+            let template = rec_r_ib_unsigned_r.opcodes(opcode.clone());
+            if ty.lane_bits() < 64 {
+                e.enc_32_64_isap(instruction, template.nonrex(), isap.clone());
+            } else {
+                // turns out the 64-bit widths have REX/W encodings and only are available on x86_64
+                e.enc64_isap(instruction, template.rex().w(), isap.clone());
+            }
+        }
+    }
+
+    // SIMD bitcast f64 to all 8-bit-lane vectors (for legalizing splat.x8x16); assumes that f64 is stored in an XMM register
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
+        let instruction = bitcast.bind_vector(ty, 16).bind(F64);
+        e.enc32_rec(instruction.clone(), rec_null_fpr, 0);
+        e.enc64_rec(instruction, rec_null_fpr, 0);
     }
 
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8)
