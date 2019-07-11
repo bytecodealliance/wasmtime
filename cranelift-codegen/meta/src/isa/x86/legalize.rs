@@ -320,12 +320,15 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
     let c = var("c");
     let d = var("d");
 
+    // SIMD vector size: eventually multiple vector sizes may be supported but for now only SSE-sized vectors are available
+    let sse_vector_size: u64 = 128;
+
     // SIMD splat: 8-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
-        let splat_x8x16 = splat.bind_vector(ty, 128 / ty.lane_bits());
-        let bitcast_f64_to_any8x16 = bitcast.bind_vector(ty, 128 / ty.lane_bits()).bind(F64);
+        let splat_any8x16 = splat.bind_vector_from_lane(ty, sse_vector_size);
+        let bitcast_f64_to_any8x16 = bitcast.bind_vector_from_lane(ty, sse_vector_size).bind(F64);
         narrow.legalize(
-            def!(y = splat_x8x16(x)),
+            def!(y = splat_any8x16(x)),
             vec![
                 def!(a = scalar_to_vector(x)), // move into the lowest 8 bits of an XMM register
                 def!(b = f64const(ieee64_zero)), // zero out a different XMM register; the shuffle mask for moving the lowest byte to all other byte lanes is 0x0
@@ -337,13 +340,13 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
 
     // SIMD splat: 16-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 16) {
-        let splat_x16x8 = splat.bind_vector(ty, 128 / ty.lane_bits());
+        let splat_x16x8 = splat.bind_vector_from_lane(ty, sse_vector_size);
         let raw_bitcast_any16x8_to_i32x4 = raw_bitcast
-            .bind_vector(I32, 4)
-            .bind_vector(ty, 128 / ty.lane_bits());
+            .bind_vector_from_lane(I32, sse_vector_size)
+            .bind_vector_from_lane(ty, sse_vector_size);
         let raw_bitcast_i32x4_to_any16x8 = raw_bitcast
-            .bind_vector(ty, 128 / ty.lane_bits())
-            .bind_vector(I32, 4);
+            .bind_vector_from_lane(ty, sse_vector_size)
+            .bind_vector_from_lane(I32, sse_vector_size);
         narrow.legalize(
             def!(y = splat_x16x8(x)),
             vec![
@@ -358,7 +361,7 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
 
     // SIMD splat: 32-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 32) {
-        let splat_any32x4 = splat.bind_vector(ty, 128 / ty.lane_bits());
+        let splat_any32x4 = splat.bind_vector_from_lane(ty, sse_vector_size);
         narrow.legalize(
             def!(y = splat_any32x4(x)),
             vec![
@@ -370,7 +373,7 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
 
     // SIMD splat: 64-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 64) {
-        let splat_any64x2 = splat.bind_vector(ty, 128 / ty.lane_bits());
+        let splat_any64x2 = splat.bind_vector_from_lane(ty, sse_vector_size);
         narrow.legalize(
             def!(y = splat_any64x2(x)),
             vec![
