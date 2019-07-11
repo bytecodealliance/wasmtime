@@ -12,7 +12,7 @@ use crate::cdsl::formats::{
 };
 use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
-use crate::cdsl::types::{LaneType, ValueType};
+use crate::cdsl::types::{LaneType, ValueType, VectorType};
 use crate::cdsl::typevar::TypeVar;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -176,6 +176,11 @@ impl Instruction {
     pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
         bind(self.clone(), Some(lane_type.into()), Vec::new())
     }
+
+    pub fn bind_vector(&self, lane_type: impl Into<LaneType>, num_lanes: u64) -> BoundInstruction {
+        bind_vector(self.clone(), lane_type.into(), num_lanes, Vec::new())
+    }
+
     pub fn bind_any(&self) -> BoundInstruction {
         bind(self.clone(), None, Vec::new())
     }
@@ -400,6 +405,11 @@ impl BoundInstruction {
     pub fn bind(self, lane_type: impl Into<LaneType>) -> BoundInstruction {
         bind(self.inst, Some(lane_type.into()), self.value_types)
     }
+
+    pub fn bind_vector(self, lane_type: impl Into<LaneType>, num_lanes: u64) -> BoundInstruction {
+        bind_vector(self.inst, lane_type.into(), num_lanes, self.value_types)
+    }
+
     pub fn bind_any(self) -> BoundInstruction {
         bind(self.inst, None, self.value_types)
     }
@@ -1062,6 +1072,26 @@ fn bind(
         }
     }
 
+    verify_polymorphic_binding(&inst, &value_types);
+
+    BoundInstruction { inst, value_types }
+}
+
+/// Helper bind for vector types reused by {Bound,}Instruction::bind.
+fn bind_vector(
+    inst: Instruction,
+    lane_type: LaneType,
+    num_lanes: u64,
+    mut value_types: Vec<ValueTypeOrAny>,
+) -> BoundInstruction {
+    let vector_type = ValueType::Vector(VectorType::new(lane_type, num_lanes));
+    value_types.push(ValueTypeOrAny::ValueType(vector_type));
+    verify_polymorphic_binding(&inst, &value_types);
+    BoundInstruction { inst, value_types }
+}
+
+/// Helper to verify that binding types to the instruction does not violate polymorphic rules
+fn verify_polymorphic_binding(inst: &Instruction, value_types: &Vec<ValueTypeOrAny>) {
     match &inst.polymorphic_info {
         Some(poly) => {
             assert!(
@@ -1076,6 +1106,4 @@ fn bind(
             ));
         }
     }
-
-    BoundInstruction { inst, value_types }
 }
