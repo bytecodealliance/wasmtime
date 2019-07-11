@@ -1,6 +1,8 @@
 //! x86 ABI implementation.
 
+use super::super::settings as shared_settings;
 use super::registers::{FPR, GPR, RU};
+use super::settings as isa_settings;
 use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
 use crate::cursor::{Cursor, CursorPosition, EncCursor};
 use crate::ir;
@@ -39,10 +41,20 @@ struct Args {
     fpr_used: usize,
     offset: u32,
     call_conv: CallConv,
+    shared_flags: shared_settings::Flags,
+    #[allow(dead_code)]
+    isa_flags: isa_settings::Flags,
 }
 
 impl Args {
-    fn new(bits: u8, gpr: &'static [RU], fpr_limit: usize, call_conv: CallConv) -> Self {
+    fn new(
+        bits: u8,
+        gpr: &'static [RU],
+        fpr_limit: usize,
+        call_conv: CallConv,
+        shared_flags: &shared_settings::Flags,
+        isa_flags: &isa_settings::Flags,
+    ) -> Self {
         let offset = if let CallConv::WindowsFastcall = call_conv {
             // [1] "The caller is responsible for allocating space for parameters to the callee,
             // and must always allocate sufficient space to store four register parameters"
@@ -61,6 +73,8 @@ impl Args {
             fpr_used: 0,
             offset,
             call_conv,
+            shared_flags: shared_flags.clone(),
+            isa_flags: isa_flags.clone(),
         }
     }
 }
@@ -69,10 +83,15 @@ impl ArgAssigner for Args {
     fn assign(&mut self, arg: &AbiParam) -> ArgAction {
         let ty = arg.value_type;
 
-        // Check for a legal type.
-        // We don't support SIMD yet, so break all vectors down.
+        // Vectors should stay in vector registers unless SIMD is not enabled--then they are split
         if ty.is_vector() {
-            return ValueConversion::VectorSplit.into();
+            if self.shared_flags.enable_simd() {
+                let reg = FPR.unit(self.fpr_used);
+                self.fpr_used += 1;
+                return ArgumentLoc::Reg(reg).into();
+            } else {
+                return ValueConversion::VectorSplit.into();
+            }
         }
 
         // Large integers and booleans are broken down to fit in a register.
@@ -139,7 +158,13 @@ impl ArgAssigner for Args {
 }
 
 /// Legalize `sig`.
-pub fn legalize_signature(sig: &mut ir::Signature, triple: &Triple, _current: bool) {
+pub fn legalize_signature(
+    sig: &mut ir::Signature,
+    triple: &Triple,
+    _current: bool,
+    shared_flags: &shared_settings::Flags,
+    isa_flags: &isa_settings::Flags,
+) {
     let bits;
     let mut args;
 
@@ -147,14 +172,28 @@ pub fn legalize_signature(sig: &mut ir::Signature, triple: &Triple, _current: bo
         PointerWidth::U16 => panic!(),
         PointerWidth::U32 => {
             bits = 32;
-            args = Args::new(bits, &[], 0, sig.call_conv);
+            args = Args::new(bits, &[], 0, sig.call_conv, shared_flags, isa_flags);
         }
         PointerWidth::U64 => {
             bits = 64;
             args = if sig.call_conv == CallConv::WindowsFastcall {
-                Args::new(bits, &ARG_GPRS_WIN_FASTCALL_X64[..], 4, sig.call_conv)
+                Args::new(
+                    bits,
+                    &ARG_GPRS_WIN_FASTCALL_X64[..],
+                    4,
+                    sig.call_conv,
+                    shared_flags,
+                    isa_flags,
+                )
             } else {
-                Args::new(bits, &ARG_GPRS[..], 8, sig.call_conv)
+                Args::new(
+                    bits,
+                    &ARG_GPRS[..],
+                    8,
+                    sig.call_conv,
+                    shared_flags,
+                    isa_flags,
+                )
             };
         }
     }
@@ -168,7 +207,14 @@ pub fn legalize_signature(sig: &mut ir::Signature, triple: &Triple, _current: bo
         (&RET_GPRS[..], 2)
     };
 
-    let mut rets = Args::new(bits, regs, fpr_limit, sig.call_conv);
+    let mut rets = Args::new(
+        bits,
+        regs,
+        fpr_limit,
+        sig.call_conv,
+        shared_flags,
+        isa_flags,
+    );
     legalize_args(&mut sig.returns, &mut rets);
 }
 

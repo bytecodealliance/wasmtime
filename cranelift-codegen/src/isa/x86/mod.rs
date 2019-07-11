@@ -106,7 +106,13 @@ impl TargetIsa for Isa {
     }
 
     fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
-        abi::legalize_signature(sig, &self.triple, current)
+        abi::legalize_signature(
+            sig,
+            &self.triple,
+            current,
+            &self.shared_flags,
+            &self.isa_flags,
+        )
     }
 
     fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass {
