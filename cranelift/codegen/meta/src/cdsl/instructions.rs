@@ -181,8 +181,17 @@ impl Instruction {
         bind_ref(self.clone(), Some(reference_type.into()), Vec::new())
     }
 
-    pub fn bind_vector(&self, lane_type: impl Into<LaneType>, num_lanes: u64) -> BoundInstruction {
-        bind_vector(self.clone(), lane_type.into(), num_lanes, Vec::new())
+    pub fn bind_vector_from_lane(
+        &self,
+        lane_type: impl Into<LaneType>,
+        vector_size_in_bits: u64,
+    ) -> BoundInstruction {
+        bind_vector(
+            self.clone(),
+            lane_type.into(),
+            vector_size_in_bits,
+            Vec::new(),
+        )
     }
 
     pub fn bind_any(&self) -> BoundInstruction {
@@ -414,8 +423,17 @@ impl BoundInstruction {
         bind_ref(self.inst, Some(reference_type.into()), self.value_types)
     }
 
-    pub fn bind_vector(self, lane_type: impl Into<LaneType>, num_lanes: u64) -> BoundInstruction {
-        bind_vector(self.inst, lane_type.into(), num_lanes, self.value_types)
+    pub fn bind_vector_from_lane(
+        self,
+        lane_type: impl Into<LaneType>,
+        vector_size_in_bits: u64,
+    ) -> BoundInstruction {
+        bind_vector(
+            self.inst,
+            lane_type.into(),
+            vector_size_in_bits,
+            self.value_types,
+        )
     }
 
     pub fn bind_any(self) -> BoundInstruction {
@@ -1116,9 +1134,10 @@ fn bind_ref(
 fn bind_vector(
     inst: Instruction,
     lane_type: LaneType,
-    num_lanes: u64,
+    vector_size_in_bits: u64,
     mut value_types: Vec<ValueTypeOrAny>,
 ) -> BoundInstruction {
+    let num_lanes = vector_size_in_bits / lane_type.lane_bits();
     let vector_type = ValueType::Vector(VectorType::new(lane_type, num_lanes));
     value_types.push(ValueTypeOrAny::ValueType(vector_type));
     verify_polymorphic_binding(&inst, &value_types);
