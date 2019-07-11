@@ -10,7 +10,8 @@ use crate::cdsl::instructions::{
 use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::{SettingGroup, SettingPredicateNumber};
 
-use crate::shared::types::Bool::B1;
+use crate::cdsl::types::ValueType;
+use crate::shared::types::Bool::{B1, B16, B32, B64, B8};
 use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I16, I32, I64, I8};
 use crate::shared::Definitions as SharedDefinitions;
@@ -340,6 +341,7 @@ pub fn define(
     let rotl_imm = shared.by_name("rotl_imm");
     let rotr = shared.by_name("rotr");
     let rotr_imm = shared.by_name("rotr_imm");
+    let scalar_to_vector = shared.by_name("scalar_to_vector");
     let selectif = shared.by_name("selectif");
     let sextend = shared.by_name("sextend");
     let sload16 = shared.by_name("sload16");
@@ -515,6 +517,7 @@ pub fn define(
     let use_popcnt = settings.predicate_by_name("use_popcnt");
     let use_lzcnt = settings.predicate_by_name("use_lzcnt");
     let use_bmi1 = settings.predicate_by_name("use_bmi1");
+    let use_sse2 = settings.predicate_by_name("use_sse2");
     let use_sse41 = settings.predicate_by_name("use_sse41");
 
     // Definitions.
@@ -603,8 +606,14 @@ pub fn define(
     // Finally, the 0xb8 opcode takes an 8-byte immediate with a REX.W prefix.
     e.enc64(iconst.bind(I64), rec_pu_iq.opcodes(vec![0xb8]).rex().w());
 
-    // Bool constants.
-    e.enc_both(bconst.bind(B1), rec_pu_id_bool.opcodes(vec![0xb8]));
+    // Bool constants (uses MOV)
+    for &ty in &[B1, B8, B16, B32] {
+        e.enc_both(bconst.bind(ty), rec_pu_id_bool.opcodes(vec![0xb8]));
+    }
+    e.enc64(
+        bconst.bind(B64),
+        rec_pu_id_bool.opcodes(vec![0xb8]).rex().w(),
+    );
 
     // Shifts and rotates.
     // Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
@@ -1564,6 +1573,20 @@ pub fn define(
     e.enc_both(fcmp.bind(F64), rec_fcscc.opcodes(vec![0x66, 0x0f, 0x2e]));
     e.enc_both(ffcmp.bind(F32), rec_fcmp.opcodes(vec![0x0f, 0x2e]));
     e.enc_both(ffcmp.bind(F64), rec_fcmp.opcodes(vec![0x66, 0x0f, 0x2e]));
+
+    // SIMD scalar_to_vector; this uses MOV to copy the scalar value to an XMM register; according
+    // to the Intel manual: "When the destination operand is an XMM register, the source operand is
+    // written to the low doubleword of the register and the regiser is zero-extended to 128 bits."
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() >= 8) {
+        let number_of_lanes = 128 / ty.lane_bits();
+        let instruction = scalar_to_vector.bind_vector(ty, number_of_lanes).bind(ty);
+        let template = rec_frurm.opcodes(vec![0x66, 0x0f, 0x6e]); // MOVD/MOVQ
+        if ty.lane_bits() < 64 {
+            // no 32-bit encodings for 64-bit widths
+            e.enc32_isap(instruction.clone(), template.clone(), use_sse2);
+        }
+        e.enc_x86_64_isap(instruction, template, use_sse2);
+    }
 
     e
 }
