@@ -843,6 +843,8 @@ macro_rules! int_div {
 
             let is_neg1 = self.create_label();
 
+            let current_depth = self.block_state.depth.clone();
+
             // TODO: This could cause segfaults because of implicit push/pop
             let gen_neg1_case = match divisor {
                 ValueLocation::Immediate(_) => {
@@ -858,6 +860,11 @@ macro_rules! int_div {
                     let reg = self.into_reg(GPRType::Rq, divisor).unwrap();
                     dynasm!(self.asm
                         ; cmp $reg_ty(reg.rq().unwrap()), -1
+                    );
+                    // TODO: We could choose `current_depth` as the depth here instead but we currently
+                    //       don't for simplicity
+                    self.set_stack_depth(current_depth.clone());
+                    dynasm!(self.asm
                         ; je =>is_neg1.0
                     );
 
@@ -867,6 +874,9 @@ macro_rules! int_div {
                     let offset = self.adjusted_offset(offset);
                     dynasm!(self.asm
                         ; cmp $pointer_ty [rsp + offset], -1
+                    );
+                    self.set_stack_depth(current_depth.clone());
+                    dynasm!(self.asm
                         ; je =>is_neg1.0
                     );
 
@@ -902,6 +912,7 @@ macro_rules! int_div {
 
             if gen_neg1_case {
                 let ret = self.create_label();
+                self.set_stack_depth(current_depth.clone());
                 dynasm!(self.asm
                     ; jmp =>ret.0
                 );
@@ -912,6 +923,7 @@ macro_rules! int_div {
                     CCLoc::try_from(rem).expect("Programmer error")
                 );
 
+                self.set_stack_depth(current_depth.clone());
                 self.define_label(ret);
             }
 
