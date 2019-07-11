@@ -51,7 +51,7 @@ fn unwrap_inst(
 
     fmtln!(
         fmt,
-        "let ({}, predicate) = if let ir::InstructionData::{} {{",
+        "let ({}, predicate) = if let crate::ir::InstructionData::{} {{",
         arg_names,
         iform.name
     );
@@ -135,18 +135,16 @@ fn unwrap_inst(
                     .to_comment_string(var_pool)
             ));
 
-            fmt.line("let results = pos.func.dfg.inst_results(inst);");
+            fmt.line("let r = pos.func.dfg.inst_results(inst);");
             for (i, &var_index) in def.defined_vars.iter().enumerate() {
                 let var = var_pool.get(var_index);
-                fmtln!(fmt, "let {} = &results[{}];", var.name, i);
-                if var.has_free_typevar() {
-                    fmtln!(
-                        fmt,
-                        "let typeof_{} = pos.func.dfg.value_type(*{});",
-                        var.name,
-                        var.name
-                    );
-                }
+                fmtln!(fmt, "let {} = &r[{}];", var.name, i);
+                fmtln!(
+                    fmt,
+                    "let typeof_{} = pos.func.dfg.value_type(*{});",
+                    var.name,
+                    var.name
+                );
             }
 
             replace_inst = true;
@@ -187,11 +185,15 @@ fn build_derived_expr(tv: &TypeVar) -> String {
         Some(base) => base,
         None => {
             assert!(tv.name.starts_with("typeof_"));
-            return format!("{}", tv.name);
+            return format!("Some({})", tv.name);
         }
     };
     let base_expr = build_derived_expr(&base.type_var);
-    format!("{}.{}()", base_expr, base.derived_func.name())
+    format!(
+        "{}.map(|t: crate::ir::Type| t.{}())",
+        base_expr,
+        base.derived_func.name()
+    )
 }
 
 /// Emit rust code for the given check.
@@ -221,18 +223,29 @@ fn emit_runtime_typecheck<'a, 'b>(
         Constraint::Eq(tv1, tv2) => {
             fmtln!(
                 fmt,
-                "let predicate = predicate && {} == {};",
+                "let predicate = predicate && match ({}, {}) {{",
                 build_derived_expr(tv1),
                 build_derived_expr(tv2)
             );
+            fmt.indent(|fmt| {
+                fmt.line("(Some(a), Some(b)) => a == b,");
+                fmt.comment("On overflow, constraint doesn\'t apply");
+                fmt.line("_ => false,");
+            });
+            fmtln!(fmt, "};");
         }
         Constraint::WiderOrEq(tv1, tv2) => {
             fmtln!(
                 fmt,
-                "let predicate = predicate && {}.wider_or_equal({});",
+                "let predicate = predicate && match ({}, {}) {{",
                 build_derived_expr(tv1),
                 build_derived_expr(tv2)
             );
+            fmt.indent(|fmt| {
+                fmt.line("(Some(a), Some(b)) => a.wider_or_equal(b),");
+                fmt.comment("On overflow, constraint doesn\'t apply");
+                fmt.line("_ => false,");
+            });
             fmtln!(fmt, "};");
         }
     }
@@ -290,7 +303,8 @@ fn emit_dst_inst(def: &Def, def_pool: &DefPool, var_pool: &VarPool, fmt: &mut Fo
             // Unwrapping would have left the results intact.  Replace the whole instruction.
             fmtln!(
                 fmt,
-                "pos.func.dfg.replace(inst).{};",
+                "let {} = pos.func.dfg.replace(inst).{};",
+                defined_vars,
                 def.apply.rust_builder(&def.defined_vars, var_pool)
             );
 
@@ -406,16 +420,17 @@ fn gen_transform_group<'a>(
     // Function arguments.
     fmtln!(fmt, "pub fn {}(", group.name);
     fmt.indent(|fmt| {
-        fmt.line("inst: ir::Inst,");
-        fmt.line("func: &mut ir::Function,");
-        fmt.line("cfg: &mut ControlFlowGraph,");
-        fmt.line("isa: &dyn TargetIsa,");
+        fmt.line("inst: crate::ir::Inst,");
+        fmt.line("func: &mut crate::ir::Function,");
+        fmt.line("cfg: &mut crate::flowgraph::ControlFlowGraph,");
+        fmt.line("isa: &dyn crate::isa::TargetIsa,");
     });
     fmtln!(fmt, ") -> bool {");
 
     // Function body.
     fmt.indent(|fmt| {
-        fmt.line("use ir::InstBuilder;");
+        fmt.line("use crate::ir::InstBuilder;");
+        fmt.line("use crate::cursor::{Cursor, FuncCursor};");
         fmt.line("let mut pos = FuncCursor::new(func).at_inst(inst);");
         fmt.line("pos.use_srcloc(inst);");
 
