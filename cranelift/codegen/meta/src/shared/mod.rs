@@ -50,6 +50,12 @@ impl OperandKinds {
     }
 }
 
+impl From<Vec<OperandKind>> for OperandKinds {
+    fn from(kinds: Vec<OperandKind>) -> Self {
+        OperandKinds(kinds)
+    }
+}
+
 pub fn define() -> Definitions {
     let mut all_instructions = AllInstructions::new();
 
