@@ -412,6 +412,12 @@ pub fn define<'shared>(
             .emit(""),
     );
     recipes.add_recipe(
+        EncodingRecipeBuilder::new("null_fpr", f_unary, 0)
+            .operands_in(vec![fpr])
+            .operands_out(vec![0])
+            .emit(""),
+    );
+    recipes.add_recipe(
         EncodingRecipeBuilder::new("stacknull", f_unary, 0)
             .operands_in(vec![stack_gpr32])
             .operands_out(vec![stack_gpr32])

@@ -9,7 +9,6 @@ use crate::cdsl::instructions::{
 };
 use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::{SettingGroup, SettingPredicateNumber};
-
 use crate::cdsl::types::ValueType;
 use crate::shared::types::Bool::{B1, B16, B32, B64, B8};
 use crate::shared::types::Float::{F32, F64};
@@ -333,6 +332,7 @@ pub fn define(
     let load_complex = shared.by_name("load_complex");
     let nearest = shared.by_name("nearest");
     let popcnt = shared.by_name("popcnt");
+    let raw_bitcast = shared.by_name("raw_bitcast");
     let regfill = shared.by_name("regfill");
     let regmove = shared.by_name("regmove");
     let regspill = shared.by_name("regspill");
@@ -452,6 +452,7 @@ pub fn define(
     let rec_ldWithIndexDisp8 = r.template("ldWithIndexDisp8");
     let rec_mulx = r.template("mulx");
     let rec_null = r.recipe("null");
+    let rec_null_fpr = r.recipe("null_fpr");
     let rec_pcrel_fnaddr8 = r.template("pcrel_fnaddr8");
     let rec_pcrel_gvaddr8 = r.template("pcrel_gvaddr8");
     let rec_popq = r.template("popq");
@@ -1586,6 +1587,18 @@ pub fn define(
             e.enc32_isap(instruction.clone(), template.clone(), use_sse2);
         }
         e.enc_x86_64_isap(instruction, template, use_sse2);
+    }
+
+    // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8)
+    for from_type in ValueType::all_lane_types().filter(|t| t.lane_bits() >= 8) {
+        for to_type in ValueType::all_lane_types().filter(|t| t.lane_bits() >= 8 && *t != from_type)
+        {
+            let instruction = raw_bitcast
+                .bind_vector(to_type, 128 / to_type.lane_bits())
+                .bind_vector(from_type, 128 / from_type.lane_bits());
+            e.enc32_rec(instruction.clone(), rec_null_fpr, 0);
+            e.enc64_rec(instruction, rec_null_fpr, 0);
+        }
     }
 
     e
