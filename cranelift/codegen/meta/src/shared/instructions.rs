@@ -106,6 +106,16 @@ pub fn define(
             .build(),
     );
 
+    let Scalar = &TypeVar::new(
+        "scalar",
+        "Any scalar value that can be used as a lane in a vector",
+        TypeSetBuilder::new()
+            .bools(Interval::All)
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .build(),
+    );
+
     let Any = &TypeVar::new(
         "Any",
         "Any integer, float, or boolean scalar or vector type",
@@ -2627,6 +2637,22 @@ pub fn define(
         "#,
         )
         .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    let s = &operand_doc("s", Scalar, "A scalar value");
+    let a = &operand_doc("a", TxN, "A vector value (i.e. held in an XMM register)");
+
+    ig.push(
+        Inst::new(
+            "scalar_to_vector",
+            r#"
+    Scalar To Vector -- move a value out of a scalar register and into a vector
+    register; the scalar will be moved to the lowest-order bits of the vector
+    register and any higher bits will be zeroed.
+    "#,
+        )
+        .operands_in(vec![s])
         .operands_out(vec![a]),
     );
 
