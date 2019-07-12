@@ -222,22 +222,13 @@ impl Function {
 }
 
 /// Additional annotations for function display.
+#[derive(Default)]
 pub struct DisplayFunctionAnnotations<'a> {
     /// Enable ISA annotations.
     pub isa: Option<&'a dyn TargetIsa>,
 
     /// Enable value labels annotations.
     pub value_ranges: Option<&'a ValueLabelsRanges>,
-}
-
-impl<'a> DisplayFunctionAnnotations<'a> {
-    /// Create a DisplayFunctionAnnotations with all fields set to None.
-    pub fn default() -> Self {
-        DisplayFunctionAnnotations {
-            isa: None,
-            value_ranges: None,
-        }
-    }
 }
 
 impl<'a> From<Option<&'a dyn TargetIsa>> for DisplayFunctionAnnotations<'a> {
