@@ -1,6 +1,7 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
+use crate::address_map::ModuleAddressMap;
 use crate::module;
 use crate::module_environ::FunctionBodyData;
 use cranelift_codegen::{binemit, ir, isa, CodegenError};
@@ -8,7 +9,6 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use std::ops::Range;
 use std::vec::Vec;
-use wasmtime_debug::ModuleAddressMap;
 
 /// Compiled machine code: body and jump table offsets.
 #[derive(Debug, Clone)]

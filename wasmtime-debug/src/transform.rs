@@ -8,6 +8,7 @@ use cranelift_wasm::DefinedFuncIndex;
 use failure::Error;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
+use wasmtime_environ::ModuleAddressMap;
 
 use gimli;
 
@@ -26,36 +27,6 @@ impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where Endian:
 #[derive(Fail, Debug)]
 #[fail(display = "Debug info transform error: {}", _0)]
 pub struct TransformError(&'static str);
-
-/// Single wasm source location to generated address mapping.
-#[derive(Debug, Clone)]
-pub struct InstructionAddressMap {
-    /// Original source location.
-    pub srcloc: ir::SourceLoc,
-
-    /// Generated instructions offset.
-    pub code_offset: usize,
-
-    /// Generated instructions length.
-    pub code_len: usize,
-}
-
-/// Function and its instructions addresses mappings.
-#[derive(Debug, Clone)]
-pub struct FunctionAddressMap {
-    /// Instructions maps.
-    /// The array is sorted by the InstructionAddressMap::code_offset field.
-    pub instructions: Vec<InstructionAddressMap>,
-
-    /// Generated function body offset if applicable, otherwise 0.
-    pub body_offset: usize,
-
-    /// Generated function body length.
-    pub body_len: usize,
-}
-
-/// Module functions addresses mappings.
-pub type ModuleAddressMap = PrimaryMap<DefinedFuncIndex, FunctionAddressMap>;
 
 /// Module `vmctx` related info.
 pub struct ModuleVmctxInfo {
