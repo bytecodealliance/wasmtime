@@ -76,7 +76,7 @@ where
     debug_addr_base: DebugAddrBase<R::Offset>,
     rnglists: &'a RangeLists<R>,
     loclists: &'a LocationLists<R>,
-    reachable: &'a HashSet<UnitSectionOffset>,
+    reachable: HashSet<UnitSectionOffset>,
 }
 
 type PendingDieRef = (write::UnitEntryId, gimli::DwAt, UnitOffset);
@@ -632,7 +632,7 @@ pub fn transform_dwarf(
         debug_addr_base: DebugAddrBase(0),
         rnglists: &di.dwarf.ranges,
         loclists: &di.dwarf.locations,
-        reachable: &reachable,
+        reachable,
     };
 
     let out_encoding = gimli::Encoding {
