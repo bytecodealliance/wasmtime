@@ -46,6 +46,7 @@ struct EbbData {
     user_param_count: usize,
 }
 
+#[derive(Default)]
 struct Position {
     ebb: PackedOption<Ebb>,
     basic_block: PackedOption<Block>,
@@ -56,13 +57,6 @@ impl Position {
         Self {
             ebb: PackedOption::from(ebb),
             basic_block: PackedOption::from(basic_block),
-        }
-    }
-
-    fn default() -> Self {
-        Self {
-            ebb: PackedOption::default(),
-            basic_block: PackedOption::default(),
         }
     }
 
