@@ -8,6 +8,7 @@ use cranelift_module::{
     Backend, DataContext, DataDescription, Init, Linkage, ModuleNamespace, ModuleResult,
 };
 use cranelift_native;
+#[cfg(not(windows))]
 use libc;
 use std::collections::HashMap;
 use std::ffi::CString;
