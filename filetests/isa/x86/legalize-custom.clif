@@ -84,7 +84,7 @@ function %f32_min(f32, f32) -> f32 {
 ebb0(v0: f32, v1: f32):
     v2 = fmin v0, v1
     return v2
-    ; check: $(vnat=$V) = x86_fmin v0, v1
+    ; check: $(vnat=$V) = x86_fmin.f32 v0, v1
     ; nextln: jump $(done=$EBB)($vnat)
 
     ; check: $(uno=$EBB):
