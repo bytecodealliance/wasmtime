@@ -19,6 +19,7 @@ hashmap_core = { version = "0.1.9", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 log = { version = "0.4.6", default-features = false }
+serde = { version = "1.0.94", features = ["derive"], optional = true }
 
 [dev-dependencies]
 wabt = "0.7.0"
@@ -28,6 +29,7 @@ target-lexicon = "0.4.0"
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std"]
 core = ["hashmap_core", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
+enable-serde = ["serde"]
 
 [badges]
 maintenance = { status = "experimental" }

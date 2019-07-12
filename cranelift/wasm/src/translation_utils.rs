@@ -3,10 +3,13 @@ use crate::environ::{WasmError, WasmResult};
 use core::u32;
 use cranelift_codegen::entity::entity_impl;
 use cranelift_codegen::ir;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 use wasmparser;
 
 /// Index type of a function (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct FuncIndex(u32);
 entity_impl!(FuncIndex);
 

@@ -14,6 +14,8 @@ pub use crate::regalloc::RegDiversions;
 
 use crate::ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
 use core::fmt;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 
 /// Offset in bytes from the beginning of the function.
 ///
@@ -26,6 +28,7 @@ pub type Addend = i64;
 
 /// Relocation kinds for every ISA
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum Reloc {
     /// absolute 4-byte
     Abs4,

@@ -20,6 +20,7 @@ failure_derive = { version = "0.1.1", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
 target-lexicon = { version = "0.4.0", default-features = false }
 log = { version = "0.4.6", default-features = false }
+serde = { version = "1.0.94", features = ["derive"], optional = true }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
@@ -57,6 +58,9 @@ x86 = []
 arm32 = []
 arm64 = []
 riscv = []
+
+# For dependent crates that want to serialize some parts of cranelift
+enable-serde = ["serde"]
 
 [badges]
 maintenance = { status = "experimental" }
