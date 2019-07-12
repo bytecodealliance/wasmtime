@@ -1,5 +1,6 @@
 //! Support for compiling with Cranelift.
 
+use crate::cache::{FuncCacheData, FuncCacheEntry};
 use crate::compilation::{
     AddressTransforms, CodeAndJTOffsets, Compilation, CompileError, FunctionAddressTransform,
     InstructionAddressTransform, Relocation, RelocationTarget, Relocations,
@@ -140,43 +141,56 @@ impl crate::compilation::Compiler for Cranelift {
                 context.func.name = get_func_name(func_index);
                 context.func.signature = module.signatures[module.functions[func_index]].clone();
 
-                let mut trans = FuncTranslator::new();
-                trans
-                    .translate(
-                        input.data,
-                        input.module_offset,
-                        &mut context.func,
-                        &mut FuncEnvironment::new(isa.frontend_config(), module),
-                    )
-                    .map_err(CompileError::Wasm)?;
+                let cache_entry = FuncCacheEntry::new(input);
 
-                let mut code_buf: Vec<u8> = Vec::new();
-                let mut reloc_sink = RelocSink::new(func_index);
-                let mut trap_sink = binemit::NullTrapSink {};
-                context
-                    .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
-                    .map_err(CompileError::Codegen)?;
+                let data = match cache_entry.get_data() {
+                    Some(data) => data,
+                    None => {
+                        let mut trans = FuncTranslator::new();
+                        trans
+                            .translate(
+                                input.data,
+                                input.module_offset,
+                                &mut context.func,
+                                &mut FuncEnvironment::new(isa.frontend_config(), module),
+                            )
+                            .map_err(CompileError::Wasm)?;
 
-                let jt_offsets = context.func.jt_offsets.clone();
+                        let mut code_buf: Vec<u8> = Vec::new();
+                        let mut reloc_sink = RelocSink::new(func_index);
+                        let mut trap_sink = binemit::NullTrapSink {};
+                        context
+                            .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
+                            .map_err(CompileError::Codegen)?;
 
-                let address_transform = if generate_debug_info {
-                    let body_len = code_buf.len();
-                    let at = get_address_transform(&context, isa);
-                    Some(FunctionAddressTransform {
-                        locations: at,
-                        body_offset: 0,
-                        body_len,
-                    })
-                } else {
-                    None
+                        let jt_offsets = context.func.jt_offsets.clone();
+
+                        let address_transform = if generate_debug_info {
+                            let body_len = code_buf.len();
+                            let at = get_address_transform(&context, isa);
+                            Some(FunctionAddressTransform {
+                                locations: at,
+                                body_offset: 0,
+                                body_len,
+                            })
+                        } else {
+                            None
+                        };
+
+                        let data = FuncCacheData::from_tuple((
+                            code_buf,
+                            jt_offsets,
+                            reloc_sink.func_relocs,
+                            address_transform,
+                        ));
+
+                        cache_entry.update_data(&data);
+
+                        data
+                    }
                 };
 
-                Ok((
-                    code_buf,
-                    jt_offsets,
-                    reloc_sink.func_relocs,
-                    address_transform,
-                ))
+                Ok(data.to_tuple())
             })
             .collect::<Result<Vec<_>, CompileError>>()?
             .into_iter()

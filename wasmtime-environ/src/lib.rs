@@ -44,6 +44,8 @@ mod module_environ;
 mod tunables;
 mod vmoffsets;
 
+mod cache;
+
 pub mod cranelift;
 #[cfg(feature = "lightbeam")]
 pub mod lightbeam;
