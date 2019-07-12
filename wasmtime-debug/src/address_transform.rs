@@ -1,11 +1,11 @@
 use crate::read_debuginfo::WasmFileInfo;
-use crate::transform::ModuleAddressMap;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::vec::Vec;
+use wasmtime_environ::ModuleAddressMap;
 
 pub type GeneratedAddress = usize;
 pub type WasmAddress = u64;

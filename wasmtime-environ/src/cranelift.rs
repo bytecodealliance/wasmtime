@@ -1,5 +1,6 @@
 //! Support for compiling with Cranelift.
 
+use crate::address_map::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
 use crate::compilation::{
     CodeAndJTOffsets, Compilation, CompileError, Relocation, RelocationTarget, Relocations,
 };
@@ -18,7 +19,6 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::vec::Vec;
-use wasmtime_debug::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
 
 /// Implementation of a relocation sink that just saves all the information for later
 pub struct RelocSink {

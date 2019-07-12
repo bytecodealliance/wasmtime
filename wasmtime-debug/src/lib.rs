@@ -3,12 +3,10 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl};
 use failure::Error;
 use target_lexicon::{BinaryFormat, Triple};
+use wasmtime_environ::ModuleAddressMap;
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
-pub use crate::transform::{
-    transform_dwarf, FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ModuleVmctxInfo,
-    ValueLabelsRanges,
-};
+pub use crate::transform::{transform_dwarf, ModuleVmctxInfo, ValueLabelsRanges};
 pub use crate::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
 
 mod address_transform;

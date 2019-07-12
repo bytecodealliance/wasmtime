@@ -20,7 +20,6 @@ failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
 indexmap = "1.0.2"
 rayon = "1.0"
-wasmtime-debug = { path = "../wasmtime-debug", default-features = false }
 
 [features]
 default = ["std"]
