@@ -56,9 +56,21 @@ where
         }
     }
 
+    /// Returns the number of elements in the underlying vector.
+    ///
+    /// The number is not necessarily the same as the length of the corresponding PrimaryMap.
+    pub fn len(&self) -> usize {
+        self.elems.len()
+    }
+
     /// Get the element at `k` if it exists.
     pub fn get(&self, k: K) -> Option<&V> {
         self.elems.get(k.index())
+    }
+
+    /// Get the default value.
+    pub fn get_default(&self) -> &V {
+        &self.default
     }
 
     /// Is this map completely empty?
