@@ -128,7 +128,7 @@ impl Serialize for JtOffsetsSerdeWrapper {
         S: Serializer,
     {
         let default_val = self.0.get_default();
-        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        let mut seq = serializer.serialize_seq(Some(1 + self.0.len()))?;
         seq.serialize_element(&Some(default_val))?;
         for e in self.0.values() {
             let some_e = Some(e);
@@ -166,12 +166,13 @@ impl<'de> Visitor<'de> for JtOffsetsSerdeWrapperVisitor {
         A: SeqAccess<'de>,
     {
         match seq.next_element()? {
-            Some(default_val) => {
+            Some(Some(default_val)) => {
                 let mut m = cranelift_entity::SecondaryMap::with_default(default_val);
                 let mut idx = 0;
                 while let Some(val) = seq.next_element()? {
+                    let val: Option<_> = val;  // compiler can't infer the type, and this line is needed
                     match cranelift_codegen::ir::JumpTable::with_number(idx) {
-                        Some(jt_idx) => m[jt_idx] = val,
+                        Some(jt_idx) => m[jt_idx] = val.unwrap_or(default_val),
                         None => {
                             return Err(serde::de::Error::custom("Invalid JumpTable reference"))
                         }
@@ -180,7 +181,7 @@ impl<'de> Visitor<'de> for JtOffsetsSerdeWrapperVisitor {
                 }
                 Ok(JtOffsetsSerdeWrapper(m))
             }
-            None => Err(serde::de::Error::custom("Default value required")),
+            _ => Err(serde::de::Error::custom("Default value required")),
         }
     }
 }

@@ -29,9 +29,6 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_native;
@@ -47,6 +44,7 @@ use std::path::PathBuf;
 use std::process;
 use std::str;
 use std::str::FromStr;
+use serde::Deserialize;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::{Compiler, Cranelift, ModuleEnvironment, Tunables};

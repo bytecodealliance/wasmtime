@@ -25,9 +25,6 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
@@ -36,6 +33,7 @@ use file_per_thread_logger;
 use pretty_env_logger;
 use std::path::Path;
 use std::process;
+use serde::Deserialize;
 use wasmtime_jit::Compiler;
 use wasmtime_wast::WastContext;
 

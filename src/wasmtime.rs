@@ -30,9 +30,6 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
@@ -47,6 +44,7 @@ use std::io::prelude::*;
 use std::path::Component;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use serde::Deserialize;
 use wabt;
 use wasi_common::preopen_dir;
 use wasmtime_jit::{ActionOutcome, Context};
