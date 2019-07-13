@@ -170,7 +170,7 @@ impl<'de> Visitor<'de> for JtOffsetsSerdeWrapperVisitor {
                 let mut m = cranelift_entity::SecondaryMap::with_default(default_val);
                 let mut idx = 0;
                 while let Some(val) = seq.next_element()? {
-                    let val: Option<_> = val;  // compiler can't infer the type, and this line is needed
+                    let val: Option<_> = val; // compiler can't infer the type, and this line is needed
                     match cranelift_codegen::ir::JumpTable::with_number(idx) {
                         Some(jt_idx) => m[jt_idx] = val.unwrap_or(default_val),
                         None => {
