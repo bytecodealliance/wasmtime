@@ -35,10 +35,11 @@ pub fn args_get(
 
         argv.push(arg_ptr);
 
-        argv_buf_offset = if let Some(new_offset) = argv_buf_offset.checked_add(
-            wasm32::uintptr_t::try_from(arg_bytes.len())
-                .expect("cast overflow would have been caught by `enc_slice_of` above"),
-        ) {
+        argv_buf_offset = if let Some(new_offset) =
+            argv_buf_offset.checked_add(match wasm32::uintptr_t::try_from(arg_bytes.len()) {
+                Ok(len) => len,
+                Err(_) => return return_enc_errno(host::__WASI_EOVERFLOW),
+            }) {
             new_offset
         } else {
             return return_enc_errno(host::__WASI_EOVERFLOW);
@@ -113,10 +114,11 @@ pub fn environ_get(
 
         environ.push(env_ptr);
 
-        environ_buf_offset = if let Some(new_offset) = environ_buf_offset.checked_add(
-            wasm32::uintptr_t::try_from(env_bytes.len())
-                .expect("cast overflow would have been caught by `enc_slice_of` above"),
-        ) {
+        environ_buf_offset = if let Some(new_offset) =
+            environ_buf_offset.checked_add(match wasm32::uintptr_t::try_from(env_bytes.len()) {
+                Ok(len) => len,
+                Err(_) => return return_enc_errno(host::__WASI_EOVERFLOW),
+            }) {
             new_offset
         } else {
             return return_enc_errno(host::__WASI_EOVERFLOW);
@@ -314,10 +316,7 @@ pub fn poll_oneoff(
 pub fn sched_yield() -> wasm32::__wasi_errno_t {
     trace!("sched_yield()");
 
-    let ret = match hostcalls_impl::sched_yield() {
-        Ok(()) => host::__WASI_ESUCCESS,
-        Err(e) => e,
-    };
+    std::thread::yield_now();
 
-    return_enc_errno(ret)
+    return_enc_errno(host::__WASI_ESUCCESS)
 }

@@ -89,32 +89,6 @@ pub fn errno_from_nix(errno: nix::errno::Errno) -> host::__wasi_errno_t {
     }
 }
 
-pub unsafe fn ciovec_to_nix<'a>(
-    ciovec: &'a host::__wasi_ciovec_t,
-) -> nix::sys::uio::IoVec<&'a [u8]> {
-    let slice = std::slice::from_raw_parts(ciovec.buf as *const u8, ciovec.buf_len);
-    nix::sys::uio::IoVec::from_slice(slice)
-}
-
-pub unsafe fn ciovec_to_nix_mut<'a>(
-    ciovec: &'a mut host::__wasi_ciovec_t,
-) -> nix::sys::uio::IoVec<&'a mut [u8]> {
-    let slice = std::slice::from_raw_parts_mut(ciovec.buf as *mut u8, ciovec.buf_len);
-    nix::sys::uio::IoVec::from_mut_slice(slice)
-}
-
-pub unsafe fn iovec_to_nix<'a>(iovec: &'a host::__wasi_iovec_t) -> nix::sys::uio::IoVec<&'a [u8]> {
-    let slice = std::slice::from_raw_parts(iovec.buf as *const u8, iovec.buf_len);
-    nix::sys::uio::IoVec::from_slice(slice)
-}
-
-pub unsafe fn iovec_to_nix_mut<'a>(
-    iovec: &'a mut host::__wasi_iovec_t,
-) -> nix::sys::uio::IoVec<&'a mut [u8]> {
-    let slice = std::slice::from_raw_parts_mut(iovec.buf as *mut u8, iovec.buf_len);
-    nix::sys::uio::IoVec::from_mut_slice(slice)
-}
-
 #[cfg(target_os = "linux")]
 pub const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
 
@@ -225,16 +199,18 @@ pub fn nix_from_filetype(sflags: host::__wasi_filetype_t) -> nix::sys::stat::SFl
     nix_sflags
 }
 
-pub fn filestat_from_nix(filestat: nix::sys::stat::FileStat) -> host::__wasi_filestat_t {
+pub fn filestat_from_nix(
+    filestat: nix::sys::stat::FileStat,
+) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
     use std::convert::TryFrom;
 
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
-    let dev = host::__wasi_device_t::try_from(filestat.st_dev)
-        .expect("FileStat::st_dev is trivially convertible to __wasi_device_t");
-    let ino = host::__wasi_inode_t::try_from(filestat.st_ino)
-        .expect("FileStat::st_ino is trivially convertible to __wasi_inode_t");
+    let dev =
+        host::__wasi_device_t::try_from(filestat.st_dev).map_err(|_| host::__WASI_EOVERFLOW)?;
+    let ino =
+        host::__wasi_inode_t::try_from(filestat.st_ino).map_err(|_| host::__WASI_EOVERFLOW)?;
 
-    host::__wasi_filestat_t {
+    Ok(host::__wasi_filestat_t {
         st_dev: dev,
         st_ino: ino,
         st_nlink: filestat.st_nlink as host::__wasi_linkcount_t,
@@ -243,7 +219,7 @@ pub fn filestat_from_nix(filestat: nix::sys::stat::FileStat) -> host::__wasi_fil
         st_ctim: filestat.st_ctime as host::__wasi_timestamp_t,
         st_mtim: filestat.st_mtime as host::__wasi_timestamp_t,
         st_filetype: filetype_from_nix(filetype),
-    }
+    })
 }
 
 #[cfg(target_os = "linux")]
@@ -276,10 +252,52 @@ pub fn dirent_from_host(
     Ok(entry)
 }
 
-pub fn path_from_raw(raw_path: &[u8]) -> OsString {
-    OsStr::from_bytes(raw_path).to_owned()
+/// `RawString` wraps `OsString` with Unix specific extensions
+/// enabling a common interface between different hosts for
+/// WASI raw string manipulation.
+#[derive(Debug, Clone)]
+pub struct RawString {
+    s: OsString,
 }
 
-pub fn path_to_raw<P: AsRef<OsStr>>(path: P) -> Vec<u8> {
-    path.as_ref().as_bytes().to_vec()
+impl RawString {
+    pub fn new(s: OsString) -> Self {
+        Self { s }
+    }
+
+    pub fn from_bytes(slice: &[u8]) -> Self {
+        Self {
+            s: OsStr::from_bytes(slice).to_owned(),
+        }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.s.as_bytes().to_vec()
+    }
+
+    pub fn contains(&self, c: &u8) -> bool {
+        self.s.as_bytes().contains(c)
+    }
+
+    pub fn ends_with(&self, c: &[u8]) -> bool {
+        self.s.as_bytes().ends_with(c)
+    }
+
+    pub fn push<T: AsRef<OsStr>>(&mut self, s: T) {
+        self.s.push(s)
+    }
+}
+
+impl AsRef<OsStr> for RawString {
+    fn as_ref(&self) -> &OsStr {
+        &self.s
+    }
+}
+
+impl From<&OsStr> for RawString {
+    fn from(os_str: &OsStr) -> Self {
+        Self {
+            s: os_str.to_owned(),
+        }
+    }
 }

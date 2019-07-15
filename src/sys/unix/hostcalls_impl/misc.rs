@@ -1,8 +1,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
-use super::host_impl;
-
 use crate::memory::*;
+use crate::sys::host_impl;
 use crate::{host, wasm32};
 
 use nix::convert_ioctl_res;
@@ -81,12 +80,13 @@ pub(crate) fn poll_oneoff(
         .iter()
         .filter_map(|event| match event {
             Ok(event) if event.type_ == wasm32::__WASI_EVENTTYPE_CLOCK => Some(ClockEventData {
-                delay: wasi_clock_to_relative_ns_delay(unsafe { event.u.clock }) / 1_000_000,
+                delay: wasi_clock_to_relative_ns_delay(unsafe { event.u.clock }).ok()? / 1_000_000,
                 userdata: event.userdata,
             }),
             _ => None,
         })
         .min_by_key(|event| event.delay);
+
     let fd_events: Vec<_> = input
         .iter()
         .filter_map(|event| match event {
@@ -147,26 +147,21 @@ pub(crate) fn poll_oneoff(
     Ok(events_count)
 }
 
-pub(crate) fn sched_yield() -> Result<(), host::__wasi_errno_t> {
-    unsafe { libc::sched_yield() };
-    Ok(())
-}
-
 // define the `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`
 nix::ioctl_read_bad!(fionread, nix::libc::FIONREAD, c_int);
 
 fn wasi_clock_to_relative_ns_delay(
     wasi_clock: host::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
-) -> u128 {
+) -> Result<u128, host::__wasi_errno_t> {
     if wasi_clock.flags != wasm32::__WASI_SUBSCRIPTION_CLOCK_ABSTIME {
-        return wasi_clock.timeout as u128;
+        return Ok(wasi_clock.timeout as u128);
     }
     let now: u128 = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Current date is before the epoch")
+        .map_err(|_| host::__WASI_ENOTCAPABLE)?
         .as_nanos();
     let deadline = wasi_clock.timeout as u128;
-    deadline.saturating_sub(now)
+    Ok(deadline.saturating_sub(now))
 }
 
 #[derive(Debug, Copy, Clone)]

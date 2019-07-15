@@ -55,7 +55,7 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
             .expect("testsuite filename should be representable as a string")
             .replace("-", "_")
     )?;
-    writeln!(out, "    use super::{{runtime, utils}};")?;
+    writeln!(out, "    use super::{{runtime, utils, setup_log}};")?;
     for dir_entry in dir_entries {
         write_testsuite_tests(out, dir_entry, testsuite)?;
     }
@@ -80,6 +80,7 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
         "    fn {}() -> Result<(), String> {{",
         avoid_keywords(&stemstr.replace("-", "_"))
     )?;
+    write!(out, "        setup_log();")?;
     write!(out, "        let path = std::path::Path::new(\"")?;
     // Write out the string with escape_debug to prevent special characters such
     // as backslash from being reinterpreted.
@@ -131,6 +132,8 @@ cfg_if::cfg_if! {
             if testsuite == "misc_testsuite" {
                 match name {
                     "big_random_buf" => false,
+                    "sched_yield" => false,
+                    "file_pread_pwrite" => false,
                     _ => true,
                 }
             } else {

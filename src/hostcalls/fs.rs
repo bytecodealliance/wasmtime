@@ -1,12 +1,14 @@
 #![allow(non_camel_case_types)]
 use super::return_enc_errno;
 use crate::ctx::WasiCtx;
+use crate::fdentry::Descriptor;
 use crate::memory::*;
-use crate::sys::host_impl;
-use crate::sys::hostcalls_impl;
+use crate::sys::host_impl::RawString;
+use crate::sys::{errno_from_host, hostcalls_impl};
 use crate::{host, wasm32};
 use log::trace;
 use std::convert::identity;
+use std::io::{self, Read, Write};
 
 use wasi_common_cbindgen::wasi_common_cbindgen;
 
@@ -21,12 +23,9 @@ pub fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wa
             return return_enc_errno(host::__WASI_ENOTSUP);
         }
     }
-    let ret = if let Some(mut fdent) = wasi_ctx.fds.remove(&fd) {
-        fdent.fd_object.needs_close = false;
-        match hostcalls_impl::fd_close(fdent) {
-            Ok(()) => host::__WASI_ESUCCESS,
-            Err(e) => e,
-        }
+    let ret = if let Some(mut fe) = wasi_ctx.fds.remove(&fd) {
+        fe.fd_object.needs_close = true;
+        host::__WASI_ESUCCESS
     } else {
         host::__WASI_EBADF
     };
@@ -44,9 +43,13 @@ pub fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__was
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
-    let ret = match hostcalls_impl::fd_datasync(fe) {
+    let file = match &*fe.fd_object.descriptor {
+        Descriptor::File(f) => f,
+        _ => return return_enc_errno(host::__WASI_EBADF),
+    };
+    let ret = match file.sync_data() {
         Ok(()) => host::__WASI_ESUCCESS,
-        Err(e) => e,
+        Err(err) => err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host),
     };
 
     return_enc_errno(ret)
@@ -81,13 +84,18 @@ pub fn fd_pread(
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
+    let file = match &*fe.fd_object.descriptor {
+        Descriptor::File(f) => f,
+        _ => return return_enc_errno(host::__WASI_EBADF),
+    };
+
     let offset = dec_filesize(offset);
     if offset > i64::max_value() as u64 {
         return return_enc_errno(host::__WASI_EIO);
     }
     let buf_size = iovs.iter().map(|v| v.buf_len).sum();
     let mut buf = vec![0; buf_size];
-    let host_nread = match hostcalls_impl::fd_pread(fe, &mut buf, offset) {
+    let host_nread = match hostcalls_impl::fd_pread(file, &mut buf, offset) {
         Ok(host_nread) => host_nread,
         Err(e) => return return_enc_errno(e),
     };
@@ -142,6 +150,11 @@ pub fn fd_pwrite(
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
+    let file = match &*fe.fd_object.descriptor {
+        Descriptor::File(f) => f,
+        _ => return return_enc_errno(host::__WASI_EBADF),
+    };
+
     let offset = dec_filesize(offset);
     if offset > i64::max_value() as u64 {
         return return_enc_errno(host::__WASI_EIO);
@@ -153,7 +166,7 @@ pub fn fd_pwrite(
             std::slice::from_raw_parts(iov.buf as *const u8, iov.buf_len)
         });
     }
-    let host_nwritten = match hostcalls_impl::fd_pwrite(fe, &buf, offset) {
+    let host_nwritten = match hostcalls_impl::fd_pwrite(file, &buf, offset) {
         Ok(host_nwritten) => host_nwritten,
         Err(e) => return return_enc_errno(e),
     };
@@ -189,22 +202,28 @@ pub fn fd_read(
         Ok(iovs) => iovs,
         Err(e) => return return_enc_errno(e),
     };
-
-    let fe = match wasi_ctx.get_fd_entry(fd, host::__WASI_RIGHT_FD_READ, 0) {
+    let fe = match wasi_ctx.get_fd_entry_mut(fd, host::__WASI_RIGHT_FD_READ, 0) {
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
+    let mut iovs: Vec<io::IoSliceMut> = iovs
+        .iter_mut()
+        .map(|vec| unsafe { host::iovec_to_host_mut(vec) })
+        .collect();
 
-    let host_nread = match hostcalls_impl::fd_read(fe, &mut iovs) {
-        Ok(host_nread) => host_nread,
-        Err(e) => return return_enc_errno(e),
+    let maybe_host_nread = match &mut *fe.fd_object.descriptor {
+        Descriptor::File(f) => f.read_vectored(&mut iovs),
+        Descriptor::Stdin => io::stdin().lock().read_vectored(&mut iovs),
+        _ => return return_enc_errno(host::__WASI_EBADF),
     };
 
-    if host_nread == 0 {
-        // we hit eof, so remove the fdentry from the context
-        let mut fe = wasi_ctx.fds.remove(&fd).expect("file entry is still there");
-        fe.fd_object.needs_close = false;
-    }
+    let host_nread = match maybe_host_nread {
+        Ok(host_nread) => host_nread,
+        Err(err) => {
+            let err = err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host);
+            return return_enc_errno(err);
+        }
+    };
 
     trace!("     | *nread={:?}", host_nread);
 
@@ -324,7 +343,7 @@ pub fn fd_fdstat_get(
     };
 
     let ret = if let Some(fe) = wasi_ctx.fds.get(&host_fd) {
-        host_fdstat.fs_filetype = fe.fd_object.ty;
+        host_fdstat.fs_filetype = fe.fd_object.file_type;
         host_fdstat.fs_rights_base = fe.rights_base;
         host_fdstat.fs_rights_inheriting = fe.rights_inheriting;
         host_fdstat.fs_flags = match hostcalls_impl::fd_fdstat_get(fe) {
@@ -406,9 +425,13 @@ pub fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_er
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
-    let ret = match hostcalls_impl::fd_sync(fe) {
+    let file = match &*fe.fd_object.descriptor {
+        Descriptor::File(f) => f,
+        _ => return return_enc_errno(host::__WASI_EBADF),
+    };
+    let ret = match file.sync_all() {
         Ok(()) => host::__WASI_ESUCCESS,
-        Err(e) => e,
+        Err(err) => err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host),
     };
 
     return_enc_errno(ret)
@@ -416,7 +439,7 @@ pub fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_er
 
 #[wasi_common_cbindgen]
 pub fn fd_write(
-    wasi_ctx: &WasiCtx,
+    wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
     iovs_ptr: wasm32::uintptr_t,
@@ -436,13 +459,28 @@ pub fn fd_write(
         Ok(iovs) => iovs,
         Err(e) => return return_enc_errno(e),
     };
-    let fe = match wasi_ctx.get_fd_entry(fd, host::__WASI_RIGHT_FD_WRITE, 0) {
+    let fe = match wasi_ctx.get_fd_entry_mut(fd, host::__WASI_RIGHT_FD_WRITE, 0) {
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
-    let host_nwritten = match hostcalls_impl::fd_write(fe, &iovs) {
+    let iovs: Vec<io::IoSlice> = iovs
+        .iter()
+        .map(|vec| unsafe { host::iovec_to_host(vec) })
+        .collect();
+
+    let maybe_host_nwritten = match &mut *fe.fd_object.descriptor {
+        Descriptor::File(f) => f.write_vectored(&iovs),
+        Descriptor::Stdin => return return_enc_errno(host::__WASI_EBADF),
+        Descriptor::Stdout => io::stdout().lock().write_vectored(&iovs),
+        Descriptor::Stderr => io::stderr().lock().write_vectored(&iovs),
+    };
+
+    let host_nwritten = match maybe_host_nwritten {
         Ok(host_nwritten) => host_nwritten,
-        Err(e) => return return_enc_errno(e),
+        Err(err) => {
+            let err = err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host);
+            return return_enc_errno(err);
+        }
     };
 
     trace!("     | *nwritten={:?}", host_nwritten);
@@ -499,19 +537,44 @@ pub fn fd_allocate(
 
     let host_fd = dec_fd(fd);
     let rights = host::__WASI_RIGHT_FD_ALLOCATE;
+    let offset = dec_filesize(offset);
+    let len = dec_filesize(len);
+
     let fe = match wasi_ctx.get_fd_entry(host_fd, rights, 0) {
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
-    let offset = dec_filesize(offset);
-    let len = dec_filesize(len);
-
-    let ret = match hostcalls_impl::fd_allocate(fe, offset, len) {
-        Ok(()) => host::__WASI_ESUCCESS,
-        Err(e) => e,
+    let f = match &*fe.fd_object.descriptor {
+        Descriptor::File(f) => f,
+        _ => return return_enc_errno(host::__WASI_EBADF),
     };
 
-    return_enc_errno(ret)
+    let metadata = match f
+        .metadata()
+        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+    {
+        Ok(metadata) => metadata,
+        Err(e) => return return_enc_errno(e),
+    };
+    let current_size = metadata.len();
+    let wanted_size = match offset.checked_add(len) {
+        Some(wanted_size) => wanted_size,
+        None => return return_enc_errno(host::__WASI_E2BIG),
+    };
+    if wanted_size > i64::max_value() as u64 {
+        return return_enc_errno(host::__WASI_E2BIG);
+    }
+
+    if wanted_size > current_size {
+        if let Err(e) = f
+            .set_len(wanted_size)
+            .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+        {
+            return return_enc_errno(e);
+        }
+    }
+
+    return_enc_errno(host::__WASI_ESUCCESS)
 }
 
 #[wasi_common_cbindgen]
@@ -531,7 +594,7 @@ pub fn path_create_directory(
 
     let dirfd = dec_fd(dirfd);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -571,11 +634,11 @@ pub fn path_link(
     let old_dirfd = dec_fd(old_dirfd);
     let new_dirfd = dec_fd(new_dirfd);
     let old_path = match dec_slice_of::<u8>(memory, old_path_ptr, old_path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
     let new_path = match dec_slice_of::<u8>(memory, new_path_ptr, new_path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -646,7 +709,7 @@ pub fn path_open(
     let needed_inheriting = fs_rights_base | fs_rights_inheriting;
 
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -767,7 +830,7 @@ pub fn path_readlink(
     };
     let dirfd = dec_fd(dirfd);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice).to_owned(),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -780,7 +843,7 @@ pub fn path_readlink(
     let host_bufused = match hostcalls_impl::path_readlink(
         wasi_ctx,
         dirfd,
-        path.as_os_str(),
+        &path,
         host::__WASI_RIGHT_PATH_READLINK,
         &mut buf,
     ) {
@@ -822,11 +885,11 @@ pub fn path_rename(
     let old_dirfd = dec_fd(old_dirfd);
     let new_dirfd = dec_fd(new_dirfd);
     let old_path = match dec_slice_of::<u8>(memory, old_path_ptr, old_path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
     let new_path = match dec_slice_of::<u8>(memory, new_path_ptr, new_path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -963,7 +1026,7 @@ pub fn path_filestat_get(
     let dirfd = dec_fd(dirfd);
     let dirflags = dec_lookupflags(dirflags);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -1009,7 +1072,7 @@ pub fn path_filestat_set_times(
     let dirfd = dec_fd(dirfd);
     let dirflags = dec_lookupflags(dirflags);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -1051,11 +1114,11 @@ pub fn path_symlink(
 
     let dirfd = dec_fd(dirfd);
     let old_path = match dec_slice_of::<u8>(memory, old_path_ptr, old_path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
     let new_path = match dec_slice_of::<u8>(memory, new_path_ptr, new_path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -1089,7 +1152,7 @@ pub fn path_unlink_file(
 
     let dirfd = dec_fd(dirfd);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -1125,7 +1188,7 @@ pub fn path_remove_directory(
 
     let dirfd = dec_fd(dirfd);
     let path = match dec_slice_of::<u8>(memory, path_ptr, path_len) {
-        Ok(slice) => host_impl::path_from_raw(slice),
+        Ok(slice) => RawString::from_bytes(slice),
         Err(e) => return return_enc_errno(e),
     };
 
@@ -1159,7 +1222,7 @@ pub fn fd_prestat_get(
     let ret = match wasi_ctx.get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
         Ok(fe) => {
             if let Some(po_path) = &fe.preopen_path {
-                if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
+                if fe.fd_object.file_type != host::__WASI_FILETYPE_DIRECTORY {
                     return return_enc_errno(host::__WASI_ENOTDIR);
                 }
                 enc_prestat_byref(
@@ -1169,7 +1232,7 @@ pub fn fd_prestat_get(
                         pr_type: host::__WASI_PREOPENTYPE_DIR,
                         u: host::__wasi_prestat_t___wasi_prestat_u {
                             dir: host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
-                                pr_name_len: host_impl::path_to_raw(po_path).len(),
+                                pr_name_len: RawString::from(po_path.as_ref()).to_bytes().len(),
                             },
                         },
                     },
@@ -1206,10 +1269,10 @@ pub fn fd_prestat_dir_name(
     let ret = match wasi_ctx.get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN.into(), 0) {
         Ok(fe) => {
             if let Some(po_path) = &fe.preopen_path {
-                if fe.fd_object.ty != host::__WASI_FILETYPE_DIRECTORY {
+                if fe.fd_object.file_type != host::__WASI_FILETYPE_DIRECTORY {
                     return return_enc_errno(host::__WASI_ENOTDIR);
                 }
-                let path_bytes = host_impl::path_to_raw(po_path);
+                let path_bytes = RawString::from(po_path.as_ref()).to_bytes();
                 if path_bytes.len() > dec_usize(path_len) {
                     return return_enc_errno(host::__WASI_ENAMETOOLONG);
                 }

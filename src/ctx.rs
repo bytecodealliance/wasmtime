@@ -1,13 +1,10 @@
-use crate::host;
-
-use crate::sys::dev_null;
-use crate::sys::fdentry::FdEntry;
-
-use failure::{bail, format_err, Error};
+use super::fdentry::FdEntry;
+use super::host;
+use super::sys::{dev_null, errno_from_host};
+use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::fs::File;
-use std::io::{stderr, stdin, stdout};
 use std::path::{Path, PathBuf};
 
 pub struct WasiCtxBuilder {
@@ -19,7 +16,7 @@ pub struct WasiCtxBuilder {
 
 impl WasiCtxBuilder {
     /// Builder for a new `WasiCtx`.
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, host::__wasi_errno_t> {
         let mut builder = Self {
             fds: HashMap::new(),
             preopens: HashMap::new(),
@@ -27,77 +24,66 @@ impl WasiCtxBuilder {
             env: HashMap::new(),
         };
 
-        builder.fds.insert(0, FdEntry::from_file(dev_null()));
-        builder.fds.insert(1, FdEntry::from_file(dev_null()));
-        builder.fds.insert(2, FdEntry::from_file(dev_null()));
+        builder.fds.insert(0, FdEntry::from(dev_null()?)?);
+        builder.fds.insert(1, FdEntry::from(dev_null()?)?);
+        builder.fds.insert(2, FdEntry::from(dev_null()?)?);
 
-        builder
+        Ok(builder)
     }
 
-    pub fn args(mut self, args: &[&str]) -> Self {
-        self.args = args
-            .into_iter()
-            .map(|arg| CString::new(*arg).expect("argument can be converted to a CString"))
+    pub fn args<S: AsRef<str>>(
+        mut self,
+        args: impl Iterator<Item = S>,
+    ) -> Result<Self, host::__wasi_errno_t> {
+        let args: Result<Vec<CString>, _> = args
+            .map(|arg| CString::new(arg.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE))
             .collect();
-        self
+        self.args = args?;
+        Ok(self)
     }
 
-    pub fn arg(mut self, arg: &str) -> Self {
+    pub fn arg(mut self, arg: &str) -> Result<Self, host::__wasi_errno_t> {
         self.args
-            .push(CString::new(arg).expect("argument can be converted to a CString"));
-        self
+            .push(CString::new(arg).map_err(|_| host::__WASI_ENOTCAPABLE)?);
+        Ok(self)
     }
 
-    pub fn c_args<S: AsRef<CStr>>(mut self, args: &[S]) -> Self {
-        self.args = args
-            .into_iter()
-            .map(|arg| arg.as_ref().to_owned())
-            .collect();
-        self
+    pub fn inherit_stdio(mut self) -> Result<Self, host::__wasi_errno_t> {
+        self.fds.insert(0, FdEntry::duplicate_stdin()?);
+        self.fds.insert(1, FdEntry::duplicate_stdout()?);
+        self.fds.insert(2, FdEntry::duplicate_stderr()?);
+        Ok(self)
     }
 
-    pub fn c_arg<S: AsRef<CStr>>(mut self, arg: S) -> Self {
-        self.args.push(arg.as_ref().to_owned());
-        self
+    pub fn inherit_env(self) -> Result<Self, host::__wasi_errno_t> {
+        self.envs(std::env::vars())
     }
 
-    pub fn inherit_stdio(mut self) -> Self {
-        self.fds.insert(0, FdEntry::duplicate(&stdin()));
-        self.fds.insert(1, FdEntry::duplicate(&stdout()));
-        self.fds.insert(2, FdEntry::duplicate(&stderr()));
-        self
+    pub fn env<S: AsRef<str>>(mut self, k: S, v: S) -> Result<Self, host::__wasi_errno_t> {
+        self.env.insert(
+            CString::new(k.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE)?,
+            CString::new(v.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE)?,
+        );
+        Ok(self)
     }
 
-    pub fn inherit_env(mut self) -> Self {
-        self.env = std::env::vars()
-            .map(|(k, v)| {
-                // TODO: handle errors, and possibly assert that the key is valid per POSIX
-                (
-                    CString::new(k).expect("environment key can be converted to a CString"),
-                    CString::new(v).expect("environment value can be converted to a CString"),
-                )
+    pub fn envs<S: AsRef<str>, T: Borrow<(S, S)>>(
+        mut self,
+        envs: impl Iterator<Item = T>,
+    ) -> Result<Self, host::__wasi_errno_t> {
+        let env: Result<HashMap<CString, CString>, _> = envs
+            .map(|t| {
+                let (k, v) = t.borrow();
+                let k = CString::new(k.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE);
+                let v = CString::new(v.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE);
+                match (k, v) {
+                    (Ok(k), Ok(v)) => Ok((k, v)),
+                    _ => Err(host::__WASI_ENOTCAPABLE),
+                }
             })
             .collect();
-        self
-    }
-
-    pub fn env(mut self, k: &str, v: &str) -> Self {
-        self.env.insert(
-            // TODO: handle errors, and possibly assert that the key is valid per POSIX
-            CString::new(k).expect("environment key can be converted to a CString"),
-            CString::new(v).expect("environment value can be converted to a CString"),
-        );
-        self
-    }
-
-    pub fn c_env<S, T>(mut self, k: S, v: T) -> Self
-    where
-        S: AsRef<CStr>,
-        T: AsRef<CStr>,
-    {
-        self.env
-            .insert(k.as_ref().to_owned(), v.as_ref().to_owned());
-        self
+        self.env = env?;
+        Ok(self)
     }
 
     pub fn preopened_dir<P: AsRef<Path>>(mut self, dir: File, guest_path: P) -> Self {
@@ -105,20 +91,22 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<WasiCtx, Error> {
+    pub fn build(mut self) -> Result<WasiCtx, host::__wasi_errno_t> {
         // startup code starts looking at fd 3 for preopens
         let mut preopen_fd = 3;
         for (guest_path, dir) in self.preopens {
-            if !dir.metadata()?.is_dir() {
-                bail!("preopened file is not a directory");
+            if !dir
+                .metadata()
+                .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?
+                .is_dir()
+            {
+                return Err(host::__WASI_EBADF);
             }
 
             while self.fds.contains_key(&preopen_fd) {
-                preopen_fd = preopen_fd
-                    .checked_add(1)
-                    .ok_or(format_err!("not enough file handles"))?;
+                preopen_fd = preopen_fd.checked_add(1).ok_or(host::__WASI_ENFILE)?;
             }
-            let mut fe = FdEntry::from_file(dir);
+            let mut fe = FdEntry::from(dir)?;
             fe.preopen_path = Some(guest_path);
             self.fds.insert(preopen_fd, fe);
             preopen_fd += 1;
@@ -159,13 +147,12 @@ impl WasiCtx {
     /// - Environment variables are inherited from the host process.
     ///
     /// To override these behaviors, use `WasiCtxBuilder`.
-    pub fn new(args: &[&str]) -> Self {
+    pub fn new<S: AsRef<str>>(args: impl Iterator<Item = S>) -> Result<Self, host::__wasi_errno_t> {
         WasiCtxBuilder::new()
-            .args(args)
-            .inherit_stdio()
-            .inherit_env()
-            .build()
-            .expect("default options don't fail")
+            .and_then(|ctx| ctx.args(args))
+            .and_then(|ctx| ctx.inherit_stdio())
+            .and_then(|ctx| ctx.inherit_env())
+            .and_then(|ctx| ctx.build())
     }
 
     pub fn get_fd_entry(
@@ -175,15 +162,34 @@ impl WasiCtx {
         rights_inheriting: host::__wasi_rights_t,
     ) -> Result<&FdEntry, host::__wasi_errno_t> {
         if let Some(fe) = self.fds.get(&fd) {
-            // validate rights
-            if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0
-            {
-                Err(host::__WASI_ENOTCAPABLE)
-            } else {
-                Ok(fe)
-            }
+            Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
         } else {
             Err(host::__WASI_EBADF)
+        }
+    }
+
+    pub fn get_fd_entry_mut(
+        &mut self,
+        fd: host::__wasi_fd_t,
+        rights_base: host::__wasi_rights_t,
+        rights_inheriting: host::__wasi_rights_t,
+    ) -> Result<&mut FdEntry, host::__wasi_errno_t> {
+        if let Some(fe) = self.fds.get_mut(&fd) {
+            Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
+        } else {
+            Err(host::__WASI_EBADF)
+        }
+    }
+
+    fn validate_rights(
+        fe: &FdEntry,
+        rights_base: host::__wasi_rights_t,
+        rights_inheriting: host::__wasi_rights_t,
+    ) -> Result<(), host::__wasi_errno_t> {
+        if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0 {
+            Err(host::__WASI_ENOTCAPABLE)
+        } else {
+            Ok(())
         }
     }
 

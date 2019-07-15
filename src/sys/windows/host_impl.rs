@@ -33,28 +33,6 @@ pub fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_errno_t {
     }
 }
 
-pub unsafe fn ciovec_to_win<'a>(ciovec: &'a host::__wasi_ciovec_t) -> winx::io::IoVec<'a> {
-    let slice = slice::from_raw_parts(ciovec.buf as *const u8, ciovec.buf_len);
-    winx::io::IoVec::new(slice)
-}
-
-pub unsafe fn ciovec_to_win_mut<'a>(
-    ciovec: &'a mut host::__wasi_ciovec_t,
-) -> winx::io::IoVecMut<'a> {
-    let slice = slice::from_raw_parts_mut(ciovec.buf as *mut u8, ciovec.buf_len);
-    winx::io::IoVecMut::new(slice)
-}
-
-pub unsafe fn iovec_to_win<'a>(iovec: &'a host::__wasi_iovec_t) -> winx::io::IoVec<'a> {
-    let slice = slice::from_raw_parts(iovec.buf as *const u8, iovec.buf_len);
-    winx::io::IoVec::new(slice)
-}
-
-pub unsafe fn iovec_to_win_mut<'a>(iovec: &'a mut host::__wasi_iovec_t) -> winx::io::IoVecMut<'a> {
-    let slice = slice::from_raw_parts_mut(iovec.buf as *mut u8, iovec.buf_len);
-    winx::io::IoVecMut::new(slice)
-}
-
 pub fn win_from_fdflags(
     fdflags: host::__wasi_fdflags_t,
 ) -> (winx::file::AccessRight, winx::file::FlagsAndAttributes) {
@@ -129,16 +107,61 @@ pub fn win_from_oflags(
     (win_disp, win_flags_attrs)
 }
 
-pub fn path_from_raw(raw_path: &[u8]) -> OsString {
-    OsString::from_wide(&raw_path.iter().map(|&x| x as u16).collect::<Vec<u16>>())
+/// `RawString` wraps `OsString` with Windows specific extensions
+/// enabling a common interface between different hosts for
+/// WASI raw string manipulation.
+#[derive(Debug, Clone)]
+pub struct RawString {
+    s: OsString,
 }
 
-pub fn path_to_raw<P: AsRef<OsStr>>(path: P) -> Vec<u8> {
-    path.as_ref()
-        .encode_wide()
-        .map(u16::to_le_bytes)
-        .fold(Vec::new(), |mut acc, bytes| {
-            acc.extend_from_slice(&bytes);
-            acc
-        })
+impl RawString {
+    pub fn new(s: OsString) -> Self {
+        Self { s }
+    }
+
+    pub fn from_bytes(slice: &[u8]) -> Self {
+        Self {
+            s: OsString::from_wide(&slice.iter().map(|&x| x as u16).collect::<Vec<u16>>()),
+        }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.s
+            .encode_wide()
+            .map(u16::to_le_bytes)
+            .fold(Vec::new(), |mut acc, bytes| {
+                acc.extend_from_slice(&bytes);
+                acc
+            })
+    }
+
+    pub fn contains(&self, c: &u8) -> bool {
+        let c = u16::from_le_bytes([*c, 0u8]);
+        self.s.encode_wide().find(|&x| x == c).is_some()
+    }
+
+    pub fn ends_with(&self, cs: &[u8]) -> bool {
+        let cs = cs.iter().map(|c| u16::from_le_bytes([*c, 0u8])).rev();
+        let ss: Vec<u16> = self.s.encode_wide().collect();
+        ss.into_iter().rev().zip(cs).all(|(l, r)| l == r)
+    }
+
+    pub fn push<T: AsRef<OsStr>>(&mut self, s: T) {
+        self.s.push(s)
+    }
+}
+
+impl AsRef<OsStr> for RawString {
+    fn as_ref(&self) -> &OsStr {
+        &self.s
+    }
+}
+
+impl From<&OsStr> for RawString {
+    fn from(os_str: &OsStr) -> Self {
+        Self {
+            s: os_str.to_owned(),
+        }
+    }
 }

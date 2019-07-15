@@ -21,6 +21,7 @@
 )]
 
 mod ctx;
+mod fdentry;
 mod sys;
 
 pub mod host;

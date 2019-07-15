@@ -1,16 +1,17 @@
-pub(crate) mod fdentry;
+pub(crate) mod fdentry_impl;
 pub(crate) mod host_impl;
 pub(crate) mod hostcalls_impl;
 
+use crate::host;
+use crate::sys::errno_from_host;
 use std::fs::File;
-use std::io;
 use std::path::Path;
 
-pub(crate) fn dev_null() -> File {
-    File::open("NUL").expect("failed to open NUL")
+pub(crate) fn dev_null() -> Result<File, host::__wasi_errno_t> {
+    File::open("NUL").map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
 }
 
-pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
+pub fn preopen_dir<P: AsRef<Path>>(path: P) -> Result<File, host::__wasi_errno_t> {
     use std::fs::OpenOptions;
     use std::os::windows::fs::OpenOptionsExt;
     use winapi::um::winbase::FILE_FLAG_BACKUP_SEMANTICS;
@@ -24,4 +25,5 @@ pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
         .read(true)
         .attributes(FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)
+        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
 }

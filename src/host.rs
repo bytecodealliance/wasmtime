@@ -1,9 +1,11 @@
 //! WASI host types as defined in host. This file was originally generated
 //! by running bindgen over wasi/core.h, and the content
 //! still largely reflects that.
-
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+
+use std::{io, slice};
+
 pub type void = ::std::os::raw::c_void;
 
 pub type __wasi_advice_t = u8;
@@ -471,6 +473,26 @@ pub struct __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clo
 #[derive(Debug, Copy, Clone)]
 pub struct __wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t {
     pub fd: __wasi_fd_t,
+}
+
+pub unsafe fn ciovec_to_host<'a>(ciovec: &'a __wasi_ciovec_t) -> io::IoSlice<'a> {
+    let slice = slice::from_raw_parts(ciovec.buf as *const u8, ciovec.buf_len);
+    io::IoSlice::new(slice)
+}
+
+pub unsafe fn ciovec_to_host_mut<'a>(ciovec: &'a mut __wasi_ciovec_t) -> io::IoSliceMut<'a> {
+    let slice = slice::from_raw_parts_mut(ciovec.buf as *mut u8, ciovec.buf_len);
+    io::IoSliceMut::new(slice)
+}
+
+pub unsafe fn iovec_to_host<'a>(iovec: &'a __wasi_iovec_t) -> io::IoSlice<'a> {
+    let slice = slice::from_raw_parts(iovec.buf as *const u8, iovec.buf_len);
+    io::IoSlice::new(slice)
+}
+
+pub unsafe fn iovec_to_host_mut<'a>(iovec: &'a mut __wasi_iovec_t) -> io::IoSliceMut<'a> {
+    let slice = slice::from_raw_parts_mut(iovec.buf as *mut u8, iovec.buf_len);
+    io::IoSliceMut::new(slice)
 }
 
 #[cfg(test)]
