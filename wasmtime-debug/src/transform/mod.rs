@@ -2,6 +2,7 @@ use crate::gc::build_dependencies;
 use crate::DebugInfoData;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use failure::Error;
+use simulate::generate_simulated_dwarf;
 use std::collections::HashSet;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
@@ -22,7 +23,9 @@ mod attr;
 mod expression;
 mod line_program;
 mod range_info_builder;
+mod simulate;
 mod unit;
+mod utils;
 
 pub(crate) trait Reader: gimli::Reader<Offset = usize> {}
 
@@ -78,6 +81,7 @@ pub fn transform_dwarf(
 
     let out_line_strings = write::LineStringTable::default();
 
+    let mut translated = HashSet::new();
     let mut iter = di.dwarf.debug_info.units();
     while let Some(unit) = iter.next().unwrap_or(None) {
         let unit = di.dwarf.unit(unit)?;
@@ -90,8 +94,20 @@ pub fn transform_dwarf(
             &vmctx_info,
             &mut out_units,
             &mut out_strings,
+            &mut translated,
         )?;
     }
+
+    generate_simulated_dwarf(
+        &addr_tr,
+        di,
+        &vmctx_info,
+        &ranges,
+        &translated,
+        &out_encoding,
+        &mut out_units,
+        &mut out_strings,
+    )?;
 
     Ok(write::Dwarf {
         units: out_units,

@@ -609,7 +609,9 @@ mod tests {
         let at = AddressTransform::new(
             &input,
             &WasmFileInfo {
+                path: None,
                 code_section_offset: 1,
+                funcs: Box::new([]),
             },
         );
 
