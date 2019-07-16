@@ -44,7 +44,7 @@ file-per-thread-logger = "0.1.2"
 indicatif = "0.11.0"
 
 [features]
-default = ["disas", "wasm"]
+default = ["disas", "wasm", "cranelift-codegen/all-arch"]
 disas = ["capstone"]
 wasm = ["wabt", "cranelift-wasm"]
 basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-blocks", "cranelift-wasm/basic-blocks"]
