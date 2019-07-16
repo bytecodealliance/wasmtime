@@ -4,6 +4,7 @@
 use crate::instance::Instance;
 use core::any::Any;
 use core::{ptr, u32};
+use wasmtime_environ::BuiltinFunctionIndex;
 
 /// An imported function.
 #[derive(Debug, Copy, Clone)]
@@ -469,6 +470,33 @@ impl Default for VMCallerCheckedAnyfunc {
             type_index: VMSharedSignatureIndex::new(u32::MAX),
             vmctx: ptr::null_mut(),
         }
+    }
+}
+
+/// An array that stores addresses of builtin functions. We translate code
+/// to use indirect calls. This way, we don't have to patch the code.
+#[repr(C)]
+pub struct VMBuiltinFunctionsArray {
+    ptrs: [usize; Self::len()],
+}
+
+impl VMBuiltinFunctionsArray {
+    pub const fn len() -> usize {
+        BuiltinFunctionIndex::builtin_functions_total_number() as usize
+    }
+
+    pub fn initialized() -> Self {
+        use crate::libcalls::*;
+        let mut ptrs = [0; Self::len()];
+        ptrs[BuiltinFunctionIndex::get_memory32_grow_index().index() as usize] =
+            wasmtime_memory32_grow as usize;
+        ptrs[BuiltinFunctionIndex::get_imported_memory32_grow_index().index() as usize] =
+            wasmtime_imported_memory32_grow as usize;
+        ptrs[BuiltinFunctionIndex::get_memory32_size_index().index() as usize] =
+            wasmtime_memory32_size as usize;
+        ptrs[BuiltinFunctionIndex::get_imported_memory32_size_index().index() as usize] =
+            wasmtime_imported_memory32_size as usize;
+        Self { ptrs }
     }
 }
 

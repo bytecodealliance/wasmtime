@@ -11,9 +11,9 @@ use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 use crate::table::Table;
 use crate::traphandlers::wasmtime_call;
 use crate::vmcontext::{
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
-    VMTableImport,
+    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
+    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
+    VMTableDefinition, VMTableImport,
 };
 use core::any::Any;
 use core::borrow::Borrow;
@@ -357,6 +357,15 @@ impl Instance {
             (&mut self.vmctx as *mut VMContext as *mut u8)
                 .add(usize::try_from(self.offsets.vmctx_globals_begin()).unwrap())
                 as *mut VMGlobalDefinition
+        }
+    }
+
+    /// Return a pointer to the `VMBuiltinFunctionsArray`.
+    fn builtin_functions_ptr(&mut self) -> *mut VMBuiltinFunctionsArray {
+        unsafe {
+            (&mut self.vmctx as *mut VMContext as *mut u8)
+                .add(usize::try_from(self.offsets.vmctx_builtin_functions_begin()).unwrap())
+                as *mut VMBuiltinFunctionsArray
         }
     }
 
@@ -722,6 +731,10 @@ impl InstanceHandle {
                 vmctx_globals.values().as_slice().as_ptr(),
                 instance.globals_ptr() as *mut VMGlobalDefinition,
                 vmctx_globals.len(),
+            );
+            ptr::write(
+                instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
+                VMBuiltinFunctionsArray::initialized(),
             );
         }
 
