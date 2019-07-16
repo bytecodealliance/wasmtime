@@ -1,6 +1,6 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use crate::environ::{ModuleEnvironment, WasmResult};
+use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::sections_translator::{
     parse_code_section, parse_data_section, parse_element_section, parse_export_section,
     parse_function_section, parse_global_section, parse_import_section, parse_memory_section,
@@ -137,6 +137,14 @@ pub fn translate_module<'data>(
     if let SectionCode::Data = section.code {
         let data = section.get_data_section_reader()?;
         parse_data_section(data, environ)?;
+    }
+
+    reader.skip_custom_sections()?;
+    if !reader.eof() {
+        return Err(WasmError::InvalidWebAssembly {
+            message: "sections must occur at most once and in the prescribed order",
+            offset: reader.current_position(),
+        });
     }
 
     Ok(())
