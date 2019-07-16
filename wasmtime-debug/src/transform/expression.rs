@@ -42,9 +42,13 @@ impl Clone for CompiledExpressionPart {
 
 impl CompiledExpression {
     pub fn vmctx() -> CompiledExpression {
+        CompiledExpression::from_label(get_vmctx_value_label())
+    }
+
+    pub fn from_label(label: ValueLabel) -> CompiledExpression {
         CompiledExpression {
             parts: vec![
-                CompiledExpressionPart::Local(get_vmctx_value_label()),
+                CompiledExpressionPart::Local(label),
                 CompiledExpressionPart::Code(vec![gimli::constants::DW_OP_stack_value.0 as u8]),
             ],
             need_deref: false,
