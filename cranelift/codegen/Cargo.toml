@@ -30,7 +30,7 @@ serde = { version = "1.0.94", features = ["derive"], optional = true }
 cranelift-codegen-meta = { path = "meta", version = "0.40.0", default-features = false }
 
 [features]
-default = ["std", "x86", "arm32", "arm64", "riscv"]
+default = ["std"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
@@ -54,10 +54,19 @@ core = [
 testing_hooks = []
 
 # ISA targets for which we should build.
+# If no ISA targets are explicitly enabled, the ISA target for the host machine is enabled.
 x86 = []
 arm32 = []
 arm64 = []
 riscv = []
+
+# Option to enable all architectures.
+all-arch = [
+    "x86",
+    "arm32",
+    "arm64",
+    "riscv"
+]
 
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = ["serde"]
