@@ -268,14 +268,38 @@ impl PerCpuModeEncodings {
     }
 
     /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand binding) has already happened
-    fn enc_32_64_isap(
+    fn enc_32_64_maybe_isap(
         &mut self,
         inst: BoundInstruction,
         template: Template,
-        isap: SettingPredicateNumber,
+        isap: Option<SettingPredicateNumber>,
     ) {
-        self.enc32_isap(inst.clone(), template.clone(), isap);
-        self.enc64_isap(inst, template, isap);
+        self.enc32_maybe_isap(inst.clone(), template.clone(), isap);
+        self.enc64_maybe_isap(inst, template, isap);
+    }
+
+    fn enc32_maybe_isap(
+        &mut self,
+        inst: BoundInstruction,
+        template: Template,
+        isap: Option<SettingPredicateNumber>,
+    ) {
+        match isap {
+            None => self.enc32(inst, template),
+            Some(isap) => self.enc32_isap(inst, template, isap),
+        }
+    }
+
+    fn enc64_maybe_isap(
+        &mut self,
+        inst: BoundInstruction,
+        template: Template,
+        isap: Option<SettingPredicateNumber>,
+    ) {
+        match isap {
+            None => self.enc64(inst, template),
+            Some(isap) => self.enc64_isap(inst, template, isap),
+        }
     }
 }
 
@@ -559,7 +583,6 @@ pub fn define(
     let use_popcnt = settings.predicate_by_name("use_popcnt");
     let use_lzcnt = settings.predicate_by_name("use_lzcnt");
     let use_bmi1 = settings.predicate_by_name("use_bmi1");
-    let use_sse2 = settings.predicate_by_name("use_sse2");
     let use_ssse3 = settings.predicate_by_name("use_ssse3");
     let use_sse41 = settings.predicate_by_name("use_sse41");
 
@@ -1648,8 +1671,8 @@ pub fn define(
         let template = rec_r_ib_unsigned_fpr
             .nonrex()
             .opcodes(vec![0x66, 0x0f, 0x70]);
-        e.enc32_isap(instruction.clone(), template.clone(), use_sse2);
-        e.enc64_isap(instruction, template, use_sse2);
+        e.enc32(instruction.clone(), template.clone());
+        e.enc64(instruction, template);
     }
 
     // SIMD scalar_to_vector; this uses MOV to copy the scalar value to an XMM register; according
@@ -1662,47 +1685,49 @@ pub fn define(
         let template = rec_frurm.opcodes(vec![0x66, 0x0f, 0x6e]); // MOVD/MOVQ
         if ty.lane_bits() < 64 {
             // no 32-bit encodings for 64-bit widths
-            e.enc32_isap(instruction.clone(), template.clone(), use_sse2);
+            e.enc32(instruction.clone(), template.clone());
         }
-        e.enc_x86_64_isap(instruction, template, use_sse2);
+        e.enc_x86_64(instruction, template);
     }
 
     // SIMD insertlane
-    let mut insertlane_mapping: HashMap<u64, (Vec<u8>, SettingPredicateNumber)> = HashMap::new();
-    insertlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x20], use_sse41)); // PINSRB
-    insertlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc4], use_sse2)); // PINSRW
-    insertlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], use_sse41)); // PINSRD
-    insertlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], use_sse41)); // PINSRQ, only x86_64
+    let mut insertlane_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
+        HashMap::new();
+    insertlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x20], Some(use_sse41))); // PINSRB
+    insertlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc4], None)); // PINSRW from SSE2
+    insertlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41))); // PINSRD
+    insertlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41))); // PINSRQ, only x86_64
 
     for ty in ValueType::all_lane_types() {
         if let Some((opcode, isap)) = insertlane_mapping.get(&ty.lane_bits()) {
             let instruction = insertlane.bind_vector_from_lane(ty, sse_vector_size);
             let template = rec_r_ib_unsigned_r.opcodes(opcode.clone());
             if ty.lane_bits() < 64 {
-                e.enc_32_64_isap(instruction, template.nonrex(), isap.clone());
+                e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap.clone());
             } else {
                 // turns out the 64-bit widths have REX/W encodings and only are available on x86_64
-                e.enc64_isap(instruction, template.rex().w(), isap.clone());
+                e.enc64_maybe_isap(instruction, template.rex().w(), isap.clone());
             }
         }
     }
 
     // SIMD extractlane
-    let mut extractlane_mapping: HashMap<u64, (Vec<u8>, SettingPredicateNumber)> = HashMap::new();
-    extractlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x14], use_sse41)); // PEXTRB
-    extractlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc5], use_sse2)); // PEXTRW, SSE4.1 has a PEXTRW that can move to reg/m16 but the opcode is four bytes
-    extractlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], use_sse41)); // PEXTRD
-    extractlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], use_sse41)); // PEXTRQ, only x86_64
+    let mut extractlane_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
+        HashMap::new();
+    extractlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x14], Some(use_sse41))); // PEXTRB
+    extractlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc5], None)); // PEXTRW from zSSE2, SSE4.1 has a PEXTRW that can move to reg/m16 but the opcode is four bytes
+    extractlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41))); // PEXTRD
+    extractlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41))); // PEXTRQ, only x86_64
 
     for ty in ValueType::all_lane_types() {
         if let Some((opcode, isap)) = extractlane_mapping.get(&ty.lane_bits()) {
             let instruction = extractlane.bind_vector_from_lane(ty, sse_vector_size);
             let template = rec_r_ib_unsigned_gpr.opcodes(opcode.clone());
             if ty.lane_bits() < 64 {
-                e.enc_32_64_isap(instruction, template.nonrex(), isap.clone());
+                e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap.clone());
             } else {
                 // turns out the 64-bit widths have REX/W encodings and only are available on x86_64
-                e.enc64_isap(instruction, template.rex().w(), isap.clone());
+                e.enc64_maybe_isap(instruction, template.rex().w(), isap.clone());
             }
         }
     }

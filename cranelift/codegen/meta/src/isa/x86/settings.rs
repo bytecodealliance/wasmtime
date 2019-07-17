@@ -3,9 +3,6 @@ use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 pub fn define(shared: &SettingGroup) -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("x86");
 
-    // CPUID.01H:EDX
-    let has_sse2 = settings.add_bool("has_sse2", "SSE2: CPUID.01H:EDX.SSE2[bit 26]", false);
-
     // CPUID.01H:ECX
     let has_sse3 = settings.add_bool("has_sse3", "SSE3: CPUID.01H:ECX.SSE3[bit 0]", false);
     let has_ssse3 = settings.add_bool("has_ssse3", "SSSE3: CPUID.01H:ECX.SSSE3[bit 9]", false);
@@ -35,7 +32,6 @@ pub fn define(shared: &SettingGroup) -> SettingGroup {
 
     let shared_enable_simd = shared.get_bool("enable_simd");
 
-    settings.add_predicate("use_sse2", predicate!(shared_enable_simd && has_sse2));
     settings.add_predicate("use_ssse3", predicate!(shared_enable_simd && has_ssse3));
     settings.add_predicate("use_sse41", predicate!(shared_enable_simd && has_sse41));
     settings.add_predicate(
@@ -69,7 +65,7 @@ pub fn define(shared: &SettingGroup) -> SettingGroup {
     settings.add_preset("baseline", preset!());
     let nehalem = settings.add_preset(
         "nehalem",
-        preset!(has_sse2 && has_sse3 && has_ssse3 && has_sse41 && has_sse42 && has_popcnt),
+        preset!(has_sse3 && has_ssse3 && has_sse41 && has_sse42 && has_popcnt),
     );
     let haswell = settings.add_preset(
         "haswell",
@@ -82,8 +78,7 @@ pub fn define(shared: &SettingGroup) -> SettingGroup {
     settings.add_preset(
         "znver1",
         preset!(
-            has_sse2
-                && has_sse3
+            has_sse3
                 && has_ssse3
                 && has_sse41
                 && has_sse42

@@ -1,6 +1,6 @@
 test binemit
 set enable_simd
-target x86_64 has_sse2=true
+target x86_64
 
 function %test_pshuf() {
 ebb0:
