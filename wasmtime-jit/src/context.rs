@@ -68,8 +68,9 @@ impl Context {
     }
 
     /// Set debug_info settings.
-    pub fn set_debug_info(&mut self, value: bool) {
+    pub fn set_debug_info(mut self: Self, value: bool) -> Self {
         self.debug_info = value;
+        self
     }
 
     /// Construct a new instance of `Context` with the given target.

@@ -30,24 +30,17 @@
     )
 )]
 
-use cranelift_codegen::settings;
-use cranelift_codegen::settings::Configurable;
-use cranelift_native;
 use docopt::Docopt;
+use libwasmtime::handle_module;
 use pretty_env_logger;
 use serde::Deserialize;
-use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io;
-use std::io::prelude::*;
 use std::path::Component;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::exit;
-use wabt;
 use wasi_common::preopen_dir;
 use wasmtime_environ::cache_conf;
-use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wasi::instantiate_wasi;
 use wasmtime_wast::instantiate_spectest;
 
@@ -100,25 +93,6 @@ struct Args {
     flag_dir: Vec<String>,
     flag_mapdir: Vec<String>,
     flag_wasi_c: bool,
-}
-
-fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
-    let mut buf: Vec<u8> = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
-    Ok(buf)
-}
-
-fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
-    let data = read_to_end(path).map_err(|err| err.to_string())?;
-
-    // If data is a wasm binary, use that. If it's using wat format, convert it
-    // to a wasm binary with wat2wasm.
-    Ok(if data.starts_with(&[b'\0', b'a', b's', b'm']) {
-        data
-    } else {
-        wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?
-    })
 }
 
 fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(String, File)> {
@@ -193,14 +167,16 @@ fn compute_environ(flag_env: &[String]) -> Vec<(String, String)> {
 }
 
 fn main() {
-    let version = env!("CARGO_PKG_VERSION");
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(String::from(version)))
-                .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
+    let args: Args = {
+        let version = env!("CARGO_PKG_VERSION");
+        Docopt::new(USAGE)
+            .and_then(|d| {
+                d.help(true)
+                    .version(Some(String::from(version)))
+                    .deserialize()
+            })
+            .unwrap_or_else(|e| e.exit())
+    };
 
     if args.flag_debug {
         pretty_env_logger::init();
@@ -210,101 +186,80 @@ fn main() {
 
     cache_conf::init(args.flag_cache);
 
-    let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
-        panic!("host machine is not a supported target");
-    });
-    let mut flag_builder = settings::builder();
+    let mut context = libwasmtime::ContextBuilder {
+        // Enable optimization if requested.
+        opt_level: if args.flag_optimize {
+            Some("best")
+        } else {
+            None
+        },
 
-    // Enable verifier passes in debug mode.
-    if cfg!(debug_assertions) {
-        flag_builder.enable("enable_verifier").unwrap();
+        // Enable verification if requested
+        enable_verifier: cfg!(debug_assertions),
+
+        // Enable/disable producing of debug info.
+        set_debug_info: args.flag_g,
     }
+    .try_build()
+    .expect("couldn't build Context");
 
-    // Enable optimization if requested.
-    if args.flag_optimize {
-        flag_builder.set("opt_level", "best").unwrap();
+    for (name, instance) in vec![
+        // Make spectest available by default.
+        (
+            "spectest".to_owned(),
+            instantiate_spectest().expect("instantiating spectest"),
+        ),
+        // Make wasi available by default.
+        ("wasi_unstable".to_owned(), {
+            let wasi_instantiation_fn = if args.flag_wasi_c {
+                #[cfg(feature = "wasi-c")]
+                {
+                    instantiate_wasi_c
+                }
+                #[cfg(not(feature = "wasi-c"))]
+                {
+                    panic!("wasi-c feature not enabled at build time")
+                }
+            } else {
+                instantiate_wasi
+            };
+
+            let global_exports = context.get_global_exports();
+            let preopen_dirs = compute_preopen_dirs(&args.flag_dir, &args.flag_mapdir);
+            let argv = compute_argv(&args.arg_file, &args.arg_arg);
+            let environ = compute_environ(&args.flag_env);
+
+            wasi_instantiation_fn("", global_exports, &preopen_dirs, &argv, &environ)
+                .expect("instantiating wasi")
+        }),
+    ] {
+        context.name_instance(name, instance);
     }
-
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut context = Context::with_isa(isa);
-
-    // Make spectest available by default.
-    context.name_instance(
-        "spectest".to_owned(),
-        instantiate_spectest().expect("instantiating spectest"),
-    );
-
-    // Make wasi available by default.
-    let global_exports = context.get_global_exports();
-    let preopen_dirs = compute_preopen_dirs(&args.flag_dir, &args.flag_mapdir);
-    let argv = compute_argv(&args.arg_file, &args.arg_arg);
-    let environ = compute_environ(&args.flag_env);
-
-    let wasi = if args.flag_wasi_c {
-        #[cfg(feature = "wasi-c")]
-        {
-            instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)
-        }
-        #[cfg(not(feature = "wasi-c"))]
-        {
-            panic!("wasi-c feature not enabled at build time")
-        }
-    } else {
-        instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)
-    }
-    .expect("instantiating wasi");
-
-    context.name_instance("wasi_unstable".to_owned(), wasi);
-
-    // Enable/disable producing of debug info.
-    context.set_debug_info(args.flag_g);
 
     // Load the preload wasm modules.
     for filename in &args.flag_preload {
-        let path = Path::new(&filename);
-        match handle_module(&mut context, &args, path) {
+        let module = File::open(&filename).expect(&format!("can't open module at {}", filename));
+        match handle_module(&mut context, module, args.flag_invoke.as_ref()) {
             Ok(()) => {}
             Err(message) => {
-                let name = path.as_os_str().to_string_lossy();
-                println!("error while processing preload {}: {}", name, message);
+                println!("error while processing preload {}: {}", filename, message);
                 exit(1);
             }
         }
     }
 
     // Load the main wasm module.
-    let path = Path::new(&args.arg_file);
-    match handle_module(&mut context, &args, path) {
+    let module =
+        File::open(&args.arg_file).expect(&format!("can't open module at {}", &args.arg_file));
+    let flag_invoke = None;
+    match handle_module(&mut context, module, flag_invoke) {
         Ok(()) => {}
         Err(message) => {
-            let name = path.as_os_str().to_string_lossy();
-            println!("error while processing main module {}: {}", name, message);
+            println!(
+                "error while processing main module {}: {}",
+                args.arg_file, message
+            );
             exit(1);
         }
     }
-}
-
-fn handle_module(context: &mut Context, args: &Args, path: &Path) -> Result<(), String> {
-    // Read the wasm module binary.
-    let data = read_wasm(path.to_path_buf())?;
-
-    // Compile and instantiating a wasm module.
-    let mut instance = context
-        .instantiate_module(None, &data)
-        .map_err(|e| e.to_string())?;
-
-    // If a function to invoke was given, invoke it.
-    if let Some(ref f) = args.flag_invoke {
-        match context
-            .invoke(&mut instance, f, &[])
-            .map_err(|e| e.to_string())?
-        {
-            ActionOutcome::Returned { .. } => {}
-            ActionOutcome::Trapped { message } => {
-                return Err(format!("Trap from within function {}: {}", f, message));
-            }
-        }
-    }
-
-    Ok(())
 }
