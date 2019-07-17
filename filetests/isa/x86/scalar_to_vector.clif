@@ -1,7 +1,7 @@
 test binemit
 set opt_level=best
 set enable_simd
-target x86_64 has_sse2=true
+target x86_64
 
 function %test_scalar_to_vector_b8() {
 ebb0:
