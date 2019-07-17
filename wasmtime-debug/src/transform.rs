@@ -1,17 +1,21 @@
 use crate::address_transform::AddressTransform;
+use crate::gc::build_dependencies;
 pub use crate::read_debuginfo::DebugInfoData;
+use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetFrontendConfig;
-use cranelift_entity::EntityRef;
+use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_wasm::DefinedFuncIndex;
 use failure::Error;
-use std::collections::{BTreeMap, HashMap};
-use std::ops::Bound::{Included, Unbounded};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::iter::FromIterator;
+use wasmtime_environ::ModuleAddressMap;
 
 use gimli;
 
 use gimli::{
-    AttributeValue, CompilationUnitHeader, DebugAbbrev, DebugAddr, DebugAddrBase, DebugLine,
-    DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, LocationLists, RangeLists,
-    UnitOffset,
+    AttributeValue, DebugAddr, DebugAddrBase, DebugLine, DebugLineOffset, DebugStr,
+    DebuggingInformationEntry, LineEncoding, LocationLists, RangeLists, Unit, UnitOffset,
+    UnitSectionOffset,
 };
 
 use gimli::write;
@@ -24,25 +28,26 @@ impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where Endian:
 #[fail(display = "Debug info transform error: {}", _0)]
 pub struct TransformError(&'static str);
 
-pub struct TransformedDwarf {
-    pub encoding: gimli::Encoding,
-    pub strings: write::StringTable,
-    pub units: write::UnitTable,
-    pub line_strings: write::LineStringTable,
-    pub range_lists: write::RangeListTable,
+/// Module `vmctx` related info.
+pub struct ModuleVmctxInfo {
+    pub memory_offset: i64,
+    pub stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
 }
+
+/// Value ranges for functions.
+pub type ValueLabelsRanges = PrimaryMap<DefinedFuncIndex, cranelift_codegen::ValueLabelsRanges>;
 
 struct DebugInputContext<'a, R>
 where
     R: Reader,
 {
-    debug_abbrev: &'a DebugAbbrev<R>,
     debug_str: &'a DebugStr<R>,
     debug_line: &'a DebugLine<R>,
     debug_addr: &'a DebugAddr<R>,
     debug_addr_base: DebugAddrBase<R::Offset>,
     rnglists: &'a RangeLists<R>,
     loclists: &'a LocationLists<R>,
+    reachable: HashSet<UnitSectionOffset>,
 }
 
 type PendingDieRef = (write::UnitEntryId, gimli::DwAt, UnitOffset);
@@ -84,7 +89,7 @@ where
                 write::AttributeValue::Udata(subprogram_range.unwrap().1)
             }
             AttributeValue::Addr(u) => {
-                let addr = addr_tr.translate(u).unwrap_or(write::Address::Absolute(0));
+                let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 if attr.name() == gimli::DW_AT_low_pc {
                     low_pc = Some((u, addr));
                 }
@@ -243,7 +248,7 @@ enum ReadLineProgramState {
 }
 
 fn clone_line_program<R>(
-    unit: &CompilationUnitHeader<R, R::Offset>,
+    unit: &Unit<R, R::Offset>,
     root: &DebuggingInformationEntry<R>,
     addr_tr: &AddressTransform,
     out_encoding: &gimli::Encoding,
@@ -277,7 +282,7 @@ where
 
     let program = debug_line.program(
         offset,
-        unit.address_size(),
+        unit.header.address_size(),
         comp_dir.and_then(|val| val.string_value(&debug_str)),
         comp_name.and_then(|val| val.string_value(&debug_str)),
     );
@@ -367,21 +372,26 @@ where
             saved_rows.insert(row.address(), saved_row);
         }
 
+        let saved_rows = Vec::from_iter(saved_rows.into_iter());
+
         for (i, map) in addr_tr.map() {
             let symbol = i.index();
             let base_addr = map.offset;
-            out_program.begin_sequence(Some(write::Address::Relative { symbol, addend: 0 }));
+            out_program.begin_sequence(Some(write::Address::Symbol { symbol, addend: 0 }));
             // TODO track and place function declaration line here
             let mut last_address = None;
             for addr_map in map.addresses.iter() {
-                let mut saved_row = saved_rows.get(&addr_map.wasm);
-                if saved_row.is_none() {
-                    // No direct match -- repeat search with range.
-                    saved_row = saved_rows
-                        .range((Unbounded, Included(addr_map.wasm)))
-                        .last()
-                        .map(|p| p.1);
-                }
+                let saved_row =
+                    match saved_rows.binary_search_by(|entry| entry.0.cmp(&addr_map.wasm)) {
+                        Ok(i) => Some(&saved_rows[i].1),
+                        Err(i) => {
+                            if i > 0 {
+                                Some(&saved_rows[i - 1].1)
+                            } else {
+                                None
+                            }
+                        }
+                    };
                 if let Some(SavedLineProgramRow::Normal {
                     address,
                     op_index,
@@ -440,9 +450,9 @@ where
     let low_pc = entry.attr_value(gimli::DW_AT_low_pc)?;
     if let Some(AttributeValue::Addr(addr)) = low_pc {
         let transformed = addr_tr.translate(addr);
-        if let Some(write::Address::Relative { symbol, .. }) = transformed {
+        if let Some(write::Address::Symbol { symbol, .. }) = transformed {
             let range = addr_tr.func_range(symbol);
-            let addr = write::Address::Relative {
+            let addr = write::Address::Symbol {
                 symbol,
                 addend: range.0 as i64,
             };
@@ -454,7 +464,7 @@ where
 }
 
 fn clone_unit<'a, R>(
-    unit: &CompilationUnitHeader<R, R::Offset>,
+    unit: Unit<R, R::Offset>,
     context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
     out_encoding: &gimli::Encoding,
@@ -464,18 +474,16 @@ fn clone_unit<'a, R>(
 where
     R: Reader,
 {
-    let abbrevs = unit.abbreviations(context.debug_abbrev)?;
-
     let mut die_ref_map = HashMap::new();
     let mut pending_die_refs = Vec::new();
     let mut stack = Vec::new();
 
     // Iterate over all of this compilation unit's entries.
-    let mut entries = unit.entries(&abbrevs);
+    let mut entries = unit.entries();
     let (comp_unit, file_map) = if let Some((depth_delta, entry)) = entries.next_dfs()? {
         assert!(depth_delta == 0);
         let (out_line_program, debug_line_offset, file_map) = clone_line_program(
-            unit,
+            &unit,
             entry,
             addr_tr,
             out_encoding,
@@ -526,14 +534,17 @@ where
         } else {
             depth_delta
         };
+        if !context
+            .reachable
+            .contains(&entry.offset().to_unit_section_offset(&unit))
+        {
+            // entry is not reachable: discarding all its info.
+            skip_at_depth = Some((0, depth_delta));
+            continue;
+        }
+
         let range = if entry.tag() == gimli::DW_TAG_subprogram {
-            let range = get_subprogram_range(entry, addr_tr)?;
-            if range.is_none() {
-                // Subprogram was not compiled: discarding all its info.
-                skip_at_depth = Some((0, depth_delta));
-                continue;
-            }
-            range
+            get_subprogram_range(entry, addr_tr)?
         } else {
             None
         };
@@ -580,16 +591,19 @@ where
 pub fn transform_dwarf(
     target_config: &TargetFrontendConfig,
     di: &DebugInfoData,
-    at: &wasmtime_environ::AddressTransforms,
-) -> Result<TransformedDwarf, Error> {
+    at: &ModuleAddressMap,
+) -> Result<write::Dwarf, Error> {
+    let addr_tr = AddressTransform::new(at, &di.wasm_file);
+    let reachable = build_dependencies(&di.dwarf, &addr_tr)?.get_reachable();
+
     let context = DebugInputContext {
-        debug_abbrev: &di.dwarf.debug_abbrev,
         debug_str: &di.dwarf.debug_str,
         debug_line: &di.dwarf.debug_line,
         debug_addr: &di.dwarf.debug_addr,
         debug_addr_base: DebugAddrBase(0),
         rnglists: &di.dwarf.ranges,
         loclists: &di.dwarf.locations,
+        reachable,
     };
 
     let out_encoding = gimli::Encoding {
@@ -600,16 +614,14 @@ pub fn transform_dwarf(
         address_size: target_config.pointer_bytes(),
     };
 
-    let addr_tr = AddressTransform::new(at, &di.wasm_file);
-
     let mut out_strings = write::StringTable::default();
     let mut out_units = write::UnitTable::default();
 
-    let out_range_lists = write::RangeListTable::default();
     let out_line_strings = write::LineStringTable::default();
 
     let mut iter = di.dwarf.debug_info.units();
-    while let Some(ref unit) = iter.next().unwrap_or(None) {
+    while let Some(unit) = iter.next().unwrap_or(None) {
+        let unit = di.dwarf.unit(unit)?;
         clone_unit(
             unit,
             &context,
@@ -620,22 +632,10 @@ pub fn transform_dwarf(
         )?;
     }
 
-    // let unit_range_list = write::RangeList(Vec::new());
-    // let unit_range_list_id = out_range_lists.add(unit_range_list.clone());
-    // let unit = dwarf.units.get_mut(self.unit_id);
-    // let root = unit.root();
-    // let root = unit.get_mut(root);
-    // root.set(
-    //     gimli::DW_AT_ranges,
-    //     AttributeValue::RangeListRef(unit_range_list_id),
-    // );
-
-    //println!("{:?} \n====\n {:?}", di, at);
-    Ok(TransformedDwarf {
-        encoding: out_encoding,
-        strings: out_strings,
+    Ok(write::Dwarf {
         units: out_units,
+        line_programs: vec![],
         line_strings: out_line_strings,
-        range_lists: out_range_lists,
+        strings: out_strings,
     })
 }

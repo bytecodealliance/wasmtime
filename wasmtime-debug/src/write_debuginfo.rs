@@ -1,51 +1,16 @@
-use crate::transform::TransformedDwarf;
-
-use gimli::write::{
-    Address, DebugAbbrev, DebugInfo, DebugLine, DebugLineStr, DebugRanges, DebugRngLists, DebugStr,
-    EndianVec, Result, SectionId, Sections, Writer,
-};
-use gimli::RunTimeEndian;
+use gimli::write::{Address, Dwarf, EndianVec, Result, Sections, Writer};
+use gimli::{RunTimeEndian, SectionId};
 
 use faerie::artifact::{Decl, SectionKind};
 use faerie::*;
+use std::result;
 
+#[derive(Clone)]
 struct DebugReloc {
     offset: u32,
     size: u8,
     name: String,
     addend: i64,
-}
-
-macro_rules! decl_section {
-    ($artifact:ident . $section:ident = $name:expr) => {
-        $artifact
-            .declare_with(
-                SectionId::$section.name(),
-                Decl::section(SectionKind::Debug),
-                $name.0.writer.into_vec(),
-            )
-            .unwrap();
-    };
-}
-
-macro_rules! sect_relocs {
-    ($artifact:ident . $section:ident = $name:expr) => {
-        for reloc in $name.0.relocs {
-            $artifact
-                .link_with(
-                    faerie::Link {
-                        from: SectionId::$section.name(),
-                        to: &reloc.name,
-                        at: u64::from(reloc.offset),
-                    },
-                    faerie::Reloc::Debug {
-                        size: reloc.size,
-                        addend: reloc.addend as i32,
-                    },
-                )
-                .expect("faerie relocation error");
-        }
-    };
 }
 
 pub enum ResolvedSymbol {
@@ -59,75 +24,48 @@ pub trait SymbolResolver {
 
 pub fn emit_dwarf(
     artifact: &mut Artifact,
-    mut dwarf: TransformedDwarf,
+    mut dwarf: Dwarf,
     symbol_resolver: &SymbolResolver,
-) {
+) -> result::Result<(), failure::Error> {
     let endian = RunTimeEndian::Little;
-    let debug_abbrev = DebugAbbrev::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_info = DebugInfo::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_str = DebugStr::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_line = DebugLine::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_ranges = DebugRanges::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_rnglists = DebugRngLists::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_line_str = DebugLineStr::from(WriterRelocate::new(endian, symbol_resolver));
 
-    let mut sections = Sections {
-        debug_abbrev,
-        debug_info,
-        debug_line,
-        debug_line_str,
-        debug_ranges,
-        debug_rnglists,
-        debug_str,
-    };
-
-    let debug_str_offsets = dwarf.strings.write(&mut sections.debug_str).unwrap();
-    let debug_line_str_offsets = dwarf
-        .line_strings
-        .write(&mut sections.debug_line_str)
-        .unwrap();
-    dwarf
-        .units
-        .write(&mut sections, &debug_line_str_offsets, &debug_str_offsets)
-        .unwrap();
-
-    decl_section!(artifact.DebugAbbrev = sections.debug_abbrev);
-    decl_section!(artifact.DebugInfo = sections.debug_info);
-    decl_section!(artifact.DebugStr = sections.debug_str);
-    decl_section!(artifact.DebugLine = sections.debug_line);
-
-    let debug_ranges_not_empty = !sections.debug_ranges.0.writer.slice().is_empty();
-    if debug_ranges_not_empty {
-        decl_section!(artifact.DebugRanges = sections.debug_ranges);
-    }
-
-    let debug_rnglists_not_empty = !sections.debug_rnglists.0.writer.slice().is_empty();
-    if debug_rnglists_not_empty {
-        decl_section!(artifact.DebugRngLists = sections.debug_rnglists);
-    }
-
-    sect_relocs!(artifact.DebugAbbrev = sections.debug_abbrev);
-    sect_relocs!(artifact.DebugInfo = sections.debug_info);
-    sect_relocs!(artifact.DebugStr = sections.debug_str);
-    sect_relocs!(artifact.DebugLine = sections.debug_line);
-
-    if debug_ranges_not_empty {
-        sect_relocs!(artifact.DebugRanges = sections.debug_ranges);
-    }
-
-    if debug_rnglists_not_empty {
-        sect_relocs!(artifact.DebugRngLists = sections.debug_rnglists);
-    }
+    let mut sections = Sections::new(WriterRelocate::new(endian, symbol_resolver));
+    dwarf.write(&mut sections)?;
+    sections.for_each_mut(|id, s| -> result::Result<(), failure::Error> {
+        artifact.declare_with(
+            id.name(),
+            Decl::section(SectionKind::Debug),
+            s.writer.take(),
+        )
+    })?;
+    sections.for_each_mut(|id, s| -> result::Result<(), failure::Error> {
+        for reloc in &s.relocs {
+            artifact.link_with(
+                faerie::Link {
+                    from: id.name(),
+                    to: &reloc.name,
+                    at: u64::from(reloc.offset),
+                },
+                faerie::Reloc::Debug {
+                    size: reloc.size,
+                    addend: reloc.addend as i32,
+                },
+            )?;
+        }
+        Ok(())
+    })?;
+    Ok(())
 }
 
-struct WriterRelocate<'a> {
+#[derive(Clone)]
+pub struct WriterRelocate<'a> {
     relocs: Vec<DebugReloc>,
     writer: EndianVec<RunTimeEndian>,
     symbol_resolver: &'a SymbolResolver,
 }
 
 impl<'a> WriterRelocate<'a> {
-    fn new(endian: RunTimeEndian, symbol_resolver: &'a SymbolResolver) -> Self {
+    pub fn new(endian: RunTimeEndian, symbol_resolver: &'a SymbolResolver) -> Self {
         WriterRelocate {
             relocs: Vec::new(),
             writer: EndianVec::new(endian),
@@ -157,10 +95,10 @@ impl<'a> Writer for WriterRelocate<'a> {
 
     fn write_address(&mut self, address: Address, size: u8) -> Result<()> {
         match address {
-            Address::Absolute(val) => self.write_word(val, size),
-            Address::Relative { symbol, addend } => {
+            Address::Constant(val) => self.write_udata(val, size),
+            Address::Symbol { symbol, addend } => {
                 match self.symbol_resolver.resolve_symbol(symbol, addend as i64) {
-                    ResolvedSymbol::PhysicalAddress(addr) => self.write_word(addr, size),
+                    ResolvedSymbol::PhysicalAddress(addr) => self.write_udata(addr, size),
                     ResolvedSymbol::Reloc { name, addend } => {
                         let offset = self.len() as u64;
                         self.relocs.push(DebugReloc {
@@ -169,7 +107,7 @@ impl<'a> Writer for WriterRelocate<'a> {
                             name,
                             addend,
                         });
-                        self.write_word(addend as u64, size)
+                        self.write_udata(addend as u64, size)
                     }
                 }
             }
@@ -185,7 +123,7 @@ impl<'a> Writer for WriterRelocate<'a> {
             name,
             addend: val as i64,
         });
-        self.write_word(val as u64, size)
+        self.write_udata(val as u64, size)
     }
 
     fn write_offset_at(
@@ -202,6 +140,6 @@ impl<'a> Writer for WriterRelocate<'a> {
             name,
             addend: val as i64,
         });
-        self.write_word_at(offset, val as u64, size)
+        self.write_udata_at(offset, val as u64, size)
     }
 }

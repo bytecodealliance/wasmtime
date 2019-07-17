@@ -3,9 +3,9 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;
 use std::collections::BTreeMap;
-use std::ops::Bound::{Included, Unbounded};
+use std::iter::FromIterator;
 use std::vec::Vec;
-use wasmtime_environ::AddressTransforms;
+use wasmtime_environ::ModuleAddressMap;
 
 pub type GeneratedAddress = usize;
 pub type WasmAddress = u64;
@@ -26,13 +26,16 @@ pub struct FunctionMap {
 
 #[derive(Debug)]
 pub struct AddressTransform {
-    lookup: BTreeMap<WasmAddress, (SymbolIndex, GeneratedAddress, GeneratedAddress)>,
+    lookup: Vec<(
+        WasmAddress,
+        (SymbolIndex, GeneratedAddress, GeneratedAddress),
+    )>,
     map: PrimaryMap<DefinedFuncIndex, FunctionMap>,
     func_ranges: Vec<(usize, usize)>,
 }
 
 impl AddressTransform {
-    pub fn new(at: &AddressTransforms, wasm_file: &WasmFileInfo) -> Self {
+    pub fn new(at: &ModuleAddressMap, wasm_file: &WasmFileInfo) -> Self {
         let code_section_offset = wasm_file.code_section_offset;
         let function_offsets = &wasm_file.function_offsets_and_sizes;
         let mut lookup = BTreeMap::new();
@@ -50,7 +53,7 @@ impl AddressTransform {
                 (index, ft.body_offset, ft.body_offset),
             );
             let mut fn_map = Vec::new();
-            for t in &ft.locations {
+            for t in &ft.instructions {
                 if t.srcloc.is_default() {
                     // TODO extend some range if possible
                     continue;
@@ -76,6 +79,9 @@ impl AddressTransform {
                 addresses: fn_map.into_boxed_slice(),
             });
         }
+
+        let lookup = Vec::from_iter(lookup.into_iter());
+
         AddressTransform {
             lookup,
             map,
@@ -83,14 +89,27 @@ impl AddressTransform {
         }
     }
 
+    pub fn can_translate_address(&self, addr: u64) -> bool {
+        self.translate(addr).is_some()
+    }
+
     pub fn translate(&self, addr: u64) -> Option<write::Address> {
         if addr == 0 {
             // It's normally 0 for debug info without the linked code.
             return None;
         }
-        let search = self.lookup.range((Unbounded, Included(addr)));
-        if let Some((_, value)) = search.last() {
-            return Some(write::Address::Relative {
+        let found = match self.lookup.binary_search_by(|entry| entry.0.cmp(&addr)) {
+            Ok(i) => Some(&self.lookup[i].1),
+            Err(i) => {
+                if i > 0 {
+                    Some(&self.lookup[i - 1].1)
+                } else {
+                    None
+                }
+            }
+        };
+        if let Some(value) = found {
+            return Some(write::Address::Symbol {
                 symbol: value.0,
                 addend: value.1 as i64,
             });
@@ -106,11 +125,11 @@ impl AddressTransform {
             return None;
         }
         if let (
-            Some(write::Address::Relative {
+            Some(write::Address::Symbol {
                 symbol: s1,
                 addend: a,
             }),
-            Some(write::Address::Relative {
+            Some(write::Address::Symbol {
                 symbol: s2,
                 addend: b,
             }),

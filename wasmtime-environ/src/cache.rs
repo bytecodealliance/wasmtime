@@ -1,3 +1,4 @@
+use crate::address_map::FunctionAddressMap;
 use crate::compilation;
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
@@ -40,7 +41,7 @@ pub struct FuncCacheData {
     code_buf: Vec<u8>,
     jt_offsets: JtOffsetsSerdeWrapper,
     func_relocs: Vec<compilation::Relocation>,
-    address_transform: Option<compilation::FunctionAddressTransform>,
+    address_transform: Option<FunctionAddressMap>,
 }
 type JtOffsetsType =
     cranelift_entity::SecondaryMap<cranelift_codegen::ir::entities::JumpTable, u32>;
@@ -49,7 +50,7 @@ type FuncCacheDataTupleType = (
     Vec<u8>,
     JtOffsetsType,
     Vec<compilation::Relocation>,
-    Option<compilation::FunctionAddressTransform>,
+    Option<FunctionAddressMap>,
 );
 struct JtOffsetsSerdeWrapperVisitor {
     marker: PhantomData<fn() -> JtOffsetsSerdeWrapper>,

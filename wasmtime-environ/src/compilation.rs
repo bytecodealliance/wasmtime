@@ -1,6 +1,7 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
+use crate::address_map::ModuleAddressMap;
 use crate::module;
 use crate::module_environ::FunctionBodyData;
 use cranelift_codegen::{binemit, ir, isa, CodegenError};
@@ -140,35 +141,6 @@ pub enum CompileError {
     Codegen(CodegenError),
 }
 
-/// Single address point transform.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct InstructionAddressTransform {
-    /// Original source location.
-    pub srcloc: ir::SourceLoc,
-
-    /// Generated instructions offset.
-    pub code_offset: usize,
-
-    /// Generated instructions length.
-    pub code_len: usize,
-}
-
-/// Function and its instructions transforms.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct FunctionAddressTransform {
-    /// Instructions transforms
-    pub locations: Vec<InstructionAddressTransform>,
-
-    /// Generated function body offset if applicable, otherwise 0.
-    pub body_offset: usize,
-
-    /// Generated function body length.
-    pub body_len: usize,
-}
-
-/// Function AddressTransforms collection.
-pub type AddressTransforms = PrimaryMap<DefinedFuncIndex, FunctionAddressTransform>;
-
 /// An implementation of a compiler from parsed WebAssembly module to native code.
 pub trait Compiler {
     /// Compile a parsed module with the given `TargetIsa`.
@@ -177,5 +149,5 @@ pub trait Compiler {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
-    ) -> Result<(Compilation, Relocations, AddressTransforms), CompileError>;
+    ) -> Result<(Compilation, Relocations, ModuleAddressMap), CompileError>;
 }

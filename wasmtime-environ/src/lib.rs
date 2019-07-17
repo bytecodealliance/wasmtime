@@ -37,6 +37,7 @@ extern crate std;
 #[macro_use]
 extern crate failure_derive;
 
+mod address_map;
 mod compilation;
 mod func_environ;
 mod module;
@@ -50,9 +51,9 @@ pub mod cranelift;
 #[cfg(feature = "lightbeam")]
 pub mod lightbeam;
 
+pub use crate::address_map::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
 pub use crate::compilation::{
-    AddressTransforms, Compilation, CompileError, Compiler, InstructionAddressTransform,
-    Relocation, RelocationTarget, Relocations,
+    Compilation, CompileError, Compiler, Relocation, RelocationTarget, Relocations,
 };
 pub use crate::cranelift::Cranelift;
 #[cfg(feature = "lightbeam")]

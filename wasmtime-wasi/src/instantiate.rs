@@ -101,12 +101,13 @@ pub fn instantiate_wasi(
     let data_initializers = Vec::new();
     let signatures = PrimaryMap::new();
 
-    let args: Vec<&str> = argv.iter().map(AsRef::as_ref).collect();
-    let mut wasi_ctx_builder = WasiCtxBuilder::new().args(&args).inherit_stdio();
-
-    for (k, v) in environ {
-        wasi_ctx_builder = wasi_ctx_builder.env(k, v);
-    }
+    let mut wasi_ctx_builder = WasiCtxBuilder::new()
+        .and_then(|ctx| ctx.inherit_stdio())
+        .and_then(|ctx| ctx.args(argv.iter()))
+        .and_then(|ctx| ctx.envs(environ.iter()))
+        .map_err(|err| {
+            InstantiationError::Resource(format!("couldn't assemble WASI context object: {}", err))
+        })?;
 
     for (dir, f) in preopened_dirs {
         wasi_ctx_builder = wasi_ctx_builder.preopened_dir(
