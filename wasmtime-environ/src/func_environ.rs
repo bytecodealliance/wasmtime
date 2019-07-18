@@ -213,7 +213,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx(&mut pos.func);
         let base = pos.ins().global_value(pointer_type, vmctx);
 
-        let mem_flags = ir::MemFlags::trusted();
+        let mut mem_flags = ir::MemFlags::trusted();
+        mem_flags.set_readonly();
 
         // Load the callee address.
         let body_offset =
