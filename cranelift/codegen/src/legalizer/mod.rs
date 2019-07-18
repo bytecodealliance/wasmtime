@@ -567,3 +567,63 @@ fn expand_stack_store(
     mflags.set_aligned();
     pos.func.dfg.replace(inst).store(mflags, val, addr, 0);
 }
+
+/// Split a load into two parts before `iconcat`ing the result together.
+fn narrow_load(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let (ptr, offset, flags) = match pos.func.dfg[inst] {
+        ir::InstructionData::Load {
+            opcode: ir::Opcode::Load,
+            arg,
+            offset,
+            flags,
+        } => (arg, offset, flags),
+        _ => panic!("Expected load: {}", pos.func.dfg.display_inst(inst, None)),
+    };
+
+    let al = pos.ins().load(ir::types::I64, flags, ptr, offset);
+    let ah = pos.ins().load(
+        ir::types::I64,
+        flags,
+        ptr,
+        offset.try_add_i64(8).expect("load offset overflow"),
+    );
+    pos.func.dfg.replace(inst).iconcat(al, ah);
+}
+
+/// Split a store into two parts after `isplit`ing the value.
+fn narrow_store(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let (val, ptr, offset, flags) = match pos.func.dfg[inst] {
+        ir::InstructionData::Store {
+            opcode: ir::Opcode::Store,
+            args,
+            offset,
+            flags,
+        } => (args[0], args[1], offset, flags),
+        _ => panic!("Expected store: {}", pos.func.dfg.display_inst(inst, None)),
+    };
+
+    let (al, ah) = pos.func.dfg.replace(inst).isplit(val);
+    pos.ins().store(flags, al, ptr, offset);
+    pos.ins().store(
+        flags,
+        ah,
+        ptr,
+        offset.try_add_i64(8).expect("store offset overflow"),
+    );
+}
