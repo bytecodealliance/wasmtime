@@ -2,6 +2,7 @@
 //! module.
 
 use crate::module::Module;
+use crate::BuiltinFunctionIndex;
 use core::convert::TryFrom;
 use cranelift_codegen::ir;
 use cranelift_wasm::{
@@ -332,13 +333,23 @@ impl VMOffsets {
             .unwrap()
     }
 
-    /// Return the size of the `VMContext` allocation.
-    #[allow(dead_code)]
-    pub fn size_of_vmctx(&self) -> u32 {
+    /// The offset of the builtin functions array.
+    pub fn vmctx_builtin_functions_begin(&self) -> u32 {
         self.vmctx_globals_begin()
             .checked_add(
                 self.num_defined_globals
                     .checked_mul(u32::from(self.size_of_vmglobal_definition()))
+                    .unwrap(),
+            )
+            .unwrap()
+    }
+
+    /// Return the size of the `VMContext` allocation.
+    pub fn size_of_vmctx(&self) -> u32 {
+        self.vmctx_builtin_functions_begin()
+            .checked_add(
+                BuiltinFunctionIndex::builtin_functions_total_number()
+                    .checked_mul(u32::from(self.pointer_size))
                     .unwrap(),
             )
             .unwrap()
@@ -515,6 +526,18 @@ impl VMOffsets {
     pub fn vmctx_vmglobal_import_from(&self, index: GlobalIndex) -> u32 {
         self.vmctx_vmglobal_import(index)
             .checked_add(u32::from(self.vmglobal_import_from()))
+            .unwrap()
+    }
+
+    /// Return the offset to builtin function in `VMBuiltinFunctionsArray` index `index`.
+    pub fn vmctx_builtin_function(&self, index: BuiltinFunctionIndex) -> u32 {
+        self.vmctx_builtin_functions_begin()
+            .checked_add(
+                index
+                    .index()
+                    .checked_mul(u32::from(self.pointer_size))
+                    .unwrap(),
+            )
             .unwrap()
     }
 }

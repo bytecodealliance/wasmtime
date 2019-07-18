@@ -54,6 +54,7 @@ pub use crate::compilation::{
     Compilation, CompileError, Compiler, Relocation, RelocationTarget, Relocations,
 };
 pub use crate::cranelift::Cranelift;
+pub use crate::func_environ::BuiltinFunctionIndex;
 #[cfg(feature = "lightbeam")]
 pub use crate::lightbeam::Lightbeam;
 pub use crate::module::{

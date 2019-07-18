@@ -8,9 +8,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{
-    AbiParam, ArgumentPurpose, ExtFuncData, FuncRef, Function, InstBuilder, Signature,
-};
+use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
@@ -50,6 +48,37 @@ pub fn get_imported_memory32_size_name() -> ir::ExternalName {
     ir::ExternalName::user(1, 3)
 }
 
+/// An index type for builtin functions.
+pub struct BuiltinFunctionIndex(u32);
+
+impl BuiltinFunctionIndex {
+    /// Returns an index for wasm's `memory.grow` builtin function.
+    pub const fn get_memory32_grow_index() -> Self {
+        Self(0)
+    }
+    /// Returns an index for wasm's imported `memory.grow` builtin function.
+    pub const fn get_imported_memory32_grow_index() -> Self {
+        Self(1)
+    }
+    /// Returns an index for wasm's `memory.size` builtin function.
+    pub const fn get_memory32_size_index() -> Self {
+        Self(2)
+    }
+    /// Returns an index for wasm's imported `memory.size` builtin function.
+    pub const fn get_imported_memory32_size_index() -> Self {
+        Self(3)
+    }
+    /// Returns the total number of builtin functions.
+    pub const fn builtin_functions_total_number() -> u32 {
+        4
+    }
+
+    /// Return the index as an u32 number.
+    pub const fn index(&self) -> u32 {
+        self.0
+    }
+}
+
 /// The `FuncEnvironment` implementation for use by the `ModuleEnvironment`.
 pub struct FuncEnvironment<'module_environment> {
     /// Target-specified configuration.
@@ -61,21 +90,13 @@ pub struct FuncEnvironment<'module_environment> {
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
 
-    /// The external function declaration for implementing wasm's `memory.size`
+    /// The external function signature for implementing wasm's `memory.size`
     /// for locally-defined 32-bit memories.
-    memory32_size_extfunc: Option<FuncRef>,
+    memory32_size_sig: Option<ir::SigRef>,
 
-    /// The external function declaration for implementing wasm's `memory.size`
-    /// for imported 32-bit memories.
-    imported_memory32_size_extfunc: Option<FuncRef>,
-
-    /// The external function declaration for implementing wasm's `memory.grow`
+    /// The external function signature for implementing wasm's `memory.grow`
     /// for locally-defined memories.
-    memory_grow_extfunc: Option<FuncRef>,
-
-    /// The external function declaration for implementing wasm's `memory.grow`
-    /// for imported memories.
-    imported_memory_grow_extfunc: Option<FuncRef>,
+    memory_grow_sig: Option<ir::SigRef>,
 
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
@@ -87,10 +108,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             target_config,
             module,
             vmctx: None,
-            memory32_size_extfunc: None,
-            imported_memory32_size_extfunc: None,
-            memory_grow_extfunc: None,
-            imported_memory_grow_extfunc: None,
+            memory32_size_sig: None,
+            memory_grow_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -107,105 +126,102 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
-    fn get_memory_grow_sig(&self, func: &mut Function) -> ir::SigRef {
-        func.import_signature(Signature {
-            params: vec![
-                AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                AbiParam::new(I32),
-                AbiParam::new(I32),
-            ],
-            returns: vec![AbiParam::new(I32)],
-            call_conv: self.target_config.default_call_conv,
-        })
+    fn get_memory_grow_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.memory_grow_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    AbiParam::new(I32),
+                    AbiParam::new(I32),
+                ],
+                returns: vec![AbiParam::new(I32)],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.memory_grow_sig = Some(sig);
+        sig
     }
 
-    /// Return the memory.grow function to call for the given index, along with the
-    /// translated index value to pass to it.
+    /// Return the memory.grow function signature to call for the given index, along with the
+    /// translated index value to pass to it and its index in `VMBuiltinFunctionsArray`.
     fn get_memory_grow_func(
         &mut self,
         func: &mut Function,
         index: MemoryIndex,
-    ) -> (FuncRef, usize) {
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
         if self.module.is_imported_memory(index) {
-            let extfunc = self.imported_memory_grow_extfunc.unwrap_or_else(|| {
-                let sig_ref = self.get_memory_grow_sig(func);
-                func.import_function(ExtFuncData {
-                    name: get_imported_memory32_grow_name(),
-                    signature: sig_ref,
-                    // We currently allocate all code segments independently, so nothing
-                    // is colocated.
-                    colocated: false,
-                })
-            });
-            self.imported_memory_grow_extfunc = Some(extfunc);
-            (extfunc, index.index())
-        } else {
-            let extfunc = self.memory_grow_extfunc.unwrap_or_else(|| {
-                let sig_ref = self.get_memory_grow_sig(func);
-                func.import_function(ExtFuncData {
-                    name: get_memory32_grow_name(),
-                    signature: sig_ref,
-                    // We currently allocate all code segments independently, so nothing
-                    // is colocated.
-                    colocated: false,
-                })
-            });
-            self.memory_grow_extfunc = Some(extfunc);
             (
-                extfunc,
+                self.get_memory_grow_sig(func),
+                index.index(),
+                BuiltinFunctionIndex::get_imported_memory32_grow_index(),
+            )
+        } else {
+            (
+                self.get_memory_grow_sig(func),
                 self.module.defined_memory_index(index).unwrap().index(),
+                BuiltinFunctionIndex::get_memory32_grow_index(),
             )
         }
     }
 
-    fn get_memory32_size_sig(&self, func: &mut Function) -> ir::SigRef {
-        func.import_signature(Signature {
-            params: vec![
-                AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                AbiParam::new(I32),
-            ],
-            returns: vec![AbiParam::new(I32)],
-            call_conv: self.target_config.default_call_conv,
-        })
+    fn get_memory32_size_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.memory32_size_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    AbiParam::new(I32),
+                ],
+                returns: vec![AbiParam::new(I32)],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.memory32_size_sig = Some(sig);
+        sig
     }
 
-    /// Return the memory.size function to call for the given index, along with the
-    /// translated index value to pass to it.
+    /// Return the memory.size function signature to call for the given index, along with the
+    /// translated index value to pass to it and its index in `VMBuiltinFunctionsArray`.
     fn get_memory_size_func(
         &mut self,
         func: &mut Function,
         index: MemoryIndex,
-    ) -> (FuncRef, usize) {
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
         if self.module.is_imported_memory(index) {
-            let extfunc = self.imported_memory32_size_extfunc.unwrap_or_else(|| {
-                let sig_ref = self.get_memory32_size_sig(func);
-                func.import_function(ExtFuncData {
-                    name: get_imported_memory32_size_name(),
-                    signature: sig_ref,
-                    // We currently allocate all code segments independently, so nothing
-                    // is colocated.
-                    colocated: false,
-                })
-            });
-            self.imported_memory32_size_extfunc = Some(extfunc);
-            (extfunc, index.index())
-        } else {
-            let extfunc = self.memory32_size_extfunc.unwrap_or_else(|| {
-                let sig_ref = self.get_memory32_size_sig(func);
-                func.import_function(ExtFuncData {
-                    name: get_memory32_size_name(),
-                    signature: sig_ref,
-                    // We currently allocate all code segments independently, so nothing
-                    // is colocated.
-                    colocated: false,
-                })
-            });
-            self.memory32_size_extfunc = Some(extfunc);
             (
-                extfunc,
+                self.get_memory32_size_sig(func),
+                index.index(),
+                BuiltinFunctionIndex::get_imported_memory32_size_index(),
+            )
+        } else {
+            (
+                self.get_memory32_size_sig(func),
                 self.module.defined_memory_index(index).unwrap().index(),
+                BuiltinFunctionIndex::get_memory32_size_index(),
             )
         }
+    }
+
+    /// Translates load of builtin function and returns a pair of values `vmctx`
+    /// and address of the loaded function.
+    fn translate_load_builtin_function_address(
+        &mut self,
+        pos: &mut FuncCursor<'_>,
+        callee_func_idx: BuiltinFunctionIndex,
+    ) -> (ir::Value, ir::Value) {
+        // We use an indirect call so that we don't have to patch the code at runtime.
+        let pointer_type = self.pointer_type();
+        let vmctx = self.vmctx(&mut pos.func);
+        let base = pos.ins().global_value(pointer_type, vmctx);
+
+        let mut mem_flags = ir::MemFlags::trusted();
+        mem_flags.set_readonly();
+
+        // Load the callee address.
+        let body_offset =
+            i32::try_from(self.offsets.vmctx_builtin_function(callee_func_idx)).unwrap();
+        let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
+
+        (base, func_addr)
     }
 }
 
@@ -662,12 +678,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _heap: ir::Heap,
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let (memory_grow_func, index_arg) = self.get_memory_grow_func(&mut pos.func, index);
+        let (func_sig, index_arg, func_idx) = self.get_memory_grow_func(&mut pos.func, index);
         let memory_index = pos.ins().iconst(I32, index_arg as i64);
-        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
         let call_inst = pos
             .ins()
-            .call(memory_grow_func, &[vmctx, val, memory_index]);
+            .call_indirect(func_sig, func_addr, &[vmctx, val, memory_index]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
@@ -677,10 +693,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: MemoryIndex,
         _heap: ir::Heap,
     ) -> WasmResult<ir::Value> {
-        let (memory_size_func, index_arg) = self.get_memory_size_func(&mut pos.func, index);
+        let (func_sig, index_arg, func_idx) = self.get_memory_size_func(&mut pos.func, index);
         let memory_index = pos.ins().iconst(I32, index_arg as i64);
-        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-        let call_inst = pos.ins().call(memory_size_func, &[vmctx, memory_index]);
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+        let call_inst = pos
+            .ins()
+            .call_indirect(func_sig, func_addr, &[vmctx, memory_index]);
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 }
