@@ -62,6 +62,9 @@ riscv = []
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = ["serde"]
 
+# Temporary feature that enforces basic block semantics.
+basic-blocks = []
+
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }
