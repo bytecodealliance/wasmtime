@@ -13,6 +13,36 @@ pub enum Descriptor {
     Stderr,
 }
 
+impl Descriptor {
+    pub fn is_file(&self) -> bool {
+        match self {
+            Descriptor::File(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_stdin(&self) -> bool {
+        match self {
+            Descriptor::Stdin => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_stdout(&self) -> bool {
+        match self {
+            Descriptor::Stdout => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_stderr(&self) -> bool {
+        match self {
+            Descriptor::Stderr => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct FdObject {
     pub file_type: host::__wasi_filetype_t,

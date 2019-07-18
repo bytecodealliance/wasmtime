@@ -27,39 +27,6 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t
         .map_err(|e| e.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
 }
 
-pub(crate) fn fd_renumber(
-    wasi_ctx: &mut WasiCtx,
-    from: host::__wasi_fd_t,
-    to: host::__wasi_fd_t,
-) -> Result<()> {
-    let fe_from = match wasi_ctx.fds.get(&from) {
-        Some(fe_from) => fe_from,
-        None => return Err(host::__WASI_EBADF),
-    };
-    let fe_to = match wasi_ctx.fds.get(&to) {
-        Some(fe_to) => fe_to,
-        None => return Err(host::__WASI_EBADF),
-    };
-
-    // Don't allow renumbering over a pre-opened resource.
-    // TODO: Eventually, we do want to permit this, once libpreopen in
-    // userspace is capable of removing entries from its tables as well.
-    if fe_from.preopen_path.is_some() || fe_to.preopen_path.is_some() {
-        return Err(host::__WASI_ENOTSUP);
-    }
-
-    let rawfd_from = fe_from.fd_object.descriptor.as_raw_fd();
-    let rawfd_to = fe_to.fd_object.descriptor.as_raw_fd();
-
-    if let Err(e) = nix::unistd::dup2(rawfd_from, rawfd_to) {
-        return Err(host_impl::errno_from_nix(e.as_errno().unwrap()));
-    }
-
-    let _ = wasi_ctx.fds.remove(&(rawfd_from as host::__wasi_fd_t));
-
-    Ok(())
-}
-
 pub(crate) fn fd_seek(
     fd_entry: &FdEntry,
     offset: host::__wasi_filedelta_t,

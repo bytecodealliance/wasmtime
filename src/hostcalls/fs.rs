@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 use super::return_enc_errno;
 use crate::ctx::WasiCtx;
-use crate::fdentry::Descriptor;
+use crate::fdentry::{Descriptor, FdEntry};
 use crate::memory::*;
 use crate::sys::{errno_from_host, host_impl, hostcalls_impl};
 use crate::{host, wasm32};
@@ -244,12 +244,38 @@ pub fn fd_renumber(
     let from = dec_fd(from);
     let to = dec_fd(to);
 
-    let ret = match hostcalls_impl::fd_renumber(wasi_ctx, from, to) {
-        Ok(()) => host::__WASI_ESUCCESS,
-        Err(e) => e,
+    if !wasi_ctx.contains_fd_entry(from) || !wasi_ctx.contains_fd_entry(to) {
+        return return_enc_errno(host::__WASI_EBADF);
+    }
+
+    // Don't allow renumbering over a pre-opened resource.
+    // TODO: Eventually, we do want to permit this, once libpreopen in
+    // userspace is capable of removing entries from its tables as well.
+    if wasi_ctx.fds[&from].preopen_path.is_some() || wasi_ctx.fds[&to].preopen_path.is_some() {
+        return return_enc_errno(host::__WASI_ENOTSUP);
+    }
+
+    // check if stdio fds
+    // TODO should we renumber stdio fds?
+    if !wasi_ctx.fds[&from].fd_object.descriptor.is_file()
+        || !wasi_ctx.fds[&to].fd_object.descriptor.is_file()
+    {
+        return return_enc_errno(host::__WASI_EBADF);
+    }
+
+    let fe_from_dup = if let Descriptor::File(f) = &*wasi_ctx.fds[&from].fd_object.descriptor {
+        match FdEntry::duplicate(f) {
+            Ok(fe) => fe,
+            Err(e) => return return_enc_errno(e),
+        }
+    } else {
+        return return_enc_errno(host::__WASI_EBADF);
     };
 
-    return_enc_errno(ret)
+    wasi_ctx.fds.insert(to, fe_from_dup);
+    wasi_ctx.fds.remove(&from);
+
+    return_enc_errno(host::__WASI_ESUCCESS)
 }
 
 #[wasi_common_cbindgen]

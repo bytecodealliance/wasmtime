@@ -46,14 +46,6 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t
         .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
 }
 
-pub(crate) fn fd_renumber(
-    wasi_ctx: &mut WasiCtx,
-    from: host::__wasi_fd_t,
-    to: host::__wasi_fd_t,
-) -> Result<()> {
-    unimplemented!("fd_renumber")
-}
-
 pub(crate) fn fd_seek(
     fd_entry: &FdEntry,
     offset: host::__wasi_filedelta_t,

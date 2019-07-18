@@ -134,6 +134,7 @@ cfg_if::cfg_if! {
                     "big_random_buf" => false,
                     "sched_yield" => false,
                     "file_pread_pwrite" => false,
+                    "renumber" => false,
                     _ => true,
                 }
             } else {
