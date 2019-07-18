@@ -3,9 +3,9 @@
 
 use crate::ctx::WasiCtx;
 use crate::fdentry::Descriptor;
-use crate::host;
 use crate::sys::errno_from_host;
 use crate::sys::host_impl;
+use crate::{host, Result};
 use std::fs::File;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::{Component, Path};
@@ -19,7 +19,7 @@ pub(crate) fn path_get(
     needed_base: host::__wasi_rights_t,
     needed_inheriting: host::__wasi_rights_t,
     needs_final_component: bool,
-) -> Result<(File, String), host::__wasi_errno_t> {
+) -> Result<(File, String)> {
     if path.contains("\0") {
         // if contains NUL, return EILSEQ
         return Err(host::__WASI_EILSEQ);

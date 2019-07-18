@@ -1,7 +1,6 @@
 use crate::fdentry::Descriptor;
-use crate::host;
 use crate::sys::errno_from_host;
-
+use crate::{host, Result};
 use std::io;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
@@ -18,14 +17,11 @@ impl AsRawFd for Descriptor {
 
 pub(crate) fn determine_type_and_access_rights<Fd: AsRawFd>(
     fd: &Fd,
-) -> Result<
-    (
-        host::__wasi_filetype_t,
-        host::__wasi_rights_t,
-        host::__wasi_rights_t,
-    ),
-    host::__wasi_errno_t,
-> {
+) -> Result<(
+    host::__wasi_filetype_t,
+    host::__wasi_rights_t,
+    host::__wasi_rights_t,
+)> {
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(fd)?;
 
     use nix::fcntl::{fcntl, OFlag, F_GETFL};
@@ -46,14 +42,11 @@ pub(crate) fn determine_type_and_access_rights<Fd: AsRawFd>(
 
 pub(crate) fn determine_type_rights<Fd: AsRawFd>(
     fd: &Fd,
-) -> Result<
-    (
-        host::__wasi_filetype_t,
-        host::__wasi_rights_t,
-        host::__wasi_rights_t,
-    ),
-    host::__wasi_errno_t,
-> {
+) -> Result<(
+    host::__wasi_filetype_t,
+    host::__wasi_rights_t,
+    host::__wasi_rights_t,
+)> {
     let (file_type, rights_base, rights_inheriting) = {
         // we just make a `File` here for convenience; we don't want it to close when it drops
         let file =

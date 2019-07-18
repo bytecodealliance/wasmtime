@@ -1,10 +1,9 @@
-use super::host;
 use crate::sys::{errno_from_host, fdentry_impl};
+use crate::{host, Result};
 
-use std::fs;
-use std::io;
 use std::mem::ManuallyDrop;
 use std::path::PathBuf;
+use std::{fs, io};
 
 #[derive(Debug)]
 pub enum Descriptor {
@@ -39,7 +38,7 @@ impl Drop for FdObject {
 }
 
 impl FdEntry {
-    pub fn from(file: fs::File) -> Result<Self, host::__wasi_errno_t> {
+    pub fn from(file: fs::File) -> Result<Self> {
         fdentry_impl::determine_type_and_access_rights(&file).map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 fd_object: FdObject {
@@ -54,13 +53,13 @@ impl FdEntry {
         )
     }
 
-    pub fn duplicate(file: &fs::File) -> Result<Self, host::__wasi_errno_t> {
+    pub fn duplicate(file: &fs::File) -> Result<Self> {
         file.try_clone()
             .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
             .and_then(Self::from)
     }
 
-    pub fn duplicate_stdin() -> Result<Self, host::__wasi_errno_t> {
+    pub fn duplicate_stdin() -> Result<Self> {
         fdentry_impl::determine_type_and_access_rights(&io::stdin()).map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 fd_object: FdObject {
@@ -75,7 +74,7 @@ impl FdEntry {
         )
     }
 
-    pub fn duplicate_stdout() -> Result<Self, host::__wasi_errno_t> {
+    pub fn duplicate_stdout() -> Result<Self> {
         fdentry_impl::determine_type_and_access_rights(&io::stdout()).map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 fd_object: FdObject {
@@ -90,7 +89,7 @@ impl FdEntry {
         )
     }
 
-    pub fn duplicate_stderr() -> Result<Self, host::__wasi_errno_t> {
+    pub fn duplicate_stderr() -> Result<Self> {
         fdentry_impl::determine_type_and_access_rights(&io::stderr()).map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 fd_object: FdObject {

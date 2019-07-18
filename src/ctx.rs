@@ -1,6 +1,6 @@
-use super::fdentry::FdEntry;
-use super::host;
-use super::sys::{dev_null, errno_from_host};
+use crate::fdentry::FdEntry;
+use crate::sys::{dev_null, errno_from_host};
+use crate::{host, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -16,7 +16,7 @@ pub struct WasiCtxBuilder {
 
 impl WasiCtxBuilder {
     /// Builder for a new `WasiCtx`.
-    pub fn new() -> Result<Self, host::__wasi_errno_t> {
+    pub fn new() -> Result<Self> {
         let mut builder = Self {
             fds: HashMap::new(),
             preopens: HashMap::new(),
@@ -31,35 +31,32 @@ impl WasiCtxBuilder {
         Ok(builder)
     }
 
-    pub fn args<S: AsRef<str>>(
-        mut self,
-        args: impl Iterator<Item = S>,
-    ) -> Result<Self, host::__wasi_errno_t> {
-        let args: Result<Vec<CString>, _> = args
+    pub fn args<S: AsRef<str>>(mut self, args: impl Iterator<Item = S>) -> Result<Self> {
+        let args: Result<Vec<CString>> = args
             .map(|arg| CString::new(arg.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE))
             .collect();
         self.args = args?;
         Ok(self)
     }
 
-    pub fn arg(mut self, arg: &str) -> Result<Self, host::__wasi_errno_t> {
+    pub fn arg(mut self, arg: &str) -> Result<Self> {
         self.args
             .push(CString::new(arg).map_err(|_| host::__WASI_ENOTCAPABLE)?);
         Ok(self)
     }
 
-    pub fn inherit_stdio(mut self) -> Result<Self, host::__wasi_errno_t> {
+    pub fn inherit_stdio(mut self) -> Result<Self> {
         self.fds.insert(0, FdEntry::duplicate_stdin()?);
         self.fds.insert(1, FdEntry::duplicate_stdout()?);
         self.fds.insert(2, FdEntry::duplicate_stderr()?);
         Ok(self)
     }
 
-    pub fn inherit_env(self) -> Result<Self, host::__wasi_errno_t> {
+    pub fn inherit_env(self) -> Result<Self> {
         self.envs(std::env::vars())
     }
 
-    pub fn env<S: AsRef<str>>(mut self, k: S, v: S) -> Result<Self, host::__wasi_errno_t> {
+    pub fn env<S: AsRef<str>>(mut self, k: S, v: S) -> Result<Self> {
         self.env.insert(
             CString::new(k.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE)?,
             CString::new(v.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE)?,
@@ -70,8 +67,8 @@ impl WasiCtxBuilder {
     pub fn envs<S: AsRef<str>, T: Borrow<(S, S)>>(
         mut self,
         envs: impl Iterator<Item = T>,
-    ) -> Result<Self, host::__wasi_errno_t> {
-        let env: Result<HashMap<CString, CString>, _> = envs
+    ) -> Result<Self> {
+        let env: Result<HashMap<CString, CString>> = envs
             .map(|t| {
                 let (k, v) = t.borrow();
                 let k = CString::new(k.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE);
@@ -91,7 +88,7 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<WasiCtx, host::__wasi_errno_t> {
+    pub fn build(mut self) -> Result<WasiCtx> {
         // startup code starts looking at fd 3 for preopens
         let mut preopen_fd = 3;
         for (guest_path, dir) in self.preopens {
@@ -147,7 +144,7 @@ impl WasiCtx {
     /// - Environment variables are inherited from the host process.
     ///
     /// To override these behaviors, use `WasiCtxBuilder`.
-    pub fn new<S: AsRef<str>>(args: impl Iterator<Item = S>) -> Result<Self, host::__wasi_errno_t> {
+    pub fn new<S: AsRef<str>>(args: impl Iterator<Item = S>) -> Result<Self> {
         WasiCtxBuilder::new()
             .and_then(|ctx| ctx.args(args))
             .and_then(|ctx| ctx.inherit_stdio())
@@ -160,7 +157,7 @@ impl WasiCtx {
         fd: host::__wasi_fd_t,
         rights_base: host::__wasi_rights_t,
         rights_inheriting: host::__wasi_rights_t,
-    ) -> Result<&FdEntry, host::__wasi_errno_t> {
+    ) -> Result<&FdEntry> {
         if let Some(fe) = self.fds.get(&fd) {
             Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
         } else {
@@ -173,7 +170,7 @@ impl WasiCtx {
         fd: host::__wasi_fd_t,
         rights_base: host::__wasi_rights_t,
         rights_inheriting: host::__wasi_rights_t,
-    ) -> Result<&mut FdEntry, host::__wasi_errno_t> {
+    ) -> Result<&mut FdEntry> {
         if let Some(fe) = self.fds.get_mut(&fd) {
             Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
         } else {
@@ -185,7 +182,7 @@ impl WasiCtx {
         fe: &FdEntry,
         rights_base: host::__wasi_rights_t,
         rights_inheriting: host::__wasi_rights_t,
-    ) -> Result<(), host::__wasi_errno_t> {
+    ) -> Result<()> {
         if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0 {
             Err(host::__WASI_ENOTCAPABLE)
         } else {
@@ -193,10 +190,7 @@ impl WasiCtx {
         }
     }
 
-    pub fn insert_fd_entry(
-        &mut self,
-        fe: FdEntry,
-    ) -> Result<host::__wasi_fd_t, host::__wasi_errno_t> {
+    pub fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<host::__wasi_fd_t> {
         // never insert where stdio handles usually are
         let mut fd = 3;
         while self.fds.contains_key(&fd) {

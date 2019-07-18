@@ -1,7 +1,6 @@
 use super::host_impl;
 use crate::fdentry::Descriptor;
-use crate::host;
-
+use crate::{host, Result};
 use std::fs::File;
 use std::io;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, RawHandle};
@@ -19,14 +18,11 @@ impl AsRawHandle for Descriptor {
 
 pub(crate) fn determine_type_and_access_rights<Handle: AsRawHandle>(
     handle: &Handle,
-) -> Result<
-    (
-        host::__wasi_filetype_t,
-        host::__wasi_rights_t,
-        host::__wasi_rights_t,
-    ),
-    host::__wasi_errno_t,
-> {
+) -> Result<(
+    host::__wasi_filetype_t,
+    host::__wasi_rights_t,
+    host::__wasi_rights_t,
+)> {
     use winx::file::{get_file_access_rights, AccessRight};
 
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(handle)?;
@@ -54,14 +50,11 @@ pub(crate) fn determine_type_and_access_rights<Handle: AsRawHandle>(
 
 pub(crate) fn determine_type_rights<Handle: AsRawHandle>(
     handle: &Handle,
-) -> Result<
-    (
-        host::__wasi_filetype_t,
-        host::__wasi_rights_t,
-        host::__wasi_rights_t,
-    ),
-    host::__wasi_errno_t,
-> {
+) -> Result<(
+    host::__wasi_filetype_t,
+    host::__wasi_rights_t,
+    host::__wasi_rights_t,
+)> {
     let (file_type, rights_base, rights_inheriting) = {
         let file_type =
             winx::file::get_file_type(handle.as_raw_handle()).map_err(host_impl::errno_from_win)?;

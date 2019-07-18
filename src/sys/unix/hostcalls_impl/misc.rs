@@ -2,16 +2,13 @@
 #![allow(unused_unsafe)]
 use crate::memory::*;
 use crate::sys::host_impl;
-use crate::{host, wasm32};
-
+use crate::{host, wasm32, Result};
 use nix::convert_ioctl_res;
 use nix::libc::{self, c_int};
 use std::cmp;
 use std::time::SystemTime;
 
-pub(crate) fn clock_res_get(
-    clock_id: host::__wasi_clockid_t,
-) -> Result<host::__wasi_timestamp_t, host::__wasi_errno_t> {
+pub(crate) fn clock_res_get(clock_id: host::__wasi_clockid_t) -> Result<host::__wasi_timestamp_t> {
     // convert the supported clocks to the libc types, or return EINVAL
     let clock_id = match clock_id {
         host::__WASI_CLOCK_REALTIME => libc::CLOCK_REALTIME,
@@ -45,9 +42,7 @@ pub(crate) fn clock_res_get(
         })
 }
 
-pub(crate) fn clock_time_get(
-    clock_id: host::__wasi_clockid_t,
-) -> Result<host::__wasi_timestamp_t, host::__wasi_errno_t> {
+pub(crate) fn clock_time_get(clock_id: host::__wasi_clockid_t) -> Result<host::__wasi_timestamp_t> {
     // convert the supported clocks to the libc types, or return EINVAL
     let clock_id = match clock_id {
         host::__WASI_CLOCK_REALTIME => libc::CLOCK_REALTIME,
@@ -73,9 +68,9 @@ pub(crate) fn clock_time_get(
 }
 
 pub(crate) fn poll_oneoff(
-    input: Vec<Result<host::__wasi_subscription_t, host::__wasi_errno_t>>,
+    input: Vec<Result<host::__wasi_subscription_t>>,
     output_slice: &mut [wasm32::__wasi_event_t],
-) -> Result<wasm32::size_t, host::__wasi_errno_t> {
+) -> Result<wasm32::size_t> {
     let timeout = input
         .iter()
         .filter_map(|event| match event {
@@ -152,7 +147,7 @@ nix::ioctl_read_bad!(fionread, nix::libc::FIONREAD, c_int);
 
 fn wasi_clock_to_relative_ns_delay(
     wasi_clock: host::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
-) -> Result<u128, host::__wasi_errno_t> {
+) -> Result<u128> {
     if wasi_clock.flags != wasm32::__WASI_SUBSCRIPTION_CLOCK_ABSTIME {
         return Ok(wasi_clock.timeout as u128);
     }

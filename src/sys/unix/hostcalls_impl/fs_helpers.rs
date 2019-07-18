@@ -3,9 +3,9 @@
 
 use crate::ctx::WasiCtx;
 use crate::fdentry::Descriptor;
-use crate::host;
 use crate::sys::errno_from_host;
 use crate::sys::host_impl;
+use crate::{host, Result};
 use nix::libc::{self, c_long};
 use std::fs::File;
 use std::path::{Component, Path};
@@ -21,7 +21,7 @@ pub(crate) fn path_get(
     needed_base: host::__wasi_rights_t,
     needed_inheriting: host::__wasi_rights_t,
     needs_final_component: bool,
-) -> Result<(File, String), host::__wasi_errno_t> {
+) -> Result<(File, String)> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
 
     if path.contains("\0") {
@@ -186,7 +186,7 @@ pub(crate) fn path_get(
     }
 }
 
-fn openat(dirfd: &File, path: &str) -> Result<File, host::__wasi_errno_t> {
+fn openat(dirfd: &File, path: &str) -> Result<File> {
     use nix::fcntl::{self, OFlag};
     use nix::sys::stat::Mode;
     use std::os::unix::prelude::{AsRawFd, FromRawFd};
@@ -201,7 +201,7 @@ fn openat(dirfd: &File, path: &str) -> Result<File, host::__wasi_errno_t> {
     .map_err(|e| host_impl::errno_from_nix(e.as_errno().unwrap()))
 }
 
-fn readlinkat(dirfd: &File, path: &str) -> Result<String, host::__wasi_errno_t> {
+fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
     use nix::fcntl;
     use std::os::unix::prelude::AsRawFd;
 

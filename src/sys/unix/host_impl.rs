@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-use crate::{host, memory, wasm32};
+use crate::{host, memory, wasm32, Result};
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
 
@@ -196,9 +196,7 @@ pub fn nix_from_filetype(sflags: host::__wasi_filetype_t) -> nix::sys::stat::SFl
     nix_sflags
 }
 
-pub fn filestat_from_nix(
-    filestat: nix::sys::stat::FileStat,
-) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
+pub fn filestat_from_nix(filestat: nix::sys::stat::FileStat) -> Result<host::__wasi_filestat_t> {
     use std::convert::TryFrom;
 
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
@@ -220,9 +218,7 @@ pub fn filestat_from_nix(
 }
 
 #[cfg(target_os = "linux")]
-pub fn dirent_from_host(
-    host_entry: &nix::libc::dirent,
-) -> Result<wasm32::__wasi_dirent_t, host::__wasi_errno_t> {
+pub fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi_dirent_t> {
     let mut entry = unsafe { std::mem::zeroed::<wasm32::__wasi_dirent_t>() };
     let d_namlen = unsafe { std::ffi::CStr::from_ptr(host_entry.d_name.as_ptr()) }
         .to_bytes()
@@ -238,9 +234,7 @@ pub fn dirent_from_host(
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn dirent_from_host(
-    host_entry: &nix::libc::dirent,
-) -> Result<wasm32::__wasi_dirent_t, host::__wasi_errno_t> {
+pub fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi_dirent_t> {
     let mut entry = unsafe { std::mem::zeroed::<wasm32::__wasi_dirent_t>() };
     entry.d_ino = memory::enc_inode(host_entry.d_ino);
     entry.d_next = memory::enc_dircookie(host_entry.d_seekoff);
@@ -253,6 +247,6 @@ pub fn dirent_from_host(
 ///
 /// NB WASI spec requires OS string to be valid UTF-8. Otherwise,
 /// `__WASI_EILSEQ` error is returned.
-pub fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String, host::__wasi_errno_t> {
+pub fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
     host::path_from_slice(s.as_ref().as_bytes()).map(String::from)
 }

@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(unused)]
-use crate::host;
+use crate::{host, Result};
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 
@@ -108,7 +108,7 @@ pub fn win_from_oflags(
 ///
 /// NB WASI spec requires OS string to be valid UTF-8. Otherwise,
 /// `__WASI_EILSEQ` error is returned.
-pub fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String, host::__wasi_errno_t> {
+pub fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
     let vec: Vec<u16> = s.as_ref().encode_wide().collect();
     String::from_utf16(&vec).map_err(|_| host::__WASI_EILSEQ)
 }

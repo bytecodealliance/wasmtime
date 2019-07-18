@@ -3,10 +3,10 @@
 use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
-use crate::host;
 use crate::sys::errno_from_host;
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::host_impl;
+use crate::{host, Result};
 use std::fs::File;
 use std::io::{self, Seek, SeekFrom};
 use std::os::windows::fs::FileExt;
@@ -36,16 +36,12 @@ pub(crate) fn fd_pread(
     file: &File,
     buf: &mut [u8],
     offset: host::__wasi_filesize_t,
-) -> Result<usize, host::__wasi_errno_t> {
+) -> Result<usize> {
     read_at(file, buf, offset)
         .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
 }
 
-pub(crate) fn fd_pwrite(
-    file: &File,
-    buf: &[u8],
-    offset: host::__wasi_filesize_t,
-) -> Result<usize, host::__wasi_errno_t> {
+pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t) -> Result<usize> {
     write_at(file, buf, offset)
         .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
 }
@@ -54,7 +50,7 @@ pub(crate) fn fd_renumber(
     wasi_ctx: &mut WasiCtx,
     from: host::__wasi_fd_t,
     to: host::__wasi_fd_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("fd_renumber")
 }
 
@@ -62,17 +58,15 @@ pub(crate) fn fd_seek(
     fd_entry: &FdEntry,
     offset: host::__wasi_filedelta_t,
     whence: host::__wasi_whence_t,
-) -> Result<u64, host::__wasi_errno_t> {
+) -> Result<u64> {
     unimplemented!("fd_seek")
 }
 
-pub(crate) fn fd_tell(fd_entry: &FdEntry) -> Result<u64, host::__wasi_errno_t> {
+pub(crate) fn fd_tell(fd_entry: &FdEntry) -> Result<u64> {
     unimplemented!("fd_tell")
 }
 
-pub(crate) fn fd_fdstat_get(
-    fd_entry: &FdEntry,
-) -> Result<host::__wasi_fdflags_t, host::__wasi_errno_t> {
+pub(crate) fn fd_fdstat_get(fd_entry: &FdEntry) -> Result<host::__wasi_fdflags_t> {
     use winx::file::AccessRight;
 
     let raw_handle = fd_entry.fd_object.descriptor.as_raw_handle();
@@ -85,7 +79,7 @@ pub(crate) fn fd_fdstat_get(
 pub(crate) fn fd_fdstat_set_flags(
     fd_entry: &FdEntry,
     fdflags: host::__wasi_fdflags_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("fd_fdstat_set_flags")
 }
 
@@ -94,7 +88,7 @@ pub(crate) fn fd_advise(
     advice: host::__wasi_advice_t,
     offset: host::__wasi_filesize_t,
     len: host::__wasi_filesize_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("fd_advise")
 }
 
@@ -102,7 +96,7 @@ pub(crate) fn path_create_directory(
     ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     path: &str,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("path_create_directory")
 }
 
@@ -114,7 +108,7 @@ pub(crate) fn path_link(
     new_path: &str,
     source_rights: host::__wasi_rights_t,
     target_rights: host::__wasi_rights_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("path_link")
 }
 
@@ -129,7 +123,7 @@ pub(crate) fn path_open(
     mut needed_base: host::__wasi_rights_t,
     mut needed_inheriting: host::__wasi_rights_t,
     fs_flags: host::__wasi_fdflags_t,
-) -> Result<FdEntry, host::__wasi_errno_t> {
+) -> Result<FdEntry> {
     use winx::file::{AccessRight, CreationDisposition, FlagsAndAttributes, ShareMode};
 
     let mut win_rights = AccessRight::READ_CONTROL;
@@ -200,7 +194,7 @@ pub(crate) fn fd_readdir(
     fd_entry: &FdEntry,
     host_buf: &mut [u8],
     cookie: host::__wasi_dircookie_t,
-) -> Result<usize, host::__wasi_errno_t> {
+) -> Result<usize> {
     unimplemented!("fd_readdir")
 }
 
@@ -210,7 +204,7 @@ pub(crate) fn path_readlink(
     path: &str,
     rights: host::__wasi_rights_t,
     buf: &mut [u8],
-) -> Result<usize, host::__wasi_errno_t> {
+) -> Result<usize> {
     unimplemented!("path_readlink")
 }
 
@@ -222,13 +216,11 @@ pub(crate) fn path_rename(
     new_dirfd: host::__wasi_fd_t,
     new_path: &str,
     new_rights: host::__wasi_rights_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("path_rename")
 }
 
-pub(crate) fn fd_filestat_get(
-    fd_entry: &FdEntry,
-) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
+pub(crate) fn fd_filestat_get(fd_entry: &FdEntry) -> Result<host::__wasi_filestat_t> {
     unimplemented!("fd_filestat_get")
 }
 
@@ -237,14 +229,14 @@ pub(crate) fn fd_filestat_set_times(
     st_atim: host::__wasi_timestamp_t,
     mut st_mtim: host::__wasi_timestamp_t,
     fst_flags: host::__wasi_fstflags_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("fd_filestat_set_times")
 }
 
 pub(crate) fn fd_filestat_set_size(
     fd_entry: &FdEntry,
     st_size: host::__wasi_filesize_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("fd_filestat_set_size")
 }
 
@@ -253,7 +245,7 @@ pub(crate) fn path_filestat_get(
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
     path: &str,
-) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
+) -> Result<host::__wasi_filestat_t> {
     unimplemented!("path_filestat_get")
 }
 
@@ -266,7 +258,7 @@ pub(crate) fn path_filestat_set_times(
     st_atim: host::__wasi_timestamp_t,
     mut st_mtim: host::__wasi_timestamp_t,
     fst_flags: host::__wasi_fstflags_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("path_filestat_set_times")
 }
 
@@ -276,7 +268,7 @@ pub(crate) fn path_symlink(
     rights: host::__wasi_rights_t,
     old_path: &str,
     new_path: &str,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("path_symlink")
 }
 
@@ -285,7 +277,7 @@ pub(crate) fn path_unlink_file(
     dirfd: host::__wasi_fd_t,
     path: &str,
     rights: host::__wasi_rights_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("path_unlink_file")
 }
 
@@ -294,6 +286,6 @@ pub(crate) fn path_remove_directory(
     dirfd: host::__wasi_fd_t,
     path: &str,
     rights: host::__wasi_rights_t,
-) -> Result<(), host::__wasi_errno_t> {
+) -> Result<()> {
     unimplemented!("path_remove_directory")
 }

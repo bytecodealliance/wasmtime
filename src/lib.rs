@@ -31,3 +31,5 @@ pub mod wasm32;
 
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use sys::preopen_dir;
+
+pub(crate) type Result<T> = std::result::Result<T, self::host::__wasi_errno_t>;

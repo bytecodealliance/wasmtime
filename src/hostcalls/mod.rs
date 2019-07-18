@@ -6,8 +6,10 @@ pub use self::fs::*;
 pub use self::misc::*;
 pub use self::sock::*;
 
-fn return_enc_errno(errno: super::host::__wasi_errno_t) -> super::wasm32::__wasi_errno_t {
-    let errno = super::memory::enc_errno(errno);
-    log::trace!("    -> errno={}", super::wasm32::strerror(errno));
+use crate::{host, memory, wasm32};
+
+fn return_enc_errno(errno: host::__wasi_errno_t) -> wasm32::__wasi_errno_t {
+    let errno = memory::enc_errno(errno);
+    log::trace!("    -> errno={}", wasm32::strerror(errno));
     errno
 }

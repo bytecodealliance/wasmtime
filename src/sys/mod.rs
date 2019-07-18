@@ -1,4 +1,4 @@
-use super::host;
+use crate::host;
 use cfg_if::cfg_if;
 
 cfg_if! {
