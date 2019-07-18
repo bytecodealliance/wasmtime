@@ -47,20 +47,19 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t
 }
 
 pub(crate) fn fd_seek(
-    fd_entry: &FdEntry,
+    file: &File,
     offset: host::__wasi_filedelta_t,
     whence: host::__wasi_whence_t,
 ) -> Result<u64> {
     unimplemented!("fd_seek")
 }
 
-pub(crate) fn fd_tell(fd_entry: &FdEntry) -> Result<u64> {
+pub(crate) fn fd_tell(file: &File) -> Result<u64> {
     unimplemented!("fd_tell")
 }
 
 pub(crate) fn fd_fdstat_get(fd_entry: &FdEntry) -> Result<host::__wasi_fdflags_t> {
     use winx::file::AccessRight;
-
     let raw_handle = fd_entry.fd_object.descriptor.as_raw_handle();
     match winx::file::get_file_access_rights(raw_handle).map(AccessRight::from_bits_truncate) {
         Ok(rights) => Ok(host_impl::fdflags_from_win(rights)),
@@ -76,7 +75,7 @@ pub(crate) fn fd_fdstat_set_flags(
 }
 
 pub(crate) fn fd_advise(
-    fd_entry: &FdEntry,
+    file: &File,
     advice: host::__wasi_advice_t,
     offset: host::__wasi_filesize_t,
     len: host::__wasi_filesize_t,

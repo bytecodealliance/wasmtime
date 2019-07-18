@@ -308,7 +308,12 @@ pub fn fd_seek(
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
-    let host_newoffset = match hostcalls_impl::fd_seek(fe, offset, whence) {
+    let file = match &*fe.fd_object.descriptor {
+        Descriptor::File(f) => f,
+        _ => return return_enc_errno(host::__WASI_EBADF),
+    };
+
+    let host_newoffset = match hostcalls_impl::fd_seek(file, offset, whence) {
         Ok(host_newoffset) => host_newoffset,
         Err(e) => return return_enc_errno(e),
     };
@@ -338,7 +343,12 @@ pub fn fd_tell(
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
-    let host_offset = match hostcalls_impl::fd_tell(fe) {
+    let file = match &*fe.fd_object.descriptor {
+        Descriptor::File(f) => f,
+        _ => return return_enc_errno(host::__WASI_EBADF),
+    };
+
+    let host_offset = match hostcalls_impl::fd_tell(file) {
         Ok(host_offset) => host_offset,
         Err(e) => return return_enc_errno(e),
     };
@@ -367,24 +377,26 @@ pub fn fd_fdstat_get(
         Err(e) => return return_enc_errno(e),
     };
 
-    let ret = if let Some(fe) = wasi_ctx.fds.get(&host_fd) {
-        host_fdstat.fs_filetype = fe.fd_object.file_type;
-        host_fdstat.fs_rights_base = fe.rights_base;
-        host_fdstat.fs_rights_inheriting = fe.rights_inheriting;
-        host_fdstat.fs_flags = match hostcalls_impl::fd_fdstat_get(fe) {
-            Ok(flags) => flags,
-            Err(e) => return return_enc_errno(e),
-        };
-        host::__WASI_ESUCCESS
-    } else {
-        host::__WASI_EBADF
+    let fe = match wasi_ctx.fds.get(&host_fd) {
+        Some(fe) => fe,
+        None => return return_enc_errno(host::__WASI_EBADF),
     };
+
+    let fs_flags = match hostcalls_impl::fd_fdstat_get(fe) {
+        Ok(flags) => flags,
+        Err(e) => return return_enc_errno(e),
+    };
+
+    host_fdstat.fs_filetype = fe.fd_object.file_type;
+    host_fdstat.fs_rights_base = fe.rights_base;
+    host_fdstat.fs_rights_inheriting = fe.rights_inheriting;
+    host_fdstat.fs_flags = fs_flags;
 
     trace!("     | *buf={:?}", host_fdstat);
 
-    if let Err(e) = enc_fdstat_byref(memory, fdstat_ptr, host_fdstat) {
-        return return_enc_errno(e);
-    }
+    let ret = enc_fdstat_byref(memory, fdstat_ptr, host_fdstat)
+        .map(|_| host::__WASI_ESUCCESS)
+        .unwrap_or_else(identity);
 
     return_enc_errno(ret)
 }
@@ -534,16 +546,21 @@ pub fn fd_advise(
     );
 
     let host_fd = dec_fd(fd);
+    let advice = dec_advice(advice);
+    let offset = dec_filesize(offset);
+    let len = dec_filesize(len);
     let rights = host::__WASI_RIGHT_FD_ADVISE;
+
     let fe = match wasi_ctx.get_fd_entry(host_fd, rights, 0) {
         Ok(fe) => fe,
         Err(e) => return return_enc_errno(e),
     };
-    let advice = dec_advice(advice);
-    let offset = dec_filesize(offset);
-    let len = dec_filesize(len);
+    let file = match &*fe.fd_object.descriptor {
+        Descriptor::File(f) => f,
+        _ => return return_enc_errno(host::__WASI_EBADF),
+    };
 
-    let ret = match hostcalls_impl::fd_advise(fe, advice, offset, len) {
+    let ret = match hostcalls_impl::fd_advise(file, advice, offset, len) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };

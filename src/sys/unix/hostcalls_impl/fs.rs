@@ -28,7 +28,7 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t
 }
 
 pub(crate) fn fd_seek(
-    fd_entry: &FdEntry,
+    file: &File,
     offset: host::__wasi_filedelta_t,
     whence: host::__wasi_whence_t,
 ) -> Result<u64> {
@@ -40,19 +40,15 @@ pub(crate) fn fd_seek(
         _ => return Err(host::__WASI_EINVAL),
     };
 
-    let rawfd = fd_entry.fd_object.descriptor.as_raw_fd();
-
-    match lseek(rawfd, offset, nwhence) {
+    match lseek(file.as_raw_fd(), offset, nwhence) {
         Ok(offset) => Ok(offset as u64),
         Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
     }
 }
 
-pub(crate) fn fd_tell(fd_entry: &FdEntry) -> Result<u64> {
+pub(crate) fn fd_tell(file: &File) -> Result<u64> {
     use nix::unistd::{lseek, Whence};
-
-    let rawfd = fd_entry.fd_object.descriptor.as_raw_fd();
-    match lseek(rawfd, 0, Whence::SeekCur) {
+    match lseek(file.as_raw_fd(), 0, Whence::SeekCur) {
         Ok(newoffset) => Ok(newoffset as u64),
         Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
     }
@@ -60,7 +56,6 @@ pub(crate) fn fd_tell(fd_entry: &FdEntry) -> Result<u64> {
 
 pub(crate) fn fd_fdstat_get(fd_entry: &FdEntry) -> Result<host::__wasi_fdflags_t> {
     use nix::fcntl::{fcntl, OFlag, F_GETFL};
-
     let rawfd = fd_entry.fd_object.descriptor.as_raw_fd();
     match fcntl(rawfd, F_GETFL).map(OFlag::from_bits_truncate) {
         Ok(flags) => Ok(host_impl::fdflags_from_nix(flags)),
@@ -81,7 +76,7 @@ pub(crate) fn fd_fdstat_set_flags(
 }
 
 pub(crate) fn fd_advise(
-    fd_entry: &FdEntry,
+    file: &File,
     advice: host::__wasi_advice_t,
     offset: host::__wasi_filesize_t,
     len: host::__wasi_filesize_t,
@@ -97,8 +92,9 @@ pub(crate) fn fd_advise(
             host::__WASI_ADVICE_NORMAL => libc::POSIX_FADV_NORMAL,
             _ => return Err(host::__WASI_EINVAL),
         };
-        let rawfd = fd_entry.fd_object.descriptor.as_raw_fd();
-        let res = unsafe { libc::posix_fadvise(rawfd, offset as off_t, len as off_t, host_advice) };
+        let res = unsafe {
+            libc::posix_fadvise(file.as_raw_fd(), offset as off_t, len as off_t, host_advice)
+        };
         if res != 0 {
             return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
         }
@@ -106,7 +102,7 @@ pub(crate) fn fd_advise(
 
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (fd_entry, offset, len);
+        let _ = (file, offset, len);
         match advice {
             host::__WASI_ADVICE_DONTNEED
             | host::__WASI_ADVICE_SEQUENTIAL
