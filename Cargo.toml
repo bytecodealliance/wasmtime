@@ -32,7 +32,7 @@ wasmtime-obj = { path = "wasmtime-obj" }
 wasmtime-wast = { path = "wasmtime-wast" }
 wasmtime-wasi = { path = "wasmtime-wasi" }
 wasmtime-wasi-c = { path = "wasmtime-wasi-c", optional = true }
-wasi-common = { git = "https://github.com/CraneStation/wasi-common" }
+wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "c3994bf57b5d2f1f973b0e4e37bc385695aa4ed2"}
 docopt = "1.0.1"
 serde = "1.0.75"
 serde_derive = "1.0.75"
