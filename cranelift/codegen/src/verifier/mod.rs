@@ -267,8 +267,6 @@ struct Verifier<'a> {
     expected_cfg: ControlFlowGraph,
     expected_domtree: DominatorTree,
     isa: Option<&'a dyn TargetIsa>,
-    // To be removed when #796 is completed.
-    verify_encodable_as_bb: bool,
 }
 
 impl<'a> Verifier<'a> {
@@ -280,7 +278,6 @@ impl<'a> Verifier<'a> {
             expected_cfg,
             expected_domtree,
             isa: fisa.isa,
-            verify_encodable_as_bb: std::env::var("CRANELIFT_BB").is_ok(),
         }
     }
 
@@ -473,12 +470,8 @@ impl<'a> Verifier<'a> {
 
     /// Check that the given EBB can be encoded as a BB, by checking that only
     /// branching instructions are ending the EBB.
+    #[cfg(feature = "basic-blocks")]
     fn encodable_as_bb(&self, ebb: Ebb, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        // Skip this verification if the environment variable is not set.
-        if !self.verify_encodable_as_bb {
-            return Ok(());
-        };
-
         let dfg = &self.func.dfg;
         let inst_iter = self.func.layout.ebb_insts(ebb);
         // Skip non-branching instructions.
@@ -1794,6 +1787,8 @@ impl<'a> Verifier<'a> {
                 self.verify_encoding(inst, errors)?;
                 self.immediate_constraints(inst, errors)?;
             }
+
+            #[cfg(feature = "basic-blocks")]
             self.encodable_as_bb(ebb, errors)?;
         }
 
