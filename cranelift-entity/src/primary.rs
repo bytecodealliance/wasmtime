@@ -7,6 +7,8 @@ use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::slice;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 use std::boxed::Box;
 use std::vec::Vec;
 
@@ -26,6 +28,7 @@ use std::vec::Vec;
 /// plain slice would make it easier to use incorrectly. To make a slice of a `PrimaryMap`, use
 /// `into_boxed_slice`.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct PrimaryMap<K, V>
 where
     K: EntityRef,
