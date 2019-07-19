@@ -3,11 +3,8 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 use crate::host;
-
-use std::ffi::{OsStr, OsString};
-use std::marker::PhantomData;
-use std::os::windows::prelude::{OsStrExt, OsStringExt};
-use std::slice;
+use std::ffi::OsStr;
+use std::os::windows::ffi::OsStrExt;
 
 pub fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_errno_t {
     // TODO: implement error mapping between Windows and WASI
@@ -107,61 +104,11 @@ pub fn win_from_oflags(
     (win_disp, win_flags_attrs)
 }
 
-/// `RawString` wraps `OsString` with Windows specific extensions
-/// enabling a common interface between different hosts for
-/// WASI raw string manipulation.
-#[derive(Debug, Clone)]
-pub struct RawString {
-    s: OsString,
-}
-
-impl RawString {
-    pub fn new(s: OsString) -> Self {
-        Self { s }
-    }
-
-    pub fn from_bytes(slice: &[u8]) -> Self {
-        Self {
-            s: OsString::from_wide(&slice.iter().map(|&x| x as u16).collect::<Vec<u16>>()),
-        }
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.s
-            .encode_wide()
-            .map(u16::to_le_bytes)
-            .fold(Vec::new(), |mut acc, bytes| {
-                acc.extend_from_slice(&bytes);
-                acc
-            })
-    }
-
-    pub fn contains(&self, c: &u8) -> bool {
-        let c = u16::from_le_bytes([*c, 0u8]);
-        self.s.encode_wide().find(|&x| x == c).is_some()
-    }
-
-    pub fn ends_with(&self, cs: &[u8]) -> bool {
-        let cs = cs.iter().map(|c| u16::from_le_bytes([*c, 0u8])).rev();
-        let ss: Vec<u16> = self.s.encode_wide().collect();
-        ss.into_iter().rev().zip(cs).all(|(l, r)| l == r)
-    }
-
-    pub fn push<T: AsRef<OsStr>>(&mut self, s: T) {
-        self.s.push(s)
-    }
-}
-
-impl AsRef<OsStr> for RawString {
-    fn as_ref(&self) -> &OsStr {
-        &self.s
-    }
-}
-
-impl From<&OsStr> for RawString {
-    fn from(os_str: &OsStr) -> Self {
-        Self {
-            s: os_str.to_owned(),
-        }
-    }
+/// Creates owned WASI path from OS string.
+///
+/// NB WASI spec requires OS string to be valid UTF-8. Otherwise,
+/// `__WASI_EILSEQ` error is returned.
+pub fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String, host::__wasi_errno_t> {
+    let vec: Vec<u16> = s.as_ref().encode_wide().collect();
+    String::from_utf16(&vec).map_err(|_| host::__WASI_EILSEQ)
 }

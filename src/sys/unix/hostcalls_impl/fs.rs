@@ -1,15 +1,14 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 use super::fs_helpers::*;
+use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
 use crate::sys::errno_from_host;
 use crate::sys::fdentry_impl::determine_type_rights;
-use crate::sys::host_impl::{self, RawString};
-
-use crate::ctx::WasiCtx;
+use crate::sys::host_impl;
 use crate::{host, wasm32};
-
 use nix::libc::{self, c_long, c_void, off_t};
+use std::ffi::CString;
 use std::fs::File;
 use std::os::unix::fs::FileExt;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};
@@ -164,7 +163,7 @@ pub(crate) fn fd_advise(
 pub(crate) fn path_create_directory(
     ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
-    path: &RawString,
+    path: &str,
 ) -> Result<(), host::__wasi_errno_t> {
     use nix::libc::mkdirat;
 
@@ -180,10 +179,8 @@ pub(crate) fn path_create_directory(
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
-    let path_cstr = match std::ffi::CString::new(path.to_bytes()) {
-        Ok(path_cstr) => path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
+    let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+
     // nix doesn't expose mkdirat() yet
     match unsafe { mkdirat(dir.as_raw_fd(), path_cstr.as_ptr(), 0o777) } {
         0 => Ok(()),
@@ -195,8 +192,8 @@ pub(crate) fn path_link(
     ctx: &WasiCtx,
     old_dirfd: host::__wasi_fd_t,
     new_dirfd: host::__wasi_fd_t,
-    old_path: &RawString,
-    new_path: &RawString,
+    old_path: &str,
+    new_path: &str,
     source_rights: host::__wasi_rights_t,
     target_rights: host::__wasi_rights_t,
 ) -> Result<(), host::__wasi_errno_t> {
@@ -209,14 +206,8 @@ pub(crate) fn path_link(
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
-    let old_path_cstr = match std::ffi::CString::new(old_path.to_bytes()) {
-        Ok(old_path_cstr) => old_path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
-    let new_path_cstr = match std::ffi::CString::new(new_path.to_bytes()) {
-        Ok(new_path_cstr) => new_path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
+    let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+    let new_path_cstr = CString::new(new_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
     // Not setting AT_SYMLINK_FOLLOW fails on most filesystems
     let atflags = libc::AT_SYMLINK_FOLLOW;
@@ -240,7 +231,7 @@ pub(crate) fn path_open(
     ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
-    path: &RawString,
+    path: &str,
     oflags: host::__wasi_oflags_t,
     read: bool,
     write: bool,
@@ -300,7 +291,7 @@ pub(crate) fn path_open(
     // meaningful for WASI programs to create executable files.
     let new_fd = match openat(
         dir.as_raw_fd(),
-        path.as_ref(),
+        path.as_str(),
         nix_all_oflags,
         Mode::from_bits_truncate(0o666),
     ) {
@@ -310,7 +301,7 @@ pub(crate) fn path_open(
                 // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
                 Some(Errno::ENXIO) => {
                     if let Ok(stat) =
-                        fstatat(dir.as_raw_fd(), path.as_ref(), AtFlags::AT_SYMLINK_NOFOLLOW)
+                        fstatat(dir.as_raw_fd(), path.as_str(), AtFlags::AT_SYMLINK_NOFOLLOW)
                     {
                         if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFSOCK) {
                             return Err(host::__WASI_ENOTSUP);
@@ -327,7 +318,7 @@ pub(crate) fn path_open(
                     if !(nix_all_oflags & (OFlag::O_NOFOLLOW | OFlag::O_DIRECTORY)).is_empty() =>
                 {
                     if let Ok(stat) =
-                        fstatat(dir.as_raw_fd(), path.as_ref(), AtFlags::AT_SYMLINK_NOFOLLOW)
+                        fstatat(dir.as_raw_fd(), path.as_str(), AtFlags::AT_SYMLINK_NOFOLLOW)
                     {
                         if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFLNK) {
                             return Err(host::__WASI_ELOOP);
@@ -421,7 +412,7 @@ pub(crate) fn fd_readdir(
 pub(crate) fn path_readlink(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
-    path: &RawString,
+    path: &str,
     rights: host::__wasi_rights_t,
     buf: &mut [u8],
 ) -> Result<usize, host::__wasi_errno_t> {
@@ -431,11 +422,7 @@ pub(crate) fn path_readlink(
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
-
-    let path_cstr = match std::ffi::CString::new(path.to_bytes()) {
-        Ok(path_cstr) => path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
+    let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
     // Linux requires that the buffer size is positive, whereas POSIX does not.
     // Use a fake buffer to store the results if the size is zero.
@@ -467,10 +454,10 @@ pub(crate) fn path_readlink(
 pub(crate) fn path_rename(
     wasi_ctx: &WasiCtx,
     old_dirfd: host::__wasi_fd_t,
-    old_path: &RawString,
+    old_path: &str,
     old_rights: host::__wasi_rights_t,
     new_dirfd: host::__wasi_fd_t,
-    new_path: &RawString,
+    new_path: &str,
     new_rights: host::__wasi_rights_t,
 ) -> Result<(), host::__wasi_errno_t> {
     use nix::libc::renameat;
@@ -485,14 +472,9 @@ pub(crate) fn path_rename(
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
-    let old_path_cstr = match std::ffi::CString::new(old_path.to_bytes()) {
-        Ok(old_path_cstr) => old_path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
-    let new_path_cstr = match std::ffi::CString::new(new_path.to_bytes()) {
-        Ok(new_path_cstr) => new_path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
+    let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+    let new_path_cstr = CString::new(new_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+
     let res = unsafe {
         renameat(
             old_dir.as_raw_fd(),
@@ -582,7 +564,7 @@ pub(crate) fn path_filestat_get(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
-    path: &RawString,
+    path: &str,
 ) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
     use nix::fcntl::AtFlags;
     use nix::sys::stat::fstatat;
@@ -604,7 +586,7 @@ pub(crate) fn path_filestat_get(
         _ => AtFlags::AT_SYMLINK_NOFOLLOW,
     };
 
-    match fstatat(dir.as_raw_fd(), path.as_ref(), atflags) {
+    match fstatat(dir.as_raw_fd(), path.as_str(), atflags) {
         Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
         Ok(filestat) => Ok(host_impl::filestat_from_nix(filestat)?),
     }
@@ -614,7 +596,7 @@ pub(crate) fn path_filestat_set_times(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
-    path: &RawString,
+    path: &str,
     rights: host::__wasi_rights_t,
     st_atim: host::__wasi_timestamp_t,
     mut st_mtim: host::__wasi_timestamp_t,
@@ -622,7 +604,7 @@ pub(crate) fn path_filestat_set_times(
 ) -> Result<(), host::__wasi_errno_t> {
     use nix::sys::time::{TimeSpec, TimeValLike};
 
-    let (dir, path) = match path_get(wasi_ctx, dirfd, dirflags, path, rights, 0, false) {
+    let (dir, path) = match path_get(wasi_ctx, dirfd, dirflags, &path, rights, 0, false) {
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
@@ -661,10 +643,9 @@ pub(crate) fn path_filestat_set_times(
     };
     let ts_mtime = *TimeSpec::nanoseconds(st_mtim as i64).as_ref();
     let times = [ts_atime, ts_mtime];
-    let path_cstr = match std::ffi::CString::new(path.to_bytes()) {
-        Ok(path_cstr) => path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
+
+    let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+
     let res =
         unsafe { libc::utimensat(dir.as_raw_fd(), path_cstr.as_ptr(), times.as_ptr(), atflags) };
     if res != 0 {
@@ -678,8 +659,8 @@ pub(crate) fn path_symlink(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     rights: host::__wasi_rights_t,
-    old_path: &RawString,
-    new_path: &RawString,
+    old_path: &str,
+    new_path: &str,
 ) -> Result<(), host::__wasi_errno_t> {
     use nix::libc::symlinkat;
 
@@ -687,14 +668,9 @@ pub(crate) fn path_symlink(
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
-    let old_path_cstr = match std::ffi::CString::new(old_path.to_bytes()) {
-        Ok(old_path_cstr) => old_path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
-    let new_path_cstr = match std::ffi::CString::new(new_path.to_bytes()) {
-        Ok(new_path_cstr) => new_path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
+    let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+    let new_path_cstr = CString::new(new_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+
     let res = unsafe {
         symlinkat(
             old_path_cstr.as_ptr(),
@@ -712,7 +688,7 @@ pub(crate) fn path_symlink(
 pub(crate) fn path_unlink_file(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
-    path: &RawString,
+    path: &str,
     rights: host::__wasi_rights_t,
 ) -> Result<(), host::__wasi_errno_t> {
     use nix::errno;
@@ -722,10 +698,8 @@ pub(crate) fn path_unlink_file(
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
-    let path_cstr = match std::ffi::CString::new(path.to_bytes()) {
-        Ok(path_cstr) => path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
+    let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+
     // nix doesn't expose unlinkat() yet
     match unsafe { unlinkat(dir.as_raw_fd(), path_cstr.as_ptr(), 0) } {
         0 => Ok(()),
@@ -746,7 +720,7 @@ pub(crate) fn path_unlink_file(
 
                 if e == errno::Errno::EPERM {
                     if let Ok(stat) =
-                        fstatat(dir.as_raw_fd(), path.as_ref(), AtFlags::AT_SYMLINK_NOFOLLOW)
+                        fstatat(dir.as_raw_fd(), path.as_str(), AtFlags::AT_SYMLINK_NOFOLLOW)
                     {
                         if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFDIR) {
                             e = errno::Errno::EISDIR;
@@ -765,7 +739,7 @@ pub(crate) fn path_unlink_file(
 pub(crate) fn path_remove_directory(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
-    path: &RawString,
+    path: &str,
     rights: host::__wasi_rights_t,
 ) -> Result<(), host::__wasi_errno_t> {
     use nix::errno;
@@ -775,10 +749,8 @@ pub(crate) fn path_remove_directory(
         Ok((dir, path)) => (dir, path),
         Err(e) => return Err(e),
     };
-    let path_cstr = match std::ffi::CString::new(path.to_bytes()) {
-        Ok(path_cstr) => path_cstr,
-        Err(_) => return Err(host::__WASI_EINVAL),
-    };
+    let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+
     // nix doesn't expose unlinkat() yet
     match unsafe { unlinkat(dir.as_raw_fd(), path_cstr.as_ptr(), AT_REMOVEDIR) } {
         0 => Ok(()),

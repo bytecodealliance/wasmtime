@@ -4,7 +4,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-use std::{io, slice};
+use std::{io, slice, str};
 
 pub type void = ::std::os::raw::c_void;
 
@@ -493,6 +493,22 @@ pub unsafe fn iovec_to_host<'a>(iovec: &'a __wasi_iovec_t) -> io::IoSlice<'a> {
 pub unsafe fn iovec_to_host_mut<'a>(iovec: &'a mut __wasi_iovec_t) -> io::IoSliceMut<'a> {
     let slice = slice::from_raw_parts_mut(iovec.buf as *mut u8, iovec.buf_len);
     io::IoSliceMut::new(slice)
+}
+
+/// Creates not-owned WASI path from byte slice.
+///
+/// NB WASI spec requires bytes to be valid UTF-8. Otherwise,
+/// `__WASI_EILSEQ` error is returned.
+pub fn path_from_slice<'a>(s: &'a [u8]) -> Result<&'a str, __wasi_errno_t> {
+    str::from_utf8(s).map_err(|_| __WASI_EILSEQ)
+}
+
+/// Creates owned WASI path from byte vector.
+///
+/// NB WASI spec requires bytes to be valid UTF-8. Otherwise,
+/// `__WASI_EILSEQ` error is returned.
+pub fn path_from_vec<S: Into<Vec<u8>>>(s: S) -> Result<String, __wasi_errno_t> {
+    String::from_utf8(s.into()).map_err(|_| __WASI_EILSEQ)
 }
 
 #[cfg(test)]

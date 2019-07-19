@@ -2,11 +2,8 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-use crate::host;
-use crate::memory;
-use crate::wasm32;
-
-use std::ffi::{OsStr, OsString};
+use crate::{host, memory, wasm32};
+use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
 
 pub fn errno_from_nix(errno: nix::errno::Errno) -> host::__wasi_errno_t {
@@ -252,52 +249,10 @@ pub fn dirent_from_host(
     Ok(entry)
 }
 
-/// `RawString` wraps `OsString` with Unix specific extensions
-/// enabling a common interface between different hosts for
-/// WASI raw string manipulation.
-#[derive(Debug, Clone)]
-pub struct RawString {
-    s: OsString,
-}
-
-impl RawString {
-    pub fn new(s: OsString) -> Self {
-        Self { s }
-    }
-
-    pub fn from_bytes(slice: &[u8]) -> Self {
-        Self {
-            s: OsStr::from_bytes(slice).to_owned(),
-        }
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.s.as_bytes().to_vec()
-    }
-
-    pub fn contains(&self, c: &u8) -> bool {
-        self.s.as_bytes().contains(c)
-    }
-
-    pub fn ends_with(&self, c: &[u8]) -> bool {
-        self.s.as_bytes().ends_with(c)
-    }
-
-    pub fn push<T: AsRef<OsStr>>(&mut self, s: T) {
-        self.s.push(s)
-    }
-}
-
-impl AsRef<OsStr> for RawString {
-    fn as_ref(&self) -> &OsStr {
-        &self.s
-    }
-}
-
-impl From<&OsStr> for RawString {
-    fn from(os_str: &OsStr) -> Self {
-        Self {
-            s: os_str.to_owned(),
-        }
-    }
+/// Creates owned WASI path from OS string.
+///
+/// NB WASI spec requires OS string to be valid UTF-8. Otherwise,
+/// `__WASI_EILSEQ` error is returned.
+pub fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String, host::__wasi_errno_t> {
+    host::path_from_slice(s.as_ref().as_bytes()).map(String::from)
 }

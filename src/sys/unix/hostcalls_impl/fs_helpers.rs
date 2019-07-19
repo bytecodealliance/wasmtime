@@ -5,28 +5,26 @@ use crate::ctx::WasiCtx;
 use crate::fdentry::Descriptor;
 use crate::host;
 use crate::sys::errno_from_host;
-use crate::sys::host_impl::{self, RawString};
-
+use crate::sys::host_impl;
 use nix::libc::{self, c_long};
-use std::ffi::OsStr;
 use std::fs::File;
 use std::path::{Component, Path};
 
 /// Normalizes a path to ensure that the target path is located under the directory provided.
 ///
 /// This is a workaround for not having Capsicum support in the OS.
-pub fn path_get(
+pub(crate) fn path_get(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
-    path: &RawString,
+    path: &str,
     needed_base: host::__wasi_rights_t,
     needed_inheriting: host::__wasi_rights_t,
     needs_final_component: bool,
-) -> Result<(File, RawString), host::__wasi_errno_t> {
+) -> Result<(File, String), host::__wasi_errno_t> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
 
-    if path.contains(&b'\0') {
+    if path.contains("\0") {
         // if contains NUL, return EILSEQ
         return Err(host::__WASI_EILSEQ);
     }
@@ -48,7 +46,7 @@ pub fn path_get(
 
     // Stack of paths left to process. This is initially the `path` argument to this function, but
     // any symlinks we encounter are processed by pushing them on the stack.
-    let mut path_stack = vec![path.clone()];
+    let mut path_stack = vec![path.to_owned()];
 
     // Track the number of symlinks we've expanded, so we can return `ELOOP` after too many.
     let mut symlink_expansions = 0;
@@ -60,7 +58,7 @@ pub fn path_get(
             Some(cur_path) => {
                 // eprintln!("cur_path = {:?}", cur_path);
 
-                let ends_with_slash = cur_path.ends_with(b"/");
+                let ends_with_slash = cur_path.ends_with("/");
                 let mut components = Path::new(&cur_path).components();
                 let head = match components.next() {
                     None => return Err(host::__WASI_ENOENT),
@@ -69,9 +67,9 @@ pub fn path_get(
                 let tail = components.as_path();
 
                 if tail.components().next().is_some() {
-                    let mut tail = RawString::from(tail.as_os_str());
+                    let mut tail = host_impl::path_from_host(tail.as_os_str())?;
                     if ends_with_slash {
-                        tail.push("/");
+                        tail.push_str("/");
                     }
                     path_stack.push(tail);
                 }
@@ -95,10 +93,10 @@ pub fn path_get(
                         }
                     }
                     Component::Normal(head) => {
-                        let mut head = RawString::from(head);
+                        let mut head = host_impl::path_from_host(head)?;
                         if ends_with_slash {
                             // preserve trailing slash
-                            head.push("/");
+                            head.push_str("/");
                         }
 
                         if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
@@ -125,8 +123,8 @@ pub fn path_get(
                                                 return Err(host::__WASI_ELOOP);
                                             }
 
-                                            if head.ends_with(b"/") {
-                                                link_path.push("/");
+                                            if head.ends_with("/") {
+                                                link_path.push_str("/");
                                             }
 
                                             path_stack.push(link_path);
@@ -156,8 +154,8 @@ pub fn path_get(
                                         return Err(host::__WASI_ELOOP);
                                     }
 
-                                    if head.ends_with(b"/") {
-                                        link_path.push("/");
+                                    if head.ends_with("/") {
+                                        link_path.push_str("/");
                                     }
 
                                     path_stack.push(link_path);
@@ -181,21 +179,21 @@ pub fn path_get(
                 // input path has trailing slashes and `needs_final_component` is not set
                 return Ok((
                     dir_stack.pop().ok_or(host::__WASI_ENOTCAPABLE)?,
-                    RawString::from(OsStr::new(".")),
+                    String::from("."),
                 ));
             }
         }
     }
 }
 
-fn openat(dirfd: &File, path: &RawString) -> Result<File, host::__wasi_errno_t> {
+fn openat(dirfd: &File, path: &str) -> Result<File, host::__wasi_errno_t> {
     use nix::fcntl::{self, OFlag};
     use nix::sys::stat::Mode;
     use std::os::unix::prelude::{AsRawFd, FromRawFd};
 
     fcntl::openat(
         dirfd.as_raw_fd(),
-        path.as_ref(),
+        path,
         OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW,
         Mode::empty(),
     )
@@ -203,15 +201,15 @@ fn openat(dirfd: &File, path: &RawString) -> Result<File, host::__wasi_errno_t> 
     .map_err(|e| host_impl::errno_from_nix(e.as_errno().unwrap()))
 }
 
-fn readlinkat(dirfd: &File, path: &RawString) -> Result<RawString, host::__wasi_errno_t> {
+fn readlinkat(dirfd: &File, path: &str) -> Result<String, host::__wasi_errno_t> {
     use nix::fcntl;
     use std::os::unix::prelude::AsRawFd;
 
     let readlink_buf = &mut [0u8; libc::PATH_MAX as usize + 1];
 
-    fcntl::readlinkat(dirfd.as_raw_fd(), path.as_ref(), readlink_buf)
-        .map(RawString::from)
+    fcntl::readlinkat(dirfd.as_raw_fd(), path, readlink_buf)
         .map_err(|e| host_impl::errno_from_nix(e.as_errno().unwrap()))
+        .and_then(host_impl::path_from_host)
 }
 
 #[cfg(not(target_os = "macos"))]

@@ -5,24 +5,22 @@ use crate::ctx::WasiCtx;
 use crate::fdentry::Descriptor;
 use crate::host;
 use crate::sys::errno_from_host;
-use crate::sys::host_impl::{self, RawString};
-
-use std::ffi::OsStr;
+use crate::sys::host_impl;
 use std::fs::File;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::{Component, Path};
 
 /// Normalizes a path to ensure that the target path is located under the directory provided.
-pub fn path_get(
+pub(crate) fn path_get(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     _dirflags: host::__wasi_lookupflags_t,
-    path: &RawString,
+    path: &str,
     needed_base: host::__wasi_rights_t,
     needed_inheriting: host::__wasi_rights_t,
     needs_final_component: bool,
-) -> Result<(File, RawString), host::__wasi_errno_t> {
-    if path.contains(&b'\0') {
+) -> Result<(File, String), host::__wasi_errno_t> {
+    if path.contains("\0") {
         // if contains NUL, return EILSEQ
         return Err(host::__WASI_EILSEQ);
     }
@@ -44,13 +42,13 @@ pub fn path_get(
 
     // Stack of paths left to process. This is initially the `path` argument to this function, but
     // any symlinks we encounter are processed by pushing them on the stack.
-    let mut path_stack = vec![path.clone()];
+    let mut path_stack = vec![path.to_owned()];
 
     loop {
         match path_stack.pop() {
             Some(cur_path) => {
                 // dbg!(&cur_path);
-                let ends_with_slash = cur_path.ends_with(b"/");
+                let ends_with_slash = cur_path.ends_with("/");
                 let mut components = Path::new(&cur_path).components();
                 let head = match components.next() {
                     None => return Err(host::__WASI_ENOENT),
@@ -59,9 +57,9 @@ pub fn path_get(
                 let tail = components.as_path();
 
                 if tail.components().next().is_some() {
-                    let mut tail = RawString::from(tail.as_os_str());
+                    let mut tail = host_impl::path_from_host(tail.as_os_str())?;
                     if ends_with_slash {
-                        tail.push("/");
+                        tail.push_str("/");
                     }
                     path_stack.push(tail);
                 }
@@ -85,10 +83,10 @@ pub fn path_get(
                         }
                     }
                     Component::Normal(head) => {
-                        let mut head = RawString::from(head);
+                        let mut head = host_impl::path_from_host(head)?;
                         if ends_with_slash {
                             // preserve trailing slash
-                            head.push("/");
+                            head.push_str("/");
                         }
                         // should the component be a directory? it should if there is more path left to process, or
                         // if it has a trailing slash and `needs_final_component` is not set
@@ -98,7 +96,7 @@ pub fn path_get(
                                     .last()
                                     .ok_or(host::__WASI_ENOTCAPABLE)?
                                     .as_raw_handle(),
-                                head.as_ref(),
+                                head.as_str(),
                                 winx::file::AccessRight::FILE_GENERIC_READ,
                                 winx::file::CreationDisposition::OPEN_EXISTING,
                                 winx::file::FlagsAndAttributes::FILE_FLAG_BACKUP_SEMANTICS,
@@ -123,7 +121,7 @@ pub fn path_get(
                 // input path has trailing slashes and `needs_final_component` is not set
                 return Ok((
                     dir_stack.pop().ok_or(host::__WASI_ENOTCAPABLE)?,
-                    RawString::from(OsStr::new(".")),
+                    String::from("."),
                 ));
             }
         }

@@ -6,8 +6,7 @@ use crate::fdentry::FdEntry;
 use crate::host;
 use crate::sys::errno_from_host;
 use crate::sys::fdentry_impl::determine_type_rights;
-use crate::sys::host_impl::{self, RawString};
-
+use crate::sys::host_impl;
 use std::fs::File;
 use std::io::{self, Seek, SeekFrom};
 use std::os::windows::fs::FileExt;
@@ -102,7 +101,7 @@ pub(crate) fn fd_advise(
 pub(crate) fn path_create_directory(
     ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
-    path: &RawString,
+    path: &str,
 ) -> Result<(), host::__wasi_errno_t> {
     unimplemented!("path_create_directory")
 }
@@ -111,8 +110,8 @@ pub(crate) fn path_link(
     ctx: &WasiCtx,
     old_dirfd: host::__wasi_fd_t,
     new_dirfd: host::__wasi_fd_t,
-    old_path: &RawString,
-    new_path: &RawString,
+    old_path: &str,
+    new_path: &str,
     source_rights: host::__wasi_rights_t,
     target_rights: host::__wasi_rights_t,
 ) -> Result<(), host::__wasi_errno_t> {
@@ -123,7 +122,7 @@ pub(crate) fn path_open(
     ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
-    path: &RawString,
+    path: &str,
     oflags: host::__wasi_oflags_t,
     read: bool,
     write: bool,
@@ -175,7 +174,7 @@ pub(crate) fn path_open(
 
     let new_handle = match winx::file::openat(
         dir.as_raw_handle(),
-        &path,
+        path.as_str(),
         win_rights,
         win_create_disp,
         win_flags_attrs,
@@ -208,7 +207,7 @@ pub(crate) fn fd_readdir(
 pub(crate) fn path_readlink(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
-    path: &RawString,
+    path: &str,
     rights: host::__wasi_rights_t,
     buf: &mut [u8],
 ) -> Result<usize, host::__wasi_errno_t> {
@@ -218,10 +217,10 @@ pub(crate) fn path_readlink(
 pub(crate) fn path_rename(
     wasi_ctx: &WasiCtx,
     old_dirfd: host::__wasi_fd_t,
-    old_path: &RawString,
+    old_path: &str,
     old_rights: host::__wasi_rights_t,
     new_dirfd: host::__wasi_fd_t,
-    new_path: &RawString,
+    new_path: &str,
     new_rights: host::__wasi_rights_t,
 ) -> Result<(), host::__wasi_errno_t> {
     unimplemented!("path_rename")
@@ -253,7 +252,7 @@ pub(crate) fn path_filestat_get(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
-    path: &RawString,
+    path: &str,
 ) -> Result<host::__wasi_filestat_t, host::__wasi_errno_t> {
     unimplemented!("path_filestat_get")
 }
@@ -262,7 +261,7 @@ pub(crate) fn path_filestat_set_times(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     dirflags: host::__wasi_lookupflags_t,
-    path: &RawString,
+    path: &str,
     rights: host::__wasi_rights_t,
     st_atim: host::__wasi_timestamp_t,
     mut st_mtim: host::__wasi_timestamp_t,
@@ -275,8 +274,8 @@ pub(crate) fn path_symlink(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
     rights: host::__wasi_rights_t,
-    old_path: &RawString,
-    new_path: &RawString,
+    old_path: &str,
+    new_path: &str,
 ) -> Result<(), host::__wasi_errno_t> {
     unimplemented!("path_symlink")
 }
@@ -284,7 +283,7 @@ pub(crate) fn path_symlink(
 pub(crate) fn path_unlink_file(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
-    path: &RawString,
+    path: &str,
     rights: host::__wasi_rights_t,
 ) -> Result<(), host::__wasi_errno_t> {
     unimplemented!("path_unlink_file")
@@ -293,7 +292,7 @@ pub(crate) fn path_unlink_file(
 pub(crate) fn path_remove_directory(
     wasi_ctx: &WasiCtx,
     dirfd: host::__wasi_fd_t,
-    path: &RawString,
+    path: &str,
     rights: host::__wasi_rights_t,
 ) -> Result<(), host::__wasi_errno_t> {
     unimplemented!("path_remove_directory")
