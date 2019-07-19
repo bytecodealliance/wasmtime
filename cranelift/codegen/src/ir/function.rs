@@ -19,6 +19,9 @@ use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
 use core::fmt;
 
+#[cfg(feature = "basic-blocks")]
+use crate::ir::{Inst, Opcode};
+
 /// A function.
 ///
 /// Functions can be cloned, but it is not a very fast operation.
@@ -218,6 +221,31 @@ impl Function {
     /// Starts collection of debug information.
     pub fn collect_debug_info(&mut self) {
         self.dfg.collect_debug_info();
+    }
+
+    /// Checks that the specified EBB can be encoded as a basic block.
+    ///
+    /// On error, returns the first invalid instruction and an error message.
+    #[cfg(feature = "basic-blocks")]
+    pub fn is_ebb_basic(&self, ebb: Ebb) -> Result<(), (Inst, &'static str)> {
+        let dfg = &self.dfg;
+        let inst_iter = self.layout.ebb_insts(ebb);
+
+        // Ignore all instructions prior to the first branch.
+        let mut inst_iter = inst_iter.skip_while(|&inst| !dfg[inst].opcode().is_branch());
+
+        // A conditional branch is permitted in a basic block only when followed
+        // by a terminal jump or fallthrough instruction.
+        if let Some(_branch) = inst_iter.next() {
+            if let Some(next) = inst_iter.next() {
+                match dfg[next].opcode() {
+                    Opcode::Fallthrough | Opcode::Jump => (),
+                    _ => return Err((next, "post-branch instruction not fallthrough or jump")),
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

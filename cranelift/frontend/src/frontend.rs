@@ -470,6 +470,16 @@ impl<'a> FunctionBuilder<'a> {
             "all blocks should be filled before dropping a FunctionBuilder"
         );
 
+        // Check that all blocks are valid basic blocks.
+        #[cfg(feature = "basic-blocks")]
+        debug_assert!(
+            self.func_ctx
+                .ebbs
+                .keys()
+                .all(|ebb| self.func.is_ebb_basic(ebb).is_ok()),
+            "all blocks should be encodable as basic blocks"
+        );
+
         // Clear the state (but preserve the allocated buffers) in preparation
         // for translation another function.
         self.func_ctx.clear();
@@ -840,6 +850,7 @@ impl<'a> FunctionBuilder<'a> {
         );
     }
 
+    /// An Ebb is 'filled' when a terminator instruction is present.
     fn fill_current_block(&mut self) {
         self.func_ctx.ebbs[self.position.ebb.unwrap()].filled = true;
     }
