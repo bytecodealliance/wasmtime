@@ -29,14 +29,12 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_native;
 use docopt::Docopt;
 use faerie::Artifact;
+use serde::Deserialize;
 use std::error::Error;
 use std::fmt::format;
 use std::fs::File;

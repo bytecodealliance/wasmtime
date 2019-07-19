@@ -10,6 +10,7 @@ use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     SignatureIndex, Table, TableIndex, WasmResult,
 };
+use sha2::{Digest, Sha256};
 use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
@@ -78,6 +79,11 @@ impl<'data> ModuleEnvironment<'data> {
     /// `ModuleEnvironment` and produces a `ModuleTranslation`.
     pub fn translate(mut self, data: &'data [u8]) -> WasmResult<ModuleTranslation<'data>> {
         translate_module(data, &mut self)?;
+
+        // TODO: this is temporary workaround and will be replaced with derive macro.
+        let mut hasher = Sha256::new();
+        hasher.input(data);
+        self.result.module.hash = Some(hasher.result().into());
 
         Ok(self.result)
     }

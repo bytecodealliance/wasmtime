@@ -30,15 +30,13 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
 use file_per_thread_logger;
 use pretty_env_logger;
+use serde::Deserialize;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;

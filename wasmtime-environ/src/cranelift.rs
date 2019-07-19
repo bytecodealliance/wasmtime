@@ -1,6 +1,7 @@
 //! Support for compiling with Cranelift.
 
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
+use crate::cache::{ModuleCacheData, ModuleCacheEntry};
 use crate::compilation::{
     CodeAndJTOffsets, Compilation, CompileError, Relocation, RelocationTarget, Relocations,
 };
@@ -123,73 +124,90 @@ impl crate::compilation::Compiler for Cranelift {
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
     ) -> Result<(Compilation, Relocations, ModuleAddressMap), CompileError> {
-        let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
-        let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
-        let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
+        let cache_entry = ModuleCacheEntry::new(module, isa, generate_debug_info);
 
-        function_body_inputs
-            .into_iter()
-            .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'data>)>>()
-            .par_iter()
-            .map(|(i, input)| {
-                let func_index = module.func_index(*i);
-                let mut context = Context::new();
-                context.func.name = get_func_name(func_index);
-                context.func.signature = module.signatures[module.functions[func_index]].clone();
+        let data = match cache_entry.get_data() {
+            Some(data) => data,
+            None => {
+                let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
+                let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
+                let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
 
-                let mut trans = FuncTranslator::new();
-                trans
-                    .translate(
-                        input.data,
-                        input.module_offset,
-                        &mut context.func,
-                        &mut FuncEnvironment::new(isa.frontend_config(), module),
-                    )
-                    .map_err(CompileError::Wasm)?;
+                function_body_inputs
+                    .into_iter()
+                    .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'data>)>>()
+                    .par_iter()
+                    .map(|(i, input)| {
+                        let func_index = module.func_index(*i);
+                        let mut context = Context::new();
+                        context.func.name = get_func_name(func_index);
+                        context.func.signature =
+                            module.signatures[module.functions[func_index]].clone();
 
-                let mut code_buf: Vec<u8> = Vec::new();
-                let mut reloc_sink = RelocSink::new(func_index);
-                let mut trap_sink = binemit::NullTrapSink {};
-                context
-                    .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
-                    .map_err(CompileError::Codegen)?;
+                        let mut trans = FuncTranslator::new();
+                        trans
+                            .translate(
+                                input.data,
+                                input.module_offset,
+                                &mut context.func,
+                                &mut FuncEnvironment::new(isa.frontend_config(), module),
+                            )
+                            .map_err(CompileError::Wasm)?;
 
-                let jt_offsets = context.func.jt_offsets.clone();
+                        let mut code_buf: Vec<u8> = Vec::new();
+                        let mut reloc_sink = RelocSink::new(func_index);
+                        let mut trap_sink = binemit::NullTrapSink {};
+                        context
+                            .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
+                            .map_err(CompileError::Codegen)?;
 
-                let address_transform = if generate_debug_info {
-                    let body_len = code_buf.len();
-                    let at = get_address_transform(&context, isa);
+                        let jt_offsets = context.func.jt_offsets.clone();
 
-                    Some(FunctionAddressMap {
-                        instructions: at,
-                        body_offset: 0,
-                        body_len,
+                        let address_transform = if generate_debug_info {
+                            let body_len = code_buf.len();
+                            let at = get_address_transform(&context, isa);
+
+                            Some(FunctionAddressMap {
+                                instructions: at,
+                                body_offset: 0,
+                                body_len,
+                            })
+                        } else {
+                            None
+                        };
+
+                        Ok((
+                            code_buf,
+                            jt_offsets,
+                            reloc_sink.func_relocs,
+                            address_transform,
+                        ))
                     })
-                } else {
-                    None
-                };
+                    .collect::<Result<Vec<_>, CompileError>>()?
+                    .into_iter()
+                    .for_each(|(function, func_jt_offsets, relocs, address_transform)| {
+                        functions.push(CodeAndJTOffsets {
+                            body: function,
+                            jt_offsets: func_jt_offsets,
+                        });
+                        relocations.push(relocs);
+                        if let Some(address_transform) = address_transform {
+                            address_transforms.push(address_transform);
+                        }
+                    });
 
-                Ok((
-                    code_buf,
-                    jt_offsets,
-                    reloc_sink.func_relocs,
-                    address_transform,
-                ))
-            })
-            .collect::<Result<Vec<_>, CompileError>>()?
-            .into_iter()
-            .for_each(|(function, func_jt_offsets, relocs, address_transform)| {
-                functions.push(CodeAndJTOffsets {
-                    body: function,
-                    jt_offsets: func_jt_offsets,
-                });
-                relocations.push(relocs);
-                if let Some(address_transform) = address_transform {
-                    address_transforms.push(address_transform);
-                }
-            });
+                // TODO: Reorganize where we create the Vec for the resolved imports.
 
-        // TODO: Reorganize where we create the Vec for the resolved imports.
-        Ok((Compilation::new(functions), relocations, address_transforms))
+                let data = ModuleCacheData::from_tuple((
+                    Compilation::new(functions),
+                    relocations,
+                    address_transforms,
+                ));
+                cache_entry.update_data(&data);
+                data
+            }
+        };
+
+        Ok(data.to_tuple())
     }
 }
