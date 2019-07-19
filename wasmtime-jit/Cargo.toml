@@ -28,7 +28,7 @@ wasmparser = "0.32.1"
 
 [features]
 default = ["std"]
-std = ["cranelift-codegen/std", "cranelift-wasm/std"]
+std = ["cranelift-codegen/std", "cranelift-wasm/std", "wasmtime-environ/std"]
 core = ["hashbrown/nightly", "cranelift-codegen/core", "cranelift-wasm/core", "wasmtime-environ/core"]
 lightbeam = ["wasmtime-environ/lightbeam"]
 
