@@ -21,6 +21,9 @@ default = ["std"]
 std = ["cranelift-codegen/std"]
 core = ["hashmap_core", "cranelift-codegen/core"]
 
+# Temporary feature that enforces basic block semantics.
+basic-blocks = ["cranelift-codegen/basic-blocks"]
+
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }

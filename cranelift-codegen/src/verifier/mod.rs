@@ -472,42 +472,9 @@ impl<'a> Verifier<'a> {
     /// branching instructions are ending the EBB.
     #[cfg(feature = "basic-blocks")]
     fn encodable_as_bb(&self, ebb: Ebb, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        let dfg = &self.func.dfg;
-        let inst_iter = self.func.layout.ebb_insts(ebb);
-        // Skip non-branching instructions.
-        let mut inst_iter = inst_iter.skip_while(|&inst| !dfg[inst].opcode().is_branch());
-
-        let branch = match inst_iter.next() {
-            // There is no branch in the current EBB.
-            None => return Ok(()),
-            Some(br) => br,
-        };
-
-        let after_branch = match inst_iter.next() {
-            // The branch is also the terminator.
-            None => return Ok(()),
-            Some(inst) => inst,
-        };
-
-        let after_branch_opcode = dfg[after_branch].opcode();
-        if !after_branch_opcode.is_terminator() {
-            return fatal!(
-                errors,
-                branch,
-                "branch followed by a non-terminator instruction."
-            );
-        };
-
-        // Allow only one conditional branch and a fallthrough implemented with
-        // a jump or fallthrough instruction. Any other, which returns or check
-        // a different condition would have to be moved to a different EBB.
-        match after_branch_opcode {
-            Opcode::Fallthrough | Opcode::Jump => Ok(()),
-            _ => fatal!(
-                errors,
-                after_branch,
-                "terminator instruction not fallthrough or jump"
-            ),
+        match self.func.is_ebb_basic(ebb) {
+            Ok(()) => Ok(()),
+            Err((inst, message)) => fatal!(errors, inst, message),
         }
     }
 
