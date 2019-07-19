@@ -31,6 +31,9 @@ std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std"]
 core = ["hashmap_core", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
 enable-serde = ["serde"]
 
+# Temporary feature that enforces basic block semantics.
+basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-blocks"]
+
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }
