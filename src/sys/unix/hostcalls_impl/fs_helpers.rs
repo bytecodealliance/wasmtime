@@ -1,8 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 
-use crate::ctx::WasiCtx;
-use crate::fdentry::Descriptor;
 use crate::sys::errno_from_host;
 use crate::sys::host_impl;
 use crate::{host, Result};
@@ -14,12 +12,9 @@ use std::path::{Component, Path};
 ///
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn path_get(
-    wasi_ctx: &WasiCtx,
-    dirfd: host::__wasi_fd_t,
+    dirfd: &File,
     dirflags: host::__wasi_lookupflags_t,
     path: &str,
-    needed_base: host::__wasi_rights_t,
-    needed_inheriting: host::__wasi_rights_t,
     needs_final_component: bool,
 ) -> Result<(File, String)> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
@@ -29,14 +24,10 @@ pub(crate) fn path_get(
         return Err(host::__WASI_EILSEQ);
     }
 
-    let dirfe = wasi_ctx.get_fd_entry(dirfd, needed_base, needed_inheriting)?;
-    let dirfd = match &*dirfe.fd_object.descriptor {
-        Descriptor::File(f) => f.try_clone().map_err(|err| {
-            err.raw_os_error()
-                .map_or(host::__WASI_EBADF, errno_from_host)
-        })?,
-        _ => return Err(host::__WASI_EBADF),
-    };
+    let dirfd = dirfd.try_clone().map_err(|err| {
+        err.raw_os_error()
+            .map_or(host::__WASI_EBADF, errno_from_host)
+    })?;
 
     // Stack of directory file descriptors. Index 0 always corresponds with the directory provided
     // to this function. Entering a directory causes a file descriptor to be pushed, while handling

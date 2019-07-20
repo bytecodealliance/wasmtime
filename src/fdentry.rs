@@ -14,6 +14,13 @@ pub enum Descriptor {
 }
 
 impl Descriptor {
+    pub fn as_file(&self) -> Result<&fs::File> {
+        match self {
+            Descriptor::File(f) => Ok(f),
+            _ => Err(host::__WASI_EBADF),
+        }
+    }
+
     pub fn is_file(&self) -> bool {
         match self {
             Descriptor::File(_) => true,

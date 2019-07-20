@@ -36,17 +36,15 @@ pub fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wa
 pub fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
     trace!("fd_datasync(fd={:?})", fd);
 
-    let host_fd = dec_fd(fd);
-    let rights = host::__WASI_RIGHT_FD_DATASYNC;
-    let fe = match wasi_ctx.get_fd_entry(host_fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = dec_fd(fd);
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_DATASYNC, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
-    let file = match &*fe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return return_enc_errno(host::__WASI_EBADF),
-    };
-    let ret = match file.sync_data() {
+    let ret = match fd.sync_data() {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(err) => err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host),
     };
@@ -78,14 +76,12 @@ pub fn fd_pread(
         Ok(iovs) => iovs,
         Err(e) => return return_enc_errno(e),
     };
-    let rights = host::__WASI_RIGHT_FD_READ;
-    let fe = match wasi_ctx.get_fd_entry(fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_READ, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
-    };
-    let file = match &*fe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return return_enc_errno(host::__WASI_EBADF),
     };
 
     let offset = dec_filesize(offset);
@@ -94,7 +90,7 @@ pub fn fd_pread(
     }
     let buf_size = iovs.iter().map(|v| v.buf_len).sum();
     let mut buf = vec![0; buf_size];
-    let host_nread = match hostcalls_impl::fd_pread(file, &mut buf, offset) {
+    let host_nread = match hostcalls_impl::fd_pread(fd, &mut buf, offset) {
         Ok(host_nread) => host_nread,
         Err(e) => return return_enc_errno(e),
     };
@@ -144,14 +140,12 @@ pub fn fd_pwrite(
         Ok(iovs) => iovs,
         Err(e) => return return_enc_errno(e),
     };
-    let rights = host::__WASI_RIGHT_FD_READ;
-    let fe = match wasi_ctx.get_fd_entry(fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_READ, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
-    };
-    let file = match &*fe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return return_enc_errno(host::__WASI_EBADF),
     };
 
     let offset = dec_filesize(offset);
@@ -165,7 +159,7 @@ pub fn fd_pwrite(
             std::slice::from_raw_parts(iov.buf as *const u8, iov.buf_len)
         });
     }
-    let host_nwritten = match hostcalls_impl::fd_pwrite(file, &buf, offset) {
+    let host_nwritten = match hostcalls_impl::fd_pwrite(fd, &buf, offset) {
         Ok(host_nwritten) => host_nwritten,
         Err(e) => return return_enc_errno(e),
     };
@@ -263,13 +257,14 @@ pub fn fd_renumber(
         return return_enc_errno(host::__WASI_EBADF);
     }
 
-    let fe_from_dup = if let Descriptor::File(f) = &*wasi_ctx.fds[&from].fd_object.descriptor {
-        match FdEntry::duplicate(f) {
-            Ok(fe) => fe,
-            Err(e) => return return_enc_errno(e),
-        }
-    } else {
-        return return_enc_errno(host::__WASI_EBADF);
+    let fe_from_dup = match wasi_ctx.fds[&from]
+        .fd_object
+        .descriptor
+        .as_file()
+        .and_then(FdEntry::duplicate)
+    {
+        Ok(fe) => fe,
+        Err(e) => return return_enc_errno(e),
     };
 
     wasi_ctx.fds.insert(to, fe_from_dup);
@@ -304,16 +299,15 @@ pub fn fd_seek(
     } else {
         host::__WASI_RIGHT_FD_SEEK | host::__WASI_RIGHT_FD_TELL
     };
-    let fe = match wasi_ctx.get_fd_entry(fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, rights, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
-    let file = match &*fe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return return_enc_errno(host::__WASI_EBADF),
-    };
 
-    let host_newoffset = match hostcalls_impl::fd_seek(file, offset, whence) {
+    let host_newoffset = match hostcalls_impl::fd_seek(fd, offset, whence) {
         Ok(host_newoffset) => host_newoffset,
         Err(e) => return return_enc_errno(e),
     };
@@ -337,18 +331,14 @@ pub fn fd_tell(
     trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
 
     let fd = dec_fd(fd);
-    let rights = host::__WASI_RIGHT_FD_TELL;
-
-    let fe = match wasi_ctx.get_fd_entry(fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_TELL, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
-    let file = match &*fe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return return_enc_errno(host::__WASI_EBADF),
-    };
-
-    let host_offset = match hostcalls_impl::fd_tell(file) {
+    let host_offset = match hostcalls_impl::fd_tell(fd) {
         Ok(host_offset) => host_offset,
         Err(e) => return return_enc_errno(e),
     };
@@ -371,30 +361,33 @@ pub fn fd_fdstat_get(
 ) -> wasm32::__wasi_errno_t {
     trace!("fd_fdstat_get(fd={:?}, fdstat_ptr={:#x?})", fd, fdstat_ptr);
 
-    let host_fd = dec_fd(fd);
-    let mut host_fdstat = match dec_fdstat_byref(memory, fdstat_ptr) {
-        Ok(host_fdstat) => host_fdstat,
+    let mut fdstat = match dec_fdstat_byref(memory, fdstat_ptr) {
+        Ok(fdstat) => fdstat,
+        Err(e) => return return_enc_errno(e),
+    };
+    let fd = dec_fd(fd);
+    let fe = match wasi_ctx.get_fd_entry(fd, 0, 0) {
+        Ok(fe) => fe,
+        Err(e) => return return_enc_errno(e),
+    };
+    let fd = match fe.fd_object.descriptor.as_file() {
+        Ok(fd) => fd,
         Err(e) => return return_enc_errno(e),
     };
 
-    let fe = match wasi_ctx.fds.get(&host_fd) {
-        Some(fe) => fe,
-        None => return return_enc_errno(host::__WASI_EBADF),
-    };
-
-    let fs_flags = match hostcalls_impl::fd_fdstat_get(fe) {
+    let fs_flags = match hostcalls_impl::fd_fdstat_get(fd) {
         Ok(flags) => flags,
         Err(e) => return return_enc_errno(e),
     };
 
-    host_fdstat.fs_filetype = fe.fd_object.file_type;
-    host_fdstat.fs_rights_base = fe.rights_base;
-    host_fdstat.fs_rights_inheriting = fe.rights_inheriting;
-    host_fdstat.fs_flags = fs_flags;
+    fdstat.fs_filetype = fe.fd_object.file_type;
+    fdstat.fs_rights_base = fe.rights_base;
+    fdstat.fs_rights_inheriting = fe.rights_inheriting;
+    fdstat.fs_flags = fs_flags;
 
-    trace!("     | *buf={:?}", host_fdstat);
+    trace!("     | *buf={:?}", fdstat);
 
-    let ret = enc_fdstat_byref(memory, fdstat_ptr, host_fdstat)
+    let ret = enc_fdstat_byref(memory, fdstat_ptr, fdstat)
         .map(|_| host::__WASI_ESUCCESS)
         .unwrap_or_else(identity);
 
@@ -409,15 +402,19 @@ pub fn fd_fdstat_set_flags(
 ) -> wasm32::__wasi_errno_t {
     trace!("fd_fdstat_set_flags(fd={:?}, fdflags={:#x?})", fd, fdflags);
 
-    let host_fd = dec_fd(fd);
-    let host_fdflags = dec_fdflags(fdflags);
-    let ret = match wasi_ctx.fds.get(&host_fd) {
-        Some(fe) => match hostcalls_impl::fd_fdstat_set_flags(fe, host_fdflags) {
-            Ok(()) => host::__WASI_ESUCCESS,
-            Err(e) => e,
-        },
-        None => host::__WASI_EBADF,
+    let fdflags = dec_fdflags(fdflags);
+    let fd = dec_fd(fd);
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, 0, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
     };
+
+    let ret = hostcalls_impl::fd_fdstat_set_flags(fd, fdflags)
+        .map(|_| host::__WASI_ESUCCESS)
+        .unwrap_or_else(identity);
 
     return_enc_errno(ret)
 }
@@ -436,8 +433,8 @@ pub fn fd_fdstat_set_rights(
         fs_rights_inheriting
     );
 
-    let host_fd = dec_fd(fd);
-    let fe = match wasi_ctx.fds.get_mut(&host_fd) {
+    let fd = dec_fd(fd);
+    let fe = match wasi_ctx.fds.get_mut(&fd) {
         Some(fe) => fe,
         None => return return_enc_errno(host::__WASI_EBADF),
     };
@@ -456,17 +453,15 @@ pub fn fd_fdstat_set_rights(
 pub fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> wasm32::__wasi_errno_t {
     trace!("fd_sync(fd={:?})", fd);
 
-    let host_fd = dec_fd(fd);
-    let rights = host::__WASI_RIGHT_FD_SYNC;
-    let fe = match wasi_ctx.get_fd_entry(host_fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = dec_fd(fd);
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_SYNC, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
-    let file = match &*fe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return return_enc_errno(host::__WASI_EBADF),
-    };
-    let ret = match file.sync_all() {
+    let ret = match fd.sync_all() {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(err) => err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host),
     };
@@ -545,22 +540,19 @@ pub fn fd_advise(
         advice
     );
 
-    let host_fd = dec_fd(fd);
+    let fd = dec_fd(fd);
     let advice = dec_advice(advice);
     let offset = dec_filesize(offset);
     let len = dec_filesize(len);
-    let rights = host::__WASI_RIGHT_FD_ADVISE;
-
-    let fe = match wasi_ctx.get_fd_entry(host_fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_ADVISE, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
-    let file = match &*fe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return return_enc_errno(host::__WASI_EBADF),
-    };
 
-    let ret = match hostcalls_impl::fd_advise(file, advice, offset, len) {
+    let ret = match hostcalls_impl::fd_advise(fd, advice, offset, len) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
@@ -577,21 +569,18 @@ pub fn fd_allocate(
 ) -> wasm32::__wasi_errno_t {
     trace!("fd_allocate(fd={:?}, offset={}, len={})", fd, offset, len);
 
-    let host_fd = dec_fd(fd);
-    let rights = host::__WASI_RIGHT_FD_ALLOCATE;
+    let fd = dec_fd(fd);
     let offset = dec_filesize(offset);
     let len = dec_filesize(len);
-
-    let fe = match wasi_ctx.get_fd_entry(host_fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_ALLOCATE, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
-    let f = match &*fe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return return_enc_errno(host::__WASI_EBADF),
-    };
 
-    let metadata = match f
+    let metadata = match fd
         .metadata()
         .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
     {
@@ -608,7 +597,7 @@ pub fn fd_allocate(
     }
 
     if wanted_size > current_size {
-        if let Err(e) = f
+        if let Err(e) = fd
             .set_len(wanted_size)
             .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
         {
@@ -643,7 +632,16 @@ pub fn path_create_directory(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let ret = match hostcalls_impl::path_create_directory(wasi_ctx, dirfd, path) {
+    let rights = host::__WASI_RIGHT_PATH_OPEN | host::__WASI_RIGHT_PATH_CREATE_DIRECTORY;
+    let dirfd = match wasi_ctx
+        .get_fd_entry(dirfd, rights, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
+
+    let ret = match hostcalls_impl::path_create_directory(dirfd, path) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
@@ -692,15 +690,22 @@ pub fn path_link(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let ret = match hostcalls_impl::path_link(
-        wasi_ctx,
-        old_dirfd,
-        new_dirfd,
-        old_path,
-        new_path,
-        host::__WASI_RIGHT_PATH_LINK_SOURCE,
-        host::__WASI_RIGHT_PATH_LINK_TARGET,
-    ) {
+    let old_dirfd = match wasi_ctx
+        .get_fd_entry(old_dirfd, host::__WASI_RIGHT_PATH_LINK_SOURCE, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
+    let new_dirfd = match wasi_ctx
+        .get_fd_entry(new_dirfd, host::__WASI_RIGHT_PATH_LINK_TARGET, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
+
+    let ret = match hostcalls_impl::path_link(old_dirfd, new_dirfd, old_path, new_path) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
@@ -823,9 +828,11 @@ pub fn fd_readdir(
         Err(e) => return return_enc_errno(e),
     };
     let fd = dec_fd(fd);
-    let rights = host::__WASI_RIGHT_FD_READDIR;
-    let fe = match wasi_ctx.get_fd_entry(fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_READDIR, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
     let host_buf = match dec_slice_of_mut::<u8>(memory, buf, buf_len) {
@@ -837,7 +844,7 @@ pub fn fd_readdir(
 
     let cookie = dec_dircookie(cookie);
 
-    let host_bufused = match hostcalls_impl::fd_readdir(fe, host_buf, cookie) {
+    let host_bufused = match hostcalls_impl::fd_readdir(fd, host_buf, cookie) {
         Ok(host_bufused) => host_bufused,
         Err(e) => return return_enc_errno(e),
     };
@@ -884,17 +891,19 @@ pub fn path_readlink(
 
     trace!("     | (path_ptr,path_len)='{}'", &path);
 
+    let dirfd = match wasi_ctx
+        .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_READLINK, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
+
     let mut buf = match dec_slice_of_mut::<u8>(memory, buf_ptr, buf_len) {
         Ok(slice) => slice,
         Err(e) => return return_enc_errno(e),
     };
-    let host_bufused = match hostcalls_impl::path_readlink(
-        wasi_ctx,
-        dirfd,
-        &path,
-        host::__WASI_RIGHT_PATH_READLINK,
-        &mut buf,
-    ) {
+    let host_bufused = match hostcalls_impl::path_readlink(dirfd, &path, &mut buf) {
         Ok(host_bufused) => host_bufused,
         Err(e) => return return_enc_errno(e),
     };
@@ -948,12 +957,22 @@ pub fn path_rename(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let old_rights = host::__WASI_RIGHT_PATH_RENAME_SOURCE;
-    let new_rights = host::__WASI_RIGHT_PATH_RENAME_TARGET;
+    let old_dirfd = match wasi_ctx
+        .get_fd_entry(old_dirfd, host::__WASI_RIGHT_PATH_RENAME_SOURCE, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
+    let new_dirfd = match wasi_ctx
+        .get_fd_entry(new_dirfd, host::__WASI_RIGHT_PATH_RENAME_TARGET, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
 
-    let ret = match hostcalls_impl::path_rename(
-        wasi_ctx, old_dirfd, old_path, old_rights, new_dirfd, new_path, new_rights,
-    ) {
+    let ret = match hostcalls_impl::path_rename(old_dirfd, old_path, new_dirfd, new_path) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
@@ -974,13 +993,16 @@ pub fn fd_filestat_get(
         filestat_ptr
     );
 
-    let host_fd = dec_fd(fd);
-    let fe = match wasi_ctx.fds.get(&host_fd) {
-        Some(fe) => fe,
-        None => return return_enc_errno(host::__WASI_EBADF),
+    let fd = dec_fd(fd);
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, 0, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
     };
 
-    let host_filestat = match hostcalls_impl::fd_filestat_get(fe) {
+    let host_filestat = match hostcalls_impl::fd_filestat_get(fd) {
         Ok(fstat) => fstat,
         Err(e) => return return_enc_errno(e),
     };
@@ -1011,17 +1033,19 @@ pub fn fd_filestat_set_times(
         fst_flags
     );
 
-    let host_fd = dec_fd(fd);
-    let rights = host::__WASI_RIGHT_FD_FILESTAT_SET_TIMES;
-    let fe = match wasi_ctx.get_fd_entry(host_fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = dec_fd(fd);
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_FILESTAT_SET_TIMES, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
     let st_atim = dec_timestamp(st_atim);
     let st_mtim = dec_timestamp(st_mtim);
     let fst_flags = dec_fstflags(fst_flags);
 
-    let ret = match hostcalls_impl::fd_filestat_set_times(fe, st_atim, st_mtim, fst_flags) {
+    let ret = match hostcalls_impl::fd_filestat_set_times(fd, st_atim, st_mtim, fst_flags) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
@@ -1037,10 +1061,12 @@ pub fn fd_filestat_set_size(
 ) -> wasm32::__wasi_errno_t {
     trace!("fd_filestat_set_size(fd={:?}, st_size={})", fd, st_size);
 
-    let host_fd = dec_fd(fd);
-    let rights = host::__WASI_RIGHT_FD_FILESTAT_SET_SIZE;
-    let fe = match wasi_ctx.get_fd_entry(host_fd, rights, 0) {
-        Ok(fe) => fe,
+    let fd = dec_fd(fd);
+    let fd = match wasi_ctx
+        .get_fd_entry(fd, host::__WASI_RIGHT_FD_FILESTAT_SET_SIZE, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
     let st_size = dec_filesize(st_size);
@@ -1048,7 +1074,7 @@ pub fn fd_filestat_set_size(
         return return_enc_errno(host::__WASI_E2BIG);
     }
 
-    let ret = match hostcalls_impl::fd_filestat_set_size(fe, st_size) {
+    let ret = match hostcalls_impl::fd_filestat_set_size(fd, st_size) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
@@ -1085,7 +1111,15 @@ pub fn path_filestat_get(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let host_filestat = match hostcalls_impl::path_filestat_get(wasi_ctx, dirfd, dirflags, path) {
+    let dirfd = match wasi_ctx
+        .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_FILESTAT_GET, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
+
+    let host_filestat = match hostcalls_impl::path_filestat_get(dirfd, dirflags, path) {
         Ok(host_filestat) => host_filestat,
         Err(e) => return return_enc_errno(e),
     };
@@ -1132,13 +1166,20 @@ pub fn path_filestat_set_times(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let rights = host::__WASI_RIGHT_PATH_FILESTAT_SET_TIMES;
     let st_atim = dec_timestamp(st_atim);
     let st_mtim = dec_timestamp(st_mtim);
     let fst_flags = dec_fstflags(fst_flags);
 
+    let dirfd = match wasi_ctx
+        .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_FILESTAT_SET_TIMES, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
+
     let ret = match hostcalls_impl::path_filestat_set_times(
-        wasi_ctx, dirfd, dirflags, path, rights, st_atim, st_mtim, fst_flags,
+        dirfd, dirflags, path, st_atim, st_mtim, fst_flags,
     ) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
@@ -1183,9 +1224,15 @@ pub fn path_symlink(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let rights = host::__WASI_RIGHT_PATH_SYMLINK;
+    let dirfd = match wasi_ctx
+        .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_SYMLINK, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
 
-    let ret = match hostcalls_impl::path_symlink(wasi_ctx, dirfd, rights, old_path, new_path) {
+    let ret = match hostcalls_impl::path_symlink(dirfd, old_path, new_path) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
@@ -1217,12 +1264,15 @@ pub fn path_unlink_file(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let ret = match hostcalls_impl::path_unlink_file(
-        wasi_ctx,
-        dirfd,
-        path,
-        host::__WASI_RIGHT_PATH_UNLINK_FILE,
-    ) {
+    let dirfd = match wasi_ctx
+        .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_UNLINK_FILE, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
+
+    let ret = match hostcalls_impl::path_unlink_file(dirfd, path) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
@@ -1254,9 +1304,15 @@ pub fn path_remove_directory(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let rights = host::__WASI_RIGHT_PATH_REMOVE_DIRECTORY;
+    let dirfd = match wasi_ctx
+        .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_REMOVE_DIRECTORY, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())
+    {
+        Ok(f) => f,
+        Err(e) => return return_enc_errno(e),
+    };
 
-    let ret = match hostcalls_impl::path_remove_directory(wasi_ctx, dirfd, path, rights) {
+    let ret = match hostcalls_impl::path_remove_directory(dirfd, path) {
         Ok(()) => host::__WASI_ESUCCESS,
         Err(e) => e,
     };
