@@ -340,15 +340,19 @@ pub fn fd_tell(
     trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
 
     let fd = dec_fd(fd);
-    let fd = match wasi_ctx
+    let mut fd = match wasi_ctx
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_TELL, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())
     {
         Ok(f) => f,
         Err(e) => return return_enc_errno(e),
     };
-    let host_offset = match hostcalls_impl::fd_tell(fd) {
-        Ok(host_offset) => host_offset,
+
+    let host_offset = match fd
+        .seek(SeekFrom::Current(0))
+        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+    {
+        Ok(offset) => offset,
         Err(e) => return return_enc_errno(e),
     };
 
