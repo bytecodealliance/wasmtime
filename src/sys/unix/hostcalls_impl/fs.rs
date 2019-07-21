@@ -27,25 +27,6 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t
         .map_err(|e| e.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
 }
 
-pub(crate) fn fd_seek(
-    file: &File,
-    offset: host::__wasi_filedelta_t,
-    whence: host::__wasi_whence_t,
-) -> Result<u64> {
-    use nix::unistd::{lseek, Whence};
-    let nwhence = match whence {
-        host::__WASI_WHENCE_CUR => Whence::SeekCur,
-        host::__WASI_WHENCE_END => Whence::SeekEnd,
-        host::__WASI_WHENCE_SET => Whence::SeekSet,
-        _ => return Err(host::__WASI_EINVAL),
-    };
-
-    match lseek(file.as_raw_fd(), offset, nwhence) {
-        Ok(offset) => Ok(offset as u64),
-        Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
-    }
-}
-
 pub(crate) fn fd_tell(file: &File) -> Result<u64> {
     use nix::unistd::{lseek, Whence};
     match lseek(file.as_raw_fd(), 0, Whence::SeekCur) {

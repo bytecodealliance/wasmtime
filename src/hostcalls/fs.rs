@@ -7,7 +7,7 @@ use crate::sys::{errno_from_host, host_impl, hostcalls_impl};
 use crate::{host, wasm32};
 use log::trace;
 use std::convert::identity;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 
 use wasi_common_cbindgen::wasi_common_cbindgen;
 
@@ -299,7 +299,7 @@ pub fn fd_seek(
     } else {
         host::__WASI_RIGHT_FD_SEEK | host::__WASI_RIGHT_FD_TELL
     };
-    let fd = match wasi_ctx
+    let mut fd = match wasi_ctx
         .get_fd_entry(fd, rights, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())
     {
@@ -307,8 +307,17 @@ pub fn fd_seek(
         Err(e) => return return_enc_errno(e),
     };
 
-    let host_newoffset = match hostcalls_impl::fd_seek(fd, offset, whence) {
-        Ok(host_newoffset) => host_newoffset,
+    let pos = match whence {
+        host::__WASI_WHENCE_CUR => SeekFrom::Current(offset),
+        host::__WASI_WHENCE_END => SeekFrom::End(offset),
+        host::__WASI_WHENCE_SET => SeekFrom::Start(offset as u64),
+        _ => return return_enc_errno(host::__WASI_EINVAL),
+    };
+    let host_newoffset = match fd
+        .seek(pos)
+        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+    {
+        Ok(offset) => offset,
         Err(e) => return return_enc_errno(e),
     };
 

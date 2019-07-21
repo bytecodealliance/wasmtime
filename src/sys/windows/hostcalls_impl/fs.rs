@@ -46,14 +46,6 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t
         .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
 }
 
-pub(crate) fn fd_seek(
-    file: &File,
-    offset: host::__wasi_filedelta_t,
-    whence: host::__wasi_whence_t,
-) -> Result<u64> {
-    unimplemented!("fd_seek")
-}
-
 pub(crate) fn fd_tell(file: &File) -> Result<u64> {
     unimplemented!("fd_tell")
 }
