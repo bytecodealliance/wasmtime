@@ -18,7 +18,7 @@ pub fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_errno_t {
         ERROR_INVALID_HANDLE | ERROR_INVALID_NAME => host::__WASI_EBADF,
         ERROR_NOT_ENOUGH_MEMORY | ERROR_OUTOFMEMORY => host::__WASI_ENOMEM,
         ERROR_DIR_NOT_EMPTY => host::__WASI_ENOTEMPTY,
-        ERROR_DEV_NOT_EXIST => host::__WASI_ENODEV,
+        ERROR_DEV_NOT_EXIST => host::__WASI_EINVAL,
         ERROR_NOT_READY | ERROR_BUSY => host::__WASI_EBUSY,
         ERROR_NOT_SUPPORTED => host::__WASI_ENOTSUP,
         ERROR_FILE_EXISTS => host::__WASI_EEXIST,
