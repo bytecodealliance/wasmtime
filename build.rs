@@ -135,6 +135,7 @@ cfg_if::cfg_if! {
                     "sched_yield" => false,
                     "file_pread_pwrite" => false,
                     "renumber" => false,
+                    "file_seek_tell" => false,
                     _ => true,
                 }
             } else {
