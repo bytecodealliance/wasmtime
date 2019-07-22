@@ -8,15 +8,30 @@ use lazy_static::lazy_static;
 use log::warn;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
+#[cfg(windows)]
+use std::ffi::OsString;
 use std::fmt;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 lazy_static! {
     static ref CACHE_DIR: Option<PathBuf> =
         match ProjectDirs::from("org", "CraneStation", "wasmtime") {
             Some(proj_dirs) => {
                 let cache_dir = proj_dirs.cache_dir();
+                // Temporary workaround for: https://github.com/rust-lang/rust/issues/32689
+                #[cfg(windows)]
+                let mut long_path = OsString::from("\\\\?\\");
+                #[cfg(windows)]
+                let cache_dir = {
+                    if cache_dir.starts_with("\\\\?\\") {
+                        cache_dir
+                    }
+                    else {
+                        long_path.push(cache_dir.as_os_str());
+                        Path::new(&long_path)
+                    }
+                };
                 match fs::create_dir_all(cache_dir) {
                     Ok(()) => (),
                     Err(err) => warn!("Unable to create cache directory, failed with: {}", err),
