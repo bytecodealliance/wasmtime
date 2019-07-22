@@ -479,15 +479,18 @@ impl<'a> FunctionBuilder<'a> {
             "all blocks should be filled before dropping a FunctionBuilder"
         );
 
-        // Check that all blocks are valid basic blocks.
+        // In debug mode, check that all blocks are valid basic blocks.
         #[cfg(feature = "basic-blocks")]
-        debug_assert!(
-            self.func_ctx
-                .ebbs
-                .keys()
-                .all(|ebb| self.func.is_ebb_basic(ebb).is_ok()),
-            "all blocks should be encodable as basic blocks"
-        );
+        #[cfg(debug_assertions)]
+        {
+            // Iterate manually to provide more helpful error messages.
+            for ebb in self.func_ctx.ebbs.keys() {
+                if let Err((inst, _msg)) = self.func.is_ebb_basic(ebb) {
+                    let inst_str = self.func.dfg.display_inst(inst, None);
+                    panic!("{} failed basic block invariants on {}", ebb, inst_str);
+                }
+            }
+        }
 
         // Clear the state (but preserve the allocated buffers) in preparation
         // for translation another function.
