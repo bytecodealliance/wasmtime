@@ -1244,6 +1244,14 @@ fn translate_br_if(
     let val = state.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, state);
     builder.ins().brnz(val, br_destination, inputs);
+
+    #[cfg(feature = "basic-blocks")]
+    {
+        let next_ebb = builder.create_ebb();
+        builder.ins().jump(next_ebb, &[]);
+        builder.seal_block(next_ebb); // The only predecessor is the current block.
+        builder.switch_to_block(next_ebb);
+    }
 }
 
 fn translate_br_if_args(
