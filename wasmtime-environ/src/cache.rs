@@ -45,7 +45,7 @@ type ModuleCacheDataTupleType = (Compilation, Relocations, ModuleAddressMap);
 
 impl ModuleCacheEntry {
     pub fn new(module: &Module, _isa: &dyn isa::TargetIsa, _generate_debug_info: bool) -> Self {
-        // TODO: cache directory hierarchy with isa name, compiler name & build's uuid, and flag if debug symbols are available
+        // TODO: cache directory hierarchy with isa name, compiler name & git revision, and files with flag if debug symbols are available
         let option_hash = module.hash;
 
         let mod_cache_path = CACHE_DIR.clone().and_then(|p| {
@@ -66,7 +66,7 @@ impl ModuleCacheEntry {
                 Ok(cache_bytes) => match bincode::deserialize(&cache_bytes[..]) {
                     Ok(data) => Some(data),
                     Err(err) => {
-                        debug!("Failed to deserialize cached code: {}", err);
+                        warn!("Failed to deserialize cached code: {}", err);
                         None
                     }
                 },
@@ -82,7 +82,7 @@ impl ModuleCacheEntry {
             let cache_buf = match bincode::serialize(&data) {
                 Ok(data) => data,
                 Err(err) => {
-                    debug!("Failed to serialize cached code: {}", err);
+                    warn!("Failed to serialize cached code: {}", err);
                     return;
                 }
             };
