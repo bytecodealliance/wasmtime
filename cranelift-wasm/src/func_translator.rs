@@ -89,7 +89,8 @@ impl FuncTranslator {
         let entry_block = builder.create_ebb();
         builder.append_ebb_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block); // This also creates values for the arguments.
-        builder.seal_block(entry_block);
+        builder.seal_block(entry_block); // Declare all predecessors known.
+
         // Make sure the entry block is inserted in the layout before we make any callbacks to
         // `environ`. The callback functions may need to insert things in the entry block.
         builder.ensure_inserted_ebb();
