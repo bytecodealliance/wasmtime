@@ -5,7 +5,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::isa;
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
-use log::{debug, warn};
+use log::warn;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
 use std::fmt;
