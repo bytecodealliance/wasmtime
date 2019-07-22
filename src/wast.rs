@@ -32,12 +32,13 @@ use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
-use file_per_thread_logger;
 use pretty_env_logger;
 use std::path::Path;
 use std::process;
 use wasmtime_jit::Compiler;
 use wasmtime_wast::WastContext;
+
+mod utils;
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
@@ -76,7 +77,7 @@ fn main() {
     if args.flag_debug {
         pretty_env_logger::init();
     } else {
-        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+        utils::init_file_per_thread_logger();
     }
 
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
