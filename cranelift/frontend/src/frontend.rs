@@ -41,8 +41,17 @@ pub struct FunctionBuilder<'a> {
 
 #[derive(Clone, Default)]
 struct EbbData {
-    filled: bool,
+    /// An Ebb is "pristine" iff no instructions have been added since the last
+    /// call to `switch_to_block()`.
     pristine: bool,
+
+    /// An Ebb is "filled" iff a terminator instruction has been inserted since
+    /// the last call to `switch_to_block()`.
+    ///
+    /// A filled block cannot be pristine.
+    filled: bool,
+
+    /// Count of parameters not supplied implicitly by the SSABuilder.
     user_param_count: usize,
 }
 
