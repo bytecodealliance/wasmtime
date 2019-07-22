@@ -22,7 +22,10 @@
 
 mod ctx;
 mod fdentry;
+mod hostcalls_impl;
 mod sys;
+#[macro_use]
+mod macros;
 
 pub mod host;
 pub mod hostcalls;

@@ -1,7 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 #![allow(unused)]
-
 use crate::ctx::WasiCtx;
 use crate::wasm32;
 use wasi_common_cbindgen::wasi_common_cbindgen;
