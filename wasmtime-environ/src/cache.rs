@@ -48,9 +48,14 @@ impl ModuleCacheEntry {
         // TODO: cache directory hierarchy with isa name, compiler name & build's uuid, and flag if debug symbols are available
         let option_hash = module.hash;
 
-        let mod_cache_path = CACHE_DIR
-            .clone()
-            .and_then(|p| option_hash.map(|hash| p.join(format!("mod-{}", base64::encode(&hash)))));
+        let mod_cache_path = CACHE_DIR.clone().and_then(|p| {
+            option_hash.map(|hash| {
+                p.join(format!(
+                    "mod-{}",
+                    base64::encode_config(&hash, base64::URL_SAFE_NO_PAD) // standard encoding uses '/' which can't be used for filename
+                ))
+            })
+        });
 
         ModuleCacheEntry { mod_cache_path }
     }
@@ -83,7 +88,11 @@ impl ModuleCacheEntry {
             };
             match fs::write(p, &cache_buf) {
                 Ok(()) => (),
-                Err(err) => warn!("Failed to write cached code to disk: {}", err),
+                Err(err) => warn!(
+                    "Failed to write cached code to disk, path: {}, message: {}",
+                    p.display(),
+                    err
+                ),
             }
         }
     }
