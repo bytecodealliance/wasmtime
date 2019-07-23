@@ -13,8 +13,8 @@ use std::ffi::OsString;
 use std::fmt;
 use std::fs;
 use std::path::PathBuf;
-#[cfg(debug)]
-use std::string::String;
+#[cfg(debug_assertions)]
+use std::string::{String, ToString};
 
 lazy_static! {
     static ref CACHE_DIR: Option<PathBuf> =
@@ -40,7 +40,7 @@ lazy_static! {
         };
 }
 
-#[cfg(debug)]
+#[cfg(debug_assertions)]
 lazy_static! {
     static ref SELF_MTIME: String = {
         match std::env::current_exe() {
@@ -92,14 +92,14 @@ impl ModuleCacheEntry {
 
         let mod_cache_path = CACHE_DIR.clone().and_then(|p| {
             option_hash.map(|hash| {
-                #[cfg(debug)]
+                #[cfg(debug_assertions)]
                 let compiler_dir = format!(
                     "{comp_name}-{comp_ver}-{comp_mtime}",
                     comp_name = compiler_name,
                     comp_ver = env!("GIT_REV"),
-                    comp_mtime = SELF_MTIME,
+                    comp_mtime = *SELF_MTIME,
                 );
-                #[cfg(not(debug))]
+                #[cfg(not(debug_assertions))]
                 let compiler_dir = format!(
                     "{comp_name}-{comp_ver}",
                     comp_name = compiler_name,
