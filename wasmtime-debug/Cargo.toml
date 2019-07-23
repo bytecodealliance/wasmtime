@@ -13,7 +13,7 @@ edition = "2018"
 
 [dependencies]
 gimli = "0.19.0"
-wasmparser = { version = "0.32.1" }
+wasmparser = { version = "0.34.0" }
 cranelift-codegen = "0.33.0"
 cranelift-entity = "0.33.0"
 cranelift-wasm = "0.33.0"
