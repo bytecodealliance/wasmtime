@@ -52,6 +52,10 @@ use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::{Compiler, Cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
 
+mod utils;
+
+static LOG_FILENAME_PREFIX: &str = "wasm2obj.dbg.";
+
 const USAGE: &str = "
 Wasm to native object translation utility.
 Takes a binary WebAssembly module into a native object file.
@@ -68,6 +72,7 @@ Options:
     --target <TARGET>   build for the target triple; default is the host machine
     -g                  generate debug information
     --version           print the Cranelift version
+    -d, --debug         enable debug output on stderr/stdout
 ";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -76,6 +81,7 @@ struct Args {
     arg_output: String,
     arg_target: Option<String>,
     flag_g: bool,
+    flag_debug: bool,
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -94,6 +100,12 @@ fn main() {
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
+
+    if args.flag_debug {
+        pretty_env_logger::init();
+    } else {
+        utils::init_file_per_thread_logger();
+    }
 
     let path = Path::new(&args.arg_file);
     match handle_module(

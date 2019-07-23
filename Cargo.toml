@@ -43,6 +43,7 @@ file-per-thread-logger = "0.1.1"
 wabt = "0.8"
 libc = "0.2.50"
 errno = "0.2.4"
+rayon = "1.1"
 
 [workspace]
 
