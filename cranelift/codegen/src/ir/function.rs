@@ -113,6 +113,7 @@ impl Function {
         self.encodings.clear();
         self.locations.clear();
         self.offsets.clear();
+        self.jt_offsets.clear();
         self.srclocs.clear();
     }
 
