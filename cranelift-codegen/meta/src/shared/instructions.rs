@@ -85,6 +85,12 @@ pub fn define(
         TypeSetBuilder::new().ints(32..64).build(),
     );
 
+    let Ref = &TypeVar::new(
+        "Ref",
+        "A scalar reference type",
+        TypeSetBuilder::new().refs(Interval::All).build(),
+    );
+
     let Testable = &TypeVar::new(
         "Testable",
         "A scalar boolean or integer type",
@@ -118,11 +124,12 @@ pub fn define(
 
     let Any = &TypeVar::new(
         "Any",
-        "Any integer, float, or boolean scalar or vector type",
+        "Any integer, float, boolean, or reference scalar or vector type",
         TypeSetBuilder::new()
             .ints(Interval::All)
             .floats(Interval::All)
             .bools(Interval::All)
+            .refs(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(true)
             .build(),
@@ -391,6 +398,19 @@ pub fn define(
         "#,
         )
         .operands_in(vec![c, code])
+        .can_trap(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "resumable_trap",
+            r#"
+        A resumable trap.
+        
+        This instruction allows non-conditional traps to be used as non-terminal instructions.
+        "#,
+        )
+        .operands_in(vec![code])
         .can_trap(true),
     );
 
@@ -1068,6 +1088,20 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
+    let a = &operand_doc("a", Ref, "A constant reference null value");
+
+    ig.push(
+        Inst::new(
+            "null",
+            r#"
+        Null constant value for reference types.
+
+        Create a scalar reference SSA value with a constant null value.
+        "#,
+        )
+        .operands_out(vec![a]),
+    );
+
     ig.push(Inst::new(
         "nop",
         r#"
@@ -1312,6 +1346,24 @@ pub fn define(
         "#,
         )
         .operands_in(vec![x, SS, dst])
+        .other_side_effects(true),
+    );
+
+    let N = &operand_doc(
+        "args",
+        variable_args,
+        "Variable number of args for Stackmap",
+    );
+
+    ig.push(
+        Inst::new(
+            "safepoint",
+            r#"
+        This instruction will provide live reference values at a point in
+        the function. It can only be used by the compiler.
+        "#,
+        )
+        .operands_in(vec![N])
         .other_side_effects(true),
     );
 
@@ -2572,6 +2624,23 @@ pub fn define(
             r#"
         Round floating point round to integral, towards nearest with ties to
         even.
+        "#,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    let a = &operand("a", b1);
+    let x = &operand("x", Ref);
+
+    ig.push(
+        Inst::new(
+            "is_null",
+            r#"
+        Reference verification.
+
+        The condition code determines if the reference type in question is
+        null or not.
         "#,
         )
         .operands_in(vec![x])

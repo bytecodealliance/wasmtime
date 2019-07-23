@@ -5,7 +5,7 @@ use super::registers::RU;
 use crate::binemit::{bad_encoding, CodeSink, Reloc};
 use crate::ir::condcodes::{CondCode, FloatCC, IntCC};
 use crate::ir::{Ebb, Function, Inst, InstructionData, JumpTable, Opcode, TrapCode};
-use crate::isa::{RegUnit, StackBase, StackBaseMask, StackRef};
+use crate::isa::{RegUnit, StackBase, StackBaseMask, StackRef, TargetIsa};
 use crate::regalloc::RegDiversions;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-x86.rs"));

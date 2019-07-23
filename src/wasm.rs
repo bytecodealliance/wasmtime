@@ -7,7 +7,7 @@
     allow(clippy::too_many_arguments, clippy::cyclomatic_complexity)
 )]
 
-use crate::disasm::{print_all, PrintRelocs, PrintTraps};
+use crate::disasm::{print_all, PrintRelocs, PrintTraps, PrintStackmaps};
 use crate::utils::{parse_sets_and_triple, read_to_end};
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
@@ -171,13 +171,14 @@ fn handle_module(
         let mut mem = vec![];
         let mut relocs = PrintRelocs::new(flag_print);
         let mut traps = PrintTraps::new(flag_print);
+        let mut stackmaps = PrintStackmaps::new(flag_print);
         if flag_check_translation {
             if let Err(errors) = context.verify(fisa) {
                 return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
             }
         } else {
             let code_info = context
-                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
+                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stackmaps)
                 .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
 
             if flag_print_size {
@@ -223,7 +224,7 @@ fn handle_module(
         }
 
         if let Some((code_size, rodata_size)) = saved_sizes {
-            print_all(isa, &mem, code_size, rodata_size, &relocs, &traps)?;
+            print_all(isa, &mem, code_size, rodata_size, &relocs, &traps, &stackmaps)?;
         }
 
         context.clear();

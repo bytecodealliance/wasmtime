@@ -888,6 +888,20 @@ pub fn define<'shared>(
             ),
     );
 
+    // XX+rd id nullary with 0 as 32-bit immediate. Note no recipe predicate.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("pu_id_ref", f_nullary, 4)
+            .operands_out(vec![gpr])
+            .emit(
+                r#"
+                    // The destination register is encoded in the low bits of the opcode.
+                    // No ModR/M.
+                    {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+                    sink.put4(0);
+                "#,
+            ),
+    );
+
     // XX+rd iq unary with 64-bit immediate.
     recipes.add_template_recipe(
         EncodingRecipeBuilder::new("pu_iq", f_unary_imm, 8)
@@ -2850,6 +2864,29 @@ pub fn define<'shared>(
                 "#,
             ),
     );
+
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("is_zero", f_unary, 2 + 2)
+            .operands_in(vec![gpr])
+            .operands_out(vec![abcd])
+            .emit(
+                r#"
+                    // Test instruction.
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg0), sink);
+                    modrm_rr(in_reg0, in_reg0, sink);
+                    // Check ZF = 1 flag to see if register holds 0.
+                    sink.put1(0x0f);
+                    sink.put1(0x94);
+                    modrm_rr(out_reg0, 0, sink);
+                "#,
+            ),
+    );
+
+    recipes.add_recipe(EncodingRecipeBuilder::new("safepoint", f_multiary, 0).emit(
+        r#"
+            sink.add_stackmap(args, func, isa);
+        "#,
+    ));
 
     recipes
 }

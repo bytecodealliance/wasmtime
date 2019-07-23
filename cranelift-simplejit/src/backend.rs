@@ -1,7 +1,9 @@
 //! Defines `SimpleJITBackend`.
 
 use crate::memory::Memory;
-use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
+use cranelift_codegen::binemit::{
+    Addend, CodeOffset, NullTrapSink, Reloc, RelocSink, Stackmap, StackmapSink,
+};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_module::{
@@ -126,6 +128,13 @@ struct RelocRecord {
     reloc: Reloc,
     name: ir::ExternalName,
     addend: Addend,
+}
+
+struct StackmapRecord {
+    #[allow(dead_code)]
+    offset: CodeOffset,
+    #[allow(dead_code)]
+    stackmap: Stackmap,
 }
 
 pub struct SimpleJITCompiledFunction {
@@ -254,7 +263,16 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         // Ignore traps for now. For now, frontends should just avoid generating code
         // that traps.
         let mut trap_sink = NullTrapSink {};
-        unsafe { ctx.emit_to_memory(&*self.isa, ptr, &mut reloc_sink, &mut trap_sink) };
+        let mut stackmap_sink = SimpleJITStackmapSink::new();
+        unsafe {
+            ctx.emit_to_memory(
+                &*self.isa,
+                ptr,
+                &mut reloc_sink,
+                &mut trap_sink,
+                &mut stackmap_sink,
+            )
+        };
 
         Ok(Self::CompiledFunction {
             code: ptr,
@@ -547,5 +565,23 @@ impl RelocSink for SimpleJITRelocSink {
                 panic!("Unhandled reloc");
             }
         }
+    }
+}
+
+struct SimpleJITStackmapSink {
+    pub stackmaps: Vec<StackmapRecord>,
+}
+
+impl SimpleJITStackmapSink {
+    pub fn new() -> Self {
+        Self {
+            stackmaps: Vec::new(),
+        }
+    }
+}
+
+impl StackmapSink for SimpleJITStackmapSink {
+    fn add_stackmap(&mut self, offset: CodeOffset, stackmap: Stackmap) {
+        self.stackmaps.push(StackmapRecord { offset, stackmap });
     }
 }

@@ -18,10 +18,12 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
     let inst_format = formats.get(recipe.format);
     let num_value_ops = inst_format.num_value_operands;
 
-    let want_args = recipe.operands_in.iter().any(|c| match c {
-        OperandConstraint::RegClass(_) | OperandConstraint::Stack(_) => true,
-        OperandConstraint::FixedReg(_) | OperandConstraint::TiedInput(_) => false,
-    });
+    // TODO: Set want_args to true for only MultiAry instructions instead of all formats with value list.
+    let want_args = inst_format.has_value_list
+        || recipe.operands_in.iter().any(|c| match c {
+            OperandConstraint::RegClass(_) | OperandConstraint::Stack(_) => true,
+            OperandConstraint::FixedReg(_) | OperandConstraint::TiedInput(_) => false,
+        });
     assert!(!want_args || num_value_ops > 0 || inst_format.has_value_list);
 
     let want_outs = recipe.operands_out.iter().any(|c| match c {
@@ -159,6 +161,7 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
             fmt.line("inst: Inst,");
             fmt.line("_divert: &mut RegDiversions,");
             fmt.line("_sink: &mut CS,");
+            fmt.line("_isa: &dyn TargetIsa,");
         });
         fmt.line(") {");
         fmt.indent(|fmt| {
@@ -176,6 +179,7 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
         fmt.line("inst: Inst,");
         fmt.line("divert: &mut RegDiversions,");
         fmt.line("sink: &mut CS,");
+        fmt.line("isa: &dyn TargetIsa,")
     });
 
     fmt.line(") {");

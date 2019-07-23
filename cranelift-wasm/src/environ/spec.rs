@@ -131,6 +131,17 @@ pub trait FuncEnvironment {
         ReturnMode::NormalReturns
     }
 
+    /// Get the Cranelift reference type to use for native references.
+    ///
+    /// This returns `R64` for 64-bit architectures and `R32` for 32-bit architectures.
+    fn reference_type(&self) -> ir::Type {
+        match self.pointer_type() {
+            ir::types::I32 => ir::types::R32,
+            ir::types::I64 => ir::types::R64,
+            _ => panic!("unsupported pointer type"),
+        }
+    }
+
     /// Set up the necessary preamble definitions in `func` to access the global variable
     /// identified by `index`.
     ///

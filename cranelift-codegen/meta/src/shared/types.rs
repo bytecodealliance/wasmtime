@@ -145,6 +145,38 @@ impl Iterator for FlagIterator {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum Reference {
+    /// 32-bit reference.
+    R32 = 32,
+    /// 64-bit reference.
+    R64 = 64,
+}
+
+/// This provides an iterator through all of the supported reference variants.
+pub struct ReferenceIterator {
+    index: u8,
+}
+
+impl ReferenceIterator {
+    pub fn new() -> Self {
+        Self { index: 0 }
+    }
+}
+
+impl Iterator for ReferenceIterator {
+    type Item = Reference;
+    fn next(&mut self) -> Option<Self::Item> {
+        let res = match self.index {
+            0 => Some(Reference::R32),
+            1 => Some(Reference::R64),
+            _ => return None,
+        };
+        self.index += 1;
+        res
+    }
+}
+
 #[cfg(test)]
 mod iter_tests {
     use super::*;
@@ -184,5 +216,13 @@ mod iter_tests {
         assert_eq!(flag_iter.next(), Some(Flag::IFlags));
         assert_eq!(flag_iter.next(), Some(Flag::FFlags));
         assert_eq!(flag_iter.next(), None);
+    }
+
+    #[test]
+    fn reference_iter_works() {
+        let mut reference_iter = ReferenceIterator::new();
+        assert_eq!(reference_iter.next(), Some(Reference::R32));
+        assert_eq!(reference_iter.next(), Some(Reference::R64));
+        assert_eq!(reference_iter.next(), None);
     }
 }

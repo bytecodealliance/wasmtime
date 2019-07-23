@@ -2,7 +2,7 @@
 
 use crate::binemit::{bad_encoding, CodeSink, Reloc};
 use crate::ir::{Function, Inst, InstructionData};
-use crate::isa::{RegUnit, StackBaseMask, StackRef};
+use crate::isa::{RegUnit, StackBaseMask, StackRef, TargetIsa};
 use crate::predicates::is_signed_int;
 use crate::regalloc::RegDiversions;
 use core::u32;

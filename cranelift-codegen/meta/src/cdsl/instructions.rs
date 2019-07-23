@@ -12,7 +12,7 @@ use crate::cdsl::formats::{
 };
 use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
-use crate::cdsl::types::{LaneType, ValueType, VectorType};
+use crate::cdsl::types::{LaneType, ReferenceType, ValueType, VectorType};
 use crate::cdsl::typevar::TypeVar;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -175,6 +175,10 @@ impl Instruction {
 
     pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
         bind(self.clone(), Some(lane_type.into()), Vec::new())
+    }
+
+    pub fn bind_ref(&self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
+        bind_ref(self.clone(), Some(reference_type.into()), Vec::new())
     }
 
     pub fn bind_vector(&self, lane_type: impl Into<LaneType>, num_lanes: u64) -> BoundInstruction {
@@ -404,6 +408,10 @@ pub struct BoundInstruction {
 impl BoundInstruction {
     pub fn bind(self, lane_type: impl Into<LaneType>) -> BoundInstruction {
         bind(self.inst, Some(lane_type.into()), self.value_types)
+    }
+
+    pub fn bind_ref(self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
+        bind_ref(self.inst, Some(reference_type.into()), self.value_types)
     }
 
     pub fn bind_vector(self, lane_type: impl Into<LaneType>, num_lanes: u64) -> BoundInstruction {
@@ -1043,6 +1051,13 @@ impl InstSpec {
             InstSpec::Bound(inst) => inst.clone().bind(lane_type),
         }
     }
+
+    pub fn bind_ref(&self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
+        match self {
+            InstSpec::Inst(inst) => inst.bind_ref(reference_type),
+            InstSpec::Bound(inst) => inst.clone().bind_ref(reference_type),
+        }
+    }
 }
 
 impl Into<InstSpec> for &Instruction {
@@ -1066,6 +1081,26 @@ fn bind(
     match lane_type {
         Some(lane_type) => {
             value_types.push(ValueTypeOrAny::ValueType(lane_type.into()));
+        }
+        None => {
+            value_types.push(ValueTypeOrAny::Any);
+        }
+    }
+
+    verify_polymorphic_binding(&inst, &value_types);
+
+    BoundInstruction { inst, value_types }
+}
+
+/// Helper bind for reference types reused by {Bound,}Instruction::bind_ref.
+fn bind_ref(
+    inst: Instruction,
+    reference_type: Option<ReferenceType>,
+    mut value_types: Vec<ValueTypeOrAny>,
+) -> BoundInstruction {
+    match reference_type {
+        Some(reference_type) => {
+            value_types.push(ValueTypeOrAny::ValueType(reference_type.into()));
         }
         None => {
             value_types.push(ValueTypeOrAny::Any);

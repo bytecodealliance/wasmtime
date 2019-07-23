@@ -2,7 +2,9 @@
 
 use crate::container;
 use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
-use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
+use cranelift_codegen::binemit::{
+    Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink, Stackmap, StackmapSink,
+};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
@@ -141,6 +143,8 @@ impl Backend for FaerieBackend {
         total_size: u32,
     ) -> ModuleResult<FaerieCompiledFunction> {
         let mut code: Vec<u8> = vec![0; total_size as usize];
+        // TODO: Replace this with FaerieStackmapSink once it is implemented.
+        let mut stackmap_sink = NullStackmapSink {};
 
         // Non-lexical lifetimes would obviate the braces here.
         {
@@ -160,6 +164,7 @@ impl Backend for FaerieBackend {
                         code.as_mut_ptr(),
                         &mut reloc_sink,
                         &mut trap_sink,
+                        &mut stackmap_sink,
                     )
                 };
                 trap_manifest.add_sink(trap_sink);
@@ -171,6 +176,7 @@ impl Backend for FaerieBackend {
                         code.as_mut_ptr(),
                         &mut reloc_sink,
                         &mut trap_sink,
+                        &mut stackmap_sink,
                     )
                 };
             }
@@ -423,5 +429,18 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
                 panic!("Unhandled reloc");
             }
         }
+    }
+}
+
+#[allow(dead_code)]
+struct FaerieStackmapSink<'a> {
+    artifact: &'a mut faerie::Artifact,
+    namespace: &'a ModuleNamespace<'a, FaerieBackend>,
+}
+
+/// Faerie is currently not used in SpiderMonkey. Methods are unimplemented.
+impl<'a> StackmapSink for FaerieStackmapSink<'a> {
+    fn add_stackmap(&mut self, _: CodeOffset, _: Stackmap) {
+        unimplemented!("faerie support for stackmaps");
     }
 }

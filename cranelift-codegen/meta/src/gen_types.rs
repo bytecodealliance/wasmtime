@@ -54,6 +54,11 @@ fn emit_types(fmt: &mut srcgen::Formatter) -> Result<(), error::Error> {
         emit_type(&ty, fmt)?;
     }
 
+    // Emit all reference types.
+    for ty in cdsl_types::ValueType::all_reference_types().map(cdsl_types::ValueType::from) {
+        emit_type(&ty, fmt)?;
+    }
+
     // Emit vector definitions for common SIMD sizes.
     for vec_size in &[64_u64, 128, 256, 512] {
         emit_vectors(*vec_size, fmt)?;

@@ -13,6 +13,7 @@ use crate::regalloc::coloring::Coloring;
 use crate::regalloc::live_value_tracker::LiveValueTracker;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::reload::Reload;
+use crate::regalloc::safepoint::emit_stackmaps;
 use crate::regalloc::spilling::Spilling;
 use crate::regalloc::virtregs::VirtRegs;
 use crate::result::CodegenResult;
@@ -191,6 +192,20 @@ impl Context {
         // Pass: Coloring.
         self.coloring
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+
+        // This function runs after register allocation has taken
+        // place, meaning values have locations assigned already.
+        if isa.flags().enable_safepoints() {
+            emit_stackmaps(func, domtree, &self.liveness, &mut self.tracker, isa);
+        } else {
+            // Make sure no references are used.
+            for val in func.dfg.values() {
+                let ty = func.dfg.value_type(val);
+                if ty.lane_type().is_ref() {
+                    panic!("reference types were found but safepoints were not enabled.");
+                }
+            }
+        }
 
         if isa.flags().enable_verifier() {
             let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()

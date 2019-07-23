@@ -92,6 +92,18 @@ pub fn define() -> SettingGroup {
         true,
     );
 
+    settings.add_bool(
+        "enable_safepoints",
+        r#"
+            Enable safepoint instruction insertions.
+
+            This will allow the emit_stackmaps() function to insert the safepoint
+            instruction on top of calls and interrupt traps in order to display the
+            live reference values at that point in the program.
+            "#,
+        false,
+    );
+
     // Settings specific to the `baldrdash` calling convention.
 
     settings.add_enum(
