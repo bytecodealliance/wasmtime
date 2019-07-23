@@ -2,6 +2,7 @@
 
 mod builder;
 pub mod condcodes;
+pub mod constant;
 pub mod dfg;
 pub mod entities;
 mod extfunc;
@@ -27,9 +28,10 @@ mod valueloc;
 use serde::{Deserialize, Serialize};
 
 pub use crate::ir::builder::{InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase};
+pub use crate::ir::constant::{ConstantData, ConstantOffset, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::entities::{
-    Ebb, FuncRef, GlobalValue, Heap, Inst, JumpTable, SigRef, StackSlot, Table, Value,
+    Constant, Ebb, FuncRef, GlobalValue, Heap, Inst, JumpTable, SigRef, StackSlot, Table, Value,
 };
 pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,

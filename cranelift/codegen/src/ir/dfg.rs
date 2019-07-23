@@ -5,7 +5,7 @@ use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::extfunc::ExtFuncData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
-use crate::ir::types;
+use crate::ir::{types, ConstantPool};
 use crate::ir::{
     Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList,
     ValueListPool,
@@ -67,6 +67,9 @@ pub struct DataFlowGraph {
 
     /// Saves Value labels.
     pub values_labels: Option<HashMap<Value, ValueLabelAssignments>>,
+
+    /// Constants used within the function
+    pub constants: ConstantPool,
 }
 
 impl DataFlowGraph {
@@ -81,6 +84,7 @@ impl DataFlowGraph {
             signatures: PrimaryMap::new(),
             ext_funcs: PrimaryMap::new(),
             values_labels: None,
+            constants: ConstantPool::new(),
         }
     }
 
@@ -94,6 +98,7 @@ impl DataFlowGraph {
         self.signatures.clear();
         self.ext_funcs.clear();
         self.values_labels = None;
+        self.constants.clear()
     }
 
     /// Get the total number of instructions created in this function, whether they are currently
