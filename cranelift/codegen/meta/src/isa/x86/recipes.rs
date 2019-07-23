@@ -399,6 +399,7 @@ pub fn define<'shared>(
     let f_unary_ieee32 = formats.by_name("UnaryIeee32");
     let f_unary_ieee64 = formats.by_name("UnaryIeee64");
     let f_unary_imm = formats.by_name("UnaryImm");
+    let f_unary_imm128 = formats.by_name("UnaryImm128");
 
     // Predicates shorthands.
     let use_sse41 = settings.predicate_by_name("use_sse41");
@@ -2378,6 +2379,19 @@ pub fn define<'shared>(
                         modrm_sib(out_reg0, sink);
                         sib(imm.trailing_zeros() as u8, in_reg0, in_reg1, sink);
                     }
+                "#,
+            ),
+    );
+
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("vconst", f_unary_imm128, 5)
+            .operands_out(vec![fpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(0, out_reg0), sink);
+                    modrm_riprel(out_reg0, sink);
+                    const_disp4(imm, func, sink);
                 "#,
             ),
     );
