@@ -30,6 +30,7 @@ pub fn define(
     let uimm8 = immediates.by_name("uimm8");
     let uimm32 = immediates.by_name("uimm32");
     let imm64 = immediates.by_name("imm64");
+    let uimm128 = immediates.by_name("uimm128");
     let offset32 = immediates.by_name("offset32");
     let memflags = immediates.by_name("memflags");
     let ieee32 = immediates.by_name("ieee32");
@@ -1082,6 +1083,22 @@ pub fn define(
 
         Create a scalar boolean SSA value with an immediate constant value, or
         a boolean vector where all the lanes have the same value.
+        "#,
+        )
+        .operands_in(vec![N])
+        .operands_out(vec![a]),
+    );
+
+    let N = &operand_doc("N", uimm128, "The 16 immediate bytes of a 128-bit vector");
+    let a = &operand_doc("a", TxN, "A constant vector value");
+
+    ig.push(
+        Inst::new(
+            "vconst",
+            r#"
+        SIMD vector constant.
+
+        Construct a vector with the given immediate bytes.
         "#,
         )
         .operands_in(vec![N])

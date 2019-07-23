@@ -5,6 +5,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
+use crate::ir::immediates::Uimm128;
 use crate::ir::{
     DataFlowGraph, DisplayFunctionAnnotations, Ebb, Function, Inst, SigRef, Type, Value, ValueDef,
     ValueLoc,
@@ -487,6 +488,11 @@ pub fn write_operands(
     match dfg[inst] {
         Unary { arg, .. } => write!(w, " {}", arg),
         UnaryImm { imm, .. } => write!(w, " {}", imm),
+        UnaryImm128 { imm, .. } => {
+            let data = dfg.constants.get(imm);
+            let uimm128 = Uimm128::from(&data[..]);
+            write!(w, " {}", uimm128)
+        }
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
         UnaryBool { imm, .. } => write!(w, " {}", imm),

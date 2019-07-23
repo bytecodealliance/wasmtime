@@ -1,3 +1,4 @@
+use cranelift_codegen::ir::immediates::Uimm128;
 use cranelift_codegen::ir::{Ebb, Function, Inst, InstructionData, Signature};
 use serde_derive::{Deserialize, Serialize};
 
@@ -261,6 +262,14 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             opcode: opcode.to_string(),
             imm: imm.to_string(),
         },
+        InstructionData::UnaryImm128 { opcode, imm } => {
+            let data = func.dfg.constants.get(imm);
+            let uimm128 = Uimm128::from(&data[..]);
+            SerInstData::UnaryImm {
+                opcode: opcode.to_string(),
+                imm: uimm128.to_string(),
+            }
+        }
         InstructionData::UnaryIeee32 { opcode, imm } => SerInstData::UnaryIeee32 {
             opcode: opcode.to_string(),
             imm: imm.to_string(),
