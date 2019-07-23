@@ -12,7 +12,9 @@ use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
 use std::ffi::OsString;
 use std::fmt;
 use std::fs;
-use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::path::Path;
+use std::path::PathBuf;
 
 lazy_static! {
     static ref CACHE_DIR: Option<PathBuf> =
