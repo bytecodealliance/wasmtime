@@ -390,6 +390,7 @@ mod tests {
              enable_nan_canonicalization = false\n\
              enable_simd = false\n\
              enable_atomics = true\n\
+             enable_safepoints = false\n\
              allones_funcaddrs = false\n\
              probestack_enabled = true\n\
              probestack_func_adjusts_sp = false\n\

@@ -80,6 +80,28 @@ impl binemit::TrapSink for PrintTraps {
     }
 }
 
+pub struct PrintStackmaps {
+    pub flag_print: bool,
+    pub text: String,
+}
+
+impl PrintStackmaps {
+    pub fn new(flag_print: bool) -> PrintStackmaps {
+        Self {
+            flag_print,
+            text: String::new(),
+        }
+    }
+}
+
+impl binemit::StackmapSink for PrintStackmaps {
+    fn add_stackmap(&mut self, offset: binemit::CodeOffset, _: binemit::Stackmap) {
+        if self.flag_print {
+            write!(&mut self.text, "add_stackmap at {}\n", offset).unwrap();
+        }
+    }
+}
+
 cfg_if! {
     if #[cfg(feature = "disas")] {
         use capstone::prelude::*;
@@ -170,11 +192,12 @@ pub fn print_all(
     rodata_size: u32,
     relocs: &PrintRelocs,
     traps: &PrintTraps,
+    stackmaps: &PrintStackmaps,
 ) -> Result<(), String> {
     print_bytes(&mem);
     print_disassembly(isa, &mem[0..code_size as usize])?;
     print_readonly_data(&mem[code_size as usize..(code_size + rodata_size) as usize]);
-    println!("\n{}\n{}", &relocs.text, &traps.text);
+    println!("\n{}\n{}\n{}", &relocs.text, &traps.text, &stackmaps.text);
     Ok(())
 }
 

@@ -13,6 +13,7 @@ use crate::cdsl::types::ValueType;
 use crate::shared::types::Bool::{B1, B16, B32, B64, B8};
 use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I16, I32, I64, I8};
+use crate::shared::types::Reference::{R32, R64};
 use crate::shared::Definitions as SharedDefinitions;
 
 use super::recipes::{RecipeGroup, Template};
@@ -175,6 +176,20 @@ impl PerCpuModeEncodings {
         });
     }
 
+    /// Add encodings for `inst.r32` to X86_32.
+    /// Add encodings for `inst.r32` to X86_64 with and without REX.
+    /// Add encodings for `inst.r64` to X86_64 with a REX.W prefix.
+    fn enc_r32_r64(&mut self, inst: impl Into<InstSpec>, template: Template) {
+        let inst: InstSpec = inst.into();
+        self.enc32(inst.bind_ref(R32), template.nonrex());
+
+        // REX-less encoding must come after REX encoding so we don't use it by default. Otherwise
+        // reg-alloc would never use r8 and up.
+        self.enc64(inst.bind_ref(R32), template.rex());
+        self.enc64(inst.bind_ref(R32), template.nonrex());
+        self.enc64(inst.bind_ref(R64), template.rex().w());
+    }
+
     /// Add encodings for `inst` to X86_64 with and without a REX prefix.
     fn enc_x86_64(&mut self, inst: impl Into<InstSpec> + Clone, template: Template) {
         // See above comment about the ordering of rex vs non-rex encodings.
@@ -331,6 +346,7 @@ pub fn define(
     let ireduce = shared.by_name("ireduce");
     let ishl = shared.by_name("ishl");
     let ishl_imm = shared.by_name("ishl_imm");
+    let is_null = shared.by_name("is_null");
     let istore16 = shared.by_name("istore16");
     let istore16_complex = shared.by_name("istore16_complex");
     let istore32 = shared.by_name("istore32");
@@ -344,6 +360,7 @@ pub fn define(
     let load = shared.by_name("load");
     let load_complex = shared.by_name("load_complex");
     let nearest = shared.by_name("nearest");
+    let null = shared.by_name("null");
     let popcnt = shared.by_name("popcnt");
     let raw_bitcast = shared.by_name("raw_bitcast");
     let regfill = shared.by_name("regfill");
@@ -354,6 +371,7 @@ pub fn define(
     let rotl_imm = shared.by_name("rotl_imm");
     let rotr = shared.by_name("rotr");
     let rotr_imm = shared.by_name("rotr_imm");
+    let safepoint = shared.by_name("safepoint");
     let scalar_to_vector = shared.by_name("scalar_to_vector");
     let selectif = shared.by_name("selectif");
     let sextend = shared.by_name("sextend");
@@ -374,6 +392,7 @@ pub fn define(
     let trap = shared.by_name("trap");
     let trapff = shared.by_name("trapff");
     let trapif = shared.by_name("trapif");
+    let resumable_trap = shared.by_name("resumable_trap");
     let trueff = shared.by_name("trueff");
     let trueif = shared.by_name("trueif");
     let trunc = shared.by_name("trunc");
@@ -455,6 +474,7 @@ pub fn define(
     let rec_icscc_ib = r.template("icscc_ib");
     let rec_icscc_id = r.template("icscc_id");
     let rec_indirect_jmp = r.template("indirect_jmp");
+    let rec_is_zero = r.template("is_zero");
     let rec_jmpb = r.template("jmpb");
     let rec_jmpd = r.template("jmpd");
     let rec_jt_base = r.template("jt_base");
@@ -473,6 +493,7 @@ pub fn define(
     let rec_popq = r.template("popq");
     let rec_pu_id = r.template("pu_id");
     let rec_pu_id_bool = r.template("pu_id_bool");
+    let rec_pu_id_ref = r.template("pu_id_ref");
     let rec_pu_iq = r.template("pu_iq");
     let rec_pushq = r.template("pushq");
     let rec_ret = r.template("ret");
@@ -492,6 +513,7 @@ pub fn define(
     let rec_rmov = r.template("rmov");
     let rec_rr = r.template("rr");
     let rec_rrx = r.template("rrx");
+    let rec_safepoint = r.recipe("safepoint");
     let rec_setf_abcd = r.template("setf_abcd");
     let rec_seti_abcd = r.template("seti_abcd");
     let rec_spaddr4_id = r.template("spaddr4_id");
@@ -566,6 +588,7 @@ pub fn define(
     e.enc_i32_i64(x86_umulx, rec_mulx.opcodes(vec![0xf7]).rrr(4));
 
     e.enc_i32_i64(copy, rec_umr.opcodes(vec![0x89]));
+    e.enc_r32_r64(copy, rec_umr.opcodes(vec![0x89]));
     e.enc_both(copy.bind(B1), rec_umr.opcodes(vec![0x89]));
     e.enc_both(copy.bind(I8), rec_umr.opcodes(vec![0x89]));
     e.enc_both(copy.bind(I16), rec_umr.opcodes(vec![0x89]));
@@ -579,6 +602,12 @@ pub fn define(
     e.enc64(regmove.bind(I64), rec_rmov.opcodes(vec![0x89]).rex().w());
     e.enc_both(regmove.bind(B1), rec_rmov.opcodes(vec![0x89]));
     e.enc_both(regmove.bind(I8), rec_rmov.opcodes(vec![0x89]));
+    e.enc32(regmove.bind_ref(R32), rec_rmov.opcodes(vec![0x89]));
+    e.enc64(regmove.bind_ref(R32), rec_rmov.opcodes(vec![0x89]).rex());
+    e.enc64(
+        regmove.bind_ref(R64),
+        rec_rmov.opcodes(vec![0x89]).rex().w(),
+    );
 
     e.enc_i32_i64(iadd_imm, rec_r_ib.opcodes(vec![0x83]).rrr(0));
     e.enc_i32_i64(iadd_imm, rec_r_id.opcodes(vec![0x81]).rrr(0));
@@ -841,6 +870,8 @@ pub fn define(
 
     e.enc_i32_i64(spill, rec_spillSib32.opcodes(vec![0x89]));
     e.enc_i32_i64(regspill, rec_regspill32.opcodes(vec![0x89]));
+    e.enc_r32_r64(spill, rec_spillSib32.opcodes(vec![0x89]));
+    e.enc_r32_r64(regspill, rec_regspill32.opcodes(vec![0x89]));
 
     // Use a 32-bit write for spilling `b1`, `i8` and `i16` to avoid
     // constraining the permitted registers.
@@ -865,6 +896,8 @@ pub fn define(
 
     e.enc_i32_i64(fill, rec_fillSib32.opcodes(vec![0x8b]));
     e.enc_i32_i64(regfill, rec_regfill32.opcodes(vec![0x8b]));
+    e.enc_r32_r64(fill, rec_fillSib32.opcodes(vec![0x8b]));
+    e.enc_r32_r64(regfill, rec_regfill32.opcodes(vec![0x8b]));
 
     // Load 32 bits from `b1`, `i8` and `i16` spill slots. See `spill.b1` above.
 
@@ -1248,6 +1281,8 @@ pub fn define(
     // Trap as ud2
     e.enc32(trap, rec_trap.opcodes(vec![0x0f, 0x0b]));
     e.enc64(trap, rec_trap.opcodes(vec![0x0f, 0x0b]));
+    e.enc32(resumable_trap, rec_trap.opcodes(vec![0x0f, 0x0b]));
+    e.enc64(resumable_trap, rec_trap.opcodes(vec![0x0f, 0x0b]));
 
     // Debug trap as int3
     e.enc32_rec(debugtrap, rec_debugtrap, 0);
@@ -1665,6 +1700,21 @@ pub fn define(
             e.enc64_rec(instruction, rec_null_fpr, 0);
         }
     }
+
+    // Reference type instructions
+
+    // Null references implemented as iconst 0.
+    e.enc32(null.bind_ref(R32), rec_pu_id_ref.opcodes(vec![0xb8]));
+
+    e.enc64(null.bind_ref(R64), rec_pu_id_ref.rex().opcodes(vec![0xb8]));
+    e.enc64(null.bind_ref(R64), rec_pu_id_ref.opcodes(vec![0xb8]));
+
+    // is_null, implemented by testing whether the value is 0.
+    e.enc_r32_r64(is_null, rec_is_zero.opcodes(vec![0x85]));
+
+    // safepoint instruction calls sink, no actual encoding.
+    e.enc32_rec(safepoint, rec_safepoint, 0);
+    e.enc64_rec(safepoint, rec_safepoint, 0);
 
     e
 }

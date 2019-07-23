@@ -6,7 +6,7 @@ use std::iter::FromIterator;
 use std::ops;
 use std::rc::Rc;
 
-use crate::cdsl::types::{BVType, LaneType, SpecialType, ValueType};
+use crate::cdsl::types::{BVType, LaneType, ReferenceType, SpecialType, ValueType};
 
 const MAX_LANES: u16 = 256;
 const MAX_BITS: u16 = 64;
@@ -63,6 +63,10 @@ impl TypeVar {
             }
             ValueType::Special(special_type) => {
                 return TypeVar::new(name, doc, builder.specials(vec![special_type]).build());
+            }
+            ValueType::Reference(ReferenceType(reference_type)) => {
+                let bits = reference_type as RangeBound;
+                return TypeVar::new(name, doc, builder.refs(bits..bits).build());
             }
             ValueType::Lane(lane_type) => (lane_type, 1),
             ValueType::Vector(vec_type) => {
@@ -406,6 +410,7 @@ pub struct TypeSet {
     pub ints: NumSet,
     pub floats: NumSet,
     pub bools: NumSet,
+    pub refs: NumSet,
     pub bitvecs: NumSet,
     pub specials: Vec<SpecialType>,
 }
@@ -416,6 +421,7 @@ impl TypeSet {
         ints: NumSet,
         floats: NumSet,
         bools: NumSet,
+        refs: NumSet,
         bitvecs: NumSet,
         specials: Vec<SpecialType>,
     ) -> Self {
@@ -424,6 +430,7 @@ impl TypeSet {
             ints,
             floats,
             bools,
+            refs,
             bitvecs,
             specials,
         }
@@ -432,7 +439,11 @@ impl TypeSet {
     /// Return the number of concrete types represented by this typeset.
     pub fn size(&self) -> usize {
         self.lanes.len()
-            * (self.ints.len() + self.floats.len() + self.bools.len() + self.bitvecs.len())
+            * (self.ints.len()
+                + self.floats.len()
+                + self.bools.len()
+                + self.refs.len()
+                + self.bitvecs.len())
             + self.specials.len()
     }
 
@@ -462,6 +473,7 @@ impl TypeSet {
         let mut copy = self.clone();
         copy.ints = NumSet::new();
         copy.floats = NumSet::new();
+        copy.refs = NumSet::new();
         copy.bitvecs = NumSet::new();
         if (&self.lanes - &num_set![1]).len() > 0 {
             copy.bools = &self.ints | &self.floats;
@@ -544,6 +556,7 @@ impl TypeSet {
         copy.ints = NumSet::new();
         copy.bools = NumSet::new();
         copy.floats = NumSet::new();
+        copy.refs = NumSet::new();
         copy.bitvecs = self
             .lanes
             .iter()
@@ -567,6 +580,9 @@ impl TypeSet {
             }
             for &bits in &self.bools {
                 ret.push(LaneType::bool_from_bits(bits).by(num_lanes));
+            }
+            for &bits in &self.refs {
+                ret.push(ReferenceType::ref_from_bits(bits).into());
             }
             for &bits in &self.bitvecs {
                 assert_eq!(num_lanes, 1);
@@ -630,6 +646,7 @@ impl TypeSet {
                 let mut ints = range_to_set(Some(8..MAX_BITS));
                 let mut floats = range_to_set(Some(32..64));
                 let mut bools = range_to_set(Some(1..MAX_BITS));
+                let refs = range_to_set(Some(32..64));
 
                 for &l in &all_lanes {
                     for &i in &all_ints {
@@ -654,7 +671,7 @@ impl TypeSet {
 
                 let bitvecs = NumSet::new();
                 let specials = Vec::new();
-                TypeSet::new(lanes, ints, floats, bools, bitvecs, specials)
+                TypeSet::new(lanes, ints, floats, bools, refs, bitvecs, specials)
             }
         }
     }
@@ -664,6 +681,7 @@ impl TypeSet {
         self.ints = &self.ints & &other.ints;
         self.floats = &self.floats & &other.floats;
         self.bools = &self.bools & &other.bools;
+        self.refs = &self.refs & &other.refs;
         self.bitvecs = &self.bitvecs & &other.bitvecs;
 
         let mut new_specials = Vec::new();
@@ -680,6 +698,7 @@ impl TypeSet {
             && self.ints.is_subset(&other.ints)
             && self.floats.is_subset(&other.floats)
             && self.bools.is_subset(&other.bools)
+            && self.refs.is_subset(&other.refs)
             && self.bitvecs.is_subset(&other.bitvecs)
             && {
                 let specials: HashSet<SpecialType> = HashSet::from_iter(self.specials.clone());
@@ -692,12 +711,14 @@ impl TypeSet {
         set_wider_or_equal(&self.ints, &other.ints)
             && set_wider_or_equal(&self.floats, &other.floats)
             && set_wider_or_equal(&self.bools, &other.bools)
+            && set_wider_or_equal(&self.refs, &other.refs)
     }
 
     pub fn is_narrower(&self, other: &TypeSet) -> bool {
         set_narrower(&self.ints, &other.ints)
             && set_narrower(&self.floats, &other.floats)
             && set_narrower(&self.bools, &other.bools)
+            && set_narrower(&self.refs, &other.refs)
     }
 }
 
@@ -738,6 +759,12 @@ impl fmt::Debug for TypeSet {
                 Vec::from_iter(self.bools.iter().map(|x| x.to_string())).join(", ")
             ));
         }
+        if !self.refs.is_empty() {
+            subsets.push(format!(
+                "refs={{{}}}",
+                Vec::from_iter(self.refs.iter().map(|x| x.to_string())).join(", ")
+            ));
+        }
         if !self.bitvecs.is_empty() {
             subsets.push(format!(
                 "bitvecs={{{}}}",
@@ -760,6 +787,7 @@ pub struct TypeSetBuilder {
     ints: Interval,
     floats: Interval,
     bools: Interval,
+    refs: Interval,
     bitvecs: Interval,
     includes_scalars: bool,
     simd_lanes: Interval,
@@ -772,6 +800,7 @@ impl TypeSetBuilder {
             ints: Interval::None,
             floats: Interval::None,
             bools: Interval::None,
+            refs: Interval::None,
             bitvecs: Interval::None,
             includes_scalars: true,
             simd_lanes: Interval::None,
@@ -792,6 +821,11 @@ impl TypeSetBuilder {
     pub fn bools(mut self, interval: impl Into<Interval>) -> Self {
         assert!(self.bools == Interval::None);
         self.bools = interval.into();
+        self
+    }
+    pub fn refs(mut self, interval: impl Into<Interval>) -> Self {
+        assert!(self.refs == Interval::None);
+        self.refs = interval.into();
         self
     }
     pub fn includes_scalars(mut self, includes_scalars: bool) -> Self {
@@ -827,6 +861,7 @@ impl TypeSetBuilder {
             range_to_set(self.ints.to_range(8..MAX_BITS, None)),
             range_to_set(self.floats.to_range(32..64, None)),
             bools,
+            range_to_set(self.refs.to_range(32..64, None)),
             range_to_set(self.bitvecs.to_range(1..MAX_BITVEC, None)),
             self.specials,
         )
@@ -837,6 +872,7 @@ impl TypeSetBuilder {
             .ints(Interval::All)
             .floats(Interval::All)
             .bools(Interval::All)
+            .refs(Interval::All)
             .simd_lanes(Interval::All)
             .bitvecs(Interval::All)
             .specials(ValueType::all_special_types().collect())

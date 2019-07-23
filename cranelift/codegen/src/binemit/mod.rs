@@ -6,13 +6,18 @@
 mod memorysink;
 mod relaxation;
 mod shrink;
+mod stackmap;
 
-pub use self::memorysink::{MemoryCodeSink, NullTrapSink, RelocSink, TrapSink};
+pub use self::memorysink::{
+    MemoryCodeSink, NullStackmapSink, NullTrapSink, RelocSink, StackmapSink, TrapSink,
+};
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;
-pub use crate::regalloc::RegDiversions;
-
+pub use self::stackmap::Stackmap;
+use crate::ir::entities::Value;
 use crate::ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
+use crate::isa::TargetIsa;
+pub use crate::regalloc::RegDiversions;
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -141,6 +146,9 @@ pub trait CodeSink {
 
     /// Read-only data output is complete, we're done.
     fn end_codegen(&mut self);
+
+    /// Add a stackmap at the current code offset.
+    fn add_stackmap(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa);
 }
 
 /// Report a bad encoding error.
@@ -157,17 +165,17 @@ pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
 ///
 /// This function is called from the `TargetIsa::emit_function()` implementations with the
 /// appropriate instruction emitter.
-pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS)
+pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS, isa: &dyn TargetIsa)
 where
     CS: CodeSink,
-    EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS),
+    EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS, &dyn TargetIsa),
 {
     let mut divert = RegDiversions::new();
     for ebb in func.layout.ebbs() {
         divert.clear();
         debug_assert_eq!(func.offsets[ebb], sink.offset());
         for inst in func.layout.ebb_insts(ebb) {
-            emit_inst(func, inst, &mut divert, sink);
+            emit_inst(func, inst, &mut divert, sink, isa);
         }
     }
 

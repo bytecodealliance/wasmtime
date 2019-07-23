@@ -1672,9 +1672,12 @@ impl<'a> Verifier<'a> {
         // Instructions with side effects are not allowed to be ghost instructions.
         let opcode = self.func.dfg[inst].opcode();
 
-        // The `fallthrough` and `fallthrough_return` instructions are marked as terminators and
-        // branches, but they are not required to have an encoding.
-        if opcode == Opcode::Fallthrough || opcode == Opcode::FallthroughReturn {
+        // The `fallthrough`, `fallthrough_return`, and `safepoint` instructions are not required
+        // to have an encoding.
+        if opcode == Opcode::Fallthrough
+            || opcode == Opcode::FallthroughReturn
+            || opcode == Opcode::Safepoint
+        {
             return Ok(());
         }
 
@@ -1739,6 +1742,24 @@ impl<'a> Verifier<'a> {
         }
     }
 
+    fn verify_safepoint_unused(
+        &self,
+        inst: Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        if let Some(isa) = self.isa {
+            if !isa.flags().enable_safepoints() && self.func.dfg[inst].opcode() == Opcode::Safepoint
+            {
+                return fatal!(
+                    errors,
+                    inst,
+                    "safepoint instruction cannot be used when it is not enabled."
+                );
+            }
+        }
+        Ok(())
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
@@ -1750,6 +1771,7 @@ impl<'a> Verifier<'a> {
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst, errors)?;
                 self.instruction_integrity(inst, errors)?;
+                self.verify_safepoint_unused(inst, errors)?;
                 self.typecheck(inst, errors)?;
                 self.verify_encoding(inst, errors)?;
                 self.immediate_constraints(inst, errors)?;
