@@ -270,7 +270,7 @@ impl PerCpuModeEncodings {
     /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand binding) has already happened
     fn enc_32_64_maybe_isap(
         &mut self,
-        inst: BoundInstruction,
+        inst: impl Clone + Into<InstSpec>,
         template: Template,
         isap: Option<SettingPredicateNumber>,
     ) {
@@ -280,7 +280,7 @@ impl PerCpuModeEncodings {
 
     fn enc32_maybe_isap(
         &mut self,
-        inst: BoundInstruction,
+        inst: impl Into<InstSpec>,
         template: Template,
         isap: Option<SettingPredicateNumber>,
     ) {
@@ -292,7 +292,7 @@ impl PerCpuModeEncodings {
 
     fn enc64_maybe_isap(
         &mut self,
-        inst: BoundInstruction,
+        inst: impl Into<InstSpec>,
         template: Template,
         isap: Option<SettingPredicateNumber>,
     ) {
@@ -432,6 +432,7 @@ pub fn define(
     let uload8_complex = shared.by_name("uload8_complex");
     let ushr = shared.by_name("ushr");
     let ushr_imm = shared.by_name("ushr_imm");
+    let vconst = shared.by_name("vconst");
     let x86_bsf = x86.by_name("x86_bsf");
     let x86_bsr = x86.by_name("x86_bsr");
     let x86_cvtt2si = x86.by_name("x86_cvtt2si");
@@ -578,6 +579,7 @@ pub fn define(
     let rec_urm = r.template("urm");
     let rec_urm_noflags = r.template("urm_noflags");
     let rec_urm_noflags_abcd = r.template("urm_noflags_abcd");
+    let rec_vconst = r.template("vconst");
 
     // Predicates shorthands.
     let all_ones_funcaddrs_and_not_is_pic =
@@ -1783,6 +1785,18 @@ pub fn define(
             e.enc32_rec(instruction.clone(), rec_null_fpr, 0);
             e.enc64_rec(instruction, rec_null_fpr, 0);
         }
+    }
+
+    // SIMD vconst using MOVUPS
+    // TODO it would be ideal if eventually this became the more efficient MOVAPS but we would have
+    // to guarantee that the constants are aligned when emitted and there is currently no mechanism
+    // for that; alternately, constants could be loaded into XMM registers using a sequence like:
+    // MOVQ + MOVHPD + MOVQ + MOVLPD (this allows the constants to be immediates instead of stored
+    // in memory) but some performance measurements are needed.
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() >= 8) {
+        let instruction = vconst.bind_vector_from_lane(ty, sse_vector_size);
+        let template = rec_vconst.nonrex().opcodes(vec![0x0f, 0x10]);
+        e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
     }
 
     // Reference type instructions
