@@ -1,9 +1,8 @@
 pub fn init_file_per_thread_logger() {
-    // There's a problem with borrow checker and static lifetimes across lambdas running
-    // in different threads, so we just use the global instead of function argument.
     use super::LOG_FILENAME_PREFIX;
 
     file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+
     // Extending behavior of default spawner:
     // https://docs.rs/rayon/1.1.0/rayon/struct.ThreadPoolBuilder.html#method.spawn_handler
     // Source code says DefaultSpawner is implementation detail and
