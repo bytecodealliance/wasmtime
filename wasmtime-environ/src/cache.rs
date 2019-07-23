@@ -22,7 +22,7 @@ lazy_static! {
             Some(proj_dirs) => {
                 let cache_dir = proj_dirs.cache_dir();
                 // Temporary workaround for: https://github.com/rust-lang/rust/issues/32689
-                #[cfg(windows)] {
+                if cfg!(windows) {
                     let mut long_path = OsString::new();
                     if !cache_dir.starts_with("\\\\?\\") {
                         long_path.push("\\\\?\\");
@@ -30,8 +30,9 @@ lazy_static! {
                     long_path.push(cache_dir.as_os_str());
                     Some(PathBuf::from(long_path))
                 }
-                #[cfg(not(windows))]
-                Some(cache_dir.to_path_buf())
+                else {
+                    Some(cache_dir.to_path_buf())
+                }
             }
             None => {
                 warn!("Failed to find proper cache directory location.");
@@ -92,19 +93,20 @@ impl ModuleCacheEntry {
 
         let mod_cache_path = CACHE_DIR.clone().and_then(|p| {
             option_hash.map(|hash| {
-                #[cfg(debug_assertions)]
-                let compiler_dir = format!(
-                    "{comp_name}-{comp_ver}-{comp_mtime}",
-                    comp_name = compiler_name,
-                    comp_ver = env!("GIT_REV"),
-                    comp_mtime = *SELF_MTIME,
-                );
-                #[cfg(not(debug_assertions))]
-                let compiler_dir = format!(
-                    "{comp_name}-{comp_ver}",
-                    comp_name = compiler_name,
-                    comp_ver = env!("GIT_REV"),
-                );
+                let compiler_dir = if cfg!(debug_assertions) {
+                    format!(
+                        "{comp_name}-{comp_ver}-{comp_mtime}",
+                        comp_name = compiler_name,
+                        comp_ver = env!("GIT_REV"),
+                        comp_mtime = *SELF_MTIME,
+                    )
+                } else {
+                    format!(
+                        "{comp_name}-{comp_ver}",
+                        comp_name = compiler_name,
+                        comp_ver = env!("GIT_REV"),
+                    )
+                };
                 p.join(isa.name()).join(compiler_dir).join(format!(
                     "mod-{mod_hash}{mod_dbg}",
                     mod_hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD), // standard encoding uses '/' which can't be used for filename
