@@ -16,7 +16,7 @@ pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;
 pub use self::stackmap::Stackmap;
 use crate::ir::entities::Value;
-use crate::ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
+use crate::ir::{ConstantOffset, ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
 use crate::isa::TargetIsa;
 pub use crate::regalloc::RegDiversions;
 use core::fmt;
@@ -134,6 +134,9 @@ pub trait CodeSink {
     fn reloc_external(&mut self, _: Reloc, _: &ExternalName, _: Addend);
 
     /// Add a relocation referencing a jump table.
+    fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset);
+
+    /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, _: Reloc, _: JumpTable);
 
     /// Add trap information for the current offset.
@@ -192,7 +195,13 @@ where
     }
 
     sink.begin_rodata();
-    // TODO: No read-only data (constant pools) at this time.
+
+    // output constants
+    for (_, constant_data) in func.dfg.constants.iter() {
+        for byte in constant_data.iter() {
+            sink.put1(*byte)
+        }
+    }
 
     sink.end_codegen();
 }

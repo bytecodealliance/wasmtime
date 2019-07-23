@@ -16,7 +16,7 @@
 use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
 use crate::binemit::stackmap::Stackmap;
 use crate::ir::entities::Value;
-use crate::ir::{ExternalName, Function, JumpTable, SourceLoc, TrapCode};
+use crate::ir::{ConstantOffset, ExternalName, Function, JumpTable, SourceLoc, TrapCode};
 use crate::isa::TargetIsa;
 use core::ptr::write_unaligned;
 
@@ -78,6 +78,9 @@ pub trait RelocSink {
     /// Add a relocation referencing an external symbol at the current offset.
     fn reloc_external(&mut self, _: CodeOffset, _: Reloc, _: &ExternalName, _: Addend);
 
+    /// Add a relocation referencing a constant.
+    fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset);
+
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable);
 }
@@ -132,6 +135,11 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.relocs.reloc_external(ofs, rel, name, addend);
     }
 
+    fn reloc_constant(&mut self, rel: Reloc, constant_offset: ConstantOffset) {
+        let ofs = self.offset();
+        self.relocs.reloc_constant(ofs, rel, constant_offset);
+    }
+
     fn reloc_jt(&mut self, rel: Reloc, jt: JumpTable) {
         let ofs = self.offset();
         self.relocs.reloc_jt(ofs, rel, jt);
@@ -169,6 +177,7 @@ pub struct NullRelocSink {}
 impl RelocSink for NullRelocSink {
     fn reloc_ebb(&mut self, _: u32, _: Reloc, _: u32) {}
     fn reloc_external(&mut self, _: u32, _: Reloc, _: &ExternalName, _: i64) {}
+    fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset) {}
     fn reloc_jt(&mut self, _: u32, _: Reloc, _: JumpTable) {}
 }
 
