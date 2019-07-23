@@ -124,7 +124,7 @@ impl crate::compilation::Compiler for Cranelift {
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
     ) -> Result<(Compilation, Relocations, ModuleAddressMap), CompileError> {
-        let cache_entry = ModuleCacheEntry::new(module, isa, generate_debug_info);
+        let cache_entry = ModuleCacheEntry::new(module, isa, "cranelift", generate_debug_info);
 
         let data = match cache_entry.get_data() {
             Some(data) => data,
