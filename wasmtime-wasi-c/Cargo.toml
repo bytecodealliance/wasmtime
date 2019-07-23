@@ -15,7 +15,7 @@ wasmtime-environ = { path = "../wasmtime-environ" }
 wasmtime-jit = { path = "../wasmtime-jit" }
 cranelift-codegen = "0.33.0"
 cranelift-entity = "0.33.0"
-cranelift-wasm = "0.33.0"
+cranelift-wasm = "0.36.0"
 target-lexicon = "0.4.0"
 log = { version = "0.4.6", default-features = false }
 libc = "0.2.50"
