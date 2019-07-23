@@ -24,11 +24,11 @@ failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
 target-lexicon = { version = "0.4.0", default-features = false }
 hashbrown = { version = "0.1.8", optional = true }
-wasmparser = "0.32.1"
+wasmparser = "0.34.0"
 
 [features]
 default = ["std"]
-std = ["cranelift-codegen/std", "cranelift-wasm/std"]
+std = ["cranelift-codegen/std", "cranelift-wasm/std", "wasmtime-environ/std"]
 core = ["hashbrown/nightly", "cranelift-codegen/core", "cranelift-wasm/core", "wasmtime-environ/core"]
 lightbeam = ["wasmtime-environ/lightbeam"]
 

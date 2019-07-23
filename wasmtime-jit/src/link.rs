@@ -333,7 +333,13 @@ fn relocate(
                         NearestF64 => wasmtime_f64_nearest as usize,
                         #[cfg(not(target_os = "windows"))]
                         Probestack => __rust_probestack as usize,
-                        #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
+                        #[cfg(all(target_os = "windows", target_env = "gnu"))]
+                        Probestack => ___chkstk as usize,
+                        #[cfg(all(
+                            target_os = "windows",
+                            target_env = "msvc",
+                            target_pointer_width = "64"
+                        ))]
                         Probestack => __chkstk as usize,
                         other => panic!("unexpected libcall: {}", other),
                     }
@@ -393,6 +399,14 @@ fn relocate(
 extern "C" {
     #[cfg(not(target_os = "windows"))]
     pub fn __rust_probestack();
-    #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
+    #[cfg(all(
+        target_os = "windows",
+        target_env = "msvc",
+        target_pointer_width = "64"
+    ))]
     pub fn __chkstk();
+    // ___chkstk (note the triple underscore) is implemented in compiler-builtins/src/x86_64.rs
+    // by the Rust compiler for the MinGW target
+    #[cfg(all(target_os = "windows", target_env = "gnu",))]
+    pub fn ___chkstk();
 }

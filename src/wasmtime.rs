@@ -34,7 +34,6 @@ use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
-use file_per_thread_logger;
 use pretty_env_logger;
 use serde::Deserialize;
 use std::error::Error;
@@ -53,6 +52,8 @@ use wasmtime_wast::instantiate_spectest;
 
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
+
+mod utils;
 
 static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
 
@@ -201,7 +202,7 @@ fn main() {
     if args.flag_debug {
         pretty_env_logger::init();
     } else {
-        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+        utils::init_file_per_thread_logger();
     }
 
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
