@@ -2,7 +2,7 @@
 #![allow(unused_unsafe)]
 use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
-use crate::fdentry::{Descriptor, FdEntry};
+use crate::fdentry::FdEntry;
 use crate::sys::errno_from_host;
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::host_impl;
@@ -36,8 +36,9 @@ pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {
 }
 
 pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: host::__wasi_fdflags_t) -> Result<()> {
+    use nix::fcntl::{fcntl, F_SETFL};
     let nix_flags = host_impl::nix_from_fdflags(fdflags);
-    match nix::fcntl::fcntl(fd.as_raw_fd(), nix::fcntl::F_SETFL(nix_flags)) {
+    match fcntl(fd.as_raw_fd(), F_SETFL(nix_flags)) {
         Ok(_) => Ok(()),
         Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
     }
@@ -88,10 +89,7 @@ pub(crate) fn fd_advise(
 pub(crate) fn path_create_directory(dirfd: &File, path: &str) -> Result<()> {
     use nix::libc::mkdirat;
 
-    let (dir, path) = match path_get(dirfd, 0, path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (dir, path) = path_get(dirfd, 0, path, false)?;
     let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
     // nix doesn't expose mkdirat() yet
@@ -108,14 +106,8 @@ pub(crate) fn path_link(
     new_path: &str,
 ) -> Result<()> {
     use nix::libc::linkat;
-    let (old_dir, old_path) = match path_get(old_dirfd, 0, old_path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
-    let (new_dir, new_path) = match path_get(new_dirfd, 0, new_path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (old_dir, old_path) = path_get(old_dirfd, 0, old_path, false)?;
+    let (new_dir, new_path) = path_get(new_dirfd, 0, new_path, false)?;
     let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
     let new_path_cstr = CString::new(new_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
@@ -184,15 +176,8 @@ pub(crate) fn path_open(
     }
 
     let dirfe = ctx.get_fd_entry(dirfd, needed_base, needed_inheriting)?;
-    let dirfd = match &*dirfe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return Err(host::__WASI_EBADF),
-    };
-
-    let (dir, path) = match path_get(dirfd, dirflags, path, nix_oflags.contains(OFlag::O_CREAT)) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let dirfd = dirfe.fd_object.descriptor.as_file()?;
+    let (dir, path) = path_get(dirfd, dirflags, path, nix_oflags.contains(OFlag::O_CREAT))?;
 
     // Call openat. Use mode 0o666 so that we follow whatever the user's
     // umask is, but don't set the executable flag, because it isn't yet
@@ -247,15 +232,13 @@ pub(crate) fn path_open(
 
     // Determine the type of the new file descriptor and which rights contradict with this type
     let file = unsafe { File::from_raw_fd(new_fd) };
-    match determine_type_rights(&file) {
-        Err(e) => Err(e),
-        Ok((_ty, max_base, max_inheriting)) => {
-            let mut fe = FdEntry::from(file)?;
+    determine_type_rights(&file).and_then(|(_ty, max_base, max_inheriting)| {
+        FdEntry::from(file).map(|mut fe| {
             fe.rights_base &= max_base;
             fe.rights_inheriting &= max_inheriting;
-            Ok(fe)
-        }
-    }
+            fe
+        })
+    })
 }
 
 pub(crate) fn fd_readdir(
@@ -286,11 +269,7 @@ pub(crate) fn fd_readdir(
         if host_entry.is_null() {
             break;
         }
-        let entry: wasm32::__wasi_dirent_t =
-            match host_impl::dirent_from_host(&unsafe { *host_entry }) {
-                Ok(entry) => entry,
-                Err(e) => return Err(e),
-            };
+        let entry: wasm32::__wasi_dirent_t = host_impl::dirent_from_host(&unsafe { *host_entry })?;
         let name_len = entry.d_namlen as usize;
         let required_space = std::mem::size_of_val(&entry) + name_len;
         if required_space > left {
@@ -319,10 +298,7 @@ pub(crate) fn fd_readdir(
 pub(crate) fn path_readlink(dirfd: &File, path: &str, buf: &mut [u8]) -> Result<usize> {
     use nix::errno::Errno;
 
-    let (dir, path) = match path_get(dirfd, 0, path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (dir, path) = path_get(dirfd, 0, path, false)?;
     let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
     // Linux requires that the buffer size is positive, whereas POSIX does not.
@@ -360,14 +336,8 @@ pub(crate) fn path_rename(
 ) -> Result<()> {
     use nix::libc::renameat;
 
-    let (old_dir, old_path) = match path_get(old_dirfd, 0, old_path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
-    let (new_dir, new_path) = match path_get(new_dirfd, 0, new_path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (old_dir, old_path) = path_get(old_dirfd, 0, old_path, false)?;
+    let (new_dir, new_path) = path_get(new_dirfd, 0, new_path, false)?;
     let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
     let new_path_cstr = CString::new(new_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
@@ -388,10 +358,9 @@ pub(crate) fn path_rename(
 
 pub(crate) fn fd_filestat_get(fd: &File) -> Result<host::__wasi_filestat_t> {
     use nix::sys::stat::fstat;
-    match fstat(fd.as_raw_fd()) {
-        Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
-        Ok(filestat) => Ok(host_impl::filestat_from_nix(filestat)?),
-    }
+    let filestat =
+        fstat(fd.as_raw_fd()).map_err(|err| host_impl::errno_from_nix(err.as_errno().unwrap()))?;
+    host_impl::filestat_from_nix(filestat)
 }
 
 pub(crate) fn fd_filestat_set_times(
@@ -409,14 +378,10 @@ pub(crate) fn fd_filestat_set_times(
         if res != 0 {
             return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
         }
-        let time_ns = match (timespec.tv_sec as host::__wasi_timestamp_t)
+        st_mtim = (timespec.tv_sec as host::__wasi_timestamp_t)
             .checked_mul(1_000_000_000)
             .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-        {
-            Some(time_ns) => time_ns,
-            None => return Err(host::__WASI_EOVERFLOW),
-        };
-        st_mtim = time_ns;
+            .ok_or(host::__WASI_EOVERFLOW)?;
     }
     let ts_atime = match fst_flags {
         f if f & host::__WASI_FILESTAT_SET_ATIM_NOW != 0 => libc::timespec {
@@ -455,19 +420,15 @@ pub(crate) fn path_filestat_get(
     use nix::fcntl::AtFlags;
     use nix::sys::stat::fstatat;
 
-    let (dir, path) = match path_get(dirfd, dirflags, path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (dir, path) = path_get(dirfd, dirflags, path, false)?;
     let atflags = match dirflags {
         0 => AtFlags::empty(),
         _ => AtFlags::AT_SYMLINK_NOFOLLOW,
     };
 
-    match fstatat(dir.as_raw_fd(), path.as_str(), atflags) {
-        Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
-        Ok(filestat) => Ok(host_impl::filestat_from_nix(filestat)?),
-    }
+    let filestat = fstatat(dir.as_raw_fd(), path.as_str(), atflags)
+        .map_err(|err| host_impl::errno_from_nix(err.as_errno().unwrap()))?;
+    host_impl::filestat_from_nix(filestat)
 }
 
 pub(crate) fn path_filestat_set_times(
@@ -480,10 +441,7 @@ pub(crate) fn path_filestat_set_times(
 ) -> Result<()> {
     use nix::sys::time::{TimeSpec, TimeValLike};
 
-    let (dir, path) = match path_get(dirfd, dirflags, &path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (dir, path) = path_get(dirfd, dirflags, &path, false)?;
     let atflags = match dirflags {
         wasm32::__WASI_LOOKUP_SYMLINK_FOLLOW => 0,
         _ => libc::AT_SYMLINK_NOFOLLOW,
@@ -495,14 +453,10 @@ pub(crate) fn path_filestat_set_times(
         if res != 0 {
             return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
         }
-        let time_ns = match (timespec.tv_sec as host::__wasi_timestamp_t)
+        st_mtim = (timespec.tv_sec as host::__wasi_timestamp_t)
             .checked_mul(1_000_000_000)
             .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-        {
-            Some(time_ns) => time_ns,
-            None => return Err(host::__WASI_EOVERFLOW),
-        };
-        st_mtim = time_ns;
+            .ok_or(host::__WASI_EOVERFLOW)?;
     }
     let ts_atime = match fst_flags {
         f if f & host::__WASI_FILESTAT_SET_ATIM_NOW != 0 => libc::timespec {
@@ -534,10 +488,7 @@ pub(crate) fn path_filestat_set_times(
 pub(crate) fn path_symlink(dirfd: &File, old_path: &str, new_path: &str) -> Result<()> {
     use nix::libc::symlinkat;
 
-    let (dir, new_path) = match path_get(dirfd, 0, new_path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (dir, new_path) = path_get(dirfd, 0, new_path, false)?;
     let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
     let new_path_cstr = CString::new(new_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
@@ -559,10 +510,7 @@ pub(crate) fn path_unlink_file(dirfd: &File, path: &str) -> Result<()> {
     use nix::errno;
     use nix::libc::unlinkat;
 
-    let (dir, path) = match path_get(dirfd, 0, path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (dir, path) = path_get(dirfd, 0, path, false)?;
     let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
     // nix doesn't expose unlinkat() yet
@@ -605,10 +553,7 @@ pub(crate) fn path_remove_directory(dirfd: &File, path: &str) -> Result<()> {
     use nix::errno;
     use nix::libc::{unlinkat, AT_REMOVEDIR};
 
-    let (dir, path) = match path_get(dirfd, 0, path, false) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    let (dir, path) = path_get(dirfd, 0, path, false)?;
     let path_cstr = CString::new(path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
 
     // nix doesn't expose unlinkat() yet

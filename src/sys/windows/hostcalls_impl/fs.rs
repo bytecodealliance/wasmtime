@@ -2,7 +2,7 @@
 #![allow(unused)]
 use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
-use crate::fdentry::{Descriptor, FdEntry};
+use crate::fdentry::FdEntry;
 use crate::sys::errno_from_host;
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::host_impl;
@@ -124,43 +124,32 @@ pub(crate) fn path_open(
     }
 
     let dirfe = ctx.get_fd_entry(dirfd, needed_base, needed_inheriting)?;
-    let dirfd = match &*dirfe.fd_object.descriptor {
-        Descriptor::File(f) => f,
-        _ => return Err(host::__WASI_EBADF),
-    };
-
-    let (dir, path) = match path_get(
+    let dirfd = dirfe.fd_object.descriptor.as_file()?;
+    let (dir, path) = path_get(
         dirfd,
         dirflags,
         path,
         !win_flags_attrs.contains(FlagsAndAttributes::FILE_FLAG_BACKUP_SEMANTICS),
-    ) {
-        Ok((dir, path)) => (dir, path),
-        Err(e) => return Err(e),
-    };
+    )?;
 
-    let new_handle = match winx::file::openat(
+    let new_handle = winx::file::openat(
         dir.as_raw_handle(),
         path.as_str(),
         win_rights,
         win_create_disp,
         win_flags_attrs,
-    ) {
-        Ok(handle) => handle,
-        Err(e) => return Err(host_impl::errno_from_win(e)),
-    };
+    )
+    .map_err(host_impl::errno_from_win)?;
 
     // Determine the type of the new file descriptor and which rights contradict with this type
     let file = unsafe { File::from_raw_handle(new_handle) };
-    match determine_type_rights(&file) {
-        Err(e) => Err(e),
-        Ok((_ty, max_base, max_inheriting)) => {
-            let mut fe = FdEntry::from(file)?;
+    determine_type_rights(&file).and_then(|(_ty, max_base, max_inheriting)| {
+        FdEntry::from(file).map(|mut fe| {
             fe.rights_base &= max_base;
             fe.rights_inheriting &= max_inheriting;
-            Ok(fe)
-        }
-    }
+            fe
+        })
+    })
 }
 
 pub(crate) fn fd_readdir(
