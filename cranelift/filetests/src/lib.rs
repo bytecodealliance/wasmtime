@@ -48,6 +48,7 @@ mod test_postopt;
 mod test_preopt;
 mod test_print_cfg;
 mod test_regalloc;
+mod test_rodata;
 mod test_run;
 mod test_safepoint;
 mod test_shrink;
@@ -119,6 +120,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "binemit" => test_binemit::subtest(parsed),
         "cat" => test_cat::subtest(parsed),
         "compile" => test_compile::subtest(parsed),
+        "rodata" => test_rodata::subtest(parsed),
         "dce" => test_dce::subtest(parsed),
         "domtree" => test_domtree::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),
