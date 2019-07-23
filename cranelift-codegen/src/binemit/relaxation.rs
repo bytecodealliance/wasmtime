@@ -37,6 +37,7 @@ use crate::iterators::IteratorExtras;
 use crate::regalloc::RegDiversions;
 use crate::timing;
 use crate::CodegenResult;
+use core::convert::TryFrom;
 use log::debug;
 
 #[cfg(feature = "basic-blocks")]
@@ -135,7 +136,11 @@ pub fn relax_branches(
     let jumptables_size = offset - jumptables;
     let rodata = offset;
 
-    // TODO: Once we have constant pools we'll do some processing here to update offset.
+    for constant in func.dfg.constants.entries_mut() {
+        constant.set_offset(offset);
+        offset +=
+            u32::try_from(constant.len()).expect("Constants must have a length that fits in a u32")
+    }
 
     let rodata_size = offset - rodata;
 

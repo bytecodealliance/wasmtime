@@ -90,6 +90,10 @@ impl binemit::CodeSink for TextSink {
         write!(self.text, ") ").unwrap();
     }
 
+    fn reloc_constant(&mut self, reloc: binemit::Reloc, constant: ir::ConstantOffset) {
+        write!(self.text, "{}({}) ", reloc, constant).unwrap();
+    }
+
     fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
         write!(self.text, "{}({}) ", reloc, jt).unwrap();
     }
@@ -313,7 +317,13 @@ impl SubTest for TestBinEmit {
         }
 
         sink.begin_rodata();
-        // TODO: Read-only (constant pool) data.
+
+        // output constants
+        for (_, constant_data) in func.dfg.constants.iter() {
+            for byte in constant_data.iter() {
+                sink.put1(*byte)
+            }
+        }
 
         sink.end_codegen();
 
