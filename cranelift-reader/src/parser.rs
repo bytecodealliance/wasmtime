@@ -9,7 +9,7 @@ use crate::testfile::{Comment, Details, TestFile};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm128, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::{
@@ -541,6 +541,23 @@ impl<'a> Parser<'a> {
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as an Imm64 to check for overflow and other issues.
             text.parse().map_err(|e| self.error(e))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a Uimm128 immediate; due to size restrictions on InstructionData, Uimm128 is boxed in cranelift-codegen/meta/src/shared/immediates.rs
+    fn match_uimm128(&mut self, err_msg: &str) -> ParseResult<Uimm128> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like hex code.
+            // Parse it as an Uimm128 to check for overflow and other issues.
+            text.parse().map_err(|e| {
+                self.error(&format!(
+                    "expected u128 hexadecimal immediate, failed to parse: {}",
+                    e
+                ))
+            })
         } else {
             err!(self.loc, err_msg)
         }
@@ -2109,6 +2126,14 @@ impl<'a> Parser<'a> {
                 opcode,
                 imm: self.match_imm64("expected immediate integer operand")?,
             },
+            InstructionFormat::UnaryImm128 => {
+                let uimm128 = self.match_uimm128("expected immediate hexadecimal operand")?;
+                let constant_handle = ctx.function.dfg.constants.insert(uimm128.0.to_vec());
+                InstructionData::UnaryImm128 {
+                    opcode,
+                    imm: constant_handle,
+                }
+            }
             InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
                 opcode,
                 imm: self.match_ieee32("expected immediate 32-bit float operand")?,

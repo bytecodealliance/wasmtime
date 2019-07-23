@@ -5,6 +5,7 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
     // Shorthands for immediates.
     let uimm8 = immediates.by_name("uimm8");
     let uimm32 = immediates.by_name("uimm32");
+    let uimm128 = immediates.by_name("uimm128");
     let imm64 = immediates.by_name("imm64");
     let ieee32 = immediates.by_name("ieee32");
     let ieee64 = immediates.by_name("ieee64");
@@ -30,6 +31,7 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
 
     registry.insert(Builder::new("Unary").value());
     registry.insert(Builder::new("UnaryImm").imm(imm64));
+    registry.insert(Builder::new("UnaryImm128").imm(uimm128));
     registry.insert(Builder::new("UnaryIeee32").imm(ieee32));
     registry.insert(Builder::new("UnaryIeee64").imm(ieee64));
     registry.insert(Builder::new("UnaryBool").imm(boolean));

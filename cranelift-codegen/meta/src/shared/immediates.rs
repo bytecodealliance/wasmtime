@@ -29,6 +29,16 @@ pub fn define() -> Vec<OperandKind> {
         .build();
     kinds.push(uimm32);
 
+    // An unsigned 128-bit immediate integer operand.
+    //
+    // This operand is used to pass entire 128-bit vectors as immediates to
+    // instructions like const.
+    let uimm128 = Builder::new_imm("uimm128")
+        .doc("A 128-bit immediate unsigned integer.")
+        .rust_type("ir::Constant")
+        .build();
+    kinds.push(uimm128);
+
     // A 32-bit immediate signed offset.
     //
     // This is used to represent an immediate address offset in load/store
