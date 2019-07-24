@@ -152,6 +152,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = state.pop1();
             let if_not = builder.create_ebb();
             let jump_inst = builder.ins().brz(val, if_not, &[]);
+
+            #[cfg(feature = "basic-blocks")]
+            {
+                let next_ebb = builder.create_ebb();
+                builder.ins().jump(next_ebb, &[]);
+                builder.seal_block(next_ebb); // Only predecessor is the current block.
+                builder.switch_to_block(next_ebb);
+            }
+
             // Here we append an argument to an Ebb targeted by an argumentless jump instruction
             // But in fact there are two cases:
             // - either the If does not have a Else clause, in that case ty = EmptyBlock
