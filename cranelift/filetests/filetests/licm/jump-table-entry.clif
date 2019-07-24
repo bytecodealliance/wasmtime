@@ -1,5 +1,4 @@
 test licm
-
 target x86_64
 
 function %dont_hoist_jump_table_entry_during_licm() {
@@ -18,6 +17,9 @@ ebb2:
     v1 = iconst.i32 -14
     v8 = ifcmp_imm v1, 2
     brif uge v8, ebb1
+    jump ebb3
+
+ebb3:
     v5 = jump_table_base.i64 jt0
     v6 = jump_table_entry.i64 v1, v5, 4, jt0
     v7 = iadd v5, v6
@@ -25,5 +27,7 @@ ebb2:
 ; check: ebb2:
 ; nextln: v8 = ifcmp_imm.i32 v1, 2
 ; nextln: brif uge v8, ebb1
+; nextln: jump ebb3
+; check: ebb3:
 ; nextln: jump_table_entry.i64
 }
