@@ -40,7 +40,7 @@ faerie = "0.10.1"
 target-lexicon = { version = "0.4.0", default-features = false }
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.1"
-wabt = "0.8"
+wabt = "0.7"
 libc = "0.2.50"
 errno = "0.2.4"
 rayon = "1.1"
