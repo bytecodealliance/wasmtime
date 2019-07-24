@@ -1,6 +1,7 @@
 //! Data structures for representing decoded wasm modules.
 
 use crate::tunables::Tunables;
+use core::hash::{Hash, Hasher};
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
@@ -13,7 +14,7 @@ use std::string::String;
 use std::vec::Vec;
 
 /// A WebAssembly table initializer.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct TableElements {
     /// The index of a table to initialize.
     pub table_index: TableIndex,
@@ -39,7 +40,7 @@ pub enum Export {
 }
 
 /// Implemenation styles for WebAssembly linear memory.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum MemoryStyle {
     /// The actual memory can be resized and moved.
     Dynamic,
@@ -77,7 +78,7 @@ impl MemoryStyle {
 
 /// A WebAssembly linear memory description along with our chosen style for
 /// implementing it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct MemoryPlan {
     /// The WebAssembly linear memory description.
     pub memory: Memory,
@@ -100,7 +101,7 @@ impl MemoryPlan {
 }
 
 /// Implemenation styles for WebAssembly tables.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum TableStyle {
     /// Signatures are stored in the table and checked in the caller.
     CallerChecksSignature,
@@ -115,7 +116,7 @@ impl TableStyle {
 
 /// A WebAssembly table description along with our chosen style for
 /// implementing it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct TablePlan {
     /// The WebAssembly table description.
     pub table: cranelift_wasm::Table,
@@ -170,10 +171,6 @@ pub struct Module {
 
     /// WebAssembly table initializers.
     pub table_elements: Vec<TableElements>,
-
-    /// Hash of the source wasm code if this module is not synthesized.
-    /// TODO: this is temporary workaround. Will be replaced with derive macro.
-    pub hash: Option<[u8; 32]>,
 }
 
 impl Module {
@@ -192,7 +189,6 @@ impl Module {
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
-            hash: None,
         }
     }
 
@@ -282,5 +278,26 @@ impl Module {
     /// Test whether the given global index is for an imported global.
     pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
         index.index() < self.imported_globals.len()
+    }
+}
+
+impl Hash for Module {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.signatures.hash(state);
+        self.imported_funcs.hash(state);
+        self.imported_tables.hash(state);
+        self.imported_memories.hash(state);
+        self.imported_globals.hash(state);
+        self.functions.hash(state);
+        self.table_plans.hash(state);
+        self.memory_plans.hash(state);
+        self.globals.hash(state);
+        // self.exports.hash(state); // TODO: do it manually; IndexMap comes from an external crate
+        self.start_func.hash(state);
+        self.table_elements.hash(state);
+        // TODO: we need to hash more data, including code of functions
     }
 }

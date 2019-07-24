@@ -1,6 +1,7 @@
 use crate::address_map::ModuleAddressMap;
 use crate::compilation::{CodeAndJTOffsets, Compilation, Relocations};
 use crate::module::Module;
+use core::hash::{Hash, Hasher};
 use cranelift_codegen::ir;
 use cranelift_codegen::isa;
 use directories::ProjectDirs;
@@ -8,6 +9,7 @@ use lazy_static::lazy_static;
 use log::warn;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
+use sha2::{Digest, Sha256};
 #[cfg(windows)]
 use std::ffi::OsString;
 use std::fmt;
@@ -86,17 +88,18 @@ pub struct ModuleCacheData {
 
 type ModuleCacheDataTupleType = (Compilation, Relocations, ModuleAddressMap);
 
+struct Sha256Hasher(Sha256);
+
 impl ModuleCacheEntry {
     pub fn new(module: &Module, _isa: &dyn isa::TargetIsa, _generate_debug_info: bool) -> Self {
         // TODO: cache directory hierarchy with isa name, compiler name & git revision, and files with flag if debug symbols are available
         let mod_cache_path = if conf::cache_enabled() {
-            CACHE_DIR.clone().and_then(|p| {
-                module.hash.map(|hash| {
-                    p.join(format!(
-                        "mod-{}",
-                        base64::encode_config(&hash, base64::URL_SAFE_NO_PAD) // standard encoding uses '/' which can't be used for filename
-                    ))
-                })
+            CACHE_DIR.clone().map(|p| {
+                let hash = Sha256Hasher::digest(module);
+                p.join(format!(
+                    "mod-{}",
+                    base64::encode_config(&hash, base64::URL_SAFE_NO_PAD) // standard encoding uses '/' which can't be used for filename
+                ))
             })
         } else {
             None
@@ -168,6 +171,27 @@ impl ModuleCacheData {
 
     pub fn to_tuple(self) -> ModuleCacheDataTupleType {
         (self.compilation, self.relocations, self.address_transforms)
+    }
+}
+
+impl Sha256Hasher {
+    pub fn digest<T>(obj: &T) -> [u8; 32]
+    where
+        T: Hash,
+    {
+        let mut hasher = Self(Sha256::new());
+        obj.hash(&mut hasher);
+        hasher.0.result().into()
+    }
+}
+
+impl Hasher for Sha256Hasher {
+    fn finish(&self) -> u64 {
+        panic!("Sha256Hasher doesn't support finish!");
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        self.0.input(bytes);
     }
 }
 
