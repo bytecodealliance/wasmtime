@@ -46,6 +46,7 @@ file-per-thread-logger = "0.1.2"
 default = ["disas", "wasm"]
 disas = ["capstone"]
 wasm = ["wabt", "cranelift-wasm"]
+basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-blocks", "cranelift-wasm/basic-blocks"]
 
 # We want debug symbols on release binaries by default since it allows profiling
 # tools to give more accurate information. We can always strip them out later if
