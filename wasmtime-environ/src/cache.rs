@@ -12,13 +12,39 @@ use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
 use std::ffi::OsString;
 use std::fmt;
 use std::fs;
+use std::io;
 #[cfg(windows)]
 use std::path::Path;
 use std::path::PathBuf;
 
+/// Module for configuring the cache system.
+pub mod conf {
+    use spin::Once;
+
+    // Private static, so only internal function can access it.
+    static CACHE_ENABLED: Once<bool> = Once::new();
+
+    /// Returns true if and only if the cache is enabled.
+    pub fn cache_enabled() -> bool {
+        // Not everyone knows about the cache system, i.e. the tests,
+        // so the default is false.
+        *CACHE_ENABLED.call_once(|| false)
+    }
+
+    /// Initializes the cache system. Should be called exactly once,
+    /// and before using the cache system. Otherwise it can panic.
+    pub fn init(enabled: bool) {
+        // init() should be called exactly once
+        assert!(CACHE_ENABLED.r#try().is_none());
+        let val = *CACHE_ENABLED.call_once(|| enabled);
+        // But multiple threads can pass the first assertion, so let's guarantee consistency:
+        assert!(val == enabled);
+    }
+}
+
 lazy_static! {
     static ref CACHE_DIR: Option<PathBuf> =
-        match ProjectDirs::from("org", "CraneStation", "wasmtime") {
+        match ProjectDirs::from("", "CraneStation", "wasmtime") {
             Some(proj_dirs) => {
                 let cache_dir = proj_dirs.cache_dir();
                 // Temporary workaround for: https://github.com/rust-lang/rust/issues/32689
@@ -63,16 +89,18 @@ type ModuleCacheDataTupleType = (Compilation, Relocations, ModuleAddressMap);
 impl ModuleCacheEntry {
     pub fn new(module: &Module, _isa: &dyn isa::TargetIsa, _generate_debug_info: bool) -> Self {
         // TODO: cache directory hierarchy with isa name, compiler name & git revision, and files with flag if debug symbols are available
-        let option_hash = module.hash;
-
-        let mod_cache_path = CACHE_DIR.clone().and_then(|p| {
-            option_hash.map(|hash| {
-                p.join(format!(
-                    "mod-{}",
-                    base64::encode_config(&hash, base64::URL_SAFE_NO_PAD) // standard encoding uses '/' which can't be used for filename
-                ))
+        let mod_cache_path = if conf::cache_enabled() {
+            CACHE_DIR.clone().and_then(|p| {
+                module.hash.map(|hash| {
+                    p.join(format!(
+                        "mod-{}",
+                        base64::encode_config(&hash, base64::URL_SAFE_NO_PAD) // standard encoding uses '/' which can't be used for filename
+                    ))
+                })
             })
-        });
+        } else {
+            None
+        };
 
         ModuleCacheEntry { mod_cache_path }
     }
@@ -105,11 +133,25 @@ impl ModuleCacheEntry {
             };
             match fs::write(p, &cache_buf) {
                 Ok(()) => (),
-                Err(err) => warn!(
-                    "Failed to write cached code to disk, path: {}, message: {}",
-                    p.display(),
-                    err
-                ),
+                Err(err) => {
+                    warn!(
+                        "Failed to write cached code to disk, path: {}, message: {}",
+                        p.display(),
+                        err
+                    );
+                    match fs::remove_file(p) {
+                        Ok(()) => (),
+                        Err(err) => {
+                            if err.kind() != io::ErrorKind::NotFound {
+                                warn!(
+                                    "Failed to cleanup invalid cache, path: {}, message: {}",
+                                    p.display(),
+                                    err
+                                );
+                            }
+                        }
+                    }
+                }
             }
         }
     }

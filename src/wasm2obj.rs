@@ -47,6 +47,7 @@ use std::str;
 use std::str::FromStr;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
+use wasmtime_environ::cache_conf;
 use wasmtime_environ::{Compiler, Cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
 
@@ -61,7 +62,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-g] <file> -o <output>
+    wasm2obj [--target TARGET] [-cdg] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
@@ -69,6 +70,7 @@ Options:
     -h, --help          print this help message
     --target <TARGET>   build for the target triple; default is the host machine
     -g                  generate debug information
+    -c, --cache         enable caching system
     --version           print the Cranelift version
     -d, --debug         enable debug output on stderr/stdout
 ";
@@ -80,6 +82,7 @@ struct Args {
     arg_target: Option<String>,
     flag_g: bool,
     flag_debug: bool,
+    flag_cache: bool,
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -104,6 +107,8 @@ fn main() {
     } else {
         utils::init_file_per_thread_logger();
     }
+
+    cache_conf::init(args.flag_cache);
 
     let path = Path::new(&args.arg_file);
     match handle_module(
