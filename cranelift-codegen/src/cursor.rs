@@ -635,6 +635,28 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
     }
 
     fn insert_built_inst(self, inst: ir::Inst, _: ir::Type) -> &'c mut ir::DataFlowGraph {
+        // TODO: Remove this assertion once #796 is fixed.
+        #[cfg(feature = "basic-blocks")]
+        #[cfg(debug_assertions)]
+        {
+            if let CursorPosition::At(_) = self.position() {
+                if let Some(curr) = self.current_inst() {
+                    if let Some(prev) = self.layout().prev_inst(curr) {
+                        let prev_op = self.data_flow_graph()[prev].opcode();
+                        let inst_op = self.data_flow_graph()[inst].opcode();
+                        let curr_op = self.data_flow_graph()[curr].opcode();
+                        if prev_op.is_branch() && !prev_op.is_terminator() {
+                            if !inst_op.is_terminator() {
+                                panic!(
+                                    "Inserting instruction {} after {}, and before {}",
+                                    inst_op, prev_op, curr_op
+                                )
+                            };
+                        }
+                    };
+                };
+            };
+        }
         self.insert_inst(inst);
         if !self.srcloc.is_default() {
             self.func.srclocs[inst] = self.srcloc;
@@ -742,6 +764,29 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         inst: ir::Inst,
         ctrl_typevar: ir::Type,
     ) -> &'c mut ir::DataFlowGraph {
+        // TODO: Remove this assertion once #796 is fixed.
+        #[cfg(feature = "basic-blocks")]
+        #[cfg(debug_assertions)]
+        {
+            if let CursorPosition::At(_) = self.position() {
+                if let Some(curr) = self.current_inst() {
+                    if let Some(prev) = self.layout().prev_inst(curr) {
+                        let prev_op = self.data_flow_graph()[prev].opcode();
+                        let inst_op = self.data_flow_graph()[inst].opcode();
+                        if prev_op.is_branch() && !prev_op.is_terminator() {
+                            if !inst_op.is_terminator() {
+                                panic!(
+                                    "Inserting instruction {} after {} and before {}",
+                                    self.display_inst(inst),
+                                    self.display_inst(prev),
+                                    self.display_inst(curr)
+                                )
+                            };
+                        }
+                    };
+                };
+            };
+        }
         // Insert the instruction and remember the reference.
         self.insert_inst(inst);
         self.built_inst = Some(inst);
