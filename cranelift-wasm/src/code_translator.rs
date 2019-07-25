@@ -42,7 +42,7 @@ use wasmparser::{MemoryImmediate, Operator};
 /// Translates wasm operators into Cranelift IR instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
-    op: Operator,
+    op: &Operator,
     builder: &mut FunctionBuilder,
     state: &mut TranslationState,
     environ: &mut FE,
@@ -59,28 +59,28 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *  disappear in the Cranelift Code
          ***********************************************************************************/
         Operator::GetLocal { local_index } => {
-            let val = builder.use_var(Variable::with_u32(local_index));
+            let val = builder.use_var(Variable::with_u32(*local_index));
             state.push1(val);
-            let label = ValueLabel::from_u32(local_index);
+            let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
         Operator::SetLocal { local_index } => {
             let val = state.pop1();
-            builder.def_var(Variable::with_u32(local_index), val);
-            let label = ValueLabel::from_u32(local_index);
+            builder.def_var(Variable::with_u32(*local_index), val);
+            let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
         Operator::TeeLocal { local_index } => {
             let val = state.peek1();
-            builder.def_var(Variable::with_u32(local_index), val);
-            let label = ValueLabel::from_u32(local_index);
+            builder.def_var(Variable::with_u32(*local_index), val);
+            let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
         /********************************** Globals ****************************************
          *  `get_global` and `set_global` are handled by the environment.
          ***********************************************************************************/
         Operator::GetGlobal { global_index } => {
-            let val = match state.get_global(builder.func, global_index, environ)? {
+            let val = match state.get_global(builder.func, *global_index, environ)? {
                 GlobalVariable::Const(val) => val,
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
@@ -91,8 +91,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(val);
         }
         Operator::SetGlobal { global_index } => {
-            match state.get_global(builder.func, global_index, environ)? {
-                GlobalVariable::Const(_) => panic!("global #{} is a constant", global_index),
+            match state.get_global(builder.func, *global_index, environ)? {
+                GlobalVariable::Const(_) => panic!("global #{} is a constant", *global_index),
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let flags = ir::MemFlags::trusted();
@@ -132,19 +132,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ***********************************************************************************/
         Operator::Block { ty } => {
             let next = builder.create_ebb();
-            if let Ok(ty_cre) = blocktype_to_type(ty) {
+            if let Ok(ty_cre) = blocktype_to_type(*ty) {
                 builder.append_ebb_param(next, ty_cre);
             }
-            state.push_block(next, num_return_values(ty)?);
+            state.push_block(next, num_return_values(*ty)?);
         }
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
             let next = builder.create_ebb();
-            if let Ok(ty_cre) = blocktype_to_type(ty) {
+            if let Ok(ty_cre) = blocktype_to_type(*ty) {
                 builder.append_ebb_param(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
-            state.push_loop(loop_body, next, num_return_values(ty)?);
+            state.push_loop(loop_body, next, num_return_values(*ty)?);
             builder.switch_to_block(loop_body);
             environ.translate_loop_header(builder.cursor())?;
         }
@@ -158,10 +158,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             //   and we add nothing;
             // - either the If have an Else clause, in that case the destination of this jump
             //   instruction will be changed later when we translate the Else operator.
-            if let Ok(ty_cre) = blocktype_to_type(ty) {
+            if let Ok(ty_cre) = blocktype_to_type(*ty) {
                 builder.append_ebb_param(if_not, ty_cre);
             }
-            state.push_if(jump_inst, if_not, num_return_values(ty)?);
+            state.push_if(jump_inst, if_not, num_return_values(*ty)?);
         }
         Operator::Else => {
             // We take the control frame pushed by the if, use its ebb as the else body
@@ -235,7 +235,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * `br_table`.
          ***********************************************************************************/
         Operator::Br { relative_depth } => {
-            let i = state.control_stack.len() - 1 - (relative_depth as usize);
+            let i = state.control_stack.len() - 1 - (*relative_depth as usize);
             let (return_count, br_destination) = {
                 let frame = &mut state.control_stack[i];
                 // We signal that all the code that follows until the next End is unreachable
@@ -253,7 +253,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.popn(return_count);
             state.reachable = false;
         }
-        Operator::BrIf { relative_depth } => translate_br_if(relative_depth, builder, state),
+        Operator::BrIf { relative_depth } => translate_br_if(*relative_depth, builder, state),
         Operator::BrTable { table } => {
             let (depths, default) = table.read_table()?;
             let mut min_depth = default;
@@ -357,10 +357,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * argument referring to an index in the external functions table of the module.
          ************************************************************************************/
         Operator::Call { function_index } => {
-            let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ)?;
+            let (fref, num_args) = state.get_direct_func(builder.func, *function_index, environ)?;
             let call = environ.translate_call(
                 builder.cursor(),
-                FuncIndex::from_u32(function_index),
+                FuncIndex::from_u32(*function_index),
                 fref,
                 state.peekn(num_args),
             )?;
@@ -378,14 +378,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::CallIndirect { index, table_index } => {
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, index, environ)?;
-            let table = state.get_table(builder.func, table_index, environ)?;
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, *index, environ)?;
+            let table = state.get_table(builder.func, *table_index, environ)?;
             let callee = state.pop1();
             let call = environ.translate_call_indirect(
                 builder.cursor(),
-                TableIndex::from_u32(table_index),
+                TableIndex::from_u32(*table_index),
                 table,
-                SignatureIndex::from_u32(index),
+                SignatureIndex::from_u32(*index),
                 sigref,
                 callee,
                 state.peekn(num_args),
@@ -406,14 +406,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::MemoryGrow { reserved } => {
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
-            let heap_index = MemoryIndex::from_u32(reserved);
-            let heap = state.get_heap(builder.func, reserved, environ)?;
+            let heap_index = MemoryIndex::from_u32(*reserved);
+            let heap = state.get_heap(builder.func, *reserved, environ)?;
             let val = state.pop1();
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::MemorySize { reserved } => {
-            let heap_index = MemoryIndex::from_u32(reserved);
-            let heap = state.get_heap(builder.func, reserved, environ)?;
+            let heap_index = MemoryIndex::from_u32(*reserved);
+            let heap = state.get_heap(builder.func, *reserved, environ)?;
             state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);
         }
         /******************************* Load instructions ***********************************
@@ -423,72 +423,72 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I32Load8U {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Uload8, I32, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Uload8, I32, builder, state, environ)?;
         }
         Operator::I32Load16U {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Uload16, I32, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Uload16, I32, builder, state, environ)?;
         }
         Operator::I32Load8S {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Sload8, I32, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Sload8, I32, builder, state, environ)?;
         }
         Operator::I32Load16S {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Sload16, I32, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Sload16, I32, builder, state, environ)?;
         }
         Operator::I64Load8U {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Uload8, I64, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Uload8, I64, builder, state, environ)?;
         }
         Operator::I64Load16U {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Uload16, I64, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Uload16, I64, builder, state, environ)?;
         }
         Operator::I64Load8S {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Sload8, I64, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Sload8, I64, builder, state, environ)?;
         }
         Operator::I64Load16S {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Sload16, I64, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Sload16, I64, builder, state, environ)?;
         }
         Operator::I64Load32S {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Sload32, I64, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Sload32, I64, builder, state, environ)?;
         }
         Operator::I64Load32U {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Uload32, I64, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Uload32, I64, builder, state, environ)?;
         }
         Operator::I32Load {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Load, I32, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Load, I32, builder, state, environ)?;
         }
         Operator::F32Load {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Load, F32, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Load, F32, builder, state, environ)?;
         }
         Operator::I64Load {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Load, I64, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Load, I64, builder, state, environ)?;
         }
         Operator::F64Load {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_load(offset, ir::Opcode::Load, F64, builder, state, environ)?;
+            translate_load(*offset, ir::Opcode::Load, F64, builder, state, environ)?;
         }
         /****************************** Store instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cranelift.
@@ -506,7 +506,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64Store {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_store(offset, ir::Opcode::Store, builder, state, environ)?;
+            translate_store(*offset, ir::Opcode::Store, builder, state, environ)?;
         }
         Operator::I32Store8 {
             memarg: MemoryImmediate { flags: _, offset },
@@ -514,7 +514,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64Store8 {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_store(offset, ir::Opcode::Istore8, builder, state, environ)?;
+            translate_store(*offset, ir::Opcode::Istore8, builder, state, environ)?;
         }
         Operator::I32Store16 {
             memarg: MemoryImmediate { flags: _, offset },
@@ -522,21 +522,21 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64Store16 {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_store(offset, ir::Opcode::Istore16, builder, state, environ)?;
+            translate_store(*offset, ir::Opcode::Istore16, builder, state, environ)?;
         }
         Operator::I64Store32 {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            translate_store(offset, ir::Opcode::Istore32, builder, state, environ)?;
+            translate_store(*offset, ir::Opcode::Istore32, builder, state, environ)?;
         }
         /****************************** Nullary Operators ************************************/
-        Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, i64::from(value))),
-        Operator::I64Const { value } => state.push1(builder.ins().iconst(I64, value)),
+        Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, i64::from(*value))),
+        Operator::I64Const { value } => state.push1(builder.ins().iconst(I64, *value)),
         Operator::F32Const { value } => {
-            state.push1(builder.ins().f32const(f32_translation(value)));
+            state.push1(builder.ins().f32const(f32_translation(*value)));
         }
         Operator::F64Const { value } => {
-            state.push1(builder.ins().f64const(f64_translation(value)));
+            state.push1(builder.ins().f64const(f64_translation(*value)));
         }
         /******************************* Unary Operators *************************************/
         Operator::I32Clz | Operator::I64Clz => {

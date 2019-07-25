@@ -130,8 +130,13 @@ impl ControlStackFrame {
 /// - The depth of the two unreachable control blocks stacks, that are manipulated when translating
 ///   unreachable code;
 pub struct TranslationState {
+    /// A stack of values corresponding to the active values in the input wasm function at this
+    /// point.
     pub stack: Vec<Value>,
+    /// A stack of active control flow operations at this point in the input wasm function.
     pub control_stack: Vec<ControlStackFrame>,
+    /// Is the current translation state still reachable? This is false when translating operators
+    /// like End, Return, or Unreachable.
     pub reachable: bool,
 
     // Map of global variables that have already been created by `FuncEnvironment::make_global`.
@@ -155,6 +160,7 @@ pub struct TranslationState {
 }
 
 impl TranslationState {
+    /// Construct a new, empty, `TranslationState`
     pub fn new() -> Self {
         Self {
             stack: Vec::new(),
@@ -242,7 +248,7 @@ impl TranslationState {
         &self.stack[self.stack.len() - n..]
     }
 
-    // Push a block on the control stack.
+    /// Push a block on the control stack.
     pub fn push_block(&mut self, following_code: Ebb, num_result_types: usize) {
         self.control_stack.push(ControlStackFrame::Block {
             destination: following_code,
@@ -252,7 +258,7 @@ impl TranslationState {
         });
     }
 
-    // Push a loop on the control stack.
+    /// Push a loop on the control stack.
     pub fn push_loop(&mut self, header: Ebb, following_code: Ebb, num_result_types: usize) {
         self.control_stack.push(ControlStackFrame::Loop {
             header,
@@ -262,7 +268,7 @@ impl TranslationState {
         });
     }
 
-    // Push an if on the control stack.
+    /// Push an if on the control stack.
     pub fn push_if(&mut self, branch_inst: Inst, following_code: Ebb, num_result_types: usize) {
         self.control_stack.push(ControlStackFrame::If {
             branch_inst,
