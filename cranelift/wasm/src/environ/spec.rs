@@ -14,9 +14,11 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_frontend::FunctionBuilder;
 use failure_derive::Fail;
 use std::boxed::Box;
 use wasmparser::BinaryReaderError;
+use wasmparser::Operator;
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -251,6 +253,26 @@ pub trait FuncEnvironment {
     /// the beginnings of loops.
     fn translate_loop_header(&mut self, _pos: FuncCursor) -> WasmResult<()> {
         // By default, don't emit anything.
+        Ok(())
+    }
+
+    /// Optional callback for the `FunctionEnvironment` performing this translation to maintain
+    /// internal state or prepare custom state for the operator to translate
+    fn before_translate_operator(
+        &mut self,
+        _op: &Operator,
+        _builder: &mut FunctionBuilder,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
+
+    /// Optional callback for the `FunctionEnvironment` performing this translation to maintain
+    /// internal state or finalize custom state for the operator that was translated
+    fn after_translate_operator(
+        &mut self,
+        _op: &Operator,
+        _builder: &mut FunctionBuilder,
+    ) -> WasmResult<()> {
         Ok(())
     }
 }

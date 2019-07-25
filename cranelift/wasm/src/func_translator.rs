@@ -207,7 +207,9 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     while !state.control_stack.is_empty() {
         builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator()?;
-        translate_operator(op, builder, state, environ)?;
+        environ.before_translate_operator(&op, builder)?;
+        translate_operator(&op, builder, state, environ)?;
+        environ.after_translate_operator(&op, builder)?;
     }
 
     // The final `End` operator left us in the exit block where we need to manually add a return
