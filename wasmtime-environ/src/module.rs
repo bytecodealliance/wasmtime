@@ -170,6 +170,10 @@ pub struct Module {
 
     /// WebAssembly table initializers.
     pub table_elements: Vec<TableElements>,
+
+    /// Hash of the source wasm code if this module is not synthesized.
+    /// TODO: this is temporary workaround. Will be replaced with derive macro.
+    pub hash: Option<[u8; 32]>,
 }
 
 impl Module {
@@ -188,6 +192,7 @@ impl Module {
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
+            hash: None,
         }
     }
 

@@ -30,14 +30,12 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
 use pretty_env_logger;
+use serde::Deserialize;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -48,6 +46,7 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use wabt;
 use wasi_common::preopen_dir;
+use wasmtime_environ::cache_conf;
 use wasmtime_jit::{ActionOutcome, Context};
 use wasmtime_wasi::instantiate_wasi;
 use wasmtime_wast::instantiate_spectest;
@@ -67,13 +66,14 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-odg] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-ocdg] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-ocdg] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
     wasmtime --help | --version
 
 Options:
     --invoke=<fn>       name of function to run
     -o, --optimize      runs optimization passes on the translated functions
+    -c, --cache         enable caching system
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
     --wasi-c            enable the wasi-c implementation of WASI
@@ -91,6 +91,7 @@ struct Args {
     arg_file: String,
     arg_arg: Vec<String>,
     flag_optimize: bool,
+    flag_cache: bool,
     flag_debug: bool,
     flag_g: bool,
     flag_invoke: Option<String>,
@@ -206,6 +207,8 @@ fn main() {
     } else {
         utils::init_file_per_thread_logger();
     }
+
+    cache_conf::init(args.flag_cache);
 
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
