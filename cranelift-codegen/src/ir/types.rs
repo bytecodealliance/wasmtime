@@ -363,6 +363,9 @@ mod tests {
         assert_eq!(I64, I64.lane_type());
         assert_eq!(F32, F32.lane_type());
         assert_eq!(F64, F64.lane_type());
+        assert_eq!(B1, B1.by(8).unwrap().lane_type());
+        assert_eq!(I32, I32X4.lane_type());
+        assert_eq!(F64, F64X2.lane_type());
 
         assert_eq!(INVALID.lane_bits(), 0);
         assert_eq!(IFLAGS.lane_bits(), 0);
