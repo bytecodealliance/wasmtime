@@ -6,7 +6,7 @@ use crate::{host, Result};
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 
-pub fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_errno_t {
+pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_errno_t {
     // TODO: implement error mapping between Windows and WASI
     use winx::winerror::WinError::*;
     match error {
@@ -30,7 +30,7 @@ pub fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_errno_t {
     }
 }
 
-pub fn win_from_fdflags(
+pub(crate) fn win_from_fdflags(
     fdflags: host::__wasi_fdflags_t,
 ) -> (winx::file::AccessRight, winx::file::FlagsAndAttributes) {
     use winx::file::{AccessRight, FlagsAndAttributes};
@@ -53,7 +53,7 @@ pub fn win_from_fdflags(
     (win_rights, win_flags_attrs)
 }
 
-pub fn fdflags_from_win(rights: winx::file::AccessRight) -> host::__wasi_fdflags_t {
+pub(crate) fn fdflags_from_win(rights: winx::file::AccessRight) -> host::__wasi_fdflags_t {
     use winx::file::AccessRight;
     let mut fdflags = 0;
     // TODO verify this!
@@ -77,7 +77,7 @@ pub fn fdflags_from_win(rights: winx::file::AccessRight) -> host::__wasi_fdflags
     fdflags
 }
 
-pub fn win_from_oflags(
+pub(crate) fn win_from_oflags(
     oflags: host::__wasi_oflags_t,
 ) -> (
     winx::file::CreationDisposition,
@@ -108,7 +108,7 @@ pub fn win_from_oflags(
 ///
 /// NB WASI spec requires OS string to be valid UTF-8. Otherwise,
 /// `__WASI_EILSEQ` error is returned.
-pub fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
+pub(crate) fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
     let vec: Vec<u16> = s.as_ref().encode_wide().collect();
     String::from_utf16(&vec).map_err(|_| host::__WASI_EILSEQ)
 }

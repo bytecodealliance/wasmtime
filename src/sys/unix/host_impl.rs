@@ -6,7 +6,7 @@ use crate::{host, memory, wasm32, Result};
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
 
-pub fn errno_from_nix(errno: nix::errno::Errno) -> host::__wasi_errno_t {
+pub(crate) fn errno_from_nix(errno: nix::errno::Errno) -> host::__wasi_errno_t {
     match errno {
         nix::errno::Errno::EPERM => host::__WASI_EPERM,
         nix::errno::Errno::ENOENT => host::__WASI_ENOENT,
@@ -87,12 +87,12 @@ pub fn errno_from_nix(errno: nix::errno::Errno) -> host::__wasi_errno_t {
 }
 
 #[cfg(target_os = "linux")]
-pub const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
+pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
 
 #[cfg(not(target_os = "linux"))]
-pub const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_SYNC;
+pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_SYNC;
 
-pub fn nix_from_fdflags(fdflags: host::__wasi_fdflags_t) -> nix::fcntl::OFlag {
+pub(crate) fn nix_from_fdflags(fdflags: host::__wasi_fdflags_t) -> nix::fcntl::OFlag {
     use nix::fcntl::OFlag;
     let mut nix_flags = OFlag::empty();
     if fdflags & host::__WASI_FDFLAG_APPEND != 0 {
@@ -113,7 +113,7 @@ pub fn nix_from_fdflags(fdflags: host::__wasi_fdflags_t) -> nix::fcntl::OFlag {
     nix_flags
 }
 
-pub fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> host::__wasi_fdflags_t {
+pub(crate) fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> host::__wasi_fdflags_t {
     use nix::fcntl::OFlag;
     let mut fdflags = 0;
     if oflags.contains(OFlag::O_APPEND) {
@@ -134,7 +134,7 @@ pub fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> host::__wasi_fdflags_t {
     fdflags
 }
 
-pub fn nix_from_oflags(oflags: host::__wasi_oflags_t) -> nix::fcntl::OFlag {
+pub(crate) fn nix_from_oflags(oflags: host::__wasi_oflags_t) -> nix::fcntl::OFlag {
     use nix::fcntl::OFlag;
     let mut nix_flags = OFlag::empty();
     if oflags & host::__WASI_O_CREAT != 0 {
@@ -152,7 +152,7 @@ pub fn nix_from_oflags(oflags: host::__wasi_oflags_t) -> nix::fcntl::OFlag {
     nix_flags
 }
 
-pub fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> host::__wasi_filetype_t {
+pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> host::__wasi_filetype_t {
     use nix::sys::stat::SFlag;
     if sflags.contains(SFlag::S_IFCHR) {
         host::__WASI_FILETYPE_CHARACTER_DEVICE
@@ -171,7 +171,7 @@ pub fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> host::__wasi_filetype
     }
 }
 
-pub fn nix_from_filetype(sflags: host::__wasi_filetype_t) -> nix::sys::stat::SFlag {
+pub(crate) fn nix_from_filetype(sflags: host::__wasi_filetype_t) -> nix::sys::stat::SFlag {
     use nix::sys::stat::SFlag;
     let mut nix_sflags = SFlag::empty();
     if sflags & host::__WASI_FILETYPE_CHARACTER_DEVICE != 0 {
@@ -196,7 +196,9 @@ pub fn nix_from_filetype(sflags: host::__wasi_filetype_t) -> nix::sys::stat::SFl
     nix_sflags
 }
 
-pub fn filestat_from_nix(filestat: nix::sys::stat::FileStat) -> Result<host::__wasi_filestat_t> {
+pub(crate) fn filestat_from_nix(
+    filestat: nix::sys::stat::FileStat,
+) -> Result<host::__wasi_filestat_t> {
     use std::convert::TryFrom;
 
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
@@ -218,7 +220,7 @@ pub fn filestat_from_nix(filestat: nix::sys::stat::FileStat) -> Result<host::__w
 }
 
 #[cfg(target_os = "linux")]
-pub fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi_dirent_t> {
+pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi_dirent_t> {
     let mut entry = unsafe { std::mem::zeroed::<wasm32::__wasi_dirent_t>() };
     let d_namlen = unsafe { std::ffi::CStr::from_ptr(host_entry.d_name.as_ptr()) }
         .to_bytes()
@@ -234,7 +236,7 @@ pub fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi_dirent_t> {
+pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi_dirent_t> {
     let mut entry = unsafe { std::mem::zeroed::<wasm32::__wasi_dirent_t>() };
     entry.d_ino = memory::enc_inode(host_entry.d_ino);
     entry.d_next = memory::enc_dircookie(host_entry.d_seekoff);
@@ -247,6 +249,6 @@ pub fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi
 ///
 /// NB WASI spec requires OS string to be valid UTF-8. Otherwise,
 /// `__WASI_EILSEQ` error is returned.
-pub fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
+pub(crate) fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
     host::path_from_slice(s.as_ref().as_bytes()).map(String::from)
 }
