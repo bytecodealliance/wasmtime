@@ -8,17 +8,41 @@ use lazy_static::lazy_static;
 use log::{debug, warn};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
-#[cfg(windows)]
 use std::ffi::OsString;
 use std::fmt;
 use std::fs;
+use std::io;
 use std::path::PathBuf;
-#[cfg(debug_assertions)]
 use std::string::{String, ToString};
+
+/// Module for configuring the cache system.
+pub mod conf {
+    use spin::Once;
+
+    // Private static, so only internal function can access it.
+    static CACHE_ENABLED: Once<bool> = Once::new();
+
+    /// Returns true if and only if the cache is enabled.
+    pub fn cache_enabled() -> bool {
+        // Not everyone knows about the cache system, i.e. the tests,
+        // so the default is false.
+        *CACHE_ENABLED.call_once(|| false)
+    }
+
+    /// Initializes the cache system. Should be called exactly once,
+    /// and before using the cache system. Otherwise it can panic.
+    pub fn init(enabled: bool) {
+        // init() should be called exactly once
+        assert!(CACHE_ENABLED.r#try().is_none());
+        let val = *CACHE_ENABLED.call_once(|| enabled);
+        // But multiple threads can pass the first assertion, so let's guarantee consistency:
+        assert!(val == enabled);
+    }
+}
 
 lazy_static! {
     static ref CACHE_DIR: Option<PathBuf> =
-        match ProjectDirs::from("org", "CraneStation", "wasmtime") {
+        match ProjectDirs::from("", "CraneStation", "wasmtime") {
             Some(proj_dirs) => {
                 let cache_dir = proj_dirs.cache_dir();
                 // Temporary workaround for: https://github.com/rust-lang/rust/issues/32689
@@ -39,10 +63,6 @@ lazy_static! {
                 None
             }
         };
-}
-
-#[cfg(debug_assertions)]
-lazy_static! {
     static ref SELF_MTIME: String = {
         match std::env::current_exe() {
             Ok(path) => match fs::metadata(&path) {
@@ -89,31 +109,33 @@ impl ModuleCacheEntry {
         compiler_name: &str,
         generate_debug_info: bool,
     ) -> Self {
-        let option_hash = module.hash;
-
-        let mod_cache_path = CACHE_DIR.clone().and_then(|p| {
-            option_hash.map(|hash| {
-                let compiler_dir = if cfg!(debug_assertions) {
-                    format!(
-                        "{comp_name}-{comp_ver}-{comp_mtime}",
-                        comp_name = compiler_name,
-                        comp_ver = env!("GIT_REV"),
-                        comp_mtime = *SELF_MTIME,
-                    )
-                } else {
-                    format!(
-                        "{comp_name}-{comp_ver}",
-                        comp_name = compiler_name,
-                        comp_ver = env!("GIT_REV"),
-                    )
-                };
-                p.join(isa.name()).join(compiler_dir).join(format!(
-                    "mod-{mod_hash}{mod_dbg}",
-                    mod_hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD), // standard encoding uses '/' which can't be used for filename
-                    mod_dbg = if generate_debug_info { ".d" } else { "" },
-                ))
+        let mod_cache_path = if conf::cache_enabled() {
+            CACHE_DIR.clone().and_then(|p| {
+                module.hash.map(|hash| {
+                    let compiler_dir = if cfg!(debug_assertions) {
+                        format!(
+                            "{comp_name}-{comp_ver}-{comp_mtime}",
+                            comp_name = compiler_name,
+                            comp_ver = env!("GIT_REV"),
+                            comp_mtime = *SELF_MTIME,
+                        )
+                    } else {
+                        format!(
+                            "{comp_name}-{comp_ver}",
+                            comp_name = compiler_name,
+                            comp_ver = env!("GIT_REV"),
+                        )
+                    };
+                    p.join(isa.name()).join(compiler_dir).join(format!(
+                        "mod-{mod_hash}{mod_dbg}",
+                        mod_hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD), // standard encoding uses '/' which can't be used for filename
+                        mod_dbg = if generate_debug_info { ".d" } else { "" },
+                    ))
+                })
             })
-        });
+        } else {
+            None
+        };
 
         ModuleCacheEntry { mod_cache_path }
     }
@@ -159,11 +181,25 @@ impl ModuleCacheEntry {
                     match fs::create_dir_all(cache_dir) {
                         Ok(()) => match fs::write(p, &cache_buf) {
                             Ok(()) => (),
-                            Err(err) => warn!(
-                                "Failed to write cached code to disk, path: {}, message: {}",
-                                p.display(),
-                                err,
-                            ),
+                            Err(err) => {
+                                warn!(
+                                    "Failed to write cached code to disk, path: {}, message: {}",
+                                    p.display(),
+                                    err
+                                );
+                                match fs::remove_file(p) {
+                                    Ok(()) => (),
+                                    Err(err) => {
+                                        if err.kind() != io::ErrorKind::NotFound {
+                                            warn!(
+                                                "Failed to cleanup invalid cache, path: {}, message: {}",
+                                                p.display(),
+                                                err
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                         },
                         Err(err) => warn!(
                             "Failed to create cache directory, path: {}, message: {}",
