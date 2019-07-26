@@ -1,9 +1,11 @@
 use crate::address_map::ModuleAddressMap;
 use crate::compilation::{CodeAndJTOffsets, Compilation, Relocations};
 use crate::module::Module;
-use core::hash::{Hash, Hasher};
-use cranelift_codegen::ir;
-use cranelift_codegen::isa;
+use crate::module_environ::FunctionBodyData;
+use core::hash::Hasher;
+use cranelift_codegen::{ir, isa};
+use cranelift_entity::PrimaryMap;
+use cranelift_wasm::DefinedFuncIndex;
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use log::{debug, warn};
@@ -107,15 +109,16 @@ type ModuleCacheDataTupleType = (Compilation, Relocations, ModuleAddressMap);
 struct Sha256Hasher(Sha256);
 
 impl ModuleCacheEntry {
-    pub fn new(
+    pub fn new<'data>(
         module: &Module,
+        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         compiler_name: &str,
         generate_debug_info: bool,
     ) -> Self {
         let mod_cache_path = if conf::cache_enabled() {
             CACHE_DIR.clone().map(|p| {
-                let hash = Sha256Hasher::digest(module);
+                let hash = Sha256Hasher::digest(module, function_body_inputs);
                 let compiler_dir = if cfg!(debug_assertions) {
                     format!(
                         "{comp_name}-{comp_ver}-{comp_mtime}",
@@ -231,12 +234,12 @@ impl ModuleCacheData {
 }
 
 impl Sha256Hasher {
-    pub fn digest<T>(obj: &T) -> [u8; 32]
-    where
-        T: Hash,
-    {
+    pub fn digest<'data>(
+        module: &Module,
+        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+    ) -> [u8; 32] {
         let mut hasher = Self(Sha256::new());
-        obj.hash(&mut hasher);
+        module.hash_for_cache(function_body_inputs, &mut hasher);
         hasher.0.result().into()
     }
 }

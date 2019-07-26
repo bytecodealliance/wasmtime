@@ -1,5 +1,6 @@
 //! Data structures for representing decoded wasm modules.
 
+use crate::module_environ::FunctionBodyData;
 use crate::tunables::Tunables;
 use core::hash::{Hash, Hasher};
 use cranelift_codegen::ir;
@@ -27,7 +28,7 @@ pub struct TableElements {
 }
 
 /// An entity to export.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Export {
     /// Function export.
     Function(FuncIndex),
@@ -134,6 +135,7 @@ impl TablePlan {
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
+// WARNING: when modifying, make sure that `hash_for_cache` is still valid!
 #[derive(Debug)]
 pub struct Module {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
@@ -279,25 +281,29 @@ impl Module {
     pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
         index.index() < self.imported_globals.len()
     }
-}
 
-impl Hash for Module {
-    fn hash<H>(&self, state: &mut H)
-    where
+    /// Computes hash of the module for the purpose of caching.
+    pub fn hash_for_cache<'data, H>(
+        &self,
+        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+        state: &mut H,
+    ) where
         H: Hasher,
     {
+        // There's no need to cache names (strings), start function
+        // and data initializers (for both memory and tables)
         self.signatures.hash(state);
-        self.imported_funcs.hash(state);
-        self.imported_tables.hash(state);
-        self.imported_memories.hash(state);
-        self.imported_globals.hash(state);
         self.functions.hash(state);
         self.table_plans.hash(state);
         self.memory_plans.hash(state);
         self.globals.hash(state);
-        // self.exports.hash(state); // TODO: do it manually; IndexMap comes from an external crate
-        self.start_func.hash(state);
-        self.table_elements.hash(state);
-        // TODO: we need to hash more data, including code of functions
+        // IndexMap (self.export) iterates over values in order of item inserts
+        // Let's actually sort the values.
+        let mut exports = self.exports.values().collect::<Vec<_>>();
+        exports.sort();
+        for val in exports {
+            val.hash(state);
+        }
+        function_body_inputs.hash(state);
     }
 }

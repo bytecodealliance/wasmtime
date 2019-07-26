@@ -15,6 +15,7 @@ use std::string::String;
 use std::vec::Vec;
 
 /// Contains function data: byte code and its offset in the module.
+#[derive(Hash)]
 pub struct FunctionBodyData<'a> {
     /// Body byte code.
     pub data: &'a [u8],
