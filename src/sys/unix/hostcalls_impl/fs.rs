@@ -406,12 +406,6 @@ pub(crate) fn fd_filestat_set_times(
     }
 }
 
-pub(crate) fn fd_filestat_set_size(fd: &File, st_size: host::__wasi_filesize_t) -> Result<()> {
-    use nix::unistd::ftruncate;
-    ftruncate(fd.as_raw_fd(), st_size as off_t)
-        .map_err(|e| host_impl::errno_from_nix(e.as_errno().unwrap()))
-}
-
 pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: host::__wasi_lookupflags_t,

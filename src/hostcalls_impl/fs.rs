@@ -779,11 +779,7 @@ pub(crate) fn fd_filestat_set_size(
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
     let st_size = dec_filesize(st_size);
-    if st_size > i64::max_value() as u64 {
-        return Err(host::__WASI_E2BIG);
-    }
-
-    hostcalls_impl::fd_filestat_set_size(fd, st_size)
+    fd.set_len(st_size).map_err(errno_from_ioerror)
 }
 
 pub(crate) fn path_filestat_get(

@@ -276,10 +276,6 @@ pub(crate) fn fd_filestat_set_times(
     unimplemented!("fd_filestat_set_times")
 }
 
-pub(crate) fn fd_filestat_set_size(fd: &File, st_size: host::__wasi_filesize_t) -> Result<()> {
-    unimplemented!("fd_filestat_set_size")
-}
-
 pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: host::__wasi_lookupflags_t,
