@@ -22,6 +22,7 @@
 
 mod ctx;
 mod fdentry;
+mod helpers;
 mod hostcalls_impl;
 mod sys;
 #[macro_use]

@@ -3,13 +3,15 @@
 use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
-use crate::sys::errno_from_host;
+use crate::helpers::systemtime_to_timestamp;
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::host_impl;
+use crate::sys::{errno_from_host, errno_from_ioerror};
 use crate::{host, wasm32, Result};
 use nix::libc::{self, c_long, c_void, off_t};
+use std::convert::TryInto;
 use std::ffi::CString;
-use std::fs::File;
+use std::fs::{File, Metadata};
 use std::os::unix::fs::FileExt;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};
 
@@ -356,11 +358,54 @@ pub(crate) fn path_rename(
     }
 }
 
-pub(crate) fn fd_filestat_get(fd: &File) -> Result<host::__wasi_filestat_t> {
-    use nix::sys::stat::fstat;
-    let filestat =
-        fstat(fd.as_raw_fd()).map_err(|err| host_impl::errno_from_nix(err.as_errno().unwrap()))?;
-    host_impl::filestat_from_nix(filestat)
+pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_filestat_t> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = file.metadata().map_err(errno_from_ioerror)?;
+    Ok(host::__wasi_filestat_t {
+        st_dev: metadata.dev(),
+        st_ino: metadata.ino(),
+        st_nlink: metadata
+            .nlink()
+            .try_into()
+            .map_err(|_| host::__WASI_EOVERFLOW)?, // u64 doesn't fit into u32
+        st_size: metadata.len(),
+        st_atim: metadata
+            .accessed()
+            .map_err(errno_from_ioerror)
+            .and_then(systemtime_to_timestamp)?,
+        st_ctim: metadata
+            .ctime()
+            .try_into()
+            .map_err(|_| host::__WASI_EOVERFLOW)?, // i64 doesn't fit into u64
+        st_mtim: metadata
+            .modified()
+            .map_err(errno_from_ioerror)
+            .and_then(systemtime_to_timestamp)?,
+        st_filetype: filetype(&metadata),
+    })
+}
+
+fn filetype(metadata: &Metadata) -> host::__wasi_filetype_t {
+    use std::os::unix::fs::FileTypeExt;
+    let ftype = metadata.file_type();
+    if ftype.is_file() {
+        host::__WASI_FILETYPE_REGULAR_FILE
+    } else if ftype.is_dir() {
+        host::__WASI_FILETYPE_DIRECTORY
+    } else if ftype.is_symlink() {
+        host::__WASI_FILETYPE_SYMBOLIC_LINK
+    } else if ftype.is_char_device() {
+        host::__WASI_FILETYPE_CHARACTER_DEVICE
+    } else if ftype.is_block_device() {
+        host::__WASI_FILETYPE_BLOCK_DEVICE
+    } else if ftype.is_socket() || ftype.is_fifo() {
+        // TODO we should use getsockopt to find out if it's
+        // SOCKET_STREAM or SOCKET_DGRAM
+        host::__WASI_FILETYPE_SOCKET_STREAM
+    } else {
+        host::__WASI_FILETYPE_UNKNOWN
+    }
 }
 
 pub(crate) fn fd_filestat_set_times(

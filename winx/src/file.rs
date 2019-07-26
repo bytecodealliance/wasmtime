@@ -1,9 +1,11 @@
 #![allow(non_camel_case_types)]
 use crate::{winerror, Result};
-use std::ffi::{OsStr, OsString};
-use std::os::windows::prelude::{OsStrExt, OsStringExt, RawHandle};
+use std::ffi::{c_void, OsStr, OsString};
+use std::fs::File;
+use std::io;
+use std::os::windows::prelude::{AsRawHandle, OsStrExt, OsStringExt, RawHandle};
 use winapi::shared::minwindef::{self, DWORD};
-use winapi::um::{fileapi, fileapi::GetFileType, winbase, winnt};
+use winapi::um::{fileapi, fileapi::GetFileType, minwinbase, winbase, winnt};
 
 /// Maximum total path length for Unicode in Windows.
 /// [Maximum path length limitation]: https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file#maximum-path-length-limitation
@@ -456,4 +458,49 @@ pub fn openat<S: AsRef<OsStr>>(
     } else {
         Ok(handle)
     }
+}
+
+// Taken from Rust libstd, file libstd/sys/windows/fs.rs
+fn cvt(i: winapi::shared::minwindef::BOOL) -> io::Result<()> {
+    if i == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+pub fn get_fileinfo(file: &File) -> io::Result<fileapi::BY_HANDLE_FILE_INFORMATION> {
+    use fileapi::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
+    use std::mem;
+
+    let handle = file.as_raw_handle();
+    let info = unsafe {
+        let mut info: BY_HANDLE_FILE_INFORMATION = mem::zeroed();
+        cvt(GetFileInformationByHandle(handle, &mut info))?;
+        info
+    };
+
+    Ok(info)
+}
+
+pub fn change_time(file: &File) -> io::Result<i64> {
+    use fileapi::FILE_BASIC_INFO;
+    use minwinbase::FileBasicInfo;
+    use std::mem;
+    use winbase::GetFileInformationByHandleEx;
+
+    let handle = file.as_raw_handle();
+    let tm = unsafe {
+        let mut info: FILE_BASIC_INFO = mem::zeroed();
+        let infosize = mem::size_of_val(&info);
+        cvt(GetFileInformationByHandleEx(
+            handle,
+            FileBasicInfo,
+            &mut info as *mut FILE_BASIC_INFO as *mut c_void,
+            infosize as u32,
+        ))?;
+        *info.ChangeTime.QuadPart()
+    };
+
+    Ok(tm)
 }

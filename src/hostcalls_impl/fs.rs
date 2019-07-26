@@ -730,7 +730,7 @@ pub(crate) fn fd_filestat_get(
         .get_fd_entry(fd, 0, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
-    let host_filestat = hostcalls_impl::fd_filestat_get(fd)?;
+    let host_filestat = hostcalls_impl::fd_filestat_get_impl(fd)?;
 
     trace!("     | *filestat_ptr={:?}", host_filestat);
 
