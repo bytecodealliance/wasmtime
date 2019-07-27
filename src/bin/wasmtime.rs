@@ -61,14 +61,16 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-ocdg] [--enable-simd] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-ocdg] [--enable-simd] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-dir=<cache_dir>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-dir=<cache_dir>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
     wasmtime --help | --version
 
 Options:
     --invoke=<fn>       name of function to run
     -o, --optimize      runs optimization passes on the translated functions
-    -c, --cache         enable caching system
+    -c, --cache         enable caching system, use default cache directory
+    --cache-dir=<cache_dir>
+                        enable caching system, use specified cache directory
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
@@ -88,6 +90,7 @@ struct Args {
     arg_arg: Vec<String>,
     flag_optimize: bool,
     flag_cache: bool,
+    flag_cache_dir: Option<String>,
     flag_debug: bool,
     flag_g: bool,
     flag_enable_simd: bool,
@@ -211,7 +214,10 @@ fn rmain() -> Result<(), Error> {
         wasmtime::init_file_per_thread_logger("wasmtime.dbg.");
     }
 
-    cache_conf::init(args.flag_cache);
+    cache_conf::init(
+        args.flag_cache || args.flag_cache_dir.is_some(),
+        args.flag_cache_dir.as_ref(),
+    );
 
     let isa_builder = cranelift_native::builder()
         .map_err(|s| format_err!("host machine is not a supported target: {}", s))?;

@@ -41,14 +41,16 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    run_wast [-cdo] [--enable-simd] <file>...
+    run_wast [-do] [--enable-simd] [--cache | --cache-dir=<cache_dir>] <file>...
     run_wast --help | --version
 
 Options:
     -h, --help          print this help message
     --version           print the Cranelift version
     -o, --optimize      runs optimization passes on the translated functions
-    -c, --cache         enable caching system
+    -c, --cache         enable caching system, use default cache directory
+    --cache-dir=<cache_dir>
+                        enable caching system, use specified cache directory
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
 ";
@@ -60,6 +62,7 @@ struct Args {
     flag_function: Option<String>,
     flag_optimize: bool,
     flag_cache: bool,
+    flag_cache_dir: Option<String>,
     flag_enable_simd: bool,
 }
 
@@ -79,7 +82,10 @@ fn main() {
         wasmtime::init_file_per_thread_logger("cranelift.dbg.");
     }
 
-    cache_conf::init(args.flag_cache);
+    cache_conf::init(
+        args.flag_cache || args.flag_cache_dir.is_some(),
+        args.flag_cache_dir.as_ref(),
+    );
 
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");

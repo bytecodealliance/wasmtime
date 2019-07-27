@@ -6,13 +6,11 @@ use core::hash::Hasher;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
-use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use log::{debug, warn};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
 use sha2::{Digest, Sha256};
-use std::ffi::OsString;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -21,52 +19,116 @@ use std::string::{String, ToString};
 
 /// Module for configuring the cache system.
 pub mod conf {
+    use directories::ProjectDirs;
+    use log::{debug, warn};
     use spin::Once;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    struct Config {
+        pub cache_enabled: bool,
+        pub cache_dir: PathBuf,
+    }
 
     // Private static, so only internal function can access it.
-    static CACHE_ENABLED: Once<bool> = Once::new();
+    static CONFIG: Once<Config> = Once::new();
+    static INIT_CALLED: AtomicBool = AtomicBool::new(false);
 
     /// Returns true if and only if the cache is enabled.
     pub fn cache_enabled() -> bool {
         // Not everyone knows about the cache system, i.e. the tests,
-        // so the default is false.
-        *CACHE_ENABLED.call_once(|| false)
+        // so the default is cache disabled.
+        CONFIG
+            .call_once(|| Config::new_cache_disabled())
+            .cache_enabled
+    }
+
+    /// Returns path to the cache directory.
+    ///
+    /// Panics if the cache is disabled.
+    pub fn cache_directory() -> &'static PathBuf {
+        &CONFIG
+            .r#try()
+            .expect("Cache system must be initialized")
+            .cache_dir
     }
 
     /// Initializes the cache system. Should be called exactly once,
     /// and before using the cache system. Otherwise it can panic.
-    pub fn init(enabled: bool) {
-        // init() should be called exactly once
-        assert!(CACHE_ENABLED.r#try().is_none());
-        let val = *CACHE_ENABLED.call_once(|| enabled);
-        // But multiple threads can pass the first assertion, so let's guarantee consistency:
-        assert!(val == enabled);
+    pub fn init<P: AsRef<Path>>(enabled: bool, dir: Option<P>) {
+        INIT_CALLED
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .expect("Cache system init must be called at most once");
+        assert!(
+            CONFIG.r#try().is_none(),
+            "Cache system init must be called before using the system."
+        );
+        let conf = CONFIG.call_once(|| Config::new(enabled, dir));
+        debug!(
+            "Cache init(): enabled={}, cache-dir={:?}",
+            conf.cache_enabled, conf.cache_dir
+        );
+    }
+
+    impl Config {
+        pub fn new_cache_disabled() -> Self {
+            Self {
+                cache_enabled: false,
+                cache_dir: PathBuf::new(),
+            }
+        }
+
+        pub fn new<P: AsRef<Path>>(enabled: bool, dir: Option<P>) -> Self {
+            if enabled {
+                match dir {
+                    Some(dir) => Self::new_step2(dir.as_ref()),
+                    None => match ProjectDirs::from("", "CraneStation", "wasmtime") {
+                        Some(proj_dirs) => Self::new_step2(proj_dirs.cache_dir()),
+                        None => {
+                            warn!("Cache directory not specified and failed to find the default. Disabling cache.");
+                            Self::new_cache_disabled()
+                        }
+                    },
+                }
+            } else {
+                Self::new_cache_disabled()
+            }
+        }
+
+        fn new_step2(dir: &Path) -> Self {
+            // On Windows, if we want long paths, we need '\\?\' prefix, but it doesn't work
+            // with relative paths. One way to get absolute path (the only one?) is to use
+            // fs::canonicalize, but it requires that given path exists. The extra advantage
+            // of this method is fact that the method prepends '\\?\' on Windows.
+            match fs::create_dir_all(dir) {
+                Ok(()) => match fs::canonicalize(dir) {
+                    Ok(p) => Self {
+                        cache_enabled: true,
+                        cache_dir: p,
+                    },
+                    Err(err) => {
+                        warn!(
+                            "Failed to canonicalize the cache directory. Disabling cache. \
+                             Message: {}",
+                            err
+                        );
+                        Self::new_cache_disabled()
+                    }
+                },
+                Err(err) => {
+                    warn!(
+                        "Failed to create the cache directory. Disabling cache. Message: {}",
+                        err
+                    );
+                    Self::new_cache_disabled()
+                }
+            }
+        }
     }
 }
 
 lazy_static! {
-    static ref CACHE_DIR: Option<PathBuf> =
-        match ProjectDirs::from("", "CraneStation", "wasmtime") {
-            Some(proj_dirs) => {
-                let cache_dir = proj_dirs.cache_dir();
-                // Temporary workaround for: https://github.com/rust-lang/rust/issues/32689
-                if cfg!(windows) {
-                    let mut long_path = OsString::new();
-                    if !cache_dir.starts_with("\\\\?\\") {
-                        long_path.push("\\\\?\\");
-                    }
-                    long_path.push(cache_dir.as_os_str());
-                    Some(PathBuf::from(long_path))
-                }
-                else {
-                    Some(cache_dir.to_path_buf())
-                }
-            }
-            None => {
-                warn!("Failed to find proper cache directory location.");
-                None
-            }
-        };
     static ref SELF_MTIME: String = {
         match std::env::current_exe() {
             Ok(path) => match fs::metadata(&path) {
@@ -125,28 +187,32 @@ impl ModuleCacheEntry {
         generate_debug_info: bool,
     ) -> Self {
         let mod_cache_path = if conf::cache_enabled() {
-            CACHE_DIR.clone().map(|p| {
-                let hash = Sha256Hasher::digest(module, function_body_inputs);
-                let compiler_dir = if cfg!(debug_assertions) {
-                    format!(
-                        "{comp_name}-{comp_ver}-{comp_mtime}",
-                        comp_name = compiler_name,
-                        comp_ver = env!("GIT_REV"),
-                        comp_mtime = *SELF_MTIME,
-                    )
-                } else {
-                    format!(
-                        "{comp_name}-{comp_ver}",
-                        comp_name = compiler_name,
-                        comp_ver = env!("GIT_REV"),
-                    )
-                };
-                p.join(isa.name()).join(compiler_dir).join(format!(
-                    "mod-{mod_hash}{mod_dbg}",
-                    mod_hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD), // standard encoding uses '/' which can't be used for filename
-                    mod_dbg = if generate_debug_info { ".d" } else { "" },
-                ))
-            })
+            let hash = Sha256Hasher::digest(module, function_body_inputs);
+            let compiler_dir = if cfg!(debug_assertions) {
+                format!(
+                    "{comp_name}-{comp_ver}-{comp_mtime}",
+                    comp_name = compiler_name,
+                    comp_ver = env!("GIT_REV"),
+                    comp_mtime = *SELF_MTIME,
+                )
+            } else {
+                format!(
+                    "{comp_name}-{comp_ver}",
+                    comp_name = compiler_name,
+                    comp_ver = env!("GIT_REV"),
+                )
+            };
+            let mod_filename = format!(
+                "mod-{mod_hash}{mod_dbg}",
+                mod_hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD), // standard encoding uses '/' which can't be used for filename
+                mod_dbg = if generate_debug_info { ".d" } else { "" },
+            );
+            Some(
+                conf::cache_directory()
+                    .join(isa.name())
+                    .join(compiler_dir)
+                    .join(mod_filename),
+            )
         } else {
             None
         };
