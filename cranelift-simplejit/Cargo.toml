@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-simplejit"
-version = "0.36.0"
+version = "0.37.0"
 authors = ["The Cranelift Project Developers"]
 description = "A simple JIT library backed by Cranelift"
 repository = "https://github.com/CraneStation/cranelift"
@@ -10,9 +10,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.36.0" }
-cranelift-module = { path = "../cranelift-module", version = "0.36.0" }
-cranelift-native = { path = "../cranelift-native", version = "0.36.0" }
+cranelift-codegen = { path = "../cranelift-codegen", version = "0.37.0" }
+cranelift-module = { path = "../cranelift-module", version = "0.37.0" }
+cranelift-native = { path = "../cranelift-native", version = "0.37.0" }
 region = "2.0.0"
 libc = { version = "0.2.42" }
 errno = "0.2.4"
@@ -27,9 +27,9 @@ selinux-fix = ['memmap']
 default = []
 
 [dev-dependencies]
-cranelift = { path = "../cranelift-umbrella", version = "0.36.0" }
-cranelift-frontend = { path = "../cranelift-frontend", version = "0.36.0" }
-cranelift-entity = { path = "../cranelift-entity", version = "0.36.0" }
+cranelift = { path = "../cranelift-umbrella", version = "0.37.0" }
+cranelift-frontend = { path = "../cranelift-frontend", version = "0.37.0" }
+cranelift-entity = { path = "../cranelift-entity", version = "0.37.0" }
 
 [badges]
 maintenance = { status = "experimental" }
