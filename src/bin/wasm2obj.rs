@@ -63,7 +63,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-cdg] [--enable-simd] <file> -o <output>
+    wasm2obj [--target TARGET] [-dg] [--cache | --cache-dir=<cache_dir>] [--enable-simd] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
@@ -71,7 +71,9 @@ Options:
     -h, --help          print this help message
     --target <TARGET>   build for the target triple; default is the host machine
     -g                  generate debug information
-    -c, --cache         enable caching system
+    -c, --cache         enable caching system, use default cache directory
+    --cache-dir=<cache_dir>
+                        enable caching system, use specified cache directory
     --enable-simd       enable proposed SIMD instructions
     --version           print the Cranelift version
     -d, --debug         enable debug output on stderr/stdout
@@ -85,6 +87,7 @@ struct Args {
     flag_g: bool,
     flag_debug: bool,
     flag_cache: bool,
+    flag_cache_dir: Option<String>,
     flag_enable_simd: bool,
 }
 
@@ -111,7 +114,10 @@ fn main() {
         wasmtime::init_file_per_thread_logger("wasm2obj.dbg.");
     }
 
-    cache_conf::init(args.flag_cache);
+    cache_conf::init(
+        args.flag_cache || args.flag_cache_dir.is_some(),
+        args.flag_cache_dir.as_ref(),
+    );
 
     let path = Path::new(&args.arg_file);
     match handle_module(
