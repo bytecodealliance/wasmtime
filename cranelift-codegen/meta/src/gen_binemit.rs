@@ -75,13 +75,9 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
             args += &unwrap_values(&recipe.operands_out, "out", "results", fmt);
         }
 
-        // Special handling for regmove instructions. Update the register
-        // diversion tracker
-        match &*inst_format.name {
-            "RegMove" => fmt.line("divert.regmove(arg, src, dst);"),
-            "RegSpill" => fmt.line("divert.regspill(arg, src, dst);"),
-            "RegFill" => fmt.line("divert.regfill(arg, src, dst);"),
-            _ => {}
+        // Optimization: Only update the register diversion tracker for regmove instructions.
+        if is_regmove {
+            fmt.line("divert.apply(data);")
         }
 
         match &recipe.emit {
