@@ -330,6 +330,14 @@ impl binemit::RelocSink for RelocSink {
     ) {
         panic!("trampoline compilation should not produce external symbol relocs");
     }
+    fn reloc_constant(
+        &mut self,
+        _code_offset: binemit::CodeOffset,
+        _reloc: binemit::Reloc,
+        _constant_offset: ir::ConstantOffset,
+    ) {
+        panic!("trampoline compilation should not produce constant relocs");
+    }
     fn reloc_jt(
         &mut self,
         _offset: binemit::CodeOffset,
