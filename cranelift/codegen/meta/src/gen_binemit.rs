@@ -32,7 +32,7 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
     let is_regmove = ["RegMove", "RegSpill", "RegFill"].contains(&inst_format.name);
 
     // Unpack the instruction data.
-    fmtln!(fmt, "if let InstructionData::{} {{", inst_format.name);
+    fmtln!(fmt, "if let &InstructionData::{} {{", inst_format.name);
     fmt.indent(|fmt| {
         fmt.line("opcode,");
         for f in &inst_format.imm_fields {
@@ -47,7 +47,7 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
         }
         fmt.line("..");
 
-        fmt.outdented_line("} = func.dfg[inst] {");
+        fmt.outdented_line("} = data {");
 
         // Pass recipe arguments in this order: inputs, imm_fields, outputs.
         let mut args = String::new();
@@ -186,7 +186,8 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
     fmt.indent(|fmt| {
         fmt.line("let encoding = func.encodings[inst];");
         fmt.line("let bits = encoding.bits();");
-        fmt.line("match func.encodings[inst].recipe() {");
+        fmt.line("let data = &func.dfg[inst];");
+        fmt.line("match encoding.recipe() {");
         fmt.indent(|fmt| {
             for (i, recipe) in recipes.iter() {
                 fmt.comment(format!("Recipe {}", recipe.name));
