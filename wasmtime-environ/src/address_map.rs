@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::vec::Vec;
 
 /// Single source location to generated address mapping.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InstructionAddressMap {
     /// Original source location.
     pub srcloc: ir::SourceLoc,
@@ -21,7 +21,7 @@ pub struct InstructionAddressMap {
 }
 
 /// Function and its instructions addresses mappings.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct FunctionAddressMap {
     /// Instructions maps.
     /// The array is sorted by the InstructionAddressMap::code_offset field.

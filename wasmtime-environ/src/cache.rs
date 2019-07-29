@@ -159,7 +159,7 @@ pub struct ModuleCacheEntry {
     mod_cache_path: Option<PathBuf>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ModuleCacheData {
     compilation: Compilation,
     relocations: Relocations,
@@ -505,3 +505,6 @@ impl<'de> Deserialize<'de> for JtOffsetsWrapper<'_> {
         deserializer.deserialize_seq(JtOffsetsWrapperVisitor {})
     }
 }
+
+#[cfg(test)]
+mod tests;
