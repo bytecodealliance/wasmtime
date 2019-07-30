@@ -6,7 +6,7 @@
 
 use crate::code_translator::translate_operator;
 use crate::environ::{FuncEnvironment, ReturnMode, WasmError, WasmResult};
-use crate::state::TranslationState;
+use crate::state::{TranslationState, VisibleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Ebb, InstBuilder, ValueLabel};
@@ -207,9 +207,9 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     while !state.control_stack.is_empty() {
         builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator()?;
-        environ.before_translate_operator(&op, builder, state)?;
+        environ.before_translate_operator(&op, builder, &VisibleTranslationState::new(state))?;
         translate_operator(&op, builder, state, environ)?;
-        environ.after_translate_operator(&op, builder, state)?;
+        environ.after_translate_operator(&op, builder, &VisibleTranslationState::new(state))?;
     }
 
     // The final `End` operator left us in the exit block where we need to manually add a return
