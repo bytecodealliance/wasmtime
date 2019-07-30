@@ -51,7 +51,7 @@ mod target_tunables;
 
 pub use crate::action::{ActionError, ActionOutcome, RuntimeValue};
 pub use crate::compiler::Compiler;
-pub use crate::context::{Context, ContextError, UnknownInstance};
+pub use crate::context::{Context, ContextError, Features, UnknownInstance};
 pub use crate::instantiate::{instantiate, CompiledModule, SetupError};
 pub use crate::link::link_module;
 pub use crate::namespace::Namespace;

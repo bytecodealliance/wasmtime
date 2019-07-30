@@ -47,7 +47,7 @@ use std::process::exit;
 use wabt;
 use wasi_common::preopen_dir;
 use wasmtime_environ::cache_conf;
-use wasmtime_jit::{ActionOutcome, Context};
+use wasmtime_jit::{ActionOutcome, Context, Features};
 use wasmtime_wasi::instantiate_wasi;
 use wasmtime_wast::instantiate_spectest;
 
@@ -66,8 +66,8 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-ocdg] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-ocdg] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-ocdg] [--enable-simd] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-ocdg] [--enable-simd] [--wasi-c] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
     wasmtime --help | --version
 
 Options:
@@ -76,6 +76,7 @@ Options:
     -c, --cache         enable caching system
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
+    --enable-simd       enable proposed SIMD instructions
     --wasi-c            enable the wasi-c implementation of WASI
     --preload=<wasm>    load an additional wasm module before loading the main module
     --env=<env>         pass an environment variable (\"key=value\") to the program
@@ -94,6 +95,7 @@ struct Args {
     flag_cache: bool,
     flag_debug: bool,
     flag_g: bool,
+    flag_enable_simd: bool,
     flag_invoke: Option<String>,
     flag_preload: Vec<String>,
     flag_env: Vec<String>,
@@ -214,10 +216,17 @@ fn main() {
         panic!("host machine is not a supported target");
     });
     let mut flag_builder = settings::builder();
+    let mut features: Features = Default::default();
 
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
         flag_builder.enable("enable_verifier").unwrap();
+    }
+
+    // Enable SIMD if requested
+    if args.flag_enable_simd {
+        flag_builder.enable("enable_simd").unwrap();
+        features.simd = true;
     }
 
     // Enable optimization if requested.
@@ -226,7 +235,7 @@ fn main() {
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut context = Context::with_isa(isa);
+    let mut context = Context::with_isa(isa).with_features(features);
 
     // Make spectest available by default.
     context.name_instance(

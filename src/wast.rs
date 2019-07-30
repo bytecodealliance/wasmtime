@@ -34,7 +34,7 @@ use serde::Deserialize;
 use std::path::Path;
 use std::process;
 use wasmtime_environ::cache_conf;
-use wasmtime_jit::Compiler;
+use wasmtime_jit::{Compiler, Features};
 use wasmtime_wast::WastContext;
 
 mod utils;
@@ -45,7 +45,7 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    run_wast [-cdo] <file>...
+    run_wast [-cdo] [--enable-simd] <file>...
     run_wast --help | --version
 
 Options:
@@ -54,6 +54,7 @@ Options:
     -o, --optimize      runs optimization passes on the translated functions
     -c, --cache         enable caching system
     -d, --debug         enable debug output on stderr/stdout
+    --enable-simd       enable proposed SIMD instructions
 ";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -63,6 +64,7 @@ struct Args {
     flag_function: Option<String>,
     flag_optimize: bool,
     flag_cache: bool,
+    flag_enable_simd: bool,
 }
 
 fn main() {
@@ -87,6 +89,7 @@ fn main() {
         panic!("host machine is not a supported target");
     });
     let mut flag_builder = settings::builder();
+    let mut features: Features = Default::default();
 
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
@@ -98,9 +101,15 @@ fn main() {
         flag_builder.set("opt_level", "best").unwrap();
     }
 
+    // Enable SIMD if requested
+    if args.flag_enable_simd {
+        flag_builder.enable("enable_simd").unwrap();
+        features.simd = true;
+    }
+
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     let engine = Compiler::new(isa);
-    let mut wast_context = WastContext::new(Box::new(engine));
+    let mut wast_context = WastContext::new(Box::new(engine)).with_features(features);
 
     wast_context
         .register_spectest()
