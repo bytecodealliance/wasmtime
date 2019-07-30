@@ -662,6 +662,17 @@ enum LabelValue {
     I64(i64),
 }
 
+impl From<Value> for LabelValue {
+    fn from(other: Value) -> LabelValue {
+        match other {
+            Value::I32(v) => LabelValue::I32(v),
+            Value::I64(v) => LabelValue::I64(v),
+            Value::F32(v) => LabelValue::I32(v.to_bits() as _),
+            Value::F64(v) => LabelValue::I64(v.to_bits() as _),
+        }
+    }
+}
+
 type Labels = HashMap<
     (u32, Either<TypeId, (LabelValue, Option<LabelValue>)>),
     (Label, u32, Option<Box<FnMut(&mut Assembler)>>),
@@ -717,7 +728,7 @@ macro_rules! int_div {
                 return;
             }
 
-            let (div, rem, mut saved) = self.$full_div_u(divisor, dividend);
+            let (div, rem, saved) = self.$full_div_u(divisor, dividend);
 
             self.free_value(rem);
 
@@ -761,7 +772,7 @@ macro_rules! int_div {
                 return;
             }
 
-            let (div, rem, mut saved) = self.$full_div_s(divisor, dividend);
+            let (div, rem, saved) = self.$full_div_s(divisor, dividend);
 
             self.free_value(rem);
 
@@ -802,7 +813,7 @@ macro_rules! int_div {
                 return;
             }
 
-            let (div, rem, mut saved) = self.$full_div_u(divisor, dividend);
+            let (div, rem, saved) = self.$full_div_u(divisor, dividend);
 
             self.free_value(div);
 
@@ -888,7 +899,7 @@ macro_rules! int_div {
                 }
             };
 
-            let (div, rem, mut saved) = self.$full_div_s(divisor, dividend);
+            let (div, rem, saved) = self.$full_div_s(divisor, dividend);
 
             self.free_value(div);
 
@@ -1063,6 +1074,7 @@ macro_rules! shift {
                     match other {
                         ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                             let gpr = self.into_reg(I32, other).unwrap();
+                            count = ValueLocation::Reg(gpr);
                             dynasm!(self.asm
                                 ; mov cl, Rb(gpr.rq().unwrap())
                             );
@@ -1111,7 +1123,7 @@ macro_rules! shift {
 macro_rules! cmp_i32 {
     ($name:ident, $flags:expr, $reverse_flags:expr, $const_fallback:expr) => {
         pub fn $name(&mut self) {
-            let right = self.pop();
+            let mut right = self.pop();
             let mut left = self.pop();
 
             let out = if let Some(i) = left.imm_i32() {
@@ -1126,6 +1138,7 @@ macro_rules! cmp_i32 {
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                         let rreg = self.into_reg(I32, right).unwrap();
+                        right = ValueLocation::Reg(rreg);
                         dynasm!(self.asm
                             ; cmp Rd(rreg.rq().unwrap()), i
                         );
@@ -1155,6 +1168,7 @@ macro_rules! cmp_i32 {
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                         let rreg = self.into_reg(I32, right).unwrap();
+                        right = ValueLocation::Reg(rreg);
                         dynasm!(self.asm
                             ; cmp Rd(lreg.rq().unwrap()), Rd(rreg.rq().unwrap())
                         );
@@ -2476,7 +2490,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             let diff = depth.0 as i32 - self.block_state.depth.0 as i32;
             let emit_lea = if diff.abs() == 1 {
                 if self.block_state.depth.0 < depth.0 {
-                    for _ in 0..depth.0 - self.block_state.depth.0 {
+                    for _ in 0..diff {
                         dynasm!(self.asm
                             ; push rax
                         );
@@ -2515,12 +2529,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     fn do_pass_block_args(&mut self, cc: &BlockCallingConvention) {
         let args = &cc.arguments;
-        for (remaining, &dst) in args
-            .iter()
-            .enumerate()
-            .rev()
-            .take(self.block_state.stack.len())
-        {
+        for &dst in args.iter().rev().take(self.block_state.stack.len()) {
             if let CCLoc::Reg(r) = dst {
                 if !self.block_state.regs.is_free(r)
                     && *self.block_state.stack.last().unwrap() != ValueLocation::Reg(r)
@@ -2691,25 +2700,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
             GPR::Rx(r) => {
-                let (temp, pop) = if let Some(reg) = self.take_reg(I64) {
-                    (reg, false)
-                } else {
-                    dynasm!(self.asm
-                        ; push rax
-                    );
-                    self.block_state.regs.mark_used(RAX);
-                    (RAX, true)
-                };
-                self.immediate_to_reg(temp, val);
+                let label = self.aligned_label(16, LabelValue::from(val));
                 dynasm!(self.asm
-                    ; movq Rx(r), Rq(temp.rq().unwrap())
+                    ; movq Rx(r), [=>label.0]
                 );
-                self.block_state.regs.release(temp);
-                if pop {
-                    dynasm!(self.asm
-                        ; push Rq(temp.rq().unwrap())
-                    );
-                }
             }
         }
     }
@@ -2866,7 +2860,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         dynasm!(self.asm
                             ; push rax
                             ; mov rax, QWORD i
-                            ; mov [rsp + out_offset], rax
+                            ; mov [rsp + out_offset + WORD_SIZE as i32], rax
                             ; pop rax
                         );
                     }
@@ -4479,10 +4473,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let saved_rax = if self.block_state.regs.is_free(RAX) {
             None
         } else {
-            self.block_state.depth.reserve(1);
             dynasm!(self.asm
                 ; push rax
             );
+            self.block_state.depth.reserve(1);
             // DON'T FREE THIS REGISTER HERE - since we don't
             // remove it from the stack freeing the register
             // here will cause `take_reg` to allocate it.
@@ -4492,10 +4486,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let saved_rdx = if self.block_state.regs.is_free(RDX) {
             None
         } else {
-            self.block_state.depth.reserve(1);
             dynasm!(self.asm
                 ; push rdx
             );
+            self.block_state.depth.reserve(1);
             // DON'T FREE THIS REGISTER HERE - since we don't
             // remove it from the stack freeing the register
             // here will cause `take_reg` to allocate it.
@@ -4979,10 +4973,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.save_volatile(..locs.len());
 
         if preserve_vmctx {
-            self.block_state.depth.reserve(1);
             dynasm!(self.asm
                 ; push Rq(VMCTX)
             );
+            self.block_state.depth.reserve(1);
         }
 
         let depth = self.block_state.depth.clone();
@@ -5237,10 +5231,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.save_volatile(..locs.len());
 
-        self.block_state.depth.reserve(1);
         dynasm!(self.asm
             ; push Rq(VMCTX)
         );
+        self.block_state.depth.reserve(1);
         let depth = self.block_state.depth.clone();
 
         self.pass_outgoing_args(&locs);
@@ -5391,10 +5385,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) {
         let locs = arg_locs(arg_types);
 
-        self.block_state.depth.reserve(1);
         dynasm!(self.asm
             ; push Rq(VMCTX)
         );
+        self.block_state.depth.reserve(1);
         let depth = self.block_state.depth.clone();
 
         self.save_volatile(..locs.len());
