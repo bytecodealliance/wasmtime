@@ -124,6 +124,28 @@ impl ControlStackFrame {
     }
 }
 
+/// VisibleTranslationState wraps a TranslationState with an interface appropriate for users
+/// outside this `cranelift-wasm`.
+///
+/// VisibleTranslationState is currently very minimal (only exposing reachability information), but
+/// is anticipated to grow in the future, with functions to inspect or modify the wasm operand
+/// stack for example.
+pub struct VisibleTranslationState<'a> {
+    state: &'a TranslationState,
+}
+
+impl<'a> VisibleTranslationState<'a> {
+    /// Build a VisibleTranslationState from an existing TranslationState
+    pub fn new(state: &'a TranslationState) -> Self {
+        VisibleTranslationState { state }
+    }
+
+    /// True if the current translation state expresses reachable code, false if it is unreachable
+    pub fn reachable(&self) -> bool {
+        self.state.reachable
+    }
+}
+
 /// Contains information passed along during the translation and that records:
 ///
 /// - The current value and control stacks.

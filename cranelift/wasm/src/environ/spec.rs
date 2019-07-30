@@ -6,7 +6,7 @@
 //!
 //! [Wasmtime]: https://github.com/CraneStation/wasmtime
 
-use crate::state::TranslationState;
+use crate::state::VisibleTranslationState;
 use crate::translation_utils::{
     FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
@@ -263,7 +263,7 @@ pub trait FuncEnvironment {
         &mut self,
         _op: &Operator,
         _builder: &mut FunctionBuilder,
-        _state: &mut TranslationState,
+        _state: &VisibleTranslationState,
     ) -> WasmResult<()> {
         Ok(())
     }
@@ -274,7 +274,7 @@ pub trait FuncEnvironment {
         &mut self,
         _op: &Operator,
         _builder: &mut FunctionBuilder,
-        _state: &mut TranslationState,
+        _state: &VisibleTranslationState,
     ) -> WasmResult<()> {
         Ok(())
     }
