@@ -26,13 +26,15 @@ use tempfile;
 fn test_write_read_cache() {
     pretty_env_logger::init();
     let dir = tempfile::tempdir().expect("Can't create temporary directory");
-    conf::init(true, Some(dir.path()));
+    let compression_level = 5;
+    conf::init(true, Some(dir.path()), Some(compression_level));
     assert!(conf::cache_enabled());
     // assumption: config init creates cache directory and returns canonicalized path
     assert_eq!(
         *conf::cache_directory(),
         fs::canonicalize(dir.path()).unwrap()
     );
+    assert_eq!(conf::compression_level(), compression_level);
 
     let mut rng = SmallRng::from_seed([
         0x42, 0x04, 0xF3, 0x44, 0x11, 0x22, 0x33, 0x44, 0x67, 0x68, 0xFF, 0x00, 0x44, 0x23, 0x7F,
