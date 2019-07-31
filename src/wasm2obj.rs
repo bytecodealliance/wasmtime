@@ -29,14 +29,12 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_native;
 use docopt::Docopt;
 use faerie::Artifact;
+use serde::Deserialize;
 use std::error::Error;
 use std::fmt::format;
 use std::fs::File;
@@ -49,8 +47,13 @@ use std::str;
 use std::str::FromStr;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
+use wasmtime_environ::cache_conf;
 use wasmtime_environ::{Compiler, Cranelift, ModuleEnvironment, Tunables};
 use wasmtime_obj::emit_module;
+
+mod utils;
+
+static LOG_FILENAME_PREFIX: &str = "wasm2obj.dbg.";
 
 const USAGE: &str = "
 Wasm to native object translation utility.
@@ -59,7 +62,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-g] <file> -o <output>
+    wasm2obj [--target TARGET] [-cdg] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
@@ -67,7 +70,9 @@ Options:
     -h, --help          print this help message
     --target <TARGET>   build for the target triple; default is the host machine
     -g                  generate debug information
+    -c, --cache         enable caching system
     --version           print the Cranelift version
+    -d, --debug         enable debug output on stderr/stdout
 ";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -76,6 +81,8 @@ struct Args {
     arg_output: String,
     arg_target: Option<String>,
     flag_g: bool,
+    flag_debug: bool,
+    flag_cache: bool,
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -94,6 +101,14 @@ fn main() {
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
+
+    if args.flag_debug {
+        pretty_env_logger::init();
+    } else {
+        utils::init_file_per_thread_logger();
+    }
+
+    cache_conf::init(args.flag_cache);
 
     let path = Path::new(&args.arg_file);
     match handle_module(

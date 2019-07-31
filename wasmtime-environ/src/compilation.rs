@@ -7,6 +7,7 @@ use crate::module_environ::FunctionBodyData;
 use cranelift_codegen::{binemit, ir, isa, CodegenError};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
+use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::vec::Vec;
 
@@ -23,7 +24,7 @@ pub struct CodeAndJTOffsets {
 type Functions = PrimaryMap<DefinedFuncIndex, CodeAndJTOffsets>;
 
 /// The result of compiling a WebAssembly module's functions.
-#[derive(Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Compilation {
     /// Compiled machine code for the function bodies.
     functions: Functions,
@@ -94,7 +95,7 @@ impl<'a> Iterator for Iter<'a> {
 }
 
 /// A record of a relocation to perform.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Relocation {
     /// The relocation code.
     pub reloc: binemit::Reloc,
@@ -107,7 +108,7 @@ pub struct Relocation {
 }
 
 /// Destination function. Can be either user function or some special one, like `memory.grow`.
-#[derive(Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub enum RelocationTarget {
     /// The user function index.
     UserFunc(FuncIndex),

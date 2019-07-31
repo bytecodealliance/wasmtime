@@ -25,19 +25,19 @@
     )
 )]
 
-#[macro_use]
-extern crate serde_derive;
-
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
-use file_per_thread_logger;
 use pretty_env_logger;
+use serde::Deserialize;
 use std::path::Path;
 use std::process;
+use wasmtime_environ::cache_conf;
 use wasmtime_jit::Compiler;
 use wasmtime_wast::WastContext;
+
+mod utils;
 
 static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
 
@@ -45,13 +45,14 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    run_wast [-do] <file>...
+    run_wast [-cdo] <file>...
     run_wast --help | --version
 
 Options:
     -h, --help          print this help message
     --version           print the Cranelift version
     -o, --optimize      runs optimization passes on the translated functions
+    -c, --cache         enable caching system
     -d, --debug         enable debug output on stderr/stdout
 ";
 
@@ -61,6 +62,7 @@ struct Args {
     flag_debug: bool,
     flag_function: Option<String>,
     flag_optimize: bool,
+    flag_cache: bool,
 }
 
 fn main() {
@@ -76,8 +78,10 @@ fn main() {
     if args.flag_debug {
         pretty_env_logger::init();
     } else {
-        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+        utils::init_file_per_thread_logger();
     }
+
+    cache_conf::init(args.flag_cache);
 
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");

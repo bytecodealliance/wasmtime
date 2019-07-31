@@ -4,10 +4,11 @@
 use cranelift_codegen::ir;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
+use serde::{Deserialize, Serialize};
 use std::vec::Vec;
 
 /// Single source location to generated address mapping.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InstructionAddressMap {
     /// Original source location.
     pub srcloc: ir::SourceLoc,
@@ -20,7 +21,7 @@ pub struct InstructionAddressMap {
 }
 
 /// Function and its instructions addresses mappings.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FunctionAddressMap {
     /// Instructions maps.
     /// The array is sorted by the InstructionAddressMap::code_offset field.
