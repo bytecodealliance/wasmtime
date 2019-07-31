@@ -556,6 +556,11 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                 simplify(pos, inst);
             } else if let Some(imm) = resolve_imm64_value(&pos.func.dfg, args[0]) {
                 let new_opcode = match opcode {
+                    Opcode::Iadd => Opcode::IaddImm,
+                    Opcode::Imul => Opcode::ImulImm,
+                    Opcode::Band => Opcode::BandImm,
+                    Opcode::Bor => Opcode::BorImm,
+                    Opcode::Bxor => Opcode::BxorImm,
                     Opcode::Isub => Opcode::IrsubImm,
                     _ => return,
                 };
