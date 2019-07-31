@@ -96,6 +96,9 @@ pub fn emit_functions(
                     })
                     .map_err(|err| format!("{}", err))?;
                 }
+                RelocationTarget::JumpTable(_, _) => {
+                    // ignore relocations for jump tables
+                }
                 _ => panic!("relocations target not supported yet: {:?}", r.reloc_target),
             };
         }
