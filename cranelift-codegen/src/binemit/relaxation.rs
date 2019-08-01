@@ -74,7 +74,7 @@ pub fn relax_branches(
     {
         let mut cur = FuncCursor::new(func);
         while let Some(ebb) = cur.next_ebb() {
-            divert.clear();
+            divert.at_ebb(&cur.func.entry_diversions, ebb);
             cur.func.offsets[ebb] = offset;
             while let Some(inst) = cur.next_inst() {
                 divert.apply(&cur.func.dfg[inst]);
@@ -93,7 +93,8 @@ pub fn relax_branches(
         // Visit all instructions in layout order.
         let mut cur = FuncCursor::new(func);
         while let Some(ebb) = cur.next_ebb() {
-            divert.clear();
+            divert.at_ebb(&cur.func.entry_diversions, ebb);
+
             // Record the offset for `ebb` and make sure we iterate until offsets are stable.
             if cur.func.offsets[ebb] != offset {
                 cur.func.offsets[ebb] = offset;

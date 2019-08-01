@@ -118,7 +118,7 @@ where
     let mut tracked_values: Vec<(Value, ValueLabel, u32, ValueLoc)> = Vec::new();
     let mut divert = RegDiversions::new();
     for ebb in ebbs {
-        divert.clear();
+        divert.at_ebb(&func.entry_diversions, ebb);
         let mut last_srcloc: Option<T> = None;
         for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
             divert.apply(&func.dfg[inst]);
