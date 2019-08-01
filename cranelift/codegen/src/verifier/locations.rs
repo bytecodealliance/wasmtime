@@ -51,9 +51,8 @@ impl<'a> LocationVerifier<'a> {
         let mut divert = RegDiversions::new();
 
         for ebb in self.func.layout.ebbs() {
-            // Diversions are reset at the top of each EBB. No diversions can exist across control
-            // flow edges.
-            divert.clear();
+            divert.at_ebb(&self.func.entry_diversions, ebb);
+
             for inst in self.func.layout.ebb_insts(ebb) {
                 let enc = self.func.encodings[inst];
 

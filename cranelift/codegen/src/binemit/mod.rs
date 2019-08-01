@@ -176,7 +176,7 @@ where
 {
     let mut divert = RegDiversions::new();
     for ebb in func.layout.ebbs() {
-        divert.clear();
+        divert.at_ebb(&func.entry_diversions, ebb);
         debug_assert_eq!(func.offsets[ebb], sink.offset());
         for inst in func.layout.ebb_insts(ebb) {
             emit_inst(func, inst, &mut divert, sink, isa);

@@ -199,6 +199,7 @@ impl<'a> Context<'a> {
             self.domtree,
         );
 
+        self.divert.at_ebb(&self.cur.func.entry_diversions, ebb);
         if self.cur.func.layout.entry_block() == Some(ebb) {
             // Parameters on the entry block have ABI constraints.
             self.color_entry_params(tracker.live())
