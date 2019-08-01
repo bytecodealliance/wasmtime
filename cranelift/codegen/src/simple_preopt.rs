@@ -585,6 +585,7 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
         InstructionData::BinaryImm { opcode, arg, imm } => {
             let ty = pos.func.dfg.ctrl_typevar(inst);
 
+            let mut arg = arg;
             let mut imm = imm;
             match opcode {
                 Opcode::IaddImm
@@ -613,12 +614,13 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                                         _ => panic!("can't happen"),
                                     };
                                     let new_imm = immediates::Imm64::from(new_imm);
-                                    let arg = *prev_arg;
+                                    let new_arg = *prev_arg;
                                     pos.func
                                         .dfg
                                         .replace(inst)
-                                        .BinaryImm(opcode, ty, new_imm, arg);
+                                        .BinaryImm(opcode, ty, new_imm, new_arg);
                                     imm = new_imm;
+                                    arg = new_arg;
                                 }
                             }
                         }
