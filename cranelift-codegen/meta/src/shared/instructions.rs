@@ -269,15 +269,9 @@ pub fn define(
         .is_branch(true),
     );
 
+    // The index into the br_table can be any type; legalizer will convert it to the right type.
     let x = &operand_doc("x", iB, "index into jump table");
-
-    let Entry = &TypeVar::new(
-        "Entry",
-        "A scalar integer type",
-        TypeSetBuilder::new().ints(Interval::All).build(),
-    );
-
-    let entry = &operand_doc("entry", Entry, "entry of jump table");
+    let entry = &operand_doc("entry", iAddr, "entry of jump table");
     let JT = &operand("JT", jump_table);
 
     ig.push(
@@ -305,6 +299,9 @@ pub fn define(
         .is_branch(true),
     );
 
+    // These are the instructions which br_table legalizes to: they perform address computations,
+    // using pointer-sized integers, so their type variables are more constrained.
+    let x = &operand_doc("x", iAddr, "index into jump table");
     let Size = &operand_doc("Size", uimm8, "Size in bytes");
 
     ig.push(
@@ -2644,11 +2641,11 @@ pub fn define(
         Cast the bits in `x` as a different type of the same bit width.
 
         This instruction does not change the data's representation but allows
-        data in registers to be used as different types, e.g. an i32x4 as a 
-        b8x16. The only constraint on the result `a` is that it can be 
+        data in registers to be used as different types, e.g. an i32x4 as a
+        b8x16. The only constraint on the result `a` is that it can be
         `raw_bitcast` back to the original type. Also, in a raw_bitcast between
-        vector types with the same number of lanes, the value of each result 
-        lane is a raw_bitcast of the corresponding operand lane. TODO there is 
+        vector types with the same number of lanes, the value of each result
+        lane is a raw_bitcast of the corresponding operand lane. TODO there is
         currently no mechanism for enforcing the bit width constraint.
         "#,
         )

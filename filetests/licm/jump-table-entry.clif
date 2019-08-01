@@ -14,7 +14,7 @@ ebb1: ; the loop!
     fallthrough ebb2
 
 ebb2:
-    v1 = iconst.i32 -14
+    v1 = iconst.i64 -14
     v8 = ifcmp_imm v1, 2
     brif uge v8, ebb1
     jump ebb3
@@ -25,7 +25,7 @@ ebb3:
     v7 = iadd v5, v6
     indirect_jump_table_br v7, jt0
 ; check: ebb2:
-; nextln: v8 = ifcmp_imm.i32 v1, 2
+; nextln: v8 = ifcmp_imm.i64 v1, 2
 ; nextln: brif uge v8, ebb1
 ; nextln: jump ebb3
 ; check: ebb3:

@@ -16,8 +16,9 @@ ebb0(v0: i64):
 ; nextln:    brif uge $oob, ebb2
 ; nextln:    fallthrough $(inb=$EBB)
 ; check:   $inb:
+; nextln:    $(final_idx=$V) = uextend.i64 $idx
 ; nextln:    $(base=$V) = jump_table_base.i64 jt0
-; nextln:    $(rel_addr=$V) = jump_table_entry.i64 $idx, $base, 4, jt0
+; nextln:    $(rel_addr=$V) = jump_table_entry $final_idx, $base, 4, jt0
 ; nextln:    $(addr=$V) = iadd $base, $rel_addr
 ; nextln:    indirect_jump_table_br $addr, jt0
 

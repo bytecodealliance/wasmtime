@@ -1224,13 +1224,10 @@ pub fn define(
 
     // Jump tables.
     e.enc64(
-        jump_table_entry.bind(I64).bind_any().bind_any(),
+        jump_table_entry.bind(I64),
         rec_jt_entry.opcodes(vec![0x63]).rex().w(),
     );
-    e.enc32(
-        jump_table_entry.bind(I32).bind_any().bind_any(),
-        rec_jt_entry.opcodes(vec![0x8b]),
-    );
+    e.enc32(jump_table_entry.bind(I32), rec_jt_entry.opcodes(vec![0x8b]));
 
     e.enc64(
         jump_table_base.bind(I64),
