@@ -33,11 +33,12 @@ pub fn shrink_instructions(func: &mut Function, isa: &dyn TargetIsa) {
                 //
                 // TODO: Eventually, we want the register allocator to avoid leaving these special
                 // instructions behind, but for now, just temporarily avoid trying to shrink them.
-                match func.dfg[inst] {
+                let inst_data = &func.dfg[inst];
+                match inst_data {
                     InstructionData::RegMove { .. }
                     | InstructionData::RegFill { .. }
                     | InstructionData::RegSpill { .. } => {
-                        divert.apply(&func.dfg[inst]);
+                        divert.apply(inst_data);
                         continue;
                     }
                     _ => (),
