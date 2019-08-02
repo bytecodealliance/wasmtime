@@ -47,7 +47,7 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
         }
         fmt.line("..");
 
-        fmt.outdented_line("} = data {");
+        fmt.outdented_line("} = inst_data {");
 
         // Pass recipe arguments in this order: inputs, imm_fields, outputs.
         let mut args = String::new();
@@ -77,7 +77,7 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
 
         // Optimization: Only update the register diversion tracker for regmove instructions.
         if is_regmove {
-            fmt.line("divert.apply(data);")
+            fmt.line("divert.apply(inst_data);")
         }
 
         match &recipe.emit {
@@ -182,7 +182,7 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
     fmt.indent(|fmt| {
         fmt.line("let encoding = func.encodings[inst];");
         fmt.line("let bits = encoding.bits();");
-        fmt.line("let data = &func.dfg[inst];");
+        fmt.line("let inst_data = &func.dfg[inst];");
         fmt.line("match encoding.recipe() {");
         fmt.indent(|fmt| {
             for (i, recipe) in recipes.iter() {
