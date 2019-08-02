@@ -1,8 +1,8 @@
 # wasi-common
-[![travis-build-status]][travis] [![rustc-1.36]][rustc]
+[![build-status]][azure] [![rustc-1.36]][rustc]
 
-[travis-build-status]: https://travis-ci.org/CraneStation/wasi-common.svg?branch=master
-[travis]: https://travis-ci.org/CraneStation/wasi-common
+[build-status]: https://dev.azure.com/CraneStation/wasi-common/_apis/build/status/CraneStation.wasi-common?branchName=master
+[azure]: https://dev.azure.com/CraneStation/wasi-common/_build/latest?definitionId=3&branchName=master
 [rustc-1.36]: https://img.shields.io/badge/rustc-1.36+-lightgray.svg
 [rustc]: https://blog.rust-lang.org/2019/07/04/Rust-1.36.0.html
 [Wasmtime]: https://github.com/CraneStation/wasmtime
