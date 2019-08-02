@@ -275,7 +275,7 @@ impl Display for Uimm128 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "0x")?;
         let mut anything_written = false;
-        for &b in self.0.iter() {
+        for &b in self.0.iter().rev() {
             if b == 0 && !anything_written {
                 continue;
             } else {
@@ -293,7 +293,7 @@ impl Display for Uimm128 {
 impl From<u64> for Uimm128 {
     fn from(x: u64) -> Self {
         let mut buffer: [u8; 16] = [0; 16]; // zero-fill
-        (0..8).for_each(|byte| buffer[15 - byte] = (x >> (byte as u64 * 8) & 0xff) as u8); // insert each byte from the u64 into v after byte position 8
+        (0..8).for_each(|byte| buffer[byte] = (x >> (byte as u64 * 8) & 0xff) as u8); // insert each byte from the u64 into v in little-endian order
         Uimm128(buffer)
     }
 }
@@ -316,15 +316,15 @@ impl FromStr for Uimm128 {
             Err("Expected a hexadecimal string, e.g. 0x1234")
         } else if s.len() % 2 != 0 {
             Err("Hexadecimal string must have an even number of digits")
-        } else if s.len() > 32 {
+        } else if s.len() > 34 {
             Err("Hexadecimal string has too many digits to fit in a 128-bit vector")
         } else {
             let mut buffer = [0; 16]; // zero-fill
-            let start_at = 16 - s.len() / 2;
+            let start_at = s.len() / 2 - 1;
             for i in (2..s.len()).step_by(2) {
                 let byte = u8::from_str_radix(&s[i..i + 2], 16)
                     .or_else(|_| Err("Unable to parse as hexadecimal"))?;
-                let position = start_at + (i / 2);
+                let position = start_at - (i / 2);
                 buffer[position] = byte;
             }
             Ok(Uimm128(buffer))
@@ -982,6 +982,22 @@ mod tests {
             "0x00000000000000000000000000000000000000000000000000",
             "Hexadecimal string has too many digits to fit in a 128-bit vector",
         );
+    }
+
+    #[test]
+    fn uimm128_endianness() {
+        assert_eq!(
+            "0x42".parse::<Uimm128>().unwrap().0,
+            [0x42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            "0x00".parse::<Uimm128>().unwrap().0,
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            "0x12345678".parse::<Uimm128>().unwrap().0,
+            [0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        )
     }
 
     #[test]
