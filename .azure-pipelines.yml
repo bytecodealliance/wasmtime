@@ -39,17 +39,17 @@ jobs:
       displayName: Install rust (Win)
       condition: eq( variables['Agent.OS'], 'Windows_NT' )
     - script: |
-        rustup component add --toolchain stable rustfmt-preview
-        rustup component list --toolchain stable
-      displayName: Add rustfmt
-    - script: |
         powershell -Command "$ProgressPreference = 'SilentlyContinue'; iwr -outf %TEMP%\LLVM-8.0.0-win64.exe https://rust-lang-ci2.s3.amazonaws.com/rust-ci-mirror/LLVM-8.0.0-win64.exe"
         %TEMP%\LLVM-8.0.0-win64.exe /S /NCRC
       condition: eq(variables['Agent.OS'], 'Windows_NT')
       displayName: Install clang (Win)
     - script: cargo fetch
       displayName: Fetch cargo dependencies
-    - script: cargo +stable fmt --all -- --check
+    - script: |
+        rustup component add rustfmt
+        rustup component list
+        cargo fmt --all -- --check
+      condition: eq( variables['rustup_toolchain'], 'stable' )
       displayName: Check formatting
     - script: cargo build --release
       displayName: Cargo build release
@@ -57,4 +57,6 @@ jobs:
       displayName: Cargo build
     - bash: RUST_BACKTRACE=1 cargo test --all
       displayName: Cargo test
-
+    - script: cargo doc
+      condition: eq(variables['Agent.OS'], 'Darwin')
+      displayName: Cargo doc
