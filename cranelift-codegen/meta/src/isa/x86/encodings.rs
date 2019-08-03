@@ -21,7 +21,7 @@ pub struct PerCpuModeEncodings {
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
     pub recipes: Recipes,
-    recipes_inverse: HashMap<EncodingRecipe, EncodingRecipeNumber>,
+    recipes_by_name: HashMap<String, EncodingRecipeNumber>,
     pub inst_pred_reg: InstructionPredicateRegistry,
 }
 
@@ -31,15 +31,15 @@ impl PerCpuModeEncodings {
             enc32: Vec::new(),
             enc64: Vec::new(),
             recipes: Recipes::new(),
-            recipes_inverse: HashMap::new(),
+            recipes_by_name: HashMap::new(),
             inst_pred_reg: InstructionPredicateRegistry::new(),
         }
     }
 
     fn add_recipe(&mut self, recipe: EncodingRecipe) -> EncodingRecipeNumber {
-        if let Some(found_index) = self.recipes_inverse.get(&recipe) {
+        if let Some(found_index) = self.recipes_by_name.get(&recipe.name) {
             assert!(
-                self.recipes[*found_index].name == recipe.name,
+                self.recipes[*found_index] == recipe,
                 format!(
                     "trying to insert different recipes with a same name ({})",
                     recipe.name
@@ -47,8 +47,9 @@ impl PerCpuModeEncodings {
             );
             *found_index
         } else {
-            let index = self.recipes.push(recipe.clone());
-            self.recipes_inverse.insert(recipe, index);
+            let recipe_name = recipe.name.clone();
+            let index = self.recipes.push(recipe);
+            self.recipes_by_name.insert(recipe_name, index);
             index
         }
     }

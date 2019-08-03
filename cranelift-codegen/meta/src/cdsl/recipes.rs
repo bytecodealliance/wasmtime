@@ -102,7 +102,7 @@ impl Into<OperandConstraint> for Stack {
 /// The `branch_range` argument must be provided for recipes that can encode
 /// branch instructions. It is an `(origin, bits)` tuple describing the exact
 /// range that can be encoded in a branch instruction.
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub struct EncodingRecipe {
     /// Short mnemonic name for this recipe.
     pub name: String,
