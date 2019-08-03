@@ -9,8 +9,7 @@ utility or as a library embedded in a larger application.
 [Cranelift]: https://github.com/CraneStation/cranelift
 [outside of the Web]: https://webassembly.org/docs/non-web/
 
-[![Travis Status](https://travis-ci.org/CraneStation/wasmtime.svg?branch=master)](https://travis-ci.org/CraneStation/wasmtime)
-[![Appveyor Status](https://ci.appveyor.com/api/projects/status/vxvpt2plriy5s0mc?svg=true)](https://ci.appveyor.com/project/CraneStation/cranelift)
+[![Build Status](https://dev.azure.com/CraneStation/Wasmtime/_apis/build/status/CraneStation.wasmtime?branchName=master)](https://dev.azure.com/CraneStation/Wasmtime/_build/latest?definitionId=4&branchName=master)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
 ![Minimum rustc 1.36](https://img.shields.io/badge/rustc-1.36+-green.svg)
 
