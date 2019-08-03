@@ -216,7 +216,7 @@ jobs:
   - task: GitHubRelease@0
     inputs:
       gitHubConnection: 'tschneidereit-releases'
-      repositoryName: 'tschneidereit/wasmtime'
+      repositoryName: 'cranestation/wasmtime'
       action: 'edit'
       target: '$(Build.SourceVersion)'
       tagSource: 'manual'
@@ -229,7 +229,7 @@ jobs:
   - task: GitHubRelease@0
     inputs:
       gitHubConnection: 'tschneidereit-releases'
-      repositoryName: 'tschneidereit/wasmtime'
+      repositoryName: 'cranestation/wasmtime'
       action: 'edit'
       target: '$(Build.SourceVersion)'
       tag: 'master'
