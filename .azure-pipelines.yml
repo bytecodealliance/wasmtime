@@ -1,0 +1,240 @@
+name: $(Build.SourceBranch)-$(date:yyyyMMdd)$(rev:.r)
+trigger:
+  branches:
+    include:
+    - 'master'
+  tags:
+    include:
+    - '*'
+
+jobs:
+- job: Build
+  strategy:
+    matrix:
+      windows-stable:
+        imageName: 'vs2017-win2016'
+        rustup_toolchain: stable
+      windows-stable-release:
+        imageName: 'vs2017-win2016'
+        rustup_toolchain: stable
+        build_type: release
+      linux-stable-release:
+        imageName: 'ubuntu-16.04'
+        rustup_toolchain: stable
+        build_type: release
+      mac-stable-release:
+        imageName: 'macos-10.14'
+        rustup_toolchain: stable
+        build_type: release
+      linux-stable:
+        imageName: 'ubuntu-16.04'
+        rustup_toolchain: stable
+      mac-stable:
+        imageName: 'macos-10.14'
+        rustup_toolchain: stable
+      mac-beta:
+        imageName: 'macos-10.14'
+        rustup_toolchain: beta
+      mac-nightly:
+        imageName: 'macos-10.14'
+        rustup_toolchain: nightly
+
+  pool:
+    vmImage: $(imageName)
+
+  # variables:
+    # SCCACHE_DIR: $(Pipeline.Workspace)/.sccache
+    # RUSTC_WRAPPER: sccache
+
+  steps:
+    - checkout: self
+      submodules: true
+
+    - script: |
+        curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $RUSTUP_TOOLCHAIN
+        echo "##vso[task.prependpath]$HOME/.cargo/bin"
+        export PATH=$PATH:$HOME/.cargo/bin
+        rustup update $RUSTUP_TOOLCHAIN
+        rustup default $RUSTUP_TOOLCHAIN
+        rustc --version
+      displayName: Install rust (*nix)
+      condition: ne( variables['Agent.OS'], 'Windows_NT' )
+    - script: |
+        rustup update %RUSTUP_TOOLCHAIN%
+        rustup default %RUSTUP_TOOLCHAIN%
+        rustc --version
+      displayName: Install rust (Win)
+      condition: eq( variables['Agent.OS'], 'Windows_NT' )
+    - script: rustup component add rustfmt
+      displayName: Add rustfmt
+      condition: and(succeeded(), eq(variables['rustup_toolchain'], 'stable'))
+
+    - bash: echo "##vso[task.setvariable variable=BUILD_TYPE_FLAG;]--release"
+      displayName: Set build type flag to --release
+      condition: eq( variables['build_type'], 'release' )
+    - bash: echo "##vso[task.setvariable variable=RUSTC_VERSION;]`rustc --version`"
+      displayName: Set rustc version string for caching
+
+    - script: |
+        powershell -Command "$ProgressPreference = 'SilentlyContinue'; iwr -outf %TEMP%\LLVM-8.0.0-win64.exe https://rust-lang-ci2.s3.amazonaws.com/rust-ci-mirror/LLVM-8.0.0-win64.exe"
+        %TEMP%\LLVM-8.0.0-win64.exe /S /NCRC
+      condition: eq(variables['Agent.OS'], 'Windows_NT')
+      displayName: Install clang (Windows)
+
+    # - bash: |
+    #     set -e
+    #     curl -Lfo sccache.tar.gz https://github.com/mozilla/sccache/releases/download/0.2.9/sccache-0.2.9-x86_64-apple-darwin.tar.gz
+    #     tar -xzf sccache.tar.gz
+    #     cp sccache-*/sccache /usr/local/bin/
+    #   displayName: Install sccache (OSX)
+    #   condition: and(succeeded(), eq(variables['Agent.OS'], 'Darwin'))
+
+    # - bash: |
+    #     set -e
+    #     curl -Lfo sccache.tar.gz https://github.com/mozilla/sccache/releases/download/0.2.9/sccache-0.2.9-x86_64-unknown-linux-musl.tar.gz
+    #     tar -xzf sccache.tar.gz
+    #     sudo cp sccache-*/sccache /usr/local/bin/
+    #   displayName: Install sccache (Linux)
+    #   condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+
+    # - script: |
+    #     curl -Lfo sccache.tar.gz https://github.com/mozilla/sccache/releases/download/0.2.9/sccache-0.2.9-x86_64-pc-windows-msvc.tar.gz
+    #     tar -xzf sccache.tar.gz
+    #     move sccache-* sccache
+    #     echo "##vso[task.prependpath]%CD%\sccache"
+    #   displayName: Install sccache (Windows)
+    #   condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
+
+    - script: cargo fetch
+      displayName: Fetch cargo dependencies
+    - script: cargo fmt --all -- --check
+      displayName: Check formatting
+      condition: and(succeeded(), eq(variables['rustup_toolchain'], 'stable'),
+                     ne( variables['build_type'], 'release' ), eq(variables['Agent.OS'], 'Darwin'))
+
+    # - task: CacheBeta@0
+    #   inputs:
+    #     key: sccache | $(Agent.OS) | "$(RUSTC_VERSION)" | "$(build_type)" | Cargo.lock
+    #     restoreKeys: |
+    #       sccache | $(Agent.OS) | "$(RUSTC_VERSION)" | "$(build_type)"
+    #     path: $(SCCACHE_DIR)
+    #   continueOnError: true
+    #   displayName: sccache
+
+    # - bash: |
+    #     sccache --show-stats
+    #     ls $SCCACHE_DIR
+    #   displayName: pre-compile sccache stats
+
+    # Build and test all features except for lightbeam
+    - bash: cargo build $BUILD_TYPE_FLAG --all --exclude lightbeam --exclude wasmtime-wasi-c
+      displayName: Cargo build
+    - bash: RUST_BACKTRACE=1 cargo test $BUILD_TYPE_FLAG --all --exclude lightbeam --exclude wasmtime-wasi-c
+      displayName: Cargo test
+
+    # Build and test lightbeam if we're using the nightly toolchain
+    - bash: cargo build $BUILD_TYPE_FLAG --package lightbeam
+      displayName: Cargo build lightbeam
+      condition: and(succeeded(), eq(variables['rustup_toolchain'], 'nightly'))
+    - bash: RUST_BACKTRACE=1 cargo test $BUILD_TYPE_FLAG --package lightbeam
+      displayName: Cargo test lightbeam
+      # Lightbeam tests fail right now, but we don't want to block on that.
+      continueOnError: true
+      condition: and(succeeded(), eq(variables['rustup_toolchain'], 'nightly'))
+
+    # - script: sccache --show-stats
+    #   displayName: post-compile sccache stats
+
+    # Only run on macOS debug builders, as those are fastest
+    - bash: |
+        cargo doc
+      displayName: Test docs generation
+      condition: and(succeeded(), eq( variables['Agent.OS'], 'Darwin' ), ne( variables['build_type'], 'release' ))
+
+    - bash: |
+        echo "##vso[task.setvariable variable=tagName;]`echo $BUILD_SOURCEBRANCH | sed -e 's|refs/tags/||'`"
+      displayName: Set tag name
+      condition: startsWith(variables['Build.SourceBranch'], 'refs/tags/')
+    - bash: |
+        echo "##vso[task.setvariable variable=tagName;]master"
+      displayName: Set tag name to "master"
+      condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
+
+    - bash: |
+        mkdir $BUILD_BINARIESDIRECTORY/bundle
+        cp target/release/{wasmtime,wasm2obj}.exe $BUILD_BINARIESDIRECTORY/bundle
+      displayName: Copy binaries (Win)
+      condition: and(succeeded(), eq( variables['Agent.OS'], 'Windows_NT' ), eq( variables['build_type'], 'release' ))
+    - bash: |
+        mkdir $BUILD_BINARIESDIRECTORY/bundle
+        cp target/release/{wasmtime,wasm2obj} $BUILD_BINARIESDIRECTORY/bundle
+      displayName: Copy binaries (*nix)
+      condition: and(succeeded(), ne( variables['Agent.OS'], 'Windows_NT' ), eq( variables['build_type'], 'release' ))
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: $(Build.BinariesDirectory)/bundle
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/wasmtime-$(tagName)-x86_64-windows.zip'
+      displayName: Archive files (Win)
+      condition: and(succeeded(), eq( variables['Agent.OS'], 'Windows_NT' ), eq( variables['build_type'], 'release' ))
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: $(Build.BinariesDirectory)/bundle
+        includeRootFolder: false
+        archiveType: 'tar'
+        tarCompression: 'xz'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/wasmtime-$(tagName)-x86_64-macos.tar.xz'
+      displayName: Archive files (macOS)
+      condition: and(succeeded(), eq( variables['Agent.OS'], 'Darwin' ), eq( variables['build_type'], 'release' ))
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: $(Build.BinariesDirectory)/bundle
+        includeRootFolder: false
+        archiveType: 'tar'
+        tarCompression: 'xz'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/wasmtime-$(tagName)-x86_64-linux.tar.xz'
+      displayName: Archive files (Linux)
+      condition: and(succeeded(), eq( variables['Agent.OS'], 'Linux' ), eq( variables['build_type'], 'release' ))
+    - task: PublishPipelineArtifact@1
+      inputs:
+        path: $(Build.ArtifactStagingDirectory)/
+        artifactName: 'bundle-$(Agent.OS)'
+      condition: and(succeeded(), eq( variables['build_type'], 'release' ))
+
+- job: Publish
+  dependsOn: Build
+  condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+  steps:
+  - checkout: none
+  - task: DownloadPipelineArtifact@1
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)
+  - script: |
+      echo "##vso[task.setvariable variable=tagName;]`echo $BUILD_SOURCEBRANCH | sed -e 's|refs/tags/||'`"
+    condition: startsWith(variables['Build.SourceBranch'], 'refs/tags/')
+  - task: GitHubRelease@0
+    inputs:
+      gitHubConnection: 'tschneidereit-releases'
+      repositoryName: 'tschneidereit/wasmtime'
+      action: 'edit'
+      target: '$(Build.SourceVersion)'
+      tagSource: 'manual'
+      tag: '$(tagName)'
+      title: 'Wasmtime $(tagName)'
+      assets: '$(Build.ArtifactStagingDirectory)/**'
+      isDraft: false
+      isPreRelease: true
+    condition: startsWith(variables['Build.SourceBranch'], 'refs/tags/')
+  - task: GitHubRelease@0
+    inputs:
+      gitHubConnection: 'tschneidereit-releases'
+      repositoryName: 'tschneidereit/wasmtime'
+      action: 'edit'
+      target: '$(Build.SourceVersion)'
+      tag: 'master'
+      title: 'Latest CI build'
+      assets: '$(Build.ArtifactStagingDirectory)/**'
+      isDraft: false
+      isPreRelease: true
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
