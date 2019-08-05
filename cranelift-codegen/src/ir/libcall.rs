@@ -108,11 +108,13 @@ impl LibCall {
 /// If there is an existing reference, use it, otherwise make a new one.
 pub fn get_libcall_funcref(
     libcall: LibCall,
+    call_conv: CallConv,
     func: &mut Function,
     inst: Inst,
     isa: &dyn TargetIsa,
 ) -> FuncRef {
-    find_funcref(libcall, func).unwrap_or_else(|| make_funcref_for_inst(libcall, func, inst, isa))
+    find_funcref(libcall, func)
+        .unwrap_or_else(|| make_funcref_for_inst(libcall, call_conv, func, inst, isa))
 }
 
 /// Get a function reference for the probestack function in `func`.
@@ -164,16 +166,25 @@ fn make_funcref_for_probestack(
 /// Create a funcref for `libcall` with a signature matching `inst`.
 fn make_funcref_for_inst(
     libcall: LibCall,
+    call_conv: CallConv,
     func: &mut Function,
     inst: Inst,
     isa: &dyn TargetIsa,
 ) -> FuncRef {
-    let mut sig = Signature::new(isa.default_call_conv());
+    let mut sig = Signature::new(call_conv);
     for &v in func.dfg.inst_args(inst) {
         sig.params.push(AbiParam::new(func.dfg.value_type(v)));
     }
     for &v in func.dfg.inst_results(inst) {
         sig.returns.push(AbiParam::new(func.dfg.value_type(v)));
+    }
+
+    if call_conv == CallConv::Baldrdash {
+        // Adds the special VMContext parameter to the signature.
+        sig.params.push(AbiParam::special(
+            isa.pointer_type(),
+            ArgumentPurpose::VMContext,
+        ));
     }
 
     make_funcref(libcall, func, sig, isa)

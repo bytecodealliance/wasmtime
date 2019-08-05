@@ -2,7 +2,7 @@
 
 use crate::ir;
 use crate::ir::{get_libcall_funcref, InstBuilder};
-use crate::isa::TargetIsa;
+use crate::isa::{CallConv, TargetIsa};
 use crate::legalizer::boundary::legalize_libcall_signature;
 use std::vec::Vec;
 
@@ -18,8 +18,17 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function, isa: &dyn Targ
     // Now we convert `inst` to a call. First save the arguments.
     let mut args = Vec::new();
     args.extend_from_slice(func.dfg.inst_args(inst));
+
+    let call_conv = CallConv::for_libcall(isa);
+    if call_conv == CallConv::Baldrdash {
+        let vmctx = func
+            .special_param(ir::ArgumentPurpose::VMContext)
+            .expect("Missing vmctx parameter for baldrdash libcall");
+        args.push(vmctx);
+    }
+
     // The replace builder will preserve the instruction result values.
-    let funcref = get_libcall_funcref(libcall, func, inst, isa);
+    let funcref = get_libcall_funcref(libcall, call_conv, func, inst, isa);
     func.dfg.replace(inst).call(funcref, &args);
 
     // Ask the ISA to legalize the signature.
