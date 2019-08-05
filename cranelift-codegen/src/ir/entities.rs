@@ -69,6 +69,7 @@ entity_impl!(Inst, "inst");
 
 /// An opaque reference to a stack slot.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlot(u32);
 entity_impl!(StackSlot, "ss");
 

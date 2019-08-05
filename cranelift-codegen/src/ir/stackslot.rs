@@ -13,6 +13,9 @@ use core::slice;
 use core::str::FromStr;
 use std::vec::Vec;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// The size of an object on the stack, or the size of a stack frame.
 ///
 /// We don't use `usize` to represent object sizes on the target platform because Cranelift supports
@@ -38,6 +41,7 @@ fn spill_size(ty: Type) -> StackSize {
 
 /// The kind of a stack slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum StackSlotKind {
     /// A spill slot. This is a stack slot created by the register allocator.
     SpillSlot,
@@ -98,6 +102,7 @@ impl fmt::Display for StackSlotKind {
 
 /// Contents of a stack slot.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlotData {
     /// The kind of stack slot.
     pub kind: StackSlotKind,
@@ -150,6 +155,7 @@ impl fmt::Display for StackSlotData {
 ///
 /// Keep track of all the stack slots used by a function.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlots {
     /// All allocated stack slots.
     slots: PrimaryMap<StackSlot, StackSlotData>,

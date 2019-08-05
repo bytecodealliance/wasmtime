@@ -7,8 +7,12 @@ use crate::ir::StackSlot;
 use crate::isa::{RegInfo, RegUnit};
 use core::fmt;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// Value location.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum ValueLoc {
     /// This value has not been assigned to a location yet.
     Unassigned,
