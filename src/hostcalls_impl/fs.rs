@@ -7,8 +7,10 @@ use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::hostcalls_impl::fs_helpers::path_open_rights;
 use crate::sys::{errno_from_ioerror, host_impl, hostcalls_impl};
 use crate::{host, wasm32, Result};
+use filetime::{set_file_handle_times, FileTime};
 use log::trace;
 use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()> {
     trace!("fd_close(fd={:?})", fd);
@@ -764,7 +766,34 @@ pub(crate) fn fd_filestat_set_times(
     let st_mtim = dec_timestamp(st_mtim);
     let fst_flags = dec_fstflags(fst_flags);
 
-    hostcalls_impl::fd_filestat_set_times(fd, st_atim, st_mtim, fst_flags)
+    let set_atim = fst_flags & host::__WASI_FILESTAT_SET_MTIM != 0;
+    let set_atim_now = fst_flags & host::__WASI_FILESTAT_SET_MTIM != 0;
+    let set_mtim = fst_flags & host::__WASI_FILESTAT_SET_MTIM != 0;
+    let set_mtim_now = fst_flags & host::__WASI_FILESTAT_SET_MTIM != 0;
+
+    if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
+        return Err(host::__WASI_EINVAL);
+    }
+    let atim = if set_atim {
+        let time = UNIX_EPOCH + Duration::from_nanos(st_atim);
+        Some(FileTime::from_system_time(time))
+    } else if set_atim_now {
+        let time = SystemTime::now();
+        Some(FileTime::from_system_time(time))
+    } else {
+        None
+    };
+
+    let mtim = if set_mtim {
+        let time = UNIX_EPOCH + Duration::from_nanos(st_mtim);
+        Some(FileTime::from_system_time(time))
+    } else if set_mtim_now {
+        let time = SystemTime::now();
+        Some(FileTime::from_system_time(time))
+    } else {
+        None
+    };
+    set_file_handle_times(fd, atim, mtim).map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_filestat_set_size(

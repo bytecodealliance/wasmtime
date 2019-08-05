@@ -363,49 +363,6 @@ fn filetype(metadata: &Metadata) -> host::__wasi_filetype_t {
     }
 }
 
-pub(crate) fn fd_filestat_set_times(
-    fd: &File,
-    st_atim: host::__wasi_timestamp_t,
-    mut st_mtim: host::__wasi_timestamp_t,
-    fst_flags: host::__wasi_fstflags_t,
-) -> Result<()> {
-    use nix::sys::time::{TimeSpec, TimeValLike};
-
-    if fst_flags & host::__WASI_FILESTAT_SET_MTIM_NOW != 0 {
-        let clock_id = libc::CLOCK_REALTIME;
-        let mut timespec = unsafe { std::mem::uninitialized::<libc::timespec>() };
-        let res = unsafe { libc::clock_gettime(clock_id, &mut timespec as *mut libc::timespec) };
-        if res != 0 {
-            return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
-        }
-        st_mtim = (timespec.tv_sec as host::__wasi_timestamp_t)
-            .checked_mul(1_000_000_000)
-            .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-            .ok_or(host::__WASI_EOVERFLOW)?;
-    }
-    let ts_atime = match fst_flags {
-        f if f & host::__WASI_FILESTAT_SET_ATIM_NOW != 0 => libc::timespec {
-            tv_sec: 0,
-            tv_nsec: utime_now(),
-        },
-        f if f & host::__WASI_FILESTAT_SET_ATIM != 0 => {
-            *TimeSpec::nanoseconds(st_atim as i64).as_ref()
-        }
-        _ => libc::timespec {
-            tv_sec: 0,
-            tv_nsec: utime_omit(),
-        },
-    };
-    let ts_mtime = *TimeSpec::nanoseconds(st_mtim as i64).as_ref();
-    let times = [ts_atime, ts_mtime];
-    let res = unsafe { libc::futimens(fd.as_raw_fd(), times.as_ptr()) };
-    if res != 0 {
-        Err(host_impl::errno_from_nix(nix::errno::Errno::last()))
-    } else {
-        Ok(())
-    }
-}
-
 pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: host::__wasi_lookupflags_t,

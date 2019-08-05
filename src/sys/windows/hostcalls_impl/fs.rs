@@ -267,15 +267,6 @@ fn filetype(metadata: &Metadata) -> io::Result<host::__wasi_filetype_t> {
     Ok(ret)
 }
 
-pub(crate) fn fd_filestat_set_times(
-    fd: &File,
-    st_atim: host::__wasi_timestamp_t,
-    mut st_mtim: host::__wasi_timestamp_t,
-    fst_flags: host::__wasi_fstflags_t,
-) -> Result<()> {
-    unimplemented!("fd_filestat_set_times")
-}
-
 pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: host::__wasi_lookupflags_t,
