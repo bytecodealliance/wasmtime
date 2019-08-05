@@ -1,3 +1,5 @@
+use crate::isa::TargetIsa;
+use crate::settings::LibcallCallConv;
 use core::fmt;
 use core::str;
 use target_lexicon::{CallingConvention, Triple};
@@ -27,6 +29,19 @@ impl CallConv {
             // uses System V.
             Ok(CallingConvention::SystemV) | Err(()) => CallConv::SystemV,
             Ok(CallingConvention::WindowsFastcall) => CallConv::WindowsFastcall,
+        }
+    }
+
+    /// Returns the calling convention used for libcalls for the given ISA.
+    pub fn for_libcall(isa: &dyn TargetIsa) -> Self {
+        match isa.flags().libcall_call_conv() {
+            LibcallCallConv::IsaDefault => isa.default_call_conv(),
+            LibcallCallConv::Fast => CallConv::Fast,
+            LibcallCallConv::Cold => CallConv::Cold,
+            LibcallCallConv::SystemV => CallConv::SystemV,
+            LibcallCallConv::WindowsFastcall => CallConv::WindowsFastcall,
+            LibcallCallConv::Baldrdash => CallConv::Baldrdash,
+            LibcallCallConv::Probestack => CallConv::Probestack,
         }
     }
 }
