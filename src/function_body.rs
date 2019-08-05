@@ -151,21 +151,57 @@ where
             block.is_next = true;
         }
 
-        if let Operator::Label(_) = op {
-        } else {
-            debug_assert_eq!(
-                {
+        macro_rules! assert_ge {
+            ($left:expr, $right:expr) => ({
+                match (&$left, &$right) {
+                    (left_val, right_val) => {
+                        if !(*left_val >= *right_val) {
+                            // The reborrows below are intentional. Without them, the stack slot for the
+                            // borrow is initialized even before the values are compared, leading to a
+                            // noticeable slow down.
+                            panic!(r#"assertion failed: `(left >= right)`
+  left: `{:?}`,
+ right: `{:?}`"#, &*left_val, &*right_val)
+                        }
+                    }
+                }
+            });
+            ($left:expr, $right:expr,) => ({
+                assert_ge!($left, $right)
+            });
+        }
+
+        // `cfg` on blocks doesn't work in the compiler right now, so we have to write a dummy macro
+        #[cfg(debug_assertions)]
+        macro_rules! assertions {
+            () => {
+                if let Operator::Label(label) = &op {
+                    let block = &blocks[&BrTarget::Label(label.clone())];
+                    let num_cc_params = block.calling_convention.as_ref().map(|cc| match cc {
+                        Left(cc) => cc.arguments.len(),
+                        Right(cc) => cc.stack.len(),
+                    });
+                    if let Some(num_cc_params) = num_cc_params {
+                        assert_ge!(num_cc_params, block.params as usize);
+                    }
+                } else {
                     let mut actual_regs = Registers::new();
                     for val in &ctx.block_state.stack {
                         if let ValueLocation::Reg(gpr) = val {
                             actual_regs.mark_used(*gpr);
                         }
                     }
-                    actual_regs
-                },
-                ctx.block_state.regs,
-            );
+                    assert_eq!(actual_regs, ctx.block_state.regs,);
+                }
+            };
         }
+
+        #[cfg(not(debug_assertions))]
+        macro_rules! assertions {
+            () => {};
+        }
+
+        assertions!();
 
         struct DisassemblyOpFormatter<Label>(Operator<Label>);
 
@@ -348,14 +384,15 @@ where
                 let f = |ctx: &mut Context<_>| {
                     let then_block_should_serialize_args = then_block.should_serialize_args();
                     let else_block_should_serialize_args = else_block.should_serialize_args();
+                    let max_params = then_block.params.max(else_block.params);
 
                     match (
                         (&mut then_block.calling_convention, &then.to_drop),
                         (&mut else_block.calling_convention, &else_.to_drop),
                     ) {
-                        ((Some(Left(ref cc)), to_drop), ref mut other @ (None, _))
-                        | (ref mut other @ (None, _), (Some(Left(ref cc)), to_drop)) => {
-                            let mut cc = ctx.serialize_block_args(cc, to_drop.clone());
+                        ((Some(Left(ref cc)), _), ref mut other @ (None, _))
+                        | (ref mut other @ (None, _), (Some(Left(ref cc)), _)) => {
+                            let mut cc = ctx.serialize_block_args(cc, max_params);
                             if let Some(to_drop) = other.1 {
                                 drop_elements(&mut cc.arguments, to_drop.clone());
                             }
@@ -365,7 +402,6 @@ where
                             (ref mut then_cc @ None, then_to_drop),
                             (ref mut else_cc @ None, else_to_drop),
                         ) => {
-                            let max_params = then_block.params.max(else_block.params);
                             let virt_cc = if !then_block_should_serialize_args
                                 || !else_block_should_serialize_args
                             {
@@ -436,7 +472,12 @@ where
                     (
                         if def.is_next { None } else { Some(def.label) },
                         def.num_callers,
-                        def.params,
+                        def.params
+                            + default
+                                .to_drop
+                                .as_ref()
+                                .map(|t| t.clone().count())
+                                .unwrap_or_default() as u32,
                     )
                 };
 
@@ -462,9 +503,7 @@ where
                         block.actual_num_callers += 1;
 
                         if block.calling_convention.is_some() {
-                            let new_cc = block.calling_convention
-                                .clone()
-                                .map(|cc| (cc, target.to_drop.clone()));
+                            let new_cc = block.calling_convention.clone();
                             assert!(cc.is_none() || cc == new_cc, "Can't pass different params to different elements of `br_table` yet");
                             cc = new_cc;
                         }
@@ -473,12 +512,19 @@ where
                             max_num_callers = block.num_callers.map(|n| max.max(n));
                         }
 
-                        max_params = max_params.max(block.params);
+                        max_params = max_params.max(
+                            block.params
+                                + target
+                                    .to_drop
+                                    .as_ref()
+                                    .map(|t| t.clone().count())
+                                    .unwrap_or_default() as u32
+                        );
                     }
 
-                    let cc = cc.map(|(cc, to_drop)| {
+                    let cc = cc.map(|cc| {
                         match cc {
-                            Left(cc) => Left(ctx.serialize_block_args(&cc, to_drop)),
+                            Left(cc) => Left(ctx.serialize_block_args(&cc, max_params)),
                             Right(cc) => Right(cc),
                         }
                     }).unwrap_or_else(||
@@ -604,7 +650,7 @@ where
             Operator::Le(SF64) => ctx.f64_le(),
             Operator::Drop(range) => ctx.drop(range),
             Operator::Const(val) => ctx.const_(val),
-            Operator::I32WrapFromI64 => {}
+            Operator::I32WrapFromI64 => ctx.i32_wrap_from_i64(),
             Operator::I32ReinterpretFromF32 => ctx.i32_reinterpret_from_f32(),
             Operator::I64ReinterpretFromF64 => ctx.i64_reinterpret_from_f64(),
             Operator::F32ReinterpretFromI32 => ctx.f32_reinterpret_from_i32(),
