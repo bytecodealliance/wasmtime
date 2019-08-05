@@ -23,6 +23,9 @@ mod trapcode;
 pub mod types;
 mod valueloc;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 pub use crate::ir::builder::{InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::entities::{
@@ -74,6 +77,7 @@ pub type SourceLocs = SecondaryMap<Inst, SourceLoc>;
 
 /// Marked with a label value.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ValueLabel(u32);
 entity_impl!(ValueLabel, "val");
 
