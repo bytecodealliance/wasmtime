@@ -8,36 +8,100 @@ trigger:
     - '*'
 
 jobs:
-- job: Build
+- job: rustfmt
+  pool:
+    vmImage: 'macos-10.14'
+  steps:
+  - checkout: self
+    submodules: true
+  - template: ci/azure-install-rust.yml
+  - script: rustup component add rustfmt
+    displayName: Add rustfmt
+  - script: cargo fmt --all -- --check
+    displayName: Check formatting
+  variables:
+    toolchain: stable
+
+# Smoke test to build docs on one builder, using OSX for now since it's the
+# fastest
+- job: docs
+  pool:
+    vmImage: 'macos-10.14'
+  steps:
+  - checkout: self
+    submodules: true
+  - template: ci/azure-install-rust.yml
+  - script: cargo doc
+    displayName: Build documentation
+  variables:
+    toolchain: stable
+
+- job: Test
   strategy:
     matrix:
       windows-stable:
         imageName: 'vs2017-win2016'
-        rustup_toolchain: stable
-      windows-stable-release:
-        imageName: 'vs2017-win2016'
-        rustup_toolchain: stable
-        build_type: release
-      linux-stable-release:
-        imageName: 'ubuntu-16.04'
-        rustup_toolchain: stable
-        build_type: release
-      mac-stable-release:
-        imageName: 'macos-10.14'
-        rustup_toolchain: stable
-        build_type: release
+        toolchain: stable
       linux-stable:
         imageName: 'ubuntu-16.04'
-        rustup_toolchain: stable
+        toolchain: stable
       mac-stable:
         imageName: 'macos-10.14'
-        rustup_toolchain: stable
+        toolchain: stable
       mac-beta:
         imageName: 'macos-10.14'
-        rustup_toolchain: beta
+        toolchain: beta
       mac-nightly:
         imageName: 'macos-10.14'
-        rustup_toolchain: nightly
+        toolchain: nightly
+
+  pool:
+    vmImage: $(imageName)
+
+  steps:
+    - checkout: self
+      submodules: true
+    - template: ci/azure-install-rust.yml
+
+    - script: |
+        powershell -Command "$ProgressPreference = 'SilentlyContinue'; iwr -outf %TEMP%\LLVM-8.0.0-win64.exe https://rust-lang-ci2.s3.amazonaws.com/rust-ci-mirror/LLVM-8.0.0-win64.exe"
+        %TEMP%\LLVM-8.0.0-win64.exe /S /NCRC
+      condition: eq(variables['Agent.OS'], 'Windows_NT')
+      displayName: Install clang (Windows)
+
+    - script: cargo fetch
+      displayName: Fetch cargo dependencies
+
+    # Build and test all features except for lightbeam
+    - bash: cargo test --all --exclude lightbeam --exclude wasmtime-wasi-c
+      displayName: Cargo test
+      env:
+        RUST_BACKTRACE: 1
+
+    # Build and test lightbeam if we're using the nightly toolchain
+    - bash: cargo build --package lightbeam
+      displayName: Cargo build lightbeam
+      condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
+    - bash: cargo test --package lightbeam
+      displayName: Cargo test lightbeam
+      # Lightbeam tests fail right now, but we don't want to block on that.
+      continueOnError: true
+      condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
+      env:
+        RUST_BACKTRACE: 1
+
+- job: Build
+  strategy:
+    matrix:
+      windows:
+        imageName: 'vs2017-win2016'
+      linux:
+        imageName: 'ubuntu-16.04'
+      mac:
+        imageName: 'macos-10.14'
+
+  variables:
+    toolchain: stable
 
   pool:
     vmImage: $(imageName)
@@ -49,29 +113,8 @@ jobs:
   steps:
     - checkout: self
       submodules: true
+    - template: ci/azure-install-rust.yml
 
-    - script: |
-        curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $RUSTUP_TOOLCHAIN
-        echo "##vso[task.prependpath]$HOME/.cargo/bin"
-        export PATH=$PATH:$HOME/.cargo/bin
-        rustup update $RUSTUP_TOOLCHAIN
-        rustup default $RUSTUP_TOOLCHAIN
-        rustc --version
-      displayName: Install rust (*nix)
-      condition: ne( variables['Agent.OS'], 'Windows_NT' )
-    - script: |
-        rustup update %RUSTUP_TOOLCHAIN%
-        rustup default %RUSTUP_TOOLCHAIN%
-        rustc --version
-      displayName: Install rust (Win)
-      condition: eq( variables['Agent.OS'], 'Windows_NT' )
-    - script: rustup component add rustfmt
-      displayName: Add rustfmt
-      condition: and(succeeded(), eq(variables['rustup_toolchain'], 'stable'))
-
-    - bash: echo "##vso[task.setvariable variable=BUILD_TYPE_FLAG;]--release"
-      displayName: Set build type flag to --release
-      condition: eq( variables['build_type'], 'release' )
     - bash: echo "##vso[task.setvariable variable=RUSTC_VERSION;]`rustc --version`"
       displayName: Set rustc version string for caching
 
@@ -105,51 +148,18 @@ jobs:
     #   displayName: Install sccache (Windows)
     #   condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
 
-    - script: cargo fetch
-      displayName: Fetch cargo dependencies
-    - script: cargo fmt --all -- --check
-      displayName: Check formatting
-      condition: and(succeeded(), eq(variables['rustup_toolchain'], 'stable'),
-                     ne( variables['build_type'], 'release' ), eq(variables['Agent.OS'], 'Darwin'))
-
-    # - task: CacheBeta@0
-    #   inputs:
-    #     key: sccache | $(Agent.OS) | "$(RUSTC_VERSION)" | "$(build_type)" | Cargo.lock
-    #     restoreKeys: |
-    #       sccache | $(Agent.OS) | "$(RUSTC_VERSION)" | "$(build_type)"
-    #     path: $(SCCACHE_DIR)
-    #   continueOnError: true
-    #   displayName: sccache
-
-    # - bash: |
-    #     sccache --show-stats
-    #     ls $SCCACHE_DIR
-    #   displayName: pre-compile sccache stats
-
-    # Build and test all features except for lightbeam
-    - bash: cargo build $BUILD_TYPE_FLAG --all --exclude lightbeam --exclude wasmtime-wasi-c
+    - bash: cargo build --release
       displayName: Cargo build
-    - bash: RUST_BACKTRACE=1 cargo test $BUILD_TYPE_FLAG --all --exclude lightbeam --exclude wasmtime-wasi-c
-      displayName: Cargo test
 
-    # Build and test lightbeam if we're using the nightly toolchain
-    - bash: cargo build $BUILD_TYPE_FLAG --package lightbeam
-      displayName: Cargo build lightbeam
-      condition: and(succeeded(), eq(variables['rustup_toolchain'], 'nightly'))
-    - bash: RUST_BACKTRACE=1 cargo test $BUILD_TYPE_FLAG --package lightbeam
-      displayName: Cargo test lightbeam
-      # Lightbeam tests fail right now, but we don't want to block on that.
-      continueOnError: true
-      condition: and(succeeded(), eq(variables['rustup_toolchain'], 'nightly'))
+    # Test what we're about to release in release mode itself. This tests
+    # everything except lightbeam which requires nightly which happens above.
+    - bash: cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c
+      displayName: Cargo test
+      env:
+        RUST_BACKTRACE: 1
 
     # - script: sccache --show-stats
     #   displayName: post-compile sccache stats
-
-    # Only run on macOS debug builders, as those are fastest
-    - bash: |
-        cargo doc
-      displayName: Test docs generation
-      condition: and(succeeded(), eq( variables['Agent.OS'], 'Darwin' ), ne( variables['build_type'], 'release' ))
 
     - bash: |
         echo "##vso[task.setvariable variable=tagName;]`echo $BUILD_SOURCEBRANCH | sed -e 's|refs/tags/||'`"
@@ -158,49 +168,45 @@ jobs:
     - bash: |
         echo "##vso[task.setvariable variable=tagName;]dev"
       displayName: Set tag name to "dev"
-      condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
+      condition: not(startsWith(variables['Build.SourceBranch'], 'refs/tags/'))
+
+    - bash: echo "##vso[task.setvariable variable=basename;]wasmtime-$(tagName)-x86_64-windows"
+      displayName: Configure basename var
+      condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
+    - bash: echo "##vso[task.setvariable variable=basename;]wasmtime-$(tagName)-x86_64-apple"
+      displayName: Configure basename var
+      condition: and(succeeded(), eq(variables['Agent.OS'], 'Darwin'))
+    - bash: echo "##vso[task.setvariable variable=basename;]wasmtime-$(tagName)-x86_64-linux"
+      displayName: Configure basename var
+      condition: and(succeeded(), eq( variables['Agent.OS'], 'Linux' ))
 
     - bash: |
-        mkdir $BUILD_BINARIESDIRECTORY/bundle
-        cp target/release/{wasmtime,wasm2obj}.exe $BUILD_BINARIESDIRECTORY/bundle
-      displayName: Copy binaries (Win)
-      condition: and(succeeded(), eq( variables['Agent.OS'], 'Windows_NT' ), eq( variables['build_type'], 'release' ))
-    - bash: |
-        mkdir $BUILD_BINARIESDIRECTORY/bundle
-        cp target/release/{wasmtime,wasm2obj} $BUILD_BINARIESDIRECTORY/bundle
-      displayName: Copy binaries (*nix)
-      condition: and(succeeded(), ne( variables['Agent.OS'], 'Windows_NT' ), eq( variables['build_type'], 'release' ))
+        set -e
+        mkdir -p $BUILD_BINARIESDIRECTORY/$BASENAME
+        if [ "$AGENT_OS" = "Windows_NT" ]; then
+          ext=.exe
+        fi
+        cp LICENSE README.md target/release/{wasmtime,wasm2obj}$ext $BUILD_BINARIESDIRECTORY/$BASENAME
+      displayName: Copy binaries
     - task: ArchiveFiles@2
       inputs:
-        rootFolderOrFile: $(Build.BinariesDirectory)/bundle
-        includeRootFolder: false
+        rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)
         archiveType: 'zip'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/wasmtime-$(tagName)-x86_64-windows.zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename).zip'
       displayName: Archive files (Win)
-      condition: and(succeeded(), eq( variables['Agent.OS'], 'Windows_NT' ), eq( variables['build_type'], 'release' ))
+      condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
     - task: ArchiveFiles@2
       inputs:
-        rootFolderOrFile: $(Build.BinariesDirectory)/bundle
-        includeRootFolder: false
+        rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)
         archiveType: 'tar'
         tarCompression: 'xz'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/wasmtime-$(tagName)-x86_64-macos.tar.xz'
-      displayName: Archive files (macOS)
-      condition: and(succeeded(), eq( variables['Agent.OS'], 'Darwin' ), eq( variables['build_type'], 'release' ))
-    - task: ArchiveFiles@2
-      inputs:
-        rootFolderOrFile: $(Build.BinariesDirectory)/bundle
-        includeRootFolder: false
-        archiveType: 'tar'
-        tarCompression: 'xz'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/wasmtime-$(tagName)-x86_64-linux.tar.xz'
-      displayName: Archive files (Linux)
-      condition: and(succeeded(), eq( variables['Agent.OS'], 'Linux' ), eq( variables['build_type'], 'release' ))
+        archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename).tar.xz'
+      displayName: Archive files (Unix)
+      condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))
     - task: PublishPipelineArtifact@1
       inputs:
         path: $(Build.ArtifactStagingDirectory)/
         artifactName: 'bundle-$(Agent.OS)'
-      condition: and(succeeded(), eq( variables['build_type'], 'release' ))
 
 - job: Publish
   dependsOn: Build
