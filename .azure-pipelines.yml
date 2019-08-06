@@ -220,7 +220,10 @@ jobs:
   dependsOn: Build
   condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
   steps:
-  - checkout: none
+  # Checking out the sources is needed to be able to delete the "dev" tag, see below.
+  - checkout: self
+    persistCredentials: true
+    submodules: false
   - task: DownloadPipelineArtifact@1
     inputs:
       targetPath: $(Build.ArtifactStagingDirectory)
@@ -230,7 +233,6 @@ jobs:
   - task: GitHubRelease@0
     inputs:
       gitHubConnection: 'tschneidereit-releases'
-      repositoryName: 'cranestation/wasmtime'
       target: '$(Build.SourceVersion)'
       tagSource: 'manual'
       tag: '$(tagName)'
@@ -239,17 +241,30 @@ jobs:
       isDraft: false
       isPreRelease: true
     condition: startsWith(variables['Build.SourceBranch'], 'refs/tags/')
+
+  # GitHub doesn't support doing rolling releases for branch.
+  # To simulate that for dev builds, always do a release for the "dev" tag.
+  # While the `edit` action for the GitHubRelease task would replace any assets
+  # associated with the tag, it wouldn't update the tag itself. Hence, delete the
+  # tag if it exists, and re-create it every time.
+  # Also explicitly delete the GitHub release, which would otherwise turn into a draft
+  # and linger forever.
   - task: GitHubRelease@0
     inputs:
       gitHubConnection: 'tschneidereit-releases'
-      repositoryName: 'cranestation/wasmtime'
       action: 'delete'
       tag: 'dev'
+    # This might fail in case the target repo doesn't yet have this tag, which is fine.
+    continueOnError: true
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
+  - script: |
+      git -c http.extraheader="AUTHORIZATION: basic ***" push origin :dev
+    # This might fail in case the target repo doesn't yet have this tag, which is fine.
+    continueOnError: true
     condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
   - task: GitHubRelease@0
     inputs:
       gitHubConnection: 'tschneidereit-releases'
-      repositoryName: 'cranestation/wasmtime'
       action: 'create'
       target: '$(Build.SourceVersion)'
       tag: 'dev'
