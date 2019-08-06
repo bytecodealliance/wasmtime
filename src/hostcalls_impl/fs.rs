@@ -440,6 +440,7 @@ pub(crate) fn fd_allocate(
 
     let current_size = metadata.len();
     let wanted_size = offset.checked_add(len).ok_or(host::__WASI_E2BIG)?;
+    // This check will be unnecessary when rust-lang/rust#63326 is fixed
     if wanted_size > i64::max_value() as u64 {
         return Err(host::__WASI_E2BIG);
     }
@@ -779,6 +780,10 @@ pub(crate) fn fd_filestat_set_size(
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
     let st_size = dec_filesize(st_size);
+    // This check will be unnecessary when rust-lang/rust#63326 is fixed
+    if st_size > i64::max_value() as u64 {
+        return Err(host::__WASI_E2BIG);
+    }
     fd.set_len(st_size).map_err(errno_from_ioerror)
 }
 
