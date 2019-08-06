@@ -95,6 +95,9 @@ jobs:
     matrix:
       windows:
         imageName: 'vs2017-win2016'
+        # Statically link against msvcrt to produce slightly more portable
+        # binaries on Windows by reducing our binary compatibility requirements.
+        RUSTFLAGS: -Ctarget-feature=+crt-static
       linux:
         imageName: 'ubuntu-16.04'
       mac:
