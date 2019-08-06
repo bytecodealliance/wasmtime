@@ -12,9 +12,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { version = "0.37.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.37.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.37.0", features = ["enable-serde"] }
+cranelift-codegen = { version = "0.38.0", features = ["enable-serde"] }
+cranelift-entity = { version = "0.38.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.38.0", features = ["enable-serde"] }
 lightbeam = { path = "../lightbeam", optional = true }
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
