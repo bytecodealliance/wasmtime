@@ -17,8 +17,8 @@ cranelift-codegen = { version = "0.37.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.37.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.37.0", features = ["enable-serde"] }
 target-lexicon = "0.4.0"
-log = { version = "0.4.6", default-features = false }
-libc = "0.2.50"
+log = { version = "0.4.8", default-features = false }
+libc = "0.2.60"
 
 [build-dependencies]
 cmake = "0.1.35"
