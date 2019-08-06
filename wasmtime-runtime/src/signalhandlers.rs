@@ -9,8 +9,6 @@ use core::borrow::{Borrow, BorrowMut};
 use core::cell::Cell;
 use std::sync::RwLock;
 
-pub type jmp_buf = [u64; 16];
-
 #[derive(Default)]
 struct TrapContext {
     tried_to_install_signal_handlers: Cell<bool>,

@@ -14,7 +14,9 @@ extern "C" {
 // Record the Trap code and wasm bytecode offset in TLS somewhere
 void RecordTrap(const uint8_t* pc);
 
-// Initiate an unwind.
+void* EnterScope(void*);
+void LeaveScope(void*);
+void* GetScope(void);
 void Unwind(void);
 
 // This function performs the low-overhead signal handler initialization that we
