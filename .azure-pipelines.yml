@@ -99,6 +99,11 @@ jobs:
         imageName: 'ubuntu-16.04'
       mac:
         imageName: 'macos-10.14'
+        # Lower the deployment target from our build image in an attempt to
+        # build more portable binaries that run on older releases. Note that
+        # 10.9 here is arbitrarily chosen and just happens to be the lowest that
+        # works at this time. Raising this is probably fine.
+        MACOSX_DEPLOYMENT_TARGET: 10.9
 
   variables:
     toolchain: stable
