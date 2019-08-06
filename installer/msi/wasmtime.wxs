@@ -25,7 +25,9 @@
 
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFiles64Folder">
-                <Directory Id="INSTALLDIR" Name="Wasmtime"/>
+                <Directory Id="INSTALLDIR" Name="Wasmtime">
+                    <Directory Id="BINDIR" Name="bin"/>
+                </Directory>
             </Directory>
         
             <!-- Record our install location -->
@@ -40,16 +42,25 @@
                 <!-- <Condition>ALLUSERS=1 OR (ALLUSERS=2 AND Privileged)</Condition> -->
                 <RegistryValue Root="HKMU" Key="$(var.BaseRegKey)" Name="PathEnvPerMachine" Type="string" Value="1" KeyPath="yes" />
                 <!-- [INSTALLDIR] contains trailing backslash -->
-                <Environment Id="PathPerMachine" Name="PATH" Value="[INSTALLDIR]" Permanent="no" Part="last" Action="set" System="yes" />
+                <Environment Id="PathPerMachine" Name="PATH" Value="[INSTALLDIR]bin" Permanent="no" Part="last" Action="set" System="yes" />
             </Component>
             <Component Id="PathEnvPerUser" Guid="*">
                 <!-- <Condition>ALLUSERS="" OR (ALLUSERS=2 AND (NOT Privileged))</Condition> -->
                 <RegistryValue Root="HKMU" Key="$(var.BaseRegKey)" Name="PathEnvPerUser" Type="string" Value="1" KeyPath="yes" />
-                <Environment Id="PathPerUser" Name="PATH" Value="[INSTALLDIR]" Permanent="no" Part="last" Action="set" System="no" />
+                <Environment Id="PathPerUser" Name="PATH" Value="[INSTALLDIR]bin" Permanent="no" Part="last" Action="set" System="no" />
             </Component>
         </Directory>
 
         <DirectoryRef Id="INSTALLDIR">
+            <Component Id="LICENSE" Guid="*">
+                <File Id="LICENSE" Source="LICENSE" KeyPath="yes" Checksum="yes"/>
+            </Component>
+            <Component Id="README" Guid="*">
+                <File Id="README.md" Source="README.md" KeyPath="yes" Checksum="yes"/>
+            </Component>
+        </DirectoryRef>
+
+        <DirectoryRef Id="BINDIR">
             <Component Id="wasmtime.exe" Guid="*">
                 <File Id="wasmtime.exe" Source="target\release\wasmtime.exe" KeyPath="yes" Checksum="yes"/>
             </Component>
@@ -61,6 +72,8 @@
         <Feature Id="InstallWasmtime" Title="Wasmtime and Wasm2obj" Level="1">
             <ComponentRef Id="wasmtime.exe" />
             <ComponentRef Id="wasm2obj.exe" />
+            <ComponentRef Id="LICENSE" />
+            <ComponentRef Id="README" />
             <ComponentRef Id="InstallDir" />
         </Feature>
         <Feature Id="AddToPath"
