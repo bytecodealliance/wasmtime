@@ -250,8 +250,10 @@ jobs:
     inputs:
       gitHubConnection: 'tschneidereit-releases'
       repositoryName: 'cranestation/wasmtime'
+      action: 'create'
       target: '$(Build.SourceVersion)'
       tag: 'dev'
+      tagSource: 'manual'
       title: 'Latest CI build'
       assets: '$(Build.ArtifactStagingDirectory)/**'
       isDraft: false
