@@ -376,15 +376,29 @@ pub(crate) fn fd_write(
         .map(|vec| unsafe { host::iovec_to_host(vec) })
         .collect();
 
-    let maybe_host_nwritten = match &mut *fe.fd_object.descriptor {
-        Descriptor::File(f) => f.write_vectored(&iovs),
+    // perform unbuffered writes
+    let host_nwritten = match &mut *fe.fd_object.descriptor {
+        Descriptor::File(f) => f
+            .write_vectored(&iovs)
+            .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?,
         Descriptor::Stdin => return Err(host::__WASI_EBADF),
-        Descriptor::Stdout => io::stdout().lock().write_vectored(&iovs),
-        Descriptor::Stderr => io::stderr().lock().write_vectored(&iovs),
+        Descriptor::Stdout => {
+            // lock for the duration of the scope
+            let stdout = io::stdout();
+            let mut stdout = stdout.lock();
+            let nwritten = stdout
+                .write_vectored(&iovs)
+                .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
+            stdout
+                .flush()
+                .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
+            nwritten
+        }
+        Descriptor::Stderr => io::stderr()
+            .lock()
+            .write_vectored(&iovs)
+            .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?,
     };
-
-    let host_nwritten = maybe_host_nwritten
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
 
     trace!("     | *nwritten={:?}", host_nwritten);
 
