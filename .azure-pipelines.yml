@@ -231,7 +231,6 @@ jobs:
     inputs:
       gitHubConnection: 'tschneidereit-releases'
       repositoryName: 'cranestation/wasmtime'
-      action: 'edit'
       target: '$(Build.SourceVersion)'
       tagSource: 'manual'
       tag: '$(tagName)'
@@ -244,7 +243,13 @@ jobs:
     inputs:
       gitHubConnection: 'tschneidereit-releases'
       repositoryName: 'cranestation/wasmtime'
-      action: 'edit'
+      action: 'delete'
+      tag: 'dev'
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
+  - task: GitHubRelease@0
+    inputs:
+      gitHubConnection: 'tschneidereit-releases'
+      repositoryName: 'cranestation/wasmtime'
       target: '$(Build.SourceVersion)'
       tag: 'dev'
       title: 'Latest CI build'
