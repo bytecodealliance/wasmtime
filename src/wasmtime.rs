@@ -81,7 +81,7 @@ Options:
     --preload=<wasm>    load an additional wasm module before loading the main module
     --env=<env>         pass an environment variable (\"key=value\") to the program
     --dir=<dir>         grant access to the given host directory
-    --mapdir=<mapping>  where <mapping> has the form <wasmdir>:<hostdir>, grant access to
+    --mapdir=<mapping>  where <mapping> has the form <wasmdir>::<hostdir>, grant access to
                         the given host directory with the given wasm directory name
     -h, --help          print this help message
     --version           print the Cranelift version
@@ -135,9 +135,9 @@ fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(Str
     }
 
     for mapdir in flag_mapdir {
-        let parts: Vec<&str> = mapdir.split(':').collect();
+        let parts: Vec<&str> = mapdir.split("::").collect();
         if parts.len() != 2 {
-            println!("--mapdir argument must contain exactly one colon, separating a guest directory name and a host directory name");
+            println!("--mapdir argument must contain exactly one double colon ('::'), separating a guest directory name and a host directory name");
             exit(1);
         }
         let (key, value) = (parts[0], parts[1]);

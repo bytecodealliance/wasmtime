@@ -240,7 +240,7 @@ links as well.
 command-line option:
 
 ```
-$ wasmtime --dir=. --mapdir=/tmp:/var/tmp demo.wasm test.txt /tmp/somewhere.txt
+$ wasmtime --dir=. --mapdir=/tmp::/var/tmp demo.wasm test.txt /tmp/somewhere.txt
 $ cat /var/tmp/somewhere.txt
 hello world
 ```
