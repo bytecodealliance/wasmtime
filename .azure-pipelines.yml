@@ -148,15 +148,15 @@ jobs:
     #   displayName: Install sccache (Windows)
     #   condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
 
+    - bash: cargo build --release
+      displayName: Cargo build
+
     # Test what we're about to release in release mode itself. This tests
     # everything except lightbeam which requires nightly which happens above.
     - bash: cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c
       displayName: Cargo test
       env:
         RUST_BACKTRACE: 1
-
-    - bash: cargo build --release
-      displayName: Cargo build
 
     # - script: sccache --show-stats
     #   displayName: post-compile sccache stats
