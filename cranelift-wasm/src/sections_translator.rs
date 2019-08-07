@@ -7,11 +7,12 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
+use crate::environ::{ModuleEnvironment, WasmResult};
 use crate::translation_utils::{
     tabletype_to_type, type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory,
     MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex,
 };
+use crate::wasm_unsupported;
 use core::convert::TryFrom;
 use cranelift_codegen::ir::{self, AbiParam, Signature};
 use cranelift_entity::EntityRef;
@@ -29,7 +30,7 @@ pub fn parse_type_section(
     types: TypeSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_signatures(types.get_count());
+    environ.reserve_signatures(types.get_count())?;
 
     for entry in types {
         match entry? {
@@ -49,9 +50,9 @@ pub fn parse_type_section(
                         .expect("only numeric types are supported in function signatures");
                     AbiParam::new(cret_arg)
                 }));
-                environ.declare_signature(sig);
+                environ.declare_signature(sig)?;
             }
-            _ => return Err(WasmError::Unsupported("unsupported type in type section")),
+            ty => wasm_unsupported!("unsupported type in type section: {:?}", ty),
         }
     }
     Ok(())
@@ -62,7 +63,7 @@ pub fn parse_import_section<'data>(
     imports: ImportSectionReader<'data>,
     environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    environ.reserve_imports(imports.get_count());
+    environ.reserve_imports(imports.get_count())?;
 
     for entry in imports {
         let import = entry?;
@@ -71,7 +72,11 @@ pub fn parse_import_section<'data>(
 
         match import.ty {
             ImportSectionEntryType::Function(sig) => {
-                environ.declare_func_import(SignatureIndex::from_u32(sig), module_name, field_name);
+                environ.declare_func_import(
+                    SignatureIndex::from_u32(sig),
+                    module_name,
+                    field_name,
+                )?;
             }
             ImportSectionEntryType::Memory(MemoryType {
                 limits: ref memlimits,
@@ -85,7 +90,7 @@ pub fn parse_import_section<'data>(
                     },
                     module_name,
                     field_name,
-                );
+                )?;
             }
             ImportSectionEntryType::Global(ref ty) => {
                 environ.declare_global_import(
@@ -96,7 +101,7 @@ pub fn parse_import_section<'data>(
                     },
                     module_name,
                     field_name,
-                );
+                )?;
             }
             ImportSectionEntryType::Table(ref tab) => {
                 environ.declare_table_import(
@@ -110,12 +115,12 @@ pub fn parse_import_section<'data>(
                     },
                     module_name,
                     field_name,
-                );
+                )?;
             }
         }
     }
 
-    environ.finish_imports();
+    environ.finish_imports()?;
     Ok(())
 }
 
@@ -124,11 +129,11 @@ pub fn parse_function_section(
     functions: FunctionSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_func_types(functions.get_count());
+    environ.reserve_func_types(functions.get_count())?;
 
     for entry in functions {
         let sigindex = entry?;
-        environ.declare_func_type(SignatureIndex::from_u32(sigindex));
+        environ.declare_func_type(SignatureIndex::from_u32(sigindex))?;
     }
 
     Ok(())
@@ -139,7 +144,7 @@ pub fn parse_table_section(
     tables: TableSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_tables(tables.get_count());
+    environ.reserve_tables(tables.get_count())?;
 
     for entry in tables {
         let table = entry?;
@@ -150,7 +155,7 @@ pub fn parse_table_section(
             },
             minimum: table.limits.initial,
             maximum: table.limits.maximum,
-        });
+        })?;
     }
 
     Ok(())
@@ -161,7 +166,7 @@ pub fn parse_memory_section(
     memories: MemorySectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_memories(memories.get_count());
+    environ.reserve_memories(memories.get_count())?;
 
     for entry in memories {
         let memory = entry?;
@@ -169,7 +174,7 @@ pub fn parse_memory_section(
             minimum: memory.limits.initial,
             maximum: memory.limits.maximum,
             shared: memory.shared,
-        });
+        })?;
     }
 
     Ok(())
@@ -180,7 +185,7 @@ pub fn parse_global_section(
     globals: GlobalSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_globals(globals.get_count());
+    environ.reserve_globals(globals.get_count())?;
 
     for entry in globals {
         let wasmparser::Global {
@@ -199,14 +204,16 @@ pub fn parse_global_section(
             Operator::GetGlobal { global_index } => {
                 GlobalInit::GetGlobal(GlobalIndex::from_u32(global_index))
             }
-            ref s => panic!("unsupported init expr in global section: {:?}", s),
+            ref s => {
+                wasm_unsupported!("unsupported init expr in global section: {:?}", s);
+            }
         };
         let global = Global {
             ty: type_to_type(content_type).unwrap(),
             mutability: mutable,
             initializer,
         };
-        environ.declare_global(global);
+        environ.declare_global(global)?;
     }
 
     Ok(())
@@ -217,7 +224,7 @@ pub fn parse_export_section<'data>(
     exports: ExportSectionReader<'data>,
     environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    environ.reserve_exports(exports.get_count());
+    environ.reserve_exports(exports.get_count())?;
 
     for entry in exports {
         let Export {
@@ -231,20 +238,24 @@ pub fn parse_export_section<'data>(
         // becomes a concern here.
         let index = index as usize;
         match *kind {
-            ExternalKind::Function => environ.declare_func_export(FuncIndex::new(index), field),
-            ExternalKind::Table => environ.declare_table_export(TableIndex::new(index), field),
-            ExternalKind::Memory => environ.declare_memory_export(MemoryIndex::new(index), field),
-            ExternalKind::Global => environ.declare_global_export(GlobalIndex::new(index), field),
+            ExternalKind::Function => environ.declare_func_export(FuncIndex::new(index), field)?,
+            ExternalKind::Table => environ.declare_table_export(TableIndex::new(index), field)?,
+            ExternalKind::Memory => {
+                environ.declare_memory_export(MemoryIndex::new(index), field)?
+            }
+            ExternalKind::Global => {
+                environ.declare_global_export(GlobalIndex::new(index), field)?
+            }
         }
     }
 
-    environ.finish_exports();
+    environ.finish_exports()?;
     Ok(())
 }
 
 /// Parses the Start section of the wasm module.
 pub fn parse_start_section(index: u32, environ: &mut dyn ModuleEnvironment) -> WasmResult<()> {
-    environ.declare_start_func(FuncIndex::from_u32(index));
+    environ.declare_start_func(FuncIndex::from_u32(index))?;
     Ok(())
 }
 
@@ -253,7 +264,7 @@ pub fn parse_element_section<'data>(
     elements: ElementSectionReader<'data>,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_table_elements(elements.get_count());
+    environ.reserve_table_elements(elements.get_count())?;
 
     for entry in elements {
         let Element { kind, items } = entry?;
@@ -268,7 +279,9 @@ pub fn parse_element_section<'data>(
                 Operator::GetGlobal { global_index } => {
                     (Some(GlobalIndex::from_u32(global_index)), 0)
                 }
-                ref s => panic!("unsupported init expr in element section: {:?}", s),
+                ref s => {
+                    wasm_unsupported!("unsupported init expr in element section: {:?}", s);
+                }
             };
             let items_reader = items.get_items_reader()?;
             let mut elems = Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
@@ -281,9 +294,9 @@ pub fn parse_element_section<'data>(
                 base,
                 offset,
                 elems.into_boxed_slice(),
-            )
+            )?
         } else {
-            panic!("unsupported passive elements section");
+            wasm_unsupported!("unsupported passive elements section: {:?}", kind);
         }
     }
     Ok(())
@@ -308,7 +321,7 @@ pub fn parse_data_section<'data>(
     data: DataSectionReader<'data>,
     environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    environ.reserve_data_initializers(data.get_count());
+    environ.reserve_data_initializers(data.get_count())?;
 
     for entry in data {
         let Data { kind, data } = entry?;
@@ -323,16 +336,16 @@ pub fn parse_data_section<'data>(
                 Operator::GetGlobal { global_index } => {
                     (Some(GlobalIndex::from_u32(global_index)), 0)
                 }
-                ref s => panic!("unsupported init expr in data section: {:?}", s),
+                ref s => wasm_unsupported!("unsupported init expr in data section: {:?}", s),
             };
             environ.declare_data_initialization(
                 MemoryIndex::from_u32(memory_index),
                 base,
                 offset,
                 data,
-            );
+            )?;
         } else {
-            panic!("unsupported passive data section");
+            wasm_unsupported!("unsupported passive data section: {:?}", kind);
         }
     }
 

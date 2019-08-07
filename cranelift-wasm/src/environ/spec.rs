@@ -60,7 +60,7 @@ pub enum WasmError {
     ///
     /// Embedding environments may have their own limitations and feature restrictions.
     #[fail(display = "Unsupported feature: {}", _0)]
-    Unsupported(&'static str),
+    Unsupported(std::string::String),
 
     /// An implementation limit was exceeded.
     ///
@@ -74,6 +74,13 @@ pub enum WasmError {
     /// Any user-defined error.
     #[fail(display = "User error: {}", _0)]
     User(std::string::String),
+}
+
+/// Return an `Err(WasmError::Unsupported(msg))` where `msg` the string built by calling `format!`
+/// on the arguments to this macro.
+#[macro_export]
+macro_rules! wasm_unsupported {
+    ($($arg:tt)*) => { return Err($crate::environ::WasmError::Unsupported(format!($($arg)*))) }
 }
 
 impl From<BinaryReaderError> for WasmError {
@@ -289,14 +296,18 @@ pub trait ModuleEnvironment<'data> {
 
     /// Provides the number of signatures up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_signatures(&mut self, _num: u32) {}
+    fn reserve_signatures(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Declares a function signature to the environment.
-    fn declare_signature(&mut self, sig: ir::Signature);
+    fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()>;
 
     /// Provides the number of imports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_imports(&mut self, _num: u32) {}
+    fn reserve_imports(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Declares a function import to the environment.
     fn declare_func_import(
@@ -304,73 +315,113 @@ pub trait ModuleEnvironment<'data> {
         sig_index: SignatureIndex,
         module: &'data str,
         field: &'data str,
-    );
+    ) -> WasmResult<()>;
 
     /// Declares a table import to the environment.
-    fn declare_table_import(&mut self, table: Table, module: &'data str, field: &'data str);
+    fn declare_table_import(
+        &mut self,
+        table: Table,
+        module: &'data str,
+        field: &'data str,
+    ) -> WasmResult<()>;
 
     /// Declares a memory import to the environment.
-    fn declare_memory_import(&mut self, memory: Memory, module: &'data str, field: &'data str);
+    fn declare_memory_import(
+        &mut self,
+        memory: Memory,
+        module: &'data str,
+        field: &'data str,
+    ) -> WasmResult<()>;
 
     /// Declares a global import to the environment.
-    fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str);
+    fn declare_global_import(
+        &mut self,
+        global: Global,
+        module: &'data str,
+        field: &'data str,
+    ) -> WasmResult<()>;
 
     /// Notifies the implementation that all imports have been declared.
-    fn finish_imports(&mut self) {}
+    fn finish_imports(&mut self) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Provides the number of defined functions up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_func_types(&mut self, _num: u32) {}
+    fn reserve_func_types(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Declares the type (signature) of a local function in the module.
-    fn declare_func_type(&mut self, sig_index: SignatureIndex);
+    fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()>;
 
     /// Provides the number of defined tables up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_tables(&mut self, _num: u32) {}
+    fn reserve_tables(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Declares a table to the environment.
-    fn declare_table(&mut self, table: Table);
+    fn declare_table(&mut self, table: Table) -> WasmResult<()>;
 
     /// Provides the number of defined memories up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_memories(&mut self, _num: u32) {}
+    fn reserve_memories(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Declares a memory to the environment
-    fn declare_memory(&mut self, memory: Memory);
+    fn declare_memory(&mut self, memory: Memory) -> WasmResult<()>;
 
     /// Provides the number of defined globals up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_globals(&mut self, _num: u32) {}
+    fn reserve_globals(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Declares a global to the environment.
-    fn declare_global(&mut self, global: Global);
+    fn declare_global(&mut self, global: Global) -> WasmResult<()>;
 
     /// Provides the number of exports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_exports(&mut self, _num: u32) {}
+    fn reserve_exports(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Declares a function export to the environment.
-    fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str);
+    fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()>;
 
     /// Declares a table export to the environment.
-    fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str);
+    fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str)
+        -> WasmResult<()>;
 
     /// Declares a memory export to the environment.
-    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &'data str);
+    fn declare_memory_export(
+        &mut self,
+        memory_index: MemoryIndex,
+        name: &'data str,
+    ) -> WasmResult<()>;
 
     /// Declares a global export to the environment.
-    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str);
+    fn declare_global_export(
+        &mut self,
+        global_index: GlobalIndex,
+        name: &'data str,
+    ) -> WasmResult<()>;
 
     /// Notifies the implementation that all exports have been declared.
-    fn finish_exports(&mut self) {}
+    fn finish_exports(&mut self) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Declares the optional start function.
-    fn declare_start_func(&mut self, index: FuncIndex);
+    fn declare_start_func(&mut self, index: FuncIndex) -> WasmResult<()>;
 
     /// Provides the number of element initializers up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_table_elements(&mut self, _num: u32) {}
+    fn reserve_table_elements(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Fills a declared table with references to functions in the module.
     fn declare_table_elements(
@@ -379,7 +430,7 @@ pub trait ModuleEnvironment<'data> {
         base: Option<GlobalIndex>,
         offset: usize,
         elements: Box<[FuncIndex]>,
-    );
+    ) -> WasmResult<()>;
 
     /// Provides the contents of a function body.
     ///
@@ -393,7 +444,9 @@ pub trait ModuleEnvironment<'data> {
 
     /// Provides the number of data initializers up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_data_initializers(&mut self, _num: u32) {}
+    fn reserve_data_initializers(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
 
     /// Fills a declared memory with bytes at module instantiation.
     fn declare_data_initialization(
@@ -402,5 +455,5 @@ pub trait ModuleEnvironment<'data> {
         base: Option<GlobalIndex>,
         offset: usize,
         data: &'data [u8],
-    );
+    ) -> WasmResult<()>;
 }
