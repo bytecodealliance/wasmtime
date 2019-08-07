@@ -29,7 +29,7 @@
                     <Directory Id="BINDIR" Name="bin"/>
                 </Directory>
             </Directory>
-        
+
             <!-- Record our install location -->
             <Component Id="InstallDir" Guid="*">
                 <RegistryKey Root='HKLM' Key='$(var.BaseRegKey)'>
