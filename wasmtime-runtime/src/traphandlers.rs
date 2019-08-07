@@ -12,10 +12,7 @@ extern "C" {
         callee: *const VMFunctionBody,
         values_vec: *mut u8,
     ) -> i32;
-    fn WasmtimeCall(
-        vmctx: *mut u8,
-        callee: *const VMFunctionBody,
-    ) -> i32;
+    fn WasmtimeCall(vmctx: *mut u8, callee: *const VMFunctionBody) -> i32;
 }
 
 thread_local! {
