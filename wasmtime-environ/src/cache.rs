@@ -1,13 +1,17 @@
 use crate::address_map::ModuleAddressMap;
 use crate::compilation::{CodeAndJTOffsets, Compilation, Relocations};
 use crate::module::Module;
-use cranelift_codegen::ir;
-use cranelift_codegen::isa;
+use crate::module_environ::FunctionBodyData;
+use core::hash::Hasher;
+use cranelift_codegen::{ir, isa};
+use cranelift_entity::PrimaryMap;
+use cranelift_wasm::DefinedFuncIndex;
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use log::{debug, warn};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
+use sha2::{Digest, Sha256};
 use std::ffi::OsString;
 use std::fmt;
 use std::fs;
@@ -102,36 +106,38 @@ pub struct ModuleCacheData {
 
 type ModuleCacheDataTupleType = (Compilation, Relocations, ModuleAddressMap);
 
+struct Sha256Hasher(Sha256);
+
 impl ModuleCacheEntry {
-    pub fn new(
+    pub fn new<'data>(
         module: &Module,
+        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         compiler_name: &str,
         generate_debug_info: bool,
     ) -> Self {
         let mod_cache_path = if conf::cache_enabled() {
-            CACHE_DIR.clone().and_then(|p| {
-                module.hash.map(|hash| {
-                    let compiler_dir = if cfg!(debug_assertions) {
-                        format!(
-                            "{comp_name}-{comp_ver}-{comp_mtime}",
-                            comp_name = compiler_name,
-                            comp_ver = env!("GIT_REV"),
-                            comp_mtime = *SELF_MTIME,
-                        )
-                    } else {
-                        format!(
-                            "{comp_name}-{comp_ver}",
-                            comp_name = compiler_name,
-                            comp_ver = env!("GIT_REV"),
-                        )
-                    };
-                    p.join(isa.name()).join(compiler_dir).join(format!(
-                        "mod-{mod_hash}{mod_dbg}",
-                        mod_hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD), // standard encoding uses '/' which can't be used for filename
-                        mod_dbg = if generate_debug_info { ".d" } else { "" },
-                    ))
-                })
+            CACHE_DIR.clone().map(|p| {
+                let hash = Sha256Hasher::digest(module, function_body_inputs);
+                let compiler_dir = if cfg!(debug_assertions) {
+                    format!(
+                        "{comp_name}-{comp_ver}-{comp_mtime}",
+                        comp_name = compiler_name,
+                        comp_ver = env!("GIT_REV"),
+                        comp_mtime = *SELF_MTIME,
+                    )
+                } else {
+                    format!(
+                        "{comp_name}-{comp_ver}",
+                        comp_name = compiler_name,
+                        comp_ver = env!("GIT_REV"),
+                    )
+                };
+                p.join(isa.name()).join(compiler_dir).join(format!(
+                    "mod-{mod_hash}{mod_dbg}",
+                    mod_hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD), // standard encoding uses '/' which can't be used for filename
+                    mod_dbg = if generate_debug_info { ".d" } else { "" },
+                ))
             })
         } else {
             None
@@ -224,6 +230,27 @@ impl ModuleCacheData {
 
     pub fn to_tuple(self) -> ModuleCacheDataTupleType {
         (self.compilation, self.relocations, self.address_transforms)
+    }
+}
+
+impl Sha256Hasher {
+    pub fn digest<'data>(
+        module: &Module,
+        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+    ) -> [u8; 32] {
+        let mut hasher = Self(Sha256::new());
+        module.hash_for_cache(function_body_inputs, &mut hasher);
+        hasher.0.result().into()
+    }
+}
+
+impl Hasher for Sha256Hasher {
+    fn finish(&self) -> u64 {
+        panic!("Sha256Hasher doesn't support finish!");
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        self.0.input(bytes);
     }
 }
 
