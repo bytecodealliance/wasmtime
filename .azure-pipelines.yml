@@ -240,7 +240,8 @@ jobs:
       assets: '$(Build.ArtifactStagingDirectory)/**'
       isDraft: false
       isPreRelease: true
-    condition: startsWith(variables['Build.SourceBranch'], 'refs/tags/')
+    condition: and(startsWith(variables['Build.SourceBranch'], 'refs/tags/'),
+                   ne(variables['Build.SourceBranch'], 'refs/tags/dev'))
 
   # GitHub doesn't support doing rolling releases for branch.
   # To simulate that for dev builds, always do a release for the "dev" tag.
@@ -256,12 +257,12 @@ jobs:
       tag: 'dev'
     # This might fail in case the target repo doesn't yet have this tag, which is fine.
     continueOnError: true
-    condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
+    condition: in(variables['Build.SourceBranch'], 'refs/heads/master', 'refs/tags/dev')
   - script: |
       git -c http.extraheader="AUTHORIZATION: basic ***" push origin :dev
     # This might fail in case the target repo doesn't yet have this tag, which is fine.
     continueOnError: true
-    condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
+    condition: in(variables['Build.SourceBranch'], 'refs/heads/master', 'refs/tags/dev')
   - task: GitHubRelease@0
     inputs:
       gitHubConnection: 'tschneidereit-releases'
@@ -273,4 +274,4 @@ jobs:
       assets: '$(Build.ArtifactStagingDirectory)/**'
       isDraft: false
       isPreRelease: true
-    condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
+    condition: in(variables['Build.SourceBranch'], 'refs/heads/master', 'refs/tags/dev')
