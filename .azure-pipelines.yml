@@ -6,6 +6,8 @@ trigger:
   tags:
     include:
     - '*'
+    exclude:
+      - 'dev'
 
 jobs:
 - job: rustfmt
