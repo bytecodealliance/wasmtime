@@ -30,7 +30,7 @@ winapi = { version = "0.3.6", features = ["winbase", "memoryapi"] }
 
 [build-dependencies]
 cmake = "0.1.35"
-bindgen = "0.50.0"
+bindgen = "0.51.0"
 regex = "1.0.6"
 
 [features]

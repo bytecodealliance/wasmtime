@@ -43,12 +43,43 @@ impl fmt::Display for ContextError {
     }
 }
 
+/// The collection of features configurable during compilation
+#[derive(Clone, Default)]
+pub struct Features {
+    /// marks whether the proposed thread feature is enabled or disabled
+    pub threads: bool,
+    /// marks whether the proposed reference type feature is enabled or disabled
+    pub reference_types: bool,
+    /// marks whether the proposed SIMD feature is enabled or disabled
+    pub simd: bool,
+    /// marks whether the proposed bulk memory feature is enabled or disabled
+    pub bulk_memory: bool,
+    /// marks whether the proposed multi-value feature is enabled or disabled
+    pub multi_value: bool,
+}
+
+impl Into<ValidatingParserConfig> for Features {
+    fn into(self) -> ValidatingParserConfig {
+        ValidatingParserConfig {
+            operator_config: OperatorValidatorConfig {
+                enable_threads: self.threads,
+                enable_reference_types: self.reference_types,
+                enable_bulk_memory: self.bulk_memory,
+                enable_simd: self.simd,
+                enable_multi_value: self.multi_value,
+            },
+            mutable_global_imports: true,
+        }
+    }
+}
+
 /// A convenient context for compiling and executing WebAssembly instances.
 pub struct Context {
     namespace: Namespace,
     compiler: Box<Compiler>,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     debug_info: bool,
+    features: Features,
 }
 
 impl Context {
@@ -59,6 +90,7 @@ impl Context {
             compiler,
             global_exports: Rc::new(RefCell::new(HashMap::new())),
             debug_info: false,
+            features: Default::default(),
         }
     }
 
@@ -77,21 +109,15 @@ impl Context {
         Self::new(Box::new(Compiler::new(isa)))
     }
 
-    fn validate(&mut self, data: &[u8]) -> Result<(), String> {
-        let config = ValidatingParserConfig {
-            operator_config: OperatorValidatorConfig {
-                enable_threads: false,
-                enable_reference_types: false,
-                enable_bulk_memory: false,
-                enable_simd: false,
-                enable_multi_value: false,
-            },
-            mutable_global_imports: true,
-        };
+    /// Construct a new instance with the given features from the current `Context`
+    pub fn with_features(self, features: Features) -> Self {
+        Self { features, ..self }
+    }
 
+    fn validate(&mut self, data: &[u8]) -> Result<(), String> {
         // TODO: Fix Cranelift to be able to perform validation itself, rather
         // than calling into wasmparser ourselves here.
-        if validate(data, Some(config)) {
+        if validate(data, Some(self.features.clone().into())) {
             Ok(())
         } else {
             // TODO: Work with wasmparser to get better error messages.

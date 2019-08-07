@@ -31,6 +31,7 @@
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
+use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
 use faerie::Artifact;
@@ -62,7 +63,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-cdg] <file> -o <output>
+    wasm2obj [--target TARGET] [-cdg] [--enable-simd] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
@@ -71,6 +72,7 @@ Options:
     --target <TARGET>   build for the target triple; default is the host machine
     -g                  generate debug information
     -c, --cache         enable caching system
+    --enable-simd       enable proposed SIMD instructions
     --version           print the Cranelift version
     -d, --debug         enable debug output on stderr/stdout
 ";
@@ -83,6 +85,7 @@ struct Args {
     flag_g: bool,
     flag_debug: bool,
     flag_cache: bool,
+    flag_enable_simd: bool,
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -116,6 +119,7 @@ fn main() {
         &args.arg_target,
         &args.arg_output,
         args.flag_g,
+        args.flag_enable_simd,
     ) {
         Ok(()) => {}
         Err(message) => {
@@ -130,6 +134,7 @@ fn handle_module(
     target: &Option<String>,
     output: &str,
     generate_debug_info: bool,
+    enable_simd: bool,
 ) -> Result<(), String> {
     let data = match read_wasm_file(path) {
         Ok(data) => data,
@@ -152,7 +157,10 @@ fn handle_module(
             panic!("host machine is not a supported target");
         }),
     };
-    let flag_builder = settings::builder();
+    let mut flag_builder = settings::builder();
+    if enable_simd {
+        flag_builder.enable("enable_simd").unwrap();
+    }
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));

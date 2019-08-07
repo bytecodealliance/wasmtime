@@ -4,7 +4,7 @@ use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
 use wasmtime_jit::{
-    ActionError, ActionOutcome, Compiler, Context, InstanceHandle, InstantiationError,
+    ActionError, ActionOutcome, Compiler, Context, Features, InstanceHandle, InstantiationError,
     RuntimeValue, UnknownInstance,
 };
 
@@ -82,6 +82,14 @@ impl WastContext {
         Self {
             current: None,
             context: Context::new(compiler),
+        }
+    }
+
+    /// Construct a new instance with the given features using the current `Context`
+    pub fn with_features(self, features: Features) -> Self {
+        Self {
+            context: self.context.with_features(features),
+            ..self
         }
     }
 
