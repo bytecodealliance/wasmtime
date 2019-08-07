@@ -151,6 +151,18 @@ impl Compiler {
         })
     }
 
+    /// Create and publish a trampoline for invoking a function.
+    pub fn get_published_trampoline(
+        &mut self,
+        callee_address: *const VMFunctionBody,
+        signature: &ir::Signature,
+        value_size: usize,
+    ) -> Result<*const VMFunctionBody, SetupError> {
+        let result = self.get_trampoline(callee_address, signature, value_size)?;
+        self.publish_compiled_code();
+        Ok(result)
+    }
+
     /// Make memory containing compiled code executable.
     pub(crate) fn publish_compiled_code(&mut self) {
         self.code_memory.publish();
