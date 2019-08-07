@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+    <?if $(sys.BUILDARCH)="x64" ?>
+        <?define ArchSuffix=" 64-bit" ?>
+    <?else?>
+        <?define ArchSuffix="" ?>
+    <?endif?>
+
+    <?define ProductName="Wasmtime $(env.WT_VERSION) $(var.ArchSuffix))" ?>
+
+    <?define BaseRegKey="Software\[Manufacturer]\Wasmtime ($(sys.BUILDARCH))\$(env.WT_VERSION)" ?>
+
+    <Product Id="*" UpgradeCode="A00EBA3C-5C90-42DA-8176-3D46447D2211" Version="$(env.WT_VERSION)" Language="1033" Name="Wasmtime" Manufacturer="Crane Station">
+        <Package InstallerVersion="300" Compressed="yes"/>
+        <Media Id="1" Cabinet="wasmtime.cab" EmbedCab="yes" />
+
+        <InstallUISequence>
+            <FindRelatedProducts After="AppSearch" />
+        </InstallUISequence>
+        <InstallExecuteSequence>
+            <FindRelatedProducts After="AppSearch" />
+            <RemoveExistingProducts Before="InstallInitialize" />
+        </InstallExecuteSequence>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFiles64Folder">
+                <Directory Id="INSTALLDIR" Name="Wasmtime">
+                    <Directory Id="BINDIR" Name="bin"/>
+                </Directory>
+            </Directory>
+
+            <!-- Record our install location -->
+            <Component Id="InstallDir" Guid="*">
+                <RegistryKey Root='HKLM' Key='$(var.BaseRegKey)'>
+                    <RegistryValue Type='string' Name='InstallDir' Value='[INSTALLDIR]'/>
+                </RegistryKey>
+            </Component>
+
+            <!-- Add install dir to PATH -->
+            <Component Id="PathEnvPerMachine" Guid="*">
+                <!-- <Condition>ALLUSERS=1 OR (ALLUSERS=2 AND Privileged)</Condition> -->
+                <RegistryValue Root="HKMU" Key="$(var.BaseRegKey)" Name="PathEnvPerMachine" Type="string" Value="1" KeyPath="yes" />
+                <!-- [INSTALLDIR] contains trailing backslash -->
+                <Environment Id="PathPerMachine" Name="PATH" Value="[INSTALLDIR]bin" Permanent="no" Part="last" Action="set" System="yes" />
+            </Component>
+            <Component Id="PathEnvPerUser" Guid="*">
+                <!-- <Condition>ALLUSERS="" OR (ALLUSERS=2 AND (NOT Privileged))</Condition> -->
+                <RegistryValue Root="HKMU" Key="$(var.BaseRegKey)" Name="PathEnvPerUser" Type="string" Value="1" KeyPath="yes" />
+                <Environment Id="PathPerUser" Name="PATH" Value="[INSTALLDIR]bin" Permanent="no" Part="last" Action="set" System="no" />
+            </Component>
+        </Directory>
+
+        <DirectoryRef Id="INSTALLDIR">
+            <Component Id="LICENSE" Guid="*">
+                <File Id="LICENSE" Source="LICENSE" KeyPath="yes" Checksum="yes"/>
+            </Component>
+            <Component Id="README" Guid="*">
+                <File Id="README.md" Source="README.md" KeyPath="yes" Checksum="yes"/>
+            </Component>
+        </DirectoryRef>
+
+        <DirectoryRef Id="BINDIR">
+            <Component Id="wasmtime.exe" Guid="*">
+                <File Id="wasmtime.exe" Source="target\release\wasmtime.exe" KeyPath="yes" Checksum="yes"/>
+            </Component>
+            <Component Id="wasm2obj.exe" Guid="*">
+                <File Id="wasm2obj.exe" Source="target\release\wasm2obj.exe" KeyPath="yes" Checksum="yes"/>
+            </Component>
+        </DirectoryRef>
+
+        <Feature Id="InstallWasmtime" Title="Wasmtime and Wasm2obj" Level="1">
+            <ComponentRef Id="wasmtime.exe" />
+            <ComponentRef Id="wasm2obj.exe" />
+            <ComponentRef Id="LICENSE" />
+            <ComponentRef Id="README" />
+            <ComponentRef Id="InstallDir" />
+        </Feature>
+        <Feature Id="AddToPath"
+                 Title="Add to PATH"
+                 Description="Add Wasmtime to PATH environment variable"
+                 Level="1"
+                 AllowAdvertise="no">
+                 <ComponentRef Id="PathEnvPerMachine" />
+                 <ComponentRef Id="PathEnvPerUser" />
+        </Feature>
+        <CustomActionRef Id="WixBroadcastEnvironmentChange" />
+    </Product>
+</Wix>

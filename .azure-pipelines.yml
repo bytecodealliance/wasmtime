@@ -198,6 +198,15 @@ jobs:
         fi
         cp LICENSE README.md target/release/{wasmtime,wasm2obj}$ext $BUILD_BINARIESDIRECTORY/$BASENAME
       displayName: Copy binaries
+
+    - bash: |
+        set -e
+        export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
+        "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj installer/msi/wasmtime.wxs
+        "$WIX/bin/light" -out $BUILD_ARTIFACTSTAGINGDIRECTORY/$(basename).msi target/wasmtime.wixobj -ext WixUtilExtension
+      displayName: Create installer (Windows)
+      condition: eq(variables['Agent.OS'], 'Windows_NT')
+
     - task: ArchiveFiles@2
       inputs:
         rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)
