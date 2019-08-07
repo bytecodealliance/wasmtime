@@ -5,9 +5,10 @@
 //! WebAssembly module and the runtime environment.
 
 use crate::code_translator::translate_operator;
-use crate::environ::{FuncEnvironment, ReturnMode, WasmError, WasmResult};
+use crate::environ::{FuncEnvironment, ReturnMode, WasmResult};
 use crate::state::{TranslationState, VisibleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
+use crate::wasm_unsupported;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Ebb, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
@@ -176,7 +177,7 @@ fn declare_locals(
         I64 => builder.ins().iconst(ir::types::I64, 0),
         F32 => builder.ins().f32const(ir::immediates::Ieee32::with_bits(0)),
         F64 => builder.ins().f64const(ir::immediates::Ieee64::with_bits(0)),
-        _ => return Err(WasmError::Unsupported("unsupported local type")),
+        ty => wasm_unsupported!("unsupported local type {:?}", ty),
     };
 
     let ty = builder.func.dfg.value_type(zeroval);

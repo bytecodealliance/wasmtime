@@ -1,5 +1,6 @@
 //! Helper functions and structures for the translation.
-use crate::environ::{WasmError, WasmResult};
+use crate::environ::WasmResult;
+use crate::wasm_unsupported;
 use core::u32;
 use cranelift_codegen::entity::entity_impl;
 use cranelift_codegen::ir;
@@ -119,7 +120,7 @@ pub fn type_to_type(ty: wasmparser::Type) -> WasmResult<ir::Type> {
         wasmparser::Type::I64 => ir::types::I64,
         wasmparser::Type::F32 => ir::types::F32,
         wasmparser::Type::F64 => ir::types::F64,
-        _ => return Err(WasmError::Unsupported("unsupported wasm type")),
+        ty => wasm_unsupported!("unsupported wasm type {:?}", ty),
     })
 }
 
@@ -132,7 +133,7 @@ pub fn tabletype_to_type(ty: wasmparser::Type) -> WasmResult<Option<ir::Type>> {
         wasmparser::Type::F32 => Some(ir::types::F32),
         wasmparser::Type::F64 => Some(ir::types::F64),
         wasmparser::Type::AnyFunc => None,
-        _ => return Err(WasmError::Unsupported("unsupported table wasm type")),
+        ty => wasm_unsupported!("unsupported table wasm type {:?}", ty),
     })
 }
 
@@ -141,7 +142,7 @@ pub fn blocktype_to_type(ty: wasmparser::TypeOrFuncType) -> WasmResult<ir::Type>
     match ty {
         wasmparser::TypeOrFuncType::Type(ty) => type_to_type(ty),
         wasmparser::TypeOrFuncType::FuncType(_) => {
-            Err(WasmError::Unsupported("multi-value block signatures"))
+            wasm_unsupported!("multi-value block signature {:?}", ty);
         }
     }
 }
@@ -165,10 +166,10 @@ pub fn num_return_values(ty: wasmparser::TypeOrFuncType) -> WasmResult<usize> {
             | wasmparser::Type::F32
             | wasmparser::Type::I64
             | wasmparser::Type::F64 => Ok(1),
-            _ => Err(WasmError::Unsupported("unsupported return value type")),
+            ty => wasm_unsupported!("unsupported return value type {:?}", ty),
         },
         wasmparser::TypeOrFuncType::FuncType(_) => {
-            Err(WasmError::Unsupported("multi-value block signatures"))
+            wasm_unsupported!("multi-value block signature {:?}", ty);
         }
     }
 }
