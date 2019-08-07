@@ -5,7 +5,7 @@
 extern "C"
 int WasmtimeCallTrampoline(void *vmctx, void (*body)(void*, void*), void *args) {
   jmp_buf buf;
-  void *prev;
+  void *volatile prev;
   if (setjmp(buf) != 0) {
     LeaveScope(prev);
     return 0;
@@ -19,7 +19,7 @@ int WasmtimeCallTrampoline(void *vmctx, void (*body)(void*, void*), void *args) 
 extern "C"
 int WasmtimeCall(void *vmctx, void (*body)(void*)) {
   jmp_buf buf;
-  void *prev;
+  void *volatile prev;
   if (setjmp(buf) != 0) {
     LeaveScope(prev);
     return 0;
