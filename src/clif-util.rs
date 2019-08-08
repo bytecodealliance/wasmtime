@@ -28,6 +28,7 @@ use std::io::{self, Write};
 use std::option::Option;
 use std::process;
 
+mod bugpoint;
 mod cat;
 mod compile;
 mod disasm;
@@ -199,6 +200,14 @@ fn main() {
                 .arg(add_pass_arg())
                 .arg(add_debug_flag())
                 .arg(add_time_flag()),
+        )
+        .subcommand(
+            SubCommand::with_name("bugpoint")
+                .about("Reduce size of clif file causing panic during compilation.")
+                .arg(add_single_input_file_arg())
+                .arg(add_set_flag())
+                .arg(add_target_flag())
+                .arg(add_verbose_flag()),
         );
 
     let res_util = match app_cmds.get_matches().subcommand() {
@@ -283,6 +292,19 @@ fn main() {
             let result = Err("Error: clif-util was compiled without wasm support.".to_owned());
 
             result
+        }
+        ("bugpoint", Some(rest_cmd)) => {
+            let mut target_val: &str = "";
+            if let Some(clap_target) = rest_cmd.value_of("target") {
+                target_val = clap_target;
+            }
+
+            bugpoint::run(
+                rest_cmd.value_of("single-file").unwrap(),
+                &get_vec(rest_cmd.values_of("set")),
+                target_val,
+                rest_cmd.is_present("verbose"),
+            )
         }
         _ => Err("Invalid subcommand.".to_owned()),
     };
