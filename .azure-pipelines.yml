@@ -204,6 +204,7 @@ jobs:
         export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
         "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj installer/msi/wasmtime.wxs
         "$WIX/bin/light" -out $BUILD_ARTIFACTSTAGINGDIRECTORY/$(basename).msi target/wasmtime.wixobj -ext WixUtilExtension
+        rm $BUILD_ARTIFACTSTAGINGDIRECTORY/$(basename).wixpdb
       displayName: Create installer (Windows)
       condition: eq(variables['Agent.OS'], 'Windows_NT')
 
