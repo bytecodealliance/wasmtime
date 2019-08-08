@@ -10,7 +10,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 use target_lexicon::triple;
-use wabt::wat2wasm;
+use wabt::{wat2wasm_with_features, Features};
 
 #[test]
 fn testsuite() {
@@ -61,7 +61,9 @@ fn handle_module(path: &Path, flags: &Flags, return_mode: ReturnMode) {
             Some("wasm") => read_file(path).expect("error reading wasm file"),
             Some("wat") => {
                 let wat = read_file(path).expect("error reading wat file");
-                match wat2wasm(&wat) {
+                let mut features = Features::new();
+                features.enable_all();
+                match wat2wasm_with_features(&wat, features) {
                     Ok(wasm) => wasm,
                     Err(e) => {
                         panic!("error converting wat to wasm: {:?}", e);
