@@ -44,11 +44,11 @@ unsafe fn decode_ptr(
             // Ok, translate the address.
             Ok((((*definition).base as usize) + (ptr as usize)) as *mut u8)
         }
-        // No export named "__wasi_memory", or the export isn't a memory.
+        // No export named "memory", or the export isn't a memory.
         // FIXME: Is EINVAL the best code here?
         x => {
             println!(
-                "!!! no export named __wasi_memory, or the export isn't a mem: {:?}",
+                "!!! no export named \"memory\", or the export isn't a mem: {:?}",
                 x
             );
             Err(host::__WASI_EINVAL as host::__wasi_errno_t)
