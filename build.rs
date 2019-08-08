@@ -131,12 +131,12 @@ cfg_if::cfg_if! {
         fn ignore(testsuite: &str, name: &str) -> bool {
             if testsuite == "misc_testsuite" {
                 match name {
-                    "big_random_buf" => false,
-                    "sched_yield" => false,
-                    "file_pread_pwrite" => false,
-                    "renumber" => false,
-                    "file_seek_tell" => false,
-                    _ => true,
+                    "readlink_no_buffer" => true,
+                    "dangling_symlink" => true,
+                    "symlink_loop" => true,
+                    "clock_time_get" => true,
+                    "truncation_rights" => true,
+                    _ => false,
                 }
             } else {
                 unreachable!()

@@ -23,19 +23,18 @@ pub(crate) fn determine_type_and_access_rights<Handle: AsRawHandle>(
     host::__wasi_rights_t,
     host::__wasi_rights_t,
 )> {
-    use winx::file::{get_file_access_rights, AccessRight};
+    use winx::file::{get_file_access_mode, AccessMode};
 
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(handle)?;
 
     match file_type {
         host::__WASI_FILETYPE_DIRECTORY | host::__WASI_FILETYPE_REGULAR_FILE => {
-            let rights = get_file_access_rights(handle.as_raw_handle())
-                .map_err(host_impl::errno_from_win)?;
-            let rights = AccessRight::from_bits_truncate(rights);
-            if rights.contains(AccessRight::FILE_GENERIC_READ) {
+            let mode =
+                get_file_access_mode(handle.as_raw_handle()).map_err(host_impl::errno_from_win)?;
+            if mode.contains(AccessMode::FILE_GENERIC_READ) {
                 rights_base |= host::__WASI_RIGHT_FD_READ;
             }
-            if rights.contains(AccessRight::FILE_GENERIC_WRITE) {
+            if mode.contains(AccessMode::FILE_GENERIC_WRITE) {
                 rights_base |= host::__WASI_RIGHT_FD_WRITE;
             }
         }

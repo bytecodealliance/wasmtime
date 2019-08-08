@@ -1,120 +1,141 @@
 #![allow(non_camel_case_types)]
-#![allow(unused_unsafe)]
-
-use crate::sys::errno_from_host;
 use crate::sys::host_impl;
 use crate::{host, Result};
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
-use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
-use std::path::{Component, Path};
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::os::windows::prelude::AsRawHandle;
+use std::path::{Path, PathBuf};
 
-/// Normalizes a path to ensure that the target path is located under the directory provided.
-pub(crate) fn path_get(
-    dirfd: &File,
-    _dirflags: host::__wasi_lookupflags_t,
-    path: &str,
-    needs_final_component: bool,
-) -> Result<(File, String)> {
-    if path.contains("\0") {
-        // if contains NUL, return EILSEQ
-        return Err(host::__WASI_EILSEQ);
+pub(crate) fn path_open_rights(
+    rights_base: host::__wasi_rights_t,
+    rights_inheriting: host::__wasi_rights_t,
+    oflags: host::__wasi_oflags_t,
+    fdflags: host::__wasi_fdflags_t,
+) -> (host::__wasi_rights_t, host::__wasi_rights_t) {
+    // which rights are needed on the dirfd?
+    let mut needed_base = host::__WASI_RIGHT_PATH_OPEN;
+    let mut needed_inheriting = rights_base | rights_inheriting;
+
+    // convert open flags
+    if oflags & host::__WASI_O_CREAT != 0 {
+        needed_base |= host::__WASI_RIGHT_PATH_CREATE_FILE;
+    } else if oflags & host::__WASI_O_TRUNC != 0 {
+        needed_base |= host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
     }
 
-    let dirfd = dirfd.try_clone().map_err(|err| {
-        err.raw_os_error()
-            .map_or(host::__WASI_EBADF, errno_from_host)
-    })?;
+    // convert file descriptor flags
+    if fdflags & host::__WASI_FDFLAG_DSYNC != 0
+        || fdflags & host::__WASI_FDFLAG_RSYNC != 0
+        || fdflags & host::__WASI_FDFLAG_SYNC != 0
+    {
+        needed_inheriting |= host::__WASI_RIGHT_FD_DATASYNC;
+        needed_inheriting |= host::__WASI_RIGHT_FD_SYNC;
+    }
 
-    // Stack of directory handles. Index 0 always corresponds with the directory provided
-    // to this function. Entering a directory causes a handle to be pushed, while handling
-    // ".." entries causes an entry to be popped. Index 0 cannot be popped, as this would imply
-    // escaping the base directory.
-    let mut dir_stack = vec![dirfd];
+    (needed_base, needed_inheriting)
+}
 
-    // Stack of paths left to process. This is initially the `path` argument to this function, but
-    // any symlinks we encounter are processed by pushing them on the stack.
-    let mut path_stack = vec![path.to_owned()];
+pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
+    use std::fs::OpenOptions;
+    use std::os::windows::fs::OpenOptionsExt;
+    use winx::file::Flags;
+    use winx::winerror::WinError;
 
-    loop {
-        match path_stack.pop() {
-            Some(cur_path) => {
-                // dbg!(&cur_path);
-                let ends_with_slash = cur_path.ends_with("/");
-                let mut components = Path::new(&cur_path).components();
-                let head = match components.next() {
-                    None => return Err(host::__WASI_ENOENT),
-                    Some(p) => p,
-                };
-                let tail = components.as_path();
-
-                if tail.components().next().is_some() {
-                    let mut tail = host_impl::path_from_host(tail.as_os_str())?;
-                    if ends_with_slash {
-                        tail.push_str("/");
-                    }
-                    path_stack.push(tail);
-                }
-
-                match head {
-                    Component::Prefix(_) | Component::RootDir => {
-                        // path is absolute!
-                        return Err(host::__WASI_ENOTCAPABLE);
-                    }
-                    Component::CurDir => {
-                        // "." so skip
-                        continue;
-                    }
-                    Component::ParentDir => {
-                        // ".." so pop a dir
-                        let _ = dir_stack.pop().ok_or(host::__WASI_ENOTCAPABLE)?;
-
-                        // we're not allowed to pop past the original directory
-                        if dir_stack.is_empty() {
-                            return Err(host::__WASI_ENOTCAPABLE);
-                        }
-                    }
-                    Component::Normal(head) => {
-                        let mut head = host_impl::path_from_host(head)?;
-                        if ends_with_slash {
-                            // preserve trailing slash
-                            head.push_str("/");
-                        }
-                        // should the component be a directory? it should if there is more path left to process, or
-                        // if it has a trailing slash and `needs_final_component` is not set
-                        if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
-                            match winx::file::openat(
-                                dir_stack
-                                    .last()
-                                    .ok_or(host::__WASI_ENOTCAPABLE)?
-                                    .as_raw_handle(),
-                                head.as_str(),
-                                winx::file::AccessRight::FILE_GENERIC_READ,
-                                winx::file::CreationDisposition::OPEN_EXISTING,
-                                winx::file::FlagsAndAttributes::FILE_FLAG_BACKUP_SEMANTICS,
-                            ) {
-                                Ok(new_dir) => {
-                                    dir_stack.push(unsafe { File::from_raw_handle(new_dir) });
-                                    continue;
-                                }
-                                Err(e) => {
-                                    return Err(host_impl::errno_from_win(e));
-                                }
-                            }
-                        } else {
-                            // we're done
-                            return Ok((dir_stack.pop().ok_or(host::__WASI_ENOTCAPABLE)?, head));
-                        }
-                    }
+    let path = concatenate(dirfd, Path::new(path))?;
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(Flags::FILE_FLAG_BACKUP_SEMANTICS.bits())
+        .open(&path)
+        .map_err(|e| match e.raw_os_error() {
+            Some(e) => {
+                log::debug!("openat error={:?}", e);
+                match WinError::from_u32(e as u32) {
+                    WinError::ERROR_INVALID_NAME => host::__WASI_ENOTDIR,
+                    e => host_impl::errno_from_win(e),
                 }
             }
             None => {
-                // no further components to process. means we've hit a case like "." or "a/..", or if the
-                // input path has trailing slashes and `needs_final_component` is not set
-                return Ok((
-                    dir_stack.pop().ok_or(host::__WASI_ENOTCAPABLE)?,
-                    String::from("."),
-                ));
+                log::debug!("Inconvertible OS error: {}", e);
+                host::__WASI_EIO
             }
+        })
+}
+
+pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
+    use winx::file::get_path_by_handle;
+    use winx::winerror::WinError;
+
+    let path = concatenate(dirfd, Path::new(s_path))?;
+    match path.read_link() {
+        Ok(target_path) => {
+            // since on Windows we are effectively emulating 'at' syscalls
+            // we need to strip the prefix from the absolute path
+            // as otherwise we will error out since WASI is not capable
+            // of dealing with absolute paths
+            let dir_path =
+                get_path_by_handle(dirfd.as_raw_handle()).map_err(host_impl::errno_from_win)?;
+            let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
+            target_path
+                .strip_prefix(dir_path)
+                .map_err(|_| host::__WASI_ENOTCAPABLE)
+                .and_then(|path| path.to_str().map(String::from).ok_or(host::__WASI_EILSEQ))
         }
+        Err(e) => match e.raw_os_error() {
+            Some(e) => {
+                log::debug!("readlinkat error={:?}", e);
+                match WinError::from_u32(e as u32) {
+                    WinError::ERROR_INVALID_NAME => {
+                        if s_path.ends_with("/") {
+                            // strip "/" and check if exists
+                            let path = concatenate(dirfd, Path::new(s_path.trim_end_matches("/")))?;
+                            if path.exists() && !path.is_dir() {
+                                Err(host::__WASI_ENOTDIR)
+                            } else {
+                                Err(host::__WASI_ENOENT)
+                            }
+                        } else {
+                            Err(host::__WASI_ENOENT)
+                        }
+                    }
+                    e => Err(host_impl::errno_from_win(e)),
+                }
+            }
+            None => {
+                log::debug!("Inconvertible OS error: {}", e);
+                Err(host::__WASI_EIO)
+            }
+        },
     }
+}
+
+pub(crate) fn strip_extended_prefix<P: AsRef<OsStr>>(path: P) -> OsString {
+    let path: Vec<u16> = path.as_ref().encode_wide().collect();
+    if &[92, 92, 63, 92] == &path[0..4] {
+        OsString::from_wide(&path[4..])
+    } else {
+        OsString::from_wide(&path)
+    }
+}
+
+pub(crate) fn concatenate<P: AsRef<Path>>(dirfd: &File, path: P) -> Result<PathBuf> {
+    use winx::file::get_path_by_handle;
+
+    // WASI is not able to deal with absolute paths
+    // so error out if absolute
+    if path.as_ref().is_absolute() {
+        return Err(host::__WASI_ENOTCAPABLE);
+    }
+
+    let dir_path = get_path_by_handle(dirfd.as_raw_handle()).map_err(host_impl::errno_from_win)?;
+    // concatenate paths
+    let mut out_path = PathBuf::from(dir_path);
+    out_path.push(path.as_ref());
+    // strip extended prefix; otherwise we will error out on any relative
+    // components with `out_path`
+    let out_path = PathBuf::from(strip_extended_prefix(out_path));
+
+    log::debug!("out_path={:?}", out_path);
+
+    Ok(out_path)
 }

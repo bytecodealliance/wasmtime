@@ -1,9 +1,9 @@
 #![allow(non_camel_case_types)]
 use crate::{winerror, Result};
-use std::ffi::{c_void, OsStr, OsString};
+use std::ffi::{c_void, OsString};
 use std::fs::File;
 use std::io;
-use std::os::windows::prelude::{AsRawHandle, OsStrExt, OsStringExt, RawHandle};
+use std::os::windows::prelude::{AsRawHandle, OsStringExt, RawHandle};
 use winapi::shared::minwindef::{self, DWORD};
 use winapi::um::{fileapi, fileapi::GetFileType, minwinbase, winbase, winnt};
 
@@ -52,28 +52,6 @@ pub fn get_file_type(handle: RawHandle) -> Result<FileType> {
         Err(err)
     } else {
         Ok(file_type)
-    }
-}
-
-bitflags! {
-    pub struct ShareMode: minwindef::DWORD {
-        /// Prevents other processes from opening a file or device if they request delete, read, or write access.
-        const NO_SHARE = 0x0;
-        /// Enables subsequent open operations on a file or device to request read access.
-        /// Otherwise, other processes cannot open the file or device if they request read access.
-        /// If this flag is not specified, but the file or device has been opened for read access, the function fails.
-        const FILE_SHARE_READ = winnt::FILE_SHARE_READ;
-        /// Enables subsequent open operations on a file or device to request write access.
-        /// Otherwise, other processes cannot open the file or device if they request write access.
-        /// If this flag is not specified, but the file or device has been opened for write access or has a file mapping with write access, the function fails.
-        const FILE_SHARE_WRITE = winnt::FILE_SHARE_WRITE;
-        /// Enables subsequent open operations on a file or device to request delete access.
-        /// Otherwise, other processes cannot open the file or device if they request delete access.
-        /// If this flag is not specified, but the file or device has been opened for delete access, the function fails.
-        const FILE_SHARE_DELETE = winnt::FILE_SHARE_DELETE;
-        const ALL = ShareMode::FILE_SHARE_READ.bits
-            | ShareMode::FILE_SHARE_WRITE.bits
-            | ShareMode::FILE_SHARE_DELETE.bits;
     }
 }
 
@@ -130,7 +108,7 @@ impl CreationDisposition {
 }
 
 bitflags! {
-    pub struct FlagsAndAttributes: minwindef::DWORD {
+    pub struct Attributes: minwindef::DWORD {
         /// A file or directory that is an archive file or directory.
         /// Applications typically use this attribute to mark files for backup or removal.
         const FILE_ATTRIBUTE_ARCHIVE = winnt::FILE_ATTRIBUTE_ARCHIVE;
@@ -189,6 +167,11 @@ bitflags! {
         const FILE_ATTRIBUTE_TEMPORARY = winnt::FILE_ATTRIBUTE_TEMPORARY;
         /// This value is reserved for system use.
         const FILE_ATTRIBUTE_VIRTUAL = winnt::FILE_ATTRIBUTE_VIRTUAL;
+    }
+}
+
+bitflags! {
+    pub struct Flags: minwindef::DWORD {
         /// The file is being opened or created for a backup or restore operation.
         /// The system ensures that the calling process overrides file security checks when the process has SE_BACKUP_NAME and SE_RESTORE_NAME privileges.
         /// You must set this flag to obtain a handle to a directory. A directory handle can be passed to some functions instead of a file handle.
@@ -238,7 +221,7 @@ bitflags! {
 
 bitflags! {
     /// [Access mask]: https://docs.microsoft.com/en-us/windows/desktop/SecAuthZ/access-mask
-    pub struct AccessRight: minwindef::DWORD {
+    pub struct AccessMode: minwindef::DWORD {
         /// For a file object, the right to read the corresponding file data.
         /// For a directory object, the right to read the corresponding directory data.
         const FILE_READ_DATA = winnt::FILE_READ_DATA;
@@ -307,31 +290,31 @@ bitflags! {
         const GENERIC_READ = winnt::GENERIC_READ;
         /// Provides read access.
         /// This flag is a union of: FILE_READ_ATTRIBUTES, FILE_READ_DATA, FILE_READ_EA, READ_CONTROL, SYNCHRONIZE
-        const FILE_GENERIC_READ = AccessRight::FILE_READ_ATTRIBUTES.bits
-            | AccessRight::FILE_READ_DATA.bits
-            | AccessRight::FILE_READ_EA.bits
-            | AccessRight::READ_CONTROL.bits
-            | AccessRight::SYNCHRONIZE.bits;
+        const FILE_GENERIC_READ = AccessMode::FILE_READ_ATTRIBUTES.bits
+            | AccessMode::FILE_READ_DATA.bits
+            | AccessMode::FILE_READ_EA.bits
+            | AccessMode::READ_CONTROL.bits
+            | AccessMode::SYNCHRONIZE.bits;
         /// Provides write access.
         /// This flag is a union of: FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, READ_CONTROL, SYNCHRONIZE
-        const FILE_GENERIC_WRITE = AccessRight::FILE_WRITE_ATTRIBUTES.bits
-            | AccessRight::FILE_WRITE_DATA.bits
-            | AccessRight::FILE_WRITE_EA.bits
-            | AccessRight::READ_CONTROL.bits
-            | AccessRight::SYNCHRONIZE.bits;
+        const FILE_GENERIC_WRITE = AccessMode::FILE_WRITE_ATTRIBUTES.bits
+            | AccessMode::FILE_WRITE_DATA.bits
+            | AccessMode::FILE_WRITE_EA.bits
+            | AccessMode::READ_CONTROL.bits
+            | AccessMode::SYNCHRONIZE.bits;
         /// Provides execute access.
         /// This flag is a union of: FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, READ_CONTROL, SYNCHRONIZE
-        const FILE_GENERIC_EXECUTE = AccessRight::FILE_EXECUTE.bits
-            | AccessRight::FILE_READ_ATTRIBUTES.bits
-            | AccessRight::READ_CONTROL.bits
-            | AccessRight::SYNCHRONIZE.bits;
+        const FILE_GENERIC_EXECUTE = AccessMode::FILE_EXECUTE.bits
+            | AccessMode::FILE_READ_ATTRIBUTES.bits
+            | AccessMode::READ_CONTROL.bits
+            | AccessMode::SYNCHRONIZE.bits;
         /// Provides all accesses.
         /// This flag is a union of: FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE
-        const FILE_GENERIC_ALL = AccessRight::FILE_GENERIC_READ.bits | AccessRight::FILE_GENERIC_WRITE.bits | AccessRight::FILE_GENERIC_EXECUTE.bits;
+        const FILE_GENERIC_ALL = AccessMode::FILE_GENERIC_READ.bits | AccessMode::FILE_GENERIC_WRITE.bits | AccessMode::FILE_GENERIC_EXECUTE.bits;
     }
 }
 
-pub fn get_file_access_rights(handle: RawHandle) -> Result<minwindef::DWORD> {
+pub fn get_file_access_mode(handle: RawHandle) -> Result<AccessMode> {
     use winapi::shared::minwindef::FALSE;
     use winapi::um::accctrl;
     use winapi::um::aclapi::GetSecurityInfo;
@@ -368,18 +351,13 @@ pub fn get_file_access_rights(handle: RawHandle) -> Result<minwindef::DWORD> {
 
         // TODO: check for PACCESS_ALLOWED_ACE in Ace before accessing
         // let header = (*(ace as winnt::PACCESS_ALLOWED_ACE)).Header.AceType;
-        Ok((*(ace as winnt::PACCESS_ALLOWED_ACE)).Mask)
+        Ok(AccessMode::from_bits_truncate(
+            (*(ace as winnt::PACCESS_ALLOWED_ACE)).Mask,
+        ))
     }
 }
 
-/// Converts OS string reference to Windows wide UTF-16 format.
-pub fn str_to_wide<S: AsRef<OsStr>>(s: S) -> Vec<u16> {
-    let mut win_unicode: Vec<u16> = s.as_ref().encode_wide().collect();
-    win_unicode.push(0);
-    win_unicode
-}
-
-fn get_path_by_handle(handle: RawHandle) -> Result<OsString> {
+pub fn get_path_by_handle(handle: RawHandle) -> Result<OsString> {
     use winapi::um::fileapi::GetFinalPathNameByHandleW;
 
     let mut raw_path: Vec<u16> = Vec::with_capacity(WIDE_MAX_PATH as usize);
@@ -400,64 +378,6 @@ fn get_path_by_handle(handle: RawHandle) -> Result<OsString> {
     // concatenate paths
     raw_path.resize(read_len as usize, 0);
     Ok(OsString::from_wide(&raw_path))
-}
-
-fn strip_extended_prefix<P: AsRef<OsStr>>(path: P) -> OsString {
-    let path = str_to_wide(path);
-    if &[92, 92, 63, 92] == &path[0..4] {
-        OsString::from_wide(&path[4..])
-    } else {
-        OsString::from_wide(&path)
-    }
-}
-
-/// Opens a `path` relative to a directory handle `dir_handle`, and returns a handle to the
-/// newly opened file. The newly opened file will have the specified `AccessRight` `rights`.
-///
-/// If the `path` is absolute, then the directory handle `dir_handle` is ignored.
-pub fn openat<S: AsRef<OsStr>>(
-    dir_handle: RawHandle,
-    path: S,
-    rights: AccessRight,
-    disposition: CreationDisposition,
-    flags_attrs: FlagsAndAttributes,
-) -> Result<RawHandle> {
-    use std::path::PathBuf;
-    use winapi::um::fileapi::CreateFileW;
-    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-
-    // check if specified path is absolute
-    let path = PathBuf::from(path.as_ref());
-    let out_path = if path.is_absolute() {
-        path
-    } else {
-        let dir_path = get_path_by_handle(dir_handle)?;
-        // concatenate paths
-        let mut out_path = PathBuf::from(&dir_path);
-        out_path.push(path);
-        out_path.into()
-    };
-
-    // this is needed so that we can use relative paths
-    let raw_out_path = strip_extended_prefix(out_path);
-    let raw_out_path = str_to_wide(raw_out_path);
-    let handle = unsafe {
-        CreateFileW(
-            raw_out_path.as_ptr(),
-            rights.bits(),
-            ShareMode::ALL.bits(),
-            std::ptr::null_mut(),
-            disposition as minwindef::DWORD,
-            flags_attrs.bits(),
-            std::ptr::null_mut(),
-        )
-    };
-
-    if handle == INVALID_HANDLE_VALUE {
-        Err(winerror::WinError::last())
-    } else {
-        Ok(handle)
-    }
 }
 
 // Taken from Rust libstd, file libstd/sys/windows/fs.rs

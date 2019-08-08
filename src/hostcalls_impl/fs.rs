@@ -1,7 +1,10 @@
 #![allow(non_camel_case_types)]
+use super::fs_helpers::path_get;
 use crate::ctx::WasiCtx;
 use crate::fdentry::{Descriptor, FdEntry};
 use crate::memory::*;
+use crate::sys::fdentry_impl::determine_type_rights;
+use crate::sys::hostcalls_impl::fs_helpers::path_open_rights;
 use crate::sys::{errno_from_host, host_impl, hostcalls_impl};
 use crate::{host, wasm32, Result};
 use log::trace;
@@ -242,9 +245,10 @@ pub(crate) fn fd_seek(
         host::__WASI_WHENCE_SET => SeekFrom::Start(offset as u64),
         _ => return Err(host::__WASI_EINVAL),
     };
-    let host_newoffset = fd
-        .seek(pos)
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
+    let host_newoffset = fd.seek(pos).map_err(|err| {
+        log::debug!("fd_seek error={:?}", err);
+        err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host)
+    })?;
 
     trace!("     | *newoffset={:?}", host_newoffset);
 
@@ -487,8 +491,9 @@ pub(crate) fn path_create_directory(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, rights, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved = path_get(dirfd, 0, path, false)?;
 
-    hostcalls_impl::path_create_directory(dirfd, path)
+    hostcalls_impl::path_create_directory(resolved)
 }
 
 pub(crate) fn path_link(
@@ -529,8 +534,10 @@ pub(crate) fn path_link(
     let new_dirfd = wasi_ctx
         .get_fd_entry(new_dirfd, host::__WASI_RIGHT_PATH_LINK_TARGET, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved_old = path_get(old_dirfd, 0, old_path, false)?;
+    let resolved_new = path_get(new_dirfd, 0, new_path, false)?;
 
-    hostcalls_impl::path_link(old_dirfd, new_dirfd, old_path, new_path)
+    hostcalls_impl::path_link(resolved_old, resolved_new)
 }
 
 pub(crate) fn path_open(
@@ -559,12 +566,26 @@ pub(crate) fn path_open(
         fd_out_ptr
     );
 
+    // pre-encode fd_out_ptr to -1 in case of error in opening a path
+    enc_fd_byref(memory, fd_out_ptr, wasm32::__wasi_fd_t::max_value())?;
+
     let dirfd = dec_fd(dirfd);
     let dirflags = dec_lookupflags(dirflags);
     let oflags = dec_oflags(oflags);
     let fs_rights_base = dec_rights(fs_rights_base);
     let fs_rights_inheriting = dec_rights(fs_rights_inheriting);
     let fs_flags = dec_fdflags(fs_flags);
+
+    let path = dec_slice_of::<u8>(memory, path_ptr, path_len).and_then(host::path_from_slice)?;
+
+    trace!("     | (path_ptr,path_len)='{}'", path);
+
+    let (needed_base, needed_inheriting) =
+        path_open_rights(fs_rights_base, fs_rights_inheriting, oflags, fs_flags);
+    let dirfd = wasi_ctx
+        .get_fd_entry(dirfd, needed_base, needed_inheriting)
+        .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved = path_get(dirfd, dirflags, path, oflags & host::__WASI_O_CREAT != 0)?;
 
     // which open mode do we need?
     let read = fs_rights_base & (host::__WASI_RIGHT_FD_READ | host::__WASI_RIGHT_FD_READDIR) != 0;
@@ -575,37 +596,18 @@ pub(crate) fn path_open(
             | host::__WASI_RIGHT_FD_FILESTAT_SET_SIZE)
         != 0;
 
-    // which rights are needed on the dirfd?
-    let needed_base = host::__WASI_RIGHT_PATH_OPEN;
-    let needed_inheriting = fs_rights_base | fs_rights_inheriting;
+    let fd = hostcalls_impl::path_open(resolved, read, write, oflags, fs_flags)?;
 
-    let path = dec_slice_of::<u8>(memory, path_ptr, path_len).and_then(host::path_from_slice)?;
+    // Determine the type of the new file descriptor and which rights contradict with this type
+    let (_ty, max_base, max_inheriting) = determine_type_rights(&fd)?;
+    let mut fe = FdEntry::from(fd)?;
+    fe.rights_base &= max_base;
+    fe.rights_inheriting &= max_inheriting;
+    let guest_fd = wasi_ctx.insert_fd_entry(fe)?;
 
-    trace!("     | (path_ptr,path_len)='{}'", path);
+    trace!("     | *fd={:?}", guest_fd);
 
-    hostcalls_impl::path_open(
-        wasi_ctx,
-        dirfd,
-        dirflags,
-        path,
-        oflags,
-        read,
-        write,
-        needed_base,
-        needed_inheriting,
-        fs_flags,
-    )
-    .and_then(|fe| {
-        let guest_fd = wasi_ctx.insert_fd_entry(fe)?;
-
-        trace!("     | *fd={:?}", guest_fd);
-
-        enc_fd_byref(memory, fd_out_ptr, guest_fd)
-    })
-    .or_else(|err| {
-        enc_fd_byref(memory, fd_out_ptr, wasm32::__wasi_fd_t::max_value())?;
-        Err(err)
-    })
+    enc_fd_byref(memory, fd_out_ptr, guest_fd)
 }
 
 pub(crate) fn fd_readdir(
@@ -676,10 +678,11 @@ pub(crate) fn path_readlink(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_READLINK, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved = path_get(dirfd, 0, &path, false)?;
 
     let mut buf = dec_slice_of_mut::<u8>(memory, buf_ptr, buf_len)?;
 
-    let host_bufused = hostcalls_impl::path_readlink(dirfd, &path, &mut buf)?;
+    let host_bufused = hostcalls_impl::path_readlink(resolved, &mut buf)?;
 
     trace!("     | (buf_ptr,*buf_used)={:?}", buf);
     trace!("     | *buf_used={:?}", host_bufused);
@@ -723,8 +726,10 @@ pub(crate) fn path_rename(
     let new_dirfd = wasi_ctx
         .get_fd_entry(new_dirfd, host::__WASI_RIGHT_PATH_RENAME_TARGET, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved_old = path_get(old_dirfd, 0, old_path, false)?;
+    let resolved_new = path_get(new_dirfd, 0, new_path, false)?;
 
-    hostcalls_impl::path_rename(old_dirfd, old_path, new_dirfd, new_path)
+    hostcalls_impl::path_rename(resolved_old, resolved_new)
 }
 
 pub(crate) fn fd_filestat_get(
@@ -825,8 +830,8 @@ pub(crate) fn path_filestat_get(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_FILESTAT_GET, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
-
-    let host_filestat = hostcalls_impl::path_filestat_get(dirfd, dirflags, path)?;
+    let resolved = path_get(dirfd, dirflags, path, false)?;
+    let host_filestat = hostcalls_impl::path_filestat_get(resolved, dirflags)?;
 
     trace!("     | *filestat_ptr={:?}", host_filestat);
 
@@ -867,8 +872,9 @@ pub(crate) fn path_filestat_set_times(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_FILESTAT_SET_TIMES, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved = path_get(dirfd, dirflags, path, false)?;
 
-    hostcalls_impl::path_filestat_set_times(dirfd, dirflags, path, st_atim, st_mtim, fst_flags)
+    hostcalls_impl::path_filestat_set_times(resolved, dirflags, st_atim, st_mtim, fst_flags)
 }
 
 pub(crate) fn path_symlink(
@@ -901,8 +907,9 @@ pub(crate) fn path_symlink(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_SYMLINK, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved_new = path_get(dirfd, 0, new_path, false)?;
 
-    hostcalls_impl::path_symlink(dirfd, old_path, new_path)
+    hostcalls_impl::path_symlink(old_path, resolved_new)
 }
 
 pub(crate) fn path_unlink_file(
@@ -927,8 +934,9 @@ pub(crate) fn path_unlink_file(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_UNLINK_FILE, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved = path_get(dirfd, 0, path, false)?;
 
-    hostcalls_impl::path_unlink_file(dirfd, path)
+    hostcalls_impl::path_unlink_file(resolved)
 }
 
 pub(crate) fn path_remove_directory(
@@ -953,8 +961,9 @@ pub(crate) fn path_remove_directory(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_REMOVE_DIRECTORY, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let resolved = path_get(dirfd, 0, path, false)?;
 
-    hostcalls_impl::path_remove_directory(dirfd, path)
+    hostcalls_impl::path_remove_directory(resolved)
 }
 
 pub(crate) fn fd_prestat_get(
