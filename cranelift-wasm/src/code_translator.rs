@@ -33,7 +33,7 @@ use crate::wasm_unsupported;
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags, ValueLabel};
+use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use wasmparser::{MemoryImmediate, Operator};
@@ -923,8 +923,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             wasm_unsupported!("proposed bulk memory operator {:?}", op);
         }
         Operator::V128Const { value } => {
-            let constant = builder.func.dfg.constants.insert(value.bytes().to_vec());
-            state.push1(builder.ins().vconst(I32X4, constant)) // TODO need to decide what to do about I32X4 here; the WASM spec has V128
+            let handle = builder.func.dfg.constants.insert(value.bytes().to_vec());
+            let value = builder.ins().vconst(I8X16, handle);
+            // the v128.const is typed in CLIF as a I8x16 but raw_bitcast to a different type before use
+            state.push1(value)
         }
         Operator::I8x16Splat
         | Operator::I16x8Splat
@@ -934,13 +936,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2Splat => {
             let value_to_splat = state.pop1();
             let ty = type_of(op);
-            state.push1(builder.ins().splat(ty, value_to_splat))
+            let splatted = builder.ins().splat(ty, value_to_splat);
+            state.push1(splatted)
         }
         Operator::I32x4ExtractLane { lane }
         | Operator::I64x2ExtractLane { lane }
         | Operator::F32x4ExtractLane { lane }
         | Operator::F64x2ExtractLane { lane } => {
-            let vector = state.pop1();
+            let vector = optionally_bitcast_vector(state.pop1(), type_of(op), builder);
             state.push1(builder.ins().extractlane(vector, lane.clone()))
         }
         Operator::I8x16ReplaceLane { lane }
@@ -950,10 +953,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F32x4ReplaceLane { lane }
         | Operator::F64x2ReplaceLane { lane } => {
             let (vector, replacement_value) = state.pop2();
+            let original_vector_type = builder.func.dfg.value_type(vector);
+            let vector = optionally_bitcast_vector(vector, type_of(op), builder);
             let replaced_vector = builder
                 .ins()
                 .insertlane(vector, lane.clone(), replacement_value);
-            state.push1(replaced_vector)
+            state.push1(optionally_bitcast_vector(
+                replaced_vector,
+                original_vector_type,
+                builder,
+            ))
         }
         Operator::V128Load { .. }
         | Operator::V128Store { .. }
@@ -1318,7 +1327,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::V128And
         | Operator::V128Or
         | Operator::V128Xor
-        | Operator::V128Bitselect => I32X4, // TODO this is used as a default until we determine what to do about the spec's V128
+        | Operator::V128Bitselect => I8X16, // default type representing V128
 
         Operator::V8x16Shuffle { .. }
         | Operator::I8x16Splat
@@ -1462,5 +1471,19 @@ fn type_of(operator: &Operator) -> Type {
             "Currently only the SIMD instructions are translated to their return type: {:?}",
             operator
         ),
+    }
+}
+
+/// Some SIMD operations only operate on I8X16 in CLIF; this will convert them to that type by
+/// adding a raw_bitcast if necessary
+fn optionally_bitcast_vector(
+    value: Value,
+    needed_type: Type,
+    builder: &mut FunctionBuilder,
+) -> Value {
+    if builder.func.dfg.value_type(value) != needed_type {
+        builder.ins().raw_bitcast(needed_type, value)
+    } else {
+        value
     }
 }
