@@ -42,12 +42,12 @@ pub(crate) fn fd_pread(
     offset: host::__wasi_filesize_t,
 ) -> Result<usize> {
     read_at(file, buf, offset)
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+        .map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t) -> Result<usize> {
     write_at(file, buf, offset)
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+        .map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {

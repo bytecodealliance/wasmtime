@@ -1,5 +1,5 @@
 use crate::fdentry::FdEntry;
-use crate::sys::{dev_null, errno_from_host};
+use crate::sys::{dev_null, errno_from_ioerror};
 use crate::{host, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -92,11 +92,7 @@ impl WasiCtxBuilder {
         // startup code starts looking at fd 3 for preopens
         let mut preopen_fd = 3;
         for (guest_path, dir) in self.preopens {
-            if !dir
-                .metadata()
-                .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?
-                .is_dir()
-            {
+            if !dir.metadata().map_err(errno_from_ioerror)?.is_dir() {
                 return Err(host::__WASI_EBADF);
             }
 

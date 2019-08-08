@@ -1,4 +1,4 @@
-use crate::sys::{errno_from_host, fdentry_impl};
+use crate::sys::{errno_from_ioerror, fdentry_impl};
 use crate::{host, Result};
 
 use std::mem::ManuallyDrop;
@@ -92,7 +92,7 @@ impl FdEntry {
 
     pub fn duplicate(file: &fs::File) -> Result<Self> {
         file.try_clone()
-            .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+            .map_err(errno_from_ioerror)
             .and_then(Self::from)
     }
 

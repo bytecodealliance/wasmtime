@@ -5,7 +5,7 @@ use crate::fdentry::{Descriptor, FdEntry};
 use crate::memory::*;
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::hostcalls_impl::fs_helpers::path_open_rights;
-use crate::sys::{errno_from_host, host_impl, hostcalls_impl};
+use crate::sys::{errno_from_ioerror, host_impl, hostcalls_impl};
 use crate::{host, wasm32, Result};
 use log::trace;
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -35,8 +35,7 @@ pub(crate) fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_DATASYNC, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
-    fd.sync_data()
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+    fd.sync_data().map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_pread(
@@ -161,8 +160,7 @@ pub(crate) fn fd_read(
         _ => return Err(host::__WASI_EBADF),
     };
 
-    let host_nread = maybe_host_nread
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
+    let host_nread = maybe_host_nread.map_err(errno_from_ioerror)?;
 
     trace!("     | *nread={:?}", host_nread);
 
@@ -245,10 +243,7 @@ pub(crate) fn fd_seek(
         host::__WASI_WHENCE_SET => SeekFrom::Start(offset as u64),
         _ => return Err(host::__WASI_EINVAL),
     };
-    let host_newoffset = fd.seek(pos).map_err(|err| {
-        log::debug!("fd_seek error={:?}", err);
-        err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host)
-    })?;
+    let host_newoffset = fd.seek(pos).map_err(errno_from_ioerror)?;
 
     trace!("     | *newoffset={:?}", host_newoffset);
 
@@ -268,9 +263,7 @@ pub(crate) fn fd_tell(
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_TELL, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
-    let host_offset = fd
-        .seek(SeekFrom::Current(0))
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
+    let host_offset = fd.seek(SeekFrom::Current(0)).map_err(errno_from_ioerror)?;
 
     trace!("     | *newoffset={:?}", host_offset);
 
@@ -352,8 +345,7 @@ pub(crate) fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()>
     let fd = wasi_ctx
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_SYNC, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
-    fd.sync_all()
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+    fd.sync_all().map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_write(
@@ -382,26 +374,20 @@ pub(crate) fn fd_write(
 
     // perform unbuffered writes
     let host_nwritten = match &mut *fe.fd_object.descriptor {
-        Descriptor::File(f) => f
-            .write_vectored(&iovs)
-            .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?,
+        Descriptor::File(f) => f.write_vectored(&iovs).map_err(errno_from_ioerror)?,
         Descriptor::Stdin => return Err(host::__WASI_EBADF),
         Descriptor::Stdout => {
             // lock for the duration of the scope
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
-            let nwritten = stdout
-                .write_vectored(&iovs)
-                .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
-            stdout
-                .flush()
-                .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
+            let nwritten = stdout.write_vectored(&iovs).map_err(errno_from_ioerror)?;
+            stdout.flush().map_err(errno_from_ioerror)?;
             nwritten
         }
         Descriptor::Stderr => io::stderr()
             .lock()
             .write_vectored(&iovs)
-            .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?,
+            .map_err(errno_from_ioerror)?,
     };
 
     trace!("     | *nwritten={:?}", host_nwritten);
@@ -450,9 +436,7 @@ pub(crate) fn fd_allocate(
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_ALLOCATE, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
-    let metadata = fd
-        .metadata()
-        .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?;
+    let metadata = fd.metadata().map_err(errno_from_ioerror)?;
 
     let current_size = metadata.len();
     let wanted_size = offset.checked_add(len).ok_or(host::__WASI_E2BIG)?;
@@ -461,8 +445,7 @@ pub(crate) fn fd_allocate(
     }
 
     if wanted_size > current_size {
-        fd.set_len(wanted_size)
-            .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+        fd.set_len(wanted_size).map_err(errno_from_ioerror)
     } else {
         Ok(())
     }

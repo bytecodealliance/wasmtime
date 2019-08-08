@@ -3,8 +3,8 @@
 use super::fs_helpers::*;
 use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::PathGet;
+use crate::sys::errno_from_ioerror;
 use crate::sys::host_impl;
-use crate::sys::{errno_from_host, errno_from_ioerror};
 use crate::{host, wasm32, Result};
 use nix::libc::{self, c_long, c_void, off_t};
 use std::convert::TryInto;
@@ -18,13 +18,11 @@ pub(crate) fn fd_pread(
     buf: &mut [u8],
     offset: host::__wasi_filesize_t,
 ) -> Result<usize> {
-    file.read_at(buf, offset)
-        .map_err(|e| e.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+    file.read_at(buf, offset).map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t) -> Result<usize> {
-    file.write_at(buf, offset)
-        .map_err(|e| e.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))
+    file.write_at(buf, offset).map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {

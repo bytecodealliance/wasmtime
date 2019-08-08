@@ -1,5 +1,5 @@
 use crate::fdentry::Descriptor;
-use crate::sys::errno_from_host;
+use crate::sys::{errno_from_host, errno_from_ioerror};
 use crate::{host, Result};
 use std::io;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
@@ -53,7 +53,7 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
             std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(fd.as_raw_fd()) });
         let ft = file
             .metadata()
-            .map_err(|err| err.raw_os_error().map_or(host::__WASI_EIO, errno_from_host))?
+            .map_err(errno_from_ioerror)?
             .file_type();
         if ft.is_block_device() {
             (
