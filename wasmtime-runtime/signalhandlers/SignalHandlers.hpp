@@ -14,14 +14,10 @@ extern "C" {
 // Record the Trap code and wasm bytecode offset in TLS somewhere
 void RecordTrap(const uint8_t* pc);
 
-// Initiate an unwind.
+void* EnterScope(void*);
+void LeaveScope(void*);
+void* GetScope(void);
 void Unwind(void);
-
-// Trap initialization state.
-struct TrapContext {
-    bool triedToInstallSignalHandlers;
-    bool haveSignalHandlers;
-};
 
 // This function performs the low-overhead signal handler initialization that we
 // want to do eagerly to ensure a more-deterministic global process state. This
@@ -31,14 +27,14 @@ struct TrapContext {
 // called at the end of the startup process, after other handlers have been
 // installed. This function can thus be called multiple times, having no effect
 // after the first call.
-bool
+int
 EnsureEagerSignalHandlers(void);
 
 // Assuming EnsureEagerProcessSignalHandlers() has already been called,
 // this function performs the full installation of signal handlers which must
 // be performed per-thread. This operation may incur some overhead and
 // so should be done only when needed to use wasm.
-bool
+int
 EnsureDarwinMachPorts(void);
 
 #ifdef __cplusplus

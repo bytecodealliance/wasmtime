@@ -65,12 +65,6 @@ jobs:
       submodules: true
     - template: ci/azure-install-rust.yml
 
-    - script: |
-        powershell -Command "$ProgressPreference = 'SilentlyContinue'; iwr -outf %TEMP%\LLVM-8.0.0-win64.exe https://rust-lang-ci2.s3.amazonaws.com/rust-ci-mirror/LLVM-8.0.0-win64.exe"
-        %TEMP%\LLVM-8.0.0-win64.exe /S /NCRC
-      condition: eq(variables['Agent.OS'], 'Windows_NT')
-      displayName: Install clang (Windows)
-
     - script: cargo fetch
       displayName: Fetch cargo dependencies
 
@@ -127,12 +121,6 @@ jobs:
 
     - bash: echo "##vso[task.setvariable variable=RUSTC_VERSION;]`rustc --version`"
       displayName: Set rustc version string for caching
-
-    - script: |
-        powershell -Command "$ProgressPreference = 'SilentlyContinue'; iwr -outf %TEMP%\LLVM-8.0.0-win64.exe https://rust-lang-ci2.s3.amazonaws.com/rust-ci-mirror/LLVM-8.0.0-win64.exe"
-        %TEMP%\LLVM-8.0.0-win64.exe /S /NCRC
-      condition: eq(variables['Agent.OS'], 'Windows_NT')
-      displayName: Install clang (Windows)
 
     # - bash: |
     #     set -e

@@ -6,10 +6,20 @@
 
 use crate::vmcontext::VMContext;
 use core::borrow::{Borrow, BorrowMut};
-use core::cell::RefCell;
+use core::cell::Cell;
 use std::sync::RwLock;
 
-include!(concat!(env!("OUT_DIR"), "/signalhandlers.rs"));
+#[derive(Default)]
+struct TrapContext {
+    tried_to_install_signal_handlers: Cell<bool>,
+    have_signal_handlers: Cell<bool>,
+}
+
+extern "C" {
+    fn EnsureEagerSignalHandlers() -> libc::c_int;
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    fn EnsureDarwinMachPorts() -> libc::c_int;
+}
 
 struct InstallState {
     tried: bool,
@@ -50,7 +60,7 @@ pub extern "C" fn wasmtime_init_eager() {
     state.tried = true;
     assert!(!state.success);
 
-    if !unsafe { EnsureEagerSignalHandlers() } {
+    if unsafe { EnsureEagerSignalHandlers() == 0 } {
         return;
     }
 
@@ -58,8 +68,7 @@ pub extern "C" fn wasmtime_init_eager() {
 }
 
 thread_local! {
-    static TRAP_CONTEXT: RefCell<TrapContext> =
-        RefCell::new(TrapContext { triedToInstallSignalHandlers: false, haveSignalHandlers: false });
+    static TRAP_CONTEXT: TrapContext = TrapContext::default();
 }
 
 /// Assuming `EnsureEagerProcessSignalHandlers` has already been called,
@@ -68,10 +77,10 @@ thread_local! {
 /// so should be done only when needed to use wasm.
 #[no_mangle]
 pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {
-    if !TRAP_CONTEXT.with(|cx| cx.borrow().triedToInstallSignalHandlers) {
+    if !TRAP_CONTEXT.with(|cx| cx.tried_to_install_signal_handlers.get()) {
         TRAP_CONTEXT.with(|cx| {
-            cx.borrow_mut().triedToInstallSignalHandlers = true;
-            assert!(!cx.borrow().haveSignalHandlers);
+            cx.tried_to_install_signal_handlers.set(true);
+            assert!(!cx.have_signal_handlers.get());
         });
 
         {
@@ -90,12 +99,12 @@ pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {
         ensure_darwin_mach_ports();
 
         TRAP_CONTEXT.with(|cx| {
-            cx.borrow_mut().haveSignalHandlers = true;
+            cx.have_signal_handlers.set(true);
         })
     }
 
     let instance = unsafe { vmctx.instance() };
-    let have_signal_handlers = TRAP_CONTEXT.with(|cx| cx.borrow().haveSignalHandlers);
+    let have_signal_handlers = TRAP_CONTEXT.with(|cx| cx.have_signal_handlers.get());
     if !have_signal_handlers && instance.needs_signal_handlers() {
         panic!("failed to install signal handlers");
     }
@@ -113,7 +122,7 @@ fn ensure_darwin_mach_ports() {
     state.tried = true;
     assert!(!state.success);
 
-    if !unsafe { EnsureDarwinMachPorts() } {
+    if unsafe { EnsureDarwinMachPorts() != 0 } {
         return;
     }
 

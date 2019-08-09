@@ -22,9 +22,11 @@ obtain a full checkout, like this:
 git clone --recurse-submodules https://github.com/CraneStation/wasmtime.git
 ```
 
-To build Wasmtime, install cmake and clang, and then build with cargo, such
-as with "cargo build --release". For information on installing clang, see
-[rust-bindgen's documentation](https://github.com/rust-lang/rust-bindgen/blob/master/book/src/requirements.md).
+To build an optimized version of Wasmtime, use Cargo:
+
+```
+cargo build --release
+```
 
 There are Rust, C, and C++ toolchains that can compile programs with WASI. See
 the [WASI intro][WASI intro] for more information, and the [WASI tutorial][WASI tutorial]
