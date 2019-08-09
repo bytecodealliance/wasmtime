@@ -136,6 +136,7 @@ cfg_if::cfg_if! {
                     "symlink_loop" => true,
                     "clock_time_get" => true,
                     "truncation_rights" => true,
+                    "fd_filestat_set" => true,
                     _ => false,
                 }
             } else {
