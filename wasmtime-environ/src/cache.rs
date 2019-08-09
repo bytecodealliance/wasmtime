@@ -1,4 +1,4 @@
-use crate::address_map::ModuleAddressMap;
+use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::compilation::{CodeAndJTOffsets, Compilation, Relocations};
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
@@ -102,9 +102,17 @@ pub struct ModuleCacheData {
     compilation: Compilation,
     relocations: Relocations,
     address_transforms: ModuleAddressMap,
+    value_ranges: ValueLabelsRanges,
+    stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
 }
 
-type ModuleCacheDataTupleType = (Compilation, Relocations, ModuleAddressMap);
+type ModuleCacheDataTupleType = (
+    Compilation,
+    Relocations,
+    ModuleAddressMap,
+    ValueLabelsRanges,
+    PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+);
 
 struct Sha256Hasher(Sha256);
 
@@ -225,11 +233,19 @@ impl ModuleCacheData {
             compilation: data.0,
             relocations: data.1,
             address_transforms: data.2,
+            value_ranges: data.3,
+            stack_slots: data.4,
         }
     }
 
     pub fn to_tuple(self) -> ModuleCacheDataTupleType {
-        (self.compilation, self.relocations, self.address_transforms)
+        (
+            self.compilation,
+            self.relocations,
+            self.address_transforms,
+            self.value_ranges,
+            self.stack_slots,
+        )
     }
 }
 

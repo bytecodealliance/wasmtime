@@ -18,7 +18,6 @@ pub type Dwarf<'input> = gimli::Dwarf<gimli::EndianSlice<'input, LittleEndian>>;
 #[derive(Debug)]
 pub struct WasmFileInfo {
     pub code_section_offset: u64,
-    pub function_offsets_and_sizes: Box<[(u64, u32)]>,
 }
 
 #[derive(Debug)]
@@ -100,7 +99,6 @@ pub fn read_debuginfo(data: &[u8]) -> DebugInfoData {
     let mut reader = ModuleReader::new(data).expect("reader");
     let mut sections = HashMap::new();
     let mut code_section_offset = 0;
-    let mut function_offsets_and_sizes = Vec::new();
     while !reader.eof() {
         let section = reader.read().expect("section");
         if let SectionCode::Custom { name, .. } = section.code {
@@ -112,23 +110,12 @@ pub fn read_debuginfo(data: &[u8]) -> DebugInfoData {
         }
         if let SectionCode::Code = section.code {
             code_section_offset = section.range().start as u64;
-            // TODO remove me later
-            let mut reader = section.get_code_section_reader().expect("code reader");
-            for _ in 0..reader.get_count() {
-                let body = reader.read().expect("function body read");
-                let range = body.range();
-                let fn_body_size = range.end - range.start;
-                let fn_body_offset = range.start;
-                function_offsets_and_sizes.push((fn_body_offset as u64, fn_body_size as u32));
-            }
         }
     }
-    let function_offsets_and_sizes = function_offsets_and_sizes.into_boxed_slice();
     DebugInfoData {
         dwarf: convert_sections(sections),
         wasm_file: WasmFileInfo {
             code_section_offset,
-            function_offsets_and_sizes,
         },
     }
 }

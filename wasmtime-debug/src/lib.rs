@@ -3,13 +3,12 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl};
 use failure::Error;
 use target_lexicon::{BinaryFormat, Triple};
-use wasmtime_environ::ModuleAddressMap;
+use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
-pub use crate::transform::{transform_dwarf, ModuleVmctxInfo, ValueLabelsRanges};
+pub use crate::transform::transform_dwarf;
 pub use crate::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
 
-mod address_transform;
 mod gc;
 mod read_debuginfo;
 mod transform;
@@ -28,12 +27,14 @@ impl SymbolResolver for FunctionRelocResolver {
 
 pub fn emit_debugsections(
     obj: &mut Artifact,
+    vmctx_info: &ModuleVmctxInfo,
     target_config: &TargetFrontendConfig,
     debuginfo_data: &DebugInfoData,
     at: &ModuleAddressMap,
+    ranges: &ValueLabelsRanges,
 ) -> Result<(), Error> {
     let resolver = FunctionRelocResolver {};
-    let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
+    let dwarf = transform_dwarf(target_config, debuginfo_data, at, vmctx_info, ranges)?;
     emit_dwarf(obj, dwarf, &resolver)?;
     Ok(())
 }
@@ -53,7 +54,9 @@ pub fn emit_debugsections_image(
     triple: Triple,
     target_config: &TargetFrontendConfig,
     debuginfo_data: &DebugInfoData,
+    vmctx_info: &ModuleVmctxInfo,
     at: &ModuleAddressMap,
+    ranges: &ValueLabelsRanges,
     funcs: &Vec<(*const u8, usize)>,
 ) -> Result<Vec<u8>, Error> {
     let ref func_offsets = funcs
@@ -62,7 +65,7 @@ pub fn emit_debugsections_image(
         .collect::<Vec<u64>>();
     let mut obj = Artifact::new(triple, String::from("module"));
     let resolver = ImageRelocResolver { func_offsets };
-    let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
+    let dwarf = transform_dwarf(target_config, debuginfo_data, at, vmctx_info, ranges)?;
 
     // Assuming all functions in the same code block, looking min/max of its range.
     assert!(funcs.len() > 0);

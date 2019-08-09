@@ -27,6 +27,12 @@ pub struct FunctionAddressMap {
     /// The array is sorted by the InstructionAddressMap::code_offset field.
     pub instructions: Vec<InstructionAddressMap>,
 
+    /// Function start source location (normally declaration).
+    pub start_srcloc: ir::SourceLoc,
+
+    /// Function end source location.
+    pub end_srcloc: ir::SourceLoc,
+
     /// Generated function body offset if applicable, otherwise 0.
     pub body_offset: usize,
 
@@ -36,3 +42,18 @@ pub struct FunctionAddressMap {
 
 /// Module functions addresses mappings.
 pub type ModuleAddressMap = PrimaryMap<DefinedFuncIndex, FunctionAddressMap>;
+
+/// Value ranges for functions.
+pub type ValueLabelsRanges = PrimaryMap<DefinedFuncIndex, cranelift_codegen::ValueLabelsRanges>;
+
+/// Stack slots for functions.
+pub type StackSlots = PrimaryMap<DefinedFuncIndex, ir::StackSlots>;
+
+/// Module `vmctx` related info.
+pub struct ModuleVmctxInfo {
+    /// The memory definition offset in the VMContext structure.
+    pub memory_offset: i64,
+
+    /// The functions stack slots.
+    pub stack_slots: StackSlots,
+}
