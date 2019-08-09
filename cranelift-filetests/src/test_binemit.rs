@@ -7,6 +7,8 @@ use crate::match_directive::match_directive;
 use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen::binemit::{self, CodeInfo, CodeSink, RegDiversions};
 use cranelift_codegen::dbg::DisplayList;
+use cranelift_codegen::dominator_tree::DominatorTree;
+use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::print_errors::pretty_error;
@@ -166,8 +168,11 @@ impl SubTest for TestBinEmit {
         }
 
         // Relax branches and compute EBB offsets based on the encodings.
-        let CodeInfo { total_size, .. } = binemit::relax_branches(&mut func, isa)
-            .map_err(|e| pretty_error(&func, context.isa, e))?;
+        let mut cfg = ControlFlowGraph::with_function(&func);
+        let mut domtree = DominatorTree::with_function(&func, &cfg);
+        let CodeInfo { total_size, .. } =
+            binemit::relax_branches(&mut func, &mut cfg, &mut domtree, isa)
+                .map_err(|e| pretty_error(&func, context.isa, e))?;
 
         // Collect all of the 'bin:' directives on instructions.
         let mut bins = HashMap::new();

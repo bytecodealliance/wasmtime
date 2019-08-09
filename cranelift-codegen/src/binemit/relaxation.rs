@@ -29,7 +29,9 @@
 
 use crate::binemit::{CodeInfo, CodeOffset};
 use crate::cursor::{Cursor, FuncCursor};
-use crate::ir::{Function, InstructionData, Opcode};
+use crate::dominator_tree::DominatorTree;
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value, ValueList};
 use crate::isa::{EncInfo, TargetIsa};
 use crate::iterators::IteratorExtras;
 use crate::regalloc::RegDiversions;
@@ -40,7 +42,12 @@ use log::debug;
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
 /// Fill in the `func.offsets` table so the function is ready for binary emission.
-pub fn relax_branches(func: &mut Function, isa: &dyn TargetIsa) -> CodegenResult<CodeInfo> {
+pub fn relax_branches(
+    func: &mut Function,
+    cfg: &mut ControlFlowGraph,
+    domtree: &mut DominatorTree,
+    isa: &dyn TargetIsa,
+) -> CodegenResult<CodeInfo> {
     let _tt = timing::relax_branches();
 
     let encinfo = isa.encoding_info();
@@ -49,7 +56,10 @@ pub fn relax_branches(func: &mut Function, isa: &dyn TargetIsa) -> CodegenResult
     func.offsets.clear();
     func.offsets.resize(func.dfg.num_ebbs());
 
-    // Start by inserting fall through instructions.
+    // Start by removing redundant jumps.
+    fold_redundant_jumps(func, cfg, domtree);
+
+    // Convert jumps to fallthrough instructions where possible.
     fallthroughs(func);
 
     let mut offset = 0;
@@ -79,7 +89,6 @@ pub fn relax_branches(func: &mut Function, isa: &dyn TargetIsa) -> CodegenResult
         let mut cur = FuncCursor::new(func);
         while let Some(ebb) = cur.next_ebb() {
             divert.clear();
-
             // Record the offset for `ebb` and make sure we iterate until offsets are stable.
             if cur.func.offsets[ebb] != offset {
                 cur.func.offsets[ebb] = offset;
@@ -132,6 +141,131 @@ pub fn relax_branches(func: &mut Function, isa: &dyn TargetIsa) -> CodegenResult
         rodata_size,
         total_size: offset,
     })
+}
+
+/// Folds an instruction if it is a redundant jump.
+/// Returns whether folding was performed (which invalidates the CFG).
+fn try_fold_redundant_jump(
+    func: &mut Function,
+    cfg: &mut ControlFlowGraph,
+    ebb: Ebb,
+    first_inst: Inst,
+) -> bool {
+    let first_dest = match func.dfg[first_inst].branch_destination() {
+        Some(ebb) => ebb, // The instruction was a single-target branch.
+        None => {
+            return false; // The instruction was either multi-target or not a branch.
+        }
+    };
+
+    // Look at the first instruction of the first branch's destination.
+    // If it is an unconditional branch, maybe the second jump can be bypassed.
+    let second_inst = func.layout.first_inst(first_dest).expect("Instructions");
+    if func.dfg[second_inst].opcode() != Opcode::Jump {
+        return false;
+    }
+
+    // Now we need to fix up first_inst's ebb parameters to match second_inst's,
+    // without changing the branch-specific arguments.
+    //
+    // The intermediary block is allowed to reference any SSA value that dominates it,
+    // but that SSA value may not necessarily also dominate the instruction that's
+    // being patched.
+
+    // Get the arguments and parameters passed by the first branch.
+    let num_fixed = func.dfg[first_inst]
+        .opcode()
+        .constraints()
+        .num_fixed_value_arguments();
+    let (first_args, first_params) = func.dfg[first_inst]
+        .arguments(&func.dfg.value_lists)
+        .split_at(num_fixed);
+
+    // Get the parameters passed by the second jump.
+    let num_fixed = func.dfg[second_inst]
+        .opcode()
+        .constraints()
+        .num_fixed_value_arguments();
+    let (_, second_params) = func.dfg[second_inst]
+        .arguments(&func.dfg.value_lists)
+        .split_at(num_fixed);
+    let mut second_params = second_params.to_vec(); // Clone for rewriting below.
+
+    // For each parameter passed by the second jump, if any of those parameters
+    // was a block parameter, rewrite it to refer to the value that the first jump
+    // passed in its parameters. Otherwise, make sure it dominates first_inst.
+    //
+    // For example: if we `ebb0: jump ebb1(v1)` to `ebb1(v2): jump ebb2(v2)`,
+    // we want to rewrite the original jump to `jump ebb2(v1)`.
+    let ebb_params: &[Value] = func.dfg.ebb_params(first_dest);
+    debug_assert!(ebb_params.len() == first_params.len());
+
+    for value in second_params.iter_mut() {
+        if let Some((n, _)) = ebb_params.iter().enumerate().find(|(_, &p)| p == *value) {
+            // This value was the Nth parameter passed to the second_inst's ebb.
+            // Rewrite it as the Nth parameter passed by first_inst.
+            *value = first_params[n];
+        }
+    }
+
+    // Build a value list of first_args (unchanged) followed by second_params (rewritten).
+    let arguments_vec: std::vec::Vec<_> = first_args
+        .iter()
+        .chain(second_params.iter())
+        .map(|x| *x)
+        .collect();
+    let value_list = ValueList::from_slice(&arguments_vec, &mut func.dfg.value_lists);
+
+    func.dfg[first_inst].take_value_list(); // Drop the current list.
+    func.dfg[first_inst].put_value_list(value_list); // Put the new list.
+
+    // Bypass the second jump.
+    // This can disconnect the Ebb containing `second_inst`, to be cleaned up later.
+    let second_dest = func.dfg[second_inst].branch_destination().expect("Dest");
+    func.change_branch_destination(first_inst, second_dest);
+    cfg.recompute_ebb(func, ebb);
+
+    // The previously-intermediary Ebb may now be unreachable. Update CFG.
+    if cfg.pred_iter(first_dest).count() == 0 {
+        // Remove all instructions from that ebb.
+        while let Some(inst) = func.layout.first_inst(first_dest) {
+            func.layout.remove_inst(inst);
+        }
+
+        // Remove the block...
+        cfg.recompute_ebb(func, first_dest); // ...from predecessor lists.
+        func.layout.remove_ebb(first_dest); // ...from the layout.
+    }
+
+    return true;
+}
+
+/// Redirects `jump` instructions that point to other `jump` instructions to the final destination.
+/// This transformation may orphan some blocks.
+fn fold_redundant_jumps(
+    func: &mut Function,
+    cfg: &mut ControlFlowGraph,
+    domtree: &mut DominatorTree,
+) {
+    let mut folded = false;
+
+    // Postorder iteration guarantees that a chain of jumps is visited from
+    // the end of the chain to the start of the chain.
+    for &ebb in domtree.cfg_postorder() {
+        // Only proceed if the first terminator instruction is a single-target branch.
+        let first_inst = func.layout.last_inst(ebb).expect("Ebb has no terminator");
+        folded |= try_fold_redundant_jump(func, cfg, ebb, first_inst);
+
+        // Also try the previous instruction.
+        if let Some(prev_inst) = func.layout.prev_inst(first_inst) {
+            folded |= try_fold_redundant_jump(func, cfg, ebb, prev_inst);
+        }
+    }
+
+    // Folding jumps invalidates the dominator tree.
+    if folded {
+        domtree.compute(func, cfg);
+    }
 }
 
 /// Convert `jump` instructions to `fallthrough` instructions where possible and verify that any

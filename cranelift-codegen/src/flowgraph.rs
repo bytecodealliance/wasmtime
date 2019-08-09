@@ -31,7 +31,7 @@ use crate::timing;
 use core::mem;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct BasicBlock {
     /// Enclosing Ebb key.
     pub ebb: Ebb,
