@@ -88,7 +88,7 @@ fn create_pre_header(
     {
         // We only follow normal edges (not the back edges)
         if !domtree.dominates(header, last_inst, &func.layout) {
-            change_branch_jump_destination(last_inst, pre_header, func);
+            func.change_branch_destination(last_inst, pre_header);
         }
     }
     {
@@ -134,15 +134,6 @@ fn has_pre_header(
         }
     }
     result
-}
-
-// Change the destination of a jump or branch instruction. Does nothing if called with a non-jump
-// or non-branch instruction.
-fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function) {
-    match func.dfg[inst].branch_destination_mut() {
-        None => (),
-        Some(instruction_dest) => *instruction_dest = new_ebb,
-    }
 }
 
 /// Test whether the given opcode is unsafe to even consider for LICM.

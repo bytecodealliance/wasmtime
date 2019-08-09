@@ -11,9 +11,9 @@ function u0:0(i64) system_v {
 ebb0(v0: i64):
     v1 = stack_addr.i64 ss0
     v2 = load.i8 v1
-    br_table v2, ebb2, jt0
+    br_table v2, ebb1, jt0
 ; check:     $(oob=$V) = ifcmp_imm $(idx=$V), 1
-; nextln:    brif uge $oob, ebb2
+; nextln:    brif uge $oob, ebb1
 ; nextln:    fallthrough $(inb=$EBB)
 ; check:   $inb:
 ; nextln:    $(final_idx=$V) = uextend.i64 $idx
@@ -21,9 +21,6 @@ ebb0(v0: i64):
 ; nextln:    $(rel_addr=$V) = jump_table_entry $final_idx, $base, 4, jt0
 ; nextln:    $(addr=$V) = iadd $base, $rel_addr
 ; nextln:    indirect_jump_table_br $addr, jt0
-
-ebb2:
-    jump ebb1
 
 ebb1:
     return
