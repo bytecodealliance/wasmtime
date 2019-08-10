@@ -41,13 +41,11 @@ pub(crate) fn fd_pread(
     buf: &mut [u8],
     offset: host::__wasi_filesize_t,
 ) -> Result<usize> {
-    read_at(file, buf, offset)
-        .map_err(errno_from_ioerror)
+    read_at(file, buf, offset).map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t) -> Result<usize> {
-    write_at(file, buf, offset)
-        .map_err(errno_from_ioerror)
+    write_at(file, buf, offset).map_err(errno_from_ioerror)
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {
@@ -203,7 +201,53 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
-    unimplemented!("path_rename")
+    use std::fs;
+
+    let old_path = concatenate(resolved_old.dirfd(), Path::new(resolved_old.path()))?;
+    let new_path = concatenate(resolved_new.dirfd(), Path::new(resolved_new.path()))?;
+
+    // First, sanity check that we're not trying to rename dir to file or vice versa.
+    // NB on Windows, the former is actually permitted [std::fs::rename].
+    //
+    // [std::fs::rename]: https://doc.rust-lang.org/std/fs/fn.rename.html
+    if old_path.is_dir() && new_path.is_file() {
+        return Err(host::__WASI_ENOTDIR);
+    }
+    if old_path.is_file() && new_path.is_dir() {
+        return Err(host::__WASI_EISDIR);
+    }
+
+    // TODO handle symlinks
+
+    fs::rename(&old_path, &new_path).or_else(|e| match e.raw_os_error() {
+        Some(e) => {
+            if old_path.is_dir() && new_path.is_dir() {
+                if !dir_is_empty(&new_path).map_err(errno_from_ioerror)? {
+                    Err(host::__WASI_ENOTEMPTY)
+                } else {
+                    // remove new_path dir and rename
+                    fs::remove_dir(&new_path)
+                        .and_then(|()| fs::rename(old_path, new_path))
+                        .map_err(errno_from_ioerror)
+                }
+            } else {
+                log::debug!("path_rename at rename error={:?}", e);
+                Err(errno_from_host(e))
+            }
+        }
+        None => {
+            log::debug!("Inconvertible OS error: {}", e);
+            Err(host::__WASI_EIO)
+        }
+    })
+}
+
+fn dir_is_empty<P: AsRef<Path>>(path: P) -> io::Result<bool> {
+    let mut it = std::fs::read_dir(path)?;
+    match it.next() {
+        Some(_) => Ok(false),
+        None => Ok(true),
+    }
 }
 
 pub(crate) fn num_hardlinks(file: &File, _metadata: &Metadata) -> io::Result<u64> {
