@@ -213,26 +213,29 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
     if old_path.is_dir() && new_path.is_file() {
         return Err(host::__WASI_ENOTDIR);
     }
-    if old_path.is_file() && new_path.is_dir() {
-        return Err(host::__WASI_EISDIR);
-    }
 
     // TODO handle symlinks
 
     fs::rename(&old_path, &new_path).or_else(|e| match e.raw_os_error() {
         Some(e) => {
-            if old_path.is_dir() && new_path.is_dir() {
-                if !dir_is_empty(&new_path).map_err(errno_from_ioerror)? {
-                    Err(host::__WASI_ENOTEMPTY)
-                } else {
-                    // remove new_path dir and rename
-                    fs::remove_dir(&new_path)
-                        .and_then(|()| fs::rename(old_path, new_path))
-                        .map_err(errno_from_ioerror)
+            use winx::winerror::WinError;
+
+            log::debug!("path_rename at rename error code={:?}", e);
+            match WinError::from_u32(e as u32) {
+                WinError::ERROR_ACCESS_DENIED => {
+                    // So most likely dealing with new_path == dir.
+                    // Eliminate case old_path == file first.
+                    if old_path.is_file() {
+                        Err(host::__WASI_EISDIR)
+                    } else {
+                        // Ok, let's try removing an empty dir at new_path if it exists
+                        // and is a nonempty dir.
+                        fs::remove_dir(&new_path)
+                            .and_then(|()| fs::rename(old_path, new_path))
+                            .map_err(errno_from_ioerror)
+                    }
                 }
-            } else {
-                log::debug!("path_rename at rename error={:?}", e);
-                Err(errno_from_host(e))
+                e => Err(host_impl::errno_from_win(e)),
             }
         }
         None => {
@@ -240,14 +243,6 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
             Err(host::__WASI_EIO)
         }
     })
-}
-
-fn dir_is_empty<P: AsRef<Path>>(path: P) -> io::Result<bool> {
-    let mut it = std::fs::read_dir(path)?;
-    match it.next() {
-        Some(_) => Ok(false),
-        None => Ok(true),
-    }
 }
 
 pub(crate) fn num_hardlinks(file: &File, _metadata: &Metadata) -> io::Result<u64> {
