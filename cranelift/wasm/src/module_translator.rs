@@ -18,133 +18,78 @@ pub fn translate_module<'data>(
     let _tt = timing::wasm_translate_module();
     let mut reader = ModuleReader::new(data)?;
 
-    reader.skip_custom_sections()?;
-    if reader.eof() {
-        return Ok(());
-    }
-    let mut section = reader.read()?;
+    while !reader.eof() {
+        let section = reader.read()?;
+        match section.code {
+            SectionCode::Type => {
+                let types = section.get_type_section_reader()?;
+                parse_type_section(types, environ)?;
+            }
 
-    if let SectionCode::Type = section.code {
-        let types = section.get_type_section_reader()?;
-        parse_type_section(types, environ)?;
+            SectionCode::Import => {
+                let imports = section.get_import_section_reader()?;
+                parse_import_section(imports, environ)?;
+            }
 
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
+            SectionCode::Function => {
+                let functions = section.get_function_section_reader()?;
+                parse_function_section(functions, environ)?;
+            }
+
+            SectionCode::Table => {
+                let tables = section.get_table_section_reader()?;
+                parse_table_section(tables, environ)?;
+            }
+
+            SectionCode::Memory => {
+                let memories = section.get_memory_section_reader()?;
+                parse_memory_section(memories, environ)?;
+            }
+
+            SectionCode::Global => {
+                let globals = section.get_global_section_reader()?;
+                parse_global_section(globals, environ)?;
+            }
+
+            SectionCode::Export => {
+                let exports = section.get_export_section_reader()?;
+                parse_export_section(exports, environ)?;
+            }
+
+            SectionCode::Start => {
+                let start = section.get_start_section_content()?;
+                parse_start_section(start, environ)?;
+            }
+
+            SectionCode::Element => {
+                let elements = section.get_element_section_reader()?;
+                parse_element_section(elements, environ)?;
+            }
+
+            SectionCode::Code => {
+                let code = section.get_code_section_reader()?;
+                parse_code_section(code, environ)?;
+            }
+
+            SectionCode::Data => {
+                let data = section.get_data_section_reader()?;
+                parse_data_section(data, environ)?;
+            }
+
+            SectionCode::DataCount => {
+                return Err(WasmError::InvalidWebAssembly {
+                    message: "don't know how to handle the data count section yet",
+                    offset: reader.current_position(),
+                });
+            }
+
+            SectionCode::Custom { name, kind: _ } => {
+                let mut reader = section.get_binary_reader();
+                let len = reader.bytes_remaining();
+                let payload = reader.read_bytes(len)?;
+                environ.custom_section(name, payload)?;
+            }
         }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Import = section.code {
-        let imports = section.get_import_section_reader()?;
-        parse_import_section(imports, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Function = section.code {
-        let functions = section.get_function_section_reader()?;
-        parse_function_section(functions, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Table = section.code {
-        let tables = section.get_table_section_reader()?;
-        parse_table_section(tables, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Memory = section.code {
-        let memories = section.get_memory_section_reader()?;
-        parse_memory_section(memories, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Global = section.code {
-        let globals = section.get_global_section_reader()?;
-        parse_global_section(globals, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Export = section.code {
-        let exports = section.get_export_section_reader()?;
-        parse_export_section(exports, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Start = section.code {
-        let start = section.get_start_section_content()?;
-        parse_start_section(start, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Element = section.code {
-        let elements = section.get_element_section_reader()?;
-        parse_element_section(elements, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Code = section.code {
-        let code = section.get_code_section_reader()?;
-        parse_code_section(code, environ)?;
-
-        reader.skip_custom_sections()?;
-        if reader.eof() {
-            return Ok(());
-        }
-        section = reader.read()?;
-    }
-
-    if let SectionCode::Data = section.code {
-        let data = section.get_data_section_reader()?;
-        parse_data_section(data, environ)?;
-    }
-
-    reader.skip_custom_sections()?;
-    if !reader.eof() {
-        return Err(WasmError::InvalidWebAssembly {
-            message: "sections must occur at most once and in the prescribed order",
-            offset: reader.current_position(),
-        });
     }
 
     Ok(())
