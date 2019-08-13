@@ -16,7 +16,7 @@ libc = "0.2"
 rand = "0.6"
 cfg-if = "0.1.9"
 log = "0.4"
-filetime = "0.2.6"
+filetime = "0.2.7"
 
 [target.'cfg(unix)'.dependencies]
 nix = "0.13"
