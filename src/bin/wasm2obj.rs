@@ -56,10 +56,6 @@ use wasmtime_environ::{
 };
 use wasmtime_obj::emit_module;
 
-mod utils;
-
-static LOG_FILENAME_PREFIX: &str = "wasm2obj.dbg.";
-
 const USAGE: &str = "
 Wasm to native object translation utility.
 Takes a binary WebAssembly module into a native object file.
@@ -112,7 +108,7 @@ fn main() {
     if args.flag_debug {
         pretty_env_logger::init();
     } else {
-        utils::init_file_per_thread_logger();
+        wasmtime::init_file_per_thread_logger("wasm2obj.dbg.");
     }
 
     cache_conf::init(args.flag_cache);
