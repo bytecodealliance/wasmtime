@@ -37,10 +37,6 @@ use wasmtime_environ::cache_conf;
 use wasmtime_jit::{Compiler, Features};
 use wasmtime_wast::WastContext;
 
-mod utils;
-
-static LOG_FILENAME_PREFIX: &str = "cranelift.dbg.";
-
 const USAGE: &str = "
 Wast test runner.
 
@@ -80,7 +76,7 @@ fn main() {
     if args.flag_debug {
         pretty_env_logger::init();
     } else {
-        utils::init_file_per_thread_logger();
+        wasmtime::init_file_per_thread_logger("cranelift.dbg.");
     }
 
     cache_conf::init(args.flag_cache);

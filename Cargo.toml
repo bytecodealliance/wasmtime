@@ -9,18 +9,6 @@ categories = ["wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 edition = "2018"
 
-[[bin]]
-name = "wasmtime"
-path = "src/wasmtime.rs"
-
-[[bin]]
-name = "wast"
-path = "src/wast.rs"
-
-[[bin]]
-name = "wasm2obj"
-path = "src/wasm2obj.rs"
-
 [dependencies]
 cranelift-codegen = { version = "0.38.0", features = ["enable-serde"] }
 cranelift-native = "0.38.0"

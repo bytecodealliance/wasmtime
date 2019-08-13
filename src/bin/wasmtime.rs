@@ -54,10 +54,6 @@ use wasmtime_wast::instantiate_spectest;
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
 
-mod utils;
-
-static LOG_FILENAME_PREFIX: &str = "wasmtime.dbg.";
-
 const USAGE: &str = "
 Wasm runner.
 
@@ -207,7 +203,7 @@ fn main() {
     if args.flag_debug {
         pretty_env_logger::init();
     } else {
-        utils::init_file_per_thread_logger();
+        wasmtime::init_file_per_thread_logger("wasmtime.dbg.");
     }
 
     cache_conf::init(args.flag_cache);
