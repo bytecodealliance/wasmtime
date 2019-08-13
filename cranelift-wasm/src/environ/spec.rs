@@ -467,4 +467,14 @@ pub trait ModuleEnvironment<'data> {
         offset: usize,
         data: &'data [u8],
     ) -> WasmResult<()>;
+
+    /// Indicates that a custom section has been found in the wasm file
+    fn custom_section(
+        &mut self,
+        name: &'data str,
+        data: &'data [u8],
+    ) -> WasmResult<()> {
+        drop((name, data));
+        Ok(())
+    }
 }
