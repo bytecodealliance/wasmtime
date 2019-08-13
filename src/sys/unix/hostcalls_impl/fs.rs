@@ -6,7 +6,7 @@ use crate::hostcalls_impl::PathGet;
 use crate::sys::errno_from_ioerror;
 use crate::sys::host_impl;
 use crate::{host, wasm32, Result};
-use nix::libc::{self, c_long, c_void, off_t};
+use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
 use std::ffi::CString;
 use std::fs::{File, Metadata};
@@ -50,6 +50,8 @@ pub(crate) fn fd_advise(
 ) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
+        use nix::libc::off_t;
+
         let host_advice = match advice {
             host::__WASI_ADVICE_DONTNEED => libc::POSIX_FADV_DONTNEED,
             host::__WASI_ADVICE_SEQUENTIAL => libc::POSIX_FADV_SEQUENTIAL,
