@@ -1,8 +1,6 @@
 use std::env;
 use std::ffi::OsStr;
-use std::fs::{self, File};
-use std::io;
-use std::io::prelude::*;
+use std::fs;
 use std::path::{Component, Path};
 use std::time::SystemTime;
 
