@@ -33,10 +33,8 @@ the [WASI intro][WASI intro] for more information, and the [WASI tutorial][WASI 
 for a tutorial on compiling and running programs using WASI and wasmtime, as
 well as an overview of the filesystem sandboxing system.
 
-Wasmtime does not yet implement Spectre mitigations, such as those being
-pioneered [by](https://www.wasmjit.org/blog/spectre-mitigations-part-1.html)
-[wasmjit](https://www.wasmjit.org/blog/spectre-mitigations-part-2.html),
-however this is a subject of ongoing research.
+Wasmtime does not yet implement Spectre mitigations, however this is a subject
+of ongoing research.
 
 [CloudABI]: https://cloudabi.org/
 [WebAssembly System Interface]: docs/WASI-overview.md
