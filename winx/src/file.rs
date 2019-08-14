@@ -360,8 +360,7 @@ pub fn get_file_access_mode(handle: RawHandle) -> Result<AccessMode> {
 pub fn get_path_by_handle(handle: RawHandle) -> Result<OsString> {
     use winapi::um::fileapi::GetFinalPathNameByHandleW;
 
-    let mut raw_path: Vec<u16> = Vec::with_capacity(WIDE_MAX_PATH as usize);
-    raw_path.resize(WIDE_MAX_PATH as usize, 0);
+    let mut raw_path: Vec<u16> = vec![0; WIDE_MAX_PATH as usize];
 
     let read_len =
         unsafe { GetFinalPathNameByHandleW(handle, raw_path.as_mut_ptr(), WIDE_MAX_PATH, 0) };
@@ -370,14 +369,14 @@ pub fn get_path_by_handle(handle: RawHandle) -> Result<OsString> {
         // failed to read
         return Err(winerror::WinError::last());
     }
-    if read_len > WIDE_MAX_PATH {
-        // path too long (practically probably impossible)
-        return Err(winerror::WinError::ERROR_BUFFER_OVERFLOW);
-    }
 
-    // concatenate paths
-    raw_path.resize(read_len as usize, 0);
-    Ok(OsString::from_wide(&raw_path))
+    // obtain a slice containing the written bytes, and check for it being too long
+    // (practically probably impossible)
+    let written_bytes = raw_path
+        .get(..read_len as usize)
+        .ok_or(winerror::WinError::ERROR_BUFFER_OVERFLOW)?;
+
+    Ok(OsString::from_wide(written_bytes))
 }
 
 // Taken from Rust libstd, file libstd/sys/windows/fs.rs
