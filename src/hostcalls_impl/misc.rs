@@ -197,7 +197,7 @@ pub(crate) fn poll_oneoff(
         nevents,
     );
 
-    if nsubscriptions as u64 > wasm32::__wasi_filesize_t::max_value() {
+    if u64::from(nsubscriptions) > wasm32::__wasi_filesize_t::max_value() {
         return Err(Error::EINVAL);
     }
 

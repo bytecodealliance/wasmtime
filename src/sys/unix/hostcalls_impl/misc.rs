@@ -148,13 +148,13 @@ fn wasi_clock_to_relative_ns_delay(
     wasi_clock: host::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
 ) -> Result<u128> {
     if wasi_clock.flags != wasm32::__WASI_SUBSCRIPTION_CLOCK_ABSTIME {
-        return Ok(wasi_clock.timeout as u128);
+        return Ok(u128::from(wasi_clock.timeout));
     }
     let now: u128 = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .map_err(|_| Error::ENOTCAPABLE)?
         .as_nanos();
-    let deadline = wasi_clock.timeout as u128;
+    let deadline = u128::from(wasi_clock.timeout);
     Ok(deadline.saturating_sub(now))
 }
 
