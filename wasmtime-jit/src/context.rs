@@ -107,6 +107,11 @@ impl Context {
         Self::new(Box::new(Compiler::new(isa)))
     }
 
+    /// Retrieve the context features
+    pub fn features(&self) -> &Features {
+        &self.features
+    }
+
     /// Construct a new instance with the given features from the current `Context`
     pub fn with_features(self, features: Features) -> Self {
         Self { features, ..self }
