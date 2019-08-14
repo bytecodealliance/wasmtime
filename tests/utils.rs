@@ -6,15 +6,8 @@ use std::io::prelude::*;
 use std::path::{Component, Path};
 use std::time::SystemTime;
 
-fn read_to_end<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, io::Error> {
-    let mut buf: Vec<u8> = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
-    Ok(buf)
-}
-
 pub fn read_wasm<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
-    let data = read_to_end(path).map_err(|err| err.to_string())?;
+    let data = fs::read(path).map_err(|err| err.to_string())?;
     if data.starts_with(&[b'\0', b'a', b's', b'm']) {
         Ok(data)
     } else {
