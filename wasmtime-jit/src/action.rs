@@ -20,6 +20,8 @@ pub enum RuntimeValue {
     F32(u32),
     /// A runtime value with type f64.
     F64(u64),
+    /// A runtime value with type v128
+    V128([u8; 16]),
 }
 
 impl RuntimeValue {
@@ -30,6 +32,7 @@ impl RuntimeValue {
             RuntimeValue::I64(_) => ir::types::I64,
             RuntimeValue::F32(_) => ir::types::F32,
             RuntimeValue::F64(_) => ir::types::F64,
+            RuntimeValue::V128(_) => ir::types::I8X16,
         }
     }
 
@@ -83,6 +86,7 @@ impl fmt::Display for RuntimeValue {
             RuntimeValue::I64(x) => write!(f, "{}: i64", x),
             RuntimeValue::F32(x) => write!(f, "{}: f32", x),
             RuntimeValue::F64(x) => write!(f, "{}: f64", x),
+            RuntimeValue::V128(x) => write!(f, "{:?}: v128", x.to_vec()),
         }
     }
 }
@@ -174,6 +178,7 @@ pub fn invoke(
                 RuntimeValue::I64(x) => ptr::write(ptr as *mut i64, *x),
                 RuntimeValue::F32(x) => ptr::write(ptr as *mut u32, *x),
                 RuntimeValue::F64(x) => ptr::write(ptr as *mut u64, *x),
+                RuntimeValue::V128(x) => ptr::write(ptr as *mut [u8; 16], *x),
             }
         }
     }
@@ -210,6 +215,7 @@ pub fn invoke(
                 ir::types::I64 => RuntimeValue::I64(ptr::read(ptr as *const i64)),
                 ir::types::F32 => RuntimeValue::F32(ptr::read(ptr as *const u32)),
                 ir::types::F64 => RuntimeValue::F64(ptr::read(ptr as *const u64)),
+                ir::types::I8X16 => RuntimeValue::V128(ptr::read(ptr as *const [u8; 16])),
                 other => panic!("unsupported value type {:?}", other),
             }
         })

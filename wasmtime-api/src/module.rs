@@ -32,6 +32,7 @@ fn into_valtype(ty: &wasmparser::Type) -> ValType {
         I64 => ValType::I64,
         F32 => ValType::F32,
         F64 => ValType::F64,
+        V128 => ValType::V128,
         AnyFunc => ValType::FuncRef,
         AnyRef => ValType::AnyRef,
         _ => unimplemented!("types in into_valtype"),

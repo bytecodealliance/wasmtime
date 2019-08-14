@@ -252,8 +252,8 @@ mod test_vmtable_definition {
 #[derive(Debug, Copy, Clone)]
 #[repr(C, align(8))]
 pub struct VMGlobalDefinition {
-    storage: [u8; 8],
-    // If more elements are added here, remember to add offset_of tests below!
+    storage: [u8; 8], // TODO this may need to be 16
+                      // If more elements are added here, remember to add offset_of tests below!
 }
 
 #[cfg(test)]
