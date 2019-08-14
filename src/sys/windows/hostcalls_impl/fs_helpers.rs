@@ -86,9 +86,9 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
                 log::debug!("readlinkat error={:?}", e);
                 match WinError::from_u32(e as u32) {
                     WinError::ERROR_INVALID_NAME => {
-                        if s_path.ends_with("/") {
+                        if s_path.ends_with('/') {
                             // strip "/" and check if exists
-                            let path = concatenate(dirfd, Path::new(s_path.trim_end_matches("/")))?;
+                            let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
                             if path.exists() && !path.is_dir() {
                                 Err(host::__WASI_ENOTDIR)
                             } else {

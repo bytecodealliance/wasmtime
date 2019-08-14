@@ -61,7 +61,7 @@ pub(crate) fn path_get(
             Some(cur_path) => {
                 log::debug!("cur_path = {:?}", cur_path);
 
-                let ends_with_slash = cur_path.ends_with("/");
+                let ends_with_slash = cur_path.ends_with('/');
                 let mut components = Path::new(&cur_path).components();
                 let head = match components.next() {
                     None => return Err(host::__WASI_ENOENT),
@@ -72,7 +72,7 @@ pub(crate) fn path_get(
                 if tail.components().next().is_some() {
                     let mut tail = host_impl::path_from_host(tail.as_os_str())?;
                     if ends_with_slash {
-                        tail.push_str("/");
+                        tail.push('/');
                     }
                     path_stack.push(tail);
                 }
@@ -98,7 +98,7 @@ pub(crate) fn path_get(
                         let mut head = host_impl::path_from_host(head)?;
                         if ends_with_slash {
                             // preserve trailing slash
-                            head.push_str("/");
+                            head.push('/');
                         }
 
                         if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
@@ -124,8 +124,8 @@ pub(crate) fn path_get(
                                         return Err(host::__WASI_ELOOP);
                                     }
 
-                                    if head.ends_with("/") {
-                                        link_path.push_str("/");
+                                    if head.ends_with('/') {
+                                        link_path.push('/');
                                     }
 
                                     log::debug!(
@@ -156,8 +156,8 @@ pub(crate) fn path_get(
                                         return Err(host::__WASI_ELOOP);
                                     }
 
-                                    if head.ends_with("/") {
-                                        link_path.push_str("/");
+                                    if head.ends_with('/') {
+                                        link_path.push('/');
                                     }
 
                                     log::debug!(

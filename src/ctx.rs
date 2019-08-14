@@ -110,7 +110,7 @@ impl WasiCtxBuilder {
             .into_iter()
             .map(|(k, v)| {
                 let mut pair = k.into_bytes();
-                pair.extend_from_slice(b"=");
+                pair.push(b'=');
                 pair.extend_from_slice(v.to_bytes_with_nul());
                 // constructing a new CString from existing CStrings is safe
                 unsafe { CString::from_vec_unchecked(pair) }
