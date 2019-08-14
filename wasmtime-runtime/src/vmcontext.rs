@@ -250,10 +250,10 @@ mod test_vmtable_definition {
 /// TODO: Pack the globals more densely, rather than using the same size
 /// for every type.
 #[derive(Debug, Copy, Clone)]
-#[repr(C, align(8))]
+#[repr(C, align(16))]
 pub struct VMGlobalDefinition {
-    storage: [u8; 8], // TODO this may need to be 16
-                      // If more elements are added here, remember to add offset_of tests below!
+    storage: [u8; 16],
+    // If more elements are added here, remember to add offset_of tests below!
 }
 
 #[cfg(test)]
@@ -268,6 +268,7 @@ mod test_vmglobal_definition {
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<i64>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f64>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[u8; 16]>());
     }
 
     #[test]
@@ -279,12 +280,19 @@ mod test_vmglobal_definition {
             usize::from(offsets.size_of_vmglobal_definition())
         );
     }
+
+    #[test]
+    fn check_vmglobal_begins_aligned() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        assert_eq!(offsets.vmctx_globals_begin() % 16, 0);
+    }
 }
 
 impl VMGlobalDefinition {
     /// Construct a `VMGlobalDefinition`.
     pub fn new() -> Self {
-        Self { storage: [0; 8] }
+        Self { storage: [0; 16] }
     }
 
     /// Return a reference to the value as an i32.
@@ -530,6 +538,42 @@ impl VMBuiltinFunctionsArray {
         ptrs[BuiltinFunctionIndex::get_imported_memory32_size_index().index() as usize] =
             wasmtime_imported_memory32_size as usize;
         Self { ptrs }
+    }
+}
+
+/// The storage for a WebAssembly invocation argument
+///
+/// TODO: These could be packed more densely, rather than using the same size for every type.
+#[derive(Debug, Copy, Clone)]
+#[repr(C, align(16))]
+pub struct VMInvokeArgument([u8; 16]);
+
+#[cfg(test)]
+mod test_vm_invoke_argument {
+    use super::VMInvokeArgument;
+    use core::mem::{align_of, size_of};
+    use wasmtime_environ::{Module, VMOffsets};
+
+    #[test]
+    fn check_vm_invoke_argument_alignment() {
+        assert_eq!(align_of::<VMInvokeArgument>(), 16);
+    }
+
+    #[test]
+    fn check_vmglobal_definition_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        assert_eq!(
+            size_of::<VMInvokeArgument>(),
+            usize::from(offsets.size_of_vmglobal_definition())
+        );
+    }
+}
+
+impl VMInvokeArgument {
+    /// Create a new invocation argument filled with zeroes
+    pub fn new() -> Self {
+        VMInvokeArgument([0; 16])
     }
 }
 

@@ -22,6 +22,11 @@ fn cast_to_u32(sz: usize) -> u32 {
     }
 }
 
+/// Align an offset used in this module to a specific byte-width by rounding up
+fn align(offset: u32, width: u32) -> u32 {
+    (offset + (width - 1)) / width * width
+}
+
 /// This class computes offsets to fields within `VMContext` and other
 /// related structs that JIT code accesses directly.
 pub struct VMOffsets {
@@ -208,9 +213,10 @@ impl VMOffsets {
 
 /// Offsets for `VMGlobalDefinition`.
 impl VMOffsets {
-    /// Return the size of `VMGlobalDefinition`.
+    /// Return the size of `VMGlobalDefinition`; this is the size of the largest value type (i.e. a
+    /// V128).
     pub fn size_of_vmglobal_definition(&self) -> u8 {
-        8
+        16
     }
 }
 
@@ -324,13 +330,15 @@ impl VMOffsets {
 
     /// The offset of the `globals` array.
     pub fn vmctx_globals_begin(&self) -> u32 {
-        self.vmctx_memories_begin()
+        let offset = self
+            .vmctx_memories_begin()
             .checked_add(
                 self.num_defined_memories
                     .checked_mul(u32::from(self.size_of_vmmemory_definition()))
                     .unwrap(),
             )
-            .unwrap()
+            .unwrap();
+        align(offset, 16)
     }
 
     /// The offset of the builtin functions array.
@@ -555,5 +563,21 @@ impl TargetSharedSignatureIndex {
     /// Returns index value.
     pub fn index(&self) -> u32 {
         self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vmoffsets::align;
+
+    #[test]
+    fn alignment() {
+        fn is_aligned(x: u32) -> bool {
+            x % 16 == 0
+        }
+        assert!(is_aligned(align(0, 16)));
+        assert!(is_aligned(align(32, 16)));
+        assert!(is_aligned(align(33, 16)));
+        assert!(is_aligned(align(31, 16)));
     }
 }

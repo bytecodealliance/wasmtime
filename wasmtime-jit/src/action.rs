@@ -7,7 +7,7 @@ use core::{fmt, mem, ptr, slice};
 use cranelift_codegen::ir;
 use std::string::String;
 use std::vec::Vec;
-use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle};
+use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle, VMInvokeArgument};
 
 /// A runtime value.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -161,12 +161,12 @@ pub fn invoke(
         assert_eq!(value.value_type(), signature.params[index + 1].value_type);
     }
 
-    // TODO: Support values larger than u64. And pack the values into memory
+    // TODO: Support values larger than v128. And pack the values into memory
     // instead of just using fixed-sized slots.
     // Subtract one becase we don't pass the vmctx argument in `values_vec`.
-    let value_size = mem::size_of::<u64>();
-    let mut values_vec: Vec<u64> =
-        vec![0; max(signature.params.len() - 1, signature.returns.len())];
+    let value_size = mem::size_of::<VMInvokeArgument>();
+    let mut values_vec: Vec<VMInvokeArgument> =
+        vec![VMInvokeArgument::new(); max(signature.params.len() - 1, signature.returns.len())];
 
     // Store the argument values into `values_vec`.
     for (index, arg) in args.iter().enumerate() {
