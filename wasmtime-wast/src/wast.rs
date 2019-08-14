@@ -15,7 +15,7 @@ fn runtime_value(v: Value) -> RuntimeValue {
         Value::I64(x) => RuntimeValue::I64(x),
         Value::F32(x) => RuntimeValue::F32(x.to_bits()),
         Value::F64(x) => RuntimeValue::F64(x.to_bits()),
-        Value::V128(_) => unimplemented!("SIMD"),
+        Value::V128(x) => RuntimeValue::V128(x.to_le_bytes()),
     }
 }
 
@@ -374,6 +374,15 @@ impl WastContext {
                                             });
                                         }
                                     }
+                                    RuntimeValue::V128(_) => {
+                                        return Err(WastFileError {
+                                            filename: filename.to_string(),
+                                            line,
+                                            error: WastError::Type(format!(
+                                                "unexpected vector type in NaN test"
+                                            )),
+                                        });
+                                    }
                                 };
                             }
                         }
@@ -425,6 +434,15 @@ impl WastContext {
                                                 )),
                                             });
                                         }
+                                    }
+                                    RuntimeValue::V128(_) => {
+                                        return Err(WastFileError {
+                                            filename: filename.to_string(),
+                                            line,
+                                            error: WastError::Type(format!(
+                                                "unexpected vector type in NaN test",
+                                            )),
+                                        });
                                     }
                                 };
                             }
