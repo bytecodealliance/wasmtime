@@ -55,8 +55,8 @@ pub use crate::trap_registry::{get_mut_trap_registry, get_trap_registry, TrapReg
 pub use crate::traphandlers::{wasmtime_call, wasmtime_call_trampoline};
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
-    VMTableImport,
+    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
+    VMTableDefinition, VMTableImport,
 };
 
 /// Version number of this crate.
