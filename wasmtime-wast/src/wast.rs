@@ -3,6 +3,7 @@ use std::io::Read;
 use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
+use wabt::Features as WabtFeatures;
 use wasmtime_jit::{
     ActionError, ActionOutcome, Compiler, Context, Features, InstanceHandle, InstantiationError,
     RuntimeValue, UnknownInstance,
@@ -196,17 +197,24 @@ impl WastContext {
 
     /// Run a wast script from a byte buffer.
     pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<(), WastFileError> {
-        let mut parser =
-            ScriptParser::from_str(str::from_utf8(wast).map_err(|error| WastFileError {
-                filename: filename.to_string(),
-                line: 0,
-                error: WastError::Utf8(error),
-            })?)
-            .map_err(|error| WastFileError {
-                filename: filename.to_string(),
-                line: 0,
-                error: WastError::Syntax(error),
-            })?;
+        let features: WabtFeatures = convert_features(self.context.features());
+        let test_filename = "test.wast"; // TODO apparently we can't use filename because this breaks the execution
+        let mut parser = ScriptParser::from_source_and_name_with_features(
+            str::from_utf8(wast)
+                .map_err(|error| WastFileError {
+                    filename: filename.to_string(),
+                    line: 0,
+                    error: WastError::Utf8(error),
+                })?
+                .as_bytes(),
+            test_filename,
+            features,
+        )
+        .map_err(|error| WastFileError {
+            filename: filename.to_string(),
+            line: 0,
+            error: WastError::Syntax(error),
+        })?;
 
         while let Some(Command { kind, line }) = parser.next().expect("parser") {
             match kind {
@@ -519,4 +527,23 @@ fn read_to_end(path: &Path) -> Result<Vec<u8>, io::Error> {
     let mut file = fs::File::open(path)?;
     file.read_to_end(&mut buf)?;
     Ok(buf)
+}
+
+/// Helper to convert wasmtime features to WABT features; would be nicer as Into<WabtFeatures> but
+/// wasmtime-jit does not have a wabt dependency
+fn convert_features(features: &Features) -> WabtFeatures {
+    let mut wabt_features = WabtFeatures::new();
+    if features.simd {
+        wabt_features.enable_simd()
+    }
+    if features.multi_value {
+        wabt_features.enable_multi_value()
+    }
+    if features.bulk_memory {
+        wabt_features.enable_bulk_memory()
+    }
+    if features.threads {
+        wabt_features.enable_threads()
+    }
+    wabt_features
 }
