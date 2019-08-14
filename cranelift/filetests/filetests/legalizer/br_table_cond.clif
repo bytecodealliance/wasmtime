@@ -7,7 +7,7 @@ target x86_64
 ; regex: V=v\d+
 ; regex: EBB=ebb\d+
 
-function u0:0(i64 vmctx) baldrdash {
+function u0:0(i64 vmctx) baldrdash_system_v {
     gv0 = vmctx
     gv1 = iadd_imm.i64 gv0, 48
     jt0 = jump_table [ebb2, ebb2, ebb7]

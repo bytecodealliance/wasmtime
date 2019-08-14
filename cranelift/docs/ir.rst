@@ -375,7 +375,7 @@ convention:
     param        : type [paramext] [paramspecial]
     paramext     : "uext" | "sext"
     paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
-    callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash"
+    callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash_system_v" | "baldrdash_windows"
 
 A function's calling convention determines exactly how arguments and return
 values are passed, and how stack frames are managed. Since all of these details
@@ -402,7 +402,8 @@ fast       not-ABI-stable convention for best performance
 cold       not-ABI-stable convention for infrequently executed code
 system_v   System V-style convention used on many platforms
 fastcall   Windows "fastcall" convention, also used for x64 and ARM
-baldrdash  SpiderMonkey WebAssembly convention
+baldrdash_system_v  SpiderMonkey WebAssembly convention on platforms natively using SystemV.
+baldrdash_windows  SpiderMonkey WebAssembly convention on platforms natively using Windows.
 ========== ===========================================
 
 The "not-ABI-stable" conventions do not follow an external specification and

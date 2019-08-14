@@ -10,7 +10,7 @@ target x86_64 haswell
 ; particular, the first block has to be non-empty but its encoding size must be
 ; zero (i.e. not generate any code). See also issue #666 for more details.
 
-function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] baldrdash {
+function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] baldrdash_system_v {
     ss0 = incoming_arg 24, offset -24
     gv0 = vmctx
     gv1 = iadd_imm.i64 gv0, 48

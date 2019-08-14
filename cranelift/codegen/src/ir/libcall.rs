@@ -179,7 +179,7 @@ fn make_funcref_for_inst(
         sig.returns.push(AbiParam::new(func.dfg.value_type(v)));
     }
 
-    if call_conv == CallConv::Baldrdash {
+    if call_conv.extends_baldrdash() {
         // Adds the special VMContext parameter to the signature.
         sig.params.push(AbiParam::special(
             isa.pointer_type(),
