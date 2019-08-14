@@ -34,20 +34,19 @@ use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_native;
 use docopt::Docopt;
+use failure::{bail, format_err, Error, ResultExt};
 use pretty_env_logger;
 use serde::Deserialize;
-use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io;
-use std::io::prelude::*;
 use std::path::Component;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use wabt;
 use wasi_common::preopen_dir;
 use wasmtime_environ::cache_conf;
-use wasmtime_jit::{ActionOutcome, Context, Features};
+use wasmtime_interface_types::ModuleData;
+use wasmtime_jit::{Context, Features, InstanceHandle};
 use wasmtime_wasi::instantiate_wasi;
 use wasmtime_wast::instantiate_spectest;
 
@@ -100,22 +99,16 @@ struct Args {
     flag_wasi_c: bool,
 }
 
-fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
-    let mut buf: Vec<u8> = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
-    Ok(buf)
-}
-
-fn read_wasm(path: PathBuf) -> Result<Vec<u8>, String> {
-    let data = read_to_end(path).map_err(|err| err.to_string())?;
+fn read_wasm(path: PathBuf) -> Result<Vec<u8>, Error> {
+    let data = std::fs::read(&path)
+        .with_context(|_| format!("failed to read file: {}", path.display()))?;
 
     // If data is a wasm binary, use that. If it's using wat format, convert it
     // to a wasm binary with wat2wasm.
     Ok(if data.starts_with(&[b'\0', b'a', b's', b'm']) {
         data
     } else {
-        wabt::wat2wasm(data).map_err(|err| String::from(err.description()))?
+        wabt::wat2wasm(data)?
     })
 }
 
@@ -191,6 +184,18 @@ fn compute_environ(flag_env: &[String]) -> Vec<(String, String)> {
 }
 
 fn main() {
+    let err = match rmain() {
+        Ok(()) => return,
+        Err(e) => e,
+    };
+    eprintln!("error: {}", err);
+    for cause in err.iter_causes() {
+        eprintln!("    caused by: {}", cause);
+    }
+    std::process::exit(1);
+}
+
+fn rmain() -> Result<(), Error> {
     let version = env!("CARGO_PKG_VERSION");
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
@@ -208,36 +213,32 @@ fn main() {
 
     cache_conf::init(args.flag_cache);
 
-    let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
-        panic!("host machine is not a supported target");
-    });
+    let isa_builder = cranelift_native::builder()
+        .map_err(|s| format_err!("host machine is not a supported target: {}", s))?;
     let mut flag_builder = settings::builder();
     let mut features: Features = Default::default();
 
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
-        flag_builder.enable("enable_verifier").unwrap();
+        flag_builder.enable("enable_verifier")?;
     }
 
     // Enable SIMD if requested
     if args.flag_enable_simd {
-        flag_builder.enable("enable_simd").unwrap();
+        flag_builder.enable("enable_simd")?;
         features.simd = true;
     }
 
     // Enable optimization if requested.
     if args.flag_optimize {
-        flag_builder.set("opt_level", "best").unwrap();
+        flag_builder.set("opt_level", "best")?;
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     let mut context = Context::with_isa(isa).with_features(features);
 
     // Make spectest available by default.
-    context.name_instance(
-        "spectest".to_owned(),
-        instantiate_spectest().expect("instantiating spectest"),
-    );
+    context.name_instance("spectest".to_owned(), instantiate_spectest()?);
 
     // Make wasi available by default.
     let global_exports = context.get_global_exports();
@@ -248,16 +249,15 @@ fn main() {
     let wasi = if args.flag_wasi_c {
         #[cfg(feature = "wasi-c")]
         {
-            instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)
+            instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)?
         }
         #[cfg(not(feature = "wasi-c"))]
         {
-            panic!("wasi-c feature not enabled at build time")
+            bail!("wasi-c feature not enabled at build time")
         }
     } else {
-        instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)
-    }
-    .expect("instantiating wasi");
+        instantiate_wasi("", global_exports, &preopen_dirs, &argv, &environ)?
+    };
 
     context.name_instance("wasi_unstable".to_owned(), wasi);
 
@@ -267,48 +267,102 @@ fn main() {
     // Load the preload wasm modules.
     for filename in &args.flag_preload {
         let path = Path::new(&filename);
-        match handle_module(&mut context, &args, path) {
-            Ok(()) => {}
-            Err(message) => {
-                let name = path.as_os_str().to_string_lossy();
-                println!("error while processing preload {}: {}", name, message);
-                exit(1);
-            }
-        }
+        instantiate_module(&mut context, path)
+            .with_context(|_| format!("failed to process preload at `{}`", path.display()))?;
     }
 
     // Load the main wasm module.
     let path = Path::new(&args.arg_file);
-    match handle_module(&mut context, &args, path) {
-        Ok(()) => {}
-        Err(message) => {
-            let name = path.as_os_str().to_string_lossy();
-            println!("error while processing main module {}: {}", name, message);
-            exit(1);
-        }
-    }
+    handle_module(&mut context, &args, path)
+        .with_context(|_| format!("failed to process main module `{}`", path.display()))?;
+    Ok(())
 }
 
-fn handle_module(context: &mut Context, args: &Args, path: &Path) -> Result<(), String> {
+fn instantiate_module(
+    context: &mut Context,
+    path: &Path,
+) -> Result<(InstanceHandle, Vec<u8>), Error> {
     // Read the wasm module binary.
     let data = read_wasm(path.to_path_buf())?;
 
     // Compile and instantiating a wasm module.
-    let mut instance = context
-        .instantiate_module(None, &data)
-        .map_err(|e| e.to_string())?;
+    let handle = context.instantiate_module(None, &data)?;
+    Ok((handle, data))
+}
+
+fn handle_module(context: &mut Context, args: &Args, path: &Path) -> Result<(), Error> {
+    let (mut instance, data) = instantiate_module(context, path)?;
 
     // If a function to invoke was given, invoke it.
-    if let Some(ref f) = args.flag_invoke {
-        match context
-            .invoke(&mut instance, f, &[])
-            .map_err(|e| e.to_string())?
-        {
-            ActionOutcome::Returned { .. } => {}
-            ActionOutcome::Trapped { message } => {
-                return Err(format!("Trap from within function {}: {}", f, message));
+    if let Some(f) = &args.flag_invoke {
+        let data = ModuleData::new(&data)?;
+        invoke_export(context, &mut instance, &data, f, args)?;
+    }
+
+    Ok(())
+}
+
+fn invoke_export(
+    context: &mut Context,
+    instance: &mut InstanceHandle,
+    data: &ModuleData,
+    name: &str,
+    args: &Args,
+) -> Result<(), Error> {
+    use wasm_webidl_bindings::ast;
+    use wasmtime_interface_types::Value;
+
+    // Use the binding information in `ModuleData` to figure out what arguments
+    // need to be passed to the function that we're invoking. Currently we take
+    // the CLI parameters and attempt to parse them into function arguments for
+    // the function we'll invoke.
+    let binding = data.binding_for_export(instance, name)?;
+    if binding.param_types()?.len() > 0 {
+        eprintln!(
+            "warning: using `--render` with a function that takes arguments \
+             is experimental and may break in the future"
+        );
+    }
+    let mut values = Vec::new();
+    let mut args = args.arg_arg.iter();
+    for ty in binding.param_types()? {
+        let val = match args.next() {
+            Some(s) => s,
+            None => bail!("not enough arguments for `{}`", name),
+        };
+        values.push(match ty {
+            // TODO: integer parsing here should handle hexadecimal notation
+            // like `0x0...`, but the Rust standard library currently only
+            // parses base-10 representations.
+            ast::WebidlScalarType::Long => Value::I32(val.parse()?),
+            ast::WebidlScalarType::LongLong => Value::I64(val.parse()?),
+            ast::WebidlScalarType::UnsignedLong => Value::U32(val.parse()?),
+            ast::WebidlScalarType::UnsignedLongLong => Value::U64(val.parse()?),
+
+            ast::WebidlScalarType::Float | ast::WebidlScalarType::UnrestrictedFloat => {
+                Value::F32(val.parse()?)
             }
-        }
+            ast::WebidlScalarType::Double | ast::WebidlScalarType::UnrestrictedDouble => {
+                Value::F64(val.parse()?)
+            }
+            ast::WebidlScalarType::DomString => Value::String(val.to_string()),
+            t => bail!("unsupported argument type {:?}", t),
+        });
+    }
+
+    // Invoke the function and then afterwards print all the results that came
+    // out, if there are any.
+    let results = data
+        .invoke(context, instance, name, &values)
+        .with_context(|_| format!("failed to invoke `{}`", name))?;
+    if results.len() > 0 {
+        eprintln!(
+            "warning: using `--render` with a function that returns values \
+             is experimental and may break in the future"
+        );
+    }
+    for result in results {
+        println!("{}", result);
     }
 
     Ok(())

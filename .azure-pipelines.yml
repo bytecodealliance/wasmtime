@@ -69,7 +69,7 @@ jobs:
       displayName: Fetch cargo dependencies
 
     # Build and test all features except for lightbeam
-    - bash: cargo test --all --exclude lightbeam --exclude wasmtime-wasi-c
+    - bash: cargo test --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py
       displayName: Cargo test
       env:
         RUST_BACKTRACE: 1
@@ -117,34 +117,46 @@ jobs:
     image: centos:6
     options: "--name ci-container -v /usr/bin/docker:/tmp/docker:ro"
   steps:
-  # We're executing in the container as non-root but `yum` requires root. We
-  # need to install `sudo` but to do that we need `sudo`. Do a bit of a weird
-  # hack where we use the host `docker` executable to re-execute in our own
-  # container with the root user to install `sudo`
-  - bash: /tmp/docker exec -t -u 0 ci-container sh -c "yum install -y sudo"
-    displayName: Configure sudo
-
-  # See https://edwards.sdsu.edu/research/c11-on-centos-6/ for where these
-  # various commands came from.
-  - bash: |
-      set -e
-      sudo yum install -y centos-release-scl cmake xz
-      sudo yum install -y devtoolset-8-gcc devtoolset-8-binutils devtoolset-8-gcc-c++
-      echo "##vso[task.prependpath]/opt/rh/devtoolset-8/root/usr/bin"
-    displayName: Install system dependencies
-
-  # Delete `libstdc++.so` to force gcc to link against `libstdc++.a` instead.
-  # This is a hack and not the right way to do this, but it ends up doing the
-  # right thing for now.
-  - bash: sudo rm -f /opt/rh/devtoolset-8/root/usr/lib/gcc/x86_64-redhat-linux/8/libstdc++.so
-    displayName: Force a static libstdc++
-
+  - template: ci/azure-prepare-centos-6.yml
   - template: ci/azure-build-release.yml
+
+# Build the `wasmtime-py` python extension in the same manner we build the
+# binaries above, since these wheels are also native code that we're
+# distributing.
+#
+# Note that the builds here are using a nightly compiler, not a stable compiler,
+# since this is what PyO3 requires.
+- job: Build_wheels
+  strategy:
+    matrix:
+      windows:
+        imageName: 'vs2017-win2016'
+        RUSTFLAGS: -Ctarget-feature=+crt-static
+      mac:
+        imageName: 'macos-10.14'
+        MACOSX_DEPLOYMENT_TARGET: 10.9
+  variables:
+    toolchain: nightly-2019-08-15
+  pool:
+    vmImage: $(imageName)
+  steps:
+  - template: ci/azure-build-wheels.yml
+- job: Build_linux_wheels
+  variables:
+    toolchain: nightly-2019-08-15
+  container:
+    image: centos:6
+    options: "--name ci-container -v /usr/bin/docker:/tmp/docker:ro"
+  steps:
+  - template: ci/azure-prepare-centos-6.yml
+  - template: ci/azure-build-wheels.yml
 
 - job: Publish
   dependsOn:
   - Build
+  - Build_wheels
   - Build_linux
+  - Build_linux_wheels
   condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
   steps:
   # Checking out the sources is needed to be able to delete the "dev" tag, see below.
