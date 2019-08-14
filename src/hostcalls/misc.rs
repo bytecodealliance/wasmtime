@@ -7,7 +7,7 @@ use log::trace;
 use wasi_common_cbindgen::wasi_common_cbindgen;
 
 #[wasi_common_cbindgen]
-pub fn proc_exit(rval: wasm32::__wasi_exitcode_t) -> () {
+pub fn proc_exit(rval: wasm32::__wasi_exitcode_t) {
     trace!("proc_exit(rval={:?})", rval);
     // TODO: Rather than call std::process::exit here, we should trigger a
     // stack unwind similar to a trap.

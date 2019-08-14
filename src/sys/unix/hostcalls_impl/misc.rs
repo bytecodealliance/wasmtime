@@ -63,7 +63,7 @@ pub(crate) fn clock_time_get(clock_id: host::__wasi_clockid_t) -> Result<host::_
     (timespec.tv_sec as host::__wasi_timestamp_t)
         .checked_mul(1_000_000_000)
         .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-        .map_or(Err(Error::EOVERFLOW), |time| Ok(time))
+        .map_or(Err(Error::EOVERFLOW), Ok)
 }
 
 pub(crate) fn poll_oneoff(
