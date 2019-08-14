@@ -1,11 +1,22 @@
 #![allow(non_camel_case_types)]
 use crate::sys::host_impl;
 use crate::{host, Result};
+use crate::hostcalls_impl::PathGet;
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::prelude::AsRawHandle;
 use std::path::{Path, PathBuf};
+
+pub(crate) trait PathGetExt {
+    fn concatenate(&self) -> Result<PathBuf>;
+}
+
+impl PathGetExt for PathGet {
+    fn concatenate(&self) -> Result<PathBuf> {
+        concatenate(self.dirfd(), Path::new(self.path()))
+    }
+}
 
 pub(crate) fn path_open_rights(
     rights_base: host::__wasi_rights_t,

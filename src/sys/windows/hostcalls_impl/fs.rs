@@ -7,6 +7,7 @@ use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::PathGet;
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::host_impl;
+use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
 use crate::sys::{errno_from_host, errno_from_ioerror};
 use crate::{host, Result};
 use std::convert::TryInto;
@@ -69,7 +70,7 @@ pub(crate) fn fd_advise(
 }
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
-    let path = concatenate(resolved.dirfd(), Path::new(resolved.path()))?;
+    let path = resolved.concatenate()?;
     std::fs::create_dir(&path).map_err(errno_from_ioerror)
 }
 
@@ -116,7 +117,7 @@ pub(crate) fn path_open(
     access_mode.insert(add_access_mode);
     flags.insert(add_flags);
 
-    let path = concatenate(resolved.dirfd(), Path::new(resolved.path()))?;
+    let path = resolved.concatenate()?;
 
     match path.symlink_metadata().map(|metadata| metadata.file_type()) {
         Ok(file_type) => {
@@ -165,7 +166,7 @@ pub(crate) fn fd_readdir(
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
     use winx::file::get_path_by_handle;
 
-    let path = concatenate(resolved.dirfd(), Path::new(resolved.path()))?;
+    let path = resolved.concatenate()?;
     let target_path = path.read_link().map_err(errno_from_ioerror)?;
 
     // since on Windows we are effectively emulating 'at' syscalls
@@ -203,8 +204,8 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use std::fs;
 
-    let old_path = concatenate(resolved_old.dirfd(), Path::new(resolved_old.path()))?;
-    let new_path = concatenate(resolved_new.dirfd(), Path::new(resolved_new.path()))?;
+    let old_path = resolved_old.concatenate()?;
+    let new_path = resolved_new.concatenate()?;
 
     // First, sanity check that we're not trying to rename dir to file or vice versa.
     // NB on Windows, the former is actually permitted [std::fs::rename].
@@ -328,7 +329,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     use winx::winerror::WinError;
 
     let old_path = concatenate(resolved.dirfd(), Path::new(old_path))?;
-    let new_path = concatenate(resolved.dirfd(), Path::new(resolved.path()))?;
+    let new_path = resolved.concatenate()?;
 
     // try creating a file symlink
     symlink_file(&old_path, &new_path).or_else(|e| {
@@ -355,7 +356,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use std::fs;
     use winx::winerror::WinError;
 
-    let path = concatenate(resolved.dirfd(), Path::new(resolved.path()))?;
+    let path = resolved.concatenate()?;
     let file_type = path
         .symlink_metadata()
         .map(|metadata| metadata.file_type())
@@ -395,6 +396,6 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
 }
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
-    let path = concatenate(resolved.dirfd(), Path::new(resolved.path()))?;
+    let path = resolved.concatenate()?;
     std::fs::remove_dir(&path).map_err(errno_from_ioerror)
 }
