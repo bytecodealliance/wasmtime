@@ -55,7 +55,7 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
     )?;
     writeln!(
         out,
-        "    use super::{{native_isa, Path, WastContext, Compiler}};"
+        "    use super::{{native_isa, Path, WastContext, Compiler, Features}};"
     )?;
     for dir_entry in dir_entries {
         write_testsuite_tests(out, dir_entry, testsuite)?;
@@ -81,7 +81,11 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
     writeln!(out, "        let compiler = Compiler::new(isa);")?;
     writeln!(
         out,
-        "        let mut wast_context = WastContext::new(Box::new(compiler));"
+        "        let features = Features {{ simd: true, ..Default::default() }};"
+    )?;
+    writeln!(
+        out,
+        "        let mut wast_context = WastContext::new(Box::new(compiler)).with_features(features);"
     )?;
     writeln!(out, "        wast_context")?;
     writeln!(out, "            .register_spectest()")?;
