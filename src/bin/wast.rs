@@ -41,8 +41,8 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    run_wast [-do] [--enable-simd] [--cache | --cache-dir=<cache_dir>] <file>...
-    run_wast --help | --version
+    wast [-do] [--enable-simd] [--cache | --cache-dir=<cache_dir>] <file>...
+    wast --help | --version
 
 Options:
     -h, --help          print this help message
