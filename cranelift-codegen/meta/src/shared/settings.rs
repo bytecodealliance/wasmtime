@@ -112,7 +112,8 @@ pub fn define() -> SettingGroup {
             "cold",
             "system_v",
             "windows_fastcall",
-            "baldrdash",
+            "baldrdash_system_v",
+            "baldrdash_windows",
             "probestack",
         ],
     );

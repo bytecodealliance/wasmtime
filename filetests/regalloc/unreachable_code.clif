@@ -6,7 +6,7 @@ target x86_64 haswell
 
 ; This function contains unreachable blocks which trip up the register
 ; allocator if they don't get cleared out.
-function %unreachable_blocks(i64 vmctx) -> i32 baldrdash {
+function %unreachable_blocks(i64 vmctx) -> i32 baldrdash_system_v {
 ebb0(v0: i64):
     v1 = iconst.i32 0
     v2 = iconst.i32 0

@@ -10,13 +10,13 @@ ebb1:
 ; nextln:     return
 ; nextln: }
 
-function %r1() -> i32, f32 baldrdash {
+function %r1() -> i32, f32 baldrdash_system_v {
 ebb1:
     v1 = iconst.i32 3
     v2 = f32const 0.0
     return v1, v2
 }
-; sameln: function %r1() -> i32, f32 baldrdash {
+; sameln: function %r1() -> i32, f32 baldrdash_system_v {
 ; nextln: ebb1:
 ; nextln:     v1 = iconst.i32 3
 ; nextln:     v2 = f32const 0.0
@@ -25,13 +25,13 @@ ebb1:
 
 function %signatures() {
     sig10 = ()
-    sig11 = (i32, f64) -> i32, b1 baldrdash
+    sig11 = (i32, f64) -> i32, b1 baldrdash_system_v
     fn5 = %foo sig11
     fn8 = %bar(i32) -> b1
 }
 ; sameln: function %signatures() fast {
 ; check:      sig10 = () fast
-; check:      sig11 = (i32, f64) -> i32, b1 baldrdash
+; check:      sig11 = (i32, f64) -> i32, b1 baldrdash_system_v
 ; check:      sig12 = (i32) -> b1 fast
 ; not:        fn0
 ; check:      fn5 = %foo sig11

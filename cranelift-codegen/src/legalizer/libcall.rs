@@ -20,7 +20,7 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function, isa: &dyn Targ
     args.extend_from_slice(func.dfg.inst_args(inst));
 
     let call_conv = CallConv::for_libcall(isa);
-    if call_conv == CallConv::Baldrdash {
+    if call_conv.extends_baldrdash() {
         let vmctx = func
             .special_param(ir::ArgumentPurpose::VMContext)
             .expect("Missing vmctx parameter for baldrdash libcall");

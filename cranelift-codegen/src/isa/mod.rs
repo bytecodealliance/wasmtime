@@ -343,7 +343,7 @@ pub trait TargetIsa: fmt::Display + Sync {
         let word_size = StackSize::from(self.pointer_bytes());
 
         // Account for the SpiderMonkey standard prologue pushes.
-        if func.signature.call_conv == CallConv::Baldrdash {
+        if func.signature.call_conv.extends_baldrdash() {
             let bytes = StackSize::from(self.flags().baldrdash_prologue_words()) * word_size;
             let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
             ss.offset = Some(-(bytes as StackOffset));
