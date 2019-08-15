@@ -105,7 +105,7 @@ impl Context {
     }
 
     /// Construct a new instance of `Context` with the given target.
-    pub fn with_isa(isa: Box<TargetIsa>) -> Self {
+    pub fn with_isa(isa: Box<dyn TargetIsa>) -> Self {
         Self::new(Box::new(Compiler::new(isa)))
     }
 

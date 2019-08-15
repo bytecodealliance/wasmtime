@@ -527,7 +527,7 @@ impl VMContext {
     ///
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
-    pub unsafe fn host_state(&mut self) -> &mut Any {
+    pub unsafe fn host_state(&mut self) -> &mut dyn Any {
         self.instance().host_state()
     }
 
