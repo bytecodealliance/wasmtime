@@ -14,10 +14,14 @@ extern "C" {
 // Record the Trap code and wasm bytecode offset in TLS somewhere
 void RecordTrap(const uint8_t* pc);
 
-void* EnterScope(void*);
-void LeaveScope(void*);
-void* GetScope(void);
+// Initiate an unwind.
 void Unwind(void);
+
+/// Schedules fixing the stack after unwinding
+void FixStackAfterUnwinding(void);
+
+/// Used by wasmtime call trampolines to save jmp_buf.
+void PushJmpBuffer(void*);
 
 // This function performs the low-overhead signal handler initialization that we
 // want to do eagerly to ensure a more-deterministic global process state. This

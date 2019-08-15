@@ -65,6 +65,13 @@ jobs:
       submodules: true
     - template: ci/azure-install-rust.yml
 
+    - script: |
+        powershell -Command "$ProgressPreference = 'SilentlyContinue'; iwr -outf %TEMP%\LLVM-8.0.0-win64.exe https://rust-lang-ci2.s3.amazonaws.com/rust-ci-mirror/LLVM-8.0.0-win64.exe"
+        %TEMP%\LLVM-8.0.0-win64.exe /S /NCRC
+        echo '##vso[task.prependpath]%SYSTEMDRIVE%\Program Files\LLVM\bin'
+      condition: eq(variables['Agent.OS'], 'Windows_NT')
+      displayName: Install clang (Windows)
+
     - script: cargo fetch
       displayName: Fetch cargo dependencies
 

@@ -22,7 +22,12 @@ obtain a full checkout, like this:
 git clone --recurse-submodules https://github.com/CraneStation/wasmtime.git
 ```
 
-To build an optimized version of Wasmtime, use Cargo:
+To build Wasmtime on Windows, install clang and add it to the `PATH`
+environment variable, and then build with cargo, such as with
+"cargo build --release".
+To build Wasmtime on other platforms, make sure your compiler supports
+`__builtin_setjmp` and `__builtin_longjmp` and if not, specify other compiler,
+i.e. "CC=clang cargo build --release".
 
 ```
 cargo build --release

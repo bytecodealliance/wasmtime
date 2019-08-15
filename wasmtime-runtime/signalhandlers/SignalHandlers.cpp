@@ -404,7 +404,7 @@ static
 __attribute__ ((warn_unused_result))
 #endif
 bool
-HandleTrap(CONTEXT* context)
+HandleTrap(CONTEXT* context, bool stackFixRequired)
 {
     assert(sAlreadyHandlingTrap);
 
@@ -421,6 +421,10 @@ HandleTrap(CONTEXT* context)
     // in that case the main thread doesn't have any space left to run.
     SetContextPC(context, reinterpret_cast<const uint8_t*>(&Unwind));
 #else
+    if (stackFixRequired) {
+        FixStackAfterUnwinding();
+    }
+    
     // For now, just call Unwind directly, rather than redirecting the PC there,
     // so that it runs on the alternate signal handler stack. To run on the main
     // stack, reroute the context PC like this:
@@ -443,6 +447,8 @@ static const unsigned sThreadLocalArrayPointerIndex = 11;
 static LONG WINAPI
 WasmTrapHandler(LPEXCEPTION_POINTERS exception)
 {
+    // TODO: this fuction should check if PC is within bounds of jit code.
+
     // Make sure TLS is initialized before reading sAlreadyHandlingTrap.
     if (!NtCurrentTeb()->Reserved1[sThreadLocalArrayPointerIndex]) {
         return EXCEPTION_CONTINUE_SEARCH;
@@ -463,7 +469,9 @@ WasmTrapHandler(LPEXCEPTION_POINTERS exception)
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
-    if (!HandleTrap(exception->ContextRecord)) {
+    if (!HandleTrap(exception->ContextRecord,
+                    record->ExceptionCode == EXCEPTION_STACK_OVERFLOW))
+    {
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
@@ -545,7 +553,7 @@ HandleMachException(const ExceptionRequest& request)
 
     {
         AutoHandlingTrap aht;
-        if (!HandleTrap(&context)) {
+        if (!HandleTrap(&context, false)) {
             return false;
         }
     }
@@ -628,7 +636,7 @@ WasmTrapHandler(int signum, siginfo_t* info, void* context)
     if (!sAlreadyHandlingTrap) {
         AutoHandlingTrap aht;
         assert(signum == SIGSEGV || signum == SIGBUS || signum == SIGFPE || signum == SIGILL);
-        if (HandleTrap(static_cast<CONTEXT*>(context))) {
+        if (HandleTrap(static_cast<CONTEXT*>(context), false)) {
             return;
         }
     }

@@ -4,7 +4,6 @@
 use core::ptr;
 use core::slice;
 use errno;
-use libc;
 use region;
 use std::string::{String, ToString};
 use std::vec::Vec;
