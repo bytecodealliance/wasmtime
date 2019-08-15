@@ -11,7 +11,7 @@ utility or as a library embedded in a larger application.
 
 [![Build Status](https://dev.azure.com/CraneStation/Wasmtime/_apis/build/status/CraneStation.wasmtime?branchName=master)](https://dev.azure.com/CraneStation/Wasmtime/_build/latest?definitionId=4&branchName=master)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
-![Minimum rustc 1.36](https://img.shields.io/badge/rustc-1.36+-green.svg)
+![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
 
 Wasmtime passes the WebAssembly spec testsuite, and supports a new system
 API proposal called [WebAssembly System Interface], or WASI.

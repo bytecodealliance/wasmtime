@@ -441,7 +441,7 @@ impl Instance {
     }
 
     /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&mut self) -> &mut Any {
+    pub fn host_state(&mut self) -> &mut dyn Any {
         &mut *self.host_state
     }
 
@@ -855,7 +855,7 @@ impl InstanceHandle {
     }
 
     /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&mut self) -> &mut Any {
+    pub fn host_state(&mut self) -> &mut dyn Any {
         self.instance_mut().host_state()
     }
 

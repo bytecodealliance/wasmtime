@@ -96,7 +96,7 @@ fn get_function_address_map<'data>(
     context: &Context,
     data: &FunctionBodyData<'data>,
     body_len: usize,
-    isa: &isa::TargetIsa,
+    isa: &dyn isa::TargetIsa,
 ) -> FunctionAddressMap {
     let mut instructions = Vec::new();
 
