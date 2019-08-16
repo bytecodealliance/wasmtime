@@ -8,6 +8,7 @@ documentation = "https://cranelift.readthedocs.io/"
 categories = ["wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 edition = "2018"
+default-run = "wasmtime"
 
 [dependencies]
 cranelift-codegen = { version = "0.38.0", features = ["enable-serde"] }
