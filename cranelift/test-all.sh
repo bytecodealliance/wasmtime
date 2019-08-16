@@ -47,25 +47,44 @@ cargo build
 banner "Rust unit tests"
 RUST_BACKTRACE=1 cargo test --all
 
+has_toolchain() {
+    rustup toolchain list | grep -q $1
+}
+
+ensure_installed() {
+    program="$1"
+    toolchain="${2:-stable}"
+    if has_toolchain $toolchain; then
+        if cargo +$toolchain install --list | grep -q $program; then
+            echo "$program found"
+        else
+            echo "installing $program"
+            cargo +$toolchain install $program
+        fi
+    else
+        return 1
+    fi
+}
+
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/cranelift/index.html"
-cargo +nightly doc
+if has_toolchain nightly; then
+    cargo +nightly doc
 
-# Make sure the documentation doesn't have broken links.
-banner "Rust documentation link test"
-find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
+    # Make sure the documentation doesn't have broken links.
+    banner "Rust documentation link test"
+    ensure_installed cargo-deadlinks
+    find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
+else
+    cargo doc
+    echo "nightly toolchain not found, some documentation links will not work"
+fi
 
 # Ensure fuzzer works by running it with a single input
 # Note LSAN is disabled due to https://github.com/google/sanitizers/issues/764
 banner "cargo fuzz check"
-if rustup toolchain list | grep -q nightly; then
-    if cargo install --list | grep -q cargo-fuzz; then
-        echo "cargo-fuzz found"
-    else
-        echo "installing cargo-fuzz"
-        cargo +nightly install cargo-fuzz
-    fi
 
+if ensure_installed cargo-fuzz nightly; then
     fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
     ASAN_OPTIONS=detect_leaks=0 \
     cargo +nightly fuzz run fuzz_translate_module \
