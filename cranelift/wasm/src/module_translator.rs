@@ -10,7 +10,7 @@ use cranelift_codegen::timing;
 use wasmparser::{ModuleReader, SectionCode};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cranelift IR
-/// [`Function`](../codegen/ir/function/struct.Function.html).
+/// [`Function`](cranelift_codegen::ir::Function).
 pub fn translate_module<'data>(
     data: &'data [u8],
     environ: &mut dyn ModuleEnvironment<'data>,

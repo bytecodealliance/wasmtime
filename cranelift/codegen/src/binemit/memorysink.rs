@@ -85,7 +85,7 @@ pub trait RelocSink {
 /// A trait for receiving trap codes and offsets.
 ///
 /// If you don't need information about possible traps, you can use the
-/// [`NullTrapSink`](binemit/trait.TrapSink.html) implementation.
+/// [`NullTrapSink`](NullTrapSink) implementation.
 pub trait TrapSink {
     /// Add trap information for a specific offset.
     fn trap(&mut self, _: CodeOffset, _: SourceLoc, _: TrapCode);

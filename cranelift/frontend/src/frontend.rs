@@ -96,7 +96,7 @@ impl FunctionBuilderContext {
     }
 }
 
-/// Implementation of the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html) that has
+/// Implementation of the [`InstBuilder`](cranelift_codegen::ir::InstBuilder) that has
 /// one convenience method per Cranelift IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short> {
     builder: &'short mut FunctionBuilder<'long>,
@@ -207,7 +207,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
 /// modifies with the information stored in the mutable borrowed
 /// [`FunctionBuilderContext`](struct.FunctionBuilderContext.html). The function passed in
 /// argument should be newly created with
-/// [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
+/// [`Function::with_name_signature()`](Function::with_name_signature), whereas the
 /// `FunctionBuilderContext` can be kept as is between two function translations.
 ///
 /// # Errors
@@ -391,7 +391,7 @@ impl<'a> FunctionBuilder<'a> {
         self.func.create_heap(data)
     }
 
-    /// Returns an object with the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html)
+    /// Returns an object with the [`InstBuilder`](cranelift_codegen::ir::InstBuilder)
     /// trait that allows to conveniently append an instruction to the current `Ebb` being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a> {
         let ebb = self

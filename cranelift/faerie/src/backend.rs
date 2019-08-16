@@ -38,7 +38,7 @@ pub struct FaerieBuilder {
 impl FaerieBuilder {
     /// Create a new `FaerieBuilder` using the given Cranelift target, that
     /// can be passed to
-    /// [`Module::new`](cranelift_module/struct.Module.html#method.new].
+    /// [`Module::new`](cranelift_module::Module::new)
     ///
     /// Faerie output requires that TargetIsa have PIC (Position Independent Code) enabled.
     ///

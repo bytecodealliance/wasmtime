@@ -49,7 +49,11 @@ RUST_BACKTRACE=1 cargo test --all
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/cranelift/index.html"
-cargo doc
+cargo +nightly doc
+
+# Make sure the documentation doesn't have broken links.
+banner "Rust documentation link test"
+find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
 
 # Ensure fuzzer works by running it with a single input
 # Note LSAN is disabled due to https://github.com/google/sanitizers/issues/764
