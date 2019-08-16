@@ -12,8 +12,8 @@ ebb0(v0: i32):
     ; check: isub v0, v3
     ; check: ushr_imm v4, 1
     ; check: iadd v5, v3
-    ; check: ushr_imm v6, 2
-    ; check: copy v7
+    ; check: v7 = ushr_imm v6, 2
+    ; check: v1 -> v7
     return v1
 }
 
@@ -23,8 +23,8 @@ ebb0(v0: i32):
     v1 = udiv_imm v0, 125
     ; check: iconst.i32 0x1062_4dd3
     ; check: umulhi v0, v2
-    ; check: ushr_imm v3, 3
-    ; check: copy v4
+    ; check: v4 = ushr_imm v3, 3
+    ; check: v1 -> v4
     return v1
 }
 
@@ -33,8 +33,8 @@ function %t_udiv32_p641(i32) -> i32 {
 ebb0(v0: i32):
     v1 = udiv_imm v0, 641
     ; check: iconst.i32 0x0066_3d81
-    ; check: umulhi v0, v2
-    ; check: copy v3
+    ; check: v3 = umulhi v0, v2
+    ; check: v1 -> v3
     return v1
 }
 
@@ -48,8 +48,8 @@ ebb0(v0: i32):
     ; check: iconst.i32 0xffff_ffff_d555_5555
     ; check: smulhi v0, v2
     ; check: ushr_imm v3, 31
-    ; check: iadd v3, v4
-    ; check: copy v5
+    ; check: v5 = iadd v3, v4
+    ; check: v1 -> v5
     return v1
 }
 
@@ -61,8 +61,8 @@ ebb0(v0: i32):
     ; check: smulhi v0, v2
     ; check: sshr_imm v3, 1
     ; check: ushr_imm v4, 31
-    ; check: iadd v4, v5
-    ; check: copy v6
+    ; check: v6 = iadd v4, v5
+    ; check: v1 -> v6
     return v1
 }
 
@@ -75,8 +75,8 @@ ebb0(v0: i32):
     ; check: isub v3, v0
     ; check: sshr_imm v4, 1
     ; check: ushr_imm v5, 31
-    ; check: iadd v5, v6
-    ; check: copy v7
+    ; check: v7 = iadd v5, v6
+    ; check: v1 -> v7
     return v1
 }
 
@@ -87,8 +87,8 @@ ebb0(v0: i32):
     ; check: iconst.i32 0x2aaa_aaab
     ; check: smulhi v0, v2
     ; check: ushr_imm v3, 31
-    ; check: iadd v3, v4
-    ; check: copy v5
+    ; check: v5 = iadd v3, v4
+    ; check: v1 -> v5
     return v1
 }
 
@@ -101,8 +101,8 @@ ebb0(v0: i32):
     ; check: iadd v3, v0
     ; check: sshr_imm v4, 2
     ; check: ushr_imm v5, 31
-    ; check: iadd v5, v6
-    ; check: copy v7
+    ; check: v7 = iadd v5, v6
+    ; check: v1 -> v7
     return v1
 }
 
@@ -114,8 +114,8 @@ ebb0(v0: i32):
     ; check: smulhi v0, v2
     ; check: sshr_imm v3, 8
     ; check: ushr_imm v4, 31
-    ; check: iadd v4, v5
-    ; check: copy v6
+    ; check: v6 = iadd v4, v5
+    ; check: v1 -> v6
     return v1
 }
 
@@ -131,8 +131,8 @@ ebb0(v0: i64):
     ; check: isub v0, v3
     ; check: ushr_imm v4, 1
     ; check: iadd v5, v3
-    ; check: ushr_imm v6, 2
-    ; check: copy v7
+    ; check: v7 = ushr_imm v6, 2
+    ; check: v1 -> v7
     return v1
 }
 
@@ -142,8 +142,8 @@ ebb0(v0: i64):
     v1 = udiv_imm v0, 9
     ; check: iconst.i64 0xe38e_38e3_8e38_e38f
     ; check: umulhi v0, v2
-    ; check: ushr_imm v3, 3
-    ; check: copy v4
+    ; check: v4 = ushr_imm v3, 3
+    ; check: v1 -> v4
     return v1
 }
 
@@ -156,8 +156,8 @@ ebb0(v0: i64):
     ; check: isub v0, v3
     ; check: ushr_imm v4, 1
     ; check: iadd v5, v3
-    ; check: ushr_imm v6, 6
-    ; check: copy v7
+    ; check: v7 = ushr_imm v6, 6
+    ; check: v1 -> v7
     return v1
 }
 
@@ -166,8 +166,8 @@ function %t_udiv64_p274177(i64) -> i64 {
 ebb0(v0: i64):
     v1 = udiv_imm v0, 274177
     ; check: iconst.i64 0x3d30_f19c_d101
-    ; check: umulhi v0, v2
-    ; check: copy v3
+    ; check: v3 = umulhi v0, v2
+    ; check: v1 -> v3
     return v1
 }
 
@@ -182,8 +182,8 @@ ebb0(v0: i64):
     ; check: smulhi v0, v2
     ; check: sshr_imm v3, 7
     ; check: ushr_imm v4, 63
-    ; check: iadd v4, v5
-    ; check: copy v6
+    ; check: v6 = iadd v4, v5
+    ; check: v1 -> v6
     return v1
 }
 
@@ -194,8 +194,8 @@ ebb0(v0: i64):
     ; check: iconst.i64 0xd555_5555_5555_5555
     ; check: smulhi v0, v2
     ; check: ushr_imm v3, 63
-    ; check: iadd v3, v4
-    ; check: copy v5
+    ; check: v5 = iadd v3, v4
+    ; check: v1 -> v5
     return v1
 }
 
@@ -207,8 +207,8 @@ ebb0(v0: i64):
     ; check: smulhi v0, v2
     ; check: sshr_imm v3, 1
     ; check: ushr_imm v4, 63
-    ; check: iadd v4, v5
-    ; check: copy v6
+    ; check: v6 = iadd v4, v5
+    ; check: v1 -> v6
     return v1
 }
 
@@ -221,8 +221,8 @@ ebb0(v0: i64):
     ; check: isub v3, v0
     ; check: sshr_imm v4, 1
     ; check: ushr_imm v5, 63
-    ; check: iadd v5, v6
-    ; check: copy v7
+    ; check: v7 = iadd v5, v6
+    ; check: v1 -> v7
     return v1
 }
 
@@ -233,8 +233,8 @@ ebb0(v0: i64):
     ; check: iconst.i64 0x2aaa_aaaa_aaaa_aaab
     ; check: smulhi v0, v2
     ; check: ushr_imm v3, 63
-    ; check: iadd v3, v4
-    ; check: copy v5
+    ; check: v5 = iadd v3, v4
+    ; check: v1 -> v5
     return v1
 }
 
@@ -247,8 +247,8 @@ ebb0(v0: i64):
     ; check: iadd v3, v0
     ; check: sshr_imm v4, 3
     ; check: ushr_imm v5, 63
-    ; check: iadd v5, v6
-    ; check: copy v7
+    ; check: v7 = iadd v5, v6
+    ; check: v1 -> v7
     return v1
 }
 
@@ -260,7 +260,7 @@ ebb0(v0: i64):
     ; check: smulhi v0, v2
     ; check: sshr_imm v3, 7
     ; check: ushr_imm v4, 63
-    ; check: iadd v4, v5
-    ; check: copy v6
+    ; check: v6 = iadd v4, v5
+    ; check: v1 -> v6
     return v1
 }

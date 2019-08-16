@@ -104,7 +104,7 @@ ebb0(v0: i32):
     ; check: ushr_imm v0, 31
     ; check: iadd v0, v2
     ; check: sshr_imm v3, 1
-    ; check: copy v4
+    ; check: v1 -> v4
     return v1
 }
 
@@ -126,8 +126,8 @@ ebb0(v0: i32):
     ; check: v2 = sshr_imm v0, 1
     ; check: ushr_imm v2, 30
     ; check: iadd v0, v3
-    ; check: sshr_imm v4, 2
-    ; check: copy v5
+    ; check: v5 = sshr_imm v4, 2
+    ; check: v1 -> v5
 
     return v1
 }
@@ -151,8 +151,8 @@ ebb0(v0: i32):
     ; check: sshr_imm v0, 29
     ; check: ushr_imm v2, 2
     ; check: iadd v0, v3
-    ; check: sshr_imm v4, 30
-    ; check: copy v5
+    ; check: v5 = sshr_imm v4, 30
+    ; check: v1 -> v5
     return v1
 }
 
@@ -214,8 +214,8 @@ ebb0(v0: i64):
     v1 = sdiv_imm v0, 2
     ; check: ushr_imm v0, 63
     ; check: iadd v0, v2
-    ; check: sshr_imm v3, 1
-    ; check: copy v4
+    ; check: v4 = sshr_imm v3, 1
+    ; check: v1 -> v4
     return v1
 }
 
@@ -237,8 +237,8 @@ ebb0(v0: i64):
     ; check: sshr_imm v0, 1
     ; check: ushr_imm v2, 62
     ; check: iadd v0, v3
-    ; check: sshr_imm v4, 2
-    ; check: copy v5
+    ; check: v5 = sshr_imm v4, 2
+    ; check: v1 -> v5
     return v1
 }
 
@@ -261,8 +261,8 @@ ebb0(v0: i64):
     ; check: sshr_imm v0, 61
     ; check: ushr_imm v2, 2
     ; check: iadd v0, v3
-    ; check: sshr_imm v4, 62
-    ; check: copy v5
+    ; check: v5 = sshr_imm v4, 62
+    ; check: v1 -> v5
     return v1
 }
 
