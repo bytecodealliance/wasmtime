@@ -56,7 +56,7 @@ steps:
 - bash: echo "##vso[task.setvariable variable=basename;]wasmtime-$(tagName)-x86_64-windows"
   displayName: Configure basename var
   condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
-- bash: echo "##vso[task.setvariable variable=basename;]wasmtime-$(tagName)-x86_64-apple"
+- bash: echo "##vso[task.setvariable variable=basename;]wasmtime-$(tagName)-x86_64-macos"
   displayName: Configure basename var
   condition: and(succeeded(), eq(variables['Agent.OS'], 'Darwin'))
 - bash: echo "##vso[task.setvariable variable=basename;]wasmtime-$(tagName)-x86_64-linux"
