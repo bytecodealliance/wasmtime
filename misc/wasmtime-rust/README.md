@@ -30,21 +30,6 @@ the module.
 Note that this macro is still in early stages of development, so error messages
 aren't great yet and all functionality isn't supported yet.
 
-## Runtime performance
-
-Currently this crate uses the `wasmtime-interface-types` crate which does a good
-deal of dynamic type checking and dispatch. The macro, however, has static
-information about signatures! It's intended that eventually this macro could
-showcase:
-
-* Up-front typechecking of a WebAssembly module against an expected signature
-  from within Rust, providing errors during instantiation time about type
-  errors.
-
-* JIT-compiled specialized trampolines from Rust to the native module which do
-  not have any dynamic dispatch overhead for entering the WebAssembly module,
-  making crossing the boundary from Rust to WebAssembly as fast as possible.
-
 ## Missing features
 
 Currently if the wasm module imports any symbols outside of the WASI namespace
