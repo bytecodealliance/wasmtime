@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::fmt;
 
 /// The set of all possible WebAssembly Interface Types
@@ -18,6 +19,17 @@ macro_rules! from {
         impl From<$a> for Value {
             fn from(val: $a) -> Value {
                 Value::$b(val)
+            }
+        }
+
+        impl TryFrom<Value> for $a {
+            type Error = failure::Error;
+
+            fn try_from(val: Value) -> Result<$a, Self::Error> {
+                match val {
+                    Value::$b(v) => Ok(v),
+                    v => failure::bail!("cannot convert {:?} to {}", v, stringify!($a)),
+                }
             }
         }
     )*)
