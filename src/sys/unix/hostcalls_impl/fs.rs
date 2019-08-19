@@ -386,58 +386,62 @@ pub(crate) fn path_filestat_set_times(
     resolved: PathGet,
     dirflags: host::__wasi_lookupflags_t,
     st_atim: host::__wasi_timestamp_t,
-    mut st_mtim: host::__wasi_timestamp_t,
+    st_mtim: host::__wasi_timestamp_t,
     fst_flags: host::__wasi_fstflags_t,
 ) -> Result<()> {
     use nix::sys::time::{TimeSpec, TimeValLike};
+    use nix::sys::stat::{utimensat, UtimensatFlags};
 
-    let atflags = match dirflags {
-        wasm32::__WASI_LOOKUP_SYMLINK_FOLLOW => 0,
-        _ => libc::AT_SYMLINK_NOFOLLOW,
-    };
-    if fst_flags & host::__WASI_FILESTAT_SET_MTIM_NOW != 0 {
-        let clock_id = libc::CLOCK_REALTIME;
-        let mut timespec = unsafe { std::mem::uninitialized::<libc::timespec>() };
-        let res = unsafe { libc::clock_gettime(clock_id, &mut timespec as *mut libc::timespec) };
-        if res != 0 {
-            return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
-        }
-        st_mtim = (timespec.tv_sec as host::__wasi_timestamp_t)
-            .checked_mul(1_000_000_000)
-            .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-            .ok_or(host::__WASI_EOVERFLOW)?;
-    }
-    let ts_atime = match fst_flags {
-        f if f & host::__WASI_FILESTAT_SET_ATIM_NOW != 0 => libc::timespec {
-            tv_sec: 0,
-            tv_nsec: utime_now(),
-        },
-        f if f & host::__WASI_FILESTAT_SET_ATIM != 0 => {
-            *TimeSpec::nanoseconds(st_atim as i64).as_ref()
-        }
-        _ => libc::timespec {
+    // FIXME this should be a part of nix
+    fn timespec_omit() -> TimeSpec {
+        let raw_ts = libc::timespec {
             tv_sec: 0,
             tv_nsec: utime_omit(),
-        },
+        };
+        unsafe { std::mem::transmute(raw_ts) }
     };
-    let ts_mtime = *TimeSpec::nanoseconds(st_mtim as i64).as_ref();
-    let times = [ts_atime, ts_mtime];
 
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
-
-    let res = unsafe {
-        libc::utimensat(
-            resolved.dirfd().as_raw_fd(),
-            path_cstr.as_ptr(),
-            times.as_ptr(),
-            atflags,
-        )
+    fn timespec_now() -> TimeSpec {
+        let raw_ts = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: utime_now(),
+        };
+        unsafe { std::mem::transmute(raw_ts) }
     };
-    if res != 0 {
-        Err(host_impl::errno_from_nix(nix::errno::Errno::last()))
-    } else {
-        Ok(())
+
+    let set_atim = fst_flags & host::__WASI_FILESTAT_SET_ATIM != 0;
+    let set_atim_now = fst_flags & host::__WASI_FILESTAT_SET_ATIM_NOW != 0;
+    let set_mtim = fst_flags & host::__WASI_FILESTAT_SET_MTIM != 0;
+    let set_mtim_now = fst_flags & host::__WASI_FILESTAT_SET_MTIM_NOW != 0;
+
+    if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
+        return Err(host::__WASI_EINVAL);
     }
+
+    let atflags = match dirflags {
+        wasm32::__WASI_LOOKUP_SYMLINK_FOLLOW => UtimensatFlags::FollowSymlink,
+        _ => UtimensatFlags::NoFollowSymlink,
+    };
+
+    let atim = if set_atim_now {
+        TimeSpec::nanoseconds(st_atim as i64) // fixme
+    } else if set_atim_now {
+        timespec_now()
+    } else {
+        timespec_omit()
+    };
+
+    let mtim = if set_mtim {
+        TimeSpec::nanoseconds(st_mtim as i64) // fixme
+    } else if set_atim_now {
+        timespec_now()
+    } else {
+        timespec_omit()
+    };
+
+    let fd = resolved.dirfd().as_raw_fd().into();
+    utimensat(fd, resolved.path(), &atim, &mtim, atflags)
+        .map_err(|e| host_impl::errno_from_nix(e.as_errno().unwrap()))
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
