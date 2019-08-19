@@ -39,7 +39,10 @@ rayon = "1.1"
 wasm-webidl-bindings = "0.4"
 
 [workspace]
-members = ["misc/wasmtime-py"]
+members = [
+  "misc/wasmtime-rust",
+  "misc/wasmtime-py",
+]
 
 [features]
 lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam"]

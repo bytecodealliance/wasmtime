@@ -1,0 +1,17 @@
+[package]
+name = "wasmtime-rust"
+version = "0.1.0"
+authors = ["Alex Crichton <alex@alexcrichton.com>"]
+edition = "2018"
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+cranelift-codegen = "0.38.0"
+cranelift-native = "0.38.0"
+failure = "0.1.5"
+wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
+wasmtime-jit = { path = "../../wasmtime-jit" }
+wasmtime-rust-macro = { path = "./macro" }
