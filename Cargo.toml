@@ -16,6 +16,7 @@ cranelift-entity = { version = "0.38.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.38.0", features = ["enable-serde"] }
 wasmtime-debug = { path = "wasmtime-debug" }
 wasmtime-environ = { path = "wasmtime-environ" }
+wasmtime-interface-types = { path = "wasmtime-interface-types" }
 wasmtime-runtime = { path = "wasmtime-runtime" }
 wasmtime-jit = { path = "wasmtime-jit" }
 wasmtime-obj = { path = "wasmtime-obj" }
@@ -26,6 +27,7 @@ wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "8ea7
 docopt = "1.0.1"
 serde = { "version" = "1.0.94", features = ["derive"] }
 faerie = "0.10.1"
+failure = "0.1"
 target-lexicon = { version = "0.4.0", default-features = false }
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.1"
@@ -33,8 +35,10 @@ wabt = "0.7"
 libc = "0.2.60"
 errno = "0.2.4"
 rayon = "1.1"
+wasm-webidl-bindings = "0.4"
 
 [workspace]
+members = ["misc/wasmtime-py"]
 
 [features]
 lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam"]
