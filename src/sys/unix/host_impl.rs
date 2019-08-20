@@ -201,20 +201,29 @@ pub(crate) fn filestat_from_nix(
 ) -> Result<host::__wasi_filestat_t> {
     use std::convert::TryFrom;
 
+    fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<host::__wasi_timestamp_t> {
+        secs.checked_mul(1_000_000_000)
+            .and_then(|sec_nsec| sec_nsec.checked_add(nsecs))
+            .ok_or(host::__WASI_EOVERFLOW)
+    }
+
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
     let dev =
         host::__wasi_device_t::try_from(filestat.st_dev).map_err(|_| host::__WASI_EOVERFLOW)?;
     let ino =
         host::__wasi_inode_t::try_from(filestat.st_ino).map_err(|_| host::__WASI_EOVERFLOW)?;
+    let st_atim = filestat_to_timestamp(filestat.st_atime as u64, filestat.st_atime_nsec as u64)?;
+    let st_ctim = filestat_to_timestamp(filestat.st_ctime as u64, filestat.st_ctime_nsec as u64)?;
+    let st_mtim = filestat_to_timestamp(filestat.st_mtime as u64, filestat.st_mtime_nsec as u64)?;
 
     Ok(host::__wasi_filestat_t {
         st_dev: dev,
         st_ino: ino,
         st_nlink: filestat.st_nlink as host::__wasi_linkcount_t,
         st_size: filestat.st_size as host::__wasi_filesize_t,
-        st_atim: filestat.st_atime as host::__wasi_timestamp_t,
-        st_ctim: filestat.st_ctime as host::__wasi_timestamp_t,
-        st_mtim: filestat.st_mtime as host::__wasi_timestamp_t,
+        st_atim,
+        st_ctim,
+        st_mtim,
         st_filetype: filetype_from_nix(filetype),
     })
 }
