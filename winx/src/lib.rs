@@ -19,6 +19,7 @@
         clippy::use_self
     )
 )]
+#![cfg(windows)]
 
 #[macro_use]
 extern crate bitflags;
