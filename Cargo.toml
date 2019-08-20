@@ -1,7 +1,7 @@
 [package]
 name = "wasmtime"
 authors = ["The Wasmtime Project Developers"]
-version = "0.1.0"
+version = "0.2.0"
 description = "Command-line interface for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
@@ -11,10 +11,10 @@ edition = "2018"
 default-run = "wasmtime"
 
 [dependencies]
-cranelift-codegen = { version = "0.38.0", features = ["enable-serde"] }
-cranelift-native = "0.38.0"
-cranelift-entity = { version = "0.38.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.38.0", features = ["enable-serde"] }
+cranelift-codegen = { version = "0.40.0", features = ["enable-serde"] }
+cranelift-native = "0.40.0"
+cranelift-entity = { version = "0.40.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.40.0", features = ["enable-serde"] }
 wasmtime-debug = { path = "wasmtime-debug" }
 wasmtime-environ = { path = "wasmtime-environ" }
 wasmtime-interface-types = { path = "wasmtime-interface-types" }
