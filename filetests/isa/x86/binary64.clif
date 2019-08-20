@@ -689,48 +689,48 @@ ebb0:
 
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
-    brz v1, ebb1                                ; bin: 48 85 c9 74 19
+    brz v1, ebb1                                ; bin: 48 85 c9 74 1b
     fallthrough ebb3
 
 ebb3:
     ; asm: testq %rsi, %rsi
     ; asm: je ebb1
-    brz v2, ebb1                                ; bin: 48 85 f6 74 14
+    brz v2, ebb1                                ; bin: 48 85 f6 74 16
     fallthrough ebb4
 
 ebb4:
     ; asm: testq %r10, %r10
     ; asm: je ebb1
-    brz v3, ebb1                                ; bin: 4d 85 d2 74 0f
+    brz v3, ebb1                                ; bin: 4d 85 d2 74 11
     fallthrough ebb5
 
 ebb5:
     ; asm: testq %rcx, %rcx
     ; asm: jne ebb1
-    brnz v1, ebb1                               ; bin: 48 85 c9 75 0a
+    brnz v1, ebb1                               ; bin: 48 85 c9 75 0c
     fallthrough ebb6
 
 ebb6:
     ; asm: testq %rsi, %rsi
     ; asm: jne ebb1
-    brnz v2, ebb1                               ; bin: 48 85 f6 75 05
+    brnz v2, ebb1                               ; bin: 48 85 f6 75 07
     fallthrough ebb7
 
 ebb7:
     ; asm: testq %r10, %r10
     ; asm: jne ebb1
-    brnz v3, ebb1                               ; bin: 4d 85 d2 75 00
+    brnz v3, ebb1                               ; bin: 4d 85 d2 75 02
 
     ; asm: jmp ebb2
-    jump ebb2
+    jump ebb2                                   ; bin: eb 01
 
     ; asm: ebb1:
 ebb1:
-    return
+    return                                       ; bin: c3
 
     ; asm: ebb2:
 ebb2:
-    jump ebb1
+    jump ebb1                                   ; bin: eb fd
 }
 
 ; CPU flag instructions.
@@ -1292,41 +1292,40 @@ ebb0:
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x
-    brz v1, ebb1                                ; bin: 85 c9 74 16
+    brz v1, ebb1                                ; bin: 85 c9 74 18
     fallthrough ebb3
 
 ebb3:
     ; asm: testl %esi, %esi
     ; asm: je ebb1x
-    brz v2, ebb1                                ; bin: 85 f6 74 12
+    brz v2, ebb1                                ; bin: 85 f6 74 14
     fallthrough ebb4
 
 ebb4:
     ; asm: testl %r10d, %r10d
     ; asm: je ebb1x
-    brz v3, ebb1                                ; bin: 45 85 d2 74 0d
+    brz v3, ebb1                                ; bin: 45 85 d2 74 0f
     fallthrough ebb5
 
 ebb5:
     ; asm: testl %ecx, %ecx
     ; asm: jne ebb1x
-    brnz v1, ebb1                               ; bin: 85 c9 75 09
+    brnz v1, ebb1                               ; bin: 85 c9 75 0b
     fallthrough ebb6
 
 ebb6:
     ; asm: testl %esi, %esi
     ; asm: jne ebb1x
-    brnz v2, ebb1                               ; bin: 85 f6 75 05
+    brnz v2, ebb1                               ; bin: 85 f6 75 07
     fallthrough ebb7
 
 ebb7:
     ; asm: testl %r10d, %r10d
     ; asm: jne ebb1x
-    brnz v3, ebb1                               ; bin: 45 85 d2 75 00
+    brnz v3, ebb1                               ; bin: 45 85 d2 75 02
 
     ; asm: jmp ebb2x
-    ; branch relaxation translates this into `fallthrough ebb1`
-    jump ebb2
+    jump ebb2                                   ; bin: eb 01
 
     ; asm: ebb1x:
 ebb1:
