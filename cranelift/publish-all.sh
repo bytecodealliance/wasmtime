@@ -9,7 +9,7 @@ topdir=$(dirname "$0")
 cd "$topdir"
 
 # All the cranelift-* crates have the same version number
-version="0.39.0"
+version="0.40.0"
 
 # Update all of the Cargo.toml files.
 #
@@ -47,5 +47,5 @@ do
 
     # Sleep for a few seconds to allow the server to update the index.
     # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
-    echo sleep 3
+    echo sleep 10
 done
