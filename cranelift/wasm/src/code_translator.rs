@@ -905,7 +905,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32AtomicRmw16UCmpxchg { .. }
         | Operator::I64AtomicRmw8UCmpxchg { .. }
         | Operator::I64AtomicRmw16UCmpxchg { .. }
-        | Operator::I64AtomicRmw32UCmpxchg { .. } => {
+        | Operator::I64AtomicRmw32UCmpxchg { .. }
+        | Operator::Fence { .. } => {
             wasm_unsupported!("proposed thread operator {:?}", op);
         }
         Operator::MemoryInit { .. }
@@ -1060,9 +1061,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F32x4ConvertSI32x4
         | Operator::F32x4ConvertUI32x4
         | Operator::F64x2ConvertSI64x2
-        | Operator::F64x2ConvertUI64x2
-        | Operator::V8x16Shuffle1
-        | Operator::V8x16Shuffle2Imm { .. } => {
+        | Operator::F64x2ConvertUI64x2 { .. }
+        | Operator::V8x16Swizzle
+        | Operator::I8x16LoadSplat { .. }
+        | Operator::I16x8LoadSplat { .. }
+        | Operator::I32x4LoadSplat { .. }
+        | Operator::I64x2LoadSplat { .. } => {
             wasm_unsupported!("proposed SIMD operator {:?}", op);
         }
     };
