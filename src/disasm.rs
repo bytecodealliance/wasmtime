@@ -140,7 +140,7 @@ cfg_if! {
         }
 
         pub fn print_disassembly(isa: &dyn TargetIsa, mem: &[u8]) -> Result<(), String> {
-            let mut cs = get_disassembler(isa)?;
+            let cs = get_disassembler(isa)?;
 
             println!("\nDisassembly of {} bytes:", mem.len());
             let insns = cs.disasm_all(&mem, 0x0).unwrap();

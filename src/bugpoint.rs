@@ -596,7 +596,7 @@ fn resolve_aliases(func: &mut Function) {
 }
 
 fn reduce(
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     mut func: Function,
     verbose: bool,
 ) -> Result<(Function, String), String> {
@@ -658,10 +658,10 @@ struct CrashCheckContext<'a> {
     context: Context,
 
     /// The target isa to compile for.
-    isa: &'a TargetIsa,
+    isa: &'a dyn TargetIsa,
 }
 
-fn get_panic_string(panic: Box<std::any::Any>) -> String {
+fn get_panic_string(panic: Box<dyn std::any::Any>) -> String {
     let panic = match panic.downcast::<&'static str>() {
         Ok(panic_msg) => panic_msg.to_owned(),
         Err(panic) => panic,
@@ -681,7 +681,7 @@ enum CheckResult {
 }
 
 impl<'a> CrashCheckContext<'a> {
-    fn new(isa: &'a TargetIsa) -> Self {
+    fn new(isa: &'a dyn TargetIsa) -> Self {
         CrashCheckContext {
             context: Context::new(),
             isa,

@@ -11,7 +11,7 @@ keywords = ["webassembly", "wasm"]
 edition = "2018"
 
 [dependencies]
-wasmparser = { version = "0.32.1", default-features = false }
+wasmparser = { version = "0.36.0", default-features = false }
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.38.0", default-features = false }
 cranelift-entity = { path = "../cranelift-entity", version = "0.38.0", default-features = false }
 cranelift-frontend = { path = "../cranelift-frontend", version = "0.38.0", default-features = false }
@@ -22,7 +22,7 @@ log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
 
 [dev-dependencies]
-wabt = "0.7.0"
+wabt = "0.9.1"
 target-lexicon = "0.4.0"
 
 [features]
