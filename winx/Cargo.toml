@@ -3,6 +3,7 @@ name = "winx"
 version = "0.1.0"
 authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
 edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
 winapi = { version = "0.3", features = ["std", "errhandlingapi", "handleapi", "processthreadsapi", "securitybaseapi", "winbase", "winerror", "ws2def", "fileapi", "aclapi" ] }
