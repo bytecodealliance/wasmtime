@@ -2,7 +2,7 @@
 name = "wasmtime-py"
 version = "0.3.0"
 authors = ["The Wasmtime Project Developers"]
-description = "Python extension for the wasmtime"
+description = "Python extension for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm", "python"]
 edition = "2018"
@@ -13,11 +13,11 @@ name = "_wasmtime"
 crate-type = ["cdylib"]
 
 [dependencies]
-cranelift-codegen = "0.38.0"
-cranelift-native = "0.38.0"
-cranelift-entity = "0.38.0"
-cranelift-wasm = "0.38.0"
-cranelift-frontend = "0.38.0"
+cranelift-codegen = "0.40.0"
+cranelift-native = "0.40.0"
+cranelift-entity = "0.40.0"
+cranelift-wasm = "0.40.0"
+cranelift-frontend = "0.40.0"
 wasmtime-environ = { path = "../../wasmtime-environ" }
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
 wasmtime-jit = { path = "../../wasmtime-jit" }
@@ -25,7 +25,7 @@ wasmtime-runtime = { path = "../../wasmtime-runtime" }
 target-lexicon = { version = "0.4.0", default-features = false }
 failure = "0.1"
 region = "2.0.0"
-wasmparser = "0.35.3"
+wasmparser = "0.36.0"
 
 [dependencies.pyo3]
 version = "0.7.0-alpha.1"

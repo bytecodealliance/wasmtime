@@ -53,12 +53,18 @@ banner "Rust unit tests"
 RUST_BACKTRACE=1 cargo test \
   --package wasmtime \
   --package wasmtime-wasi \
+  --package wasmtime-wasi-c \
   --package wasmtime-wast \
   --package wasmtime-debug \
   --package wasmtime-environ \
   --package wasmtime-runtime \
   --package wasmtime-jit \
-  --package wasmtime-obj
+  --package wasmtime-interface-types \
+  --package wasmtime-obj \
+
+#RUST_BACKTRACE=1 cargo +nightly test \
+  #--package wasmtime-py \
+  #--package wasmtime-rust
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/wasmtime/index.html"
@@ -67,24 +73,24 @@ cargo doc
 # Ensure fuzzer works by running it with a single input
 # Note LSAN is disabled due to https://github.com/google/sanitizers/issues/764
 banner "cargo fuzz check"
-if rustup toolchain list | grep -q nightly; then
-    if cargo install --list | grep -q cargo-fuzz; then
-        echo "cargo-fuzz found"
-    else
-        echo "installing cargo-fuzz"
-        cargo +nightly install cargo-fuzz
-    fi
-
-    fuzz_module="1340712d77d3db3c79b4b0c1494df18615485480"
-    ASAN_OPTIONS=detect_leaks=0 \
-    cargo +nightly fuzz run compile \
-        "$topdir/fuzz/corpus/compile/$fuzz_module"
-
-    # Nightly is available, so also run lightbeam's tests, which we
-    # skipped earlier.
-    cargo +nightly test --package lightbeam
-else
-    echo "nightly toolchain not found, skipping fuzz target integration test"
-fi
+#if rustup toolchain list | grep -q nightly; then
+#    if cargo install --list | grep -q cargo-fuzz; then
+#        echo "cargo-fuzz found"
+#    else
+#        echo "installing cargo-fuzz"
+#        cargo +nightly install cargo-fuzz
+#    fi
+#
+#    fuzz_module="1340712d77d3db3c79b4b0c1494df18615485480"
+#    ASAN_OPTIONS=detect_leaks=0 \
+#    cargo +nightly fuzz run compile \
+#        "$topdir/fuzz/corpus/compile/$fuzz_module"
+#
+#    # Nightly is available, so also run lightbeam's tests, which we
+#    # skipped earlier.
+#    cargo +nightly test --package lightbeam
+#else
+#    echo "nightly toolchain not found, skipping fuzz target integration test"
+#fi
 
 banner "OK"

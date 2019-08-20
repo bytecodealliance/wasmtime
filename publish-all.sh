@@ -9,7 +9,7 @@ topdir=$(dirname "$0")
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.1.0"
+version="0.2.0"
 
 # Update all of the Cargo.toml files.
 #
@@ -34,9 +34,26 @@ cargo update
 # Note that libraries need to be published in topological order.
 
 echo git commit -a -m "\"Bump version to $version"\"
+echo git tag v$version
 echo git push
+echo git push origin v$version
 for crate in \
-    wasmtime-environ
+    wasmtime \
+    wasmtime-wasi \
+    wasmtime-wasi-c \
+    wasmtime-wast \
+    wasmtime-debug \
+    wasmtime-environ \
+    wasmtime-runtime \
+    wasmtime-jit \
+    wasmtime-interface-types \
+    wasmtime-obj \
+    wasmtime-py \
+    wasmtime-rust
 do
     echo cargo publish --manifest-path "$crate/Cargo.toml"
+
+    # Sleep for a few seconds to allow the server to update the index.
+    # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
+    echo sleep 10
 done

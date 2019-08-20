@@ -68,7 +68,6 @@ impl Into<ValidatingParserConfig> for Features {
                 enable_simd: self.simd,
                 enable_multi_value: self.multi_value,
             },
-            mutable_global_imports: true,
         }
     }
 }

@@ -3,14 +3,16 @@ name = "wasmtime-rust"
 version = "0.1.0"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
+categories = ["wasm", "rust"]
+license = "Apache-2.0 WITH LLVM-exception"
 
 [lib]
 test = false
 doctest = false
 
 [dependencies]
-cranelift-codegen = "0.38.0"
-cranelift-native = "0.38.0"
+cranelift-codegen = "0.40.0"
+cranelift-native = "0.40.0"
 failure = "0.1.5"
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
 wasmtime-jit = { path = "../../wasmtime-jit" }

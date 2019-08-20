@@ -197,8 +197,15 @@ impl crate::compilation::Compiler for Cranelift {
                         let mut code_buf: Vec<u8> = Vec::new();
                         let mut reloc_sink = RelocSink::new(func_index);
                         let mut trap_sink = binemit::NullTrapSink {};
+                        let mut stackmap_sink = binemit::NullStackmapSink {};
                         context
-                            .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
+                            .compile_and_emit(
+                                isa,
+                                &mut code_buf,
+                                &mut reloc_sink,
+                                &mut trap_sink,
+                                &mut stackmap_sink,
+                            )
                             .map_err(CompileError::Codegen)?;
 
                         let jt_offsets = context.func.jt_offsets.clone();
