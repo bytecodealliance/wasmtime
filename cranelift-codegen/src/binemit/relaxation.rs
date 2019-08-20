@@ -57,7 +57,8 @@ pub fn relax_branches(
     func.offsets.resize(func.dfg.num_ebbs());
 
     // Start by removing redundant jumps.
-    fold_redundant_jumps(func, cfg, domtree);
+    // FIXME: Temporarily disabled due to #916.
+    /* fold_redundant_jumps(func, cfg, domtree); */
 
     // Convert jumps to fallthrough instructions where possible.
     fallthroughs(func);
