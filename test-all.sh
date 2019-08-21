@@ -59,6 +59,7 @@ RUST_BACKTRACE=1 cargo test \
   --package wasmtime-environ \
   --package wasmtime-runtime \
   --package wasmtime-jit \
+  --package wasmtime-api \
   --package wasmtime-interface-types \
   --package wasmtime-obj \
 

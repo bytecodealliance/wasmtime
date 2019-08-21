@@ -42,6 +42,7 @@ for crate in \
     wasmtime-debug \
     wasmtime-runtime \
     wasmtime-jit \
+    wasmtime-api \
     wasmtime-wast \
     wasmtime-wasi \
     wasmtime-wasi-c \
