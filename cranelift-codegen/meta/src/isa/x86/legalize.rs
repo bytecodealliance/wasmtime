@@ -20,7 +20,6 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // List of instructions.
     let insts = &shared.instructions;
     let band = insts.by_name("band");
-    let bitcast = insts.by_name("bitcast");
     let bor = insts.by_name("bor");
     let clz = insts.by_name("clz");
     let ctz = insts.by_name("ctz");
@@ -321,7 +320,9 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // SIMD splat: 8-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
         let splat_any8x16 = splat.bind_vector_from_lane(ty, sse_vector_size);
-        let bitcast_f64_to_any8x16 = bitcast.bind_vector_from_lane(ty, sse_vector_size).bind(F64);
+        let bitcast_f64_to_any8x16 = raw_bitcast
+            .bind_vector_from_lane(ty, sse_vector_size)
+            .bind(F64);
         narrow.legalize(
             def!(y = splat_any8x16(x)),
             vec![

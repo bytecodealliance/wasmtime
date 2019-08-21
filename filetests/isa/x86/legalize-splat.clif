@@ -68,6 +68,6 @@ ebb0:
 ; nextln:     v0 = ireduce.i8 v2
 ; nextln:     v3 = scalar_to_vector.i8x16 v0
 ; nextln:     v4 = f64const 0.0
-; nextln:     v5 = bitcast.i8x16 v4
+; nextln:     v5 = raw_bitcast.i8x16 v4
 ; nextln:     v1 = x86_pshufb v3, v5
 ; nextln:     return v1
