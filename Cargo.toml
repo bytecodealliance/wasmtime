@@ -26,10 +26,10 @@ winx = { path = "winx" }
 winapi = "0.3"
 
 [dev-dependencies]
-wasmtime-runtime = { git = "https://github.com/cranestation/wasmtime", rev = "165dc49" }
-wasmtime-environ = { git = "https://github.com/cranestation/wasmtime", rev = "165dc49" }
-wasmtime-jit = { git = "https://github.com/cranestation/wasmtime", rev = "165dc49" }
-wasmtime-wasi = { git = "https://github.com/cranestation/wasmtime", rev = "165dc49" }
+wasmtime-runtime = { git = "https://github.com/cranestation/wasmtime", rev = "44367ba" }
+wasmtime-environ = { git = "https://github.com/cranestation/wasmtime", rev = "44367ba" }
+wasmtime-jit = { git = "https://github.com/cranestation/wasmtime", rev = "44367ba" }
+wasmtime-wasi = { git = "https://github.com/cranestation/wasmtime", rev = "44367ba" }
 cranelift-codegen = "0.40.0"
 cranelift-entity = "0.40.0"
 cranelift-wasm = "0.40.0"
