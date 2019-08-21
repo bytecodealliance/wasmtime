@@ -940,6 +940,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let splatted = builder.ins().splat(ty, value_to_splat);
             state.push1(splatted)
         }
+        Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
+            let vector = optionally_bitcast_vector(state.pop1(), type_of(op), builder);
+            let extracted = builder.ins().extractlane(vector, lane.clone());
+            state.push1(builder.ins().sextend(I32, extracted))
+        }
+        Operator::I8x16ExtractLaneU { lane } | Operator::I16x8ExtractLaneU { lane } => {
+            let vector = optionally_bitcast_vector(state.pop1(), type_of(op), builder);
+            state.push1(builder.ins().extractlane(vector, lane.clone()));
+            // on x86, PEXTRB zeroes the upper bits of the destination register of extractlane so uextend is elided; of course, this depends on extractlane being legalized to a PEXTRB
+        }
         Operator::I32x4ExtractLane { lane }
         | Operator::I64x2ExtractLane { lane }
         | Operator::F32x4ExtractLane { lane }
@@ -967,10 +977,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::V128Load { .. }
         | Operator::V128Store { .. }
-        | Operator::I8x16ExtractLaneS { .. }
-        | Operator::I8x16ExtractLaneU { .. }
-        | Operator::I16x8ExtractLaneS { .. }
-        | Operator::I16x8ExtractLaneU { .. }
         | Operator::V8x16Shuffle { .. }
         | Operator::I8x16Eq
         | Operator::I8x16Ne
