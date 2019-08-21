@@ -15,19 +15,31 @@ use std::process::{Command, Stdio};
 fn main() {
     let out_dir =
         PathBuf::from(env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set"));
+    println!("OUT_DIR is {:?}", out_dir);
     let mut out = File::create(out_dir.join("misc_testsuite_tests.rs"))
         .expect("error generating test source file");
 
-    build_tests("misc_testsuite").expect("building tests");
-    test_directory(&mut out, "misc_testsuite").expect("generating tests");
+    build_tests("misc_testsuite", &out_dir).expect("building tests");
+    test_directory(&mut out, "misc_testsuite", &out_dir).expect("generating tests");
 }
 
-fn build_tests(testsuite: &str) -> io::Result<()> {
+fn build_tests(testsuite: &str, out_dir: &Path) -> io::Result<()> {
+    // if the submodule has not been checked out, the build will stall
+    if !Path::new(&format!("{}/Cargo.toml", testsuite)).exists() {
+        panic!("Testsuite {} not checked out", testsuite);
+    }
+
     let mut cmd = Command::new("cargo");
-    cmd.args(&["build", "--release", "--target=wasm32-wasi"])
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .current_dir(testsuite);
+    cmd.args(&[
+        "build",
+        "--release",
+        "--target=wasm32-wasi",
+        "--target-dir",
+        out_dir.to_str().unwrap(),
+    ])
+    .stdout(Stdio::inherit())
+    .stderr(Stdio::inherit())
+    .current_dir(testsuite);
     let output = cmd.output()?;
 
     let status = output.status;
@@ -41,8 +53,8 @@ fn build_tests(testsuite: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
-    let mut dir_entries: Vec<_> = read_dir(format!("{}/target/wasm32-wasi/release", testsuite))
+fn test_directory(out: &mut File, testsuite: &str, out_dir: &Path) -> io::Result<()> {
+    let mut dir_entries: Vec<_> = read_dir(out_dir.join("wasm32-wasi/release"))
         .expect("reading testsuite directory")
         .map(|r| r.expect("reading testsuite directory entry"))
         .filter(|dir_entry| {

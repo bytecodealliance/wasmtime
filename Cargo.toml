@@ -9,7 +9,6 @@ authors = [
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 description = "WASI implementation in Rust"
-exclude = ["misc_testsuite/*.wasm"]
 
 [dependencies]
 wasi-common-cbindgen = { path = "wasi-common-cbindgen" }
