@@ -9,6 +9,7 @@ use crate::sys::{errno_from_ioerror, host_impl, hostcalls_impl};
 use crate::{host, wasm32, Result};
 use filetime::{set_file_handle_times, FileTime};
 use log::trace;
+use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -766,6 +767,15 @@ pub(crate) fn fd_filestat_set_times(
     let st_mtim = dec_timestamp(st_mtim);
     let fst_flags = dec_fstflags(fst_flags);
 
+    fd_filestat_set_times_impl(fd, st_atim, st_mtim, fst_flags)
+}
+
+pub(crate) fn fd_filestat_set_times_impl(
+    fd: &File,
+    st_atim: wasm32::__wasi_timestamp_t,
+    st_mtim: wasm32::__wasi_timestamp_t,
+    fst_flags: wasm32::__wasi_fstflags_t,
+) -> Result<()> {
     let set_atim = fst_flags & host::__WASI_FILESTAT_SET_ATIM != 0;
     let set_atim_now = fst_flags & host::__WASI_FILESTAT_SET_ATIM_NOW != 0;
     let set_mtim = fst_flags & host::__WASI_FILESTAT_SET_MTIM != 0;

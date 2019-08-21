@@ -4,7 +4,7 @@ use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
 use crate::helpers::systemtime_to_timestamp;
-use crate::hostcalls_impl::PathGet;
+use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
@@ -311,7 +311,9 @@ pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: host::__wasi_lookupflags_t,
 ) -> Result<host::__wasi_filestat_t> {
-    unimplemented!("path_filestat_get")
+    let path = resolved.concatenate()?;
+    let file = File::open(path).map_err(errno_from_ioerror)?;
+    fd_filestat_get_impl(&file)
 }
 
 pub(crate) fn path_filestat_set_times(
@@ -321,7 +323,13 @@ pub(crate) fn path_filestat_set_times(
     mut st_mtim: host::__wasi_timestamp_t,
     fst_flags: host::__wasi_fstflags_t,
 ) -> Result<()> {
-    unimplemented!("path_filestat_set_times")
+    use winx::file::AccessMode;
+    let path = resolved.concatenate()?;
+    let file = OpenOptions::new()
+        .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
+        .open(path)
+        .map_err(errno_from_ioerror)?;
+    fd_filestat_set_times_impl(&file, st_atim, st_mtim, fst_flags)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
