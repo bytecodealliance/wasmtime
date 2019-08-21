@@ -9,7 +9,8 @@ mod shrink;
 mod stackmap;
 
 pub use self::memorysink::{
-    MemoryCodeSink, NullStackmapSink, NullTrapSink, RelocSink, StackmapSink, TrapSink,
+    MemoryCodeSink, NullRelocSink, NullStackmapSink, NullTrapSink, RelocSink, StackmapSink,
+    TrapSink,
 };
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;

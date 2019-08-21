@@ -162,6 +162,16 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     }
 }
 
+/// A `RelocSink` implementation that does nothing, which is convenient when
+/// compiling code that does not relocate anything.
+pub struct NullRelocSink {}
+
+impl RelocSink for NullRelocSink {
+    fn reloc_ebb(&mut self, _: u32, _: Reloc, _: u32) {}
+    fn reloc_external(&mut self, _: u32, _: Reloc, _: &ExternalName, _: i64) {}
+    fn reloc_jt(&mut self, _: u32, _: Reloc, _: JumpTable) {}
+}
+
 /// A `TrapSink` implementation that does nothing, which is convenient when
 /// compiling code that does not rely on trapping semantics.
 pub struct NullTrapSink {}

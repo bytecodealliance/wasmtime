@@ -23,6 +23,7 @@
     )
 )]
 
+pub use crate::function_runner::FunctionRunner;
 use crate::runner::TestRunner;
 use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
@@ -30,6 +31,7 @@ use std::path::Path;
 use std::time;
 
 mod concurrent;
+mod function_runner;
 mod match_directive;
 mod runner;
 mod runone;
@@ -46,6 +48,7 @@ mod test_postopt;
 mod test_preopt;
 mod test_print_cfg;
 mod test_regalloc;
+mod test_run;
 mod test_safepoint;
 mod test_shrink;
 mod test_simple_gvn;
@@ -124,6 +127,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "simple_preopt" => test_simple_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),
+        "run" => test_run::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
