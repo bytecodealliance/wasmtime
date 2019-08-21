@@ -63,8 +63,8 @@ RUST_BACKTRACE=1 cargo test \
   --package wasmtime-interface-types \
   --package wasmtime-obj \
 
+# TODO: Test wasmtime-py once it's ready.
 RUST_BACKTRACE=1 cargo +nightly test \
-  --package wasmtime-py \
   --package wasmtime-rust
 
 # Make sure the documentation builds.
