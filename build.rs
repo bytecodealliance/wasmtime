@@ -10,6 +10,7 @@ use std::env;
 use std::fs::{read_dir, DirEntry, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 fn main() {
     let out_dir =
@@ -17,11 +18,31 @@ fn main() {
     let mut out = File::create(out_dir.join("misc_testsuite_tests.rs"))
         .expect("error generating test source file");
 
+    build_tests("misc_testsuite").expect("building tests");
     test_directory(&mut out, "misc_testsuite").expect("generating tests");
 }
 
+fn build_tests(testsuite: &str) -> io::Result<()> {
+    let mut cmd = Command::new("cargo");
+    cmd.args(&["build", "--release", "--target=wasm32-wasi"])
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .current_dir(testsuite);
+    let output = cmd.output()?;
+
+    let status = output.status;
+    if !status.success() {
+        panic!(
+            "Building tests failed: exit code: {}",
+            status.code().unwrap()
+        );
+    }
+
+    Ok(())
+}
+
 fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
-    let mut dir_entries: Vec<_> = read_dir(testsuite)
+    let mut dir_entries: Vec<_> = read_dir(format!("{}/target/wasm32-wasi/release", testsuite))
         .expect("reading testsuite directory")
         .map(|r| r.expect("reading testsuite directory entry"))
         .filter(|dir_entry| {

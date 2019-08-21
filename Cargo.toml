@@ -51,4 +51,4 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 
 [workspace]
 members = ["wasi-common-cbindgen"]
-exclude = ["winx"]
+exclude = ["winx", "misc_testsuite"]
