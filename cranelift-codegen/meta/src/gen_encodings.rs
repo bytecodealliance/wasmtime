@@ -142,6 +142,7 @@ fn emit_instp(instp: &InstructionPredicate, has_func: bool, fmt: &mut Formatter)
 fn emit_recipe_predicates(isa: &TargetIsa, fmt: &mut Formatter) {
     let mut predicate_names = HashMap::new();
 
+    fmt.comment(format!("{} recipe predicates.", isa.name));
     for recipe in isa.recipes.values() {
         let (isap, instp) = match (&recipe.isa_predicate, &recipe.inst_predicate) {
             (None, None) => continue,
@@ -177,8 +178,15 @@ fn emit_recipe_predicates(isa: &TargetIsa, fmt: &mut Formatter) {
         });
         fmtln!(fmt, "}");
     }
+    fmt.empty_line();
 
     // Generate the static table.
+    fmt.doc_comment(format!(
+        r#"{} recipe predicate table.
+
+        One entry per recipe, set to Some only when the recipe is guarded by a predicate."#,
+        isa.name
+    ));
     fmtln!(
         fmt,
         "pub static RECIPE_PREDICATES: [RecipePredicate; {}] = [",
@@ -193,11 +201,13 @@ fn emit_recipe_predicates(isa: &TargetIsa, fmt: &mut Formatter) {
         }
     });
     fmtln!(fmt, "];");
+    fmt.empty_line();
 }
 
 /// Emit private functions for matching instruction predicates as well as a static
 /// `INST_PREDICATES` array indexed by predicate number.
 fn emit_inst_predicates(isa: &TargetIsa, fmt: &mut Formatter) {
+    fmt.comment(format!("{} instruction predicates.", isa.name));
     for (id, instp) in isa.encodings_predicates.iter() {
         fmtln!(fmt, "fn inst_predicate_{}(func: &crate::ir::Function, inst: &crate::ir::InstructionData) -> bool {{", id.index());
         fmt.indent(|fmt| {
@@ -205,8 +215,16 @@ fn emit_inst_predicates(isa: &TargetIsa, fmt: &mut Formatter) {
         });
         fmtln!(fmt, "}");
     }
+    fmt.empty_line();
 
     // Generate the static table.
+    fmt.doc_comment(format!(
+        r#"{} instruction predicate table.
+
+        One entry per instruction predicate, so the encoding bytecode can embed indexes into this
+        table."#,
+        isa.name
+    ));
     fmtln!(
         fmt,
         "pub static INST_PREDICATES: [InstPredicate; {}] = [",
@@ -218,12 +236,18 @@ fn emit_inst_predicates(isa: &TargetIsa, fmt: &mut Formatter) {
         }
     });
     fmtln!(fmt, "];");
+    fmt.empty_line();
 }
 
 /// Emit a table of encoding recipe names keyed by recipe number.
 ///
 /// This is used for pretty-printing encodings.
 fn emit_recipe_names(isa: &TargetIsa, fmt: &mut Formatter) {
+    fmt.doc_comment(format!(
+        r#"{} recipe names, using the same recipe index spaces as the one specified by the
+        corresponding binemit file."#,
+        isa.name
+    ));
     fmtln!(
         fmt,
         "static RECIPE_NAMES: [&str; {}] = [",
@@ -235,6 +259,7 @@ fn emit_recipe_names(isa: &TargetIsa, fmt: &mut Formatter) {
         }
     });
     fmtln!(fmt, "];");
+    fmt.empty_line();
 }
 
 /// Returns a set of all the registers involved in fixed register constraints.
@@ -353,6 +378,12 @@ fn emit_operand_constraints(
 ///
 /// These are used by the register allocator to pick registers that can be properly encoded.
 fn emit_recipe_constraints(isa: &TargetIsa, fmt: &mut Formatter) {
+    fmt.doc_comment(format!(
+        r#"{} recipe constraints list, using the same recipe index spaces as the one
+        specified by the corresponding binemit file. These constraints are used by register
+        allocation to select the right location to use for input and output values."#,
+        isa.name
+    ));
     fmtln!(
         fmt,
         "static RECIPE_CONSTRAINTS: [RecipeConstraints; {}] = [",
@@ -437,10 +468,17 @@ fn emit_recipe_constraints(isa: &TargetIsa, fmt: &mut Formatter) {
         }
     });
     fmtln!(fmt, "];");
+    fmt.empty_line();
 }
 
 /// Emit a table of encoding recipe code size information.
 fn emit_recipe_sizing(isa: &TargetIsa, fmt: &mut Formatter) {
+    fmt.doc_comment(format!(
+        r#"{} recipe sizing descriptors, using the same recipe index spaces as the one
+        specified by the corresponding binemit file. These are used to compute the final size of an
+        instruction, as well as to compute the range of branches."#,
+        isa.name
+    ));
     fmtln!(
         fmt,
         "static RECIPE_SIZING: [RecipeSizing; {}] = [",
@@ -468,6 +506,7 @@ fn emit_recipe_sizing(isa: &TargetIsa, fmt: &mut Formatter) {
         }
     });
     fmtln!(fmt, "];");
+    fmt.empty_line();
 }
 
 /// Level 1 table mapping types to `Level2` objects.
@@ -878,7 +917,7 @@ fn encode_level2_hashtables<'a>(
     }
 }
 
-fn emit_tables(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
+fn emit_encoding_tables(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
     // Level 1 tables, one per CPU mode.
     let mut level1_tables: HashMap<&'static str, Level1Table> = HashMap::new();
 
@@ -923,6 +962,13 @@ fn emit_tables(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
     let level2_offset_type = offset_type(enc_lists.len());
 
     // Emit encoding lists.
+    fmt.doc_comment(
+        format!(r#"{} encoding lists.
+
+        This contains the entire encodings bytecode for every single instruction; the encodings
+        interpreter knows where to start from thanks to the initial lookup in the level 1 and level 2
+        table entries below."#, isa.name)
+    );
     fmtln!(fmt, "pub static ENCLISTS: [u16; {}] = [", enc_lists.len());
     fmt.indent(|fmt| {
         let mut line = Vec::new();
@@ -943,8 +989,17 @@ fn emit_tables(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
         }
     });
     fmtln!(fmt, "];");
+    fmt.empty_line();
 
     // Emit the full concatenation of level 2 hash tables.
+    fmt.doc_comment(format!(
+        r#"{} level 2 hash tables.
+
+        This hash table, keyed by instruction opcode, contains all the starting offsets for the
+        encodings interpreter, for all the CPU modes. It is jumped to after a lookup on the
+        instruction's controlling type in the level 1 hash table."#,
+        isa.name
+    ));
     fmtln!(
         fmt,
         "pub static LEVEL2: [Level2Entry<{}>; {}] = [",
@@ -971,6 +1026,7 @@ fn emit_tables(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
         }
     });
     fmtln!(fmt, "];");
+    fmt.empty_line();
 
     // Emit a level 1 hash table for each CPU mode.
     for cpu_mode in &isa.cpu_modes {
@@ -987,6 +1043,16 @@ fn emit_tables(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
             },
         );
 
+        fmt.doc_comment(format!(
+            r#"{} level 1 hash table for the CPU mode {}.
+
+            This hash table, keyed by instruction controlling type, contains all the level 2
+            hash-tables offsets for the given CPU mode, as well as a legalization identifier indicating
+            which legalization scheme to apply when the instruction doesn't have any valid encoding for
+            this CPU mode.
+        "#,
+            isa.name, cpu_mode.name
+        ));
         fmtln!(
             fmt,
             "pub static LEVEL1_{}: [Level1Entry<{}>; {}] = [",
@@ -1033,6 +1099,7 @@ fn emit_tables(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
             }
         });
         fmtln!(fmt, "];");
+        fmt.empty_line();
     }
 }
 
@@ -1043,7 +1110,7 @@ fn gen_isa(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
     // Make the `INST_PREDICATES` table.
     emit_inst_predicates(isa, fmt);
 
-    emit_tables(defs, isa, fmt);
+    emit_encoding_tables(defs, isa, fmt);
 
     emit_recipe_names(isa, fmt);
     emit_recipe_constraints(isa, fmt);

@@ -137,7 +137,7 @@ fn unwrap_values(
                         values_slice,
                         i
                     );
-                    fmt.line(format!("{}, ", stack.stack_base_mask()));
+                    fmt.line(format!("{},", stack.stack_base_mask()));
                     fmt.line("&func.stack_slots,");
                 });
                 fmt.line(").unwrap();");
