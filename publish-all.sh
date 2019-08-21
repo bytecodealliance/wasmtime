@@ -9,7 +9,7 @@ topdir=$(dirname "$0")
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.2.0"
+version="0.3.0"
 
 # Update all of the Cargo.toml files.
 #

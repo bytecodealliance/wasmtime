@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-debug"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Debug utils for WebAsssembly code in Cranelift"
 repository = "https://github.com/CraneStation/wasmtime"
@@ -18,7 +18,7 @@ cranelift-codegen = { version = "0.40.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.40.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.40.0", features = ["enable-serde"] }
 faerie = "0.10.1"
-wasmtime-environ = { path = "../wasmtime-environ", version = "0.2.0", default-features = false }
+wasmtime-environ = { path = "../wasmtime-environ", version = "0.3.0", default-features = false }
 target-lexicon = { version = "0.4.0", default-features = false }
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
