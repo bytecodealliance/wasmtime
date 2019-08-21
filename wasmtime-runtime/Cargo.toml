@@ -2,7 +2,6 @@
 name = "wasmtime-runtime"
 version = "0.2.0"
 authors = ["The Wasmtime Project Developers"]
-publish = false
 description = "Runtime library support for Wasmtime"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]

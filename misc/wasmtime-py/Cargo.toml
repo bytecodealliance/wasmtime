@@ -1,12 +1,11 @@
 [package]
 name = "wasmtime-py"
-version = "0.3.0"
+version = "0.2.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Python extension for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm", "python"]
 edition = "2018"
-publish = false
 
 [lib]
 name = "_wasmtime"

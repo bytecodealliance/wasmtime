@@ -2,7 +2,6 @@
 name = "wasmtime-jit"
 version = "0.2.0"
 authors = ["The Wasmtime Project Developers"]
-publish = false
 description = "JIT-style execution for WebAsssembly code in Cranelift"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
