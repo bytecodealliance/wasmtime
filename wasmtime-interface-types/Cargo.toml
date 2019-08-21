@@ -2,7 +2,6 @@
 name = "wasmtime-interface-types"
 version = "0.2.0"
 authors = ["The Wasmtime Project Developers"]
-publish = false
 description = "Support for wasm interface types with wasmtime"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
