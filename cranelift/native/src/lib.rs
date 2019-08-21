@@ -59,6 +59,9 @@ fn parse_x86_cpuid(isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
         if info.has_sse3() {
             isa_builder.enable("has_sse3").unwrap();
         }
+        if info.has_ssse3() {
+            isa_builder.enable("has_ssse3").unwrap();
+        }
         if info.has_sse41() {
             isa_builder.enable("has_sse41").unwrap();
         }
