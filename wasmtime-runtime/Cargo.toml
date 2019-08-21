@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-runtime"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["The Wasmtime Project Developers"]
 publish = false
 description = "Runtime library support for Wasmtime"
@@ -12,9 +12,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { version = "0.38.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.38.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.38.0", features = ["enable-serde"] }
+cranelift-codegen = { version = "0.40.0", features = ["enable-serde"] }
+cranelift-entity = { version = "0.40.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.40.0", features = ["enable-serde"] }
 wasmtime-environ = { path = "../wasmtime-environ", default-features = false }
 region = "2.0.0"
 lazy_static = "1.2.0"

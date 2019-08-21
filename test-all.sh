@@ -53,12 +53,18 @@ banner "Rust unit tests"
 RUST_BACKTRACE=1 cargo test \
   --package wasmtime \
   --package wasmtime-wasi \
+  --package wasmtime-wasi-c \
   --package wasmtime-wast \
   --package wasmtime-debug \
   --package wasmtime-environ \
   --package wasmtime-runtime \
   --package wasmtime-jit \
-  --package wasmtime-obj
+  --package wasmtime-interface-types \
+  --package wasmtime-obj \
+
+RUST_BACKTRACE=1 cargo +nightly test \
+  --package wasmtime-py \
+  --package wasmtime-rust
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/wasmtime/index.html"

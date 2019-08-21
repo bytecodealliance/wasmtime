@@ -1,6 +1,6 @@
-use cranelift_wasm::DefinedFuncIndex;
+use cranelift_entity::EntityRef;
 use failure::Error;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 use gimli;
@@ -11,9 +11,10 @@ use gimli::write;
 
 use super::address_transform::AddressTransform;
 use super::attr::{clone_die_attributes, FileAttributeContext};
-use super::expression::{compile_expression, CompiledExpression, FunctionFrameInfo};
+use super::expression::compile_expression;
 use super::line_program::clone_line_program;
 use super::range_info_builder::RangeInfoBuilder;
+use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::{DebugInputContext, Reader, TransformError};
 
 pub(crate) type PendingDieRef = (write::UnitEntryId, gimli::DwAt, UnitOffset);
@@ -44,109 +45,6 @@ impl<T> InheritedAttr<T> {
     fn is_empty(&self) -> bool {
         self.stack.is_empty()
     }
-}
-
-fn get_function_frame_info<'a, 'b, 'c>(
-    module_info: &'b ModuleVmctxInfo,
-    func_index: DefinedFuncIndex,
-    value_ranges: &'c ValueLabelsRanges,
-) -> Option<FunctionFrameInfo<'a>>
-where
-    'b: 'a,
-    'c: 'a,
-{
-    if let Some(value_ranges) = value_ranges.get(func_index) {
-        let frame_info = FunctionFrameInfo {
-            value_ranges,
-            memory_offset: module_info.memory_offset,
-            stack_slots: &module_info.stack_slots[func_index],
-        };
-        Some(frame_info)
-    } else {
-        None
-    }
-}
-
-fn add_internal_types(
-    comp_unit: &mut write::Unit,
-    root_id: write::UnitEntryId,
-    out_strings: &mut write::StringTable,
-    module_info: &ModuleVmctxInfo,
-) -> (write::UnitEntryId, write::UnitEntryId) {
-    let wp_die_id = comp_unit.add(root_id, gimli::DW_TAG_base_type);
-    let wp_die = comp_unit.get_mut(wp_die_id);
-    wp_die.set(
-        gimli::DW_AT_name,
-        write::AttributeValue::StringRef(out_strings.add("WebAssemblyPtr")),
-    );
-    wp_die.set(gimli::DW_AT_byte_size, write::AttributeValue::Data1(4));
-    wp_die.set(
-        gimli::DW_AT_encoding,
-        write::AttributeValue::Encoding(gimli::DW_ATE_unsigned),
-    );
-
-    let memory_byte_die_id = comp_unit.add(root_id, gimli::DW_TAG_base_type);
-    let memory_byte_die = comp_unit.get_mut(memory_byte_die_id);
-    memory_byte_die.set(
-        gimli::DW_AT_name,
-        write::AttributeValue::StringRef(out_strings.add("u8")),
-    );
-    memory_byte_die.set(
-        gimli::DW_AT_encoding,
-        write::AttributeValue::Encoding(gimli::DW_ATE_unsigned),
-    );
-    memory_byte_die.set(gimli::DW_AT_byte_size, write::AttributeValue::Data1(1));
-
-    let memory_bytes_die_id = comp_unit.add(root_id, gimli::DW_TAG_pointer_type);
-    let memory_bytes_die = comp_unit.get_mut(memory_bytes_die_id);
-    memory_bytes_die.set(
-        gimli::DW_AT_name,
-        write::AttributeValue::StringRef(out_strings.add("u8*")),
-    );
-    memory_bytes_die.set(
-        gimli::DW_AT_type,
-        write::AttributeValue::ThisUnitEntryRef(memory_byte_die_id),
-    );
-
-    let memory_offset = module_info.memory_offset;
-    let vmctx_die_id = comp_unit.add(root_id, gimli::DW_TAG_structure_type);
-    let vmctx_die = comp_unit.get_mut(vmctx_die_id);
-    vmctx_die.set(
-        gimli::DW_AT_name,
-        write::AttributeValue::StringRef(out_strings.add("WasmtimeVMContext")),
-    );
-    vmctx_die.set(
-        gimli::DW_AT_byte_size,
-        write::AttributeValue::Data4(memory_offset as u32 + 8),
-    );
-
-    let m_die_id = comp_unit.add(vmctx_die_id, gimli::DW_TAG_member);
-    let m_die = comp_unit.get_mut(m_die_id);
-    m_die.set(
-        gimli::DW_AT_name,
-        write::AttributeValue::StringRef(out_strings.add("memory")),
-    );
-    m_die.set(
-        gimli::DW_AT_type,
-        write::AttributeValue::ThisUnitEntryRef(memory_bytes_die_id),
-    );
-    m_die.set(
-        gimli::DW_AT_data_member_location,
-        write::AttributeValue::Udata(memory_offset as u64),
-    );
-
-    let vmctx_ptr_die_id = comp_unit.add(root_id, gimli::DW_TAG_pointer_type);
-    let vmctx_ptr_die = comp_unit.get_mut(vmctx_ptr_die_id);
-    vmctx_ptr_die.set(
-        gimli::DW_AT_name,
-        write::AttributeValue::StringRef(out_strings.add("WasmtimeVMContext*")),
-    );
-    vmctx_ptr_die.set(
-        gimli::DW_AT_type,
-        write::AttributeValue::ThisUnitEntryRef(vmctx_die_id),
-    );
-
-    (wp_die_id, vmctx_ptr_die_id)
 }
 
 fn get_base_type_name<R>(
@@ -252,48 +150,6 @@ where
     Ok(die_id)
 }
 
-fn append_vmctx_info(
-    comp_unit: &mut write::Unit,
-    parent_id: write::UnitEntryId,
-    vmctx_die_id: write::UnitEntryId,
-    addr_tr: &AddressTransform,
-    frame_info: Option<&FunctionFrameInfo>,
-    scope_ranges: &[(u64, u64)],
-    out_strings: &mut write::StringTable,
-) -> Result<(), Error> {
-    let loc = {
-        let endian = gimli::RunTimeEndian::Little;
-
-        let expr = CompiledExpression::vmctx();
-        let mut locs = Vec::new();
-        for (begin, length, data) in
-            expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian)
-        {
-            locs.push(write::Location::StartLength {
-                begin,
-                length,
-                data,
-            });
-        }
-        let list_id = comp_unit.locations.add(write::LocationList(locs));
-        write::AttributeValue::LocationListRef(list_id)
-    };
-
-    let var_die_id = comp_unit.add(parent_id, gimli::DW_TAG_variable);
-    let var_die = comp_unit.get_mut(var_die_id);
-    var_die.set(
-        gimli::DW_AT_name,
-        write::AttributeValue::StringRef(out_strings.add("__vmctx")),
-    );
-    var_die.set(
-        gimli::DW_AT_type,
-        write::AttributeValue::ThisUnitEntryRef(vmctx_die_id),
-    );
-    var_die.set(gimli::DW_AT_location, loc);
-
-    Ok(())
-}
-
 pub(crate) fn clone_unit<'a, R>(
     unit: Unit<R, R::Offset>,
     context: &DebugInputContext<R>,
@@ -303,6 +159,7 @@ pub(crate) fn clone_unit<'a, R>(
     module_info: &ModuleVmctxInfo,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
+    translated: &mut HashSet<u32>,
 ) -> Result<(), Error>
 where
     R: Reader,
@@ -414,6 +271,7 @@ where
                 {
                     current_value_range.push(new_stack_len, frame_info);
                 }
+                translated.insert(func_index.index() as u32);
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {

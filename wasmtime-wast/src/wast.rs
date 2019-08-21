@@ -15,6 +15,7 @@ fn runtime_value(v: Value) -> RuntimeValue {
         Value::I64(x) => RuntimeValue::I64(x),
         Value::F32(x) => RuntimeValue::F32(x.to_bits()),
         Value::F64(x) => RuntimeValue::F64(x.to_bits()),
+        Value::V128(_) => unimplemented!("SIMD"),
     }
 }
 
@@ -295,7 +296,7 @@ impl WastContext {
                         }
                     }
                 }
-                CommandKind::AssertExhaustion { action } => {
+                CommandKind::AssertExhaustion { action, message } => {
                     match self.perform_action(action).map_err(|error| WastFileError {
                         filename: filename.to_string(),
                         line,
@@ -311,10 +312,12 @@ impl WastContext {
                                 )),
                             });
                         }
-                        ActionOutcome::Trapped { message } => {
+                        ActionOutcome::Trapped {
+                            message: trap_message,
+                        } => {
                             println!(
-                                "{}:{}: TODO: Check the assert_exhaustion message: {}",
-                                filename, line, message
+                                "{}:{}: TODO: Check the assert_exhaustion message: expected {}, got {}",
+                                filename, line, message, trap_message
                             );
                         }
                     }
