@@ -154,7 +154,9 @@ fn ignore(testsuite: &str, name: &str) -> bool {
             (_, _) => false,
         };
     }
-    if cfg!(target_os = "linux") {
+
+    #[cfg(target_os = "linux")]
+    {
         // Test whether the libc correctly parses the following constant; if so,
         // we can run the "const" test. If not, the "const" test will fail, since
         // we use wabt to parse the tests and wabt uses strtof.
@@ -176,5 +178,6 @@ fn ignore(testsuite: &str, name: &str) -> bool {
             };
         }
     }
+
     false
 }
