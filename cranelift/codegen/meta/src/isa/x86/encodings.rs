@@ -234,7 +234,7 @@ impl PerCpuModeEncodings {
     }
     fn enc_both_isap(
         &mut self,
-        inst: BoundInstruction,
+        inst: impl Clone + Into<InstSpec>,
         template: Template,
         isap: SettingPredicateNumber,
     ) {
@@ -243,7 +243,7 @@ impl PerCpuModeEncodings {
     }
     fn enc_both_instp(
         &mut self,
-        inst: BoundInstruction,
+        inst: impl Clone + Into<InstSpec>,
         template: Template,
         instp: InstructionPredicateNode,
     ) {
@@ -1811,23 +1811,38 @@ pub(crate) fn define(
         }
     }
 
-    // SIMD bitcast f64 to all 8-bit-lane vectors (for legalizing splat.x8x16); assumes that f64 is stored in an XMM register
-    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
-        let instruction = bitcast.bind_vector_from_lane(ty, sse_vector_size).bind(F64);
+    // helper for generating null encodings for FPRs on both 32- and 64-bit architectures
+    let mut null_encode_32_64 = |instruction: BoundInstruction| {
         e.enc32_rec(instruction.clone(), rec_null_fpr, 0);
         e.enc64_rec(instruction, rec_null_fpr, 0);
-    }
+    };
 
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8)
     for from_type in ValueType::all_lane_types().filter(allowed_simd_type) {
         for to_type in
             ValueType::all_lane_types().filter(|t| allowed_simd_type(t) && *t != from_type)
         {
-            let instruction = raw_bitcast
-                .bind_vector_from_lane(to_type, sse_vector_size)
-                .bind_vector_from_lane(from_type, sse_vector_size);
-            e.enc32_rec(instruction.clone(), rec_null_fpr, 0);
-            e.enc64_rec(instruction, rec_null_fpr, 0);
+            null_encode_32_64(
+                raw_bitcast
+                    .bind_vector_from_lane(to_type, sse_vector_size)
+                    .bind_vector_from_lane(from_type, sse_vector_size),
+            );
+        }
+    }
+
+    // SIMD raw bitcast floats to vector (and back); assumes that floats are already stored in an XMM register
+    for float_type in &[F32, F64] {
+        for lane_type in ValueType::all_lane_types().filter(allowed_simd_type) {
+            null_encode_32_64(
+                raw_bitcast
+                    .bind_vector_from_lane(lane_type, sse_vector_size)
+                    .bind(*float_type),
+            );
+            null_encode_32_64(
+                raw_bitcast
+                    .bind(*float_type)
+                    .bind_vector_from_lane(lane_type, sse_vector_size),
+            );
         }
     }
 
