@@ -171,8 +171,15 @@ fn make_trampoline(
     let mut code_buf: Vec<u8> = Vec::new();
     let mut reloc_sink = RelocSink {};
     let mut trap_sink = binemit::NullTrapSink {};
+    let mut stackmap_sink = binemit::NullStackmapSink {};
     context
-        .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
+        .compile_and_emit(
+            isa,
+            &mut code_buf,
+            &mut reloc_sink,
+            &mut trap_sink,
+            &mut stackmap_sink,
+        )
         .expect("compile_and_emit");
 
     code_memory
