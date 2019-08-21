@@ -36,7 +36,10 @@ steps:
 
 # Test what we're about to release in release mode itself. This tests
 # everything except lightbeam which requires nightly which happens above.
-- bash: cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py
+- bash: |
+    gcc test.c
+    ./a.out
+    cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py
   displayName: Cargo test
   env:
     RUST_BACKTRACE: 1
