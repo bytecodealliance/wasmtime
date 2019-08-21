@@ -33,6 +33,7 @@ mod cat;
 mod compile;
 mod disasm;
 mod print_cfg;
+mod run;
 mod utils;
 
 /// A command either succeeds or fails with an error message.
@@ -163,6 +164,13 @@ fn main() {
                 .arg(add_debug_flag()),
         )
         .subcommand(
+            SubCommand::with_name("run")
+                .about("Execute CLIF code and verify with test expressions")
+                .arg(add_verbose_flag())
+                .arg(add_input_file_arg())
+                .arg(add_debug_flag()),
+        )
+        .subcommand(
             SubCommand::with_name("cat")
                 .about("Outputs .clif file")
                 .arg(add_input_file_arg())
@@ -221,6 +229,14 @@ fn main() {
                 rest_cmd.is_present("verbose"),
                 rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("file")),
+            )
+            .map(|_time| ())
+        }
+        ("run", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+            run::run(
+                get_vec(rest_cmd.values_of("file")),
+                rest_cmd.is_present("verbose"),
             )
             .map(|_time| ())
         }
