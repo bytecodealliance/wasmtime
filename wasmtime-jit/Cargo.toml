@@ -29,7 +29,8 @@ wasmparser = "0.36.0"
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-wasm/std", "wasmtime-environ/std"]
 core = ["hashbrown/nightly", "cranelift-codegen/core", "cranelift-wasm/core", "wasmtime-environ/core"]
-lightbeam = ["wasmtime-environ/lightbeam"]
+# Temporarily disable lightbeam.
+#lightbeam = ["wasmtime-environ/lightbeam"]
 
 [badges]
 maintenance = { status = "experimental" }

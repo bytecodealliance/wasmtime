@@ -50,5 +50,6 @@ members = [
 ]
 
 [features]
-lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam"]
+# Temporarily disable lightbeam.
+#lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam"]
 wasi-c = ["wasmtime-wasi-c"]
