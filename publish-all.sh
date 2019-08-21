@@ -38,18 +38,18 @@ echo git tag v$version
 echo git push
 echo git push origin v$version
 for crate in \
-    wasmtime \
-    wasmtime-wasi \
-    wasmtime-wasi-c \
-    wasmtime-wast \
-    wasmtime-debug \
     wasmtime-environ \
+    wasmtime-debug \
     wasmtime-runtime \
     wasmtime-jit \
+    wasmtime-wast \
+    wasmtime-wasi \
+    wasmtime-wasi-c \
     wasmtime-interface-types \
     wasmtime-obj \
     wasmtime-py \
-    wasmtime-rust
+    wasmtime-rust \
+    wasmtime
 do
     echo cargo publish --manifest-path "$crate/Cargo.toml"
 
