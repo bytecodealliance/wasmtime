@@ -154,5 +154,30 @@ fn ignore(testsuite: &str, name: &str) -> bool {
             (_, _) => false,
         };
     }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Test whether the libc correctly parses the following constant; if so,
+        // we can run the "const" test. If not, the "const" test will fail, since
+        // we use wabt to parse the tests and wabt uses strtof.
+        extern "C" {
+            pub fn strtof(s: *const libc::c_char, endp: *mut *mut libc::c_char) -> libc::c_float;
+        }
+        if unsafe {
+            strtof(
+                b"8.8817847263968443574e-16" as *const u8 as *const libc::c_char,
+                std::ptr::null_mut(),
+            )
+        }
+        .to_bits()
+            != 0x26800001
+        {
+            return match (testsuite, name) {
+                ("spec_testsuite", "const") => true,
+                (_, _) => false,
+            };
+        }
+    }
+
     false
 }
