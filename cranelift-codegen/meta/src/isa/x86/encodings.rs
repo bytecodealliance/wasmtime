@@ -356,7 +356,6 @@ pub(crate) fn define(
     let copy_to_ssa = shared.by_name("copy_to_ssa");
     let ctz = shared.by_name("ctz");
     let debugtrap = shared.by_name("debugtrap");
-    let extractlane = shared.by_name("extractlane");
     let f32const = shared.by_name("f32const");
     let f64const = shared.by_name("f64const");
     let fadd = shared.by_name("fadd");
@@ -460,6 +459,7 @@ pub(crate) fn define(
     let x86_fmax = x86.by_name("x86_fmax");
     let x86_fmin = x86.by_name("x86_fmin");
     let x86_pop = x86.by_name("x86_pop");
+    let x86_pextr = x86.by_name("x86_pextr");
     let x86_pshufd = x86.by_name("x86_pshufd");
     let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_push = x86.by_name("x86_push");
@@ -1791,16 +1791,16 @@ pub(crate) fn define(
     }
 
     // SIMD extractlane
-    let mut extractlane_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
+    let mut x86_pextr_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
         HashMap::new();
-    extractlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x14], Some(use_sse41_simd))); // PEXTRB
-    extractlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc5], None)); // PEXTRW from zSSE2, SSE4.1 has a PEXTRW that can move to reg/m16 but the opcode is four bytes
-    extractlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41_simd))); // PEXTRD
-    extractlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41_simd))); // PEXTRQ, only x86_64
+    x86_pextr_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x14], Some(use_sse41))); // PEXTRB
+    x86_pextr_mapping.insert(16, (vec![0x66, 0x0f, 0xc5], None)); // PEXTRW from zSSE2, SSE4.1 has a PEXTRW that can move to reg/m16 but the opcode is four bytes
+    x86_pextr_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41))); // PEXTRD
+    x86_pextr_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41))); // PEXTRQ, only x86_64
 
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        if let Some((opcode, isap)) = extractlane_mapping.get(&ty.lane_bits()) {
-            let instruction = extractlane.bind_vector_from_lane(ty, sse_vector_size);
+        if let Some((opcode, isap)) = x86_pextr_mapping.get(&ty.lane_bits()) {
+            let instruction = x86_pextr.bind_vector_from_lane(ty, sse_vector_size);
             let template = rec_r_ib_unsigned_gpr.opcodes(opcode.clone());
             if ty.lane_bits() < 64 {
                 e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap.clone());

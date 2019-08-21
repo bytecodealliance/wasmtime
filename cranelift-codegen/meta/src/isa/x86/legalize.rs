@@ -23,6 +23,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let bor = insts.by_name("bor");
     let clz = insts.by_name("clz");
     let ctz = insts.by_name("ctz");
+    let extractlane = insts.by_name("extractlane");
     let f64const = insts.by_name("f64const");
     let fcmp = insts.by_name("fcmp");
     let fcvt_from_uint = insts.by_name("fcvt_from_uint");
@@ -378,6 +379,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             ],
         );
     }
+
+    narrow.custom_legalize(extractlane, "convert_extractlane");
 
     narrow.build_and_add_to(&mut shared.transform_groups);
 }

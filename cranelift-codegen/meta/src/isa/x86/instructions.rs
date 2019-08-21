@@ -291,5 +291,22 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let Idx = &operand_doc("Idx", uimm8, "Lane index");
+    let x = &operand("x", TxN);
+    let a = &operand("a", &TxN.lane_of());
+
+    ig.push(
+        Inst::new(
+            "x86_pextr",
+            r#"
+        Extract lane ``Idx`` from ``x``.
+        The lane index, ``Idx``, is an immediate value, not an SSA value. It
+        must indicate a valid lane index for the type of ``x``.
+        "#,
+        )
+        .operands_in(vec![x, Idx])
+        .operands_out(vec![a]),
+    );
+
     ig.build()
 }
