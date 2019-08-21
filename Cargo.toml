@@ -15,16 +15,16 @@ cranelift-codegen = { version = "0.40.0", features = ["enable-serde"] }
 cranelift-native = "0.40.0"
 cranelift-entity = { version = "0.40.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.40.0", features = ["enable-serde"] }
-wasmtime-api = { path = "wasmtime-api" }
-wasmtime-debug = { path = "wasmtime-debug" }
-wasmtime-environ = { path = "wasmtime-environ" }
-wasmtime-interface-types = { path = "wasmtime-interface-types" }
-wasmtime-runtime = { path = "wasmtime-runtime" }
-wasmtime-jit = { path = "wasmtime-jit" }
-wasmtime-obj = { path = "wasmtime-obj" }
-wasmtime-wast = { path = "wasmtime-wast" }
-wasmtime-wasi = { path = "wasmtime-wasi" }
-wasmtime-wasi-c = { path = "wasmtime-wasi-c", optional = true }
+wasmtime-api = { path = "wasmtime-api", version = "0.2.0" }
+wasmtime-debug = { path = "wasmtime-debug", version = "0.2.0" }
+wasmtime-environ = { path = "wasmtime-environ", version = "0.2.0" }
+wasmtime-interface-types = { path = "wasmtime-interface-types", version = "0.2.0" }
+wasmtime-runtime = { path = "wasmtime-runtime", version = "0.2.0" }
+wasmtime-jit = { path = "wasmtime-jit", version = "0.2.0" }
+wasmtime-obj = { path = "wasmtime-obj", version = "0.2.0" }
+wasmtime-wast = { path = "wasmtime-wast", version = "0.2.0" }
+wasmtime-wasi = { path = "wasmtime-wasi", version = "0.2.0" }
+wasmtime-wasi-c = { path = "wasmtime-wasi-c", version = "0.2.0", optional = true }
 wasi-common = "0.2.0"
 docopt = "1.0.1"
 serde = { "version" = "1.0.94", features = ["derive"] }

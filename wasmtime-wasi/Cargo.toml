@@ -9,9 +9,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
 [dependencies]
-wasmtime-runtime = { path = "../wasmtime-runtime" }
-wasmtime-environ = { path = "../wasmtime-environ" }
-wasmtime-jit = { path = "../wasmtime-jit" }
+wasmtime-runtime = { path = "../wasmtime-runtime", version = "0.2.0" }
+wasmtime-environ = { path = "../wasmtime-environ", version = "0.2.0" }
+wasmtime-jit = { path = "../wasmtime-jit", version = "0.2.0" }
 wasi-common = "0.2.0"
 cranelift-codegen = { version = "0.40.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.40.0", features = ["enable-serde"] }
