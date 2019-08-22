@@ -389,8 +389,8 @@ pub(crate) fn path_filestat_set_times(
     st_mtim: host::__wasi_timestamp_t,
     fst_flags: host::__wasi_fstflags_t,
 ) -> Result<()> {
-    use nix::sys::time::{TimeSpec, TimeValLike};
     use nix::sys::stat::{utimensat, UtimensatFlags};
+    use nix::sys::time::{TimeSpec, TimeValLike};
 
     // FIXME this should be a part of nix
     fn timespec_omit() -> TimeSpec {
@@ -424,7 +424,8 @@ pub(crate) fn path_filestat_set_times(
     };
 
     let atim = if set_atim_now {
-        TimeSpec::nanoseconds(st_atim as i64) // fixme
+        let st_atim = st_atim.try_into().map_err(|_| host::__WASI_EOVERFLOW)?;
+        TimeSpec::nanoseconds(st_atim)
     } else if set_atim_now {
         timespec_now()
     } else {
@@ -432,7 +433,8 @@ pub(crate) fn path_filestat_set_times(
     };
 
     let mtim = if set_mtim {
-        TimeSpec::nanoseconds(st_mtim as i64) // fixme
+        let st_mtim = st_mtim.try_into().map_err(|_| host::__WASI_EOVERFLOW)?;
+        TimeSpec::nanoseconds(st_mtim)
     } else if set_atim_now {
         timespec_now()
     } else {
