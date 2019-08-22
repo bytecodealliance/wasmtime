@@ -9,7 +9,7 @@ into executable machine code.
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
 [![Travis Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
-![Minimum rustc 1.35](https://img.shields.io/badge/rustc-1.35+-green.svg)
+![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
 
 For more information, see [the
 documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
@@ -52,7 +52,7 @@ needed before it would be ready for a production use case.
 
 Cranelift's APIs are not yet stable.
 
-Cranelift currently requires Rust 1.35 or later to build.
+Cranelift currently requires Rust 1.37 or later to build.
 
 Planned uses
 ------------

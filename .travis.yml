@@ -7,7 +7,7 @@ language: rust
 rust:
     # The oldest version we currently support. See
     # CONTRIBUTING.md#rustc-version-support for details.
-    - 1.35.0
+    - 1.37.0
     - beta
     - nightly
 matrix:
