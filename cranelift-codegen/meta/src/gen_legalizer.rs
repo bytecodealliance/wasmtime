@@ -466,7 +466,9 @@ fn gen_transform_group<'a>(
 
                 // Emit the custom transforms. The Rust compiler will complain about any overlap with
                 // the normal transforms.
-                for (inst_camel_name, func_name) in &group.custom_legalizes {
+                let mut sorted_custom_legalizes = Vec::from_iter(&group.custom_legalizes);
+                sorted_custom_legalizes.sort();
+                for (inst_camel_name, func_name) in sorted_custom_legalizes {
                     fmtln!(fmt, "ir::Opcode::{} => {{", inst_camel_name);
                     fmt.indent(|fmt| {
                         fmtln!(fmt, "{}(inst, pos.func, cfg, isa);", func_name);
