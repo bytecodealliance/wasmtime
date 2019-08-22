@@ -150,28 +150,27 @@ pub mod conf {
 
 lazy_static! {
     static ref SELF_MTIME: String = {
-        match std::env::current_exe() {
-            Ok(path) => match fs::metadata(&path) {
-                Ok(metadata) => match metadata.modified() {
-                    Ok(mtime) => match mtime.duration_since(std::time::UNIX_EPOCH) {
-                        Ok(duration) => format!("{}", duration.as_millis()),
-                        Err(err) => format!("m{}", err.duration().as_millis()),
-                    },
-                    Err(_) => {
-                        warn!("Failed to get modification time of current executable");
-                        "no-mtime".to_string()
-                    }
-                },
-                Err(_) => {
-                    warn!("Failed to get metadata of current executable");
-                    "no-mtime".to_string()
-                }
-            },
-            Err(_) => {
-                warn!("Failed to get path of current executable");
-                "no-mtime".to_string()
-            }
-        }
+        std::env::current_exe()
+            .map_err(|_| warn!("Failed to get path of current executable"))
+            .ok()
+            .and_then(|path| {
+                fs::metadata(&path)
+                    .map_err(|_| warn!("Failed to get metadata of current executable"))
+                    .ok()
+            })
+            .and_then(|metadata| {
+                metadata
+                    .modified()
+                    .map_err(|_| warn!("Failed to get metadata of current executable"))
+                    .ok()
+            })
+            .and_then(|mtime| {
+                Some(match mtime.duration_since(std::time::UNIX_EPOCH) {
+                    Ok(duration) => format!("{}", duration.as_millis()),
+                    Err(err) => format!("m{}", err.duration().as_millis()),
+                })
+            })
+            .unwrap_or("no-mtime".to_string())
     };
 }
 
@@ -241,87 +240,67 @@ impl ModuleCacheEntry {
     }
 
     pub fn get_data(&self) -> Option<ModuleCacheData> {
-        if let Some(p) = &self.mod_cache_path {
-            match fs::read(p) {
-                Ok(compressed_cache_bytes) => match zstd::decode_all(&compressed_cache_bytes[..]) {
-                    Ok(cache_bytes) => match bincode::deserialize(&cache_bytes[..]) {
-                        Ok(data) => Some(data),
-                        Err(err) => {
-                            warn!("Failed to deserialize cached code: {}", err);
-                            None
-                        }
-                    },
-                    Err(err) => {
-                        warn!("Failed to decompress cached code: {}", err);
-                        None
-                    }
-                },
-                Err(_) => None,
-            }
-        } else {
-            None
-        }
+        let path = self.mod_cache_path.as_ref()?;
+        let compressed_cache_bytes = fs::read(path).ok()?;
+        let cache_bytes = zstd::decode_all(&compressed_cache_bytes[..])
+            .map_err(|err| warn!("Failed to decompress cached code: {}", err))
+            .ok()?;
+        bincode::deserialize(&cache_bytes[..])
+            .map_err(|err| warn!("Failed to deserialize cached code: {}", err))
+            .ok()
     }
 
     pub fn update_data(&self, data: &ModuleCacheData) {
-        if let Some(p) = &self.mod_cache_path {
-            let cache_buf = match bincode::serialize(&data) {
-                Ok(data) => match zstd::encode_all(&data[..], conf::compression_level()) {
-                    Ok(data) => data,
-                    Err(err) => {
-                        warn!("Failed to compress cached code: {}", err);
-                        return;
-                    }
-                },
-                Err(err) => {
-                    warn!("Failed to serialize cached code: {}", err);
-                    return;
-                }
-            };
-            // Optimize syscalls: first, try writing to disk. It should succeed in most cases.
-            // Otherwise, try creating the cache directory and retry writing to the file.
-            match fs::write(p, &cache_buf) {
-                Ok(()) => (),
-                Err(err) => {
-                    debug!(
-                        "Attempting to create the cache directory, because \
-                         failed to write cached code to disk, path: {}, message: {}",
-                        p.display(),
-                        err,
+        let _ = self.update_data_impl(data);
+    }
+
+    fn update_data_impl(&self, data: &ModuleCacheData) -> Option<()> {
+        let path = self.mod_cache_path.as_ref()?;
+        let serialized_data = bincode::serialize(&data)
+            .map_err(|err| warn!("Failed to serialize cached code: {}", err))
+            .ok()?;
+        let compressed_data = zstd::encode_all(&serialized_data[..], conf::compression_level())
+            .map_err(|err| warn!("Failed to compress cached code: {}", err))
+            .ok()?;
+
+        // Optimize syscalls: first, try writing to disk. It should succeed in most cases.
+        // Otherwise, try creating the cache directory and retry writing to the file.
+        let err = fs::write(path, &compressed_data).err()?; // return on success
+        debug!(
+            "Attempting to create the cache directory, because \
+             failed to write cached code to disk, path: {}, message: {}",
+            path.display(),
+            err,
+        );
+
+        let cache_dir = path.parent().unwrap();
+        fs::create_dir_all(cache_dir)
+            .map_err(|err| {
+                warn!(
+                    "Failed to create cache directory, path: {}, message: {}",
+                    cache_dir.display(),
+                    err
+                )
+            })
+            .ok()?;
+
+        let err = fs::write(path, &compressed_data).err()?;
+        warn!(
+            "Failed to write cached code to disk, path: {}, message: {}",
+            path.display(),
+            err
+        );
+        fs::remove_file(path)
+            .map_err(|err| {
+                if err.kind() != io::ErrorKind::NotFound {
+                    warn!(
+                        "Failed to cleanup invalid cache, path: {}, message: {}",
+                        path.display(),
+                        err
                     );
-                    let cache_dir = p.parent().unwrap();
-                    match fs::create_dir_all(cache_dir) {
-                        Ok(()) => match fs::write(p, &cache_buf) {
-                            Ok(()) => (),
-                            Err(err) => {
-                                warn!(
-                                    "Failed to write cached code to disk, path: {}, message: {}",
-                                    p.display(),
-                                    err
-                                );
-                                match fs::remove_file(p) {
-                                    Ok(()) => (),
-                                    Err(err) => {
-                                        if err.kind() != io::ErrorKind::NotFound {
-                                            warn!(
-                                                "Failed to cleanup invalid cache, path: {}, message: {}",
-                                                p.display(),
-                                                err
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        Err(err) => warn!(
-                            "Failed to create cache directory, path: {}, message: {}",
-                            cache_dir.display(),
-                            err
-                        ),
-                    }
                 }
-            }
-        }
+            })
+            .ok()
     }
 }
 
