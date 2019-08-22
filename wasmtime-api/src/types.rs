@@ -39,7 +39,7 @@ impl Limits {
 
 // Value Types
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ValType {
     I32,
     I64,
