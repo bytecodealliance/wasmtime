@@ -12,9 +12,9 @@ readme = "README.md"
 wasmtime-runtime = { path = "../wasmtime-runtime" }
 wasmtime-environ = { path = "../wasmtime-environ" }
 wasmtime-jit = { path = "../wasmtime-jit" }
-cranelift-codegen = { version = "0.40.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.40.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.40.0", features = ["enable-serde"] }
+cranelift-codegen = { version = "0.41.0", features = ["enable-serde"] }
+cranelift-entity = { version = "0.41.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.41.0", features = ["enable-serde"] }
 target-lexicon = "0.4.0"
 log = { version = "0.4.8", default-features = false }
 libc = "0.2.60"

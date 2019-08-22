@@ -12,11 +12,11 @@ name = "wasmtime_api"
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [dependencies]
-cranelift-codegen = "0.40.0"
-cranelift-native = "0.40.0"
-cranelift-entity = "0.40.0"
-cranelift-wasm = "0.40.0"
-cranelift-frontend = "0.40.0"
+cranelift-codegen = { version = "0.41.0", features = ["enable-serde"] }
+cranelift-native = "0.41.0"
+cranelift-entity = { version = "0.41.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.41.0", features = ["enable-serde"] }
+cranelift-frontend = "0.41.0"
 wasmtime-runtime = { path="../wasmtime-runtime" }
 wasmtime-environ = { path="../wasmtime-environ" }
 wasmtime-jit = { path="../wasmtime-jit" }

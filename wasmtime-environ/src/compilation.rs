@@ -12,7 +12,7 @@ use std::ops::Range;
 use std::vec::Vec;
 
 /// Compiled machine code: body and jump table offsets.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct CodeAndJTOffsets {
     /// The function body.
     pub body: Vec<u8>,
@@ -24,7 +24,7 @@ pub struct CodeAndJTOffsets {
 type Functions = PrimaryMap<DefinedFuncIndex, CodeAndJTOffsets>;
 
 /// The result of compiling a WebAssembly module's functions.
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct Compilation {
     /// Compiled machine code for the function bodies.
     functions: Functions,
@@ -95,7 +95,7 @@ impl<'a> Iterator for Iter<'a> {
 }
 
 /// A record of a relocation to perform.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Relocation {
     /// The relocation code.
     pub reloc: binemit::Reloc,
