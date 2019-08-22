@@ -17,10 +17,10 @@ ebb0:
             return
 }
 
-function %test_scalar_to_vector_f32() {
+function %test_scalar_to_vector_b32() {
 ebb0:
-[-, %rcx]   v0 = f32const 0x0.42
-[-, %xmm3]  v1 = scalar_to_vector.f32x4 v0    ; bin: 66 0f 6e d9
+[-, %rcx]   v0 = bconst.b32 false
+[-, %xmm3]  v1 = scalar_to_vector.b32x4 v0    ; bin: 66 0f 6e d9
             return
 }
 
