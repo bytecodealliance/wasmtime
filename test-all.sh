@@ -86,7 +86,7 @@ if rustup toolchain list | grep -q nightly; then
     # skipped earlier.
     cargo +nightly test --package lightbeam
 
-    # Also run wasmtie-py and wasmtime-rust's tests.
+    # Also run wasmtime-py and wasmtime-rust's tests.
     RUST_BACKTRACE=1 cargo +nightly test \
       --package wasmtime-py \
       --package wasmtime-rust
