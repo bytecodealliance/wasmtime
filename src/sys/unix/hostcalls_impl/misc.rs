@@ -3,7 +3,6 @@
 use crate::memory::*;
 use crate::sys::host_impl;
 use crate::{host, wasm32, Result};
-use nix::convert_ioctl_res;
 use nix::libc::{self, c_int};
 use std::cmp;
 use std::time::SystemTime;
@@ -104,10 +103,10 @@ pub(crate) fn poll_oneoff(
     let mut poll_fds: Vec<_> = fd_events
         .iter()
         .map(|event| {
-            let mut flags = nix::poll::EventFlags::empty();
+            let mut flags = nix::poll::PollFlags::empty();
             match event.type_ {
-                wasm32::__WASI_EVENTTYPE_FD_READ => flags.insert(nix::poll::EventFlags::POLLIN),
-                wasm32::__WASI_EVENTTYPE_FD_WRITE => flags.insert(nix::poll::EventFlags::POLLOUT),
+                wasm32::__WASI_EVENTTYPE_FD_READ => flags.insert(nix::poll::PollFlags::POLLIN),
+                wasm32::__WASI_EVENTTYPE_FD_WRITE => flags.insert(nix::poll::PollFlags::POLLOUT),
                 // An event on a file descriptor can currently only be of type FD_READ or FD_WRITE
                 // Nothing else has been defined in the specification, and these are also the only two
                 // events we filtered before. If we get something else here, the code has a serious bug.
@@ -210,7 +209,7 @@ fn poll_oneoff_handle_fd_event<'t>(
         if fd_event.type_ == wasm32::__WASI_EVENTTYPE_FD_READ {
             let _ = unsafe { fionread(fd_event.fd, &mut nbytes) };
         }
-        let output_event = if revents.contains(nix::poll::EventFlags::POLLNVAL) {
+        let output_event = if revents.contains(nix::poll::PollFlags::POLLNVAL) {
             host::__wasi_event_t {
                 userdata: fd_event.userdata,
                 type_: fd_event.type_,
@@ -223,7 +222,7 @@ fn poll_oneoff_handle_fd_event<'t>(
                         },
                 },
             }
-        } else if revents.contains(nix::poll::EventFlags::POLLERR) {
+        } else if revents.contains(nix::poll::PollFlags::POLLERR) {
             host::__wasi_event_t {
                 userdata: fd_event.userdata,
                 type_: fd_event.type_,
@@ -236,7 +235,7 @@ fn poll_oneoff_handle_fd_event<'t>(
                         },
                 },
             }
-        } else if revents.contains(nix::poll::EventFlags::POLLHUP) {
+        } else if revents.contains(nix::poll::PollFlags::POLLHUP) {
             host::__wasi_event_t {
                 userdata: fd_event.userdata,
                 type_: fd_event.type_,
@@ -249,8 +248,8 @@ fn poll_oneoff_handle_fd_event<'t>(
                         },
                 },
             }
-        } else if revents.contains(nix::poll::EventFlags::POLLIN)
-            | revents.contains(nix::poll::EventFlags::POLLOUT)
+        } else if revents.contains(nix::poll::PollFlags::POLLIN)
+            | revents.contains(nix::poll::PollFlags::POLLOUT)
         {
             host::__wasi_event_t {
                 userdata: fd_event.userdata,

@@ -21,7 +21,7 @@ log = "0.4"
 filetime = "0.2.7"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.13"
+nix = "0.15"
 
 [target.'cfg(windows)'.dependencies]
 winx = { path = "winx" }
