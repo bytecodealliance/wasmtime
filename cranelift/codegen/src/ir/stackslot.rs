@@ -101,7 +101,7 @@ impl fmt::Display for StackSlotKind {
 }
 
 /// Contents of a stack slot.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlotData {
     /// The kind of stack slot.
@@ -154,7 +154,7 @@ impl fmt::Display for StackSlotData {
 /// Stack frame manager.
 ///
 /// Keep track of all the stack slots used by a function.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlots {
     /// All allocated stack slots.

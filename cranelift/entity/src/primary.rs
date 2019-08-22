@@ -27,7 +27,7 @@ use std::vec::Vec;
 /// that it only allows indexing with the distinct `EntityRef` key type, so converting to a
 /// plain slice would make it easier to use incorrectly. To make a slice of a `PrimaryMap`, use
 /// `into_boxed_slice`.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct PrimaryMap<K, V>
 where
