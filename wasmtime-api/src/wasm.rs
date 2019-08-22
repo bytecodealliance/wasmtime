@@ -6,8 +6,8 @@
 // TODO complete the C API
 
 use super::{
-    Callable, Engine, ExportType, Extern, Func, FuncType, ImportType, Instance, Module, Store,
-    Trap, Val, ValType,
+    Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, GlobalType, ImportType,
+    Instance, MemoryType, Module, Name, Store, TableType, Trap, Val, ValType,
 };
 use std::boxed::Box;
 use std::cell::RefCell;
@@ -16,16 +16,146 @@ use std::ptr;
 use std::rc::Rc;
 use std::slice;
 
-pub type byte_t = ::std::os::raw::c_char;
+macro_rules! declare_vec {
+    ($name:ident, $elem_ty:path) => {
+        #[repr(C)]
+        #[derive(Clone)]
+        pub struct $name {
+            pub size: usize,
+            pub data: *mut $elem_ty,
+        }
+
+        impl $name {
+            #[allow(dead_code)]
+            fn set_from_slice(&mut self, source: &[$elem_ty]) {
+                let mut buffer = Vec::with_capacity(source.len());
+                buffer.extend_from_slice(source);
+                assert!(buffer.len() == buffer.capacity());
+                self.size = buffer.len();
+                self.data = buffer.as_mut_ptr();
+                mem::forget(buffer);
+            }
+
+            #[allow(dead_code)]
+            fn set_buffer(&mut self, mut buffer: Vec<$elem_ty>) {
+                assert!(buffer.len() == buffer.capacity());
+                self.size = buffer.len();
+                self.data = buffer.as_mut_ptr();
+                mem::forget(buffer);
+            }
+
+            #[allow(dead_code)]
+            fn set_uninitialized(&mut self, size: usize) {
+                let mut buffer = vec![Default::default(); size];
+                self.size = size;
+                self.data = buffer.as_mut_ptr();
+                mem::forget(buffer);
+            }
+
+            #[allow(dead_code)]
+            fn uninitialize(&mut self) {
+                let _ = unsafe { Vec::from_raw_parts(self.data, self.size, self.size) };
+            }
+
+            #[allow(dead_code)]
+            fn as_slice(&self) -> &[$elem_ty] {
+                unsafe { slice::from_raw_parts(self.data as *const $elem_ty, self.size) }
+            }
+        }
+
+        impl From<Vec<$elem_ty>> for $name {
+            fn from(mut vec: Vec<$elem_ty>) -> Self {
+                assert!(vec.len() == vec.capacity());
+                let result = $name {
+                    size: vec.len(),
+                    data: vec.as_mut_ptr(),
+                };
+                mem::forget(vec);
+                result
+            }
+        }
+
+        impl Drop for $name {
+            fn drop(&mut self) {
+                self.uninitialize();
+            }
+        }
+    };
+
+    ($name:ident, *mut $elem_ty:path) => {
+        #[repr(C)]
+        #[derive(Clone)]
+        pub struct $name {
+            pub size: usize,
+            pub data: *mut *mut $elem_ty,
+        }
+
+        impl $name {
+            #[allow(dead_code)]
+            fn set_from_slice(&mut self, source: &[*mut $elem_ty]) {
+                let mut buffer = Vec::with_capacity(source.len());
+                buffer.extend_from_slice(source);
+                assert!(buffer.len() == buffer.capacity());
+                self.size = buffer.len();
+                self.data = buffer.as_mut_ptr();
+                mem::forget(buffer);
+            }
+
+            #[allow(dead_code)]
+            fn set_buffer(&mut self, mut buffer: Vec<*mut $elem_ty>) {
+                assert!(buffer.len() == buffer.capacity());
+                self.size = buffer.len();
+                self.data = buffer.as_mut_ptr();
+                mem::forget(buffer);
+            }
+
+            #[allow(dead_code)]
+            fn set_uninitialized(&mut self, size: usize) {
+                let mut buffer = vec![ptr::null_mut(); size];
+                self.size = size;
+                self.data = buffer.as_mut_ptr();
+                mem::forget(buffer);
+            }
+
+            #[allow(dead_code)]
+            fn uninitialize(&mut self) {
+                for element in unsafe { Vec::from_raw_parts(self.data, self.size, self.size) } {
+                    let _ = unsafe { Box::from_raw(element) };
+                }
+            }
+
+            #[allow(dead_code)]
+            fn as_slice(&self) -> &[$elem_ty] {
+                unsafe { slice::from_raw_parts(self.data as *const $elem_ty, self.size) }
+            }
+        }
+
+        impl From<Vec<*mut $elem_ty>> for $name {
+            fn from(mut vec: Vec<*mut $elem_ty>) -> Self {
+                assert!(vec.len() == vec.capacity());
+                let result = $name {
+                    size: vec.len(),
+                    data: vec.as_mut_ptr(),
+                };
+                mem::forget(vec);
+                result
+            }
+        }
+
+        impl Drop for $name {
+            fn drop(&mut self) {
+                self.uninitialize();
+            }
+        }
+    };
+}
+
 pub type float32_t = f32;
 pub type float64_t = f64;
-pub type wasm_byte_t = byte_t;
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_byte_vec_t {
-    pub size: usize,
-    pub data: *mut wasm_byte_t,
-}
+pub type wasm_byte_t = u8;
+
+declare_vec!(wasm_byte_vec_t, wasm_byte_t);
+
 pub type wasm_name_t = wasm_byte_vec_t;
 #[repr(C)]
 #[derive(Clone)]
@@ -55,91 +185,84 @@ pub struct wasm_limits_t {
 pub struct wasm_valtype_t {
     ty: ValType,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_valtype_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_valtype_t,
-}
+
+declare_vec!(wasm_valtype_vec_t, *mut wasm_valtype_t);
+
 pub type wasm_valkind_t = u8;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_functype_t {
     functype: FuncType,
+    params_cache: Option<wasm_valtype_vec_t>,
+    returns_cache: Option<wasm_valtype_vec_t>,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_functype_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_functype_t,
-}
+
+declare_vec!(wasm_functype_vec_t, *mut wasm_functype_t);
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_globaltype_t {
-    _unused: [u8; 0],
+    globaltype: GlobalType,
+    content_cache: Option<wasm_valtype_t>,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_globaltype_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_globaltype_t,
-}
+
+declare_vec!(wasm_globaltype_vec_t, *mut wasm_globaltype_t);
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_tabletype_t {
-    _unused: [u8; 0],
+    tabletype: TableType,
+    element_cache: Option<wasm_valtype_t>,
+    limits_cache: Option<wasm_limits_t>,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_tabletype_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_tabletype_t,
-}
+
+declare_vec!(wasm_tabletype_vec_t, *mut wasm_tabletype_t);
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_memorytype_t {
-    _unused: [u8; 0],
+    memorytype: MemoryType,
+    limits_cache: Option<wasm_limits_t>,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_memorytype_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_memorytype_t,
-}
+
+declare_vec!(wasm_memorytype_vec_t, *mut wasm_memorytype_t);
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_externtype_t {
-    _unused: [u8; 0],
+    ty: ExternType,
+    cache: wasm_externtype_t_type_cache,
 }
-#[repr(C)]
+
 #[derive(Clone)]
-pub struct wasm_externtype_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_externtype_t,
+enum wasm_externtype_t_type_cache {
+    Empty,
+    Func(wasm_functype_t),
+    Global(wasm_globaltype_t),
+    Memory(wasm_memorytype_t),
+    Table(wasm_tabletype_t),
 }
+
+declare_vec!(wasm_externtype_vec_t, *mut wasm_externtype_t);
+
 pub type wasm_externkind_t = u8;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_importtype_t {
     ty: ImportType,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_importtype_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_importtype_t,
-}
+
+declare_vec!(wasm_importtype_vec_t, *mut wasm_importtype_t);
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_exporttype_t {
     ty: ExportType,
+    name_cache: Option<wasm_name_t>,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_exporttype_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_exporttype_t,
-}
+
+declare_vec!(wasm_exporttype_vec_t, *mut wasm_exporttype_t);
+
 #[doc = ""]
 #[repr(C)]
 #[derive(Clone)]
@@ -152,6 +275,7 @@ pub struct wasm_val_t {
     pub kind: wasm_valkind_t,
     pub of: wasm_val_t__bindgen_ty_1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union wasm_val_t__bindgen_ty_1 {
@@ -162,23 +286,26 @@ pub union wasm_val_t__bindgen_ty_1 {
     pub ref_: *mut wasm_ref_t,
     _bindgen_union_align: u64,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_val_vec_t {
-    pub size: usize,
-    pub data: *mut wasm_val_t,
+
+impl Default for wasm_val_t {
+    fn default() -> Self {
+        wasm_val_t {
+            kind: 0,
+            of: wasm_val_t__bindgen_ty_1 { i32: 0 },
+        }
+    }
 }
+
+declare_vec!(wasm_val_vec_t, wasm_val_t);
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_frame_t {
     _unused: [u8; 0],
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_frame_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_frame_t,
-}
+
+declare_vec!(wasm_frame_vec_t, *mut wasm_frame_t);
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_instance_t {
@@ -244,25 +371,17 @@ pub type wasm_memory_pages_t = u32;
 pub struct wasm_extern_t {
     ext: Rc<RefCell<Extern>>,
 }
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_extern_vec_t {
-    pub size: usize,
-    pub data: *mut *mut wasm_extern_t,
-}
+
+declare_vec!(wasm_extern_vec_t, *mut wasm_extern_t);
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_byte_vec_delete(v: *mut wasm_byte_vec_t) {
-    let _ = Vec::from_raw_parts((*v).data, 0, (*v).size);
+    (*v).uninitialize();
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_byte_vec_new_uninitialized(out: *mut wasm_byte_vec_t, size: usize) {
-    let mut buffer = vec![0; size];
-    let result = out.as_mut().unwrap();
-    result.size = buffer.capacity();
-    result.data = buffer.as_mut_ptr();
-    mem::forget(buffer);
+    (*out).set_uninitialized(size);
 }
 
 #[no_mangle]
@@ -287,11 +406,7 @@ pub unsafe extern "C" fn wasm_extern_as_func(e: *mut wasm_extern_t) -> *mut wasm
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_vec_delete(v: *mut wasm_extern_vec_t) {
-    let buffer = Vec::from_raw_parts((*v).data, (*v).size, (*v).size);
-    for p in buffer {
-        // TODO wasm_extern_delete
-        let _ = Box::from_raw(p);
-    }
+    (*v).uninitialize();
 }
 
 #[no_mangle]
@@ -341,7 +456,7 @@ impl wasm_val_t {
     fn from_val(val: &Val) -> wasm_val_t {
         match val {
             Val::I32(i) => wasm_val_t {
-                kind: from_valtype(ValType::I32),
+                kind: from_valtype(&ValType::I32),
                 of: wasm_val_t__bindgen_ty_1 { i32: *i },
             },
             _ => unimplemented!("wasm_val_t::from_val {:?}", val),
@@ -452,7 +567,11 @@ pub unsafe extern "C" fn wasm_functype_new(
         .map(|vt| (*vt).ty.clone())
         .collect::<Vec<_>>();
     let functype = FuncType::new(params.into_boxed_slice(), results.into_boxed_slice());
-    let functype = Box::new(wasm_functype_t { functype });
+    let functype = Box::new(wasm_functype_t {
+        functype,
+        params_cache: None,  // TODO get from args?
+        returns_cache: None, // TODO get from args?
+    });
     Box::into_raw(functype)
 }
 
@@ -471,7 +590,7 @@ pub unsafe extern "C" fn wasm_instance_new(
     store: *mut wasm_store_t,
     module: *const wasm_module_t,
     imports: *const *const wasm_extern_t,
-    _result: *mut *mut wasm_trap_t,
+    result: *mut *mut wasm_trap_t,
 ) -> *mut wasm_instance_t {
     let store = (*store).store.clone();
     let mut externs: Vec<Rc<RefCell<Extern>>> = Vec::with_capacity((*module).imports.len());
@@ -485,9 +604,19 @@ pub unsafe extern "C" fn wasm_instance_new(
             let instance = Box::new(wasm_instance_t {
                 instance: Rc::new(RefCell::new(instance)),
             });
+            (*result) = ptr::null_mut();
             Box::into_raw(instance)
         }
-        _ => unimplemented!(),
+        Err(_) => {
+            // TODO Unwrap trap from failure::Error
+            let trap = Box::new(wasm_trap_t {
+                trap: Rc::new(RefCell::new(Trap::new(
+                    "trap during instantiation".to_string(),
+                ))),
+            });
+            (*result) = Box::into_raw(trap);
+            ptr::null_mut()
+        }
     }
 }
 
@@ -503,9 +632,7 @@ pub unsafe extern "C" fn wasm_instance_exports(
         let ext = Box::new(wasm_extern_t { ext: e.clone() });
         buffer.push(Box::into_raw(ext));
     }
-    (*out).size = buffer.capacity();
-    (*out).data = buffer.as_mut_ptr();
-    mem::forget(buffer);
+    (*out).set_buffer(buffer);
 }
 
 #[no_mangle]
@@ -513,12 +640,21 @@ pub unsafe extern "C" fn wasm_module_delete(module: *mut wasm_module_t) {
     let _ = Box::from_raw(module);
 }
 
+impl wasm_name_t {
+    fn from_name(name: &Name) -> wasm_name_t {
+        let s = name.to_string();
+        let mut buffer = Vec::new();
+        buffer.extend_from_slice(s.as_bytes());
+        buffer.into()
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn wasm_module_new(
     store: *mut wasm_store_t,
     binary: *const wasm_byte_vec_t,
 ) -> *mut wasm_module_t {
-    let binary = slice::from_raw_parts((*binary).data as *const u8, (*binary).size);
+    let binary = (*binary).as_slice();
     let store = (*store).store.clone();
     let module = Module::new(store, binary).expect("module");
     let imports = module
@@ -529,7 +665,10 @@ pub unsafe extern "C" fn wasm_module_new(
     let exports = module
         .exports()
         .iter()
-        .map(|e| wasm_exporttype_t { ty: e.clone() })
+        .map(|e| wasm_exporttype_t {
+            ty: e.clone(),
+            name_cache: None,
+        })
         .collect::<Vec<_>>();
     let module = Box::new(wasm_module_t {
         module: Rc::new(RefCell::new(module)),
@@ -555,8 +694,7 @@ pub unsafe extern "C" fn wasm_store_new(engine: *mut wasm_engine_t) -> *mut wasm
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_valtype_vec_new_empty(out: *mut wasm_valtype_vec_t) {
-    (*out).data = ptr::null_mut();
-    (*out).size = 0;
+    (*out).set_uninitialized(0);
 }
 
 #[no_mangle]
@@ -600,7 +738,7 @@ fn into_valtype(kind: wasm_valkind_t) -> ValType {
     }
 }
 
-fn from_valtype(ty: ValType) -> wasm_valkind_t {
+fn from_valtype(ty: &ValType) -> wasm_valkind_t {
     match ty {
         ValType::I32 => 0,
         ValType::I64 => 1,
@@ -626,13 +764,9 @@ pub unsafe extern "C" fn wasm_valtype_vec_new(
     data: *const *mut wasm_valtype_t,
 ) {
     let slice = slice::from_raw_parts(data, size);
-    let mut buffer = Vec::with_capacity(size);
-    buffer.extend_from_slice(slice);
-    assert!(size == buffer.capacity());
-    (*out).size = size;
-    (*out).data = buffer.as_mut_ptr();
-    mem::forget(buffer);
+    (*out).set_from_slice(slice);
 }
+
 #[no_mangle]
 pub unsafe extern "C" fn wasm_byte_vec_new(
     out: *mut wasm_byte_vec_t,
@@ -640,12 +774,7 @@ pub unsafe extern "C" fn wasm_byte_vec_new(
     data: *const wasm_byte_t,
 ) {
     let slice = slice::from_raw_parts(data, size);
-    let mut buffer = Vec::with_capacity(size);
-    buffer.extend_from_slice(slice);
-    assert!(size == buffer.capacity());
-    (*out).size = size;
-    (*out).data = buffer.as_mut_ptr();
-    mem::forget(buffer);
+    (*out).set_from_slice(slice);
 }
 
 #[no_mangle]
@@ -675,10 +804,7 @@ pub unsafe extern "C" fn wasm_frame_module_offset(_arg1: *const wasm_frame_t) ->
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_frame_vec_delete(frames: *mut wasm_frame_vec_t) {
-    let frames = Vec::from_raw_parts((*frames).data, (*frames).size, (*frames).size);
-    for _frame in frames {
-        unimplemented!("wasm_frame_vec_delete for frame")
-    }
+    (*frames).uninitialize();
 }
 
 #[no_mangle]
@@ -691,7 +817,7 @@ pub unsafe extern "C" fn wasm_trap_new(
     _store: *mut wasm_store_t,
     message: *const wasm_message_t,
 ) -> *mut wasm_trap_t {
-    let message = slice::from_raw_parts((*message).data as *const u8, (*message).size);
+    let message = (*message).as_slice();
     if message[message.len() - 1] != 0 {
         panic!("wasm_trap_new message stringz expected");
     }
@@ -708,10 +834,7 @@ pub unsafe extern "C" fn wasm_trap_message(trap: *const wasm_trap_t, out: *mut w
     buffer.extend_from_slice((*trap).trap.borrow().message().as_bytes());
     buffer.reserve_exact(1);
     buffer.push(0);
-    assert!(buffer.len() == buffer.capacity());
-    (*out).size = buffer.capacity();
-    (*out).data = buffer.as_mut_ptr() as *mut i8;
-    mem::forget(buffer);
+    (*out).set_buffer(buffer);
 }
 
 #[no_mangle]
@@ -721,8 +844,287 @@ pub unsafe extern "C" fn wasm_trap_origin(_trap: *const wasm_trap_t) -> *mut was
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_trap_trace(_trap: *const wasm_trap_t, out: *mut wasm_frame_vec_t) {
-    let mut buffer = Vec::new();
-    (*out).size = 0;
-    (*out).data = buffer.as_mut_ptr();
-    mem::forget(buffer);
+    (*out).set_uninitialized(0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_exporttype_name(et: *const wasm_exporttype_t) -> *const wasm_name_t {
+    if (*et).name_cache.is_none() {
+        let et = (et as *mut wasm_exporttype_t).as_mut().unwrap();
+        et.name_cache = Some(wasm_name_t::from_name(&et.ty.name()));
+    }
+    (*et).name_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_exporttype_type(
+    et: *const wasm_exporttype_t,
+) -> *const wasm_externtype_t {
+    let ty = Box::new(wasm_externtype_t {
+        ty: (*et).ty.r#type().clone(),
+        cache: wasm_externtype_t_type_cache::Empty,
+    });
+    Box::into_raw(ty)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_exporttype_vec_delete(et: *mut wasm_exporttype_vec_t) {
+    (*et).uninitialize();
+}
+
+fn from_externtype(ty: &ExternType) -> wasm_externkind_t {
+    match ty {
+        ExternType::ExternFunc(_) => 0,
+        ExternType::ExternGlobal(_) => 1,
+        ExternType::ExternTable(_) => 2,
+        ExternType::ExternMemory(_) => 3,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_extern_kind(e: *const wasm_extern_t) -> wasm_externkind_t {
+    from_externtype(&(*e).ext.borrow().r#type())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_extern_type(e: *const wasm_extern_t) -> *mut wasm_externtype_t {
+    let et = Box::new(wasm_externtype_t {
+        ty: (*e).ext.borrow().r#type(),
+        cache: wasm_externtype_t_type_cache::Empty,
+    });
+    Box::into_raw(et)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_externtype_as_functype_const(
+    et: *const wasm_externtype_t,
+) -> *const wasm_functype_t {
+    if let wasm_externtype_t_type_cache::Empty = (*et).cache {
+        let functype = (*et).ty.func().clone();
+        let f = wasm_functype_t {
+            functype,
+            params_cache: None,
+            returns_cache: None,
+        };
+        let et = (et as *mut wasm_externtype_t).as_mut().unwrap();
+        et.cache = wasm_externtype_t_type_cache::Func(f);
+    }
+    match &(*et).cache {
+        wasm_externtype_t_type_cache::Func(f) => f,
+        _ => panic!("wasm_externtype_as_functype_const"),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_externtype_as_globaltype_const(
+    et: *const wasm_externtype_t,
+) -> *const wasm_globaltype_t {
+    if let wasm_externtype_t_type_cache::Empty = (*et).cache {
+        let globaltype = (*et).ty.global().clone();
+        let g = wasm_globaltype_t {
+            globaltype,
+            content_cache: None,
+        };
+        let et = (et as *mut wasm_externtype_t).as_mut().unwrap();
+        et.cache = wasm_externtype_t_type_cache::Global(g);
+    }
+    match &(*et).cache {
+        wasm_externtype_t_type_cache::Global(g) => g,
+        _ => panic!("wasm_externtype_as_globaltype_const"),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_externtype_as_tabletype_const(
+    et: *const wasm_externtype_t,
+) -> *const wasm_tabletype_t {
+    if let wasm_externtype_t_type_cache::Empty = (*et).cache {
+        let tabletype = (*et).ty.table().clone();
+        let t = wasm_tabletype_t {
+            tabletype,
+            element_cache: None,
+            limits_cache: None,
+        };
+        let et = (et as *mut wasm_externtype_t).as_mut().unwrap();
+        et.cache = wasm_externtype_t_type_cache::Table(t);
+    }
+    match &(*et).cache {
+        wasm_externtype_t_type_cache::Table(t) => t,
+        _ => panic!("wasm_externtype_as_tabletype_const"),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_externtype_as_memorytype_const(
+    et: *const wasm_externtype_t,
+) -> *const wasm_memorytype_t {
+    if let wasm_externtype_t_type_cache::Empty = (*et).cache {
+        let memorytype = (*et).ty.memory().clone();
+        let m = wasm_memorytype_t {
+            memorytype,
+            limits_cache: None,
+        };
+        let et = (et as *mut wasm_externtype_t).as_mut().unwrap();
+        et.cache = wasm_externtype_t_type_cache::Memory(m);
+    }
+    match &(*et).cache {
+        wasm_externtype_t_type_cache::Memory(m) => m,
+        _ => panic!("wasm_externtype_as_memorytype_const"),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_externtype_delete(et: *mut wasm_externtype_t) {
+    let _ = Box::from_raw(et);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_externtype_kind(et: *const wasm_externtype_t) -> wasm_externkind_t {
+    from_externtype(&(*et).ty)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_func_param_arity(f: *const wasm_func_t) -> usize {
+    (*f).func.borrow().param_arity()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_func_result_arity(f: *const wasm_func_t) -> usize {
+    (*f).func.borrow().result_arity()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_functype_params(
+    ft: *const wasm_functype_t,
+) -> *const wasm_valtype_vec_t {
+    if (*ft).params_cache.is_none() {
+        let ft = (ft as *mut wasm_functype_t).as_mut().unwrap();
+        let buffer = ft
+            .functype
+            .params()
+            .iter()
+            .map(|p| {
+                let ty = Box::new(wasm_valtype_t { ty: p.clone() });
+                Box::into_raw(ty)
+            })
+            .collect::<Vec<_>>();
+        ft.params_cache = Some(buffer.into());
+    }
+    (*ft).params_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_functype_results(
+    ft: *const wasm_functype_t,
+) -> *const wasm_valtype_vec_t {
+    if (*ft).returns_cache.is_none() {
+        let ft = (ft as *mut wasm_functype_t).as_mut().unwrap();
+        let buffer = ft
+            .functype
+            .results()
+            .iter()
+            .map(|p| {
+                let ty = Box::new(wasm_valtype_t { ty: p.clone() });
+                Box::into_raw(ty)
+            })
+            .collect::<Vec<_>>();
+        ft.returns_cache = Some(buffer.into());
+    }
+    (*ft).returns_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_globaltype_content(
+    gt: *const wasm_globaltype_t,
+) -> *const wasm_valtype_t {
+    if (*gt).content_cache.is_none() {
+        let gt = (gt as *mut wasm_globaltype_t).as_mut().unwrap();
+        gt.content_cache = Some(wasm_valtype_t {
+            ty: (*gt).globaltype.content().clone(),
+        });
+    }
+    (*gt).content_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_globaltype_mutability(
+    gt: *const wasm_globaltype_t,
+) -> wasm_mutability_t {
+    use super::Mutability::*;
+    match (*gt).globaltype.mutability() {
+        Const => 0,
+        Var => 1,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_memorytype_limits(
+    mt: *const wasm_memorytype_t,
+) -> *const wasm_limits_t {
+    if (*mt).limits_cache.is_none() {
+        let mt = (mt as *mut wasm_memorytype_t).as_mut().unwrap();
+        let limits = (*mt).memorytype.limits();
+        mt.limits_cache = Some(wasm_limits_t {
+            min: limits.min(),
+            max: limits.max(),
+        });
+    }
+    (*mt).limits_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_module_exports(
+    module: *const wasm_module_t,
+    out: *mut wasm_exporttype_vec_t,
+) {
+    let buffer = (*module)
+        .exports
+        .iter()
+        .map(|et| {
+            let et = Box::new(et.clone());
+            Box::into_raw(et)
+        })
+        .collect::<Vec<_>>();
+    (*out).set_buffer(buffer);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_module_imports(
+    _module: *const wasm_module_t,
+    _out: *mut wasm_importtype_vec_t,
+) {
+    unimplemented!("wasm_module_imports");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_tabletype_element(
+    tt: *const wasm_tabletype_t,
+) -> *const wasm_valtype_t {
+    if (*tt).element_cache.is_none() {
+        let tt = (tt as *mut wasm_tabletype_t).as_mut().unwrap();
+        tt.element_cache = Some(wasm_valtype_t {
+            ty: (*tt).tabletype.element().clone(),
+        });
+    }
+    (*tt).element_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_tabletype_limits(
+    tt: *const wasm_tabletype_t,
+) -> *const wasm_limits_t {
+    if (*tt).limits_cache.is_none() {
+        let tt = (tt as *mut wasm_tabletype_t).as_mut().unwrap();
+        let limits = (*tt).tabletype.limits();
+        tt.limits_cache = Some(wasm_limits_t {
+            min: limits.min(),
+            max: limits.max(),
+        });
+    }
+    (*tt).limits_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_valtype_kind(vt: *const wasm_valtype_t) -> wasm_valkind_t {
+    from_valtype(&(*vt).ty)
 }

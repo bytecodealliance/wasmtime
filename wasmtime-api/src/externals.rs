@@ -1,7 +1,7 @@
 use crate::callable::{Callable, WasmtimeFn};
 use crate::runtime::Store;
 use crate::trap::Trap;
-use crate::types::{ExternType, FuncType, GlobalType, MemoryType};
+use crate::types::{ExternType, FuncType, GlobalType, MemoryType, TableType};
 use crate::values::Val;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -48,7 +48,8 @@ impl Extern {
         match self {
             Extern::Func(ft) => ExternType::ExternFunc(ft.borrow().r#type().clone()),
             Extern::Memory(ft) => ExternType::ExternMemory(ft.borrow().r#type().clone()),
-            _ => unimplemented!("ExternType::type"),
+            Extern::Table(tt) => ExternType::ExternTable(tt.borrow().r#type().clone()),
+            Extern::Global(gt) => ExternType::ExternGlobal(gt.borrow().r#type().clone()),
         }
     }
 
@@ -106,9 +107,13 @@ impl Extern {
                 };
                 Extern::Global(Rc::new(RefCell::new(Global::new(store, ty, val))))
             }
-            wasmtime_runtime::Export::Table { .. } => {
-                // TODO Extern::Table(Rc::new(RefCell::new(Table::new(store, ty, val))))
-                Extern::Table(Rc::new(RefCell::new(Table)))
+            wasmtime_runtime::Export::Table {
+                definition: _,
+                vmctx: _,
+                table,
+            } => {
+                let ty = TableType::from_cranelift_table(table.table.clone());
+                Extern::Table(Rc::new(RefCell::new(Table::new(store, ty))))
             }
         }
     }
@@ -186,7 +191,39 @@ impl Global {
     }
 }
 
-pub struct Table;
+pub struct Table {
+    _store: Rc<RefCell<Store>>,
+    r#type: TableType,
+}
+
+impl Table {
+    pub fn new(store: Rc<RefCell<Store>>, r#type: TableType) -> Table {
+        Table {
+            _store: store,
+            r#type,
+        }
+    }
+
+    pub fn r#type(&self) -> &TableType {
+        &self.r#type
+    }
+
+    pub fn get(&self, _index: u32) -> Val {
+        unimplemented!("Table::get")
+    }
+
+    pub fn set(&self, _index: u32, _val: &Val) -> usize {
+        unimplemented!("Table::set")
+    }
+
+    pub fn size(&self) -> u32 {
+        unimplemented!("Table::size")
+    }
+
+    pub fn grow(&mut self, _delta: u32) -> bool {
+        unimplemented!("Table::grow")
+    }
+}
 
 pub struct Memory {
     _store: Rc<RefCell<Store>>,
