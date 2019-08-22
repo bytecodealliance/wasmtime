@@ -7,7 +7,7 @@ use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
 use lazy_static::lazy_static;
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -241,6 +241,7 @@ impl ModuleCacheEntry {
 
     pub fn get_data(&self) -> Option<ModuleCacheData> {
         let path = self.mod_cache_path.as_ref()?;
+        trace!("get_data() for path: {}", path.display());
         let compressed_cache_bytes = fs::read(path).ok()?;
         let cache_bytes = zstd::decode_all(&compressed_cache_bytes[..])
             .map_err(|err| warn!("Failed to decompress cached code: {}", err))
@@ -256,6 +257,7 @@ impl ModuleCacheEntry {
 
     fn update_data_impl(&self, data: &ModuleCacheData) -> Option<()> {
         let path = self.mod_cache_path.as_ref()?;
+        trace!("update_data() for path: {}", path.display());
         let serialized_data = bincode::serialize(&data)
             .map_err(|err| warn!("Failed to serialize cached code: {}", err))
             .ok()?;
