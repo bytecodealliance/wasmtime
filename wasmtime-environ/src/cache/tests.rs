@@ -1,8 +1,7 @@
 use super::*;
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::compilation::{Relocation, RelocationTarget};
+use crate::compilation::{CodeAndJTOffsets, Relocation, RelocationTarget};
 use crate::module::{MemoryPlan, MemoryStyle, Module};
-use cranelift_codegen::ir::entities::JumpTable;
 use cranelift_codegen::{binemit, ir, isa, settings, ValueLocRange};
 use cranelift_entity::EntityRef;
 use cranelift_entity::{PrimaryMap, SecondaryMap};
@@ -10,7 +9,7 @@ use cranelift_wasm::{DefinedFuncIndex, FuncIndex, Global, GlobalInit, Memory, Si
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use std::boxed::Box;
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::fs;
 use std::str::FromStr;
 use std::vec::Vec;
@@ -45,7 +44,7 @@ fn test_write_read_cache() {
     code_container.resize(0x4000, 0);
     rng.fill(&mut code_container[..]);
 
-    let isa1 = new_isa("riscv64");
+    let isa1 = new_isa("riscv64-unknown-unknown");
     let isa2 = new_isa("i386");
     let module1 = new_module(&mut rng);
     let module2 = new_module(&mut rng);
@@ -262,66 +261,5 @@ fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
 impl ModuleCacheEntry {
     pub fn mod_cache_path(&self) -> &Option<PathBuf> {
         &self.mod_cache_path
-    }
-}
-
-// cranelift's types (including SecondaryMap) doesn't implement PartialEq
-impl PartialEq for ModuleCacheData {
-    fn eq(&self, other: &Self) -> bool {
-        // compilation field
-        if self.compilation.len() != other.compilation.len() {
-            return false;
-        }
-
-        for i in (0..self.compilation.len()).map(DefinedFuncIndex::new) {
-            let lhs = self.compilation.get(i);
-            let rhs = other.compilation.get(i);
-            if lhs.body != rhs.body || lhs.jt_offsets.get_default() != rhs.jt_offsets.get_default()
-            {
-                return false;
-            }
-
-            for j in (0..max(lhs.jt_offsets.len(), rhs.jt_offsets.len())).map(JumpTable::new) {
-                if lhs.jt_offsets.get(j) != rhs.jt_offsets.get(j) {
-                    return false;
-                }
-            }
-        }
-
-        // relocs
-        {
-            if self.relocations.len() != other.relocations.len() {
-                return false;
-            }
-            let it_lhs = self.relocations.iter();
-            let it_rhs = other.relocations.iter();
-            if it_lhs.zip(it_rhs).any(|(lhs, rhs)| lhs != rhs) {
-                return false;
-            }
-        }
-
-        // debug symbols
-        {
-            if self.address_transforms.len() != other.address_transforms.len() {
-                return false;
-            }
-            let it_lhs = self.address_transforms.iter();
-            let it_rhs = other.address_transforms.iter();
-            if it_lhs.zip(it_rhs).any(|(lhs, rhs)| lhs != rhs) {
-                return false;
-            }
-        }
-
-        true
-    }
-}
-
-// binemit::Reloc doesn't implement PartialEq
-impl PartialEq for Relocation {
-    fn eq(&self, other: &Self) -> bool {
-        self.reloc as u64 == other.reloc as u64
-            && self.reloc_target == other.reloc_target
-            && self.offset == other.offset
-            && self.addend == other.addend
     }
 }
