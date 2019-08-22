@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
 use crate::cdsl::instructions::{
-    BoundInstruction, InstSpec, Instruction, InstructionGroup, InstructionPredicate,
-    InstructionPredicateNode, InstructionPredicateRegistry,
+    InstSpec, Instruction, InstructionGroup, InstructionPredicate, InstructionPredicateNode,
+    InstructionPredicateRegistry,
 };
 use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::{SettingGroup, SettingPredicateNumber};
@@ -277,6 +277,17 @@ impl PerCpuModeEncodings {
             self.enc64(inst.clone().bind(I64).bind_any(), template.clone().rex());
             self.enc64(inst.clone().bind(I64).bind_any(), template);
         }
+    }
+
+    /// Add the same encoding/recipe pairing to both X86_32 and X86_64
+    fn enc_32_64_rec(
+        &mut self,
+        inst: impl Clone + Into<InstSpec>,
+        recipe: &EncodingRecipe,
+        bits: u16,
+    ) {
+        self.enc32_rec(inst.clone(), recipe, bits);
+        self.enc64_rec(inst, recipe, bits);
     }
 
     /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand
@@ -1761,12 +1772,16 @@ pub(crate) fn define(
     // written to the low doubleword of the register and the regiser is zero-extended to 128 bits."
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let instruction = scalar_to_vector.bind_vector_from_lane(ty, sse_vector_size);
-        let template = rec_frurm.opcodes(vec![0x66, 0x0f, 0x6e]); // MOVD/MOVQ
-        if ty.lane_bits() < 64 {
-            // no 32-bit encodings for 64-bit widths
-            e.enc32(instruction.clone(), template.clone());
+        if ty.is_float() {
+            e.enc_32_64_rec(instruction, rec_null_fpr, 0);
+        } else {
+            let template = rec_frurm.opcodes(vec![0x66, 0x0f, 0x6e]); // MOVD/MOVQ
+            if ty.lane_bits() < 64 {
+                // no 32-bit encodings for 64-bit widths
+                e.enc32(instruction.clone(), template.clone());
+            }
+            e.enc_x86_64(instruction, template);
         }
-        e.enc_x86_64(instruction, template);
     }
 
     // SIMD insertlane
@@ -1811,37 +1826,34 @@ pub(crate) fn define(
         }
     }
 
-    // helper for generating null encodings for FPRs on both 32- and 64-bit architectures
-    let mut null_encode_32_64 = |instruction: BoundInstruction| {
-        e.enc32_rec(instruction.clone(), rec_null_fpr, 0);
-        e.enc64_rec(instruction, rec_null_fpr, 0);
-    };
-
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8)
     for from_type in ValueType::all_lane_types().filter(allowed_simd_type) {
         for to_type in
             ValueType::all_lane_types().filter(|t| allowed_simd_type(t) && *t != from_type)
         {
-            null_encode_32_64(
-                raw_bitcast
-                    .bind_vector_from_lane(to_type, sse_vector_size)
-                    .bind_vector_from_lane(from_type, sse_vector_size),
-            );
+            let instruction = raw_bitcast
+                .bind_vector_from_lane(to_type, sse_vector_size)
+                .bind_vector_from_lane(from_type, sse_vector_size);
+            e.enc_32_64_rec(instruction, rec_null_fpr, 0);
         }
     }
 
     // SIMD raw bitcast floats to vector (and back); assumes that floats are already stored in an XMM register
     for float_type in &[F32, F64] {
         for lane_type in ValueType::all_lane_types().filter(allowed_simd_type) {
-            null_encode_32_64(
+            e.enc_32_64_rec(
                 raw_bitcast
                     .bind_vector_from_lane(lane_type, sse_vector_size)
                     .bind(*float_type),
+                rec_null_fpr,
+                0,
             );
-            null_encode_32_64(
+            e.enc_32_64_rec(
                 raw_bitcast
                     .bind(*float_type)
                     .bind_vector_from_lane(lane_type, sse_vector_size),
+                rec_null_fpr,
+                0,
             );
         }
     }

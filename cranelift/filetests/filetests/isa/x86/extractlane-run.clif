@@ -24,8 +24,7 @@ ebb0:
     v0 = f32const 0x42.42
     v1 = vconst.f32x4 [0x00.00 0x00.00 0x00.00 0x42.42]
     v2 = extractlane v1, 3
-    v10 = f32const 0x42.42  ; TODO this should not be necessary, v0 should be re-usable
-    v3 = fcmp eq v2, v10
+    v3 = fcmp eq v2, v0
     return v3
 }
 ; run
