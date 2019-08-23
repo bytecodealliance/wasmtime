@@ -381,6 +381,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     }
 
     narrow.custom_legalize(extractlane, "convert_extractlane");
+    narrow.custom_legalize(insertlane, "convert_insertlane");
 
     narrow.build_and_add_to(&mut shared.transform_groups);
 }

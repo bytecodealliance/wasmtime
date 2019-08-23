@@ -308,5 +308,84 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let IBxN = &TypeVar::new(
+        "IBxN",
+        "A SIMD vector type containing only booleans and integers",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .includes_scalars(false)
+            .build(),
+    );
+    let x = &operand("x", IBxN);
+    let y = &operand_doc("y", &IBxN.lane_of(), "New lane value");
+    let a = &operand("a", IBxN);
+
+    ig.push(
+        Inst::new(
+            "x86_pinsr",
+            r#"
+        Insert ``y`` into ``x`` at lane ``Idx``.
+        The lane index, ``Idx``, is an immediate value, not an SSA value. It
+        must indicate a valid lane index for the type of ``x``.
+        "#,
+        )
+        .operands_in(vec![x, Idx, y])
+        .operands_out(vec![a]),
+    );
+
+    let FxN = &TypeVar::new(
+        "FxN",
+        "A SIMD vector type containing floats",
+        TypeSetBuilder::new()
+            .floats(Interval::All)
+            .simd_lanes(Interval::All)
+            .includes_scalars(false)
+            .build(),
+    );
+    let x = &operand("x", FxN);
+    let y = &operand_doc("y", &FxN.lane_of(), "New lane value");
+    let a = &operand("a", FxN);
+
+    ig.push(
+        Inst::new(
+            "x86_insertps",
+            r#"
+        Insert a lane of ``y`` into ``x`` at using ``Idx`` to encode both which lane the value is 
+        extracted from and which it is inserted to. This is similar to x86_pinsr but inserts 
+        floats, which are already stored in an XMM register.
+        "#,
+        )
+        .operands_in(vec![x, Idx, y])
+        .operands_out(vec![a]),
+    );
+
+    let x = &operand("x", FxN);
+    let y = &operand("y", FxN);
+    let a = &operand("a", FxN);
+
+    ig.push(
+        Inst::new(
+            "x86_movsd",
+            r#"
+        Move the low 64 bits of the float vector ``y`` to the low 64 bits of float vector ``x``
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_movlhps",
+            r#"
+        Move the low 64 bits of the float vector ``y`` to the high 64 bits of float vector ``x``
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     ig.build()
 }
