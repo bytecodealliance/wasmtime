@@ -13,14 +13,6 @@
     )
 )]
 
-use cfg_if::cfg_if;
-
-cfg_if! {
-    if #[cfg(feature = "wasm")] {
-        mod wasm;
-    }
-}
-
 use clap::{App, Arg, SubCommand};
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::VERSION;
@@ -35,6 +27,9 @@ mod disasm;
 mod print_cfg;
 mod run;
 mod utils;
+
+#[cfg(feature = "wasm")]
+mod wasm;
 
 /// A command either succeeds or fails with an error message.
 pub type CommandResult = Result<(), String>;
