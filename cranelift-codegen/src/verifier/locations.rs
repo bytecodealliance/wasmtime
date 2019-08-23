@@ -107,8 +107,10 @@ impl<'a> LocationVerifier<'a> {
         fatal!(
             errors,
             inst,
-            "{} constraints not satisfied",
-            self.encinfo.display(enc)
+            "{} constraints not satisfied in: {}\n{}",
+            self.encinfo.display(enc),
+            self.func.dfg.display_inst(inst, self.isa),
+            self.func.display(self.isa)
         )
     }
 

@@ -396,7 +396,6 @@ pub(crate) fn define(
     let ifcmp_sp = shared.by_name("ifcmp_sp");
     let imul = shared.by_name("imul");
     let indirect_jump_table_br = shared.by_name("indirect_jump_table_br");
-    let insertlane = shared.by_name("insertlane");
     let ireduce = shared.by_name("ireduce");
     let ishl = shared.by_name("ishl");
     let ishl_imm = shared.by_name("ishl_imm");
@@ -469,8 +468,12 @@ pub(crate) fn define(
     let x86_cvtt2si = x86.by_name("x86_cvtt2si");
     let x86_fmax = x86.by_name("x86_fmax");
     let x86_fmin = x86.by_name("x86_fmin");
+    let x86_insertps = x86.by_name("x86_insertps");
+    let x86_movlhps = x86.by_name("x86_movlhps");
+    let x86_movsd = x86.by_name("x86_movsd");
     let x86_pop = x86.by_name("x86_pop");
     let x86_pextr = x86.by_name("x86_pextr");
+    let x86_pinsr = x86.by_name("x86_pinsr");
     let x86_pshufd = x86.by_name("x86_pshufd");
     let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_push = x86.by_name("x86_push");
@@ -501,6 +504,7 @@ pub(crate) fn define(
     let rec_f64imm_z = r.template("f64imm_z");
     let rec_fa = r.template("fa");
     let rec_fax = r.template("fax");
+    let rec_fa_ib = r.template("fa_ib");
     let rec_fcmp = r.template("fcmp");
     let rec_fcscc = r.template("fcscc");
     let rec_ffillnull = r.recipe("ffillnull");
@@ -1785,16 +1789,16 @@ pub(crate) fn define(
     }
 
     // SIMD insertlane
-    let mut insertlane_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
+    let mut x86_pinsr_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
         HashMap::new();
-    insertlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x20], Some(use_sse41_simd))); // PINSRB
-    insertlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc4], None)); // PINSRW from SSE2
-    insertlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41_simd))); // PINSRD
-    insertlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41_simd))); // PINSRQ, only x86_64
+    x86_pinsr_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x20], Some(use_sse41_simd))); // PINSRB
+    x86_pinsr_mapping.insert(16, (vec![0x66, 0x0f, 0xc4], None)); // PINSRW from SSE2
+    x86_pinsr_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41_simd))); // PINSRD
+    x86_pinsr_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41_simd))); // PINSRQ, only x86_64
 
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        if let Some((opcode, isap)) = insertlane_mapping.get(&ty.lane_bits()) {
-            let instruction = insertlane.bind_vector_from_lane(ty, sse_vector_size);
+        if let Some((opcode, isap)) = x86_pinsr_mapping.get(&ty.lane_bits()) {
+            let instruction = x86_pinsr.bind_vector_from_lane(ty, sse_vector_size);
             let template = rec_r_ib_unsigned_r.opcodes(opcode.clone());
             if ty.lane_bits() < 64 {
                 e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap.clone());
@@ -1805,13 +1809,34 @@ pub(crate) fn define(
         }
     }
 
+    // for legalizing insertlane with floats, INSERTPS from SSE4.1
+    {
+        let instruction = x86_insertps.bind_vector_from_lane(F32, sse_vector_size);
+        let template = rec_fa_ib.nonrex().opcodes(vec![0x66, 0x0f, 0x3a, 0x21]);
+        e.enc_32_64_maybe_isap(instruction, template, Some(use_sse41_simd));
+    }
+
+    // for legalizing insertlane with floats,  MOVSD from SSE2
+    {
+        let instruction = x86_movsd.bind_vector_from_lane(F64, sse_vector_size);
+        let template = rec_fa.nonrex().opcodes(vec![0xf2, 0x0f, 0x10]);
+        e.enc_32_64_maybe_isap(instruction, template, None); // from SSE2
+    }
+
+    // for legalizing insertlane with floats, MOVLHPS from SSE
+    {
+        let instruction = x86_movlhps.bind_vector_from_lane(F64, sse_vector_size);
+        let template = rec_fa.nonrex().opcodes(vec![0x0f, 0x16]);
+        e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
+    }
+
     // SIMD extractlane
     let mut x86_pextr_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
         HashMap::new();
-    x86_pextr_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x14], Some(use_sse41))); // PEXTRB
-    x86_pextr_mapping.insert(16, (vec![0x66, 0x0f, 0xc5], None)); // PEXTRW from zSSE2, SSE4.1 has a PEXTRW that can move to reg/m16 but the opcode is four bytes
-    x86_pextr_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41))); // PEXTRD
-    x86_pextr_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41))); // PEXTRQ, only x86_64
+    x86_pextr_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x14], Some(use_sse41_simd))); // PEXTRB
+    x86_pextr_mapping.insert(16, (vec![0x66, 0x0f, 0xc5], None)); // PEXTRW from SSE2, SSE4.1 has a PEXTRW that can move to reg/m16 but the opcode is four bytes
+    x86_pextr_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41_simd))); // PEXTRD
+    x86_pextr_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41_simd))); // PEXTRQ, only x86_64
 
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         if let Some((opcode, isap)) = x86_pextr_mapping.get(&ty.lane_bits()) {
