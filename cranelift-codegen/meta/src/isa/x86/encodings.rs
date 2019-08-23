@@ -1729,9 +1729,7 @@ pub fn define(
     // to the Intel manual: "When the destination operand is an XMM register, the source operand is
     // written to the low doubleword of the register and the regiser is zero-extended to 128 bits."
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() >= 8) {
-        let instruction = scalar_to_vector
-            .bind_vector_from_lane(ty, sse_vector_size)
-            .bind(ty);
+        let instruction = scalar_to_vector.bind_vector_from_lane(ty, sse_vector_size);
         let template = rec_frurm.opcodes(vec![0x66, 0x0f, 0x6e]); // MOVD/MOVQ
         if ty.lane_bits() < 64 {
             // no 32-bit encodings for 64-bit widths
