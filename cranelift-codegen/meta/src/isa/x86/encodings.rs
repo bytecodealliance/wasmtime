@@ -683,10 +683,7 @@ pub fn define(
     for &ty in &[B1, B8, B16, B32] {
         e.enc_both(bconst.bind(ty), rec_pu_id_bool.opcodes(vec![0xb8]));
     }
-    e.enc64(
-        bconst.bind(B64),
-        rec_pu_id_bool.opcodes(vec![0xb8]).rex().w(),
-    );
+    e.enc64(bconst.bind(B64), rec_pu_id_bool.opcodes(vec![0xb8]).rex());
 
     // Shifts and rotates.
     // Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
