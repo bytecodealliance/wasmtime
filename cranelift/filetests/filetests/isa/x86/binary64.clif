@@ -1642,3 +1642,10 @@ ebb0:
 
     return
 }
+
+function %B64() {
+ebb0:
+    [-, %rax]   v1 = bconst.b64 true    ; bin: 40 b8 00000001
+    [-, %r10]   v0 = bconst.b64 true    ; bin: 41 ba 00000001
+    return
+}
