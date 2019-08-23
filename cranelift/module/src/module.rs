@@ -559,7 +559,7 @@ where
         Ok(total_size)
     }
 
-    /// Define a function, producing the data contents from the given `DataContext`.
+    /// Define a data object, producing the data contents from the given `DataContext`.
     pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
         let compiled = {
             let info = &self.contents.data_objects[data];
