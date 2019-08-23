@@ -41,7 +41,7 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    wast [-do] [--enable-simd] [--cache | --cache-dir=<cache_dir>] <file>...
+    wast [-do] [--enable-simd] [--cache] [--cache-dir=<cache_dir>] [--cache-compression-level=<compr_level>] <file>...
     wast --help | --version
 
 Options:
@@ -51,6 +51,8 @@ Options:
     -c, --cache         enable caching system, use default cache directory
     --cache-dir=<cache_dir>
                         enable caching system, use specified cache directory
+    --cache-compression-level=<compr_level>
+                        enable caching system, use custom compression level for new cache, values 1-21
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
 ";
@@ -63,6 +65,7 @@ struct Args {
     flag_optimize: bool,
     flag_cache: bool,
     flag_cache_dir: Option<String>,
+    flag_cache_compression_level: Option<i32>,
     flag_enable_simd: bool,
 }
 
@@ -83,8 +86,11 @@ fn main() {
     }
 
     cache_conf::init(
-        args.flag_cache || args.flag_cache_dir.is_some(),
+        args.flag_cache
+            || args.flag_cache_dir.is_some()
+            || args.flag_cache_compression_level.is_some(),
         args.flag_cache_dir.as_ref(),
+        args.flag_cache_compression_level,
     );
 
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {

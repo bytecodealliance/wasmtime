@@ -63,7 +63,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-dg] [--cache | --cache-dir=<cache_dir>] [--enable-simd] <file> -o <output>
+    wasm2obj [--target TARGET] [-dg] [--cache] [--cache-dir=<cache_dir>] [--cache-compression-level=<compr_level>] [--enable-simd] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
@@ -74,6 +74,8 @@ Options:
     -c, --cache         enable caching system, use default cache directory
     --cache-dir=<cache_dir>
                         enable caching system, use specified cache directory
+    --cache-compression-level=<compr_level>
+                        enable caching system, use custom compression level for new cache, values 1-21
     --enable-simd       enable proposed SIMD instructions
     --version           print the Cranelift version
     -d, --debug         enable debug output on stderr/stdout
@@ -88,6 +90,7 @@ struct Args {
     flag_debug: bool,
     flag_cache: bool,
     flag_cache_dir: Option<String>,
+    flag_cache_compression_level: Option<i32>,
     flag_enable_simd: bool,
 }
 
@@ -115,8 +118,11 @@ fn main() {
     }
 
     cache_conf::init(
-        args.flag_cache || args.flag_cache_dir.is_some(),
+        args.flag_cache
+            || args.flag_cache_dir.is_some()
+            || args.flag_cache_compression_level.is_some(),
         args.flag_cache_dir.as_ref(),
+        args.flag_cache_compression_level,
     );
 
     let path = Path::new(&args.arg_file);

@@ -29,11 +29,13 @@ pub mod conf {
     struct Config {
         pub cache_enabled: bool,
         pub cache_dir: PathBuf,
+        pub compression_level: i32,
     }
 
     // Private static, so only internal function can access it.
     static CONFIG: Once<Config> = Once::new();
     static INIT_CALLED: AtomicBool = AtomicBool::new(false);
+    static DEFAULT_COMPRESSION_LEVEL: i32 = 0; // 0 for zstd means "use default level"
 
     /// Returns true if and only if the cache is enabled.
     pub fn cache_enabled() -> bool {
@@ -54,9 +56,19 @@ pub mod conf {
             .cache_dir
     }
 
+    /// Returns cache compression level.
+    ///
+    /// Panics if the cache is disabled.
+    pub fn compression_level() -> i32 {
+        CONFIG
+            .r#try()
+            .expect("Cache system must be initialized")
+            .compression_level
+    }
+
     /// Initializes the cache system. Should be called exactly once,
     /// and before using the cache system. Otherwise it can panic.
-    pub fn init<P: AsRef<Path>>(enabled: bool, dir: Option<P>) {
+    pub fn init<P: AsRef<Path>>(enabled: bool, dir: Option<P>, compression_level: Option<i32>) {
         INIT_CALLED
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .expect("Cache system init must be called at most once");
@@ -64,10 +76,16 @@ pub mod conf {
             CONFIG.r#try().is_none(),
             "Cache system init must be called before using the system."
         );
-        let conf = CONFIG.call_once(|| Config::new(enabled, dir));
+        let conf = CONFIG.call_once(|| {
+            Config::new(
+                enabled,
+                dir,
+                compression_level.unwrap_or(DEFAULT_COMPRESSION_LEVEL),
+            )
+        });
         debug!(
-            "Cache init(): enabled={}, cache-dir={:?}",
-            conf.cache_enabled, conf.cache_dir
+            "Cache init(): enabled={}, cache-dir={:?}, compression-level={}",
+            conf.cache_enabled, conf.cache_dir, conf.compression_level,
         );
     }
 
@@ -76,15 +94,18 @@ pub mod conf {
             Self {
                 cache_enabled: false,
                 cache_dir: PathBuf::new(),
+                compression_level: DEFAULT_COMPRESSION_LEVEL,
             }
         }
 
-        pub fn new<P: AsRef<Path>>(enabled: bool, dir: Option<P>) -> Self {
+        pub fn new<P: AsRef<Path>>(enabled: bool, dir: Option<P>, compression_level: i32) -> Self {
             if enabled {
                 match dir {
-                    Some(dir) => Self::new_step2(dir.as_ref()),
+                    Some(dir) => Self::new_step2(dir.as_ref(), compression_level),
                     None => match ProjectDirs::from("", "CraneStation", "wasmtime") {
-                        Some(proj_dirs) => Self::new_step2(proj_dirs.cache_dir()),
+                        Some(proj_dirs) => {
+                            Self::new_step2(proj_dirs.cache_dir(), compression_level)
+                        }
                         None => {
                             warn!("Cache directory not specified and failed to find the default. Disabling cache.");
                             Self::new_cache_disabled()
@@ -96,7 +117,7 @@ pub mod conf {
             }
         }
 
-        fn new_step2(dir: &Path) -> Self {
+        fn new_step2(dir: &Path, compression_level: i32) -> Self {
             // On Windows, if we want long paths, we need '\\?\' prefix, but it doesn't work
             // with relative paths. One way to get absolute path (the only one?) is to use
             // fs::canonicalize, but it requires that given path exists. The extra advantage
@@ -106,6 +127,7 @@ pub mod conf {
                     Ok(p) => Self {
                         cache_enabled: true,
                         cache_dir: p,
+                        compression_level,
                     },
                     Err(err) => {
                         warn!(
@@ -223,10 +245,16 @@ impl ModuleCacheEntry {
     pub fn get_data(&self) -> Option<ModuleCacheData> {
         if let Some(p) = &self.mod_cache_path {
             match fs::read(p) {
-                Ok(cache_bytes) => match bincode::deserialize(&cache_bytes[..]) {
-                    Ok(data) => Some(data),
+                Ok(compressed_cache_bytes) => match zstd::decode_all(&compressed_cache_bytes[..]) {
+                    Ok(cache_bytes) => match bincode::deserialize(&cache_bytes[..]) {
+                        Ok(data) => Some(data),
+                        Err(err) => {
+                            warn!("Failed to deserialize cached code: {}", err);
+                            None
+                        }
+                    },
                     Err(err) => {
-                        warn!("Failed to deserialize cached code: {}", err);
+                        warn!("Failed to decompress cached code: {}", err);
                         None
                     }
                 },
@@ -240,7 +268,13 @@ impl ModuleCacheEntry {
     pub fn update_data(&self, data: &ModuleCacheData) {
         if let Some(p) = &self.mod_cache_path {
             let cache_buf = match bincode::serialize(&data) {
-                Ok(data) => data,
+                Ok(data) => match zstd::encode_all(&data[..], conf::compression_level()) {
+                    Ok(data) => data,
+                    Err(err) => {
+                        warn!("Failed to compress cached code: {}", err);
+                        return;
+                    }
+                },
                 Err(err) => {
                     warn!("Failed to serialize cached code: {}", err);
                     return;
