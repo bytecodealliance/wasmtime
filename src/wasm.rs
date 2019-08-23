@@ -7,13 +7,13 @@
     allow(clippy::too_many_arguments, clippy::cyclomatic_complexity)
 )]
 
-use crate::disasm::{print_all, PrintRelocs, PrintTraps, PrintStackmaps};
+use crate::disasm::{print_all, PrintRelocs, PrintStackmaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_end};
+use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
-use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::path::Path;
@@ -113,7 +113,8 @@ fn handle_module(
     };
 
     let debug_info = flag_calc_value_ranges;
-    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
+    let mut dummy_environ =
+        DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
     let _ = terminal.fg(term::color::GREEN);
@@ -195,7 +196,10 @@ fn handle_module(
             }
 
             if flag_print_disasm {
-                saved_sizes = Some((code_info.code_size, code_info.jumptables_size + code_info.rodata_size));
+                saved_sizes = Some((
+                    code_info.code_size,
+                    code_info.jumptables_size + code_info.rodata_size,
+                ));
             }
         }
 
@@ -212,19 +216,34 @@ fn handle_module(
                 println!("; Exported as \"{}\"", export_name);
             }
             let value_ranges = if flag_calc_value_ranges {
-                Some(context.build_value_labels_ranges(isa).expect("value location ranges"))
+                Some(
+                    context
+                        .build_value_labels_ranges(isa)
+                        .expect("value location ranges"),
+                )
             } else {
                 None
             };
-            println!("{}", context.func.display_with(DisplayFunctionAnnotations {
-                isa: fisa.isa,
-                value_ranges: value_ranges.as_ref(),
-            }));
+            println!(
+                "{}",
+                context.func.display_with(DisplayFunctionAnnotations {
+                    isa: fisa.isa,
+                    value_ranges: value_ranges.as_ref(),
+                })
+            );
             vprintln!(flag_verbose, "");
         }
 
         if let Some((code_size, rodata_size)) = saved_sizes {
-            print_all(isa, &mem, code_size, rodata_size, &relocs, &traps, &stackmaps)?;
+            print_all(
+                isa,
+                &mem,
+                code_size,
+                rodata_size,
+                &relocs,
+                &traps,
+                &stackmaps,
+            )?;
         }
 
         context.clear();
