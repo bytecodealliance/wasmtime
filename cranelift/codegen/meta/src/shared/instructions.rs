@@ -113,16 +113,6 @@ pub fn define(
             .build(),
     );
 
-    let Scalar = &TypeVar::new(
-        "scalar",
-        "Any scalar value that can be used as a lane in a vector",
-        TypeSetBuilder::new()
-            .bools(Interval::All)
-            .ints(Interval::All)
-            .floats(Interval::All)
-            .build(),
-    );
-
     let Any = &TypeVar::new(
         "Any",
         "Any integer, float, boolean, or reference scalar or vector type",
@@ -407,7 +397,7 @@ pub fn define(
             "resumable_trap",
             r#"
         A resumable trap.
-        
+
         This instruction allows non-conditional traps to be used as non-terminal instructions.
         "#,
         )
@@ -2772,8 +2762,8 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
-    let s = &operand_doc("s", Scalar, "A scalar value");
-    let a = &operand_doc("a", TxN, "A vector value (i.e. held in an XMM register)");
+    let a = &operand_doc("a", TxN, "A vector value");
+    let s = &operand_doc("s", &TxN.lane_of(), "A scalar value");
 
     ig.push(
         Inst::new(
