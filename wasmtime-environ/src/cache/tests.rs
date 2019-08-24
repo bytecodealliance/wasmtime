@@ -25,15 +25,33 @@ use tempfile;
 fn test_write_read_cache() {
     pretty_env_logger::init();
     let dir = tempfile::tempdir().expect("Can't create temporary directory");
-    let compression_level = 5;
-    conf::init(true, Some(dir.path()), Some(compression_level));
-    assert!(conf::cache_enabled());
+
+    let cache_dir = dir.path().join("cache-dir");
+    let baseline_compression_level = 5;
+
+    let config_path = dir.path().join("cache-config.toml");
+    let config_content = format!(
+        "[cache]\n\
+         enabled = true\n\
+         directory = {}\n\
+         baseline-compression-level = {}\n",
+        toml::to_string_pretty(&format!("{}", cache_dir.display())).unwrap(),
+        baseline_compression_level,
+    );
+    fs::write(&config_path, config_content).expect("Failed to write test config file");
+
+    let errors = cache_config::init(true, Some(&config_path), false);
+    assert!(errors.is_empty());
+    assert!(cache_config::enabled());
     // assumption: config init creates cache directory and returns canonicalized path
     assert_eq!(
-        *conf::cache_directory(),
-        fs::canonicalize(dir.path()).unwrap()
+        *cache_config::directory(),
+        fs::canonicalize(cache_dir).unwrap()
     );
-    assert_eq!(conf::compression_level(), compression_level);
+    assert_eq!(
+        cache_config::baseline_compression_level(),
+        baseline_compression_level
+    );
 
     let mut rng = SmallRng::from_seed([
         0x42, 0x04, 0xF3, 0x44, 0x11, 0x22, 0x33, 0x44, 0x67, 0x68, 0xFF, 0x00, 0x44, 0x23, 0x7F,

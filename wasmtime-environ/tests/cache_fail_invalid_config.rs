@@ -3,11 +3,9 @@ use tempfile;
 use wasmtime_environ::cache_config;
 
 #[test]
-#[should_panic]
-fn test_cache_fail_calling_init_twice() {
+fn test_cache_fail_invalid_config() {
     let dir = tempfile::tempdir().expect("Can't create temporary directory");
-    let cache_dir = dir.path().join("cache-dir");
-    let baseline_compression_level = 5;
+    let baseline_compression_level = -4;
 
     let config_path = dir.path().join("cache-config.toml");
     let config_content = format!(
@@ -15,12 +13,11 @@ fn test_cache_fail_calling_init_twice() {
          enabled = true\n\
          directory = {}\n\
          baseline-compression-level = {}\n",
-        toml::to_string_pretty(&format!("{}", cache_dir.display())).unwrap(),
+        toml::to_string_pretty(&format!("{}", config_path.display())).unwrap(), // directory is a file -- incorrect!
         baseline_compression_level,
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
     let errors = cache_config::init(true, Some(&config_path), false);
-    assert!(errors.is_empty());
-    let _errors = cache_config::init(true, Some(&config_path), false);
+    assert!(!errors.is_empty());
 }
