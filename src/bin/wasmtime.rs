@@ -47,7 +47,7 @@ use std::rc::Rc;
 use wabt;
 use wasi_common::preopen_dir;
 use wasmtime_api::{Config, Engine, Instance, Module, Store};
-use wasmtime_environ::cache_conf;
+use wasmtime_environ::cache_config;
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 use wasmtime_wasi::instantiate_wasi;
@@ -64,18 +64,19 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache] [--cache-dir=<cache_dir>] [--cache-compression-level=<compr_level>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache] [--cache-dir=<cache_dir>] [--cache-compression-level=<compr_level>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
     wasmtime --help | --version
 
 Options:
     --invoke=<fn>       name of function to run
     -o, --optimize      runs optimization passes on the translated functions
-    -c, --cache         enable caching system, use default cache directory
-    --cache-dir=<cache_dir>
-                        enable caching system, use specified cache directory
-    --cache-compression-level=<compr_level>
-                        enable caching system, use custom compression level for new cache, values 1-21
+    -c, --cache         enable caching system, use default configuration
+    --cache-config=<cache_config_file>
+                        enable caching system, use specified cache configuration
+    --create-cache-config
+                        used with --cache or --cache-config, creates default configuration and writes it to the disk,
+                        will fail if specified file already exists (or default file if used with --cache)
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
@@ -94,9 +95,9 @@ struct Args {
     arg_file: String,
     arg_arg: Vec<String>,
     flag_optimize: bool,
-    flag_cache: bool,
-    flag_cache_dir: Option<String>,
-    flag_cache_compression_level: Option<i32>,
+    flag_cache: bool, // TODO change to disable cache after implementing cache eviction
+    flag_cache_config_file: Option<String>,
+    flag_create_cache_config: bool,
     flag_debug: bool,
     flag_g: bool,
     flag_enable_simd: bool,
@@ -201,7 +202,7 @@ fn main() {
     for cause in err.iter_causes() {
         eprintln!("    caused by: {}", cause);
     }
-    std::process::exit(1);
+    exit(1);
 }
 
 fn rmain() -> Result<(), Error> {
@@ -220,13 +221,19 @@ fn rmain() -> Result<(), Error> {
         wasmtime::init_file_per_thread_logger("wasmtime.dbg.");
     }
 
-    cache_conf::init(
-        args.flag_cache
-            || args.flag_cache_dir.is_some()
-            || args.flag_cache_compression_level.is_some(),
-        args.flag_cache_dir.as_ref(),
-        args.flag_cache_compression_level,
+    let errors = cache_config::init(
+        args.flag_cache || args.flag_cache_config_file.is_some(),
+        args.flag_cache_config_file.as_ref(),
+        args.flag_create_cache_config,
     );
+
+    if !errors.is_empty() {
+        eprintln!("Cache initialization failed. Errors:");
+        for e in errors {
+            eprintln!("-> {}", e);
+        }
+        exit(1);
+    }
 
     let mut flag_builder = settings::builder();
     let mut features: Features = Default::default();

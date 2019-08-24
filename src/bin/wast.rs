@@ -33,7 +33,7 @@ use pretty_env_logger;
 use serde::Deserialize;
 use std::path::Path;
 use std::process;
-use wasmtime_environ::cache_conf;
+use wasmtime_environ::cache_config;
 use wasmtime_jit::{Compiler, Features};
 use wasmtime_wast::WastContext;
 
@@ -41,18 +41,19 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    wast [-do] [--enable-simd] [--cache] [--cache-dir=<cache_dir>] [--cache-compression-level=<compr_level>] <file>...
+    wast [-do] [--enable-simd] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] <file>...
     wast --help | --version
 
 Options:
     -h, --help          print this help message
     --version           print the Cranelift version
     -o, --optimize      runs optimization passes on the translated functions
-    -c, --cache         enable caching system, use default cache directory
-    --cache-dir=<cache_dir>
-                        enable caching system, use specified cache directory
-    --cache-compression-level=<compr_level>
-                        enable caching system, use custom compression level for new cache, values 1-21
+    -c, --cache         enable caching system, use default configuration
+    --cache-config=<cache_config_file>
+                        enable caching system, use specified cache configuration
+    --create-cache-config
+                        used with --cache or --cache-config, creates default configuration and writes it to the disk,
+                        will fail if specified file already exists (or default file if used with --cache)
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
 ";
@@ -63,9 +64,9 @@ struct Args {
     flag_debug: bool,
     flag_function: Option<String>,
     flag_optimize: bool,
-    flag_cache: bool,
-    flag_cache_dir: Option<String>,
-    flag_cache_compression_level: Option<i32>,
+    flag_cache: bool, // TODO change to disable cache after implementing cache eviction
+    flag_cache_config_file: Option<String>,
+    flag_create_cache_config: bool,
     flag_enable_simd: bool,
 }
 
@@ -85,13 +86,19 @@ fn main() {
         wasmtime::init_file_per_thread_logger("cranelift.dbg.");
     }
 
-    cache_conf::init(
-        args.flag_cache
-            || args.flag_cache_dir.is_some()
-            || args.flag_cache_compression_level.is_some(),
-        args.flag_cache_dir.as_ref(),
-        args.flag_cache_compression_level,
+    let errors = cache_config::init(
+        args.flag_cache || args.flag_cache_config_file.is_some(),
+        args.flag_cache_config_file.as_ref(),
+        args.flag_create_cache_config,
     );
+
+    if !errors.is_empty() {
+        eprintln!("Cache initialization failed. Errors:");
+        for e in errors {
+            eprintln!("-> {}", e);
+        }
+        process::exit(1);
+    }
 
     let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");

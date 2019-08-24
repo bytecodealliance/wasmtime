@@ -15,138 +15,8 @@ use std::io;
 use std::path::PathBuf;
 use std::string::{String, ToString};
 
-/// Module for configuring the cache system.
-pub mod conf {
-    use directories::ProjectDirs;
-    use log::{debug, warn};
-    use spin::Once;
-    use std::fs;
-    use std::path::{Path, PathBuf};
-    use std::sync::atomic::{AtomicBool, Ordering};
-
-    struct Config {
-        pub cache_enabled: bool,
-        pub cache_dir: PathBuf,
-        pub compression_level: i32,
-    }
-
-    // Private static, so only internal function can access it.
-    static CONFIG: Once<Config> = Once::new();
-    static INIT_CALLED: AtomicBool = AtomicBool::new(false);
-    static DEFAULT_COMPRESSION_LEVEL: i32 = 0; // 0 for zstd means "use default level"
-
-    /// Returns true if and only if the cache is enabled.
-    pub fn cache_enabled() -> bool {
-        // Not everyone knows about the cache system, i.e. the tests,
-        // so the default is cache disabled.
-        CONFIG
-            .call_once(|| Config::new_cache_disabled())
-            .cache_enabled
-    }
-
-    /// Returns path to the cache directory.
-    ///
-    /// Panics if the cache is disabled.
-    pub fn cache_directory() -> &'static PathBuf {
-        &CONFIG
-            .r#try()
-            .expect("Cache system must be initialized")
-            .cache_dir
-    }
-
-    /// Returns cache compression level.
-    ///
-    /// Panics if the cache is disabled.
-    pub fn compression_level() -> i32 {
-        CONFIG
-            .r#try()
-            .expect("Cache system must be initialized")
-            .compression_level
-    }
-
-    /// Initializes the cache system. Should be called exactly once,
-    /// and before using the cache system. Otherwise it can panic.
-    pub fn init<P: AsRef<Path>>(enabled: bool, dir: Option<P>, compression_level: Option<i32>) {
-        INIT_CALLED
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .expect("Cache system init must be called at most once");
-        assert!(
-            CONFIG.r#try().is_none(),
-            "Cache system init must be called before using the system."
-        );
-        let conf = CONFIG.call_once(|| {
-            Config::new(
-                enabled,
-                dir,
-                compression_level.unwrap_or(DEFAULT_COMPRESSION_LEVEL),
-            )
-        });
-        debug!(
-            "Cache init(): enabled={}, cache-dir={:?}, compression-level={}",
-            conf.cache_enabled, conf.cache_dir, conf.compression_level,
-        );
-    }
-
-    impl Config {
-        pub fn new_cache_disabled() -> Self {
-            Self {
-                cache_enabled: false,
-                cache_dir: PathBuf::new(),
-                compression_level: DEFAULT_COMPRESSION_LEVEL,
-            }
-        }
-
-        pub fn new<P: AsRef<Path>>(enabled: bool, dir: Option<P>, compression_level: i32) -> Self {
-            if enabled {
-                match dir {
-                    Some(dir) => Self::new_step2(dir.as_ref(), compression_level),
-                    None => match ProjectDirs::from("", "CraneStation", "wasmtime") {
-                        Some(proj_dirs) => {
-                            Self::new_step2(proj_dirs.cache_dir(), compression_level)
-                        }
-                        None => {
-                            warn!("Cache directory not specified and failed to find the default. Disabling cache.");
-                            Self::new_cache_disabled()
-                        }
-                    },
-                }
-            } else {
-                Self::new_cache_disabled()
-            }
-        }
-
-        fn new_step2(dir: &Path, compression_level: i32) -> Self {
-            // On Windows, if we want long paths, we need '\\?\' prefix, but it doesn't work
-            // with relative paths. One way to get absolute path (the only one?) is to use
-            // fs::canonicalize, but it requires that given path exists. The extra advantage
-            // of this method is fact that the method prepends '\\?\' on Windows.
-            match fs::create_dir_all(dir) {
-                Ok(()) => match fs::canonicalize(dir) {
-                    Ok(p) => Self {
-                        cache_enabled: true,
-                        cache_dir: p,
-                        compression_level,
-                    },
-                    Err(err) => {
-                        warn!(
-                            "Failed to canonicalize the cache directory. Disabling cache. \
-                             Message: {}",
-                            err
-                        );
-                        Self::new_cache_disabled()
-                    }
-                },
-                Err(err) => {
-                    warn!(
-                        "Failed to create the cache directory. Disabling cache. Message: {}",
-                        err
-                    );
-                    Self::new_cache_disabled()
-                }
-            }
-        }
-    }
-}
+pub mod config;
+use config as cache_config; // so we have namespaced methods
 
 lazy_static! {
     static ref SELF_MTIME: String = {
@@ -205,7 +75,7 @@ impl ModuleCacheEntry {
         compiler_name: &str,
         generate_debug_info: bool,
     ) -> Self {
-        let mod_cache_path = if conf::cache_enabled() {
+        let mod_cache_path = if cache_config::enabled() {
             let hash = Sha256Hasher::digest(module, function_body_inputs);
             let compiler_dir = if cfg!(debug_assertions) {
                 format!(
@@ -227,7 +97,7 @@ impl ModuleCacheEntry {
                 mod_dbg = if generate_debug_info { ".d" } else { "" },
             );
             Some(
-                conf::cache_directory()
+                cache_config::directory()
                     .join(isa.triple().to_string())
                     .join(compiler_dir)
                     .join(mod_filename),
@@ -261,9 +131,12 @@ impl ModuleCacheEntry {
         let serialized_data = bincode::serialize(&data)
             .map_err(|err| warn!("Failed to serialize cached code: {}", err))
             .ok()?;
-        let compressed_data = zstd::encode_all(&serialized_data[..], conf::compression_level())
-            .map_err(|err| warn!("Failed to compress cached code: {}", err))
-            .ok()?;
+        let compressed_data = zstd::encode_all(
+            &serialized_data[..],
+            cache_config::baseline_compression_level(),
+        )
+        .map_err(|err| warn!("Failed to compress cached code: {}", err))
+        .ok()?;
 
         // Optimize syscalls: first, try writing to disk. It should succeed in most cases.
         // Otherwise, try creating the cache directory and retry writing to the file.
