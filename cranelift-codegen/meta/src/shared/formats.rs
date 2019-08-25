@@ -157,6 +157,7 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
             .imm(("src", regunit))
             .imm(("dst", regunit)),
     );
+    registry.insert(Builder::new("CopyToSsa").imm(("src", regunit)));
     registry.insert(
         Builder::new("RegSpill")
             .value()

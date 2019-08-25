@@ -340,6 +340,7 @@ pub fn define(
     let copy = shared.by_name("copy");
     let copy_nop = shared.by_name("copy_nop");
     let copy_special = shared.by_name("copy_special");
+    let copy_to_ssa = shared.by_name("copy_to_ssa");
     let ctz = shared.by_name("ctz");
     let debugtrap = shared.by_name("debugtrap");
     let extractlane = shared.by_name("extractlane");
@@ -352,6 +353,7 @@ pub fn define(
     let fdiv = shared.by_name("fdiv");
     let ffcmp = shared.by_name("ffcmp");
     let fill = shared.by_name("fill");
+    let fill_nop = shared.by_name("fill_nop");
     let floor = shared.by_name("floor");
     let fmul = shared.by_name("fmul");
     let fpromote = shared.by_name("fpromote");
@@ -468,7 +470,9 @@ pub fn define(
     let rec_fax = r.template("fax");
     let rec_fcmp = r.template("fcmp");
     let rec_fcscc = r.template("fcscc");
+    let rec_ffillnull = r.recipe("ffillnull");
     let rec_ffillSib32 = r.template("ffillSib32");
+    let rec_fillnull = r.recipe("fillnull");
     let rec_fillSib32 = r.template("fillSib32");
     let rec_fld = r.template("fld");
     let rec_fldDisp32 = r.template("fldDisp32");
@@ -490,6 +494,7 @@ pub fn define(
     let rec_fstWithIndexDisp32 = r.template("fstWithIndexDisp32");
     let rec_fstWithIndexDisp8 = r.template("fstWithIndexDisp8");
     let rec_furm = r.template("furm");
+    let rec_furm_reg_to_ssa = r.template("furm_reg_to_ssa");
     let rec_furmi_rnd = r.template("furmi_rnd");
     let rec_got_fnaddr8 = r.template("got_fnaddr8");
     let rec_got_gvaddr8 = r.template("got_gvaddr8");
@@ -568,6 +573,7 @@ pub fn define(
     let rec_trapff = r.recipe("trapff");
     let rec_u_id = r.template("u_id");
     let rec_umr = r.template("umr");
+    let rec_umr_reg_to_ssa = r.template("umr_reg_to_ssa");
     let rec_ur = r.template("ur");
     let rec_urm = r.template("urm");
     let rec_urm_noflags = r.template("urm_noflags");
@@ -921,6 +927,18 @@ pub fn define(
     e.enc_r32_r64(fill, rec_fillSib32.opcodes(vec![0x8b]));
     e.enc_r32_r64(regfill, rec_regfill32.opcodes(vec![0x8b]));
 
+    // No-op fills, created by late-stage redundant-fill removal.
+    for &ty in &[I64, I32, I16, I8] {
+        e.enc64_rec(fill_nop.bind(ty), rec_fillnull, 0);
+        e.enc32_rec(fill_nop.bind(ty), rec_fillnull, 0);
+    }
+    e.enc64_rec(fill_nop.bind(B1), rec_fillnull, 0);
+    e.enc32_rec(fill_nop.bind(B1), rec_fillnull, 0);
+    for &ty in &[F64, F32] {
+        e.enc64_rec(fill_nop.bind(ty), rec_ffillnull, 0);
+        e.enc32_rec(fill_nop.bind(ty), rec_ffillnull, 0);
+    }
+
     // Load 32 bits from `b1`, `i8` and `i16` spill slots. See `spill.b1` above.
 
     e.enc_both(fill.bind(B1), rec_fillSib32.opcodes(vec![0x8b]));
@@ -942,6 +960,24 @@ pub fn define(
     // special regunit immediate operands with the current constraint language.
     e.enc64(copy_special, rec_copysp.opcodes(vec![0x89]).rex().w());
     e.enc32(copy_special, rec_copysp.opcodes(vec![0x89]));
+
+    // Copy to SSA
+    e.enc_i32_i64(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(vec![0x89]));
+    e.enc_r32_r64(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(vec![0x89]));
+    e.enc_both(copy_to_ssa.bind(B1), rec_umr_reg_to_ssa.opcodes(vec![0x89]));
+    e.enc_both(copy_to_ssa.bind(I8), rec_umr_reg_to_ssa.opcodes(vec![0x89]));
+    e.enc_both(
+        copy_to_ssa.bind(I16),
+        rec_umr_reg_to_ssa.opcodes(vec![0x89]),
+    );
+    e.enc_both(
+        copy_to_ssa.bind(F64),
+        rec_furm_reg_to_ssa.opcodes(vec![0xf2, 0x0f, 0x10]),
+    );
+    e.enc_both(
+        copy_to_ssa.bind(F32),
+        rec_furm_reg_to_ssa.opcodes(vec![0xf3, 0x0f, 0x10]),
+    );
 
     // Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
     // into a no-op.

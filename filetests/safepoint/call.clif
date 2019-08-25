@@ -41,6 +41,7 @@ ebb1:
 ; nextln:   v3 = spill v10
 ; nextln:   brz v2, ebb1
 ; nextln:   v11 = fill v1
+; nextln:   regmove v11, %r15 -> %rax
 ; nextln:   return v11
 ; nextln: 
 ; nextln: ebb1:
@@ -48,5 +49,6 @@ ebb1:
 ; nextln:   safepoint v3
 ; nextln:   v4 = call_indirect sig1, v8()
 ; nextln:   v12 = fill.r64 v3
+; nextln:   regmove v12, %r15 -> %rax
 ; nextln:   return v12
 ; nextln: }

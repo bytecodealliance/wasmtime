@@ -126,6 +126,7 @@ impl RegisterSet {
 }
 
 /// Iterator over available registers in a register class.
+#[derive(Clone)]
 pub struct RegSetIter {
     regs: RegUnitMask,
 }
@@ -158,6 +159,31 @@ impl Iterator for RegSetIter {
     fn size_hint(&self) -> (usize, Option<usize>) {
         let bits = self.regs.iter().map(|&w| w.count_ones() as usize).sum();
         (bits, Some(bits))
+    }
+}
+
+impl RegSetIter {
+    pub fn rnext(&mut self) -> Option<RegUnit> {
+        let num_words = self.regs.len();
+        let bits_per_word = 8 * size_of_val(&self.regs[0]);
+
+        // Find the last set bit in `self.regs`.
+        for i in 0..num_words {
+            let word_ix = num_words - 1 - i;
+
+            let word = &mut self.regs[word_ix];
+            if *word != 0 {
+                let lzeroes = word.leading_zeros() as usize;
+
+                // Clear that highest bit so we won't find it again.
+                *word &= !(1 << (bits_per_word - 1 - lzeroes));
+
+                return Some((word_ix * bits_per_word + bits_per_word - 1 - lzeroes) as RegUnit);
+            }
+        }
+
+        // All of `self.regs` is 0.
+        None
     }
 }
 
@@ -260,6 +286,45 @@ mod tests {
         banks: &[],
         classes: &[],
     };
+
+    const RSI_1: RegSetIter = RegSetIter {
+        regs: [0x31415927, 0x27182818, 0x14141356],
+    };
+
+    const RSI_2: RegSetIter = RegSetIter {
+        regs: [0x00000000, 0x00000000, 0x00000000],
+    };
+
+    const RSI_3: RegSetIter = RegSetIter {
+        regs: [0xffffffff, 0xffffffff, 0xffffffff],
+    };
+
+    fn reverse_regset_iteration_work(rsi: &RegSetIter) {
+        // Check the reverse iterator by comparing its output with the forward iterator.
+        let rsi_f = (*rsi).clone();
+        let results_f = rsi_f.collect::<Vec<_>>();
+
+        let mut rsi_r = (*rsi).clone();
+        let mut results_r = Vec::<RegUnit>::new();
+        while let Some(r) = rsi_r.rnext() {
+            results_r.push(r);
+        }
+
+        let len_f = results_f.len();
+        let len_r = results_r.len();
+        assert_eq!(len_f, len_r);
+
+        for i in 0..len_f {
+            assert_eq!(results_f[i], results_r[len_f - 1 - i]);
+        }
+    }
+
+    #[test]
+    fn reverse_regset_iteration() {
+        reverse_regset_iteration_work(&RSI_1);
+        reverse_regset_iteration_work(&RSI_2);
+        reverse_regset_iteration_work(&RSI_3);
+    }
 
     #[test]
     fn put_and_take() {

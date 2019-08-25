@@ -63,6 +63,7 @@ pub fn define<'formats>(
     let f_branch_icmp = formats.by_name("BranchIcmp");
     let f_call = formats.by_name("Call");
     let f_call_indirect = formats.by_name("CallIndirect");
+    let f_copy_to_ssa = formats.by_name("CopyToSsa");
     let f_int_compare = formats.by_name("IntCompare");
     let f_int_compare_imm = formats.by_name("IntCompareImm");
     let f_jump = formats.by_name("Jump");
@@ -185,6 +186,14 @@ pub fn define<'formats>(
             .emit("put_i(bits, src, 0, dst, sink);"),
     );
 
+    // Same for copy-to-SSA -- GPR regmove.
+    recipes.push(
+        EncodingRecipeBuilder::new("copytossa", f_copy_to_ssa, 4)
+            // No operands_in to mention, because a source register is specified directly.
+            .operands_out(vec![gpr])
+            .emit("put_i(bits, src, 0, out_reg0, sink);"),
+    );
+
     // U-type instructions have a 20-bit immediate that targets bits 12-31.
     let format = formats.get(f_unary_imm);
     recipes.push(
@@ -268,6 +277,15 @@ pub fn define<'formats>(
         EncodingRecipeBuilder::new("stacknull", f_unary, 0)
             .operands_in(vec![Stack::new(gpr)])
             .operands_out(vec![Stack::new(gpr)])
+            .emit(""),
+    );
+
+    // No-op fills, created by late-stage redundant-fill removal.
+    recipes.push(
+        EncodingRecipeBuilder::new("fillnull", f_unary, 0)
+            .operands_in(vec![Stack::new(gpr)])
+            .operands_out(vec![gpr])
+            .clobbers_flags(false)
             .emit(""),
     );
 

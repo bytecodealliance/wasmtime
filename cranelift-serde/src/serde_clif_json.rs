@@ -210,6 +210,10 @@ pub enum SerInstData {
         src: String,
         dst: String,
     },
+    CopyToSsa {
+        opcode: String,
+        src: String,
+    },
     RegSpill {
         opcode: String,
         arg: String,
@@ -650,6 +654,10 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             opcode: opcode.to_string(),
             src: src.to_string(),
             dst: dst.to_string(),
+        },
+        InstructionData::CopyToSsa { opcode, src } => SerInstData::CopyToSsa {
+            opcode: opcode.to_string(),
+            src: src.to_string(),
         },
         InstructionData::RegSpill {
             opcode,
