@@ -23,6 +23,7 @@ use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::postopt::do_postopt;
+use crate::redundant_reload_remover::RedundantReloadRemover;
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings::{FlagsOrIsa, OptLevel};
@@ -50,6 +51,9 @@ pub struct Context {
 
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
+
+    /// Redundant-reload remover context.
+    pub redundant_reload_remover: RedundantReloadRemover,
 }
 
 impl Context {
@@ -72,6 +76,7 @@ impl Context {
             domtree: DominatorTree::new(),
             regalloc: regalloc::Context::new(),
             loop_analysis: LoopAnalysis::new(),
+            redundant_reload_remover: RedundantReloadRemover::new(),
         }
     }
 
@@ -82,6 +87,7 @@ impl Context {
         self.domtree.clear();
         self.regalloc.clear();
         self.loop_analysis.clear();
+        self.redundant_reload_remover.clear();
     }
 
     /// Compile the function, and emit machine code into a `Vec<u8>`.
@@ -149,6 +155,7 @@ impl Context {
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         if isa.flags().opt_level() == OptLevel::Best {
+            self.redundant_reload_remover(isa)?;
             self.shrink_instructions(isa)?;
         }
         self.relax_branches(isa)
@@ -319,6 +326,14 @@ impl Context {
         isa.prologue_epilogue(&mut self.func)?;
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
+        Ok(())
+    }
+
+    /// Do redundant-reload removal after allocation of both registers and stack slots.
+    pub fn redundant_reload_remover(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        self.redundant_reload_remover
+            .run(isa, &mut self.func, &self.cfg);
+        self.verify_if(isa)?;
         Ok(())
     }
 

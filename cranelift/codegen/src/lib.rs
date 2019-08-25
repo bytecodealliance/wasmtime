@@ -95,6 +95,7 @@ mod nan_canonicalization;
 mod partition_slice;
 mod postopt;
 mod predicates;
+mod redundant_reload_remover;
 mod ref_slice;
 mod regalloc;
 mod result;

@@ -45,7 +45,25 @@ where
 
     /// Is this set completely empty?
     pub fn is_empty(&self) -> bool {
+        // Note that this implementation will become incorrect should it ever become possible
+        // to remove elements from an `EntitySet`.
         self.len == 0
+    }
+
+    /// Returns the cardinality of the set.  More precisely, it returns the number of calls to
+    /// `insert` with different key values, that have happened since the the set was most recently
+    /// `clear`ed or created with `new`.
+    pub fn cardinality(&self) -> usize {
+        let mut n: usize = 0;
+        for byte_ix in 0..self.len / 8 {
+            n += self.elems[byte_ix].count_ones() as usize;
+        }
+        for bit_ix in (self.len / 8) * 8..self.len {
+            if (self.elems[bit_ix / 8] & (1 << (bit_ix % 8))) != 0 {
+                n += 1;
+            }
+        }
+        n
     }
 
     /// Remove all entries from this set.

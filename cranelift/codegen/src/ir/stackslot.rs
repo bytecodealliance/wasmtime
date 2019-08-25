@@ -209,11 +209,6 @@ impl StackSlots {
         self.slots.is_valid(ss)
     }
 
-    /// Set the offset of a stack slot.
-    pub fn set_offset(&mut self, ss: StackSlot, offset: StackOffset) {
-        self.slots[ss].offset = Some(offset);
-    }
-
     /// Get an iterator over all the stack slot keys.
     pub fn iter(&self) -> Iter<StackSlot, StackSlotData> {
         self.slots.iter()
