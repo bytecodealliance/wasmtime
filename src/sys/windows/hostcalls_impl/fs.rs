@@ -288,11 +288,11 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_
             .modified()
             .map_err(errno_from_ioerror)
             .and_then(systemtime_to_timestamp)?,
-        st_filetype: filetype(&metadata).map_err(errno_from_ioerror)?,
+        st_filetype: filetype(&metadata)?,
     })
 }
 
-fn filetype(metadata: &Metadata) -> io::Result<host::__wasi_filetype_t> {
+fn filetype(_file: &File, metadata: &Metadata) -> Result<host::__wasi_filetype_t> {
     let ftype = metadata.file_type();
     let ret = if ftype.is_file() {
         host::__WASI_FILETYPE_REGULAR_FILE

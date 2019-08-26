@@ -339,29 +339,35 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_
             .modified()
             .map_err(errno_from_ioerror)
             .and_then(systemtime_to_timestamp)?,
-        st_filetype: filetype(&metadata),
+        st_filetype: filetype(file, &metadata)?,
     })
 }
 
-fn filetype(metadata: &Metadata) -> host::__wasi_filetype_t {
+fn filetype(file: &File, metadata: &Metadata) -> Result<host::__wasi_filetype_t> {
     use std::os::unix::fs::FileTypeExt;
+    use nix::sys::socket::{self, SockType};
     let ftype = metadata.file_type();
     if ftype.is_file() {
-        host::__WASI_FILETYPE_REGULAR_FILE
+        Ok(host::__WASI_FILETYPE_REGULAR_FILE)
     } else if ftype.is_dir() {
-        host::__WASI_FILETYPE_DIRECTORY
+        Ok(host::__WASI_FILETYPE_DIRECTORY)
     } else if ftype.is_symlink() {
-        host::__WASI_FILETYPE_SYMBOLIC_LINK
+        Ok(host::__WASI_FILETYPE_SYMBOLIC_LINK)
     } else if ftype.is_char_device() {
-        host::__WASI_FILETYPE_CHARACTER_DEVICE
+        Ok(host::__WASI_FILETYPE_CHARACTER_DEVICE)
     } else if ftype.is_block_device() {
-        host::__WASI_FILETYPE_BLOCK_DEVICE
-    } else if ftype.is_socket() || ftype.is_fifo() {
-        // TODO we should use getsockopt to find out if it's
-        // SOCKET_STREAM or SOCKET_DGRAM
-        host::__WASI_FILETYPE_SOCKET_STREAM
+        Ok(host::__WASI_FILETYPE_BLOCK_DEVICE)
+    } else if ftype.is_fifo() {
+        Ok(host::__WASI_FILETYPE_SOCKET_STREAM)
+    } else if ftype.is_socket() {
+        match socket::getsockopt(file.as_raw_fd(), socket::sockopt::SockType).map_err(|err|
+            err.as_errno().unwrap()).map_err(host_impl::errno_from_nix)? {
+                SockType::Datagram => Ok(host::__WASI_FILETYPE_SOCKET_DGRAM),
+                SockType::Stream => Ok(host::__WASI_FILETYPE_SOCKET_STREAM),
+                _ => Ok(host::__WASI_FILETYPE_UNKNOWN),
+            }
     } else {
-        host::__WASI_FILETYPE_UNKNOWN
+        Ok(host::__WASI_FILETYPE_UNKNOWN)
     }
 }
 
