@@ -288,7 +288,7 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_
             .modified()
             .map_err(errno_from_ioerror)
             .and_then(systemtime_to_timestamp)?,
-        st_filetype: filetype(&metadata)?,
+        st_filetype: filetype(file, &metadata)?,
     })
 }
 
