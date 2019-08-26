@@ -1,43 +1,7 @@
 use cranelift_codegen::ir::types::{Type, I32, I64};
-use wasi_common::{host, hostcalls, memory, wasm32, WasiCtx};
+use log::trace;
+use wasi_common::{hostcalls, wasm32, WasiCtx};
 use wasmtime_runtime::{Export, VMContext};
-
-fn return_encoded_errno(e: host::__wasi_errno_t) -> wasm32::__wasi_errno_t {
-    let errno = memory::enc_errno(e);
-    trace!("    -> errno={}", wasm32::strerror(errno));
-    errno
-}
-
-fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, host::__wasi_errno_t> {
-    unsafe {
-        vmctx.host_state().downcast_mut::<WasiCtx>().ok_or_else(|| {
-            println!("!!! no host state named WasiCtx available");
-            host::__WASI_EINVAL
-        })
-    }
-}
-
-fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], host::__wasi_errno_t> {
-    unsafe {
-        match vmctx.lookup_global_export("memory") {
-            Some(Export::Memory {
-                definition,
-                vmctx: _,
-                memory: _,
-            }) => Ok(std::slice::from_raw_parts_mut(
-                (*definition).base,
-                (*definition).current_length,
-            )),
-            x => {
-                println!(
-                    "!!! no export named \"memory\", or the export isn't a mem: {:?}",
-                    x
-                );
-                Err(host::__WASI_EINVAL)
-            }
-        }
-    }
-}
 
 pub trait AbiRet {
     type Abi;
@@ -110,6 +74,49 @@ impl AbiRet for () {
     }
 }
 
+fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasm32::__wasi_errno_t> {
+    unsafe {
+        vmctx.host_state().downcast_mut::<WasiCtx>().ok_or_else(|| {
+            println!("!!! no host state named WasiCtx available");
+            wasm32::__WASI_EINVAL
+        })
+    }
+}
+
+fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasm32::__wasi_errno_t> {
+    unsafe {
+        match vmctx.lookup_global_export("memory") {
+            Some(Export::Memory {
+                definition,
+                vmctx: _,
+                memory: _,
+            }) => Ok(std::slice::from_raw_parts_mut(
+                (*definition).base,
+                (*definition).current_length,
+            )),
+            x => {
+                println!(
+                    "!!! no export named \"memory\", or the export isn't a mem: {:?}",
+                    x
+                );
+                Err(wasm32::__WASI_EINVAL)
+            }
+        }
+    }
+}
+
+macro_rules! ok_or_errno {
+    ($expr:expr) => {
+        match $expr {
+            Ok(v) => v,
+            Err(e) => {
+                trace!("    -> errno={}", wasm32::strerror(e));
+                return e;
+            }
+        }
+    };
+}
+
 macro_rules! syscalls {
     ($(pub unsafe extern "C" fn $name:ident($ctx:ident: *mut VMContext $(, $arg:ident: $ty:ty)*,) -> $ret:ty {
         $($body:tt)*
@@ -164,17 +171,8 @@ syscalls! {
             argv,
             argv_buf,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::args_get(wasi_ctx, memory, argv, argv_buf)
     }
 
@@ -188,17 +186,8 @@ syscalls! {
             argc,
             argv_buf_size,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::args_sizes_get(wasi_ctx, memory, argc, argv_buf_size)
     }
 
@@ -212,12 +201,7 @@ syscalls! {
             clock_id,
             resolution,
         );
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::clock_res_get(memory, clock_id, resolution)
     }
 
@@ -233,12 +217,7 @@ syscalls! {
             precision,
             time,
         );
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::clock_time_get(memory, clock_id, precision, time)
     }
 
@@ -252,17 +231,8 @@ syscalls! {
             environ,
             environ_buf,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::environ_get(wasi_ctx, memory, environ, environ_buf)
     }
 
@@ -276,17 +246,8 @@ syscalls! {
             environ_count,
             environ_buf_size,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::environ_sizes_get(wasi_ctx, memory, environ_count, environ_buf_size)
     }
 
@@ -296,17 +257,8 @@ syscalls! {
         buf: wasm32::uintptr_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_prestat_get(fd={:?}, buf={:#x?})", fd, buf);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_prestat_get(wasi_ctx, memory, fd, buf)
     }
 
@@ -317,17 +269,8 @@ syscalls! {
         path_len: wasm32::size_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_prestat_dir_name(fd={:?}, path={:#x?}, path_len={})", fd, path, path_len);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_prestat_dir_name(wasi_ctx, memory, fd, path, path_len)
     }
 
@@ -336,12 +279,7 @@ syscalls! {
         fd: wasm32::__wasi_fd_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_close(fd={:?})", fd);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_close(wasi_ctx, fd)
     }
 
@@ -350,12 +288,7 @@ syscalls! {
         fd: wasm32::__wasi_fd_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_datasync(fd={:?})", fd);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_datasync(wasi_ctx, fd)
     }
 
@@ -375,17 +308,8 @@ syscalls! {
             offset,
             nread
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_pread(
             wasi_ctx,
             memory,
@@ -413,17 +337,8 @@ syscalls! {
             offset,
             nwritten
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_pwrite(
             wasi_ctx,
             memory,
@@ -449,17 +364,8 @@ syscalls! {
             iovs_len,
             nread
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_read(wasi_ctx, memory, fd, iovs, iovs_len, nread)
     }
 
@@ -469,12 +375,7 @@ syscalls! {
         to: wasm32::__wasi_fd_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_renumber(from={:?}, to={:?})", from, to);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_renumber(wasi_ctx, from, to)
     }
 
@@ -492,17 +393,8 @@ syscalls! {
             wasm32::whence_to_str(whence),
             newoffset
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_seek(wasi_ctx, memory, fd, offset, whence, newoffset)
     }
 
@@ -512,17 +404,8 @@ syscalls! {
         newoffset: wasm32::uintptr_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_tell(wasi_ctx, memory, fd, newoffset)
     }
 
@@ -532,17 +415,8 @@ syscalls! {
         buf: wasm32::uintptr_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_fdstat_get(fd={:?}, buf={:#x?})", fd, buf);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_fdstat_get(wasi_ctx, memory, fd, buf)
     }
 
@@ -556,12 +430,7 @@ syscalls! {
             fd,
             flags
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_fdstat_set_flags(wasi_ctx, fd, flags)
     }
 
@@ -577,12 +446,7 @@ syscalls! {
             fs_rights_base,
             fs_rights_inheriting
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_fdstat_set_rights(
             wasi_ctx,
             fd,
@@ -596,12 +460,7 @@ syscalls! {
         fd: wasm32::__wasi_fd_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_sync(fd={:?})", fd);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_sync(wasi_ctx, fd)
     }
 
@@ -619,17 +478,8 @@ syscalls! {
             iovs_len,
             nwritten
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_write(wasi_ctx, memory, fd, iovs, iovs_len, nwritten)
     }
 
@@ -647,12 +497,7 @@ syscalls! {
             len,
             advice
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_advise(wasi_ctx,  fd, offset, len, advice)
     }
 
@@ -663,12 +508,7 @@ syscalls! {
         len: wasm32::__wasi_filesize_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_allocate(fd={:?}, offset={}, len={})", fd, offset, len);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_allocate(wasi_ctx, fd, offset, len)
     }
 
@@ -684,17 +524,8 @@ syscalls! {
             path,
             path_len,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_create_directory(wasi_ctx, memory, fd, path, path_len)
     }
 
@@ -718,17 +549,8 @@ syscalls! {
             path1,
             path_len1
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_link(
             wasi_ctx,
             memory,
@@ -768,17 +590,8 @@ syscalls! {
             fs_flags,
             fd
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_open(
             wasi_ctx,
             memory,
@@ -810,17 +623,8 @@ syscalls! {
             cookie,
             buf_used,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_readdir(
             wasi_ctx,
             memory,
@@ -850,17 +654,8 @@ syscalls! {
             buf_len,
             buf_used,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_readlink(
             wasi_ctx,
             memory,
@@ -891,17 +686,8 @@ syscalls! {
             path1,
             path_len1,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_rename(
             wasi_ctx,
             memory,
@@ -920,17 +706,8 @@ syscalls! {
         buf: wasm32::uintptr_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("fd_filestat_get(fd={:?}, buf={:#x?})", fd, buf);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::fd_filestat_get(wasi_ctx, memory, fd, buf)
     }
 
@@ -947,12 +724,7 @@ syscalls! {
             st_atim, st_mtim,
             fstflags
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_filestat_set_times(wasi_ctx, fd, st_atim, st_mtim, fstflags)
     }
 
@@ -966,12 +738,7 @@ syscalls! {
             fd,
             size
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_filestat_set_size(wasi_ctx, fd, size)
     }
 
@@ -991,17 +758,8 @@ syscalls! {
             path_len,
             buf
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_filestat_get(wasi_ctx, memory, fd, flags, path, path_len, buf)
     }
 
@@ -1024,17 +782,8 @@ syscalls! {
             st_atim, st_mtim,
             fstflags
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_filestat_set_times(
             wasi_ctx,
             memory,
@@ -1064,17 +813,8 @@ syscalls! {
             path1,
             path_len1
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_symlink(
             wasi_ctx,
             memory,
@@ -1098,17 +838,8 @@ syscalls! {
             path,
             path_len
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_unlink_file(wasi_ctx, memory, fd, path, path_len)
     }
 
@@ -1124,17 +855,8 @@ syscalls! {
             path,
             path_len
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::path_remove_directory(wasi_ctx, memory, fd, path, path_len)
     }
 
@@ -1152,18 +874,12 @@ syscalls! {
             nsubscriptions,
             nevents,
         );
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::poll_oneoff(memory, in_, out, nsubscriptions, nevents)
     }
 
     pub unsafe extern "C" fn proc_exit(_vmctx: *mut VMContext, rval: u32,) -> () {
         trace!("proc_exit(rval={:?})", rval);
-
         hostcalls::proc_exit(rval)
     }
 
@@ -1172,17 +888,8 @@ syscalls! {
         sig: wasm32::__wasi_signal_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("proc_raise(sig={:?})", sig);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::proc_raise(wasi_ctx, memory, sig)
     }
 
@@ -1192,18 +899,12 @@ syscalls! {
         buf_len: wasm32::size_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("random_get(buf={:#x?}, buf_len={:?})", buf, buf_len);
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::random_get(memory, buf, buf_len)
     }
 
     pub unsafe extern "C" fn sched_yield(_vmctx: *mut VMContext,) -> wasm32::__wasi_errno_t {
         trace!("sched_yield(void)");
-
         hostcalls::sched_yield()
     }
 
@@ -1222,17 +923,8 @@ syscalls! {
             ri_data, ri_data_len, ri_flags,
             ro_datalen, ro_flags
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::sock_recv(
             wasi_ctx,
             memory,
@@ -1258,17 +950,8 @@ syscalls! {
             sock,
             si_data, si_data_len, si_flags, so_datalen,
         );
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::sock_send(
             wasi_ctx,
             memory,
@@ -1286,17 +969,8 @@ syscalls! {
         how: wasm32::__wasi_sdflags_t,
     ) -> wasm32::__wasi_errno_t {
         trace!("sock_shutdown(sock={:?}, how={:?})", sock, how);
-
-        let wasi_ctx = match get_wasi_ctx(&mut *vmctx) {
-            Ok(ctx) => ctx,
-            Err(e) => return return_encoded_errno(e),
-        };
-
-        let memory = match get_memory(&mut *vmctx) {
-            Ok(memory) => memory,
-            Err(e) => return return_encoded_errno(e),
-        };
-
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
+        let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::sock_shutdown(wasi_ctx, memory, sock, how)
     }
 }

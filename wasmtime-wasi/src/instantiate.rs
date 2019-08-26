@@ -1,3 +1,4 @@
+use super::syscalls;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
@@ -6,7 +7,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::rc::Rc;
-use syscalls;
 use target_lexicon::HOST;
 use wasi_common::WasiCtxBuilder;
 use wasmtime_environ::{translate_signature, Export, Module};
