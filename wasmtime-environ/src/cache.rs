@@ -231,7 +231,7 @@ impl ModuleCacheEntry {
             );
             Some(
                 conf::cache_directory()
-                    .join(isa.name())
+                    .join(isa.triple().to_string())
                     .join(compiler_dir)
                     .join(mod_filename),
             )
