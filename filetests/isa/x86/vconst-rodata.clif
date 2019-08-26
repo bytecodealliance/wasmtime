@@ -1,6 +1,5 @@
 test rodata
 set enable_simd=true
-set probestack_enabled=false
 target x86_64 haswell
 
 function %test_vconst_i32() -> i32x4 {

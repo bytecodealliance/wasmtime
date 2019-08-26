@@ -45,6 +45,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let selectif = insts.by_name("selectif");
     let smulhi = insts.by_name("smulhi");
     let splat = insts.by_name("splat");
+    let shuffle = insts.by_name("shuffle");
     let srem = insts.by_name("srem");
     let udiv = insts.by_name("udiv");
     let umulhi = insts.by_name("umulhi");
@@ -380,6 +381,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         );
     }
 
+    narrow.custom_legalize(shuffle, "convert_shuffle");
     narrow.custom_legalize(extractlane, "convert_extractlane");
     narrow.custom_legalize(insertlane, "convert_insertlane");
 

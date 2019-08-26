@@ -1,4 +1,3 @@
-use cranelift_codegen::ir::immediates::Uimm128;
 use cranelift_codegen::ir::{Ebb, Function, Inst, InstructionData, Signature};
 use serde_derive::{Deserialize, Serialize};
 
@@ -58,6 +57,11 @@ pub enum SerInstData {
         opcode: String,
         arg: String,
         lane: String,
+    },
+    Shuffle {
+        opcode: String,
+        args: [String; 2],
+        mask: String,
     },
     IntCompare {
         opcode: String,
@@ -262,14 +266,6 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             opcode: opcode.to_string(),
             imm: imm.to_string(),
         },
-        InstructionData::UnaryImm128 { opcode, imm } => {
-            let data = func.dfg.constants.get(imm);
-            let uimm128 = Uimm128::from(&data[..]);
-            SerInstData::UnaryImm {
-                opcode: opcode.to_string(),
-                imm: uimm128.to_string(),
-            }
-        }
         InstructionData::UnaryIeee32 { opcode, imm } => SerInstData::UnaryIeee32 {
             opcode: opcode.to_string(),
             imm: imm.to_string(),
@@ -340,6 +336,28 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             arg: arg.to_string(),
             lane: lane.to_string(),
         },
+        InstructionData::UnaryConst {
+            opcode,
+            constant_handle,
+        } => {
+            let constant = func.dfg.constants.get(constant_handle);
+            SerInstData::UnaryImm {
+                opcode: opcode.to_string(),
+                imm: format!("{:?}", constant),
+            }
+        }
+        InstructionData::Shuffle { opcode, args, mask } => {
+            let mask = func
+                .dfg
+                .immediates
+                .get(mask)
+                .expect("Expected shuffle mask to already be inserted in immediate mapping");
+            SerInstData::Shuffle {
+                opcode: opcode.to_string(),
+                args: [args[0].to_string(), args[1].to_string()],
+                mask: format!("{:?}", mask),
+            }
+        }
         InstructionData::IntCompare { opcode, args, cond } => {
             let hold_args = [args[0].to_string(), args[1].to_string()];
             SerInstData::IntCompare {

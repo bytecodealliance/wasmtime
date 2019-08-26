@@ -1785,7 +1785,7 @@ pub(crate) fn define(
     let allowed_simd_type = |t: &LaneType| t.lane_bits() >= 8 && t.lane_bits() < 128;
 
     // PSHUFB, 8-bit shuffle using two XMM registers.
-    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let instruction = x86_pshufb.bind_vector_from_lane(ty, sse_vector_size);
         let template = rec_fa.nonrex().opcodes(vec![0x66, 0x0f, 0x38, 00]);
         e.enc32_isap(instruction.clone(), template.clone(), use_ssse3_simd);
@@ -1804,7 +1804,7 @@ pub(crate) fn define(
 
     // SIMD scalar_to_vector; this uses MOV to copy the scalar value to an XMM register; according
     // to the Intel manual: "When the destination operand is an XMM register, the source operand is
-    // written to the low doubleword of the register and the regiser is zero-extended to 128 bits."
+    // written to the low doubleword of the register and the register is zero-extended to 128 bits."
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let instruction = scalar_to_vector.bind_vector_from_lane(ty, sse_vector_size);
         if ty.is_float() {
@@ -1926,6 +1926,13 @@ pub(crate) fn define(
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let instruction = vconst.bind_vector_from_lane(ty, sse_vector_size);
         let template = rec_vconst.nonrex().opcodes(vec![0x0f, 0x10]);
+        e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
+    }
+
+    // SIMD bor using ORPS
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let instruction = bor.bind_vector_from_lane(ty, sse_vector_size);
+        let template = rec_fa.nonrex().opcodes(vec![0x0f, 0x56]);
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
     }
 

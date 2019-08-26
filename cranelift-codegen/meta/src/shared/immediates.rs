@@ -23,6 +23,12 @@ pub(crate) struct Immediates {
     /// const.
     pub uimm128: OperandKind,
 
+    /// A constant stored in the constant pool.
+    ///
+    /// This operand is used to pass constants to instructions like vconst while storing the
+    /// actual bytes in the constant pool.
+    pub pool_constant: OperandKind,
+
     /// A 32-bit immediate signed offset.
     ///
     /// This is used to represent an immediate address offset in load/store instructions.
@@ -84,6 +90,12 @@ impl Immediates {
 
             uimm128: Builder::new_imm("uimm128")
                 .doc("A 128-bit immediate unsigned integer.")
+                .rust_type("ir::Immediate")
+                .build(),
+
+            pool_constant: Builder::new_imm("poolConstant")
+                .doc("A constant stored in the constant pool.")
+                .default_member("constant_handle")
                 .rust_type("ir::Constant")
                 .build(),
 
