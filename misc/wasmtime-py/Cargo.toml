@@ -24,7 +24,7 @@ wasmtime-runtime = { path = "../../wasmtime-runtime" }
 target-lexicon = { version = "0.4.0", default-features = false }
 failure = "0.1"
 region = "2.0.0"
-wasmparser = "0.36.0"
+wasmparser = "0.37.1"
 
 [dependencies.pyo3]
 version = "0.7.0-alpha.1"
