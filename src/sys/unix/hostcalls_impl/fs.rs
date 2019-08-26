@@ -5,7 +5,7 @@ use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::PathGet;
 use crate::sys::errno_from_ioerror;
 use crate::sys::host_impl;
-use crate::{host, wasm32, Result};
+use crate::{host, Result};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
 use std::ffi::CString;
@@ -213,7 +213,7 @@ pub(crate) fn fd_readdir(
     host_buf: &mut [u8],
     cookie: host::__wasi_dircookie_t,
 ) -> Result<usize> {
-    use libc::{dirent, fdopendir, memcpy, readdir_r, seekdir};
+    use libc::{dirent, fdopendir, memcpy, readdir_r, rewinddir, seekdir};
 
     let host_buf_ptr = host_buf.as_mut_ptr();
     let host_buf_len = host_buf.len();
@@ -221,9 +221,15 @@ pub(crate) fn fd_readdir(
     if dir.is_null() {
         return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
     }
-    if cookie != wasm32::__WASI_DIRCOOKIE_START {
+
+    if cookie != host::__WASI_DIRCOOKIE_START {
         unsafe { seekdir(dir, cookie as c_long) };
+    } else {
+        // If cookie set to __WASI_DIRCOOKIE_START, rewind the dir ptr
+        // to the start of the stream.
+        unsafe { rewinddir(dir) };
     }
+
     let mut entry_buf = unsafe { std::mem::uninitialized::<dirent>() };
     let mut left = host_buf_len;
     let mut host_buf_offset: usize = 0;
@@ -236,7 +242,7 @@ pub(crate) fn fd_readdir(
         if host_entry.is_null() {
             break;
         }
-        let entry: wasm32::__wasi_dirent_t = host_impl::dirent_from_host(&unsafe { *host_entry })?;
+        let entry: host::__wasi_dirent_t = host_impl::dirent_from_host(&unsafe { *host_entry })?;
         let name_len = entry.d_namlen as usize;
         let required_space = std::mem::size_of_val(&entry) + name_len;
         if required_space > left {
@@ -244,7 +250,7 @@ pub(crate) fn fd_readdir(
         }
         unsafe {
             let ptr = host_buf_ptr.offset(host_buf_offset as isize) as *mut c_void
-                as *mut wasm32::__wasi_dirent_t;
+                as *mut host::__wasi_dirent_t;
             *ptr = entry;
         }
         host_buf_offset += std::mem::size_of_val(&entry);
@@ -344,8 +350,8 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_
 }
 
 fn filetype(file: &File, metadata: &Metadata) -> Result<host::__wasi_filetype_t> {
-    use std::os::unix::fs::FileTypeExt;
     use nix::sys::socket::{self, SockType};
+    use std::os::unix::fs::FileTypeExt;
     let ftype = metadata.file_type();
     if ftype.is_file() {
         Ok(host::__WASI_FILETYPE_REGULAR_FILE)
@@ -360,12 +366,14 @@ fn filetype(file: &File, metadata: &Metadata) -> Result<host::__wasi_filetype_t>
     } else if ftype.is_fifo() {
         Ok(host::__WASI_FILETYPE_SOCKET_STREAM)
     } else if ftype.is_socket() {
-        match socket::getsockopt(file.as_raw_fd(), socket::sockopt::SockType).map_err(|err|
-            err.as_errno().unwrap()).map_err(host_impl::errno_from_nix)? {
-                SockType::Datagram => Ok(host::__WASI_FILETYPE_SOCKET_DGRAM),
-                SockType::Stream => Ok(host::__WASI_FILETYPE_SOCKET_STREAM),
-                _ => Ok(host::__WASI_FILETYPE_UNKNOWN),
-            }
+        match socket::getsockopt(file.as_raw_fd(), socket::sockopt::SockType)
+            .map_err(|err| err.as_errno().unwrap())
+            .map_err(host_impl::errno_from_nix)?
+        {
+            SockType::Datagram => Ok(host::__WASI_FILETYPE_SOCKET_DGRAM),
+            SockType::Stream => Ok(host::__WASI_FILETYPE_SOCKET_STREAM),
+            _ => Ok(host::__WASI_FILETYPE_UNKNOWN),
+        }
     } else {
         Ok(host::__WASI_FILETYPE_UNKNOWN)
     }
@@ -425,7 +433,7 @@ pub(crate) fn path_filestat_set_times(
     }
 
     let atflags = match dirflags {
-        wasm32::__WASI_LOOKUP_SYMLINK_FOLLOW => UtimensatFlags::FollowSymlink,
+        host::__WASI_LOOKUP_SYMLINK_FOLLOW => UtimensatFlags::FollowSymlink,
         _ => UtimensatFlags::NoFollowSymlink,
     };
 

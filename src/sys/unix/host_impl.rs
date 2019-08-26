@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-use crate::{host, memory, wasm32, Result};
+use crate::{host, memory, Result};
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
 
@@ -228,29 +228,54 @@ pub(crate) fn filestat_from_nix(
     })
 }
 
+pub(crate) fn dirent_filetype_from_host(
+    host_entry: &nix::libc::dirent,
+) -> Result<host::__wasi_filetype_t> {
+    match host_entry.d_type {
+        libc::DT_FIFO => Ok(host::__WASI_FILETYPE_UNKNOWN),
+        libc::DT_CHR => Ok(host::__WASI_FILETYPE_CHARACTER_DEVICE),
+        libc::DT_DIR => Ok(host::__WASI_FILETYPE_DIRECTORY),
+        libc::DT_BLK => Ok(host::__WASI_FILETYPE_BLOCK_DEVICE),
+        libc::DT_REG => Ok(host::__WASI_FILETYPE_REGULAR_FILE),
+        libc::DT_LNK => Ok(host::__WASI_FILETYPE_SYMBOLIC_LINK),
+        libc::DT_SOCK => {
+            // TODO how to discriminate between STREAM and DGRAM?
+            // Perhaps, we should create a more general WASI filetype
+            // such as __WASI_FILETYPE_SOCKET, and then it would be
+            // up to the client to check whether it's actually
+            // STREAM or DGRAM?
+            Ok(host::__WASI_FILETYPE_UNKNOWN)
+        }
+        libc::DT_UNKNOWN => Ok(host::__WASI_FILETYPE_UNKNOWN),
+        _ => Err(host::__WASI_EINVAL),
+    }
+}
+
 #[cfg(target_os = "linux")]
-pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi_dirent_t> {
-    let mut entry = unsafe { std::mem::zeroed::<wasm32::__wasi_dirent_t>() };
+pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<host::__wasi_dirent_t> {
+    let mut entry = unsafe { std::mem::zeroed::<host::__wasi_dirent_t>() };
     let d_namlen = unsafe { std::ffi::CStr::from_ptr(host_entry.d_name.as_ptr()) }
         .to_bytes()
         .len();
     if d_namlen > u32::max_value() as usize {
         return Err(host::__WASI_EIO);
     }
+    let d_type = dirent_filetype_from_host(host_entry)?;
     entry.d_ino = memory::enc_inode(host_entry.d_ino);
     entry.d_next = memory::enc_dircookie(host_entry.d_off as u64);
     entry.d_namlen = memory::enc_u32(d_namlen as u32);
-    entry.d_type = memory::enc_filetype(host_entry.d_type);
+    entry.d_type = memory::enc_filetype(d_type);
     Ok(entry)
 }
 
 #[cfg(not(target_os = "linux"))]
-pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<wasm32::__wasi_dirent_t> {
-    let mut entry = unsafe { std::mem::zeroed::<wasm32::__wasi_dirent_t>() };
+pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<host::__wasi_dirent_t> {
+    let mut entry = unsafe { std::mem::zeroed::<host::__wasi_dirent_t>() };
+    let d_type = dirent_filetype_from_host(host_entry)?;
     entry.d_ino = memory::enc_inode(host_entry.d_ino);
     entry.d_next = memory::enc_dircookie(host_entry.d_seekoff);
     entry.d_namlen = memory::enc_u32(u32::from(host_entry.d_namlen));
-    entry.d_type = memory::enc_filetype(host_entry.d_type);
+    entry.d_type = memory::enc_filetype(d_type);
     Ok(entry)
 }
 
