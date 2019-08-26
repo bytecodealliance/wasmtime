@@ -27,11 +27,19 @@ impl Limits {
             max: ::std::u32::MAX,
         }
     }
+
+    pub fn min(&self) -> u32 {
+        self.min
+    }
+
+    pub fn max(&self) -> u32 {
+        self.max
+    }
 }
 
 // Value Types
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ValType {
     I32,
     I64,
@@ -236,6 +244,17 @@ impl TableType {
     }
     pub fn limits(&self) -> &Limits {
         &self.limits
+    }
+
+    pub(crate) fn from_cranelift_table(table: cranelift_wasm::Table) -> TableType {
+        assert!(if let cranelift_wasm::TableElementType::Func = table.ty {
+            true
+        } else {
+            false
+        });
+        let ty = ValType::FuncRef;
+        let limits = Limits::new(table.minimum, table.maximum.unwrap_or(::std::u32::MAX));
+        TableType::new(ty, limits)
     }
 }
 

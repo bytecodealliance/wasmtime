@@ -1,13 +1,13 @@
 use crate::callable::{Callable, WasmtimeFn};
 use crate::runtime::Store;
 use crate::trap::Trap;
-use crate::types::{ExternType, FuncType, GlobalType, MemoryType};
+use crate::types::{ExternType, FuncType, GlobalType, MemoryType, TableType, ValType};
 use crate::values::Val;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::result::Result;
 
-use crate::trampoline::generate_func_export;
+use crate::trampoline::{generate_func_export, generate_global_export, generate_memory_export};
 use wasmtime_runtime::InstanceHandle;
 // Externals
 
@@ -48,7 +48,8 @@ impl Extern {
         match self {
             Extern::Func(ft) => ExternType::ExternFunc(ft.borrow().r#type().clone()),
             Extern::Memory(ft) => ExternType::ExternMemory(ft.borrow().r#type().clone()),
-            _ => unimplemented!("ExternType::type"),
+            Extern::Table(tt) => ExternType::ExternTable(tt.borrow().r#type().clone()),
+            Extern::Global(gt) => ExternType::ExternGlobal(gt.borrow().r#type().clone()),
         }
     }
 
@@ -60,6 +61,8 @@ impl Extern {
                 }
                 f.borrow().anchor.as_ref().unwrap().1.clone()
             }
+            Extern::Global(g) => g.borrow().wasmtime_export().clone(),
+            Extern::Memory(m) => m.borrow().wasmtime_export().clone(),
             _ => unimplemented!("get_wasmtime_export"),
         }
     }
@@ -69,7 +72,6 @@ impl Extern {
         instance_handle: InstanceHandle,
         export: wasmtime_runtime::Export,
     ) -> Extern {
-        use cranelift_wasm::GlobalInit;
         match export {
             wasmtime_runtime::Export::Function {
                 address,
@@ -82,33 +84,19 @@ impl Extern {
                 f.anchor = Some((instance_handle, export.clone()));
                 Extern::Func(Rc::new(RefCell::new(f)))
             }
-            wasmtime_runtime::Export::Memory {
+            wasmtime_runtime::Export::Memory { .. } => Extern::Memory(Rc::new(RefCell::new(
+                Memory::from_wasmtime_memory(export, store, instance_handle),
+            ))),
+            wasmtime_runtime::Export::Global { .. } => Extern::Global(Rc::new(RefCell::new(
+                Global::from_wasmtime_global(export, store),
+            ))),
+            wasmtime_runtime::Export::Table {
                 definition: _,
                 vmctx: _,
-                memory,
+                table,
             } => {
-                let ty = MemoryType::from_cranelift_memory(memory.memory.clone());
-                let m = Memory::new(store, ty);
-                Extern::Memory(Rc::new(RefCell::new(m)))
-            }
-            wasmtime_runtime::Export::Global {
-                definition: _,
-                vmctx: _,
-                global,
-            } => {
-                let ty = GlobalType::from_cranelift_global(global.clone());
-                let val = match global.initializer {
-                    GlobalInit::I32Const(i) => Val::from(i),
-                    GlobalInit::I64Const(i) => Val::from(i),
-                    GlobalInit::F32Const(f) => Val::from_f32_bits(f),
-                    GlobalInit::F64Const(f) => Val::from_f64_bits(f),
-                    _ => unimplemented!("from_wasmtime_export initializer"),
-                };
-                Extern::Global(Rc::new(RefCell::new(Global::new(store, ty, val))))
-            }
-            wasmtime_runtime::Export::Table { .. } => {
-                // TODO Extern::Table(Rc::new(RefCell::new(Table::new(store, ty, val))))
-                Extern::Table(Rc::new(RefCell::new(Table)))
+                let ty = TableType::from_cranelift_table(table.table.clone());
+                Extern::Table(Rc::new(RefCell::new(Table::new(store, ty))))
             }
         }
     }
@@ -161,15 +149,20 @@ impl Func {
 pub struct Global {
     _store: Rc<RefCell<Store>>,
     r#type: GlobalType,
-    val: Val,
+    wasmtime_export: wasmtime_runtime::Export,
+    #[allow(dead_code)]
+    wasmtime_state: Option<crate::trampoline::GlobalState>,
 }
 
 impl Global {
     pub fn new(store: Rc<RefCell<Store>>, r#type: GlobalType, val: Val) -> Global {
+        let (wasmtime_export, wasmtime_state) =
+            generate_global_export(&r#type, val).expect("generated global");
         Global {
             _store: store,
             r#type,
-            val,
+            wasmtime_export,
+            wasmtime_state: Some(wasmtime_state),
         }
     }
 
@@ -177,27 +170,119 @@ impl Global {
         &self.r#type
     }
 
-    pub fn get(&self) -> &Val {
-        &self.val
+    fn wasmtime_global_definition(&self) -> *mut wasmtime_runtime::VMGlobalDefinition {
+        match self.wasmtime_export {
+            wasmtime_runtime::Export::Global { definition, .. } => definition,
+            _ => panic!("global definition not found"),
+        }
+    }
+
+    pub fn get(&self) -> Val {
+        let definition = unsafe { &mut *self.wasmtime_global_definition() };
+        unsafe {
+            match self.r#type().content() {
+                ValType::I32 => Val::from(*definition.as_i32()),
+                ValType::I64 => Val::from(*definition.as_i64()),
+                ValType::F32 => Val::from_f32_bits(*definition.as_u32()),
+                ValType::F64 => Val::from_f64_bits(*definition.as_u64()),
+                _ => unimplemented!("Global::get for {:?}", self.r#type().content()),
+            }
+        }
     }
 
     pub fn set(&mut self, val: Val) {
-        self.val = val;
+        if val.r#type() != *self.r#type().content() {
+            panic!(
+                "global of type {:?} cannot be set to {:?}",
+                self.r#type().content(),
+                val.r#type()
+            );
+        }
+        let definition = unsafe { &mut *self.wasmtime_global_definition() };
+        unsafe {
+            match val {
+                Val::I32(i) => *definition.as_i32_mut() = i,
+                Val::I64(i) => *definition.as_i64_mut() = i,
+                Val::F32(f) => *definition.as_u32_mut() = f,
+                Val::F64(f) => *definition.as_u64_mut() = f,
+                _ => unimplemented!("Global::set for {:?}", val.r#type()),
+            }
+        }
+    }
+
+    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
+        &self.wasmtime_export
+    }
+
+    pub(crate) fn from_wasmtime_global(
+        export: wasmtime_runtime::Export,
+        store: Rc<RefCell<Store>>,
+    ) -> Global {
+        let global = if let wasmtime_runtime::Export::Global { ref global, .. } = export {
+            global
+        } else {
+            panic!("wasmtime export is not memory")
+        };
+        let ty = GlobalType::from_cranelift_global(global.clone());
+        Global {
+            _store: store,
+            r#type: ty,
+            wasmtime_export: export,
+            wasmtime_state: None,
+        }
     }
 }
 
-pub struct Table;
+pub struct Table {
+    _store: Rc<RefCell<Store>>,
+    r#type: TableType,
+}
+
+impl Table {
+    pub fn new(store: Rc<RefCell<Store>>, r#type: TableType) -> Table {
+        Table {
+            _store: store,
+            r#type,
+        }
+    }
+
+    pub fn r#type(&self) -> &TableType {
+        &self.r#type
+    }
+
+    pub fn get(&self, _index: u32) -> Val {
+        unimplemented!("Table::get")
+    }
+
+    pub fn set(&self, _index: u32, _val: &Val) -> usize {
+        unimplemented!("Table::set")
+    }
+
+    pub fn size(&self) -> u32 {
+        unimplemented!("Table::size")
+    }
+
+    pub fn grow(&mut self, _delta: u32) -> bool {
+        unimplemented!("Table::grow")
+    }
+}
 
 pub struct Memory {
     _store: Rc<RefCell<Store>>,
     r#type: MemoryType,
+    wasmtime_handle: InstanceHandle,
+    wasmtime_export: wasmtime_runtime::Export,
 }
 
 impl Memory {
     pub fn new(store: Rc<RefCell<Store>>, r#type: MemoryType) -> Memory {
+        let (wasmtime_handle, wasmtime_export) =
+            generate_memory_export(&r#type).expect("generated memory");
         Memory {
             _store: store,
             r#type,
+            wasmtime_handle,
+            wasmtime_export,
         }
     }
 
@@ -205,19 +290,56 @@ impl Memory {
         &self.r#type
     }
 
-    pub fn data(&self) -> *const u8 {
-        unimplemented!("Memory::data")
+    fn wasmtime_memory_definition(&self) -> *mut wasmtime_runtime::VMMemoryDefinition {
+        match self.wasmtime_export {
+            wasmtime_runtime::Export::Memory { definition, .. } => definition,
+            _ => panic!("memory definition not found"),
+        }
+    }
+
+    pub fn data(&self) -> *mut u8 {
+        unsafe { (*self.wasmtime_memory_definition()).base }
     }
 
     pub fn data_size(&self) -> usize {
-        unimplemented!("Memory::data_size")
+        unsafe { (*self.wasmtime_memory_definition()).current_length }
     }
 
     pub fn size(&self) -> u32 {
-        unimplemented!("Memory::size")
+        (self.data_size() / wasmtime_environ::WASM_PAGE_SIZE as usize) as u32
     }
 
-    pub fn grow(&mut self, _delta: u32) -> bool {
-        unimplemented!("Memory::grow")
+    pub fn grow(&mut self, delta: u32) -> bool {
+        match self.wasmtime_export {
+            wasmtime_runtime::Export::Memory { definition, .. } => {
+                let definition = unsafe { &(*definition) };
+                let index = self.wasmtime_handle.memory_index(definition);
+                self.wasmtime_handle.memory_grow(index, delta).is_some()
+            }
+            _ => panic!("memory definition not found"),
+        }
+    }
+
+    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
+        &self.wasmtime_export
+    }
+
+    pub(crate) fn from_wasmtime_memory(
+        export: wasmtime_runtime::Export,
+        store: Rc<RefCell<Store>>,
+        instance_handle: wasmtime_runtime::InstanceHandle,
+    ) -> Memory {
+        let memory = if let wasmtime_runtime::Export::Memory { ref memory, .. } = export {
+            memory
+        } else {
+            panic!("wasmtime export is not memory")
+        };
+        let ty = MemoryType::from_cranelift_memory(memory.memory.clone());
+        Memory {
+            _store: store,
+            r#type: ty,
+            wasmtime_handle: instance_handle,
+            wasmtime_export: export,
+        }
     }
 }

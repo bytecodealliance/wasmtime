@@ -1,7 +1,7 @@
 use crate::runtime::Store;
 use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
-    ValType,
+    TableType, ValType,
 };
 use failure::Error;
 use std::cell::RefCell;
@@ -33,6 +33,8 @@ fn into_valtype(ty: &wasmparser::Type) -> ValType {
         I64 => ValType::I64,
         F32 => ValType::F32,
         F64 => ValType::F64,
+        AnyFunc => ValType::FuncRef,
+        AnyRef => ValType::AnyRef,
         _ => unimplemented!("types in into_valtype"),
     }
 }
@@ -44,6 +46,16 @@ fn into_func_type(mt: wasmparser::FuncType) -> FuncType {
     FuncType::new(params.into_boxed_slice(), returns.into_boxed_slice())
 }
 
+fn into_table_type(tt: wasmparser::TableType) -> TableType {
+    assert!(tt.element_type == wasmparser::Type::AnyFunc);
+    let ty = into_valtype(&tt.element_type);
+    let limits = Limits::new(
+        tt.limits.initial,
+        tt.limits.maximum.unwrap_or(::std::u32::MAX),
+    );
+    TableType::new(ty, limits)
+}
+
 fn read_imports_and_exports(
     binary: &[u8],
 ) -> Result<(Box<[ImportType]>, Box<[ExportType]>), Error> {
@@ -51,6 +63,7 @@ fn read_imports_and_exports(
     let mut imports = Vec::new();
     let mut exports = Vec::new();
     let mut memories = Vec::new();
+    let mut tables = Vec::new();
     let mut func_sig = Vec::new();
     let mut sigs = Vec::new();
     let mut globals = Vec::new();
@@ -83,6 +96,13 @@ fn read_imports_and_exports(
                 globals.reserve_exact(section.get_count() as usize);
                 for entry in section {
                     globals.push(into_global_type(&entry?.ty));
+                }
+            }
+            SectionCode::Table => {
+                let section = section.get_table_section_reader()?;
+                tables.reserve_exact(section.get_count() as usize);
+                for entry in section {
+                    tables.push(into_table_type(entry?))
                 }
             }
             SectionCode::Import => {
@@ -127,7 +147,9 @@ fn read_imports_and_exports(
                             let sig = &sigs[sig_index];
                             ExternType::ExternFunc(sig.clone())
                         }
-                        ExternalKind::Table => unimplemented!("ExternalKind::Table"),
+                        ExternalKind::Table => {
+                            ExternType::ExternTable(tables[entry.index as usize].clone())
+                        }
                         ExternalKind::Memory => {
                             ExternType::ExternMemory(memories[entry.index as usize].clone())
                         }
