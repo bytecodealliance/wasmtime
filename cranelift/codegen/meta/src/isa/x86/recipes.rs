@@ -396,11 +396,11 @@ pub(crate) fn define<'shared>(
     let f_trap = formats.by_name("Trap");
     let f_unary = formats.by_name("Unary");
     let f_unary_bool = formats.by_name("UnaryBool");
+    let f_unary_const = formats.by_name("UnaryConst");
     let f_unary_global_value = formats.by_name("UnaryGlobalValue");
     let f_unary_ieee32 = formats.by_name("UnaryIeee32");
     let f_unary_ieee64 = formats.by_name("UnaryIeee64");
     let f_unary_imm = formats.by_name("UnaryImm");
-    let f_unary_imm128 = formats.by_name("UnaryImm128");
 
     // Predicates shorthands.
     let use_sse41 = settings.predicate_by_name("use_sse41");
@@ -2437,14 +2437,14 @@ pub(crate) fn define<'shared>(
     );
 
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("vconst", f_unary_imm128, 5)
+        EncodingRecipeBuilder::new("vconst", f_unary_const, 5)
             .operands_out(vec![fpr])
             .clobbers_flags(false)
             .emit(
                 r#"
                     {{PUT_OP}}(bits, rex2(0, out_reg0), sink);
                     modrm_riprel(out_reg0, sink);
-                    const_disp4(imm, func, sink);
+                    const_disp4(constant_handle, func, sink);
                 "#,
             ),
     );

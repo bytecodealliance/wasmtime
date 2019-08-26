@@ -1090,7 +1090,7 @@ pub(crate) fn define(
 
     let N = &operand_doc(
         "N",
-        &imm.uimm128,
+        &imm.pool_constant,
         "The 16 immediate bytes of a 128-bit vector",
     );
     let a = &operand_doc("a", TxN, "A constant vector value");
@@ -1105,6 +1105,41 @@ pub(crate) fn define(
         "#,
         )
         .operands_in(vec![N])
+        .operands_out(vec![a]),
+    );
+
+    let mask = &operand_doc(
+        "mask",
+        &imm.uimm128,
+        "The 16 immediate bytes used for selecting the elements to shuffle",
+    );
+    let Tx16 = &TypeVar::new(
+        "Tx16",
+        "A SIMD vector with exactly 16 lanes of 8-bit values; eventually this may support other \
+         lane counts and widths",
+        TypeSetBuilder::new()
+            .ints(8..8)
+            .bools(8..8)
+            .simd_lanes(16..16)
+            .includes_scalars(false)
+            .build(),
+    );
+    let a = &operand_doc("a", Tx16, "A vector value");
+    let b = &operand_doc("b", Tx16, "A vector value");
+
+    ig.push(
+        Inst::new(
+            "shuffle",
+            r#"
+        SIMD vector shuffle.
+        
+        Shuffle two vectors using the given immediate bytes. For each of the 16 bytes of the
+        immediate, a value i of 0-15 selects the i-th element of the first vector and a value i of 
+        16-31 selects the (i-16)th element of the second vector. Immediate values outside of the 
+        0-31 range place a 0 in the resulting vector lane.
+        "#,
+        )
+        .operands_in(vec![a, b, mask])
         .operands_out(vec![a]),
     );
 

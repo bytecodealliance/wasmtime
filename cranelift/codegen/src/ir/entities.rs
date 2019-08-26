@@ -181,6 +181,29 @@ impl Constant {
     }
 }
 
+/// An opaque reference to an immediate.
+///
+/// Some immediates (e.g. SIMD shuffle masks) are too large to store in the
+/// [`InstructionData`](super::instructions::InstructionData) struct and therefore must be
+/// tracked separately in [`DataFlowGraph::immediates`](super::dfg::DataFlowGraph). `Immediate`
+/// provides a way to reference values stored there.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Immediate(u32);
+entity_impl!(Immediate, "imm");
+
+impl Immediate {
+    /// Create an immediate reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Self> {
+        if n < u32::MAX {
+            Some(Immediate(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// An opaque reference to a [jump table](https://en.wikipedia.org/wiki/Branch_table).
 ///
 /// `JumpTable`s are used for indirect branching and are specialized for dense,

@@ -488,11 +488,6 @@ pub fn write_operands(
     match dfg[inst] {
         Unary { arg, .. } => write!(w, " {}", arg),
         UnaryImm { imm, .. } => write!(w, " {}", imm),
-        UnaryImm128 { imm, .. } => {
-            let data = dfg.constants.get(imm);
-            let uimm128 = Uimm128::from(&data[..]);
-            write!(w, " {}", uimm128)
-        }
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
         UnaryBool { imm, .. } => write!(w, " {}", imm),
@@ -510,6 +505,20 @@ pub fn write_operands(
         NullAry { .. } => write!(w, " "),
         InsertLane { lane, args, .. } => write!(w, " {}, {}, {}", args[0], lane, args[1]),
         ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
+        UnaryConst {
+            constant_handle, ..
+        } => {
+            let data = dfg.constants.get(constant_handle);
+            let uimm128 = Uimm128::from(&data[..]);
+            write!(w, " {}", uimm128)
+        }
+        Shuffle { mask, args, .. } => {
+            let data = dfg.immediates.get(mask).expect(
+                "Expected the shuffle mask to already be inserted into the immediates table",
+            );
+            let uimm128 = Uimm128::from(&data[..]);
+            write!(w, " {}, {}, {}", args[0], args[1], uimm128)
+        }
         IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
         IntCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),

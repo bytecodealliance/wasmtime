@@ -899,6 +899,80 @@ fn expand_fcvt_to_uint_sat(
     cfg.recompute_ebb(pos.func, done);
 }
 
+/// Convert shuffle instructions.
+fn convert_shuffle(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Shuffle { args, mask, .. } = pos.func.dfg[inst] {
+        // A mask-building helper: in 128-bit SIMD, 0-15 indicate which lane to read from and a 1
+        // in the most significant position zeroes the lane.
+        let zero_unknown_lane_index = |b: u8| if b > 15 { 0b10000000 } else { b };
+
+        // We only have to worry about aliasing here because copies will be introduced later (in
+        // regalloc).
+        let a = pos.func.dfg.resolve_aliases(args[0]);
+        let b = pos.func.dfg.resolve_aliases(args[1]);
+        let mask = pos
+            .func
+            .dfg
+            .immediates
+            .get(mask)
+            .expect("The shuffle immediate should have been recorded before this point")
+            .clone();
+        if a == b {
+            // PSHUFB the first argument (since it is the same as the second).
+            let constructed_mask = mask
+                .iter()
+                // If the mask is greater than 15 it still may be referring to a lane in b.
+                .map(|&b| if b > 15 { b.wrapping_sub(16) } else { b })
+                .map(zero_unknown_lane_index)
+                .collect();
+            let handle = pos.func.dfg.constants.insert(constructed_mask);
+            // Move the built mask into another XMM register.
+            let a_type = pos.func.dfg.value_type(a);
+            let mask_value = pos.ins().vconst(a_type, handle);
+            // Shuffle the single incoming argument.
+            pos.func.dfg.replace(inst).x86_pshufb(a, mask_value);
+        } else {
+            // PSHUFB the first argument, placing zeroes for unused lanes.
+            let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
+            let handle = pos.func.dfg.constants.insert(constructed_mask);
+            // Move the built mask into another XMM register.
+            let a_type = pos.func.dfg.value_type(a);
+            let mask_value = pos.ins().vconst(a_type, handle);
+            // Shuffle the first argument.
+            let shuffled_first_arg = pos.ins().x86_pshufb(a, mask_value);
+
+            // PSHUFB the second argument, placing zeroes for unused lanes.
+            let constructed_mask = mask
+                .iter()
+                .map(|b| b.wrapping_sub(16))
+                .map(zero_unknown_lane_index)
+                .collect();
+            let handle = pos.func.dfg.constants.insert(constructed_mask);
+            // Move the built mask into another XMM register.
+            let b_type = pos.func.dfg.value_type(b);
+            let mask_value = pos.ins().vconst(b_type, handle);
+            // Shuffle the second argument.
+            let shuffled_second_arg = pos.ins().x86_pshufb(b, mask_value);
+
+            // OR the vectors together to form the final shuffled value.
+            pos.func
+                .dfg
+                .replace(inst)
+                .bor(shuffled_first_arg, shuffled_second_arg);
+
+            // TODO when AVX512 is enabled we should replace this sequence with a single VPERMB
+        };
+    }
+}
+
 /// Because floats already exist in XMM registers, we can keep them there when executing a CLIF
 /// extractlane instruction
 fn convert_extractlane(

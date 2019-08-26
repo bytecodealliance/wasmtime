@@ -6,10 +6,10 @@ pub(crate) fn define(imm: &Immediates, entities: &EntityRefs) -> FormatRegistry 
 
     registry.insert(Builder::new("Unary").value());
     registry.insert(Builder::new("UnaryImm").imm(&imm.imm64));
-    registry.insert(Builder::new("UnaryImm128").imm(&imm.uimm128));
     registry.insert(Builder::new("UnaryIeee32").imm(&imm.ieee32));
     registry.insert(Builder::new("UnaryIeee64").imm(&imm.ieee64));
     registry.insert(Builder::new("UnaryBool").imm(&imm.boolean));
+    registry.insert(Builder::new("UnaryConst").imm(&imm.pool_constant));
     registry.insert(Builder::new("UnaryGlobalValue").imm(&entities.global_value));
 
     registry.insert(Builder::new("Binary").value().value());
@@ -42,6 +42,12 @@ pub(crate) fn define(imm: &Immediates, entities: &EntityRefs) -> FormatRegistry 
         Builder::new("ExtractLane")
             .value()
             .imm_with_name("lane", &imm.uimm8),
+    );
+    registry.insert(
+        Builder::new("Shuffle")
+            .value()
+            .value()
+            .imm_with_name("mask", &imm.uimm128),
     );
 
     registry.insert(Builder::new("IntCompare").imm(&imm.intcc).value().value());

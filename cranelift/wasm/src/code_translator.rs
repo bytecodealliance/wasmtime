@@ -974,9 +974,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder,
             ))
         }
+        Operator::V8x16Shuffle { lanes, .. } => {
+            let (vector_a, vector_b) = state.pop2();
+            let a = optionally_bitcast_vector(vector_a, I8X16, builder);
+            let b = optionally_bitcast_vector(vector_b, I8X16, builder);
+            let mask = builder.func.dfg.immediates.push(lanes.to_vec());
+            let shuffled = builder.ins().shuffle(a, b, mask);
+            state.push1(shuffled)
+            // At this point the original types of a and b are lost; users of this value (i.e. this
+            // WASM-to-CLIF translator) may need to raw_bitcast for type-correctness. This is due
+            // to WASM using the less specific v128 type for certain operations and more specific
+            // types (e.g. i8x16) for others.
+        }
         Operator::V128Load { .. }
         | Operator::V128Store { .. }
-        | Operator::V8x16Shuffle { .. }
         | Operator::I8x16Eq
         | Operator::I8x16Ne
         | Operator::I8x16LtS

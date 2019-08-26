@@ -2243,23 +2243,6 @@ impl<'a> Parser<'a> {
                 opcode,
                 imm: self.match_imm64("expected immediate integer operand")?,
             },
-            InstructionFormat::UnaryImm128 => match explicit_control_type {
-                None => {
-                    return err!(
-                        self.loc,
-                        "Expected {:?} to have a controlling type variable, e.g. inst.i32x4",
-                        opcode
-                    )
-                }
-                Some(ty) => {
-                    let uimm128 = self.match_uimm128_or_literals(ty)?;
-                    let constant_handle = ctx.function.dfg.constants.insert(uimm128.0.to_vec());
-                    InstructionData::UnaryImm128 {
-                        opcode,
-                        imm: constant_handle,
-                    }
-                }
-            },
             InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
                 opcode,
                 imm: self.match_ieee32("expected immediate 32-bit float operand")?,
@@ -2441,6 +2424,36 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lane = self.match_uimm8("expected lane number")?;
                 InstructionData::ExtractLane { opcode, lane, arg }
+            }
+            InstructionFormat::UnaryConst => match explicit_control_type {
+                None => {
+                    return err!(
+                        self.loc,
+                        "Expected {:?} to have a controlling type variable, e.g. inst.i32x4",
+                        opcode
+                    )
+                }
+                Some(controlling_type) => {
+                    let uimm128 = self.match_uimm128_or_literals(controlling_type)?;
+                    let constant_handle = ctx.function.dfg.constants.insert(uimm128.to_vec());
+                    InstructionData::UnaryConst {
+                        opcode,
+                        constant_handle,
+                    }
+                }
+            },
+            InstructionFormat::Shuffle => {
+                let a = self.match_value("expected SSA value first operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let b = self.match_value("expected SSA value second operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let uimm128 = self.match_uimm128_or_literals(I8X16)?;
+                let mask = ctx.function.dfg.immediates.push(uimm128.to_vec());
+                InstructionData::Shuffle {
+                    opcode,
+                    mask,
+                    args: [a, b],
+                }
             }
             InstructionFormat::IntCompare => {
                 let cond = self.match_enum("expected intcc condition code")?;

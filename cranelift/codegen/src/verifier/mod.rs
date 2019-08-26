@@ -706,7 +706,6 @@ impl<'a> Verifier<'a> {
             // Exhaustive list so we can't forget to add new formats
             Unary { .. }
             | UnaryImm { .. }
-            | UnaryImm128 { .. }
             | UnaryIeee32 { .. }
             | UnaryIeee64 { .. }
             | UnaryBool { .. }
@@ -715,6 +714,8 @@ impl<'a> Verifier<'a> {
             | Ternary { .. }
             | InsertLane { .. }
             | ExtractLane { .. }
+            | UnaryConst { .. }
+            | Shuffle { .. }
             | IntCompare { .. }
             | IntCompareImm { .. }
             | IntCond { .. }
