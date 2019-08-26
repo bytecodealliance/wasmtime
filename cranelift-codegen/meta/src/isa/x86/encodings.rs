@@ -589,8 +589,9 @@ pub fn define(
     let use_popcnt = settings.predicate_by_name("use_popcnt");
     let use_lzcnt = settings.predicate_by_name("use_lzcnt");
     let use_bmi1 = settings.predicate_by_name("use_bmi1");
-    let use_ssse3 = settings.predicate_by_name("use_ssse3");
     let use_sse41 = settings.predicate_by_name("use_sse41");
+    let use_ssse3_simd = settings.predicate_by_name("use_ssse3_simd");
+    let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
 
     // Definitions.
     let mut e = PerCpuModeEncodings::new();
@@ -1694,8 +1695,8 @@ pub fn define(
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
         let instruction = x86_pshufb.bind_vector_from_lane(ty, sse_vector_size);
         let template = rec_fa.nonrex().opcodes(vec![0x66, 0x0f, 0x38, 00]);
-        e.enc32_isap(instruction.clone(), template.clone(), use_ssse3);
-        e.enc64_isap(instruction, template, use_ssse3);
+        e.enc32_isap(instruction.clone(), template.clone(), use_ssse3_simd);
+        e.enc64_isap(instruction, template, use_ssse3_simd);
     }
 
     // PSHUFD, 32-bit shuffle using one XMM register and a u8 immediate
@@ -1726,10 +1727,10 @@ pub fn define(
     // SIMD insertlane
     let mut insertlane_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
         HashMap::new();
-    insertlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x20], Some(use_sse41))); // PINSRB
+    insertlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x20], Some(use_sse41_simd))); // PINSRB
     insertlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc4], None)); // PINSRW from SSE2
-    insertlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41))); // PINSRD
-    insertlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41))); // PINSRQ, only x86_64
+    insertlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41_simd))); // PINSRD
+    insertlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41_simd))); // PINSRQ, only x86_64
 
     for ty in ValueType::all_lane_types() {
         if let Some((opcode, isap)) = insertlane_mapping.get(&ty.lane_bits()) {
@@ -1747,10 +1748,10 @@ pub fn define(
     // SIMD extractlane
     let mut extractlane_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
         HashMap::new();
-    extractlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x14], Some(use_sse41))); // PEXTRB
+    extractlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x14], Some(use_sse41_simd))); // PEXTRB
     extractlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc5], None)); // PEXTRW from zSSE2, SSE4.1 has a PEXTRW that can move to reg/m16 but the opcode is four bytes
-    extractlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41))); // PEXTRD
-    extractlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41))); // PEXTRQ, only x86_64
+    extractlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41_simd))); // PEXTRD
+    extractlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41_simd))); // PEXTRQ, only x86_64
 
     for ty in ValueType::all_lane_types() {
         if let Some((opcode, isap)) = extractlane_mapping.get(&ty.lane_bits()) {
