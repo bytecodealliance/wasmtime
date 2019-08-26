@@ -4,7 +4,7 @@ use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_codegen::{settings, Context};
 use cranelift_native::builder as host_isa_builder;
-use mmap::{MapOption, MemoryMap};
+use memmap::MmapMut;
 use region;
 use region::Protection;
 
@@ -67,19 +67,23 @@ impl FunctionRunner {
         let code_info = context
             .compile(self.isa.as_ref())
             .map_err(|e| e.to_string())?;
-        let code_page = MemoryMap::new(code_info.total_size as usize, &[MapOption::MapWritable])
-            .map_err(|e| e.to_string())?;
+        let mut code_page =
+            MmapMut::map_anon(code_info.total_size as usize).map_err(|e| e.to_string())?;
         let callable_fn: fn() -> bool = unsafe {
             context.emit_to_memory(
                 self.isa.as_ref(),
-                code_page.data(),
+                code_page.as_mut_ptr(),
                 relocs,
                 traps,
                 stackmaps,
             );
-            region::protect(code_page.data(), code_page.len(), Protection::ReadExecute)
-                .map_err(|e| e.to_string())?;
-            mem::transmute(code_page.data())
+            region::protect(
+                code_page.as_mut_ptr(),
+                code_page.len(),
+                Protection::ReadExecute,
+            )
+            .map_err(|e| e.to_string())?;
+            mem::transmute(code_page.as_mut_ptr())
         };
 
         // execute
