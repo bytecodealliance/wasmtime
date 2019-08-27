@@ -8,8 +8,8 @@ use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::Flags;
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
-use cranelift_reader::parse_test;
 use cranelift_reader::IsaSpec;
+use cranelift_reader::{parse_test, ParseOptions};
 use log::info;
 use std::borrow::Cow;
 use std::fs;
@@ -33,8 +33,13 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
     info!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
     let buffer = read_to_string(path).map_err(|e| e.to_string())?;
+    let options = ParseOptions {
+        target,
+        passes,
+        ..ParseOptions::default()
+    };
 
-    let testfile = match parse_test(&buffer, passes, target) {
+    let testfile = match parse_test(&buffer, options) {
         Ok(testfile) => testfile,
         Err(e) => {
             if e.is_warning {

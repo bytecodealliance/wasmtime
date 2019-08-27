@@ -1,11 +1,12 @@
 //! CLI tool to compile Cranelift IR files to native code in memory and execute them.
 
 use crate::utils::read_to_string;
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_filetests::FunctionRunner;
 use cranelift_native::builder as host_isa_builder;
-use cranelift_reader::{parse_test, Details, IsaSpec};
+use cranelift_reader::{parse_test, Details, IsaSpec, ParseOptions};
 use std::path::PathBuf;
+use target_lexicon::Triple;
 use walkdir::WalkDir;
 
 pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
@@ -74,7 +75,11 @@ fn run_single_file(path: &PathBuf) -> Result<(), String> {
 
 /// Main body of `run_single_file` separated for testing
 fn run_file_contents(file_contents: String) -> Result<(), String> {
-    let test_file = parse_test(&file_contents, None, None).map_err(|e| e.to_string())?;
+    let options = ParseOptions {
+        default_calling_convention: CallConv::triple_default(&Triple::host()), // use the host's default calling convention
+        ..ParseOptions::default()
+    };
+    let test_file = parse_test(&file_contents, options).map_err(|e| e.to_string())?;
     for (func, Details { comments, .. }) in test_file.functions {
         if comments.iter().any(|c| c.text.contains("run")) {
             let isa = create_target_isa(&test_file.isa_spec)?;
