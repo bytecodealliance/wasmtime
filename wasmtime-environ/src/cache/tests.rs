@@ -40,7 +40,7 @@ fn test_write_read_cache() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let errors = cache_config::init(true, Some(&config_path), false);
+    let errors = cache_config::init(true, Some(&config_path), false, None);
     assert!(errors.is_empty());
     assert!(cache_config::enabled());
     // assumption: config init creates cache directory and returns canonicalized path
