@@ -31,20 +31,37 @@ use target_lexicon::Triple;
 /// Any test commands or target declarations are ignored.
 pub fn parse_functions(text: &str) -> ParseResult<Vec<Function>> {
     let _tt = timing::parse_text();
-    parse_test(text, None, None)
+    parse_test(text, ParseOptions::default())
         .map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
+}
+
+/// Options for configuring the parsing of filetests.
+pub struct ParseOptions<'a> {
+    /// Compiler passes to run on the parsed functions.
+    pub passes: Option<&'a [String]>,
+    /// Target ISA for compiling the parsed functions, e.g. "x86_64 skylake".
+    pub target: Option<&'a str>,
+    /// Default calling convention used when none is specified for a parsed function.
+    pub default_calling_convention: CallConv,
+}
+
+impl Default for ParseOptions<'_> {
+    fn default() -> Self {
+        Self {
+            passes: None,
+            target: None,
+            default_calling_convention: CallConv::Fast,
+        }
+    }
 }
 
 /// Parse the entire `text` as a test case file.
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
-pub fn parse_test<'a>(
-    text: &'a str,
-    passes: Option<&'a [String]>,
-    target: Option<&str>,
-) -> ParseResult<TestFile<'a>> {
+pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<TestFile<'a>> {
     let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
+
     // Gather the preamble comments.
     parser.start_gathering_comments();
 
@@ -53,17 +70,27 @@ pub fn parse_test<'a>(
 
     // Check for specified passes and target, if present throw out test commands/targets specified
     // in file.
-    match passes {
+    match options.passes {
         Some(pass_vec) => {
             parser.parse_test_commands();
             commands = parser.parse_cmdline_passes(pass_vec);
             parser.parse_target_specs()?;
-            isa_spec = parser.parse_cmdline_target(target)?;
+            isa_spec = parser.parse_cmdline_target(options.target)?;
         }
         None => {
             commands = parser.parse_test_commands();
             isa_spec = parser.parse_target_specs()?;
         }
+    };
+
+    // Decide between using the calling convention passed in the options or using the
+    // host's calling convention--if any tests are to be run on the host we should default to the
+    // host's calling convention.
+    parser = if commands.iter().any(|tc| tc.command == "run") {
+        let host_default_calling_convention = CallConv::triple_default(&Triple::host());
+        parser.with_default_calling_convention(host_default_calling_convention)
+    } else {
+        parser.with_default_calling_convention(options.default_calling_convention)
     };
 
     parser.token();
@@ -99,6 +126,9 @@ pub struct Parser<'a> {
 
     /// Comments collected so far.
     comments: Vec<Comment<'a>>,
+
+    /// Default calling conventions; used when none is specified.
+    default_calling_convention: CallConv,
 }
 
 /// Context for resolving references when parsing a single function.
@@ -235,11 +265,16 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new signature.
-    fn add_sig(&mut self, sig: SigRef, data: Signature, loc: Location) -> ParseResult<()> {
+    fn add_sig(
+        &mut self,
+        sig: SigRef,
+        data: Signature,
+        loc: Location,
+        defaultcc: CallConv,
+    ) -> ParseResult<()> {
         self.map.def_sig(sig, loc)?;
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
-            self.function
-                .import_signature(Signature::new(CallConv::Fast));
+            self.function.import_signature(Signature::new(defaultcc));
         }
         self.function.dfg.signatures[sig] = data;
         Ok(())
@@ -318,6 +353,16 @@ impl<'a> Parser<'a> {
             gathering_comments: false,
             gathered_comments: Vec::new(),
             comments: Vec::new(),
+            default_calling_convention: CallConv::Fast,
+        }
+    }
+
+    /// Modify the default calling convention; returns a new parser with the changed calling
+    /// convention.
+    pub fn with_default_calling_convention(self, default_calling_convention: CallConv) -> Self {
+        Self {
+            default_calling_convention,
+            ..self
         }
     }
 
@@ -1018,7 +1063,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_signature(&mut self, unique_isa: Option<&dyn TargetIsa>) -> ParseResult<Signature> {
         // Calling convention defaults to `fast`, but can be changed.
-        let mut sig = Signature::new(CallConv::Fast);
+        let mut sig = Signature::new(self.default_calling_convention);
 
         self.match_token(Token::LPar, "expected function signature: ( args... )")?;
         // signature ::=  "(" * [abi-param-list] ")" ["->" retlist] [callconv]
@@ -1170,7 +1215,9 @@ impl<'a> Parser<'a> {
                 Some(Token::SigRef(..)) => {
                     self.start_gathering_comments();
                     self.parse_signature_decl(ctx.unique_isa)
-                        .and_then(|(sig, dat)| ctx.add_sig(sig, dat, self.loc))
+                        .and_then(|(sig, dat)| {
+                            ctx.add_sig(sig, dat, self.loc, self.default_calling_convention)
+                        })
                 }
                 Some(Token::FuncRef(..)) => {
                     self.start_gathering_comments();
@@ -2951,8 +2998,7 @@ mod tests {
                              set enable_float=false
                              ; still preamble
                              function %comment() system_v {}",
-            None,
-            None,
+            ParseOptions::default(),
         )
         .unwrap();
         assert_eq!(tf.commands.len(), 2);
@@ -2978,6 +3024,7 @@ mod tests {
         assert!(parse_test(
             "target
                             function %foo() system_v {}",
+            ParseOptions::default()
         )
         .is_err());
 
@@ -2985,6 +3032,7 @@ mod tests {
             "target riscv32
                             set enable_float=false
                             function %foo() system_v {}",
+            ParseOptions::default()
         )
         .is_err());
 
@@ -2992,6 +3040,7 @@ mod tests {
             "set enable_float=false
                           isa riscv
                           function %foo() system_v {}",
+            ParseOptions::default(),
         )
         .unwrap()
         .isa_spec
@@ -3051,5 +3100,27 @@ mod tests {
                                            }",
         );
         assert!(parser.parse_function(None).is_err());
+    }
+
+    #[test]
+    fn change_default_calling_convention() {
+        let code = "function %test() {
+        ebb0:
+            return
+        }";
+
+        // By default the parser will use the fast calling convention if none is specified.
+        let mut parser = Parser::new(code);
+        assert_eq!(
+            parser.parse_function(None).unwrap().0.signature.call_conv,
+            CallConv::Fast
+        );
+
+        // However, we can specify a different calling convention to be the default.
+        let mut parser = Parser::new(code).with_default_calling_convention(CallConv::Cold);
+        assert_eq!(
+            parser.parse_function(None).unwrap().0.signature.call_conv,
+            CallConv::Cold
+        );
     }
 }

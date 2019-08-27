@@ -1,7 +1,7 @@
 use core::mem;
 use cranelift_codegen::binemit::{NullRelocSink, NullStackmapSink, NullTrapSink};
 use cranelift_codegen::ir::Function;
-use cranelift_codegen::isa::{CallConv, TargetIsa};
+use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{settings, Context};
 use cranelift_native::builder as host_isa_builder;
 use memmap::MmapMut;
@@ -47,10 +47,7 @@ impl FunctionRunner {
             ));
         }
 
-        if func.signature.call_conv != self.isa.default_call_conv()
-            && func.signature.call_conv != CallConv::Fast
-        {
-            // ideally we wouldn't have to also check for Fast here but currently there is no way to inform the filetest parser that we would like to use a default other than Fast
+        if func.signature.call_conv != self.isa.default_call_conv() {
             return Err(String::from(
                 "Functions only run on the host's default calling convention; remove the specified calling convention in the function signature to use the host's default.",
             ));
@@ -97,7 +94,7 @@ impl FunctionRunner {
 #[cfg(test)]
 mod test {
     use super::*;
-    use cranelift_reader::parse_test;
+    use cranelift_reader::{parse_test, ParseOptions};
 
     #[test]
     fn nop() {
@@ -111,7 +108,7 @@ mod test {
         );
 
         // extract function
-        let test_file = parse_test(code.as_str(), None, None).unwrap();
+        let test_file = parse_test(code.as_str(), ParseOptions::default()).unwrap();
         assert_eq!(1, test_file.functions.len());
         let function = test_file.functions[0].0.clone();
 

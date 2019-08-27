@@ -9,7 +9,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
-use cranelift_reader::parse_test;
+use cranelift_reader::{parse_test, ParseOptions};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -27,7 +27,8 @@ pub fn run(
     let path = Path::new(&filename).to_path_buf();
 
     let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", filename, e))?;
-    let test_file = parse_test(&buffer, None, None).map_err(|e| format!("{}: {}", filename, e))?;
+    let test_file =
+        parse_test(&buffer, ParseOptions::default()).map_err(|e| format!("{}: {}", filename, e))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.
@@ -754,12 +755,13 @@ impl<'a> CrashCheckContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cranelift_reader::ParseOptions;
 
     #[test]
     fn test_reduce() {
         const TEST: &'static str = include_str!("./bugpoint_test.clif");
 
-        let test_file = parse_test(TEST, None, None).unwrap();
+        let test_file = parse_test(TEST, ParseOptions::default()).unwrap();
 
         // If we have an isa from the command-line, use that. Otherwise if the
         // file contains a unique isa, use that.

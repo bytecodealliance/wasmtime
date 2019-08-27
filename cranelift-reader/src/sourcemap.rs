@@ -211,7 +211,7 @@ impl SourceMap {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse_test;
+    use crate::{parse_test, ParseOptions};
 
     #[test]
     fn details() {
@@ -222,8 +222,7 @@ mod tests {
                              ebb0(v4: i32, v7: i32):
                                v10 = iadd v4, v7
                              }",
-            None,
-            None,
+            ParseOptions::default(),
         )
         .unwrap();
         let map = &tf.functions[0].1.map;
