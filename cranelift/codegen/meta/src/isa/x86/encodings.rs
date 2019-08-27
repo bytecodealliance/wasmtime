@@ -150,6 +150,20 @@ impl PerCpuModeEncodings {
         self.enc64(inst.bind(I64), template.rex().w());
     }
 
+    /// Add encodings for `inst.b32` to X86_32.
+    /// Add encodings for `inst.b32` to X86_64 with and without REX.
+    /// Add encodings for `inst.b64` to X86_64 with a REX.W prefix.
+    fn enc_b32_b64(&mut self, inst: impl Into<InstSpec>, template: Template) {
+        let inst: InstSpec = inst.into();
+        self.enc32(inst.bind(B32), template.nonrex());
+
+        // REX-less encoding must come after REX encoding so we don't use it by default. Otherwise
+        // reg-alloc would never use r8 and up.
+        self.enc64(inst.bind(B32), template.rex());
+        self.enc64(inst.bind(B32), template.nonrex());
+        self.enc64(inst.bind(B64), template.rex().w());
+    }
+
     /// Add encodings for `inst.i32` to X86_32.
     /// Add encodings for `inst.i32` to X86_64 with a REX prefix.
     /// Add encodings for `inst.i64` to X86_64 with a REX.W prefix.
@@ -658,11 +672,15 @@ pub(crate) fn define(
     e.enc_i32_i64(isub_ifborrow, rec_rio.opcodes(vec![0x19]));
 
     e.enc_i32_i64(band, rec_rr.opcodes(vec![0x21]));
+    e.enc_b32_b64(band, rec_rr.opcodes(vec![0x21]));
     e.enc_i32_i64(bor, rec_rr.opcodes(vec![0x09]));
+    e.enc_b32_b64(bor, rec_rr.opcodes(vec![0x09]));
     e.enc_i32_i64(bxor, rec_rr.opcodes(vec![0x31]));
+    e.enc_b32_b64(bxor, rec_rr.opcodes(vec![0x31]));
 
     // x86 has a bitwise not instruction NOT.
     e.enc_i32_i64(bnot, rec_ur.opcodes(vec![0xf7]).rrr(2));
+    e.enc_b32_b64(bnot, rec_ur.opcodes(vec![0xf7]).rrr(2));
 
     // Also add a `b1` encodings for the logic instructions.
     // TODO: Should this be done with 8-bit instructions? It would improve partial register
@@ -690,7 +708,12 @@ pub(crate) fn define(
         e.enc32(regmove.bind(ty), rec_rmov.opcodes(vec![0x89]));
         e.enc64(regmove.bind(ty), rec_rmov.opcodes(vec![0x89]).rex());
     }
+    for &ty in &[B8, B16, B32] {
+        e.enc32(regmove.bind(ty), rec_rmov.opcodes(vec![0x89]));
+        e.enc64(regmove.bind(ty), rec_rmov.opcodes(vec![0x89]).rex());
+    }
     e.enc64(regmove.bind(I64), rec_rmov.opcodes(vec![0x89]).rex().w());
+    e.enc64(regmove.bind(B64), rec_rmov.opcodes(vec![0x89]).rex().w());
     e.enc_both(regmove.bind(B1), rec_rmov.opcodes(vec![0x89]));
     e.enc_both(regmove.bind(I8), rec_rmov.opcodes(vec![0x89]));
     e.enc32(regmove.bind_ref(R32), rec_rmov.opcodes(vec![0x89]));
