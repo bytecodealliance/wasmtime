@@ -6,6 +6,7 @@ mod externals;
 mod instance;
 mod module;
 mod runtime;
+mod table_utils;
 mod trampoline;
 mod trap;
 mod types;

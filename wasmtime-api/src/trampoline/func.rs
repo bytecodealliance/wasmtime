@@ -17,12 +17,12 @@ use core::cmp;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::{Func, Trap, Val};
+use crate::{Callable, FuncType, Store, Trap, Val};
 
 use super::create_handle::create_handle;
 
 struct TrampolineState {
-    func: Rc<RefCell<Func>>,
+    func: Rc<dyn Callable + 'static>,
     trap: Option<Rc<RefCell<Trap>>>,
     #[allow(dead_code)]
     code_memory: CodeMemory,
@@ -45,15 +45,15 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
         (args, signature.returns.len())
     };
 
-    let func = instance
+    let mut returns = vec![Val::default(); returns_len];
+    let func = &instance
         .host_state()
         .downcast_mut::<TrampolineState>()
         .expect("state")
-        .func
-        .borrow();
+        .func;
 
-    match func.call(&args) {
-        Ok(returns) => {
+    match func.call(&args, &mut returns) {
+        Ok(()) => {
             for i in 0..returns_len {
                 // TODO check signature.returns[i].value_type ?
                 returns[i].write_value_to(values_vec.offset(i as isize));
@@ -188,8 +188,12 @@ fn make_trampoline(
         .as_ptr()
 }
 
-pub fn create_handle_with_function(func: &Rc<RefCell<Func>>) -> Result<InstanceHandle, Error> {
-    let sig = func.borrow().r#type().get_cranelift_signature().clone();
+pub fn create_handle_with_function(
+    ft: &FuncType,
+    func: &Rc<dyn Callable + 'static>,
+    store: &Rc<RefCell<Store>>,
+) -> Result<InstanceHandle, Error> {
+    let sig = ft.get_cranelift_signature().clone();
 
     let isa = {
         let isa_builder =
@@ -229,7 +233,12 @@ pub fn create_handle_with_function(func: &Rc<RefCell<Func>>) -> Result<InstanceH
         code_memory,
     };
 
-    create_handle(module, finished_functions, Box::new(trampoline_state))
+    create_handle(
+        module,
+        Some(store.borrow_mut()),
+        finished_functions,
+        Box::new(trampoline_state),
+    )
 }
 
 /// We don't expect trampoline compilation to produce any relocations, so

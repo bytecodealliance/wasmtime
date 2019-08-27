@@ -181,7 +181,8 @@ impl Compiler {
         self.code_memory.publish();
     }
 
-    pub(crate) fn signatures(&mut self) -> &mut SignatureRegistry {
+    /// Shared signature registry.
+    pub fn signatures(&mut self) -> &mut SignatureRegistry {
         &mut self.signatures
     }
 }

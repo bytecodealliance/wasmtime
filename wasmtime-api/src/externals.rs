@@ -1,14 +1,15 @@
-use crate::callable::{Callable, WasmtimeFn};
+use crate::callable::{Callable, NativeCallable, WasmtimeFn, WrappedCallable};
 use crate::runtime::Store;
+use crate::table_utils;
+use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
 use crate::trap::Trap;
 use crate::types::{ExternType, FuncType, GlobalType, MemoryType, TableType, ValType};
 use crate::values::Val;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::result::Result;
-
-use crate::trampoline::{generate_func_export, generate_global_export, generate_memory_export};
 use wasmtime_runtime::InstanceHandle;
+
 // Externals
 
 pub enum Extern {
@@ -55,15 +56,10 @@ impl Extern {
 
     pub(crate) fn get_wasmtime_export(&mut self) -> wasmtime_runtime::Export {
         match self {
-            Extern::Func(f) => {
-                if f.borrow().anchor.is_none() {
-                    generate_func_export(&f).expect("generate_func_export");
-                }
-                f.borrow().anchor.as_ref().unwrap().1.clone()
-            }
+            Extern::Func(f) => f.borrow().wasmtime_export().clone(),
             Extern::Global(g) => g.borrow().wasmtime_export().clone(),
             Extern::Memory(m) => m.borrow().wasmtime_export().clone(),
-            _ => unimplemented!("get_wasmtime_export"),
+            Extern::Table(t) => t.borrow().wasmtime_export().clone(),
         }
     }
 
@@ -73,58 +69,56 @@ impl Extern {
         export: wasmtime_runtime::Export,
     ) -> Extern {
         match export {
-            wasmtime_runtime::Export::Function {
-                address,
-                vmctx,
-                ref signature,
-            } => {
-                let ty = FuncType::from_cranelift_signature(signature.clone());
-                let callable = WasmtimeFn::new(store.clone(), signature.clone(), address, vmctx);
-                let mut f = Func::new(store, ty, Rc::new(callable));
-                f.anchor = Some((instance_handle, export.clone()));
-                Extern::Func(Rc::new(RefCell::new(f)))
-            }
+            wasmtime_runtime::Export::Function { .. } => Extern::Func(Rc::new(RefCell::new(
+                Func::from_wasmtime_function(export, store, instance_handle),
+            ))),
             wasmtime_runtime::Export::Memory { .. } => Extern::Memory(Rc::new(RefCell::new(
                 Memory::from_wasmtime_memory(export, store, instance_handle),
             ))),
             wasmtime_runtime::Export::Global { .. } => Extern::Global(Rc::new(RefCell::new(
                 Global::from_wasmtime_global(export, store),
             ))),
-            wasmtime_runtime::Export::Table {
-                definition: _,
-                vmctx: _,
-                table,
-            } => {
-                let ty = TableType::from_cranelift_table(table.table.clone());
-                Extern::Table(Rc::new(RefCell::new(Table::new(store, ty))))
-            }
+            wasmtime_runtime::Export::Table { .. } => Extern::Table(Rc::new(RefCell::new(
+                Table::from_wasmtime_table(export, store, instance_handle),
+            ))),
         }
     }
 }
 
 pub struct Func {
     _store: Rc<RefCell<Store>>,
-    callable: Rc<dyn Callable + 'static>,
+    callable: Rc<dyn WrappedCallable + 'static>,
     r#type: FuncType,
-    pub(crate) anchor: Option<(InstanceHandle, wasmtime_runtime::Export)>,
 }
 
 impl Func {
     pub fn new(
         store: Rc<RefCell<Store>>,
-        r#type: FuncType,
+        ty: FuncType,
         callable: Rc<dyn Callable + 'static>,
+    ) -> Self {
+        let callable = Rc::new(NativeCallable::new(callable, &ty, &store));
+        Func::from_wrapped(store, ty, callable)
+    }
+
+    fn from_wrapped(
+        store: Rc<RefCell<Store>>,
+        r#type: FuncType,
+        callable: Rc<dyn WrappedCallable + 'static>,
     ) -> Func {
         Func {
             _store: store,
             callable,
             r#type,
-            anchor: None,
         }
     }
 
     pub fn r#type(&self) -> &FuncType {
         &self.r#type
+    }
+
+    pub(crate) fn callable(&self) -> &Rc<dyn WrappedCallable + 'static> {
+        &self.callable
     }
 
     pub fn param_arity(&self) -> usize {
@@ -135,14 +129,28 @@ impl Func {
         self.r#type.results().len()
     }
 
-    pub fn callable(&self) -> &(dyn Callable + 'static) {
-        self.callable.as_ref()
-    }
-
     pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Rc<RefCell<Trap>>> {
         let mut results = vec![Val::default(); self.result_arity()];
         self.callable.call(params, &mut results)?;
         Ok(results.into_boxed_slice())
+    }
+
+    fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
+        self.callable.wasmtime_export()
+    }
+
+    fn from_wasmtime_function(
+        export: wasmtime_runtime::Export,
+        store: Rc<RefCell<Store>>,
+        instance_handle: InstanceHandle,
+    ) -> Self {
+        let ty = if let wasmtime_runtime::Export::Function { signature, .. } = &export {
+            FuncType::from_cranelift_signature(signature.clone())
+        } else {
+            panic!("expected function export")
+        };
+        let callable = WasmtimeFn::new(store.clone(), instance_handle, export.clone());
+        Func::from_wrapped(store, ty, Rc::new(callable))
     }
 }
 
@@ -234,15 +242,27 @@ impl Global {
 }
 
 pub struct Table {
-    _store: Rc<RefCell<Store>>,
+    store: Rc<RefCell<Store>>,
     r#type: TableType,
+    #[allow(dead_code)]
+    wasmtime_handle: InstanceHandle,
+    wasmtime_export: wasmtime_runtime::Export,
 }
 
 impl Table {
-    pub fn new(store: Rc<RefCell<Store>>, r#type: TableType) -> Table {
+    pub fn new(store: Rc<RefCell<Store>>, r#type: TableType, _init: Val) -> Table {
+        match r#type.element() {
+            ValType::FuncRef => (),
+            _ => panic!("table is not for funcref"),
+        }
+        // TODO implement _init initialization
+        let (wasmtime_handle, wasmtime_export) =
+            generate_table_export(&r#type).expect("generated table");
         Table {
-            _store: store,
+            store,
             r#type,
+            wasmtime_handle,
+            wasmtime_export,
         }
     }
 
@@ -250,20 +270,54 @@ impl Table {
         &self.r#type
     }
 
-    pub fn get(&self, _index: u32) -> Val {
-        unimplemented!("Table::get")
+    fn wasmtime_table_definition(&self) -> *mut wasmtime_runtime::VMTableDefinition {
+        match self.wasmtime_export {
+            wasmtime_runtime::Export::Table { definition, .. } => definition,
+            _ => panic!("global definition not found"),
+        }
     }
 
-    pub fn set(&self, _index: u32, _val: &Val) -> usize {
-        unimplemented!("Table::set")
+    pub fn get(&self, index: u32) -> Val {
+        let definition = self.wasmtime_table_definition();
+        unsafe { table_utils::get_item(definition, &self.store, index) }
+    }
+
+    pub fn set(&self, index: u32, val: Val) -> bool {
+        let definition = self.wasmtime_table_definition();
+        unsafe { table_utils::set_item(definition, &self.store, index, val) }
     }
 
     pub fn size(&self) -> u32 {
-        unimplemented!("Table::size")
+        let definition = self.wasmtime_table_definition();
+        unsafe { table_utils::get_size(definition) }
     }
 
-    pub fn grow(&mut self, _delta: u32) -> bool {
-        unimplemented!("Table::grow")
+    pub fn grow(&mut self, delta: u32, init: Val) -> bool {
+        let definition = self.wasmtime_table_definition();
+        unsafe { table_utils::grow_table(definition, &self.r#type, &self.store, delta, init) }
+    }
+
+    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
+        &self.wasmtime_export
+    }
+
+    pub(crate) fn from_wasmtime_table(
+        export: wasmtime_runtime::Export,
+        store: Rc<RefCell<Store>>,
+        instance_handle: wasmtime_runtime::InstanceHandle,
+    ) -> Table {
+        let table = if let wasmtime_runtime::Export::Table { ref table, .. } = export {
+            table
+        } else {
+            panic!("wasmtime export is not table")
+        };
+        let ty = TableType::from_cranelift_table(table.table.clone());
+        Table {
+            store,
+            r#type: ty,
+            wasmtime_handle: instance_handle,
+            wasmtime_export: export,
+        }
     }
 }
 
