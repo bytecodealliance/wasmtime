@@ -42,3 +42,19 @@ ebb0:
 }
 
 ; run
+
+
+function %compare_shuffle() -> b32 {
+ebb0:
+    v1 = vconst.b32x4 [true false true false]
+    v2 = raw_bitcast.b8x16 v1 ; we have to cast because shuffle is type-limited to Tx16
+    ; pair up the true values to make the entire vector true
+    v3 = shuffle v2, v2, [0 1 2 3 0 1 2 3 8 9 10 11 8 9 10 11]
+    v4 = raw_bitcast.b32x4 v3
+    v5 = extractlane v4, 3
+    v6 = extractlane v4, 0
+    v7 = band v5, v6
+    return v7
+}
+
+; run
