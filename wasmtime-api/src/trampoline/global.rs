@@ -35,7 +35,8 @@ pub fn create_global(
         },
         initializer: cranelift_wasm::GlobalInit::Import, // TODO is it right?
     };
-    let mut handle = create_handle(Module::new(), PrimaryMap::new(), Box::new(())).expect("handle");
+    let mut handle =
+        create_handle(Module::new(), None, PrimaryMap::new(), Box::new(())).expect("handle");
     Ok((
         wasmtime_runtime::Export::Global {
             definition: definition.as_mut(),

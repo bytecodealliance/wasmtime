@@ -29,5 +29,5 @@ pub fn create_handle_with_memory(memory: &MemoryType) -> Result<InstanceHandle, 
         wasmtime_environ::Export::Memory(memory_id),
     );
 
-    create_handle(module, PrimaryMap::new(), Box::new(()))
+    create_handle(module, None, PrimaryMap::new(), Box::new(()))
 }

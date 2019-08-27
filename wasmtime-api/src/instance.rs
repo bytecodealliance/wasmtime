@@ -108,6 +108,12 @@ impl Instance {
         let mut mutable = instance_handle.clone();
         for (name, _) in instance_handle.clone().exports() {
             let export = mutable.lookup(name).expect("export");
+            if let wasmtime_runtime::Export::Function { signature, .. } = &export {
+                // HACK ensure all handles, instantiated outside Store, present in
+                // the store's SignatureRegistry.
+                use crate::runtime::SignatureRegistry;
+                let _ = store.borrow_mut().register_cranelift_signature(signature);
+            }
             export_names_map.insert(name.to_owned(), exports.len());
             exports.push(Rc::new(RefCell::new(Extern::from_wasmtime_export(
                 store.clone(),

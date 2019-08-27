@@ -387,7 +387,7 @@ impl VMGlobalDefinition {
 /// An index into the shared signature registry, usable for checking signatures
 /// at indirect calls.
 #[repr(C)]
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
 pub struct VMSharedSignatureIndex(u32);
 
 #[cfg(test)]
@@ -422,14 +422,23 @@ impl VMSharedSignatureIndex {
     }
 }
 
+impl Default for VMSharedSignatureIndex {
+    fn default() -> Self {
+        VMSharedSignatureIndex::new(u32::MAX)
+    }
+}
+
 /// The VM caller-checked "anyfunc" record, for caller-side signature checking.
 /// It consists of the actual function pointer and a signature id to be checked
 /// by the caller.
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct VMCallerCheckedAnyfunc {
+    /// Function body.
     pub func_ptr: *const VMFunctionBody,
+    /// Function signature id.
     pub type_index: VMSharedSignatureIndex,
+    /// Function `VMContext`.
     pub vmctx: *mut VMContext,
     // If more elements are added here, remember to add offset_of tests below!
 }
@@ -467,7 +476,7 @@ impl Default for VMCallerCheckedAnyfunc {
     fn default() -> Self {
         Self {
             func_ptr: ptr::null_mut(),
-            type_index: VMSharedSignatureIndex::new(u32::MAX),
+            type_index: Default::default(),
             vmctx: ptr::null_mut(),
         }
     }

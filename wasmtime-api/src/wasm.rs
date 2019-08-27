@@ -6,9 +6,9 @@
 // TODO complete the C API
 
 use super::{
-    Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
-    ImportType, Instance, Limits, Memory, MemoryType, Module, Name, Store, TableType, Trap, Val,
-    ValType,
+    AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncRef, FuncType, Global,
+    GlobalType, ImportType, Instance, Limits, Memory, MemoryType, Module, Name, Store, Table,
+    TableType, Trap, Val, ValType,
 };
 use std::boxed::Box;
 use std::cell::RefCell;
@@ -268,7 +268,7 @@ declare_vec!(wasm_exporttype_vec_t, *mut wasm_exporttype_t);
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_ref_t {
-    _unused: [u8; 0],
+    r: AnyRef,
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -360,7 +360,7 @@ pub struct wasm_global_t {
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_table_t {
-    _unused: [u8; 0],
+    table: Rc<RefCell<Table>>,
 }
 pub type wasm_table_size_t = u32;
 #[repr(C)]
@@ -1333,4 +1333,134 @@ pub unsafe extern "C" fn wasm_memorytype_new(
         limits_cache: None,
     });
     Box::into_raw(mt)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_extern_as_table(e: *mut wasm_extern_t) -> *mut wasm_table_t {
+    let t = Box::new(wasm_table_t {
+        table: (*e).ext.borrow().table().clone(),
+    });
+    Box::into_raw(t)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_func_as_ref(f: *mut wasm_func_t) -> *mut wasm_ref_t {
+    let callable = (*f).func.borrow().callable().clone();
+    let f = Box::new(wasm_ref_t {
+        r: AnyRef::Func(FuncRef(callable)),
+    });
+    Box::into_raw(f)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_ref_delete(r: *mut wasm_ref_t) {
+    if !r.is_null() {
+        let _ = Box::from_raw(r);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_delete(t: *mut wasm_table_t) {
+    let _ = Box::from_raw(t);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_copy(t: *const wasm_table_t) -> *mut wasm_table_t {
+    Box::into_raw(Box::new((*t).clone()))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_new(
+    store: *mut wasm_store_t,
+    tt: *const wasm_tabletype_t,
+    init: *mut wasm_ref_t,
+) -> *mut wasm_table_t {
+    let init: Val = if !init.is_null() {
+        Box::from_raw(init).r.into()
+    } else {
+        Val::AnyRef(AnyRef::Null)
+    };
+    let t = Box::new(wasm_table_t {
+        table: Rc::new(RefCell::new(Table::new(
+            (*store).store.clone(),
+            (*tt).tabletype.clone(),
+            init,
+        ))),
+    });
+    Box::into_raw(t)
+}
+
+unsafe fn into_funcref(val: Val) -> *mut wasm_ref_t {
+    if let Val::AnyRef(AnyRef::Null) = val {
+        return ptr::null_mut();
+    }
+    let r = Box::new(wasm_ref_t { r: val.into() });
+    Box::into_raw(r)
+}
+
+unsafe fn from_funcref(r: *mut wasm_ref_t) -> Val {
+    if !r.is_null() {
+        Box::from_raw(r).r.into()
+    } else {
+        Val::AnyRef(AnyRef::Null)
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_get(
+    t: *const wasm_table_t,
+    index: wasm_table_size_t,
+) -> *mut wasm_ref_t {
+    let val = (*t).table.borrow().get(index);
+    into_funcref(val)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_set(
+    t: *mut wasm_table_t,
+    index: wasm_table_size_t,
+    r: *mut wasm_ref_t,
+) -> bool {
+    let val = from_funcref(r);
+    (*t).table.borrow().set(index, val)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_size(t: *const wasm_table_t) -> wasm_table_size_t {
+    (*t).table.borrow().size()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_grow(
+    t: *mut wasm_table_t,
+    delta: wasm_table_size_t,
+    init: *mut wasm_ref_t,
+) -> bool {
+    let init = from_funcref(init);
+    (*t).table.borrow_mut().grow(delta, init)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_same(t1: *const wasm_table_t, t2: *const wasm_table_t) -> bool {
+    (*t1).table.as_ptr() == (*t2).table.as_ptr()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_tabletype_delete(tt: *mut wasm_tabletype_t) {
+    let _ = Box::from_raw(tt);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_tabletype_new(
+    ty: *mut wasm_valtype_t,
+    limits: *const wasm_limits_t,
+) -> *mut wasm_tabletype_t {
+    let ty = Box::from_raw(ty).ty;
+    let limits = Limits::new((*limits).min, (*limits).max);
+    let tt = Box::new(wasm_tabletype_t {
+        tabletype: TableType::new(ty, limits),
+        element_cache: None,
+        limits_cache: None,
+    });
+    Box::into_raw(tt)
 }

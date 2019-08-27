@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::context::{create_compiler, Context};
 
-use cranelift_codegen::settings;
+use cranelift_codegen::{ir, settings};
 use wasmtime_jit::Features;
 
 // Runtime Environment
@@ -79,10 +79,22 @@ impl Engine {
 
 // Store
 
+pub(crate) trait SignatureRegistry {
+    fn register_cranelift_signature(
+        &mut self,
+        signature: &ir::Signature,
+    ) -> wasmtime_runtime::VMSharedSignatureIndex;
+    fn lookup_cranelift_signature(
+        &self,
+        type_index: wasmtime_runtime::VMSharedSignatureIndex,
+    ) -> Option<&ir::Signature>;
+}
+
 pub struct Store {
     engine: Rc<RefCell<Engine>>,
     context: Context,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
+    signature_cache: HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>,
 }
 
 impl Store {
@@ -94,6 +106,7 @@ impl Store {
             engine,
             context: Context::create(flags, features, debug_info),
             global_exports: Rc::new(RefCell::new(HashMap::new())),
+            signature_cache: HashMap::new(),
         }
     }
 
@@ -110,5 +123,28 @@ impl Store {
         &self,
     ) -> &Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> {
         &self.global_exports
+    }
+}
+
+impl SignatureRegistry for Store {
+    fn register_cranelift_signature(
+        &mut self,
+        signature: &ir::Signature,
+    ) -> wasmtime_runtime::VMSharedSignatureIndex {
+        use std::collections::hash_map::Entry;
+        let index = self.context().compiler().signatures().register(signature);
+        match self.signature_cache.entry(index) {
+            Entry::Vacant(v) => {
+                v.insert(signature.clone());
+            }
+            Entry::Occupied(_) => (),
+        }
+        index
+    }
+    fn lookup_cranelift_signature(
+        &self,
+        type_index: wasmtime_runtime::VMSharedSignatureIndex,
+    ) -> Option<&ir::Signature> {
+        self.signature_cache.get(&type_index)
     }
 }

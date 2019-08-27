@@ -52,8 +52,9 @@ pub use crate::sig_registry::SignatureRegistry;
 pub use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 pub use crate::traphandlers::{wasmtime_call, wasmtime_call_trampoline};
 pub use crate::vmcontext::{
-    VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
-    VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition,
+    VMTableImport,
 };
 
 /// Version number of this crate.

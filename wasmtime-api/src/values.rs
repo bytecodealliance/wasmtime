@@ -1,6 +1,6 @@
-use crate::callable::Callable;
+use crate::callable::WrappedCallable;
 use crate::types::ValType;
-use std::cell::RefCell;
+use std::any::Any;
 use std::fmt;
 use std::ptr;
 use std::rc::Rc;
@@ -9,26 +9,50 @@ use cranelift_codegen::ir;
 use wasmtime_jit::RuntimeValue;
 
 #[derive(Clone)]
-pub struct AnyRef;
+pub enum AnyRef {
+    Null,
+    Rc(Rc<dyn Any>),
+    Func(FuncRef),
+}
+
 impl AnyRef {
     pub fn null() -> AnyRef {
-        AnyRef
+        AnyRef::Null
     }
 }
 
 impl fmt::Debug for AnyRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "anyref")
+        match self {
+            AnyRef::Null => write!(f, "null"),
+            AnyRef::Rc(_) => write!(f, "anyref"),
+            AnyRef::Func(func) => func.fmt(f),
+        }
     }
 }
 
-pub struct FuncRef {
-    pub callable: Box<dyn Callable + 'static>,
-}
+#[derive(Clone)]
+pub struct FuncRef(pub(crate) Rc<dyn WrappedCallable + 'static>);
 
 impl fmt::Debug for FuncRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "funcref")
+    }
+}
+
+impl From<AnyRef> for FuncRef {
+    fn from(anyref: AnyRef) -> FuncRef {
+        match anyref {
+            AnyRef::Func(f) => f,
+            AnyRef::Rc(_) => unimplemented!("try to unwrap?"),
+            AnyRef::Null => panic!("null anyref"),
+        }
+    }
+}
+
+impl Into<AnyRef> for FuncRef {
+    fn into(self) -> AnyRef {
+        AnyRef::Func(self)
     }
 }
 
@@ -38,13 +62,13 @@ pub enum Val {
     I64(i64),
     F32(u32),
     F64(u64),
-    AnyRef(Rc<RefCell<AnyRef>>),
-    FuncRef(Rc<RefCell<FuncRef>>),
+    AnyRef(AnyRef),
+    FuncRef(FuncRef),
 }
 
 impl Val {
     pub fn default() -> Val {
-        Val::AnyRef(Rc::new(RefCell::new(AnyRef::null())))
+        Val::AnyRef(AnyRef::null())
     }
 
     pub fn r#type(&self) -> ValType {
@@ -151,14 +175,27 @@ impl Into<f64> for Val {
     }
 }
 
-impl From<Rc<RefCell<AnyRef>>> for Val {
-    fn from(val: Rc<RefCell<AnyRef>>) -> Val {
-        Val::AnyRef(val)
+impl From<AnyRef> for Val {
+    fn from(val: AnyRef) -> Val {
+        match val {
+            AnyRef::Func(f) => Val::FuncRef(f),
+            _ => Val::AnyRef(val),
+        }
     }
 }
 
-impl From<Rc<RefCell<FuncRef>>> for Val {
-    fn from(val: Rc<RefCell<FuncRef>>) -> Val {
+impl From<FuncRef> for Val {
+    fn from(val: FuncRef) -> Val {
         Val::FuncRef(val)
+    }
+}
+
+impl Into<AnyRef> for Val {
+    fn into(self) -> AnyRef {
+        match self {
+            Val::AnyRef(r) => r,
+            Val::FuncRef(f) => AnyRef::Func(f),
+            _ => panic!("Invalid conversion of {:?} to anyref.", self),
+        }
     }
 }
