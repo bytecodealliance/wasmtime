@@ -20,6 +20,8 @@ pub struct TestFile<'a> {
     pub commands: Vec<TestCommand<'a>>,
     /// `isa bar ...` lines.
     pub isa_spec: IsaSpec,
+    /// `feature ...` lines
+    pub features: Vec<Feature<'a>>,
     /// Comments appearing before the first function.
     /// These are all tagged as 'Function' scope for lack of a better entity.
     pub preamble_comments: Vec<Comment<'a>>,
@@ -54,4 +56,18 @@ pub struct Comment<'a> {
     pub entity: AnyEntity,
     /// Text of the comment, including the leading `;`.
     pub text: &'a str,
+}
+
+/// A cranelift feature in a test file preamble.
+///
+/// This represents the expectation of the test case. Before running any of the
+/// functions of the test file, the feature set should be compared with the
+/// feature set used to compile Cranelift. If there is any differences, then the
+/// test file should be skipped.
+#[derive(PartialEq, Eq, Debug)]
+pub enum Feature<'a> {
+    /// `feature "..."` lines
+    With(&'a str),
+    /// `feature ! "..."` lines.
+    Without(&'a str),
 }
