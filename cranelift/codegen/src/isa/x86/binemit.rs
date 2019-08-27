@@ -342,7 +342,7 @@ fn jt_disp4<CS: CodeSink + ?Sized>(jt: JumpTable, func: &Function, sink: &mut CS
     sink.reloc_jt(Reloc::X86PCRelRodata4, jt);
 }
 
-/// Emit a four-byte displacement to `constant`
+/// Emit a four-byte displacement to `constant`.
 fn const_disp4<CS: CodeSink + ?Sized>(constant: Constant, func: &Function, sink: &mut CS) {
     let offset = func.dfg.constants.get_offset(constant);
     let delta = offset.wrapping_sub(sink.offset() + 4);
