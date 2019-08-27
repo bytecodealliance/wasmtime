@@ -133,7 +133,7 @@ pub trait CodeSink {
     /// Add a relocation referencing an external symbol plus the addend at the current offset.
     fn reloc_external(&mut self, _: Reloc, _: &ExternalName, _: Addend);
 
-    /// Add a relocation referencing a jump table.
+    /// Add a relocation referencing a constant.
     fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset);
 
     /// Add a relocation referencing a jump table.
