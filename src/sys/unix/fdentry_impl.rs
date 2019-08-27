@@ -51,10 +51,7 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
         // we just make a `File` here for convenience; we don't want it to close when it drops
         let file =
             std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(fd.as_raw_fd()) });
-        let ft = file
-            .metadata()
-            .map_err(errno_from_ioerror)?
-            .file_type();
+        let ft = file.metadata().map_err(errno_from_ioerror)?.file_type();
         if ft.is_block_device() {
             (
                 host::__WASI_FILETYPE_BLOCK_DEVICE,
@@ -110,9 +107,9 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
             }
         } else if ft.is_fifo() {
             (
-                host::__WASI_FILETYPE_SOCKET_STREAM,
-                host::RIGHTS_SOCKET_BASE,
-                host::RIGHTS_SOCKET_INHERITING,
+                host::__WASI_FILETYPE_UNKNOWN,
+                host::RIGHTS_REGULAR_FILE_BASE,
+                host::RIGHTS_REGULAR_FILE_INHERITING,
             )
         } else {
             return Err(host::__WASI_EINVAL);

@@ -158,7 +158,7 @@ pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> host::__wasi_f
         host::__WASI_FILETYPE_CHARACTER_DEVICE
     } else if sflags.contains(SFlag::S_IFBLK) {
         host::__WASI_FILETYPE_BLOCK_DEVICE
-    } else if sflags.contains(SFlag::S_IFIFO) | sflags.contains(SFlag::S_IFSOCK) {
+    } else if sflags.contains(SFlag::S_IFSOCK) {
         host::__WASI_FILETYPE_SOCKET_STREAM
     } else if sflags.contains(SFlag::S_IFDIR) {
         host::__WASI_FILETYPE_DIRECTORY
@@ -169,31 +169,6 @@ pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> host::__wasi_f
     } else {
         host::__WASI_FILETYPE_UNKNOWN
     }
-}
-
-pub(crate) fn nix_from_filetype(sflags: host::__wasi_filetype_t) -> nix::sys::stat::SFlag {
-    use nix::sys::stat::SFlag;
-    let mut nix_sflags = SFlag::empty();
-    if sflags & host::__WASI_FILETYPE_CHARACTER_DEVICE != 0 {
-        nix_sflags.insert(SFlag::S_IFCHR);
-    }
-    if sflags & host::__WASI_FILETYPE_BLOCK_DEVICE != 0 {
-        nix_sflags.insert(SFlag::S_IFBLK);
-    }
-    if sflags & host::__WASI_FILETYPE_SOCKET_STREAM != 0 {
-        nix_sflags.insert(SFlag::S_IFIFO);
-        nix_sflags.insert(SFlag::S_IFSOCK);
-    }
-    if sflags & host::__WASI_FILETYPE_DIRECTORY != 0 {
-        nix_sflags.insert(SFlag::S_IFDIR);
-    }
-    if sflags & host::__WASI_FILETYPE_REGULAR_FILE != 0 {
-        nix_sflags.insert(SFlag::S_IFREG);
-    }
-    if sflags & host::__WASI_FILETYPE_SYMBOLIC_LINK != 0 {
-        nix_sflags.insert(SFlag::S_IFLNK);
-    }
-    nix_sflags
 }
 
 pub(crate) fn filestat_from_nix(

@@ -368,8 +368,6 @@ fn filetype(file: &File, metadata: &Metadata) -> Result<host::__wasi_filetype_t>
         Ok(host::__WASI_FILETYPE_CHARACTER_DEVICE)
     } else if ftype.is_block_device() {
         Ok(host::__WASI_FILETYPE_BLOCK_DEVICE)
-    } else if ftype.is_fifo() {
-        Ok(host::__WASI_FILETYPE_SOCKET_STREAM)
     } else if ftype.is_socket() {
         match socket::getsockopt(file.as_raw_fd(), socket::sockopt::SockType)
             .map_err(|err| err.as_errno().unwrap())
