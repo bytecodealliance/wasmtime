@@ -8,8 +8,7 @@ use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::Flags;
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
-use cranelift_reader::IsaSpec;
-use cranelift_reader::{parse_test, ParseOptions};
+use cranelift_reader::{parse_test, Feature, IsaSpec, ParseOptions};
 use log::info;
 use std::borrow::Cow;
 use std::fs;
@@ -52,6 +51,31 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
             return Err(e.to_string());
         }
     };
+
+    for feature in testfile.features.iter() {
+        let (flag, test_expect) = match feature {
+            Feature::With(name) => (name, true),
+            Feature::Without(name) => (name, false),
+        };
+        let cranelift_has = match flag {
+            // Add any cranelift feature flag here, and make sure that it is forwarded to the
+            // cranelift-filetest crate in the top-level Cargo.toml.
+            &"basic-blocks" => cfg!(feature = "basic-blocks"),
+            _ => {
+                return Err(format!(
+                    r#"{:?}: Unknown feature flag named "{}""#,
+                    path, flag
+                ))
+            }
+        };
+        if cranelift_has != test_expect {
+            println!(
+                r#"skipping test {:?}: non-matching feature flag "{}""#,
+                path, flag
+            );
+            return Ok(started.elapsed());
+        }
+    }
 
     if testfile.functions.is_empty() {
         return Err("no functions found".to_string());
