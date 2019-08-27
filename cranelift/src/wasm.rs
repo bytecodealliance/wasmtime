@@ -19,7 +19,7 @@ use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::path::Path;
 use std::path::PathBuf;
 use term;
-use wabt::wat2wasm;
+use wabt::{wat2wasm_with_features, Features};
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -49,6 +49,7 @@ pub fn run(
     flag_print_size: bool,
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
+    flag_enable_simd: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
 
@@ -64,6 +65,7 @@ pub fn run(
             flag_print_disasm,
             flag_report_times,
             flag_calc_value_ranges,
+            flag_enable_simd,
             &path.to_path_buf(),
             &name,
             parsed.as_fisa(),
@@ -81,6 +83,7 @@ fn handle_module(
     flag_print_disasm: bool,
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
+    flag_enable_simd: bool,
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
@@ -97,7 +100,11 @@ fn handle_module(
     let mut module_binary = read_to_end(path.clone()).map_err(|err| err.to_string())?;
 
     if !module_binary.starts_with(&[b'\0', b'a', b's', b'm']) {
-        module_binary = match wat2wasm(&module_binary) {
+        let mut features = Features::new();
+        if flag_enable_simd {
+            features.enable_simd();
+        }
+        module_binary = match wat2wasm_with_features(&module_binary, features) {
             Ok(data) => data,
             Err(e) => return Err(e.to_string()),
         };

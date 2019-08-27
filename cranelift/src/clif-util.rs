@@ -104,7 +104,13 @@ fn add_print_flag<'a>() -> clap::Arg<'a, 'a> {
 fn add_debug_flag<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("debug")
         .short("d")
-        .help("enable debug output on stderr/stdout")
+        .help("Enable debug output on stderr/stdout")
+}
+
+fn add_enable_simd_flag<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("enable-simd")
+        .long("enable-simd")
+        .help("Enable WASM's SIMD operations")
 }
 
 /// Returns a vector of clap value options and changes these options into a vector of strings
@@ -137,6 +143,7 @@ fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
         .arg(add_target_flag())
         .arg(add_input_file_arg())
         .arg(add_debug_flag())
+        .arg(add_enable_simd_flag())
 }
 
 fn handle_debug_flag(debug: bool) {
@@ -296,6 +303,7 @@ fn main() {
                     rest_cmd.is_present("print-size"),
                     rest_cmd.is_present("time-passes"),
                     rest_cmd.is_present("value-ranges"),
+                    rest_cmd.is_present("enable-simd"),
                 )
             };
 
