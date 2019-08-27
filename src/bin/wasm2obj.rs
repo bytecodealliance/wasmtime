@@ -112,16 +112,20 @@ fn main() {
         })
         .unwrap_or_else(|e| e.exit());
 
-    if args.flag_debug {
+    let log_config = if args.flag_debug {
         pretty_env_logger::init();
+        None
     } else {
-        wasmtime::init_file_per_thread_logger("wasm2obj.dbg.");
-    }
+        let prefix = "wasm2obj.dbg.";
+        wasmtime::init_file_per_thread_logger(prefix);
+        Some(prefix)
+    };
 
     let errors = cache_config::init(
         args.flag_cache || args.flag_cache_config_file.is_some(),
         args.flag_cache_config_file.as_ref(),
         args.flag_create_cache_config,
+        log_config,
     );
 
     if !errors.is_empty() {

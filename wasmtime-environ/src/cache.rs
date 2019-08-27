@@ -11,12 +11,13 @@ use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::string::{String, ToString};
 
 pub mod config;
 use config as cache_config; // so we have namespaced methods
+mod worker;
 
 lazy_static! {
     static ref SELF_MTIME: String = {
@@ -116,13 +117,19 @@ impl ModuleCacheEntry {
         let cache_bytes = zstd::decode_all(&compressed_cache_bytes[..])
             .map_err(|err| warn!("Failed to decompress cached code: {}", err))
             .ok()?;
-        bincode::deserialize(&cache_bytes[..])
+        let ret = bincode::deserialize(&cache_bytes[..])
             .map_err(|err| warn!("Failed to deserialize cached code: {}", err))
-            .ok()
+            .ok()?;
+
+        worker::on_cache_get_async(path); // call on success
+        Some(ret)
     }
 
     pub fn update_data(&self, data: &ModuleCacheData) {
-        let _ = self.update_data_impl(data);
+        if self.update_data_impl(data).is_some() {
+            let path = self.mod_cache_path.as_ref().unwrap();
+            worker::on_cache_update_async(path); // call on success
+        }
     }
 
     fn update_data_impl(&self, data: &ModuleCacheData) -> Option<()> {
@@ -140,12 +147,14 @@ impl ModuleCacheEntry {
 
         // Optimize syscalls: first, try writing to disk. It should succeed in most cases.
         // Otherwise, try creating the cache directory and retry writing to the file.
-        let err = fs::write(path, &compressed_data).err()?; // return on success
+        if fs_write_atomic(path, "mod", &compressed_data) {
+            return Some(());
+        }
+
         debug!(
             "Attempting to create the cache directory, because \
-             failed to write cached code to disk, path: {}, message: {}",
+             failed to write cached code to disk, path: {}",
             path.display(),
-            err,
         );
 
         let cache_dir = path.parent().unwrap();
@@ -159,23 +168,11 @@ impl ModuleCacheEntry {
             })
             .ok()?;
 
-        let err = fs::write(path, &compressed_data).err()?;
-        warn!(
-            "Failed to write cached code to disk, path: {}, message: {}",
-            path.display(),
-            err
-        );
-        fs::remove_file(path)
-            .map_err(|err| {
-                if err.kind() != io::ErrorKind::NotFound {
-                    warn!(
-                        "Failed to cleanup invalid cache, path: {}, message: {}",
-                        path.display(),
-                        err
-                    );
-                }
-            })
-            .ok()
+        if fs_write_atomic(path, "mod", &compressed_data) {
+            Some(())
+        } else {
+            None
+        }
     }
 }
 
@@ -220,6 +217,29 @@ impl Hasher for Sha256Hasher {
     fn write(&mut self, bytes: &[u8]) {
         self.0.input(bytes);
     }
+}
+
+// Assumption: path inside cache directory.
+// Then, we don't have to use sound OS-specific exclusive file access.
+// Note: there's no need to remove temporary file here - cleanup task will do it later.
+fn fs_write_atomic(path: &Path, reason: &str, contents: &[u8]) -> bool {
+    let lock_path = path.with_extension(format!("wip-atomic-write-{}", reason));
+    fs::OpenOptions::new()
+        .create_new(true) // atomic file creation (assumption: no one will open it without this flag)
+        .write(true)
+        .open(&lock_path)
+        .and_then(|mut file| file.write_all(contents))
+        // file should go out of scope and be closed at this point
+        .and_then(|()| fs::rename(&lock_path, &path)) // atomic file rename
+        .map_err(|err| {
+            warn!(
+                "Failed to write file with rename, lock path: {}, target path: {}, err: {}",
+                lock_path.display(),
+                path.display(),
+                err
+            )
+        })
+        .is_ok()
 }
 
 #[cfg(test)]

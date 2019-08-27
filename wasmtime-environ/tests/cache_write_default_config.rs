@@ -6,7 +6,7 @@ fn test_cache_write_default_config() {
     let dir = tempfile::tempdir().expect("Can't create temporary directory");
     let config_path = dir.path().join("cache-config.toml");
 
-    let errors = cache_config::init(true, Some(&config_path), true);
+    let errors = cache_config::init(true, Some(&config_path), true, None);
     assert!(errors.is_empty());
     assert!(config_path.exists());
 }

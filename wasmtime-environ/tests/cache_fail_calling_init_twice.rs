@@ -20,7 +20,7 @@ fn test_cache_fail_calling_init_twice() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let errors = cache_config::init(true, Some(&config_path), false);
+    let errors = cache_config::init(true, Some(&config_path), false, None);
     assert!(errors.is_empty());
-    let _errors = cache_config::init(true, Some(&config_path), false);
+    let _errors = cache_config::init(true, Some(&config_path), false, None);
 }

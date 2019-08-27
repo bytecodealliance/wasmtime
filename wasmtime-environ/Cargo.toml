@@ -30,6 +30,14 @@ spin = "0.5.0"
 log = { version = "0.4.8", default-features = false }
 zstd = "0.4"
 toml = "0.5"
+file-per-thread-logger = "0.1.1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = "0.3.7"
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+libc = "0.2.60"
+errno = "0.2.4"
 
 [dev-dependencies]
 tempfile = "3"
