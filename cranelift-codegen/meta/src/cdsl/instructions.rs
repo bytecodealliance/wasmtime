@@ -614,6 +614,12 @@ pub enum FormatPredicateKind {
     /// Is the immediate format field member equal to zero? (float64 version)
     IsZero64BitFloat,
 
+    /// Is the immediate format field member equal zero in all lanes?
+    IsAllZeroes128Bit,
+
+    /// Does the immediate format field member have ones in all bits of all lanes?
+    IsAllOnes128Bit,
+
     /// Has the value list (in member_name) the size specified in parameter?
     LengthEquals(usize),
 
@@ -690,6 +696,14 @@ impl FormatPredicateNode {
             FormatPredicateKind::IsZero64BitFloat => {
                 format!("predicates::is_zero_64_bit_float({})", self.member_name)
             }
+            FormatPredicateKind::IsAllZeroes128Bit => format!(
+                "predicates::is_all_zeroes_128_bit(func.dfg.constants.get({}))",
+                self.member_name
+            ),
+            FormatPredicateKind::IsAllOnes128Bit => format!(
+                "predicates::is_all_ones_128_bit(func.dfg.constants.get({}))",
+                self.member_name
+            ),
             FormatPredicateKind::LengthEquals(num) => format!(
                 "predicates::has_length_of({}, {}, func)",
                 self.member_name, num
@@ -926,6 +940,28 @@ impl InstructionPredicate {
             format,
             field_name,
             FormatPredicateKind::IsZero64BitFloat,
+        ))
+    }
+
+    pub fn new_is_all_zeroes_128bit(
+        format: &InstructionFormat,
+        field_name: &'static str,
+    ) -> InstructionPredicateNode {
+        InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
+            format,
+            field_name,
+            FormatPredicateKind::IsAllZeroes128Bit,
+        ))
+    }
+
+    pub fn new_is_all_ones_128bit(
+        format: &InstructionFormat,
+        field_name: &'static str,
+    ) -> InstructionPredicateNode {
+        InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
+            format,
+            field_name,
+            FormatPredicateKind::IsAllOnes128Bit,
         ))
     }
 
