@@ -389,6 +389,7 @@ mod tests {
              enable_float = true\n\
              enable_nan_canonicalization = false\n\
              enable_pinned_reg = false\n\
+             use_pinned_reg_as_heap_base = false\n\
              enable_simd = false\n\
              enable_atomics = true\n\
              enable_safepoints = false\n\

@@ -95,6 +95,21 @@ pub fn define() -> SettingGroup {
         false,
     );
 
+    settings.add_bool(
+        "use_pinned_reg_as_heap_base",
+        r#"Use the pinned register as the heap base.
+
+        Enabling this requires the enable_pinned_reg setting to be set to true. It enables a custom
+        legalization of the `heap_addr` instruction so it will use the pinned register as the heap
+        base, instead of fetching it from a global value.
+
+        Warning! Enabling this means that the pinned register *must* be maintained to contain the
+        heap base address at all times, during the lifetime of a function. Using the pinned
+        register for other purposes when this is set is very likely to cause crashes.
+        "#,
+        false,
+    );
+
     settings.add_bool("enable_simd", "Enable the use of SIMD instructions.", false);
 
     settings.add_bool(
