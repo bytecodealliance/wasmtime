@@ -4,7 +4,7 @@ steps:
 
 - template: azure-install-rust.yml
 
-- bash: mkdir misc/wasmtime-py/wheelhouse
+- bash: mkdir misc/py/wheelhouse
   displayName: Pre-create wheelhouse directory
 
 # Note that we skip this on Linux because Python 3.6 is pre-installed in the
@@ -24,14 +24,14 @@ steps:
   condition: and(succeeded(), ne(variables['Agent.OS'], 'Linux'))
 
 - bash: python setup.py bdist_wheel
-  workingDirectory: misc/wasmtime-py
+  workingDirectory: misc/py
   displayName: Build wheels py36
 
 # Clear the build directory between building different wheels for different
 # Python versions to ensure that we don't package dynamic libraries twice by
 # accident.
 - bash: rm -rf build
-  workingDirectory: misc/wasmtime-py
+  workingDirectory: misc/py
   displayName: Clear build directory
 
 # Note that 3.7 isn't installed on Linux so we don't do this a second time
@@ -45,7 +45,7 @@ steps:
     set -e
     pip3 install setuptools wheel==0.31.1 setuptools-rust
     python setup.py bdist_wheel
-  workingDirectory: misc/wasmtime-py
+  workingDirectory: misc/py
   displayName: Build wheels py37
   condition: and(succeeded(), ne(variables['Agent.OS'], 'Linux'))
 
@@ -53,7 +53,7 @@ steps:
 # need to run an `auditwheel` command as well to turn these into "manylinux"
 # wheels to run across a number of distributions.
 - bash: mv dist/*.whl wheelhouse/
-  workingDirectory: misc/wasmtime-py
+  workingDirectory: misc/py
   displayName: Move wheels to wheelhouse (not Linux)
   condition: and(succeeded(), ne(variables['Agent.OS'], 'Linux'))
 - bash: |
@@ -61,7 +61,7 @@ steps:
     for whl in dist/*.whl; do
         auditwheel repair "$whl" -w wheelhouse/
     done
-  workingDirectory: misc/wasmtime-py
+  workingDirectory: misc/py
   displayName: Move wheels to wheelhouse (Linux)
   condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
 
@@ -69,5 +69,5 @@ steps:
 # github releases
 - task: PublishPipelineArtifact@1
   inputs:
-    path: misc/wasmtime-py/wheelhouse
+    path: misc/py/wheelhouse
     artifactName: 'wheels-$(Agent.OS)'

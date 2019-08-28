@@ -80,7 +80,7 @@ or `cargo run --bin wasmtime foo.wasm`.
 
 The polyfill is online [here](https://wasi.dev/polyfill/).
 
-The source is [here](https://github.com/CraneStation/wasmtime/tree/master/wasmtime-wasi/js-polyfill).
+The source is [here](https://github.com/CraneStation/wasmtime/tree/master/crates/wasi/js-polyfill).
 
 ## Where can I learn more?
 

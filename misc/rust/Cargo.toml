@@ -15,6 +15,6 @@ doctest = false
 cranelift-codegen = "0.40.0"
 cranelift-native = "0.40.0"
 failure = "0.1.5"
-wasmtime-interface-types = { path = "../../crates/wasmtime-interface-types" }
-wasmtime-jit = { path = "../../crates/wasmtime-jit" }
+wasmtime-interface-types = { path = "../../crates/interface-types" }
+wasmtime-jit = { path = "../../crates/jit" }
 wasmtime-rust-macro = { path = "./macro" }
