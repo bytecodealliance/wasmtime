@@ -6,12 +6,11 @@
 // TODO complete the C API
 
 use super::{
-    AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncRef, FuncType, Global,
-    GlobalType, ImportType, Instance, Limits, Memory, MemoryType, Module, Name, Store, Table,
-    TableType, Trap, Val, ValType,
+    AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
+    HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Name, Store,
+    Table, TableType, Trap, Val, ValType,
 };
 use std::boxed::Box;
-use std::cell::RefCell;
 use std::mem;
 use std::ptr;
 use std::rc::Rc;
@@ -166,12 +165,12 @@ pub struct wasm_config_t {
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_engine_t {
-    engine: Rc<RefCell<Engine>>,
+    engine: HostRef<Engine>,
 }
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_store_t {
-    store: Rc<RefCell<Store>>,
+    store: HostRef<Store>,
 }
 #[doc = ""]
 pub type wasm_mutability_t = u8;
@@ -312,13 +311,13 @@ declare_vec!(wasm_frame_vec_t, *mut wasm_frame_t);
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_instance_t {
-    instance: Rc<RefCell<Instance>>,
+    instance: HostRef<Instance>,
 }
 pub type wasm_message_t = wasm_name_t;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_trap_t {
-    trap: Rc<RefCell<Trap>>,
+    trap: HostRef<Trap>,
 }
 #[repr(C)]
 #[derive(Clone)]
@@ -328,7 +327,7 @@ pub struct wasm_foreign_t {
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_module_t {
-    module: Rc<RefCell<Module>>,
+    module: HostRef<Module>,
     imports: Vec<wasm_importtype_t>,
     exports: Vec<wasm_exporttype_t>,
 }
@@ -340,7 +339,7 @@ pub struct wasm_shared_module_t {
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_func_t {
-    func: Rc<RefCell<Func>>,
+    func: HostRef<Func>,
 }
 pub type wasm_func_callback_t = ::std::option::Option<
     unsafe extern "C" fn(args: *const wasm_val_t, results: *mut wasm_val_t) -> *mut wasm_trap_t,
@@ -355,24 +354,24 @@ pub type wasm_func_callback_with_env_t = ::std::option::Option<
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_global_t {
-    global: Rc<RefCell<Global>>,
+    global: HostRef<Global>,
 }
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_table_t {
-    table: Rc<RefCell<Table>>,
+    table: HostRef<Table>,
 }
 pub type wasm_table_size_t = u32;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_memory_t {
-    memory: Rc<RefCell<Memory>>,
+    memory: HostRef<Memory>,
 }
 pub type wasm_memory_pages_t = u32;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_extern_t {
-    ext: Rc<RefCell<Extern>>,
+    ext: Extern,
 }
 
 declare_vec!(wasm_extern_vec_t, *mut wasm_extern_t);
@@ -395,14 +394,18 @@ pub unsafe extern "C" fn wasm_engine_delete(engine: *mut wasm_engine_t) {
 #[no_mangle]
 pub unsafe extern "C" fn wasm_engine_new() -> *mut wasm_engine_t {
     let engine = Box::new(wasm_engine_t {
-        engine: Rc::new(RefCell::new(Engine::default())),
+        engine: HostRef::new(Engine::default()),
     });
     Box::into_raw(engine)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_as_func(e: *mut wasm_extern_t) -> *mut wasm_func_t {
-    let func = (*e).ext.borrow().func().clone();
+    let func = if let Some(f) = (*e).ext.func() {
+        f.clone()
+    } else {
+        return ptr::null_mut();
+    };
     let func = Box::new(wasm_func_t { func });
     Box::into_raw(func)
 }
@@ -415,9 +418,7 @@ pub unsafe extern "C" fn wasm_extern_vec_delete(v: *mut wasm_extern_vec_t) {
 #[no_mangle]
 pub unsafe extern "C" fn wasm_func_as_extern(f: *mut wasm_func_t) -> *mut wasm_extern_t {
     let ext = Extern::Func((*f).func.clone());
-    let ext = Box::new(wasm_extern_t {
-        ext: Rc::new(RefCell::new(ext)),
-    });
+    let ext = Box::new(wasm_extern_t { ext });
     Box::into_raw(ext)
 }
 
@@ -512,7 +513,7 @@ impl wasm_val_t {
 }
 
 impl Callable for wasm_func_callback_t {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Rc<RefCell<Trap>>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
         let params = params
             .iter()
             .map(|p| wasm_val_t::from_val(p))
@@ -531,8 +532,8 @@ impl Callable for wasm_func_callback_t {
     }
 }
 
-impl Into<Rc<RefCell<Trap>>> for wasm_trap_t {
-    fn into(self) -> Rc<RefCell<Trap>> {
+impl Into<HostRef<Trap>> for wasm_trap_t {
+    fn into(self) -> HostRef<Trap> {
         self.trap
     }
 }
@@ -544,7 +545,7 @@ struct CallbackWithEnv {
 }
 
 impl Callable for CallbackWithEnv {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Rc<RefCell<Trap>>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
         let params = params
             .iter()
             .map(|p| wasm_val_t::from_val(p))
@@ -583,7 +584,7 @@ pub unsafe extern "C" fn wasm_func_new(
     let ty = (*ty).functype.clone();
     let callback = Rc::new(callback);
     let func = Box::new(wasm_func_t {
-        func: Rc::new(RefCell::new(Func::new(store, ty, callback))),
+        func: HostRef::new(Func::new(store, ty, callback)),
     });
     Box::into_raw(func)
 }
@@ -633,7 +634,7 @@ pub unsafe extern "C" fn wasm_instance_new(
     result: *mut *mut wasm_trap_t,
 ) -> *mut wasm_instance_t {
     let store = (*store).store.clone();
-    let mut externs: Vec<Rc<RefCell<Extern>>> = Vec::with_capacity((*module).imports.len());
+    let mut externs: Vec<Extern> = Vec::with_capacity((*module).imports.len());
     for i in 0..(*module).imports.len() {
         let import = *imports.offset(i as isize);
         externs.push((*import).ext.clone());
@@ -642,7 +643,7 @@ pub unsafe extern "C" fn wasm_instance_new(
     match Instance::new(store, module, &externs) {
         Ok(instance) => {
             let instance = Box::new(wasm_instance_t {
-                instance: Rc::new(RefCell::new(instance)),
+                instance: HostRef::new(instance),
             });
             if !result.is_null() {
                 (*result) = ptr::null_mut();
@@ -653,9 +654,7 @@ pub unsafe extern "C" fn wasm_instance_new(
             if !result.is_null() {
                 // TODO Unwrap trap from failure::Error
                 let trap = Box::new(wasm_trap_t {
-                    trap: Rc::new(RefCell::new(Trap::new(
-                        "trap during instantiation".to_string(),
-                    ))),
+                    trap: HostRef::new(Trap::new("trap during instantiation".to_string())),
                 });
                 (*result) = Box::into_raw(trap);
             }
@@ -715,7 +714,7 @@ pub unsafe extern "C" fn wasm_module_new(
         })
         .collect::<Vec<_>>();
     let module = Box::new(wasm_module_t {
-        module: Rc::new(RefCell::new(module)),
+        module: HostRef::new(module),
         imports,
         exports,
     });
@@ -731,7 +730,7 @@ pub unsafe extern "C" fn wasm_store_delete(store: *mut wasm_store_t) {
 pub unsafe extern "C" fn wasm_store_new(engine: *mut wasm_engine_t) -> *mut wasm_store_t {
     let engine = (*engine).engine.clone();
     let store = Box::new(wasm_store_t {
-        store: Rc::new(RefCell::new(Store::new(engine))),
+        store: HostRef::new(Store::new(engine)),
     });
     Box::into_raw(store)
 }
@@ -757,7 +756,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
         finalizer,
     });
     let func = Box::new(wasm_func_t {
-        func: Rc::new(RefCell::new(Func::new(store, ty, callback))),
+        func: HostRef::new(Func::new(store, ty, callback)),
     });
     Box::into_raw(func)
 }
@@ -867,7 +866,7 @@ pub unsafe extern "C" fn wasm_trap_new(
     }
     let message = String::from_utf8_lossy(message).to_string();
     let trap = Box::new(wasm_trap_t {
-        trap: Rc::new(RefCell::new(Trap::new(message))),
+        trap: HostRef::new(Trap::new(message)),
     });
     Box::into_raw(trap)
 }
@@ -927,13 +926,13 @@ fn from_externtype(ty: &ExternType) -> wasm_externkind_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_kind(e: *const wasm_extern_t) -> wasm_externkind_t {
-    from_externtype(&(*e).ext.borrow().r#type())
+    from_externtype(&(*e).ext.r#type())
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_type(e: *const wasm_extern_t) -> *mut wasm_externtype_t {
     let et = Box::new(wasm_externtype_t {
-        ty: (*e).ext.borrow().r#type(),
+        ty: (*e).ext.r#type(),
         cache: wasm_externtype_t_type_cache::Empty,
     });
     Box::into_raw(et)
@@ -1175,15 +1174,18 @@ pub unsafe extern "C" fn wasm_valtype_kind(vt: *const wasm_valtype_t) -> wasm_va
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_as_global(e: *mut wasm_extern_t) -> *mut wasm_global_t {
-    let g = Box::new(wasm_global_t {
-        global: (*e).ext.borrow().global().clone(),
-    });
+    let global = if let Some(g) = (*e).ext.global() {
+        g.clone()
+    } else {
+        return ptr::null_mut();
+    };
+    let g = Box::new(wasm_global_t { global });
     Box::into_raw(g)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_global_as_extern(g: *mut wasm_global_t) -> *mut wasm_extern_t {
-    let ext = Rc::new(RefCell::new(Extern::Global((*g).global.clone())));
+    let ext = (*g).global.clone().into();
     let ext = Box::new(wasm_extern_t { ext });
     Box::into_raw(ext)
 }
@@ -1203,7 +1205,7 @@ pub unsafe extern "C" fn wasm_global_same(
     g1: *const wasm_global_t,
     g2: *const wasm_global_t,
 ) -> bool {
-    (*g1).global.as_ptr() == (*g2).global.as_ptr()
+    (*g1).global.ptr_eq(&(*g2).global)
 }
 
 #[no_mangle]
@@ -1212,11 +1214,11 @@ pub unsafe extern "C" fn wasm_global_new(
     gt: *const wasm_globaltype_t,
     val: *const wasm_val_t,
 ) -> *mut wasm_global_t {
-    let global = Rc::new(RefCell::new(Global::new(
+    let global = HostRef::new(Global::new(
         (*store).store.clone(),
         (*gt).globaltype.clone(),
         (*val).val(),
-    )));
+    ));
     let g = Box::new(wasm_global_t { global });
     Box::into_raw(g)
 }
@@ -1258,9 +1260,12 @@ pub unsafe extern "C" fn wasm_globaltype_new(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_as_memory(e: *mut wasm_extern_t) -> *mut wasm_memory_t {
-    let g = Box::new(wasm_memory_t {
-        memory: (*e).ext.borrow().memory().clone(),
-    });
+    let memory = if let Some(m) = (*e).ext.memory() {
+        m.clone()
+    } else {
+        return ptr::null_mut();
+    };
+    let g = Box::new(wasm_memory_t { memory });
     Box::into_raw(g)
 }
 
@@ -1279,12 +1284,12 @@ pub unsafe extern "C" fn wasm_memory_same(
     m1: *const wasm_memory_t,
     m2: *const wasm_memory_t,
 ) -> bool {
-    (*m1).memory.as_ptr() == (*m2).memory.as_ptr()
+    (*m1).memory.ptr_eq(&(*m2).memory)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_memory_data(m: *mut wasm_memory_t) -> *mut u8 {
-    (*m).memory.borrow().data()
+    (*m).memory.borrow().data_ptr()
 }
 
 #[no_mangle]
@@ -1310,10 +1315,10 @@ pub unsafe extern "C" fn wasm_memory_new(
     store: *mut wasm_store_t,
     mt: *const wasm_memorytype_t,
 ) -> *mut wasm_memory_t {
-    let memory = Rc::new(RefCell::new(Memory::new(
+    let memory = HostRef::new(Memory::new(
         (*store).store.clone(),
         (*mt).memorytype.clone(),
-    )));
+    ));
     let m = Box::new(wasm_memory_t { memory });
     Box::into_raw(m)
 }
@@ -1337,18 +1342,19 @@ pub unsafe extern "C" fn wasm_memorytype_new(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_as_table(e: *mut wasm_extern_t) -> *mut wasm_table_t {
-    let t = Box::new(wasm_table_t {
-        table: (*e).ext.borrow().table().clone(),
-    });
+    let table = if let Some(t) = (*e).ext.table() {
+        t.clone()
+    } else {
+        return ptr::null_mut();
+    };
+    let t = Box::new(wasm_table_t { table });
     Box::into_raw(t)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_func_as_ref(f: *mut wasm_func_t) -> *mut wasm_ref_t {
-    let callable = (*f).func.borrow().callable().clone();
-    let f = Box::new(wasm_ref_t {
-        r: AnyRef::Func(FuncRef(callable)),
-    });
+    let r = (*f).func.anyref();
+    let f = Box::new(wasm_ref_t { r });
     Box::into_raw(f)
 }
 
@@ -1381,11 +1387,11 @@ pub unsafe extern "C" fn wasm_table_new(
         Val::AnyRef(AnyRef::Null)
     };
     let t = Box::new(wasm_table_t {
-        table: Rc::new(RefCell::new(Table::new(
+        table: HostRef::new(Table::new(
             (*store).store.clone(),
             (*tt).tabletype.clone(),
             init,
-        ))),
+        )),
     });
     Box::into_raw(t)
 }
@@ -1442,7 +1448,7 @@ pub unsafe extern "C" fn wasm_table_grow(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_table_same(t1: *const wasm_table_t, t2: *const wasm_table_t) -> bool {
-    (*t1).table.as_ptr() == (*t2).table.as_ptr()
+    (*t1).table.ptr_eq(&(*t2).table)
 }
 
 #[no_mangle]
@@ -1463,4 +1469,34 @@ pub unsafe extern "C" fn wasm_tabletype_new(
         limits_cache: None,
     });
     Box::into_raw(tt)
+}
+
+struct HostInfoState {
+    info: *mut ::std::os::raw::c_void,
+    finalizer: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+}
+
+impl HostInfo for HostInfoState {
+    fn finalize(&mut self) {
+        if let Some(f) = &self.finalizer {
+            unsafe {
+                f(self.info);
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_instance_set_host_info_with_finalizer(
+    instance: *mut wasm_instance_t,
+    info: *mut ::std::os::raw::c_void,
+    finalizer: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+) {
+    let info = if info.is_null() && finalizer.is_none() {
+        None
+    } else {
+        let b: Box<dyn HostInfo> = Box::new(HostInfoState { info, finalizer });
+        Some(b)
+    };
+    (*instance).instance.anyref().set_host_info(info);
 }

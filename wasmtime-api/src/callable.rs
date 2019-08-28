@@ -1,8 +1,8 @@
+use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::trampoline::generate_func_export;
@@ -11,11 +11,11 @@ use wasmtime_jit::InstanceHandle;
 use wasmtime_runtime::Export;
 
 pub trait Callable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Rc<RefCell<Trap>>>;
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>>;
 }
 
 pub(crate) trait WrappedCallable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Rc<RefCell<Trap>>>;
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>>;
     fn signature(&self) -> &ir::Signature {
         match self.wasmtime_export() {
             Export::Function { signature, .. } => signature,
@@ -27,13 +27,13 @@ pub(crate) trait WrappedCallable {
 }
 
 pub(crate) struct WasmtimeFn {
-    store: Rc<RefCell<Store>>,
+    store: HostRef<Store>,
     instance: InstanceHandle,
     export: Export,
 }
 
 impl WasmtimeFn {
-    pub fn new(store: Rc<RefCell<Store>>, instance: InstanceHandle, export: Export) -> WasmtimeFn {
+    pub fn new(store: HostRef<Store>, instance: InstanceHandle, export: Export) -> WasmtimeFn {
         WasmtimeFn {
             store,
             instance,
@@ -43,7 +43,7 @@ impl WasmtimeFn {
 }
 
 impl WrappedCallable for WasmtimeFn {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Rc<RefCell<Trap>>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
         use core::cmp::max;
         use core::{mem, ptr};
 
@@ -81,7 +81,7 @@ impl WrappedCallable for WasmtimeFn {
         let exec_code_buf = context
             .compiler()
             .get_published_trampoline(body, &signature, value_size)
-            .map_err(|_| Rc::new(RefCell::new(Trap::fake())))?; //was ActionError::Setup)?;
+            .map_err(|_| HostRef::new(Trap::fake()))?; //was ActionError::Setup)?;
 
         // Call the trampoline.
         if let Err(message) = unsafe {
@@ -91,7 +91,7 @@ impl WrappedCallable for WasmtimeFn {
                 values_vec.as_mut_ptr() as *mut u8,
             )
         } {
-            return Err(Rc::new(RefCell::new(Trap::new(message))));
+            return Err(HostRef::new(Trap::new(message)));
         }
 
         // Load the return values out of `values_vec`.
@@ -129,7 +129,7 @@ impl NativeCallable {
     pub(crate) fn new(
         callable: Rc<dyn Callable + 'static>,
         ft: &FuncType,
-        store: &Rc<RefCell<Store>>,
+        store: &HostRef<Store>,
     ) -> Self {
         let (instance, export) =
             generate_func_export(ft, &callable, store).expect("generated func");
@@ -142,7 +142,7 @@ impl NativeCallable {
 }
 
 impl WrappedCallable for NativeCallable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Rc<RefCell<Trap>>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
         self.callable.call(params, results)
     }
     fn wasmtime_handle(&self) -> &InstanceHandle {

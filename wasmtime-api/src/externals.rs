@@ -1,46 +1,48 @@
 use crate::callable::{Callable, NativeCallable, WasmtimeFn, WrappedCallable};
+use crate::r#ref::{AnyRef, HostRef};
 use crate::runtime::Store;
 use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
 use crate::trap::Trap;
 use crate::types::{ExternType, FuncType, GlobalType, MemoryType, TableType, ValType};
-use crate::values::{from_checked_anyfunc, into_checked_anyfunc, AnyRef, Val};
-use std::cell::RefCell;
+use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
 use std::rc::Rc;
 use std::result::Result;
+use std::slice;
 use wasmtime_runtime::InstanceHandle;
 
 // Externals
 
+#[derive(Clone)]
 pub enum Extern {
-    Func(Rc<RefCell<Func>>),
-    Global(Rc<RefCell<Global>>),
-    Table(Rc<RefCell<Table>>),
-    Memory(Rc<RefCell<Memory>>),
+    Func(HostRef<Func>),
+    Global(HostRef<Global>),
+    Table(HostRef<Table>),
+    Memory(HostRef<Memory>),
 }
 
 impl Extern {
-    pub fn func(&self) -> &Rc<RefCell<Func>> {
+    pub fn func(&self) -> Option<&HostRef<Func>> {
         match self {
-            Extern::Func(func) => func,
-            _ => panic!("Extern::Func expected"),
+            Extern::Func(func) => Some(func),
+            _ => None,
         }
     }
-    pub fn global(&self) -> &Rc<RefCell<Global>> {
+    pub fn global(&self) -> Option<&HostRef<Global>> {
         match self {
-            Extern::Global(global) => global,
-            _ => panic!("Extern::Global expected"),
+            Extern::Global(global) => Some(global),
+            _ => None,
         }
     }
-    pub fn table(&self) -> &Rc<RefCell<Table>> {
+    pub fn table(&self) -> Option<&HostRef<Table>> {
         match self {
-            Extern::Table(table) => table,
-            _ => panic!("Extern::Table expected"),
+            Extern::Table(table) => Some(table),
+            _ => None,
         }
     }
-    pub fn memory(&self) -> &Rc<RefCell<Memory>> {
+    pub fn memory(&self) -> Option<&HostRef<Memory>> {
         match self {
-            Extern::Memory(memory) => memory,
-            _ => panic!("Extern::Memory expected"),
+            Extern::Memory(memory) => Some(memory),
+            _ => None,
         }
     }
 
@@ -63,45 +65,65 @@ impl Extern {
     }
 
     pub(crate) fn from_wasmtime_export(
-        store: Rc<RefCell<Store>>,
+        store: HostRef<Store>,
         instance_handle: InstanceHandle,
         export: wasmtime_runtime::Export,
     ) -> Extern {
         match export {
-            wasmtime_runtime::Export::Function { .. } => Extern::Func(Rc::new(RefCell::new(
+            wasmtime_runtime::Export::Function { .. } => Extern::Func(HostRef::new(
                 Func::from_wasmtime_function(export, store, instance_handle),
-            ))),
-            wasmtime_runtime::Export::Memory { .. } => Extern::Memory(Rc::new(RefCell::new(
+            )),
+            wasmtime_runtime::Export::Memory { .. } => Extern::Memory(HostRef::new(
                 Memory::from_wasmtime_memory(export, store, instance_handle),
-            ))),
-            wasmtime_runtime::Export::Global { .. } => Extern::Global(Rc::new(RefCell::new(
-                Global::from_wasmtime_global(export, store),
-            ))),
-            wasmtime_runtime::Export::Table { .. } => Extern::Table(Rc::new(RefCell::new(
+            )),
+            wasmtime_runtime::Export::Global { .. } => {
+                Extern::Global(HostRef::new(Global::from_wasmtime_global(export, store)))
+            }
+            wasmtime_runtime::Export::Table { .. } => Extern::Table(HostRef::new(
                 Table::from_wasmtime_table(export, store, instance_handle),
-            ))),
+            )),
         }
     }
 }
 
+impl From<HostRef<Func>> for Extern {
+    fn from(r: HostRef<Func>) -> Self {
+        Extern::Func(r)
+    }
+}
+
+impl From<HostRef<Global>> for Extern {
+    fn from(r: HostRef<Global>) -> Self {
+        Extern::Global(r)
+    }
+}
+
+impl From<HostRef<Memory>> for Extern {
+    fn from(r: HostRef<Memory>) -> Self {
+        Extern::Memory(r)
+    }
+}
+
+impl From<HostRef<Table>> for Extern {
+    fn from(r: HostRef<Table>) -> Self {
+        Extern::Table(r)
+    }
+}
+
 pub struct Func {
-    _store: Rc<RefCell<Store>>,
+    _store: HostRef<Store>,
     callable: Rc<dyn WrappedCallable + 'static>,
     r#type: FuncType,
 }
 
 impl Func {
-    pub fn new(
-        store: Rc<RefCell<Store>>,
-        ty: FuncType,
-        callable: Rc<dyn Callable + 'static>,
-    ) -> Self {
+    pub fn new(store: HostRef<Store>, ty: FuncType, callable: Rc<dyn Callable + 'static>) -> Self {
         let callable = Rc::new(NativeCallable::new(callable, &ty, &store));
         Func::from_wrapped(store, ty, callable)
     }
 
     fn from_wrapped(
-        store: Rc<RefCell<Store>>,
+        store: HostRef<Store>,
         r#type: FuncType,
         callable: Rc<dyn WrappedCallable + 'static>,
     ) -> Func {
@@ -116,11 +138,6 @@ impl Func {
         &self.r#type
     }
 
-    #[cfg(feature = "wasm-c-api")]
-    pub(crate) fn callable(&self) -> &Rc<dyn WrappedCallable + 'static> {
-        &self.callable
-    }
-
     pub fn param_arity(&self) -> usize {
         self.r#type.params().len()
     }
@@ -129,19 +146,19 @@ impl Func {
         self.r#type.results().len()
     }
 
-    pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Rc<RefCell<Trap>>> {
+    pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, HostRef<Trap>> {
         let mut results = vec![Val::default(); self.result_arity()];
         self.callable.call(params, &mut results)?;
         Ok(results.into_boxed_slice())
     }
 
-    fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
+    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
         self.callable.wasmtime_export()
     }
 
-    fn from_wasmtime_function(
+    pub(crate) fn from_wasmtime_function(
         export: wasmtime_runtime::Export,
-        store: Rc<RefCell<Store>>,
+        store: HostRef<Store>,
         instance_handle: InstanceHandle,
     ) -> Self {
         let ty = if let wasmtime_runtime::Export::Function { signature, .. } = &export {
@@ -154,8 +171,14 @@ impl Func {
     }
 }
 
+impl std::fmt::Debug for Func {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Func")
+    }
+}
+
 pub struct Global {
-    _store: Rc<RefCell<Store>>,
+    _store: HostRef<Store>,
     r#type: GlobalType,
     wasmtime_export: wasmtime_runtime::Export,
     #[allow(dead_code)]
@@ -163,7 +186,7 @@ pub struct Global {
 }
 
 impl Global {
-    pub fn new(store: Rc<RefCell<Store>>, r#type: GlobalType, val: Val) -> Global {
+    pub fn new(store: HostRef<Store>, r#type: GlobalType, val: Val) -> Global {
         let (wasmtime_export, wasmtime_state) =
             generate_global_export(&r#type, val).expect("generated global");
         Global {
@@ -224,7 +247,7 @@ impl Global {
 
     pub(crate) fn from_wasmtime_global(
         export: wasmtime_runtime::Export,
-        store: Rc<RefCell<Store>>,
+        store: HostRef<Store>,
     ) -> Global {
         let global = if let wasmtime_runtime::Export::Global { ref global, .. } = export {
             global
@@ -242,7 +265,7 @@ impl Global {
 }
 
 pub struct Table {
-    store: Rc<RefCell<Store>>,
+    store: HostRef<Store>,
     r#type: TableType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::Export,
@@ -250,7 +273,7 @@ pub struct Table {
 
 fn get_table_item(
     handle: &InstanceHandle,
-    store: &Rc<RefCell<Store>>,
+    store: &HostRef<Store>,
     table_index: cranelift_wasm::DefinedTableIndex,
     item_index: u32,
 ) -> Val {
@@ -263,7 +286,7 @@ fn get_table_item(
 
 fn set_table_item(
     handle: &mut InstanceHandle,
-    store: &Rc<RefCell<Store>>,
+    store: &HostRef<Store>,
     table_index: cranelift_wasm::DefinedTableIndex,
     item_index: u32,
     val: Val,
@@ -278,7 +301,7 @@ fn set_table_item(
 }
 
 impl Table {
-    pub fn new(store: Rc<RefCell<Store>>, r#type: TableType, init: Val) -> Table {
+    pub fn new(store: HostRef<Store>, r#type: TableType, init: Val) -> Table {
         match r#type.element() {
             ValType::FuncRef => (),
             _ => panic!("table is not for funcref"),
@@ -363,7 +386,7 @@ impl Table {
 
     pub(crate) fn from_wasmtime_table(
         export: wasmtime_runtime::Export,
-        store: Rc<RefCell<Store>>,
+        store: HostRef<Store>,
         instance_handle: wasmtime_runtime::InstanceHandle,
     ) -> Table {
         let table = if let wasmtime_runtime::Export::Table { ref table, .. } = export {
@@ -382,14 +405,14 @@ impl Table {
 }
 
 pub struct Memory {
-    _store: Rc<RefCell<Store>>,
+    _store: HostRef<Store>,
     r#type: MemoryType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::Export,
 }
 
 impl Memory {
-    pub fn new(store: Rc<RefCell<Store>>, r#type: MemoryType) -> Memory {
+    pub fn new(store: HostRef<Store>, r#type: MemoryType) -> Memory {
         let (wasmtime_handle, wasmtime_export) =
             generate_memory_export(&r#type).expect("generated memory");
         Memory {
@@ -411,7 +434,14 @@ impl Memory {
         }
     }
 
-    pub fn data(&self) -> *mut u8 {
+    pub fn data(&self) -> &mut [u8] {
+        unsafe {
+            let definition = &*self.wasmtime_memory_definition();
+            slice::from_raw_parts_mut(definition.base, definition.current_length)
+        }
+    }
+
+    pub fn data_ptr(&self) -> *mut u8 {
         unsafe { (*self.wasmtime_memory_definition()).base }
     }
 
@@ -440,7 +470,7 @@ impl Memory {
 
     pub(crate) fn from_wasmtime_memory(
         export: wasmtime_runtime::Export,
-        store: Rc<RefCell<Store>>,
+        store: HostRef<Store>,
         instance_handle: wasmtime_runtime::InstanceHandle,
     ) -> Memory {
         let memory = if let wasmtime_runtime::Export::Memory { ref memory, .. } = export {

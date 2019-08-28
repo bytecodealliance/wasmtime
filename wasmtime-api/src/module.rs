@@ -1,11 +1,10 @@
+use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
     TableType, ValType,
 };
 use failure::Error;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
 
@@ -170,14 +169,14 @@ fn read_imports_and_exports(
 
 #[derive(Clone)]
 pub struct Module {
-    store: Rc<RefCell<Store>>,
+    store: HostRef<Store>,
     binary: Box<[u8]>,
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
 }
 
 impl Module {
-    pub fn new(store: Rc<RefCell<Store>>, binary: &[u8]) -> Result<Module, Error> {
+    pub fn new(store: HostRef<Store>, binary: &[u8]) -> Result<Module, Error> {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(Module {
             store,
