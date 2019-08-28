@@ -2,9 +2,9 @@
 	path = spec_testsuite
 	url = https://github.com/WebAssembly/testsuite
 [submodule "lightbeam"]
-	path = lightbeam
+	path = crates/lightbeam
 	url = https://github.com/CraneStation/lightbeam.git
 	branch = master
 [submodule "wasmtime-api/c-examples/wasm-c-api"]
-	path = wasmtime-api/c-examples/wasm-c-api
+	path = crates/wasmtime-api/c-examples/wasm-c-api
 	url = https://github.com/WebAssembly/wasm-c-api
