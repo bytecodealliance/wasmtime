@@ -43,10 +43,26 @@ impl RegBank {
             // Try to match without the bank prefix.
             assert!(name.starts_with(self.prefix));
             let name_without_prefix = &name[self.prefix.len()..];
-            self.names
+            if let Some(found) = self
+                .names
                 .iter()
                 .position(|&reg_name| reg_name == name_without_prefix)
-                .expect(&format!("invalid register name {}", name))
+            {
+                found
+            } else {
+                // Ultimate try: try to parse a number and use this in the array, eg r15 on x86.
+                if let Ok(as_num) = name_without_prefix.parse::<u8>() {
+                    assert!(
+                        (as_num - self.first_unit) < self.units,
+                        "trying to get {}, but bank only has {} registers!",
+                        name,
+                        self.units
+                    );
+                    (as_num - self.first_unit) as usize
+                } else {
+                    panic!("invalid register name {}", name);
+                }
+            }
         };
         self.first_unit + (unit as u8)
     }
