@@ -12,6 +12,7 @@ use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm128, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
+use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
@@ -21,6 +22,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, timing};
+use std::iter::FromIterator;
 use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
@@ -610,6 +612,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal list form (e.g. [0 1 2...])
+    fn match_uimm128_or_literals(&mut self, controlling_type: Type) -> ParseResult<Uimm128> {
+        if self.optional(Token::LBracket) {
+            // parse using a list of values, e.g. vconst.i32x4 [0 1 2 3]
+            let uimm128 = self.parse_literals_to_uimm128(controlling_type)?;
+            self.match_token(Token::RBracket, "expected a terminating right bracket")?;
+            Ok(uimm128)
+        } else {
+            // parse using a hexadecimal value
+            self.match_uimm128("expected an immediate hexadecimal operand")
+        }
+    }
+
     // Match and consume a Uimm64 immediate.
     fn match_uimm64(&mut self, err_msg: &str) -> ParseResult<Uimm64> {
         if let Some(Token::Integer(text)) = self.token() {
@@ -818,6 +833,36 @@ impl<'a> Parser<'a> {
             }
         } else {
             Ok(Default::default())
+        }
+    }
+
+    /// Parse a list of literals (i.e. integers, floats, booleans); e.g.
+    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<Uimm128> {
+        macro_rules! consume {
+            ( $ty:ident, $match_fn:expr ) => {{
+                assert!($ty.is_vector());
+                let mut v = Vec::with_capacity($ty.lane_count() as usize);
+                for _ in 0..$ty.lane_count() {
+                    v.push($match_fn?);
+                }
+                Uimm128::from_iter(v)
+            }};
+        }
+
+        if !ty.is_vector() {
+            err!(self.loc, "Expected a controlling vector type, not {}", ty)
+        } else {
+            let uimm128 = match ty.lane_type() {
+                I8 => consume!(ty, self.match_uimm8("Expected an 8-bit unsigned integer")),
+                I16 => unimplemented!(), // TODO no 16-bit match yet
+                I32 => consume!(ty, self.match_imm32("Expected a 32-bit integer")),
+                I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")),
+                F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float...")),
+                F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")),
+                b if b.is_bool() => consume!(ty, self.match_bool("Expected a boolean")),
+                _ => return err!(self.loc, "Expected a type of: float, int, bool"),
+            };
+            Ok(uimm128)
         }
     }
 
@@ -1977,7 +2022,7 @@ impl<'a> Parser<'a> {
         };
 
         // instruction ::=  [inst-results "="] Opcode(opc) ["." Type] * ...
-        let inst_data = self.parse_inst_operands(ctx, opcode)?;
+        let inst_data = self.parse_inst_operands(ctx, opcode, explicit_ctrl_type)?;
 
         // We're done parsing the instruction now.
         //
@@ -2186,6 +2231,7 @@ impl<'a> Parser<'a> {
         &mut self,
         ctx: &mut Context,
         opcode: Opcode,
+        explicit_control_type: Option<Type>,
     ) -> ParseResult<InstructionData> {
         let idata = match opcode.format() {
             InstructionFormat::Unary => InstructionData::Unary {
@@ -2196,14 +2242,23 @@ impl<'a> Parser<'a> {
                 opcode,
                 imm: self.match_imm64("expected immediate integer operand")?,
             },
-            InstructionFormat::UnaryImm128 => {
-                let uimm128 = self.match_uimm128("expected immediate hexadecimal operand")?;
-                let constant_handle = ctx.function.dfg.constants.insert(uimm128.0.to_vec());
-                InstructionData::UnaryImm128 {
-                    opcode,
-                    imm: constant_handle,
+            InstructionFormat::UnaryImm128 => match explicit_control_type {
+                None => {
+                    return err!(
+                        self.loc,
+                        "Expected {:?} to have a controlling type variable, e.g. inst.i32x4",
+                        opcode
+                    )
                 }
-            }
+                Some(ty) => {
+                    let uimm128 = self.match_uimm128_or_literals(ty)?;
+                    let constant_handle = ctx.function.dfg.constants.insert(uimm128.0.to_vec());
+                    InstructionData::UnaryImm128 {
+                        opcode,
+                        imm: constant_handle,
+                    }
+                }
+            },
             InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
                 opcode,
                 imm: self.match_ieee32("expected immediate 32-bit float operand")?,
@@ -3149,5 +3204,36 @@ mod tests {
             parser.parse_function(None).unwrap().0.signature.call_conv,
             CallConv::Cold
         );
+    }
+
+    #[test]
+    fn uimm128() {
+        macro_rules! parse_as_uimm128 {
+            ($text:expr, $type:expr) => {{
+                Parser::new($text).parse_literals_to_uimm128($type)
+            }};
+        }
+        macro_rules! can_parse_as_uimm128 {
+            ($text:expr, $type:expr) => {{
+                assert!(parse_as_uimm128!($text, $type).is_ok())
+            }};
+        }
+        macro_rules! cannot_parse_as_uimm128 {
+            ($text:expr, $type:expr) => {{
+                assert!(parse_as_uimm128!($text, $type).is_err())
+            }};
+        }
+
+        can_parse_as_uimm128!("1 2 3 4", I32X4);
+        can_parse_as_uimm128!("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16", I8X16);
+        can_parse_as_uimm128!("0x1.1 0x2.2 0x3.3 0x4.4", F32X4);
+        can_parse_as_uimm128!("true false true false true false true false", B16X8);
+        can_parse_as_uimm128!("0 -1", I64X2);
+        can_parse_as_uimm128!("true false", B64X2);
+        can_parse_as_uimm128!("true true true true true", B32X4); // note that parse_literals_to_uimm128 will leave extra tokens unconsumed
+
+        cannot_parse_as_uimm128!("0x0 0x1 0x2 0x3", I32X4);
+        cannot_parse_as_uimm128!("1 2 3", I32X4);
+        cannot_parse_as_uimm128!(" ", F32X4);
     }
 }
