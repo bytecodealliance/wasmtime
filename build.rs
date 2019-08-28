@@ -154,10 +154,22 @@ fn avoid_keywords(name: &str) -> &str {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(not(windows))] {
+    if #[cfg(linux)] {
         /// Ignore tests that aren't supported yet.
         fn ignore(_testsuite: &str, _name: &str) -> bool {
             false
+        }
+    } else if #[cfg(not(any(linux, windows)))] {
+        /// Ignore tests that aren't supported yet.
+        fn ignore(testsuite: &str, name: &str) -> bool {
+            if testsuite == "misc_testsuite" {
+                match name {
+                    "fd_readdir" => true,
+                    _ => false,
+                }
+            } else {
+                unreachable!()
+            }
         }
     } else {
         /// Ignore tests that aren't supported yet.
@@ -169,6 +181,7 @@ cfg_if::cfg_if! {
                     "symlink_loop" => true,
                     "clock_time_get" => true,
                     "truncation_rights" => true,
+                    "fd_readdir" => true,
                     _ => false,
                 }
             } else {
