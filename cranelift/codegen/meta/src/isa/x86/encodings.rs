@@ -310,6 +310,20 @@ impl PerCpuModeEncodings {
         self.enc64_rec(inst, recipe, bits);
     }
 
+    /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand binding) has already happened
+    fn enc_32_64_func<T>(
+        &mut self,
+        inst: impl Clone + Into<InstSpec>,
+        template: Template,
+        builder_closure: T,
+    ) where
+        T: FnOnce(EncodingBuilder) -> EncodingBuilder,
+    {
+        let encoding = self.make_encoding(inst.into(), template, builder_closure);
+        self.enc32.push(encoding.clone());
+        self.enc64.push(encoding);
+    }
+
     /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand
     /// binding) has already happened.
     fn enc_32_64_maybe_isap(
@@ -642,6 +656,7 @@ pub(crate) fn define(
     let rec_urm_noflags = r.template("urm_noflags");
     let rec_urm_noflags_abcd = r.template("urm_noflags_abcd");
     let rec_vconst = r.template("vconst");
+    let rec_vconst_optimized = r.template("vconst_optimized");
 
     // Predicates shorthands.
     let all_ones_funcaddrs_and_not_is_pic =
@@ -1671,7 +1686,7 @@ pub(crate) fn define(
     );
     e.enc_x86_64_instp(
         f64const,
-        rec_f64imm_z.opcodes(vec![0x66, 0x0f, 0x57]),
+        rec_f64imm_z.opcodes(vec![0x66, 0x0f, 0x57]), // XORPD from SSE2
         is_zero_64_bit_float,
     );
 
@@ -1944,6 +1959,32 @@ pub(crate) fn define(
                 0,
             );
         }
+    }
+
+    // SIMD vconst for special cases (all zeroes, all ones)
+    // this must be encoded prior to the MOVUPS implementation (below) so the compiler sees this
+    // encoding first
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let f_unary_const = formats.get(formats.by_name("UnaryConst"));
+        let instruction = vconst.bind_vector_from_lane(ty, sse_vector_size);
+
+        let is_zero_128bit =
+            InstructionPredicate::new_is_all_zeroes_128bit(f_unary_const, "constant_handle");
+        let template = rec_vconst_optimized
+            .nonrex()
+            .opcodes(vec![0x66, 0x0f, 0xef]); // PXOR from SSE2
+        e.enc_32_64_func(instruction.clone(), template, |builder| {
+            builder.inst_predicate(is_zero_128bit)
+        });
+
+        let is_ones_128bit =
+            InstructionPredicate::new_is_all_ones_128bit(f_unary_const, "constant_handle");
+        let template = rec_vconst_optimized
+            .nonrex()
+            .opcodes(vec![0x66, 0x0f, 0x74]); // PCMPEQB from SSE2
+        e.enc_32_64_func(instruction, template, |builder| {
+            builder.inst_predicate(is_ones_128bit)
+        });
     }
 
     // SIMD vconst using MOVUPS

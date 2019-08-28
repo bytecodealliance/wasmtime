@@ -2450,6 +2450,18 @@ pub(crate) fn define<'shared>(
     );
 
     recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("vconst_optimized", f_unary_const, 1)
+            .operands_out(vec![fpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(out_reg0, out_reg0), sink);
+                    modrm_rr(out_reg0, out_reg0, sink);
+                "#,
+            ),
+    );
+
+    recipes.add_template_recipe(
         EncodingRecipeBuilder::new("jt_base", f_branch_table_base, 5)
             .operands_out(vec![gpr])
             .clobbers_flags(false)
