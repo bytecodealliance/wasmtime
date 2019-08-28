@@ -877,6 +877,7 @@ impl Solver {
             let d = v.iter(&self.regs_in, &self.regs_out, global_regs).len();
             v.domain = cmp::min(d, u16::MAX as usize) as u16;
         }
+
         // Solve for vars with small domains first to increase the chance of finding a solution.
         //
         // Also consider this case:
@@ -949,9 +950,8 @@ impl Solver {
                     // live registers be diverted. We need to make it a non-global value.
                     if v.is_global && gregs.iter(rc).next().is_none() {
                         return Err(SolverError::Global(v.value));
-                    } else {
-                        return Err(SolverError::Divert(rc));
                     }
+                    return Err(SolverError::Divert(rc));
                 }
             };
 
@@ -976,7 +976,7 @@ impl Solver {
     }
 
     /// Check if `value` can be added as a variable to help find a solution.
-    pub fn can_add_var(&mut self, _value: Value, constraint: RegClass, from: RegUnit) -> bool {
+    pub fn can_add_var(&mut self, constraint: RegClass, from: RegUnit) -> bool {
         !self.regs_in.is_avail(constraint, from)
     }
 }
@@ -1030,7 +1030,7 @@ impl Solver {
         let mut avail = regs.clone();
         let mut i = 0;
         while i < self.moves.len() + self.fills.len() {
-            // Don't even look at the fills until we've spent all the moves. Deferring these let's
+            // Don't even look at the fills until we've spent all the moves. Deferring these lets
             // us potentially reuse the claimed registers to resolve multiple cycles.
             if i >= self.moves.len() {
                 self.moves.append(&mut self.fills);

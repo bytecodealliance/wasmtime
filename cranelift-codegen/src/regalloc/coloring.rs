@@ -106,6 +106,8 @@ struct Context<'a> {
     // Pristine set of registers that the allocator can use.
     // This set remains immutable, we make clones.
     usable_regs: RegisterSet,
+
+    uses_pinned_reg: bool,
 }
 
 impl Coloring {
@@ -137,6 +139,7 @@ impl Coloring {
         debug!("Coloring for:\n{}", func.display(isa));
         let mut ctx = Context {
             usable_regs: isa.allocatable_registers(func),
+            uses_pinned_reg: isa.flags().enable_pinned_reg(),
             cur: EncCursor::new(func, isa),
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
@@ -151,6 +154,12 @@ impl Coloring {
 }
 
 impl<'a> Context<'a> {
+    /// Is the pinned register usage enabled, and is this register the pinned register?
+    #[inline]
+    fn is_pinned_reg(&self, rc: RegClass, reg: RegUnit) -> bool {
+        rc.is_pinned_reg(self.uses_pinned_reg, reg)
+    }
+
     /// Run the coloring algorithm.
     fn run(&mut self, tracker: &mut LiveValueTracker) {
         self.cur
@@ -425,9 +434,11 @@ impl<'a> Context<'a> {
 
         // Program the solver with register constraints for the input side.
         self.solver.reset(&regs.input);
+
         if let Some(constraints) = constraints {
             self.program_input_constraints(inst, constraints.ins);
         }
+
         let call_sig = self.cur.func.dfg.call_signature(inst);
         if let Some(sig) = call_sig {
             self.program_input_abi(inst, AbiParams::Parameters(sig));
@@ -457,6 +468,7 @@ impl<'a> Context<'a> {
         if self.solver.has_fixed_input_conflicts() {
             self.divert_fixed_input_conflicts(tracker.live());
         }
+
         self.solver.inputs_done();
 
         // Update the live value tracker with this instruction.
@@ -467,6 +479,13 @@ impl<'a> Context<'a> {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 let reg = self.divert.reg(lv.value, &self.cur.func.locations);
+
+                if self.is_pinned_reg(rc, reg) {
+                    // Don't kill the pinned reg, either in the local or global register sets.
+                    debug_assert!(lv.is_local, "pinned register SSA value can't be global");
+                    continue;
+                }
+
                 debug!(
                     "    kill {} in {} ({} {})",
                     lv.value,
@@ -506,6 +525,7 @@ impl<'a> Context<'a> {
                 );
             }
         }
+
         if let Some(sig) = call_sig {
             self.program_output_abi(
                 sig,
@@ -515,6 +535,7 @@ impl<'a> Context<'a> {
                 &regs.global,
             );
         }
+
         if let Some(constraints) = constraints {
             self.program_output_constraints(
                 inst,
@@ -596,16 +617,28 @@ impl<'a> Context<'a> {
 
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
+                let reg = loc.unwrap_reg();
+
+                debug_assert!(
+                    !self.is_pinned_reg(rc, reg)
+                        || self.cur.func.dfg[inst].opcode() == Opcode::GetPinnedReg,
+                    "pinned register may not be part of outputs for '{}'.",
+                    self.cur.func.dfg[inst].opcode()
+                );
+
+                if self.is_pinned_reg(rc, reg) {
+                    continue;
+                }
 
                 // Remove the dead defs.
                 if lv.endpoint == inst {
-                    regs.input.free(rc, loc.unwrap_reg());
+                    regs.input.free(rc, reg);
                     debug_assert!(lv.is_local);
                 }
 
                 // Track globals in their undiverted locations.
                 if !lv.is_local && !replace_global_defines {
-                    regs.global.take(rc, loc.unwrap_reg());
+                    regs.global.take(rc, reg);
                 }
             }
         }
@@ -626,14 +659,35 @@ impl<'a> Context<'a> {
             // already in a register.
             let cur_reg = self.divert.reg(value, &self.cur.func.locations);
             match op.kind {
-                ConstraintKind::FixedReg(regunit) | ConstraintKind::FixedTied(regunit) => {
+                ConstraintKind::FixedReg(regunit) => {
                     // Add the fixed constraint even if `cur_reg == regunit`.
                     // It is possible that we will want to convert the value to a variable later,
                     // and this identity assignment prevents that from happening.
                     self.solver
                         .reassign_in(value, op.regclass, cur_reg, regunit);
                 }
-                ConstraintKind::Reg | ConstraintKind::Tied(_) => {
+                ConstraintKind::FixedTied(regunit) => {
+                    // The pinned register may not be part of a fixed tied requirement. If this
+                    // becomes the case, then it must be changed to a different register.
+                    debug_assert!(
+                        !self.is_pinned_reg(op.regclass, regunit),
+                        "see comment above"
+                    );
+                    // See comment right above.
+                    self.solver
+                        .reassign_in(value, op.regclass, cur_reg, regunit);
+                }
+                ConstraintKind::Tied(_) => {
+                    if self.is_pinned_reg(op.regclass, cur_reg) {
+                        // Divert the pinned register; it shouldn't be reused for a tied input.
+                        if self.solver.can_add_var(op.regclass, cur_reg) {
+                            self.solver.add_var(value, op.regclass, cur_reg);
+                        }
+                    } else if !op.regclass.contains(cur_reg) {
+                        self.solver.add_var(value, op.regclass, cur_reg);
+                    }
+                }
+                ConstraintKind::Reg => {
                     if !op.regclass.contains(cur_reg) {
                         self.solver.add_var(value, op.regclass, cur_reg);
                     }
@@ -664,10 +718,13 @@ impl<'a> Context<'a> {
             match op.kind {
                 ConstraintKind::Reg | ConstraintKind::Tied(_) => {
                     let cur_reg = self.divert.reg(value, &self.cur.func.locations);
-                    // This is the opposite condition of `program_input_constraints()`.
-                    if op.regclass.contains(cur_reg) {
+
+                    // This is the opposite condition of `program_input_constraints()`. The pinned
+                    // register mustn't be added back as a variable.
+                    if op.regclass.contains(cur_reg) && !self.is_pinned_reg(op.regclass, cur_reg) {
                         // This code runs after calling `solver.inputs_done()` so we must identify
-                        // the new variable as killed or live-through.
+                        // the new variable as killed or live-through. Always special-case the
+                        // pinned register as a through variable.
                         let ctx = self.liveness.context(&self.cur.func.layout);
                         if self.liveness[value].killed_at(inst, ctx.order.pp_ebb(inst), ctx) {
                             self.solver.add_killed_var(value, op.regclass, cur_reg);
@@ -778,7 +835,7 @@ impl<'a> Context<'a> {
             if pred(lr, self.liveness.context(&self.cur.func.layout)) {
                 if let Affinity::Reg(rci) = lr.affinity {
                     let rc = self.reginfo.rc(rci);
-                    // Stack diversions should not be possible here. The only live transiently
+                    // Stack diversions should not be possible here. They only live transiently
                     // during `shuffle_inputs()`.
                     self.solver.reassign_in(
                         value,
@@ -797,8 +854,8 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Find existing live values that conflict with the fixed input register constraints programmed
-    // into the constraint solver. Convert them to solver variables so they can be diverted.
+    /// Find existing live values that conflict with the fixed input register constraints programmed
+    /// into the constraint solver. Convert them to solver variables so they can be diverted.
     fn divert_fixed_input_conflicts(&mut self, live: &[LiveValue]) {
         for lv in live {
             if let Affinity::Reg(rci) = lv.affinity {
@@ -886,7 +943,9 @@ impl<'a> Context<'a> {
         reg: RegUnit,
         throughs: &[LiveValue],
     ) {
-        if !self.solver.add_fixed_output(rc, reg) {
+        // Pinned register is already unavailable in the solver, since it is copied in the
+        // available registers on entry.
+        if !self.is_pinned_reg(rc, reg) && !self.solver.add_fixed_output(rc, reg) {
             // The fixed output conflicts with some of the live-through registers.
             for lv in throughs {
                 if let Affinity::Reg(rci) = lv.affinity {
@@ -929,12 +988,12 @@ impl<'a> Context<'a> {
                     // Find the input operand we're tied to.
                     // The solver doesn't care about the output value.
                     let arg = self.cur.func.dfg.inst_args(inst)[num as usize];
-                    if let Some(reg) = self.solver.add_tied_input(
-                        arg,
-                        op.regclass,
-                        self.divert.reg(arg, &self.cur.func.locations),
-                        !lv.is_local,
-                    ) {
+                    let reg = self.divert.reg(arg, &self.cur.func.locations);
+
+                    if let Some(reg) =
+                        self.solver
+                            .add_tied_input(arg, op.regclass, reg, !lv.is_local)
+                    {
                         // The value we're tied to has been assigned to a fixed register.
                         // We need to make sure that fixed output register is compatible with the
                         // global register set.
@@ -1000,7 +1059,7 @@ impl<'a> Context<'a> {
                 let toprc2 = self.reginfo.toprc(rci);
                 let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
                 if rc.contains(reg2)
-                    && self.solver.can_add_var(lv.value, toprc2, reg2)
+                    && self.solver.can_add_var(toprc2, reg2)
                     && !self.is_live_on_outgoing_edge(lv.value)
                 {
                     self.solver.add_through_var(lv.value, toprc2, reg2);
@@ -1061,8 +1120,15 @@ impl<'a> Context<'a> {
         for m in self.solver.moves() {
             match *m {
                 Reg {
-                    value, from, to, ..
+                    value,
+                    from,
+                    to,
+                    rc,
                 } => {
+                    debug_assert!(
+                        !self.is_pinned_reg(rc, to),
+                        "pinned register used in a regmove"
+                    );
                     self.divert.regmove(value, from, to);
                     self.cur.ins().regmove(value, from, to);
                 }
@@ -1086,8 +1152,12 @@ impl<'a> Context<'a> {
                     value,
                     from_slot,
                     to,
-                    ..
+                    rc,
                 } => {
+                    debug_assert!(
+                        !self.is_pinned_reg(rc, to),
+                        "pinned register used in a regfill"
+                    );
                     // These slots are single use, so mark `ss` as available again.
                     let ss = slot[from_slot].take().expect("Using unallocated slot");
                     self.divert.regfill(value, ss, to);

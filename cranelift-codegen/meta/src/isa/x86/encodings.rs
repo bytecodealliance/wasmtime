@@ -372,6 +372,7 @@ pub(crate) fn define(
     let fpromote = shared.by_name("fpromote");
     let fsub = shared.by_name("fsub");
     let func_addr = shared.by_name("func_addr");
+    let get_pinned_reg = shared.by_name("get_pinned_reg");
     let iadd = shared.by_name("iadd");
     let iadd_cout = shared.by_name("iadd_cout");
     let iadd_cin = shared.by_name("iadd_cin");
@@ -421,6 +422,7 @@ pub(crate) fn define(
     let scalar_to_vector = shared.by_name("scalar_to_vector");
     let selectif = shared.by_name("selectif");
     let sextend = shared.by_name("sextend");
+    let set_pinned_reg = shared.by_name("set_pinned_reg");
     let sload16 = shared.by_name("sload16");
     let sload16_complex = shared.by_name("sload16_complex");
     let sload32 = shared.by_name("sload32");
@@ -516,6 +518,7 @@ pub(crate) fn define(
     let rec_furm = r.template("furm");
     let rec_furm_reg_to_ssa = r.template("furm_reg_to_ssa");
     let rec_furmi_rnd = r.template("furmi_rnd");
+    let rec_get_pinned_reg = r.recipe("get_pinned_reg");
     let rec_got_fnaddr8 = r.template("got_fnaddr8");
     let rec_got_gvaddr8 = r.template("got_gvaddr8");
     let rec_gvaddr4 = r.template("gvaddr4");
@@ -569,6 +572,7 @@ pub(crate) fn define(
     let rec_safepoint = r.recipe("safepoint");
     let rec_setf_abcd = r.template("setf_abcd");
     let rec_seti_abcd = r.template("seti_abcd");
+    let rec_set_pinned_reg = r.template("set_pinned_reg");
     let rec_spaddr4_id = r.template("spaddr4_id");
     let rec_spaddr8_id = r.template("spaddr8_id");
     let rec_spillSib32 = r.template("spillSib32");
@@ -618,6 +622,13 @@ pub(crate) fn define(
 
     // Definitions.
     let mut e = PerCpuModeEncodings::new();
+
+    // The pinned reg is fixed to a certain value entirely user-controlled, so it generates nothing!
+    e.enc64_rec(get_pinned_reg.bind(I64), rec_get_pinned_reg, 0);
+    e.enc_x86_64(
+        set_pinned_reg.bind(I64),
+        rec_set_pinned_reg.opcodes(vec![0x89]).rex().w(),
+    );
 
     e.enc_i32_i64(iadd, rec_rr.opcodes(vec![0x01]));
     e.enc_i32_i64(iadd_cout, rec_rr.opcodes(vec![0x01]));

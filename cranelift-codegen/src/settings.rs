@@ -388,6 +388,7 @@ mod tests {
              avoid_div_traps = false\n\
              enable_float = true\n\
              enable_nan_canonicalization = false\n\
+             enable_pinned_reg = false\n\
              enable_simd = false\n\
              enable_atomics = true\n\
              enable_safepoints = false\n\

@@ -676,6 +676,26 @@ impl<'a> Verifier<'a> {
                 self.verify_value_list(inst, args, errors)?;
             }
 
+            NullAry {
+                opcode: Opcode::GetPinnedReg,
+            }
+            | Unary {
+                opcode: Opcode::SetPinnedReg,
+                ..
+            } => {
+                if let Some(isa) = &self.isa {
+                    if !isa.flags().enable_pinned_reg() {
+                        return fatal!(
+                            errors,
+                            inst,
+                            "GetPinnedReg/SetPinnedReg cannot be used without enable_pinned_reg"
+                        );
+                    }
+                } else {
+                    return fatal!(errors, inst, "GetPinnedReg/SetPinnedReg need an ISA!");
+                }
+            }
+
             // Exhaustive list so we can't forget to add new formats
             Unary { .. }
             | UnaryImm { .. }

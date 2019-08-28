@@ -154,6 +154,12 @@ pub struct RegClassData {
 
     /// The global `RegInfo` instance containing this register class.
     pub info: &'static RegInfo,
+
+    /// The "pinned" register of the associated register bank.
+    ///
+    /// This register must be non-volatile (callee-preserved) and must not be the fixed
+    /// output register of any instruction.
+    pub pinned_reg: Option<RegUnit>,
 }
 
 impl RegClassData {
@@ -200,6 +206,15 @@ impl RegClassData {
     /// Does this register class contain `regunit`?
     pub fn contains(&self, regunit: RegUnit) -> bool {
         self.mask[(regunit / 32) as usize] & (1u32 << (regunit % 32)) != 0
+    }
+
+    /// If the pinned register is used, is the given regunit the pinned register of this class?
+    #[inline]
+    pub fn is_pinned_reg(&self, enabled: bool, regunit: RegUnit) -> bool {
+        enabled
+            && self
+                .pinned_reg
+                .map_or(false, |pinned_reg| pinned_reg == regunit)
     }
 }
 
