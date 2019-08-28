@@ -41,10 +41,24 @@ steps:
     versionSpec: '3.7'
     addToPath: true
   condition: and(succeeded(), ne(variables['Agent.OS'], 'Linux'))
+- bash: sudo bash ci/setup_centos6_python37.sh
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+
+- bash: sudo pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
+  displayName: Install Python dependencies (Linux)
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+- bash: pip3 install setuptools wheel==0.31.1 setuptools-rust
+  displayName: Install Python dependencies (not Linux)
+  condition: and(succeeded(), ne(variables['Agent.OS'], 'Linux'))
+
 - bash: |
     set -e
-    pip3 install setuptools wheel==0.31.1 setuptools-rust
-    python setup.py bdist_wheel
+    export PYTHON_SYS_EXECUTABLE=`which python3.7`
+    $PYTHON_SYS_EXECUTABLE setup.py bdist_wheel
+  workingDirectory: misc/wasmtime-py
+  displayName: Build wheels py37
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+- bash: python setup.py bdist_wheel
   workingDirectory: misc/wasmtime-py
   displayName: Build wheels py37
   condition: and(succeeded(), ne(variables['Agent.OS'], 'Linux'))
