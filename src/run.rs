@@ -108,13 +108,12 @@ mod test {
     fn nop() {
         let code = String::from(
             "
-            function %test() -> b8 system_v {
+            function %test() -> b8 {
             ebb0:
                 nop
                 v1 = bconst.b8 true
                 return v1
             }
-            
             ; run
             ",
         );
