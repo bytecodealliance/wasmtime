@@ -19,8 +19,9 @@ pub type ConstantOffset = u32;
 /// Inner type for storing data and offset together in the constant pool. The offset is optional
 /// because it must be set relative to the function code size (i.e. constants are emitted after the
 /// function body); because the function is not yet compiled when constants are inserted,
-/// [set_offset](ir::ConstantPool::set_offset) must be called once a constant's offset from the
-/// beginning of the function is known (see [relaxation.rs](binemit::relaxation)).
+/// [`set_offset`](crate::ir::ConstantPool::set_offset) must be called once a constant's
+/// offset from the beginning of the function is known (see
+/// [`relaxation.rs`](crate::binemit::relaxation)).
 #[derive(Clone)]
 pub struct ConstantPoolEntry {
     data: ConstantData,
@@ -43,8 +44,9 @@ impl ConstantPoolEntry {
     }
 }
 
-/// Maintains the mapping between a constant handle (i.e. [Constant](ir::entities::Constant)) and
-/// its constant data (i.e. [ConstantData](ir::constant::ConstantData)).
+/// Maintains the mapping between a constant handle (i.e.
+/// [`Constant`](crate::ir::Constant)) and its constant data (i.e.
+/// [`ConstantData`](crate::ir::ConstantData)).
 #[derive(Clone)]
 pub struct ConstantPool {
     /// This mapping maintains the insertion order as long as Constants are created with sequentially increasing integers.
