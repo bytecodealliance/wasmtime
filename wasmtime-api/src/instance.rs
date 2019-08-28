@@ -1,6 +1,7 @@
 use crate::context::Context;
 use crate::externals::Extern;
 use crate::module::Module;
+use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use failure::Error;
 use std::cell::RefCell;
@@ -11,22 +12,22 @@ use wasmtime_jit::{instantiate, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle};
 
 struct SimpleResolver {
-    imports: Vec<(String, String, Rc<RefCell<Extern>>)>,
+    imports: Vec<(String, String, Extern)>,
 }
 
 impl Resolver for SimpleResolver {
     fn resolve(&mut self, name: &str, field: &str) -> Option<Export> {
         // TODO speedup lookup
         self.imports
-            .iter()
+            .iter_mut()
             .find(|(n, f, _)| name == n && field == f)
-            .map(|(_, _, e)| e.borrow_mut().get_wasmtime_export())
+            .map(|(_, _, e)| e.get_wasmtime_export())
     }
 }
 
 pub fn instantiate_in_context(
     data: &[u8],
-    imports: Vec<(String, String, Rc<RefCell<Extern>>)>,
+    imports: Vec<(String, String, Extern)>,
     mut context: Context,
     exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
 ) -> Result<(InstanceHandle, HashSet<Context>), Error> {
@@ -51,14 +52,14 @@ pub struct Instance {
     // We need to keep CodeMemory alive.
     contexts: HashSet<Context>,
 
-    exports: Box<[Rc<RefCell<Extern>>]>,
+    exports: Box<[Extern]>,
 }
 
 impl Instance {
     pub fn new(
-        store: Rc<RefCell<Store>>,
-        module: Rc<RefCell<Module>>,
-        externs: &[Rc<RefCell<Extern>>],
+        store: HostRef<Store>,
+        module: HostRef<Module>,
+        externs: &[Extern],
     ) -> Result<Instance, Error> {
         let context = store.borrow_mut().context().clone();
         let exports = store.borrow_mut().global_exports().clone();
@@ -78,11 +79,11 @@ impl Instance {
             for export in module.exports() {
                 let name = export.name().to_string();
                 let export = instance_handle.lookup(&name).expect("export");
-                exports.push(Rc::new(RefCell::new(Extern::from_wasmtime_export(
+                exports.push(Extern::from_wasmtime_export(
                     store.clone(),
                     instance_handle.clone(),
                     export,
-                ))));
+                ));
             }
             exports.into_boxed_slice()
         };
@@ -93,12 +94,12 @@ impl Instance {
         })
     }
 
-    pub fn exports(&self) -> &[Rc<RefCell<Extern>>] {
+    pub fn exports(&self) -> &[Extern] {
         &self.exports
     }
 
     pub fn from_handle(
-        store: Rc<RefCell<Store>>,
+        store: HostRef<Store>,
         instance_handle: InstanceHandle,
     ) -> Result<(Instance, HashMap<String, usize>), Error> {
         let contexts = HashSet::new();
@@ -115,11 +116,11 @@ impl Instance {
                 let _ = store.borrow_mut().register_cranelift_signature(signature);
             }
             export_names_map.insert(name.to_owned(), exports.len());
-            exports.push(Rc::new(RefCell::new(Extern::from_wasmtime_export(
+            exports.push(Extern::from_wasmtime_export(
                 store.clone(),
                 instance_handle.clone(),
                 export.clone(),
-            ))));
+            ));
         }
 
         Ok((

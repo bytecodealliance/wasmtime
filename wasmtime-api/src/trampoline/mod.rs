@@ -7,8 +7,8 @@ mod global;
 mod memory;
 mod table;
 
+use crate::r#ref::HostRef;
 use failure::Error;
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use self::func::create_handle_with_function;
@@ -22,7 +22,7 @@ pub use self::global::GlobalState;
 pub fn generate_func_export(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
-    store: &Rc<RefCell<Store>>,
+    store: &HostRef<Store>,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export), Error> {
     let mut instance = create_handle_with_function(ft, func, store)?;
     let export = instance.lookup("trampoline").expect("trampoline export");

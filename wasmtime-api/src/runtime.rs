@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::context::{create_compiler, Context};
+use crate::r#ref::HostRef;
 
 use cranelift_codegen::{ir, settings};
 use wasmtime_jit::Features;
@@ -80,14 +81,14 @@ impl Engine {
 // Store
 
 pub struct Store {
-    engine: Rc<RefCell<Engine>>,
+    engine: HostRef<Engine>,
     context: Context,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     signature_cache: HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>,
 }
 
 impl Store {
-    pub fn new(engine: Rc<RefCell<Engine>>) -> Store {
+    pub fn new(engine: HostRef<Engine>) -> Store {
         let flags = engine.borrow().config().flags().clone();
         let features = engine.borrow().config().features().clone();
         let debug_info = engine.borrow().config().debug_info();
@@ -99,7 +100,7 @@ impl Store {
         }
     }
 
-    pub fn engine(&self) -> &Rc<RefCell<Engine>> {
+    pub fn engine(&self) -> &HostRef<Engine> {
         &self.engine
     }
 

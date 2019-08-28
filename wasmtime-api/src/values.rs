@@ -1,62 +1,11 @@
-use crate::callable::{WasmtimeFn, WrappedCallable};
+use crate::externals::Func;
+use crate::r#ref::{AnyRef, HostRef};
 use crate::runtime::Store;
 use crate::types::ValType;
-use std::any::Any;
-use std::cell::RefCell;
-use std::fmt;
 use std::ptr;
-use std::rc::Rc;
 
 use cranelift_codegen::ir;
 use wasmtime_jit::RuntimeValue;
-
-#[derive(Clone)]
-pub enum AnyRef {
-    Null,
-    Rc(Rc<dyn Any>),
-    Func(FuncRef),
-}
-
-impl AnyRef {
-    pub fn null() -> AnyRef {
-        AnyRef::Null
-    }
-}
-
-impl fmt::Debug for AnyRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AnyRef::Null => write!(f, "null"),
-            AnyRef::Rc(_) => write!(f, "anyref"),
-            AnyRef::Func(func) => func.fmt(f),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct FuncRef(pub(crate) Rc<dyn WrappedCallable + 'static>);
-
-impl fmt::Debug for FuncRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "funcref")
-    }
-}
-
-impl From<AnyRef> for FuncRef {
-    fn from(anyref: AnyRef) -> FuncRef {
-        match anyref {
-            AnyRef::Func(f) => f,
-            AnyRef::Rc(_) => unimplemented!("try to unwrap?"),
-            AnyRef::Null => panic!("null anyref"),
-        }
-    }
-}
-
-impl Into<AnyRef> for FuncRef {
-    fn into(self) -> AnyRef {
-        AnyRef::Func(self)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum Val {
@@ -65,7 +14,7 @@ pub enum Val {
     F32(u32),
     F64(u64),
     AnyRef(AnyRef),
-    FuncRef(FuncRef),
+    FuncRef(HostRef<Func>),
 }
 
 impl Val {
@@ -179,15 +128,21 @@ impl Into<f64> for Val {
 
 impl From<AnyRef> for Val {
     fn from(val: AnyRef) -> Val {
-        match val {
-            AnyRef::Func(f) => Val::FuncRef(f),
-            _ => Val::AnyRef(val),
+        match &val {
+            AnyRef::Ref(r) => {
+                if r.is_ref::<Func>() {
+                    Val::FuncRef(r.get_ref())
+                } else {
+                    Val::AnyRef(val)
+                }
+            }
+            _ => unimplemented!("AnyRef::Other"),
         }
     }
 }
 
-impl From<FuncRef> for Val {
-    fn from(val: FuncRef) -> Val {
+impl From<HostRef<Func>> for Val {
+    fn from(val: HostRef<Func>) -> Val {
         Val::FuncRef(val)
     }
 }
@@ -196,7 +151,7 @@ impl Into<AnyRef> for Val {
     fn into(self) -> AnyRef {
         match self {
             Val::AnyRef(r) => r,
-            Val::FuncRef(f) => AnyRef::Func(f),
+            Val::FuncRef(f) => f.anyref(),
             _ => panic!("Invalid conversion of {:?} to anyref.", self),
         }
     }
@@ -204,7 +159,7 @@ impl Into<AnyRef> for Val {
 
 pub(crate) fn into_checked_anyfunc(
     val: Val,
-    store: &Rc<RefCell<Store>>,
+    store: &HostRef<Store>,
 ) -> wasmtime_runtime::VMCallerCheckedAnyfunc {
     match val {
         Val::AnyRef(AnyRef::Null) => wasmtime_runtime::VMCallerCheckedAnyfunc {
@@ -212,8 +167,9 @@ pub(crate) fn into_checked_anyfunc(
             type_index: wasmtime_runtime::VMSharedSignatureIndex::default(),
             vmctx: ptr::null_mut(),
         },
-        Val::AnyRef(AnyRef::Func(f)) | Val::FuncRef(f) => {
-            let (vmctx, func_ptr, signature) = match f.0.wasmtime_export() {
+        Val::FuncRef(f) => {
+            let f = f.borrow();
+            let (vmctx, func_ptr, signature) = match f.wasmtime_export() {
                 wasmtime_runtime::Export::Function {
                     vmctx,
                     address,
@@ -234,7 +190,7 @@ pub(crate) fn into_checked_anyfunc(
 
 pub(crate) fn from_checked_anyfunc(
     item: &wasmtime_runtime::VMCallerCheckedAnyfunc,
-    store: &Rc<RefCell<Store>>,
+    store: &HostRef<Store>,
 ) -> Val {
     if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {
         return Val::AnyRef(AnyRef::Null);
@@ -250,6 +206,6 @@ pub(crate) fn from_checked_anyfunc(
         signature,
         vmctx: item.vmctx,
     };
-    let f = WasmtimeFn::new(store.clone(), instance_handle, export);
-    Val::FuncRef(FuncRef(Rc::new(f)))
+    let f = Func::from_wasmtime_function(export, store.clone(), instance_handle);
+    Val::FuncRef(HostRef::new(f))
 }

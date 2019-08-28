@@ -1,5 +1,6 @@
 //! Support for a calling of an imported function.
 
+use crate::r#ref::HostRef;
 use crate::trampoline::code_memory::CodeMemory;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode};
@@ -14,7 +15,6 @@ use wasmtime_environ::{Export, Module};
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
 
 use core::cmp;
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{Callable, FuncType, Store, Trap, Val};
@@ -23,7 +23,7 @@ use super::create_handle::create_handle;
 
 struct TrampolineState {
     func: Rc<dyn Callable + 'static>,
-    trap: Option<Rc<RefCell<Trap>>>,
+    trap: Option<HostRef<Trap>>,
     #[allow(dead_code)]
     code_memory: CodeMemory,
 }
@@ -191,7 +191,7 @@ fn make_trampoline(
 pub fn create_handle_with_function(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
-    store: &Rc<RefCell<Store>>,
+    store: &HostRef<Store>,
 ) -> Result<InstanceHandle, Error> {
     let sig = ft.get_cranelift_signature().clone();
 
