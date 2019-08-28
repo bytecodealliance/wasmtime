@@ -964,6 +964,34 @@ pub(crate) fn define(
         .operands_out(vec![addr]),
     );
 
+    // Note this instruction is marked as having other side-effects, so GVN won't try to hoist it,
+    // which would result in it being subject to spilling. While not hoisting would generally hurt
+    // performance, since a computed value used many times may need to be regenerated before each
+    // use, it is not the case here: this instruction doesn't generate any code.  That's because,
+    // by definition the pinned register is never used by the register allocator, but is written to
+    // and read explicitly and exclusively by set_pinned_reg and get_pinned_reg.
+    ig.push(
+        Inst::new(
+            "get_pinned_reg",
+            r#"
+            Gets the content of the pinned register, when it's enabled.
+        "#,
+        )
+        .operands_out(vec![addr])
+        .other_side_effects(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "set_pinned_reg",
+            r#"
+        Sets the content of the pinned register, when it's enabled.
+        "#,
+        )
+        .operands_in(vec![addr])
+        .other_side_effects(true),
+    );
+
     let TableOffset = &TypeVar::new(
         "TableOffset",
         "An unsigned table offset",

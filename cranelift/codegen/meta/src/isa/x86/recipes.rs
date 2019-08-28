@@ -351,6 +351,7 @@ pub(crate) fn define<'shared>(
     let reg_rax = Register::new(gpr, regs.regunit_by_name(gpr, "rax"));
     let reg_rcx = Register::new(gpr, regs.regunit_by_name(gpr, "rcx"));
     let reg_rdx = Register::new(gpr, regs.regunit_by_name(gpr, "rdx"));
+    let reg_r15 = Register::new(gpr, regs.regunit_by_name(gpr, "r15"));
 
     // Stack operand with a 32-bit signed displacement from either RBP or RSP.
     let stack_gpr32 = Stack::new(gpr);
@@ -426,6 +427,25 @@ pub(crate) fn define<'shared>(
             .operands_in(vec![stack_gpr32])
             .operands_out(vec![stack_gpr32])
             .emit(""),
+    );
+
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("get_pinned_reg", f_nullary, 0)
+            .operands_out(vec![reg_r15])
+            .emit(""),
+    );
+    // umr with a fixed register output that's r15.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("set_pinned_reg", f_unary, 1)
+            .operands_in(vec![gpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    let r15 = RU::r15.into();
+                    {{PUT_OP}}(bits, rex2(r15, in_reg0), sink);
+                    modrm_rr(r15, in_reg0, sink);
+                "#,
+            ),
     );
 
     // No-op fills, created by late-stage redundant-fill removal.

@@ -6,7 +6,8 @@ pub fn define() -> IsaRegs {
     let builder = RegBankBuilder::new("IntRegs", "r")
         .units(16)
         .names(vec!["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi"])
-        .track_pressure(true);
+        .track_pressure(true)
+        .pinned_reg(15);
     let int_regs = regs.add_bank(builder);
 
     let builder = RegBankBuilder::new("FloatRegs", "xmm")

@@ -56,6 +56,7 @@ fn gen_regclass(isa: &TargetIsa, reg_class: &RegClass, fmt: &mut Formatter) {
         fmtln!(fmt, "first: {},", reg_bank.first_unit + reg_class.start);
         fmtln!(fmt, "subclasses: {:#x},", reg_class.subclass_mask());
         fmtln!(fmt, "mask: [{}],", mask);
+        fmtln!(fmt, "pinned_reg: {:?},", reg_bank.pinned_reg);
         fmtln!(fmt, "info: &INFO,");
     });
     fmtln!(fmt, "};");

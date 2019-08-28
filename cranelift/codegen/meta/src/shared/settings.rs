@@ -84,6 +84,17 @@ pub fn define() -> SettingGroup {
         false,
     );
 
+    settings.add_bool(
+        "enable_pinned_reg",
+        r#"Enable the use of the pinned register.
+
+        This register is excluded from register allocation, and is completely under the control of
+        the end-user. It is possible to read it via the get_pinned_reg instruction, and to set it
+        with the set_pinned_reg instruction.
+        "#,
+        false,
+    );
+
     settings.add_bool("enable_simd", "Enable the use of SIMD instructions.", false);
 
     settings.add_bool(

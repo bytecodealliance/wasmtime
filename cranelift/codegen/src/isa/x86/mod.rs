@@ -119,8 +119,8 @@ impl TargetIsa for Isa {
         abi::regclass_for_abi_type(ty)
     }
 
-    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::RegisterSet {
-        abi::allocatable_registers(func, &self.triple)
+    fn allocatable_registers(&self, _func: &ir::Function) -> regalloc::RegisterSet {
+        abi::allocatable_registers(&self.triple, &self.shared_flags)
     }
 
     #[cfg(feature = "testing_hooks")]

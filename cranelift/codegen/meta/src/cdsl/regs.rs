@@ -11,6 +11,7 @@ pub struct RegBank {
     pub names: Vec<&'static str>,
     pub prefix: &'static str,
     pub pressure_tracking: bool,
+    pub pinned_reg: Option<u16>,
     pub toprcs: Vec<RegClassIndex>,
     pub classes: Vec<RegClassIndex>,
 }
@@ -23,6 +24,7 @@ impl RegBank {
         names: Vec<&'static str>,
         prefix: &'static str,
         pressure_tracking: bool,
+        pinned_reg: Option<u16>,
     ) -> Self {
         RegBank {
             name,
@@ -31,6 +33,7 @@ impl RegBank {
             names,
             prefix,
             pressure_tracking,
+            pinned_reg,
             toprcs: Vec::new(),
             classes: Vec::new(),
         }
@@ -183,6 +186,7 @@ pub struct RegBankBuilder {
     pub names: Vec<&'static str>,
     pub prefix: &'static str,
     pub pressure_tracking: Option<bool>,
+    pub pinned_reg: Option<u16>,
 }
 
 impl RegBankBuilder {
@@ -193,6 +197,7 @@ impl RegBankBuilder {
             names: vec![],
             prefix,
             pressure_tracking: None,
+            pinned_reg: None,
         }
     }
     pub fn units(mut self, units: u8) -> Self {
@@ -205,6 +210,11 @@ impl RegBankBuilder {
     }
     pub fn track_pressure(mut self, track: bool) -> Self {
         self.pressure_tracking = Some(track);
+        self
+    }
+    pub fn pinned_reg(mut self, unit: u16) -> Self {
+        assert!(unit < (self.units as u16));
+        self.pinned_reg = Some(unit);
         self
     }
 }
@@ -246,6 +256,7 @@ impl IsaRegsBuilder {
             builder
                 .pressure_tracking
                 .expect("Pressure tracking must be explicitly set"),
+            builder.pinned_reg,
         ))
     }
 
