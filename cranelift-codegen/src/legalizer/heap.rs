@@ -14,7 +14,7 @@ pub fn expand_heap_addr(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &dyn TargetIsa,
+    isa: &dyn TargetIsa,
 ) {
     // Unpack the instruction.
     let (heap, offset, access_size) = match func.dfg[inst] {
@@ -32,16 +32,24 @@ pub fn expand_heap_addr(
 
     match func.heaps[heap].style {
         ir::HeapStyle::Dynamic { bound_gv } => {
-            dynamic_addr(inst, heap, offset, access_size, bound_gv, func)
+            dynamic_addr(isa, inst, heap, offset, access_size, bound_gv, func)
         }
-        ir::HeapStyle::Static { bound } => {
-            static_addr(inst, heap, offset, access_size, bound.into(), func, cfg)
-        }
+        ir::HeapStyle::Static { bound } => static_addr(
+            isa,
+            inst,
+            heap,
+            offset,
+            access_size,
+            bound.into(),
+            func,
+            cfg,
+        ),
     }
 }
 
 /// Expand a `heap_addr` for a dynamic heap.
 fn dynamic_addr(
+    isa: &dyn TargetIsa,
     inst: ir::Inst,
     heap: ir::Heap,
     offset: ir::Value,
@@ -82,11 +90,12 @@ fn dynamic_addr(
     }
     pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
 
-    compute_addr(inst, heap, addr_ty, offset, offset_ty, pos.func);
+    compute_addr(isa, inst, heap, addr_ty, offset, offset_ty, pos.func);
 }
 
 /// Expand a `heap_addr` for a static heap.
 fn static_addr(
+    isa: &dyn TargetIsa,
     inst: ir::Inst,
     heap: ir::Heap,
     offset: ir::Value,
@@ -134,11 +143,12 @@ fn static_addr(
         pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
     }
 
-    compute_addr(inst, heap, addr_ty, offset, offset_ty, pos.func);
+    compute_addr(isa, inst, heap, addr_ty, offset, offset_ty, pos.func);
 }
 
 /// Emit code for the base address computation of a `heap_addr` instruction.
 fn compute_addr(
+    isa: &dyn TargetIsa,
     inst: ir::Inst,
     heap: ir::Heap,
     addr_ty: ir::Type,
@@ -165,7 +175,12 @@ fn compute_addr(
     }
 
     // Add the heap base address base
-    let base_gv = pos.func.heaps[heap].base;
-    let base = pos.ins().global_value(addr_ty, base_gv);
+    let base = if isa.flags().enable_pinned_reg() && isa.flags().use_pinned_reg_as_heap_base() {
+        pos.ins().get_pinned_reg(isa.pointer_type())
+    } else {
+        let base_gv = pos.func.heaps[heap].base;
+        pos.ins().global_value(addr_ty, base_gv)
+    };
+
     pos.func.dfg.replace(inst).iadd(base, offset);
 }
