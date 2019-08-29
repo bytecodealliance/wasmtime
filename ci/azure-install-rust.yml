@@ -1,0 +1,33 @@
+steps:
+  # Rustup is currently installed on Windows and Linux, but not macOS.
+  # It is installed in /usr/local/cargo/bin/ or C:\Program Files\Rust\.cargo\bin\
+  # This steps ensures that rustup is installed, mainly for macOS, or if the
+  # azure image changes in the future.
+  - bash: |
+      set -ex
+      if [ -x "`command -v rustup`" ]; then
+        echo `command -v rustup` `rustup -V` already installed
+        rustup self update
+      else
+        if [ "$AGENT_OS" = "Windows_NT" ]; then
+          curl -sSf -o rustup-init.exe https://win.rustup.rs
+          ./rustup-init.exe -y --default-toolchain $TOOLCHAIN
+          echo "##vso[task.prependpath]$USERPROFILE/.cargo/bin"
+        else
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $TOOLCHAIN
+          echo "##vso[task.prependpath]$HOME/.cargo/bin"
+        fi
+      fi
+    displayName: Install rustup
+
+  - bash: |
+      set -ex
+      rustup update $TOOLCHAIN
+      rustup default $TOOLCHAIN
+    displayName: Install rust
+
+  - bash: |
+      set -ex
+      rustc -Vv
+      cargo -V
+    displayName: Query rust and cargo versions

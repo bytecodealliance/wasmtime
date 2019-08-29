@@ -1,0 +1,66 @@
+steps:
+- checkout: self
+  submodules: true
+
+- template: azure-install-rust.yml
+
+- bash: echo "##vso[task.setvariable variable=RUSTC_VERSION;]`rustc --version`"
+  displayName: Set rustc version string for caching
+
+- bash: cargo build --release
+  displayName: Cargo build
+
+# Test what we're about to release in release mode itself.
+- bash: cargo test --release --all
+  displayName: Cargo test
+  env:
+    RUST_BACKTRACE: 1
+
+- bash: |
+    echo "##vso[task.setvariable variable=tagName;]`echo $BUILD_SOURCEBRANCH | sed -e 's|refs/tags/||'`"
+  displayName: Set tag name
+  condition: startsWith(variables['Build.SourceBranch'], 'refs/tags/')
+- bash: |
+    echo "##vso[task.setvariable variable=tagName;]dev"
+  displayName: Set tag name to "dev"
+  condition: not(startsWith(variables['Build.SourceBranch'], 'refs/tags/'))
+
+- bash: echo "##vso[task.setvariable variable=basename;]cranelift-$(tagName)-x86_64-windows"
+  displayName: Configure basename var
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
+- bash: echo "##vso[task.setvariable variable=basename;]cranelift-$(tagName)-x86_64-macos"
+  displayName: Configure basename var
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Darwin'))
+- bash: echo "##vso[task.setvariable variable=basename;]cranelift-$(tagName)-x86_64-linux"
+  displayName: Configure basename var
+  condition: and(succeeded(), eq( variables['Agent.OS'], 'Linux' ))
+
+- bash: |
+    set -e
+    mkdir -p $BUILD_BINARIESDIRECTORY/$BASENAME
+    if [ "$AGENT_OS" = "Windows_NT" ]; then
+      ext=.exe
+    fi
+    cp LICENSE README.md target/release/clif-util$ext $BUILD_BINARIESDIRECTORY/$BASENAME
+  displayName: Copy binaries
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename).zip'
+  displayName: Archive files (Win)
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)
+    archiveType: 'tar'
+    tarCompression: 'xz'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename).tar.xz'
+  displayName: Archive files (Unix)
+  condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))
+- task: PublishPipelineArtifact@1
+  inputs:
+    path: $(Build.ArtifactStagingDirectory)/
+    artifactName: 'bundle-$(Agent.OS)'
+

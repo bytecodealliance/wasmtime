@@ -1,0 +1,156 @@
+name: $(Build.SourceBranch)-$(date:yyyy-MM-dd)$(rev:.r)
+trigger:
+  branches:
+    include:
+    - 'master'
+  tags:
+    include:
+    - '*'
+    exclude:
+      - 'dev'
+
+jobs:
+- job: rustfmt
+  pool:
+    vmImage: 'macos-10.14'
+  steps:
+  - checkout: self
+    submodules: true
+  - template: ci/azure-install-rust.yml
+  - script: rustup component add rustfmt
+    displayName: Add rustfmt
+  - script: cargo fmt --all -- --check
+    displayName: Check formatting
+  variables:
+    toolchain: stable
+
+# Smoke test to build docs on one builder, using OSX for now since it's the
+# fastest
+- job: docs
+  pool:
+    vmImage: 'macos-10.14'
+  steps:
+  - checkout: self
+    submodules: true
+  - template: ci/azure-install-rust.yml
+  - script: cargo doc
+    displayName: Build documentation
+  - script: cargo install cargo-deadlinks
+    displayName: Install cargo-deadlinks
+  - bash: |
+      find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
+    displayName: Run cargo-deadlinks
+  variables:
+    toolchain: nightly
+
+- job: Test
+  strategy:
+    matrix:
+      windows-earliest:
+        imageName: 'vs2017-win2016'
+        toolchain: '1.37.0'
+      linux-earliest:
+        imageName: 'ubuntu-16.04'
+        toolchain: '1.37.0'
+      mac-earliest:
+        imageName: 'macos-10.14'
+        toolchain: '1.37.0'
+      mac-stable:
+        imageName: 'macos-10.14'
+        toolchain: stable
+      mac-beta:
+        imageName: 'macos-10.14'
+        toolchain: beta
+      mac-nightly:
+        imageName: 'macos-10.14'
+        toolchain: nightly
+
+  pool:
+    vmImage: $(imageName)
+
+  steps:
+    - checkout: self
+      submodules: true
+    - template: ci/azure-install-rust.yml
+
+    - script: cargo fetch
+      displayName: Fetch cargo dependencies
+
+    - script: cargo build
+      displayName: Cargo build
+
+    - bash: cargo test --all
+      displayName: Cargo test
+      env:
+        RUST_BACKTRACE: 1
+
+    # Ensure fuzzer works by running it with a single input
+    - bash: cargo install cargo-fuzz
+      displayName: Install cargo-fuzz
+      condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
+    - bash: |
+        fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
+        cargo fuzz run fuzz_translate_module \
+        "fuzz/corpus/fuzz_translate_module/$fuzz_module"
+      displayName: Run cargo-fuzz
+      env:
+        RUST_BACKTRACE: 1
+      condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
+
+- job: Build
+  strategy:
+    matrix:
+      windows:
+        imageName: 'vs2017-win2016'
+        # Statically link against msvcrt to produce slightly more portable
+        # binaries on Windows by reducing our binary compatibility requirements.
+        RUSTFLAGS: -Ctarget-feature=+crt-static
+      mac:
+        imageName: 'macos-10.14'
+        # Lower the deployment target from our build image in an attempt to
+        # build more portable binaries that run on older releases. Note that
+        # 10.9 here is arbitrarily chosen and just happens to be the lowest that
+        # works at this time. Raising this is probably fine.
+        MACOSX_DEPLOYMENT_TARGET: 10.9
+  variables:
+    toolchain: '1.37.0'
+  pool:
+    vmImage: $(imageName)
+  # We try to be compatible with beta and nightly, but they occasionally
+  # fail, so we don't allow them to hold up people using stable.
+  continueOnError: $[ne(variables['toolchain'], 'stable')]
+  steps:
+  - template: ci/azure-build-release.yml
+
+# Build the Linux release binary in an older Linux container (in this case
+# Centos 6)
+- job: Build_linux
+  variables:
+    toolchain: '1.37.0'
+  container:
+    image: centos:6
+    options: "--name ci-container -v /usr/bin/docker:/tmp/docker:ro"
+  steps:
+  # We're executing in the container as non-root but `yum` requires root. We
+  # need to install `sudo` but to do that we need `sudo`. Do a bit of a weird
+  # hack where we use the host `docker` executable to re-execute in our own
+  # container with the root user to install `sudo`
+  - bash: /tmp/docker exec -t -u 0 ci-container sh -c "yum install -y sudo"
+    displayName: Configure sudo
+
+  # See https://edwards.sdsu.edu/research/c11-on-centos-6/ for where these
+  # various commands came from.
+  - bash: |
+      set -e
+      sudo yum install -y centos-release-scl cmake xz
+      sudo yum install -y devtoolset-8-gcc devtoolset-8-binutils devtoolset-8-gcc-c++
+      echo "##vso[task.prependpath]/opt/rh/devtoolset-8/root/usr/bin"
+    displayName: Install system dependencies
+
+  # Delete `libstdc++.so` to force gcc to link against `libstdc++.a` instead.
+  # This is a hack and not the right way to do this, but it ends up doing the
+  # right thing for now.
+  - bash: sudo rm -f /opt/rh/devtoolset-8/root/usr/lib/gcc/x86_64-redhat-linux/8/libstdc++.so
+    displayName: Force a static libstdc++
+
+  - template: ci/azure-build-release.yml
