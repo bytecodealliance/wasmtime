@@ -31,7 +31,9 @@ steps:
 #   displayName: Install sccache (Windows)
 #   condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
 
-- bash: cargo build --release
+- bash: |
+    cargo build --release --bin wasmtime --bin wasm2obj
+    cargo build --release --features wasmtime-api/wasm-c-api --package wasmtime-api
   displayName: Cargo build
 
 # Test what we're about to release in release mode itself. This tests
@@ -68,8 +70,22 @@ steps:
     mkdir -p $BUILD_BINARIESDIRECTORY/$BASENAME
     if [ "$AGENT_OS" = "Windows_NT" ]; then
       ext=.exe
+      shared_ext=.dll
+      lib_ext=.lib
+    elif [ "$AGENT_OS" = "Darwin" ]; then
+      shared_ext=.dylib
+      lib_ext=.a
+      lib_prefix=lib
+    else
+      shared_ext=.so
+      lib_ext=.a
+      lib_prefix=lib
     fi
     cp LICENSE README.md target/release/{wasmtime,wasm2obj}$ext $BUILD_BINARIESDIRECTORY/$BASENAME
+    mkdir -p $BUILD_BINARIESDIRECTORY/$BASENAME/api/include
+    cp wasmtime-api/c-examples/wasm-c-api/include/wasm.h $BUILD_BINARIESDIRECTORY/$BASENAME/api/include
+    mkdir -p $BUILD_BINARIESDIRECTORY/$BASENAME/api/lib
+    cp target/release/${lib_prefix}wasmtime_api${shared_ext} target/release/${lib_prefix}wasmtime_api${lib_ext} $BUILD_BINARIESDIRECTORY/$BASENAME/api/lib
   displayName: Copy binaries
 
 - bash: |
