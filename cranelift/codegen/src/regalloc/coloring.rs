@@ -44,7 +44,7 @@
 
 use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
+use crate::ir::{ArgumentLoc, InstBuilder, ValueDef};
 use crate::ir::{Ebb, Function, Inst, InstructionData, Layout, Opcode, SigRef, Value, ValueLoc};
 use crate::isa::{regs_overlap, RegClass, RegInfo, RegUnit};
 use crate::isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
@@ -66,6 +66,12 @@ use log::debug;
 pub struct Coloring {
     divert: RegDiversions,
     solver: Solver,
+}
+
+/// Kinds of ABI parameters.
+enum AbiParams {
+    Parameters(SigRef),
+    Returns,
 }
 
 /// Bundle of references that the coloring algorithm needs.
@@ -285,6 +291,36 @@ impl<'a> Context<'a> {
         regs
     }
 
+    /// Program the input-side ABI constraints for `inst` into the constraint solver.
+    ///
+    /// ABI constraints are the fixed register assignments useds for calls and returns.
+    fn program_input_abi(&mut self, inst: Inst, abi_params: AbiParams) {
+        let abi_types = match abi_params {
+            AbiParams::Parameters(sig) => &self.cur.func.dfg.signatures[sig].params,
+            AbiParams::Returns => &self.cur.func.signature.returns,
+        };
+
+        for (abi, &value) in abi_types
+            .iter()
+            .zip(self.cur.func.dfg.inst_variable_args(inst))
+        {
+            if let ArgumentLoc::Reg(reg) = abi.location {
+                if let Affinity::Reg(rci) = self
+                    .liveness
+                    .get(value)
+                    .expect("ABI register must have live range")
+                    .affinity
+                {
+                    let rc = self.reginfo.rc(rci);
+                    let cur_reg = self.divert.reg(value, &self.cur.func.locations);
+                    self.solver.reassign_in(value, rc, cur_reg, reg);
+                } else {
+                    panic!("ABI argument {} should be in a register", value);
+                }
+            }
+        }
+    }
+
     /// Color the values defined by `inst` and insert any necessary shuffle code to satisfy
     /// instruction constraints.
     ///
@@ -316,25 +352,9 @@ impl<'a> Context<'a> {
         }
         let call_sig = self.cur.func.dfg.call_signature(inst);
         if let Some(sig) = call_sig {
-            program_input_abi(
-                &mut self.solver,
-                inst,
-                &self.cur.func.dfg.signatures[sig].params,
-                &self.cur.func,
-                &self.liveness,
-                &self.reginfo,
-                &self.divert,
-            );
+            self.program_input_abi(inst, AbiParams::Parameters(sig));
         } else if self.cur.func.dfg[inst].opcode().is_return() {
-            program_input_abi(
-                &mut self.solver,
-                inst,
-                &self.cur.func.signature.returns,
-                &self.cur.func,
-                &self.liveness,
-                &self.reginfo,
-                &self.divert,
-            );
+            self.program_input_abi(inst, AbiParams::Returns);
         } else if self.cur.func.dfg[inst].opcode().is_branch() {
             // This is a branch, so we need to make sure that globally live values are in their
             // global registers. For EBBs that take arguments, we also need to place the argument
@@ -1099,35 +1119,6 @@ impl<'a> Context<'a> {
                     regs.global
                         .free(rc, self.cur.func.locations[lv.value].unwrap_reg());
                 }
-            }
-        }
-    }
-}
-
-/// Program the input-side ABI constraints for `inst` into the constraint solver.
-///
-/// ABI constraints are the fixed register assignments used for calls and returns.
-fn program_input_abi(
-    solver: &mut Solver,
-    inst: Inst,
-    abi_types: &[AbiParam],
-    func: &Function,
-    liveness: &Liveness,
-    reginfo: &RegInfo,
-    divert: &RegDiversions,
-) {
-    for (abi, &value) in abi_types.iter().zip(func.dfg.inst_variable_args(inst)) {
-        if let ArgumentLoc::Reg(reg) = abi.location {
-            if let Affinity::Reg(rci) = liveness
-                .get(value)
-                .expect("ABI register must have live range")
-                .affinity
-            {
-                let rc = reginfo.rc(rci);
-                let cur_reg = divert.reg(value, &func.locations);
-                solver.reassign_in(value, rc, cur_reg, reg);
-            } else {
-                panic!("ABI argument {} should be in a register", value);
             }
         }
     }
