@@ -21,6 +21,7 @@ use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
 use crate::predicates;
 use crate::timing;
+use std::collections::BTreeSet;
 use std::vec::Vec;
 
 mod boundary;
@@ -146,7 +147,9 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     func.encodings.resize(func.dfg.num_insts());
 
     let mut pos = FuncCursor::new(func);
-    let mut pending_splits = Vec::new();
+
+    // This must be a set to prevent trying to legalize `isplit` and `vsplit` twice in certain cases.
+    let mut pending_splits = BTreeSet::new();
 
     // Process EBBs in layout order. Some legalization actions may split the current EBB or append
     // new ones to the end. We need to make sure we visit those new EBBs too.
@@ -166,7 +169,9 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
                 // The argument of a `isplit` or `vsplit` instruction didn't resolve to a
                 // `iconcat` or `vconcat` instruction. Try again after legalizing the rest of
                 // the instructions.
-                LegalizeInstResult::SplitLegalizePending => pending_splits.push(inst),
+                LegalizeInstResult::SplitLegalizePending => {
+                    pending_splits.insert(inst);
+                }
             }
         }
     }
