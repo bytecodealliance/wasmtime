@@ -21,7 +21,7 @@ wasmtime-environ = { path = "../../wasmtime-environ" }
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
 wasmtime-jit = { path = "../../wasmtime-jit" }
 wasmtime-runtime = { path = "../../wasmtime-runtime" }
-target-lexicon = { version = "0.4.0", default-features = false }
+target-lexicon = { version = "0.6.0", default-features = false }
 failure = "0.1"
 region = "2.0.0"
 wasmparser = "0.37.1"
