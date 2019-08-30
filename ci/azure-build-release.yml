@@ -38,7 +38,7 @@ steps:
 
 # Test what we're about to release in release mode itself. This tests
 # everything except lightbeam which requires nightly which happens above.
-- bash: cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py
+- bash: cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime-api
   displayName: Cargo test
   env:
     RUST_BACKTRACE: 1
@@ -70,6 +70,14 @@ steps:
     mkdir -p $BUILD_BINARIESDIRECTORY/$BASENAME
     if [ "$AGENT_OS" = "Windows_NT" ]; then
       ext=.exe
+    fi
+    cp LICENSE README.md target/release/{wasmtime,wasm2obj}$ext $BUILD_BINARIESDIRECTORY/$BASENAME
+  displayName: Copy binaries
+
+- bash: |
+    set -e
+    API_BASENAME=${BASENAME}-api
+    if [ "$AGENT_OS" = "Windows_NT" ]; then
       shared_ext=.dll
       lib_ext=.lib
     elif [ "$AGENT_OS" = "Darwin" ]; then
@@ -81,12 +89,13 @@ steps:
       lib_ext=.a
       lib_prefix=lib
     fi
-    cp LICENSE README.md target/release/{wasmtime,wasm2obj}$ext $BUILD_BINARIESDIRECTORY/$BASENAME
-    mkdir -p $BUILD_BINARIESDIRECTORY/$BASENAME/api/include
-    cp wasmtime-api/c-examples/wasm-c-api/include/wasm.h $BUILD_BINARIESDIRECTORY/$BASENAME/api/include
-    mkdir -p $BUILD_BINARIESDIRECTORY/$BASENAME/api/lib
-    cp target/release/${lib_prefix}wasmtime_api${shared_ext} target/release/${lib_prefix}wasmtime_api${lib_ext} $BUILD_BINARIESDIRECTORY/$BASENAME/api/lib
-  displayName: Copy binaries
+    mkdir -p $BUILD_BINARIESDIRECTORY/$API_BASENAME
+    cp wasmtime-api/README.md wasmtime-api/LICENSE $BUILD_BINARIESDIRECTORY/$API_BASENAME
+    mkdir -p $BUILD_BINARIESDIRECTORY/$API_BASENAME/include
+    cp wasmtime-api/c-examples/wasm-c-api/include/wasm.h $BUILD_BINARIESDIRECTORY/$API_BASENAME/include
+    mkdir -p $BUILD_BINARIESDIRECTORY/$API_BASENAME/lib
+    cp target/release/${lib_prefix}wasmtime_api${shared_ext} target/release/${lib_prefix}wasmtime_api${lib_ext} $BUILD_BINARIESDIRECTORY/$API_BASENAME/lib
+  displayName: Copy c-api binaries
 
 - bash: |
     set -e
@@ -112,6 +121,23 @@ steps:
     archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename).tar.xz'
   displayName: Archive files (Unix)
   condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)-api
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename)-c-api.zip'
+  displayName: Archive c-api files (Win)
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)-api
+    archiveType: 'tar'
+    tarCompression: 'xz'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename)-c-api.tar.xz'
+  displayName: Archive c-api files (Unix)
+  condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))
+
 - task: PublishPipelineArtifact@1
   inputs:
     path: $(Build.ArtifactStagingDirectory)/
