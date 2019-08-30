@@ -188,6 +188,10 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     narrow.custom_legalize(load, "narrow_load");
     narrow.custom_legalize(store, "narrow_store");
 
+    // iconst.i64 can't be legalized in the meta langage (because integer literals can't be
+    // embedded as part of arguments), so use a custom legalization for now.
+    narrow.custom_legalize(iconst, "narrow_iconst");
+
     narrow.legalize(
         def!(a = iadd(x, y)),
         vec![

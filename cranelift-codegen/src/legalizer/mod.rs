@@ -16,7 +16,7 @@
 use crate::bitset::BitSet;
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
-use crate::ir::types::I32;
+use crate::ir::types::{I32, I64};
 use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
 use crate::predicates;
@@ -632,4 +632,36 @@ fn narrow_store(
         offset.try_add_i64(8).expect("store offset overflow"),
     );
     pos.remove_inst();
+}
+
+/// Expands an illegal iconst value by splitting it into two.
+fn narrow_iconst(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &dyn TargetIsa,
+) {
+    let imm: i64 = if let ir::InstructionData::UnaryImm {
+        opcode: ir::Opcode::Iconst,
+        imm,
+    } = &func.dfg[inst]
+    {
+        (*imm).into()
+    } else {
+        panic!("unexpected instruction in narrow_iconst");
+    };
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let ty = pos.func.dfg.ctrl_typevar(inst);
+    if isa.pointer_bits() == 32 && ty == I64 {
+        let low = pos.ins().iconst(I32, imm & 0xffffffff);
+        let high = pos.ins().iconst(I32, imm >> 32);
+        // The instruction has as many results as iconcat, so no need to replace them.
+        pos.func.dfg.replace(inst).iconcat(low, high);
+        return;
+    }
+
+    unimplemented!("missing encoding or legalization for iconst.{:?}", ty);
 }

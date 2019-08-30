@@ -62,14 +62,6 @@ ebb0:
     return v1
 }
 
-function %f64const() -> f64 {
-ebb0:
-    v1 = f64const 0x1.0p1
-    ; check: $(tmp=$V) = iconst.i64
-    ; check: v1 = bitcast.f64 $tmp
-    return v1
-}
-
 function %select_f64(f64, f64, i32) -> f64 {
 ebb0(v0: f64, v1: f64, v2: i32):
     v3 = select v2, v0, v1
