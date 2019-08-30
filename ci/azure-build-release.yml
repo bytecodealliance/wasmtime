@@ -31,12 +31,14 @@ steps:
 #   displayName: Install sccache (Windows)
 #   condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
 
-- bash: cargo build --release
+- bash: |
+    cargo build --release --bin wasmtime --bin wasm2obj
+    cargo build --release --features wasmtime-api/wasm-c-api --package wasmtime-api
   displayName: Cargo build
 
 # Test what we're about to release in release mode itself. This tests
 # everything except lightbeam which requires nightly which happens above.
-- bash: cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py
+- bash: cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime-api
   displayName: Cargo test
   env:
     RUST_BACKTRACE: 1
@@ -74,6 +76,29 @@ steps:
 
 - bash: |
     set -e
+    API_BASENAME=${BASENAME}-api
+    if [ "$AGENT_OS" = "Windows_NT" ]; then
+      shared_ext=.dll
+      lib_ext=.lib
+    elif [ "$AGENT_OS" = "Darwin" ]; then
+      shared_ext=.dylib
+      lib_ext=.a
+      lib_prefix=lib
+    else
+      shared_ext=.so
+      lib_ext=.a
+      lib_prefix=lib
+    fi
+    mkdir -p $BUILD_BINARIESDIRECTORY/$API_BASENAME
+    cp wasmtime-api/README.md wasmtime-api/LICENSE $BUILD_BINARIESDIRECTORY/$API_BASENAME
+    mkdir -p $BUILD_BINARIESDIRECTORY/$API_BASENAME/include
+    cp wasmtime-api/c-examples/wasm-c-api/include/wasm.h $BUILD_BINARIESDIRECTORY/$API_BASENAME/include
+    mkdir -p $BUILD_BINARIESDIRECTORY/$API_BASENAME/lib
+    cp target/release/${lib_prefix}wasmtime_api${shared_ext} target/release/${lib_prefix}wasmtime_api${lib_ext} $BUILD_BINARIESDIRECTORY/$API_BASENAME/lib
+  displayName: Copy c-api binaries
+
+- bash: |
+    set -e
     export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
     "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj installer/msi/wasmtime.wxs
     "$WIX/bin/light" -out $BUILD_ARTIFACTSTAGINGDIRECTORY/$(basename).msi target/wasmtime.wixobj -ext WixUtilExtension
@@ -96,6 +121,23 @@ steps:
     archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename).tar.xz'
   displayName: Archive files (Unix)
   condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)-api
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename)-c-api.zip'
+  displayName: Archive c-api files (Win)
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(Build.BinariesDirectory)/$(basename)-api
+    archiveType: 'tar'
+    tarCompression: 'xz'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/$(basename)-c-api.tar.xz'
+  displayName: Archive c-api files (Unix)
+  condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))
+
 - task: PublishPipelineArtifact@1
   inputs:
     path: $(Build.ArtifactStagingDirectory)/
