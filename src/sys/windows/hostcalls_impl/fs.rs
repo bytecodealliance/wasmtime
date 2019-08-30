@@ -61,12 +61,22 @@ pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: host::__wasi_fdflags_t) ->
 }
 
 pub(crate) fn fd_advise(
-    file: &File,
+    _file: &File,
     advice: host::__wasi_advice_t,
-    offset: host::__wasi_filesize_t,
-    len: host::__wasi_filesize_t,
+    _offset: host::__wasi_filesize_t,
+    _len: host::__wasi_filesize_t,
 ) -> Result<()> {
-    unimplemented!("fd_advise")
+    match advice {
+        host::__WASI_ADVICE_DONTNEED
+        | host::__WASI_ADVICE_SEQUENTIAL
+        | host::__WASI_ADVICE_WILLNEED
+        | host::__WASI_ADVICE_NOREUSE
+        | host::__WASI_ADVICE_RANDOM
+        | host::__WASI_ADVICE_NORMAL => {}
+        _ => return Err(host::__WASI_EINVAL),
+    }
+
+    Ok(())
 }
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
