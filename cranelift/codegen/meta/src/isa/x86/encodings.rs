@@ -1776,7 +1776,7 @@ pub(crate) fn define(
     insertlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41_simd))); // PINSRD
     insertlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], Some(use_sse41_simd))); // PINSRQ, only x86_64
 
-    for ty in ValueType::all_lane_types() {
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         if let Some((opcode, isap)) = insertlane_mapping.get(&ty.lane_bits()) {
             let instruction = insertlane.bind_vector_from_lane(ty, sse_vector_size);
             let template = rec_r_ib_unsigned_r.opcodes(opcode.clone());
@@ -1797,7 +1797,7 @@ pub(crate) fn define(
     extractlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41_simd))); // PEXTRD
     extractlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x16], Some(use_sse41_simd))); // PEXTRQ, only x86_64
 
-    for ty in ValueType::all_lane_types() {
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         if let Some((opcode, isap)) = extractlane_mapping.get(&ty.lane_bits()) {
             let instruction = extractlane.bind_vector_from_lane(ty, sse_vector_size);
             let template = rec_r_ib_unsigned_gpr.opcodes(opcode.clone());
