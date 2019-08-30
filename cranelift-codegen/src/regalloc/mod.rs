@@ -10,6 +10,7 @@ pub mod register_set;
 pub mod virtregs;
 
 mod affinity;
+mod branch_splitting;
 mod coalescing;
 mod context;
 mod diversion;

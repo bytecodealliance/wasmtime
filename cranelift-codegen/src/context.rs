@@ -318,7 +318,7 @@ impl Context {
     /// Run the register allocator.
     pub fn regalloc(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
         self.regalloc
-            .run(isa, &mut self.func, &self.cfg, &mut self.domtree)
+            .run(isa, &mut self.func, &mut self.cfg, &mut self.domtree)
     }
 
     /// Insert prologue and epilogues after computing the stack frame layout.

@@ -1,8 +1,9 @@
 test regalloc
 target x86_64 haswell
-feature !"basic-blocks"
+feature "basic-blocks"
 
 ; regex: V=v\d+
+; regex: EBB=ebb\d+
 
 ; Filed as https://github.com/CraneStation/cranelift/issues/208
 ;
@@ -60,9 +61,12 @@ ebb6:
     v8 = iadd v25, v23
     v9 = load.i32 v8+56
     ; check: v9 = spill
-    ; check: brnz $V, ebb3(v9)
+    ; check: brnz $V, $(splitEdge=$EBB)
     brnz v9, ebb3(v9)
     jump ebb4
+
+    ; check: $splitEdge:
+    ; nextln:  jump ebb3(v9)
 
 ebb4:
     jump ebb2
