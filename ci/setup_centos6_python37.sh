@@ -14,7 +14,7 @@ curl -O -L https://github.com/openssl/openssl/archive/OpenSSL_1_1_1c.tar.gz
 tar -zxvf OpenSSL_1_1_1c.tar.gz
 cd openssl-OpenSSL_1_1_1c
 ./Configure shared zlib linux-x86_64
-make
+make -sj4
 make install
 cd ..
 rm -rf openssl-OpenSSL_1_1_1c
@@ -26,7 +26,7 @@ curl -O -L https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tgz
 tar xzf Python-3.7.3.tgz
 cd Python-3.7.3
 ./configure
-make
+make -sj4
 make install
 cd ..
 rm -rf Python-3.7.3
