@@ -75,12 +75,11 @@ fn legalize_inst(
         match pos.func.dfg.value_def(arg) {
             ir::ValueDef::Result(inst, _num) => {
                 if let ir::InstructionData::Binary {
-                    opcode, args: _, ..
+                    opcode: ir::Opcode::Iconcat,
+                    ..
                 } = pos.func.dfg[inst]
                 {
-                    if opcode != ir::Opcode::Iconcat {
-                        return LegalizeInstResult::SplitLegalizePending;
-                    }
+                    // `arg` was created by an `iconcat` instruction.
                 } else {
                     // `arg` was not created by an `iconcat` instruction. Don't try to resolve it,
                     // as otherwise `split::isplit` will re-insert the original `isplit`, causing
@@ -153,7 +152,9 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 
     // Process EBBs in layout order. Some legalization actions may split the current EBB or append
     // new ones to the end. We need to make sure we visit those new EBBs too.
-    while let Some(_ebb) = pos.next_ebb() {
+    while let Some(ebb) = pos.next_ebb() {
+        split::split_ebb_params(pos.func, cfg, ebb);
+
         // Keep track of the cursor position before the instruction being processed, so we can
         // double back when replacing instructions.
         let mut prev_pos = pos.position();
@@ -174,10 +175,6 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
                 }
             }
         }
-    }
-
-    while let Some(ebb) = pos.next_ebb() {
-        split::split_ebb_params(pos.func, cfg, ebb);
     }
 
     // Try legalizing `isplit` and `vsplit` instructions, which could not previously be legalized.
