@@ -89,6 +89,8 @@ fn unwrap_inst(
                     fmtln!(fmt, "func.dfg.resolve_aliases(args[{}]),", n);
                 } else if op.is_varargs() {
                     let n = inst.imm_opnums.iter().chain(inst.value_opnums.iter()).max().map(|n| n + 1).unwrap_or(0);
+                    // We need to create a `Vec` here, as using a slice would result in a borrowck
+                    // error later on.
                     fmtln!(fmt, "\
                         args.iter().skip({}).map(|&arg| func.dfg.resolve_aliases(arg)).collect::<Vec<_>>(),\
                     ", n);
@@ -115,6 +117,9 @@ fn unwrap_inst(
             let name = var_pool
                 .get(apply.args[i].maybe_var().expect("vararg without name"))
                 .name;
+
+            // Above name is set to an `Vec` representing the varargs. However it is expected to be
+            // `&[Value]` below, so we borrow it.
             fmtln!(fmt, "let {} = &{};", name, name);
         }
     }
@@ -419,6 +424,8 @@ fn gen_transform<'a>(
         }
 
         if transform.def_pool.get(transform.src).apply.inst.is_branch {
+            // A branch might have been legalized into multiple branches, so we need to recompute
+            // the cfg.
             fmt.line("cfg.recompute_ebb(pos.func, pos.current_ebb().unwrap());");
         }
 
