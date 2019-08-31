@@ -2532,7 +2532,7 @@ pub fn define<'shared>(
 
     // XX /r, MR form. Add two GPR registers and get carry flag.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rcin", f_ternary, 1)
+        EncodingRecipeBuilder::new("rin", f_ternary, 1)
             .operands_in(vec![
                 OperandConstraint::RegClass(gpr),
                 OperandConstraint::RegClass(gpr),
@@ -2550,7 +2550,7 @@ pub fn define<'shared>(
 
     // XX /r, MR form. Add two GPR registers with carry flag.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rcarry", f_ternary, 1)
+        EncodingRecipeBuilder::new("rio", f_ternary, 1)
             .operands_in(vec![
                 OperandConstraint::RegClass(gpr),
                 OperandConstraint::RegClass(gpr),
