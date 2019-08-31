@@ -1,7 +1,7 @@
 //! Topological order of EBBs, according to the dominator tree.
 
 use crate::dominator_tree::DominatorTree;
-use crate::entity::SparseSet;
+use crate::entity::EntitySet;
 use crate::ir::{Ebb, Layout};
 use std::vec::Vec;
 
@@ -19,7 +19,7 @@ pub struct TopoOrder {
     next: usize,
 
     /// Set of visited EBBs.
-    visited: SparseSet<Ebb>,
+    visited: EntitySet<Ebb>,
 
     /// Stack of EBBs to be visited next, already in `visited`.
     stack: Vec<Ebb>,
@@ -31,7 +31,7 @@ impl TopoOrder {
         Self {
             preferred: Vec::new(),
             next: 0,
-            visited: SparseSet::new(),
+            visited: EntitySet::new(),
             stack: Vec::new(),
         }
     }
@@ -64,6 +64,7 @@ impl TopoOrder {
     /// - All EBBs in the `preferred` iterator given to `reset` will be returned.
     /// - All dominators are visited before the EBB returned.
     pub fn next(&mut self, layout: &Layout, domtree: &DominatorTree) -> Option<Ebb> {
+        self.visited.resize(layout.ebb_capacity());
         // Any entries in `stack` should be returned immediately. They have already been added to
         // `visited`.
         while self.stack.is_empty() {
@@ -73,7 +74,7 @@ impl TopoOrder {
                     // We have the next EBB in the preferred order.
                     self.next += 1;
                     // Push it along with any non-visited dominators.
-                    while self.visited.insert(ebb).is_none() {
+                    while self.visited.insert(ebb) {
                         self.stack.push(ebb);
                         match domtree.idom(ebb) {
                             Some(idom) => ebb = layout.inst_ebb(idom).expect("idom not in layout"),
