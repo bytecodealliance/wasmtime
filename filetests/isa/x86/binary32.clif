@@ -477,6 +477,14 @@ ebb0:
     ; asm: adcl %esi, %ecx
     [-,%rcx,%rflags] v704, v705 = iadd_carry v1, v2, v702 ; bin: 11 f1
 
+    ; Borrow Subtraction
+    ; asm: subl %esi, %ecx
+    [-,%rcx,%rflags] v706, v707 = isub_bout v1, v2         ; bin: 29 f1
+    ; asm: sbbl %esi, %ecx
+    [-,%rcx] v708 = isub_bin v1, v2, v707                  ; bin: 19 f1
+    ; asm: sbbl %esi, %ecx
+    [-,%rcx,%rflags] v709, v710 = isub_borrow v1, v2, v707 ; bin: 19 f1
+
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 85 c9 74 0e
