@@ -83,7 +83,7 @@ impl<F: Forest> NodePool<F> {
         NodeData<F>: fmt::Display,
         F::Key: fmt::Display,
     {
-        use crate::entity::SparseSet;
+        use crate::entity::EntitySet;
         use core::borrow::Borrow;
         use core::cmp::Ordering;
         use std::vec::Vec;
@@ -94,7 +94,13 @@ impl<F: Forest> NodePool<F> {
             assert!(size > 0, "Root must have more than one sub-tree");
         }
 
-        let mut done = SparseSet::new();
+        let mut done = match self[node] {
+            NodeData::Inner { size, .. } | NodeData::Leaf { size, .. } => {
+                EntitySet::with_capacity(size.into())
+            }
+            _ => EntitySet::new(),
+        };
+
         let mut todo = Vec::new();
 
         // Todo-list entries are:
@@ -104,11 +110,7 @@ impl<F: Forest> NodePool<F> {
         todo.push((None, node, None));
 
         while let Some((lkey, node, rkey)) = todo.pop() {
-            assert_eq!(
-                done.insert(node),
-                None,
-                "Node appears more than once in tree"
-            );
+            assert!(done.insert(node), "Node appears more than once in tree");
             let mut lower = lkey;
 
             match self[node] {

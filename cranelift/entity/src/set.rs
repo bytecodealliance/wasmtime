@@ -33,6 +33,14 @@ where
         }
     }
 
+    /// Creates a new empty set with the specified capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            elems: Vec::with_capacity((capacity + 7) / 8),
+            ..Self::new()
+        }
+    }
+
     /// Get the element at `k` if it exists.
     pub fn contains(&self, k: K) -> bool {
         let index = k.index();
@@ -45,9 +53,11 @@ where
 
     /// Is this set completely empty?
     pub fn is_empty(&self) -> bool {
-        // Note that this implementation will become incorrect should it ever become possible
-        // to remove elements from an `EntitySet`.
-        self.len == 0
+        if self.len != 0 {
+            false
+        } else {
+            self.elems.iter().all(|&e| e == 0)
+        }
     }
 
     /// Returns the cardinality of the set.  More precisely, it returns the number of calls to
@@ -93,6 +103,34 @@ where
         self.elems[index / 8] |= 1 << (index % 8);
         result
     }
+
+    /// Removes and returns the entity from the set if it exists.
+    pub fn pop(&mut self) -> Option<K> {
+        if self.len == 0 {
+            return None;
+        }
+
+        // Clear the last known entity in the list.
+        let last_index = self.len - 1;
+        self.elems[last_index / 8] &= !(1 << (last_index % 8));
+
+        // Set the length to the next last stored entity or zero if we pop'ed
+        // the last entity.
+        self.len = self
+            .elems
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, &byte)| byte != 0)
+            // Map `i` from byte index to bit level index.
+            // `(i + 1) * 8` = Last bit in byte.
+            // `last - byte.leading_zeros()` = last set bit in byte.
+            // `as usize` won't ever truncate as the potential range is `0..=8`.
+            .map(|(i, byte)| ((i + 1) * 8) - byte.leading_zeros() as usize)
+            .unwrap_or(0);
+
+        Some(K::new(last_index))
+    }
 }
 
 #[cfg(test)]
@@ -101,7 +139,7 @@ mod tests {
     use core::u32;
 
     // `EntityRef` impl for testing.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct E(u32);
 
     impl EntityRef for E {
@@ -157,6 +195,53 @@ mod tests {
         assert!(!m.contains(E(u32::MAX)));
 
         m.clear();
+        assert!(m.is_empty());
+    }
+
+    #[test]
+    fn pop_ordered() {
+        let r0 = E(0);
+        let r1 = E(1);
+        let r2 = E(2);
+        let mut m = EntitySet::new();
+        m.insert(r0);
+        m.insert(r1);
+        m.insert(r2);
+
+        assert_eq!(r2, m.pop().unwrap());
+        assert_eq!(r1, m.pop().unwrap());
+        assert_eq!(r0, m.pop().unwrap());
+        assert!(m.pop().is_none());
+        assert!(m.pop().is_none());
+    }
+
+    #[test]
+    fn pop_unordered() {
+        let mut ebbs = [
+            E(0),
+            E(1),
+            E(6),
+            E(7),
+            E(5),
+            E(9),
+            E(10),
+            E(2),
+            E(3),
+            E(11),
+            E(12),
+        ];
+
+        let mut m = EntitySet::new();
+        for &ebb in &ebbs {
+            m.insert(ebb);
+        }
+        assert_eq!(m.len, 13);
+        ebbs.sort();
+
+        for &ebb in ebbs.iter().rev() {
+            assert_eq!(ebb, m.pop().unwrap());
+        }
+
         assert!(m.is_empty());
     }
 }
