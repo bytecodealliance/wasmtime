@@ -1,9 +1,12 @@
 //! Constants
 //!
-//! The constant pool defined here allows cranelift to avoid emitting the same constant multiple
-//! times. As constants are inserted in the pool, a handle is returned; the handle is a cranelift
-//! Entity. Inserting the same data multiple times will always return the same handle. Future work
-//! could include: ensuring alignment of constants within the pool, bucketing constants by size.
+//! The constant pool defined here allows Cranelift to avoid emitting the same constant multiple
+//! times. As constants are inserted in the pool, a handle is returned; the handle is a Cranelift
+//! Entity. Inserting the same data multiple times will always return the same handle.
+//!
+//! Future work could include:
+//! - ensuring alignment of constants within the pool,
+//! - bucketing constants by size.
 
 use crate::ir::Constant;
 use cranelift_entity::EntityRef;
@@ -19,8 +22,8 @@ pub type ConstantOffset = u32;
 /// Inner type for storing data and offset together in the constant pool. The offset is optional
 /// because it must be set relative to the function code size (i.e. constants are emitted after the
 /// function body); because the function is not yet compiled when constants are inserted,
-/// [`set_offset`](crate::ir::ConstantPool::set_offset) must be called once a constant's
-/// offset from the beginning of the function is known (see
+/// [`set_offset`](crate::ir::ConstantPool::set_offset) must be called once a constant's offset
+/// from the beginning of the function is known (see
 /// [`relaxation.rs`](crate::binemit::relaxation)).
 #[derive(Clone)]
 pub struct ConstantPoolEntry {
@@ -30,7 +33,7 @@ pub struct ConstantPoolEntry {
 
 impl ConstantPoolEntry {
     fn new(data: ConstantData) -> Self {
-        ConstantPoolEntry { data, offset: None }
+        Self { data, offset: None }
     }
 
     /// Return the size of the constant at this entry.
@@ -44,21 +47,23 @@ impl ConstantPoolEntry {
     }
 }
 
-/// Maintains the mapping between a constant handle (i.e.
-/// [`Constant`](crate::ir::Constant)) and its constant data (i.e.
-/// [`ConstantData`](crate::ir::ConstantData)).
+/// Maintains the mapping between a constant handle (i.e.  [`Constant`](crate::ir::Constant)) and
+/// its constant data (i.e.  [`ConstantData`](crate::ir::ConstantData)).
 #[derive(Clone)]
 pub struct ConstantPool {
-    /// This mapping maintains the insertion order as long as Constants are created with sequentially increasing integers.
+    /// This mapping maintains the insertion order as long as Constants are created with
+    /// sequentially increasing integers.
     handles_to_values: BTreeMap<Constant, ConstantPoolEntry>,
-    /// This mapping is unordered (no need for lexicographic ordering) but allows us to map constant data back to handles.
+
+    /// This mapping is unordered (no need for lexicographic ordering) but allows us to map
+    /// constant data back to handles.
     values_to_handles: HashMap<ConstantData, Constant>,
 }
 
 impl ConstantPool {
     /// Create a new constant pool instance.
     pub fn new() -> Self {
-        ConstantPool {
+        Self {
             handles_to_values: BTreeMap::new(),
             values_to_handles: HashMap::new(),
         }
@@ -75,10 +80,7 @@ impl ConstantPool {
     /// returned.
     pub fn insert(&mut self, constant_value: ConstantData) -> Constant {
         if self.values_to_handles.contains_key(&constant_value) {
-            self.values_to_handles
-                .get(&constant_value)
-                .expect("A constant handle must have a corresponding constant value; this is an implementation error in ConstantPool")
-                .clone()
+            self.values_to_handles.get(&constant_value).unwrap().clone()
         } else {
             let constant_handle = Constant::new(self.len());
             self.values_to_handles
@@ -94,16 +96,17 @@ impl ConstantPool {
     /// Retrieve the constant data given a handle.
     pub fn get(&self, constant_handle: Constant) -> &ConstantData {
         assert!(self.handles_to_values.contains_key(&constant_handle));
-        &self.handles_to_values
-            .get(&constant_handle)
-            .expect("A constant handle must have a corresponding constant value; was a constant handle created outside of the pool?")
-            .data
+        &self.handles_to_values.get(&constant_handle).unwrap().data
     }
 
     /// Assign an offset to a given constant, where the offset is the number of bytes from the
     /// beginning of the function to the beginning of the constant data inside the pool.
     pub fn set_offset(&mut self, constant_handle: Constant, constant_offset: ConstantOffset) {
-        assert!(self.handles_to_values.contains_key(&constant_handle), "A constant handle must have already been inserted into the pool; perhaps a constant pool was created outside of the pool?");
+        assert!(
+            self.handles_to_values.contains_key(&constant_handle),
+            "A constant handle must have already been inserted into the pool; perhaps a \
+             constant pool was created outside of the pool?"
+        );
         self.handles_to_values
             .entry(constant_handle)
             .and_modify(|e| e.offset = Some(constant_offset));
@@ -112,10 +115,17 @@ impl ConstantPool {
     /// Retrieve the offset of a given constant, where the offset is the number of bytes from the
     /// beginning of the function to the beginning of the constant data inside the pool.
     pub fn get_offset(&self, constant_handle: Constant) -> ConstantOffset {
-        self.handles_to_values.get(&constant_handle)
-            .expect("A constant handle must have a corresponding constant value; was a constant handle created outside of the pool?")
+        self.handles_to_values
+            .get(&constant_handle)
+            .expect(
+                "A constant handle must have a corresponding constant value; was a constant \
+                 handle created outside of the pool?",
+            )
             .offset
-            .expect("A constant offset has not yet been set; verify that `set_offset` has been called before this point")
+            .expect(
+                "A constant offset has not yet been set; verify that `set_offset` has been \
+                 called before this point",
+            )
     }
 
     /// Iterate over the constants in insertion order.

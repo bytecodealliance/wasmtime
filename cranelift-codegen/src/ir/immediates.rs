@@ -292,7 +292,7 @@ impl FromStr for Uimm32 {
 
 /// A 128-bit unsigned integer immediate operand.
 ///
-/// This is used as an immediate value in SIMD instructions
+/// This is used as an immediate value in SIMD instructions.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Uimm128(pub [u8; 16]);
 
@@ -314,7 +314,7 @@ impl Uimm128 {
 }
 
 impl Display for Uimm128 {
-    // print a 128-bit vector in hexadecimal, e.g. 0x000102030405060708090a0b0c0d0e0f
+    // Print a 128-bit vector in hexadecimal, e.g. 0x000102030405060708090a0b0c0d0e0f.
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "0x")?;
         let mut anything_written = false;
