@@ -595,7 +595,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a Uimm128 immediate; due to size restrictions on InstructionData, Uimm128 is boxed in cranelift-codegen/meta/src/shared/immediates.rs
+    // Match and consume a Uimm128 immediate; due to size restrictions on InstructionData, Uimm128
+    // is boxed in cranelift-codegen/meta/src/shared/immediates.rs
     fn match_uimm128(&mut self, err_msg: &str) -> ParseResult<Uimm128> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();

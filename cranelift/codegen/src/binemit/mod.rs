@@ -185,7 +185,7 @@ where
 
     sink.begin_jumptables();
 
-    // output jump tables
+    // Output jump tables.
     for (jt, jt_data) in func.jump_tables.iter() {
         let jt_offset = func.jt_offsets[jt];
         for ebb in jt_data.iter() {
@@ -196,7 +196,7 @@ where
 
     sink.begin_rodata();
 
-    // output constants
+    // Output constants.
     for (_, constant_data) in func.dfg.constants.iter() {
         for byte in constant_data.iter() {
             sink.put1(*byte)

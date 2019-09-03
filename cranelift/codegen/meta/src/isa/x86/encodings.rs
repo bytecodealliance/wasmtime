@@ -279,7 +279,8 @@ impl PerCpuModeEncodings {
         }
     }
 
-    /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand binding) has already happened
+    /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand
+    /// binding) has already happened.
     fn enc_32_64_maybe_isap(
         &mut self,
         inst: impl Clone + Into<InstSpec>,
