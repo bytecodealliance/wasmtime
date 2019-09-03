@@ -179,6 +179,26 @@ ebb0:
     ; asm: movq %r10, %rsp
     copy_special %r10 -> %rsp                   ; bin: 4c 89 d4
 
+    ; Copy to SSA
+
+    ; asm: movq %rax, %r15
+    [-,%r15]      v700 = copy_to_ssa.i64 %rax    ; bin: 49 89 c7
+    ; asm: movq %r15, %rax
+    [-,%rax]      v701 = copy_to_ssa.i64 %r15    ; bin: 4c 89 f8
+    ; asm: movq %rdi, %rsi
+    [-,%rsi]      v702 = copy_to_ssa.i64 %rdi    ; bin: 48 89 fe
+    ; asm: movq %r11, %r14
+    [-,%r14]      v703 = copy_to_ssa.i64 %r11    ; bin: 4d 89 de
+
+    ; asm: movl %eax, %r15d
+    [-,%r15]      v704 = copy_to_ssa.i32 %rax    ; bin: 41 89 c7
+    ; asm: movl %r15d, %eax
+    [-,%rax]      v705 = copy_to_ssa.i32 %r15    ; bin: 44 89 f8
+    ; asm: movl %edi, %esi.  Unfortunately we get a redundant REX prefix.
+    [-,%rsi]      v706 = copy_to_ssa.i32 %rdi    ; bin: 40 89 fe
+    ; asm: movl %r11, %r14
+    [-,%r14]      v707 = copy_to_ssa.i32 %r11    ; bin: 45 89 de
+
     ; Load/Store instructions.
 
     ; Register indirect addressing with no displacement.

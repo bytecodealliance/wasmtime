@@ -96,6 +96,26 @@ ebb0:
     ; asm: movaps %xmm5, %xmm10
     [-,%xmm10]          v39 = copy v10                          ; bin: 44 0f 28 d5
 
+    ; Copy to SSA
+
+    ; asm: movsd %xmm0, %xmm15
+    [-,%xmm15]          v400 = copy_to_ssa.f64 %xmm0            ; bin: f2 44 0f 10 f8
+    ; asm: movsd %xmm15, %xmm0
+    [-,%xmm0]           v401 = copy_to_ssa.f64 %xmm15           ; bin: f2 41 0f 10 c7
+    ; asm: movsd %xmm7, %xmm6.  Unfortunately we get a redundant REX prefix.
+    [-,%xmm6]           v402 = copy_to_ssa.f64 %xmm7            ; bin: f2 40 0f 10 f7
+    ; asm: movsd %xmm11, %xmm14
+    [-,%xmm14]          v403 = copy_to_ssa.f64 %xmm11           ; bin: f2 45 0f 10 f3
+
+    ; asm: movss %xmm0, %xmm15
+    [-,%xmm15]          v404 = copy_to_ssa.f32 %xmm0            ; bin: f3 44 0f 10 f8
+    ; asm: movss %xmm15, %xmm0
+    [-,%xmm0]           v405 = copy_to_ssa.f32 %xmm15           ; bin: f3 41 0f 10 c7
+    ; asm: movss %xmm7, %xmm6.  Unfortunately we get a redundant REX prefix.
+    [-,%xmm6]           v406 = copy_to_ssa.f32 %xmm7            ; bin: f3 40 0f 10 f7
+    ; asm: movss %xmm11, %xmm14
+    [-,%xmm14]          v407 = copy_to_ssa.f32 %xmm11           ; bin: f3 45 0f 10 f3
+
     ; Convert float to int.
 
     ; asm: cvttss2si %xmm5, %ecx
