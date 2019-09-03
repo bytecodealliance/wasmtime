@@ -12,9 +12,6 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 /// data type.
 #[derive(Debug)]
 pub struct FormatField {
-    /// Immediate operand number in parent.
-    immnum: usize,
-
     /// Immediate operand kind.
     pub kind: OperandKind,
 
@@ -53,7 +50,7 @@ pub struct InstructionFormat {
 
 impl fmt::Display for InstructionFormat {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        let args = self
+        let imm_args = self
             .imm_fields
             .iter()
             .map(|field| format!("{}: {}", field.member, field.kind.name))
@@ -61,7 +58,7 @@ impl fmt::Display for InstructionFormat {
             .join(", ");
         fmt.write_fmt(format_args!(
             "{}(imms=({}), vals={})",
-            self.name, args, self.num_value_operands
+            self.name, imm_args, self.num_value_operands
         ))?;
         Ok(())
     }
@@ -112,7 +109,6 @@ impl InstructionFormatBuilder {
 
     pub fn imm(mut self, operand_kind: &OperandKind) -> Self {
         let field = FormatField {
-            immnum: self.imm_fields.len(),
             kind: operand_kind.clone(),
             member: operand_kind.default_member.unwrap(),
         };
@@ -122,7 +118,6 @@ impl InstructionFormatBuilder {
 
     pub fn imm_with_name(mut self, member: &'static str, operand_kind: &OperandKind) -> Self {
         let field = FormatField {
-            immnum: self.imm_fields.len(),
             kind: operand_kind.clone(),
             member,
         };
