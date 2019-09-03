@@ -2940,6 +2940,19 @@ pub(crate) fn define<'shared>(
             ),
     );
 
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("icscc_fpr", f_int_compare, 1)
+            .operands_in(vec![fpr, fpr])
+            .operands_out(vec![0])
+            .emit(
+                r#"
+                    // Comparison instruction.
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
+                    modrm_rr(in_reg1, in_reg0, sink);
+                "#,
+            ),
+    );
+
     {
         let format = formats.get(f_int_compare_imm);
 
