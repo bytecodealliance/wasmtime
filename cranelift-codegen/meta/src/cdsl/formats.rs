@@ -89,27 +89,6 @@ pub struct InstructionFormatBuilder {
     typevar_operand: Option<usize>,
 }
 
-pub struct ImmParameter {
-    kind: OperandKind,
-    member: &'static str,
-}
-impl Into<ImmParameter> for (&'static str, &OperandKind) {
-    fn into(self) -> ImmParameter {
-        ImmParameter {
-            kind: self.1.clone(),
-            member: self.0,
-        }
-    }
-}
-impl Into<ImmParameter> for &OperandKind {
-    fn into(self) -> ImmParameter {
-        ImmParameter {
-            kind: self.clone(),
-            member: self.default_member.unwrap(),
-        }
-    }
-}
-
 impl InstructionFormatBuilder {
     pub fn new(name: &'static str) -> Self {
         Self {
@@ -131,12 +110,21 @@ impl InstructionFormatBuilder {
         self
     }
 
-    pub fn imm(mut self, param: impl Into<ImmParameter>) -> Self {
-        let imm_param = param.into();
+    pub fn imm(mut self, operand_kind: &OperandKind) -> Self {
         let field = FormatField {
             immnum: self.imm_fields.len(),
-            kind: imm_param.kind,
-            member: imm_param.member,
+            kind: operand_kind.clone(),
+            member: operand_kind.default_member.unwrap(),
+        };
+        self.imm_fields.push(field);
+        self
+    }
+
+    pub fn imm_with_name(mut self, member: &'static str, operand_kind: &OperandKind) -> Self {
+        let field = FormatField {
+            immnum: self.imm_fields.len(),
+            kind: operand_kind.clone(),
+            member,
         };
         self.imm_fields.push(field);
         self
