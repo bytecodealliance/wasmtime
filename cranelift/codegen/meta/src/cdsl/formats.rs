@@ -189,7 +189,9 @@ impl FormatRegistry {
             if operand.is_value() {
                 num_values += 1;
             }
-            has_varargs = has_varargs || operand.is_varargs();
+            if !has_varargs {
+                has_varargs = operand.is_varargs();
+            }
             if let Some(imm_key) = operand.kind.imm_key() {
                 imm_keys.push(imm_key);
             }
