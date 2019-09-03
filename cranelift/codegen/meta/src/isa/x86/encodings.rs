@@ -151,6 +151,16 @@ impl PerCpuModeEncodings {
     }
 
     /// Add encodings for `inst.i32` to X86_32.
+    /// Add encodings for `inst.i32` to X86_64 with a REX prefix.
+    /// Add encodings for `inst.i64` to X86_64 with a REX.W prefix.
+    fn enc_i32_i64_rex_only(&mut self, inst: impl Into<InstSpec>, template: Template) {
+        let inst: InstSpec = inst.into();
+        self.enc32(inst.bind(I32), template.nonrex());
+        self.enc64(inst.bind(I32), template.rex());
+        self.enc64(inst.bind(I64), template.rex().w());
+    }
+
+    /// Add encodings for `inst.i32` to X86_32.
     /// Add encodings for `inst.i32` to X86_64 with and without REX.
     /// Add encodings for `inst.i64` to X86_64 with a REX.W prefix.
     fn enc_i32_i64_instp(
@@ -177,16 +187,10 @@ impl PerCpuModeEncodings {
     }
 
     /// Add encodings for `inst.r32` to X86_32.
-    /// Add encodings for `inst.r32` to X86_64 with and without REX.
     /// Add encodings for `inst.r64` to X86_64 with a REX.W prefix.
-    fn enc_r32_r64(&mut self, inst: impl Into<InstSpec>, template: Template) {
+    fn enc_r32_r64_rex_only(&mut self, inst: impl Into<InstSpec>, template: Template) {
         let inst: InstSpec = inst.into();
         self.enc32(inst.bind_ref(R32), template.nonrex());
-
-        // REX-less encoding must come after REX encoding so we don't use it by default. Otherwise
-        // reg-alloc would never use r8 and up.
-        self.enc64(inst.bind_ref(R32), template.rex());
-        self.enc64(inst.bind_ref(R32), template.nonrex());
         self.enc64(inst.bind_ref(R64), template.rex().w());
     }
 
@@ -245,6 +249,14 @@ impl PerCpuModeEncodings {
     ) {
         self.enc32_instp(inst.clone(), template.clone(), instp.clone());
         self.enc_x86_64_instp(inst, template, instp);
+    }
+
+    /// Add two encodings for `inst`:
+    /// - X86_32
+    /// - X86_64 with the REX prefix.
+    fn enc_both_rex_only(&mut self, inst: impl Clone + Into<InstSpec>, template: Template) {
+        self.enc32(inst.clone(), template.clone());
+        self.enc64(inst, template.rex());
     }
 
     /// Add encodings for `inst.i32` to X86_32.
@@ -622,7 +634,7 @@ pub fn define(
     e.enc_i32_i64(x86_umulx, rec_mulx.opcodes(vec![0xf7]).rrr(4));
 
     e.enc_i32_i64(copy, rec_umr.opcodes(vec![0x89]));
-    e.enc_r32_r64(copy, rec_umr.opcodes(vec![0x89]));
+    e.enc_r32_r64_rex_only(copy, rec_umr.opcodes(vec![0x89]));
     e.enc_both(copy.bind(B1), rec_umr.opcodes(vec![0x89]));
     e.enc_both(copy.bind(I8), rec_umr.opcodes(vec![0x89]));
     e.enc_both(copy.bind(I16), rec_umr.opcodes(vec![0x89]));
@@ -901,8 +913,8 @@ pub fn define(
 
     e.enc_i32_i64(spill, rec_spillSib32.opcodes(vec![0x89]));
     e.enc_i32_i64(regspill, rec_regspill32.opcodes(vec![0x89]));
-    e.enc_r32_r64(spill, rec_spillSib32.opcodes(vec![0x89]));
-    e.enc_r32_r64(regspill, rec_regspill32.opcodes(vec![0x89]));
+    e.enc_r32_r64_rex_only(spill, rec_spillSib32.opcodes(vec![0x89]));
+    e.enc_r32_r64_rex_only(regspill, rec_regspill32.opcodes(vec![0x89]));
 
     // Use a 32-bit write for spilling `b1`, `i8` and `i16` to avoid
     // constraining the permitted registers.
@@ -927,8 +939,8 @@ pub fn define(
 
     e.enc_i32_i64(fill, rec_fillSib32.opcodes(vec![0x8b]));
     e.enc_i32_i64(regfill, rec_regfill32.opcodes(vec![0x8b]));
-    e.enc_r32_r64(fill, rec_fillSib32.opcodes(vec![0x8b]));
-    e.enc_r32_r64(regfill, rec_regfill32.opcodes(vec![0x8b]));
+    e.enc_r32_r64_rex_only(fill, rec_fillSib32.opcodes(vec![0x8b]));
+    e.enc_r32_r64_rex_only(regfill, rec_regfill32.opcodes(vec![0x8b]));
 
     // No-op fills, created by late-stage redundant-fill removal.
     for &ty in &[I64, I32, I16, I8] {
@@ -964,20 +976,22 @@ pub fn define(
     e.enc64(copy_special, rec_copysp.opcodes(vec![0x89]).rex().w());
     e.enc32(copy_special, rec_copysp.opcodes(vec![0x89]));
 
-    // Copy to SSA
-    e.enc_i32_i64(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(vec![0x89]));
-    e.enc_r32_r64(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(vec![0x89]));
-    e.enc_both(copy_to_ssa.bind(B1), rec_umr_reg_to_ssa.opcodes(vec![0x89]));
-    e.enc_both(copy_to_ssa.bind(I8), rec_umr_reg_to_ssa.opcodes(vec![0x89]));
-    e.enc_both(
+    // Copy to SSA.  These have to be done with special _rex_only encoders, because the standard
+    // machinery for deciding whether a REX.{RXB} prefix is needed doesn't take into account
+    // the source register, which is specified directly in the instruction.
+    e.enc_i32_i64_rex_only(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(vec![0x89]));
+    e.enc_r32_r64_rex_only(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(vec![0x89]));
+    e.enc_both_rex_only(copy_to_ssa.bind(B1), rec_umr_reg_to_ssa.opcodes(vec![0x89]));
+    e.enc_both_rex_only(copy_to_ssa.bind(I8), rec_umr_reg_to_ssa.opcodes(vec![0x89]));
+    e.enc_both_rex_only(
         copy_to_ssa.bind(I16),
         rec_umr_reg_to_ssa.opcodes(vec![0x89]),
     );
-    e.enc_both(
+    e.enc_both_rex_only(
         copy_to_ssa.bind(F64),
         rec_furm_reg_to_ssa.opcodes(vec![0xf2, 0x0f, 0x10]),
     );
-    e.enc_both(
+    e.enc_both_rex_only(
         copy_to_ssa.bind(F32),
         rec_furm_reg_to_ssa.opcodes(vec![0xf3, 0x0f, 0x10]),
     );
@@ -1808,7 +1822,7 @@ pub fn define(
     e.enc64(null.bind_ref(R64), rec_pu_id_ref.opcodes(vec![0xb8]));
 
     // is_null, implemented by testing whether the value is 0.
-    e.enc_r32_r64(is_null, rec_is_zero.opcodes(vec![0x85]));
+    e.enc_r32_r64_rex_only(is_null, rec_is_zero.opcodes(vec![0x85]));
 
     // safepoint instruction calls sink, no actual encoding.
     e.enc32_rec(safepoint, rec_safepoint, 0);
