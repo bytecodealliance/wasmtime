@@ -60,10 +60,14 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
     registry.insert(
         Builder::new("InsertLane")
             .value()
-            .imm(("lane", uimm8))
+            .imm_with_name("lane", uimm8)
             .value(),
     );
-    registry.insert(Builder::new("ExtractLane").value().imm(("lane", uimm8)));
+    registry.insert(
+        Builder::new("ExtractLane")
+            .value()
+            .imm_with_name("lane", uimm8),
+    );
 
     registry.insert(Builder::new("IntCompare").imm(intcc).value().value());
     registry.insert(Builder::new("IntCompareImm").imm(intcc).value().imm(imm64));
@@ -151,26 +155,26 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
     registry.insert(
         Builder::new("RegMove")
             .value()
-            .imm(("src", regunit))
-            .imm(("dst", regunit)),
+            .imm_with_name("src", regunit)
+            .imm_with_name("dst", regunit),
     );
     registry.insert(
         Builder::new("CopySpecial")
-            .imm(("src", regunit))
-            .imm(("dst", regunit)),
+            .imm_with_name("src", regunit)
+            .imm_with_name("dst", regunit),
     );
-    registry.insert(Builder::new("CopyToSsa").imm(("src", regunit)));
+    registry.insert(Builder::new("CopyToSsa").imm_with_name("src", regunit));
     registry.insert(
         Builder::new("RegSpill")
             .value()
-            .imm(("src", regunit))
-            .imm(("dst", stack_slot)),
+            .imm_with_name("src", regunit)
+            .imm_with_name("dst", stack_slot),
     );
     registry.insert(
         Builder::new("RegFill")
             .value()
-            .imm(("src", stack_slot))
-            .imm(("dst", regunit)),
+            .imm_with_name("src", stack_slot)
+            .imm_with_name("dst", regunit),
     );
 
     registry.insert(Builder::new("Trap").imm(trapcode));
