@@ -573,6 +573,7 @@ pub(crate) fn define(
     let rec_gvaddr4 = r.template("gvaddr4");
     let rec_gvaddr8 = r.template("gvaddr8");
     let rec_icscc = r.template("icscc");
+    let rec_icscc_fpr = r.template("icscc_fpr");
     let rec_icscc_ib = r.template("icscc_ib");
     let rec_icscc_id = r.template("icscc_id");
     let rec_indirect_jmp = r.template("indirect_jmp");
@@ -2056,6 +2057,31 @@ pub(crate) fn define(
     ] {
         let iadd = iadd.bind_vector_from_lane(ty.clone(), sse_vector_size);
         e.enc_32_64(iadd, rec_fa.opcodes(opcodes.to_vec()));
+    }
+
+    // SIMD icmp using PCMPEQ*
+    let mut pcmpeq_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
+        HashMap::new();
+    pcmpeq_mapping.insert(8, (vec![0x66, 0x0f, 0x74], None)); // PCMPEQB from SSE2
+    pcmpeq_mapping.insert(16, (vec![0x66, 0x0f, 0x75], None)); // PCMPEQW from SSE2
+    pcmpeq_mapping.insert(32, (vec![0x66, 0x0f, 0x76], None)); // PCMPEQD from SSE2
+    pcmpeq_mapping.insert(64, (vec![0x66, 0x0f, 0x38, 0x29], Some(use_sse41_simd))); // PCMPEQQ from SSE4.1
+    for ty in ValueType::all_lane_types().filter(|t| t.is_int() && allowed_simd_type(t)) {
+        if let Some((opcodes, isa_predicate)) = pcmpeq_mapping.get(&ty.lane_bits()) {
+            let instruction = icmp.bind_vector_from_lane(ty, sse_vector_size);
+            let f_int_compare = formats.get(formats.by_name("IntCompare"));
+            let has_eq_condition_code =
+                InstructionPredicate::new_has_condition_code(f_int_compare, "eq", "cond");
+            let template = rec_icscc_fpr.nonrex().opcodes(opcodes.clone());
+            e.enc_32_64_func(instruction, template, |builder| {
+                let builder = builder.inst_predicate(has_eq_condition_code);
+                if let Some(p) = isa_predicate {
+                    builder.isa_predicate(*p)
+                } else {
+                    builder
+                }
+            });
+        }
     }
 
     // Reference type instructions

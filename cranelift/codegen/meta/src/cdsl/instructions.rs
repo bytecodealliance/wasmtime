@@ -628,6 +628,9 @@ pub enum FormatPredicateKind {
 
     /// Is the referenced data object colocated?
     IsColocatedData,
+
+    /// Does the operation have a specific condition code?
+    HasConditionCode(&'static str),
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -714,6 +717,10 @@ impl FormatPredicateNode {
             FormatPredicateKind::IsColocatedData => {
                 format!("predicates::is_colocated_data({}, func)", self.member_name)
             }
+            FormatPredicateKind::HasConditionCode(code) => format!(
+                "predicates::match_condition_code_to_str({}, \"{}\")",
+                self.member_name, code
+            ),
         }
     }
 }
@@ -994,6 +1001,18 @@ impl InstructionPredicate {
             format,
             "global_value",
             FormatPredicateKind::IsColocatedData,
+        ))
+    }
+
+    pub fn new_has_condition_code(
+        format: &InstructionFormat,
+        condition_code: &'static str,
+        field_name: &'static str,
+    ) -> InstructionPredicateNode {
+        InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
+            format,
+            field_name,
+            FormatPredicateKind::HasConditionCode(condition_code),
         ))
     }
 
