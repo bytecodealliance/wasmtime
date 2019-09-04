@@ -4,6 +4,7 @@
 use core::ptr;
 use core::slice;
 use errno;
+#[cfg(not(target_os = "windows"))]
 use libc;
 use region;
 use std::string::{String, ToString};
