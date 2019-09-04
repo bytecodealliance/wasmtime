@@ -86,7 +86,6 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     let istore16 = insts.by_name("istore16");
     let isub = insts.by_name("isub");
     let isub_bin = insts.by_name("isub_bin");
-    let isub_borrow = insts.by_name("isub_borrow");
     let isub_bout = insts.by_name("isub_bout");
     let load = insts.by_name("load");
     let popcnt = insts.by_name("popcnt");
@@ -160,8 +159,6 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     let b2 = var("b2");
     let b3 = var("b3");
     let b4 = var("b4");
-    let b_in = var("b_in");
-    let b_int = var("b_int");
     let c = var("c");
     let c1 = var("c1");
     let c2 = var("c2");
@@ -458,33 +455,6 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
             );
         }
     }
-
-    // Expand integer operations with carry for RISC architectures that don't have
-    // the flags.
-    let intcc_ugt = Literal::enumerator_for(intcc, "ugt");
-    expand.legalize(
-        def!((a, b) = isub_bout(x, y)),
-        vec![def!(a = isub(x, y)), def!(b = icmp(intcc_ugt, a, x))],
-    );
-
-    expand.legalize(
-        def!(a = isub_bin(x, y, b)),
-        vec![
-            def!(a1 = isub(x, y)),
-            def!(b_int = bint(b)),
-            def!(a = isub(a1, b_int)),
-        ],
-    );
-
-    expand.legalize(
-        def!((a, b) = isub_borrow(x, y, b_in)),
-        vec![
-            def!((a1, b1) = isub_bout(x, y)),
-            def!(b_int = bint(b_in)),
-            def!((a, b2) = isub_bout(a1, b_int)),
-            def!(b = bor(b1, b2)),
-        ],
-    );
 
     // Expansions for fcvt_from_{u,s}int for smaller integer types.
     // These use expand and not widen because the controlling type variable for
