@@ -1866,8 +1866,8 @@ pub fn define(
     let y = &operand("y", iB);
     let c_in = &operand_doc("c_in", iflags, "Input carry flag");
     let c_out = &operand_doc("c_out", iflags, "Output carry flag");
-    let b_in = &operand_doc("b_in", b1, "Input borrow flag");
-    let b_out = &operand_doc("b_out", b1, "Output borrow flag");
+    let b_in = &operand_doc("b_in", iflags, "Input borrow flag");
+    let b_out = &operand_doc("b_out", iflags, "Output borrow flag");
 
     ig.push(
         Inst::new(
