@@ -10,7 +10,7 @@ use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::immediates::Immediates;
 use crate::shared::types;
 
-pub fn define(
+pub(crate) fn define(
     mut all_instructions: &mut AllInstructions,
     format_registry: &FormatRegistry,
     immediates: &Immediates,

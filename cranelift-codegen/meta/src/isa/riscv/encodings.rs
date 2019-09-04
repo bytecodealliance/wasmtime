@@ -101,7 +101,7 @@ fn lui_bits() -> u16 {
     0b01101
 }
 
-pub fn define<'defs>(
+pub(crate) fn define<'defs>(
     shared_defs: &'defs SharedDefinitions,
     isa_settings: &SettingGroup,
     recipes: &'defs RecipeGroup,

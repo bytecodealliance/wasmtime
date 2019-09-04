@@ -11,7 +11,6 @@ use std::fmt;
 pub enum Expr {
     Var(VarIndex),
     Literal(Literal),
-    Apply(Apply),
 }
 
 impl Expr {
@@ -39,7 +38,6 @@ impl Expr {
         match self {
             Expr::Var(var_index) => var_pool.get(*var_index).to_rust_code(),
             Expr::Literal(literal) => literal.to_rust_code(),
-            Expr::Apply(a) => a.to_rust_code(var_pool),
         }
     }
 }
@@ -80,9 +78,6 @@ impl DefPool {
     }
     pub fn get(&self, index: DefIndex) -> &Def {
         self.pool.get(index).unwrap()
-    }
-    pub fn get_mut(&mut self, index: DefIndex) -> &mut Def {
-        self.pool.get_mut(index).unwrap()
     }
     pub fn next_index(&self) -> DefIndex {
         self.pool.next_key()
@@ -428,16 +423,6 @@ impl Apply {
         let inst_name = inst_and_bound_types.join(".");
 
         format!("{}({})", inst_name, args)
-    }
-
-    fn to_rust_code(&self, var_pool: &VarPool) -> String {
-        let args = self
-            .args
-            .iter()
-            .map(|arg| arg.to_rust_code(var_pool))
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!("{}({})", self.inst.name, args)
     }
 
     pub fn inst_predicate(

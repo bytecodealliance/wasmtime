@@ -55,7 +55,7 @@ impl fmt::Display for Isa {
     }
 }
 
-pub fn define(isas: &Vec<Isa>, shared_defs: &mut SharedDefinitions) -> Vec<TargetIsa> {
+pub(crate) fn define(isas: &Vec<Isa>, shared_defs: &mut SharedDefinitions) -> Vec<TargetIsa> {
     isas.iter()
         .map(|isa| match isa {
             Isa::Riscv => riscv::define(shared_defs),

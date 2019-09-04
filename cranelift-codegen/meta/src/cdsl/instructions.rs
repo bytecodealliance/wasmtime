@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ops;
 use std::rc::Rc;
-use std::slice;
 
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::{
@@ -72,10 +71,6 @@ pub struct InstructionGroup {
 }
 
 impl InstructionGroup {
-    pub fn iter(&self) -> slice::Iter<Instruction> {
-        self.instructions.iter()
-    }
-
     pub fn by_name(&self, name: &'static str) -> &Instruction {
         self.instructions
             .iter()

@@ -50,7 +50,7 @@ impl<'formats> RecipeGroup<'formats> {
     }
 }
 
-pub fn define<'formats>(
+pub(crate) fn define<'formats>(
     shared_defs: &'formats SharedDefinitions,
     regs: &IsaRegs,
 ) -> RecipeGroup<'formats> {

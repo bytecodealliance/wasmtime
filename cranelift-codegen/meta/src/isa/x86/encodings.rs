@@ -318,7 +318,7 @@ impl PerCpuModeEncodings {
 
 // Definitions.
 
-pub fn define(
+pub(crate) fn define(
     shared_defs: &SharedDefinitions,
     settings: &SettingGroup,
     x86: &InstructionGroup,

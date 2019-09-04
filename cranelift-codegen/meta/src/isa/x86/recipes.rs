@@ -325,7 +325,7 @@ fn valid_scale(format: &InstructionFormat) -> InstructionPredicate {
         })
 }
 
-pub fn define<'shared>(
+pub(crate) fn define<'shared>(
     shared_defs: &'shared SharedDefinitions,
     settings: &'shared SettingGroup,
     regs: &'shared IsaRegs,

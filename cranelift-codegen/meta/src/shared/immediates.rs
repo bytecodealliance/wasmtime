@@ -2,7 +2,7 @@ use crate::cdsl::operands::{OperandKind, OperandKindBuilder as Builder};
 
 use std::collections::HashMap;
 
-pub struct Immediates {
+pub(crate) struct Immediates {
     /// A 64-bit immediate integer operand.
     ///
     /// This type of immediate integer can interact with SSA values with any IntType type.

@@ -6,7 +6,7 @@ use crate::shared::types::Float::F64;
 use crate::shared::types::Int::{I32, I64};
 use crate::shared::Definitions as SharedDefinitions;
 
-pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGroup) {
+pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGroup) {
     let mut group = TransformGroupBuilder::new(
         "x86_expand",
         r#"

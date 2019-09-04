@@ -16,7 +16,7 @@ use crate::cdsl::xform::TransformGroups;
 use crate::shared::entities::EntityRefs;
 use crate::shared::immediates::Immediates;
 
-pub struct Definitions {
+pub(crate) struct Definitions {
     pub settings: SettingGroup,
     pub all_instructions: AllInstructions,
     pub instructions: InstructionGroup,
@@ -25,7 +25,7 @@ pub struct Definitions {
     pub transform_groups: TransformGroups,
 }
 
-pub fn define() -> Definitions {
+pub(crate) fn define() -> Definitions {
     let mut all_instructions = AllInstructions::new();
 
     let immediates = Immediates::new();

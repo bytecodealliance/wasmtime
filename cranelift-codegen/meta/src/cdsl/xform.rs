@@ -384,9 +384,6 @@ impl TransformGroups {
     pub fn get(&self, id: TransformGroupIndex) -> &TransformGroup {
         &self.groups[id]
     }
-    pub fn get_mut(&mut self, id: TransformGroupIndex) -> &mut TransformGroup {
-        self.groups.get_mut(id).unwrap()
-    }
     fn next_key(&self) -> TransformGroupIndex {
         self.groups.next_key()
     }

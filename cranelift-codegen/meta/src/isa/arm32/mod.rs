@@ -49,7 +49,7 @@ fn define_regs() -> IsaRegs {
     regs.build()
 }
 
-pub fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
+pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let settings = define_settings(&shared_defs.settings);
     let regs = define_regs();
 
