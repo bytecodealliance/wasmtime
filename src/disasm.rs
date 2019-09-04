@@ -136,16 +136,20 @@ cfg_if! {
                     .x86()
                     .mode(arch::x86::ArchMode::Mode64)
                     .build(),
-                Architecture::Arm
-                | Architecture::Armv4t
-                | Architecture::Armv5te
-                | Architecture::Armv7
-                | Architecture::Armv7s => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
-                Architecture::Thumbv6m | Architecture::Thumbv7em | Architecture::Thumbv7m => Capstone::new(
-                ).arm()
-                    .mode(arch::arm::ArchMode::Thumb)
-                    .build(),
-                Architecture::Aarch64 => Capstone::new()
+                Architecture::Arm(arm) => {
+                    if arm.is_thumb() {
+                        Capstone::new()
+                            .arm()
+                            .mode(arch::arm::ArchMode::Thumb)
+                            .build()
+                    } else {
+                        Capstone::new()
+                            .arm()
+                            .mode(arch::arm::ArchMode::Arm)
+                            .build()
+                    }
+                }
+                Architecture::Aarch64 {..} => Capstone::new()
                     .arm64()
                     .mode(arch::arm64::ArchMode::Arm)
                     .build(),

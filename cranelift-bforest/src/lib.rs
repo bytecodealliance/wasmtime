@@ -32,7 +32,6 @@
     )
 )]
 #![no_std]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(test)]
 #[cfg(not(feature = "std"))]
