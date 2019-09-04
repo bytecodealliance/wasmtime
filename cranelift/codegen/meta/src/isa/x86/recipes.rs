@@ -332,7 +332,7 @@ pub fn define<'shared>(
 ) -> RecipeGroup<'shared> {
     // The set of floating point condition codes that are directly supported.
     // Other condition codes need to be reversed or expressed as two tests.
-    let floatcc = shared_defs.operand_kinds.by_name("floatcc");
+    let floatcc = &shared_defs.imm.floatcc;
     let supported_floatccs: Vec<Literal> = ["ord", "uno", "one", "ueq", "gt", "ge", "ult", "ule"]
         .iter()
         .map(|name| Literal::enumerator_for(floatcc, name))

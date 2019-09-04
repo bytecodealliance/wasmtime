@@ -230,8 +230,7 @@ pub fn define<'defs>(
          -> InstructionPredicateNode {
             let x = var_pool.create("x");
             let y = var_pool.create("y");
-            let cc =
-                Literal::enumerator_for(shared_defs.operand_kinds.by_name("intcc"), intcc_field);
+            let cc = Literal::enumerator_for(&shared_defs.imm.intcc, intcc_field);
             Apply::new(
                 bound_inst.clone().into(),
                 vec![Expr::Literal(cc), Expr::Var(x), Expr::Var(y)],
@@ -313,8 +312,7 @@ pub fn define<'defs>(
             let y = var_pool.create("y");
             let dest = var_pool.create("dest");
             let args = var_pool.create("args");
-            let cc =
-                Literal::enumerator_for(shared_defs.operand_kinds.by_name("intcc"), intcc_field);
+            let cc = Literal::enumerator_for(&shared_defs.imm.intcc, intcc_field);
             Apply::new(
                 bound_inst.clone().into(),
                 vec![
