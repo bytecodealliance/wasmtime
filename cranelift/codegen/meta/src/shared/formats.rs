@@ -1,18 +1,7 @@
 use crate::cdsl::formats::{FormatRegistry, InstructionFormatBuilder as Builder};
-use crate::shared::immediates::Immediates;
-use crate::shared::OperandKinds;
+use crate::shared::{entities::EntityRefs, immediates::Immediates};
 
-pub fn define(imm: &Immediates, entities: &OperandKinds) -> FormatRegistry {
-    // Shorthands for entities.
-    let global_value = entities.by_name("global_value");
-    let ebb = entities.by_name("ebb");
-    let jump_table = entities.by_name("jump_table");
-    let func_ref = entities.by_name("func_ref");
-    let sig_ref = entities.by_name("sig_ref");
-    let stack_slot = entities.by_name("stack_slot");
-    let heap = entities.by_name("heap");
-    let table = entities.by_name("table");
-
+pub fn define(imm: &Immediates, entities: &EntityRefs) -> FormatRegistry {
     let mut registry = FormatRegistry::new();
 
     registry.insert(Builder::new("Unary").value());
@@ -21,7 +10,7 @@ pub fn define(imm: &Immediates, entities: &OperandKinds) -> FormatRegistry {
     registry.insert(Builder::new("UnaryIeee32").imm(&imm.ieee32));
     registry.insert(Builder::new("UnaryIeee64").imm(&imm.ieee64));
     registry.insert(Builder::new("UnaryBool").imm(&imm.boolean));
-    registry.insert(Builder::new("UnaryGlobalValue").imm(global_value));
+    registry.insert(Builder::new("UnaryGlobalValue").imm(&entities.global_value));
 
     registry.insert(Builder::new("Binary").value().value());
     registry.insert(Builder::new("BinaryImm").value().imm(&imm.imm64));
@@ -80,20 +69,20 @@ pub fn define(imm: &Immediates, entities: &OperandKinds) -> FormatRegistry {
             .value(),
     );
 
-    registry.insert(Builder::new("Jump").imm(ebb).varargs());
-    registry.insert(Builder::new("Branch").value().imm(ebb).varargs());
+    registry.insert(Builder::new("Jump").imm(&entities.ebb).varargs());
+    registry.insert(Builder::new("Branch").value().imm(&entities.ebb).varargs());
     registry.insert(
         Builder::new("BranchInt")
             .imm(&imm.intcc)
             .value()
-            .imm(ebb)
+            .imm(&entities.ebb)
             .varargs(),
     );
     registry.insert(
         Builder::new("BranchFloat")
             .imm(&imm.floatcc)
             .value()
-            .imm(ebb)
+            .imm(&entities.ebb)
             .varargs(),
     );
     registry.insert(
@@ -101,23 +90,37 @@ pub fn define(imm: &Immediates, entities: &OperandKinds) -> FormatRegistry {
             .imm(&imm.intcc)
             .value()
             .value()
-            .imm(ebb)
+            .imm(&entities.ebb)
             .varargs(),
     );
-    registry.insert(Builder::new("BranchTable").value().imm(ebb).imm(jump_table));
+    registry.insert(
+        Builder::new("BranchTable")
+            .value()
+            .imm(&entities.ebb)
+            .imm(&entities.jump_table),
+    );
     registry.insert(
         Builder::new("BranchTableEntry")
             .value()
             .value()
             .imm(&imm.uimm8)
-            .imm(jump_table),
+            .imm(&entities.jump_table),
     );
-    registry.insert(Builder::new("BranchTableBase").imm(jump_table));
-    registry.insert(Builder::new("IndirectJump").value().imm(jump_table));
+    registry.insert(Builder::new("BranchTableBase").imm(&entities.jump_table));
+    registry.insert(
+        Builder::new("IndirectJump")
+            .value()
+            .imm(&entities.jump_table),
+    );
 
-    registry.insert(Builder::new("Call").imm(func_ref).varargs());
-    registry.insert(Builder::new("CallIndirect").imm(sig_ref).value().varargs());
-    registry.insert(Builder::new("FuncAddr").imm(func_ref));
+    registry.insert(Builder::new("Call").imm(&entities.func_ref).varargs());
+    registry.insert(
+        Builder::new("CallIndirect")
+            .imm(&entities.sig_ref)
+            .value()
+            .varargs(),
+    );
+    registry.insert(Builder::new("FuncAddr").imm(&entities.func_ref));
 
     registry.insert(
         Builder::new("Load")
@@ -145,21 +148,30 @@ pub fn define(imm: &Immediates, entities: &OperandKinds) -> FormatRegistry {
             .varargs()
             .imm(&imm.offset32),
     );
-    registry.insert(Builder::new("StackLoad").imm(stack_slot).imm(&imm.offset32));
+    registry.insert(
+        Builder::new("StackLoad")
+            .imm(&entities.stack_slot)
+            .imm(&imm.offset32),
+    );
     registry.insert(
         Builder::new("StackStore")
             .value()
-            .imm(stack_slot)
+            .imm(&entities.stack_slot)
             .imm(&imm.offset32),
     );
 
     // Accessing a WebAssembly heap.
-    registry.insert(Builder::new("HeapAddr").imm(heap).value().imm(&imm.uimm32));
+    registry.insert(
+        Builder::new("HeapAddr")
+            .imm(&entities.heap)
+            .value()
+            .imm(&imm.uimm32),
+    );
 
     // Accessing a WebAssembly table.
     registry.insert(
         Builder::new("TableAddr")
-            .imm(table)
+            .imm(&entities.table)
             .value()
             .imm(&imm.offset32),
     );
@@ -180,12 +192,12 @@ pub fn define(imm: &Immediates, entities: &OperandKinds) -> FormatRegistry {
         Builder::new("RegSpill")
             .value()
             .imm_with_name("src", &imm.regunit)
-            .imm_with_name("dst", stack_slot),
+            .imm_with_name("dst", &entities.stack_slot),
     );
     registry.insert(
         Builder::new("RegFill")
             .value()
-            .imm_with_name("src", stack_slot)
+            .imm_with_name("src", &entities.stack_slot)
             .imm_with_name("dst", &imm.regunit),
     );
 
