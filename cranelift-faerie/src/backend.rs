@@ -342,7 +342,7 @@ fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
 }
 
 fn translate_data_linkage(linkage: Linkage, writable: bool, align: Option<u8>) -> faerie::Decl {
-    let align = align.map(|align| usize::from(align));
+    let align = align.map(|align| u64::from(align));
     match linkage {
         Linkage::Import => faerie::Decl::data_import().into(),
         Linkage::Local => faerie::Decl::data()
