@@ -7,11 +7,13 @@ use crate::cdsl::instructions::{
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
-use crate::shared::{immediates, types, OperandKinds};
+use crate::shared::immediates::Immediates;
+use crate::shared::types;
 
 pub fn define(
     mut all_instructions: &mut AllInstructions,
     format_registry: &FormatRegistry,
+    immediates: &Immediates,
 ) -> InstructionGroup {
     let mut ig = InstructionGroupBuilder::new(
         "x86",
@@ -249,8 +251,7 @@ pub fn define(
         .operands_out(vec![y, rflags]),
     );
 
-    let immediates = OperandKinds::from(immediates::define());
-    let uimm8 = immediates.by_name("uimm8");
+    let uimm8 = &immediates.uimm8;
     let TxN = &TypeVar::new(
         "TxN",
         "A SIMD vector type",

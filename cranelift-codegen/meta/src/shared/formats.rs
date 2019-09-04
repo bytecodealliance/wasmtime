@@ -1,22 +1,8 @@
 use crate::cdsl::formats::{FormatRegistry, InstructionFormatBuilder as Builder};
+use crate::shared::immediates::Immediates;
 use crate::shared::OperandKinds;
 
-pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegistry {
-    // Shorthands for immediates.
-    let uimm8 = immediates.by_name("uimm8");
-    let uimm32 = immediates.by_name("uimm32");
-    let uimm128 = immediates.by_name("uimm128");
-    let imm64 = immediates.by_name("imm64");
-    let ieee32 = immediates.by_name("ieee32");
-    let ieee64 = immediates.by_name("ieee64");
-    let boolean = immediates.by_name("boolean");
-    let intcc = immediates.by_name("intcc");
-    let floatcc = immediates.by_name("floatcc");
-    let memflags = immediates.by_name("memflags");
-    let offset32 = immediates.by_name("offset32");
-    let trapcode = immediates.by_name("trapcode");
-    let regunit = immediates.by_name("regunit");
-
+pub fn define(imm: &Immediates, entities: &OperandKinds) -> FormatRegistry {
     // Shorthands for entities.
     let global_value = entities.by_name("global_value");
     let ebb = entities.by_name("ebb");
@@ -30,15 +16,15 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
     let mut registry = FormatRegistry::new();
 
     registry.insert(Builder::new("Unary").value());
-    registry.insert(Builder::new("UnaryImm").imm(imm64));
-    registry.insert(Builder::new("UnaryImm128").imm(uimm128));
-    registry.insert(Builder::new("UnaryIeee32").imm(ieee32));
-    registry.insert(Builder::new("UnaryIeee64").imm(ieee64));
-    registry.insert(Builder::new("UnaryBool").imm(boolean));
+    registry.insert(Builder::new("UnaryImm").imm(&imm.imm64));
+    registry.insert(Builder::new("UnaryImm128").imm(&imm.uimm128));
+    registry.insert(Builder::new("UnaryIeee32").imm(&imm.ieee32));
+    registry.insert(Builder::new("UnaryIeee64").imm(&imm.ieee64));
+    registry.insert(Builder::new("UnaryBool").imm(&imm.boolean));
     registry.insert(Builder::new("UnaryGlobalValue").imm(global_value));
 
     registry.insert(Builder::new("Binary").value().value());
-    registry.insert(Builder::new("BinaryImm").value().imm(imm64));
+    registry.insert(Builder::new("BinaryImm").value().imm(&imm.imm64));
 
     // The select instructions are controlled by the second VALUE operand.
     // The first VALUE operand is the controlling flag which has a derived type.
@@ -60,43 +46,59 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
     registry.insert(
         Builder::new("InsertLane")
             .value()
-            .imm_with_name("lane", uimm8)
+            .imm_with_name("lane", &imm.uimm8)
             .value(),
     );
     registry.insert(
         Builder::new("ExtractLane")
             .value()
-            .imm_with_name("lane", uimm8),
+            .imm_with_name("lane", &imm.uimm8),
     );
 
-    registry.insert(Builder::new("IntCompare").imm(intcc).value().value());
-    registry.insert(Builder::new("IntCompareImm").imm(intcc).value().imm(imm64));
-    registry.insert(Builder::new("IntCond").imm(intcc).value());
+    registry.insert(Builder::new("IntCompare").imm(&imm.intcc).value().value());
+    registry.insert(
+        Builder::new("IntCompareImm")
+            .imm(&imm.intcc)
+            .value()
+            .imm(&imm.imm64),
+    );
+    registry.insert(Builder::new("IntCond").imm(&imm.intcc).value());
 
-    registry.insert(Builder::new("FloatCompare").imm(floatcc).value().value());
-    registry.insert(Builder::new("FloatCond").imm(floatcc).value());;
+    registry.insert(
+        Builder::new("FloatCompare")
+            .imm(&imm.floatcc)
+            .value()
+            .value(),
+    );
+    registry.insert(Builder::new("FloatCond").imm(&imm.floatcc).value());;
 
-    registry.insert(Builder::new("IntSelect").imm(intcc).value().value().value());
+    registry.insert(
+        Builder::new("IntSelect")
+            .imm(&imm.intcc)
+            .value()
+            .value()
+            .value(),
+    );
 
     registry.insert(Builder::new("Jump").imm(ebb).varargs());
     registry.insert(Builder::new("Branch").value().imm(ebb).varargs());
     registry.insert(
         Builder::new("BranchInt")
-            .imm(intcc)
+            .imm(&imm.intcc)
             .value()
             .imm(ebb)
             .varargs(),
     );
     registry.insert(
         Builder::new("BranchFloat")
-            .imm(floatcc)
+            .imm(&imm.floatcc)
             .value()
             .imm(ebb)
             .varargs(),
     );
     registry.insert(
         Builder::new("BranchIcmp")
-            .imm(intcc)
+            .imm(&imm.intcc)
             .value()
             .value()
             .imm(ebb)
@@ -107,7 +109,7 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
         Builder::new("BranchTableEntry")
             .value()
             .value()
-            .imm(uimm8)
+            .imm(&imm.uimm8)
             .imm(jump_table),
     );
     registry.insert(Builder::new("BranchTableBase").imm(jump_table));
@@ -117,74 +119,89 @@ pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegis
     registry.insert(Builder::new("CallIndirect").imm(sig_ref).value().varargs());
     registry.insert(Builder::new("FuncAddr").imm(func_ref));
 
-    registry.insert(Builder::new("Load").imm(memflags).value().imm(offset32));
+    registry.insert(
+        Builder::new("Load")
+            .imm(&imm.memflags)
+            .value()
+            .imm(&imm.offset32),
+    );
     registry.insert(
         Builder::new("LoadComplex")
-            .imm(memflags)
+            .imm(&imm.memflags)
             .varargs()
-            .imm(offset32),
+            .imm(&imm.offset32),
     );
     registry.insert(
         Builder::new("Store")
-            .imm(memflags)
+            .imm(&imm.memflags)
             .value()
             .value()
-            .imm(offset32),
+            .imm(&imm.offset32),
     );
     registry.insert(
         Builder::new("StoreComplex")
-            .imm(memflags)
+            .imm(&imm.memflags)
             .value()
             .varargs()
-            .imm(offset32),
+            .imm(&imm.offset32),
     );
-    registry.insert(Builder::new("StackLoad").imm(stack_slot).imm(offset32));
+    registry.insert(Builder::new("StackLoad").imm(stack_slot).imm(&imm.offset32));
     registry.insert(
         Builder::new("StackStore")
             .value()
             .imm(stack_slot)
-            .imm(offset32),
+            .imm(&imm.offset32),
     );
 
     // Accessing a WebAssembly heap.
-    registry.insert(Builder::new("HeapAddr").imm(heap).value().imm(uimm32));
+    registry.insert(Builder::new("HeapAddr").imm(heap).value().imm(&imm.uimm32));
 
     // Accessing a WebAssembly table.
-    registry.insert(Builder::new("TableAddr").imm(table).value().imm(offset32));
+    registry.insert(
+        Builder::new("TableAddr")
+            .imm(table)
+            .value()
+            .imm(&imm.offset32),
+    );
 
     registry.insert(
         Builder::new("RegMove")
             .value()
-            .imm_with_name("src", regunit)
-            .imm_with_name("dst", regunit),
+            .imm_with_name("src", &imm.regunit)
+            .imm_with_name("dst", &imm.regunit),
     );
     registry.insert(
         Builder::new("CopySpecial")
-            .imm_with_name("src", regunit)
-            .imm_with_name("dst", regunit),
+            .imm_with_name("src", &imm.regunit)
+            .imm_with_name("dst", &imm.regunit),
     );
-    registry.insert(Builder::new("CopyToSsa").imm_with_name("src", regunit));
+    registry.insert(Builder::new("CopyToSsa").imm_with_name("src", &imm.regunit));
     registry.insert(
         Builder::new("RegSpill")
             .value()
-            .imm_with_name("src", regunit)
+            .imm_with_name("src", &imm.regunit)
             .imm_with_name("dst", stack_slot),
     );
     registry.insert(
         Builder::new("RegFill")
             .value()
             .imm_with_name("src", stack_slot)
-            .imm_with_name("dst", regunit),
+            .imm_with_name("dst", &imm.regunit),
     );
 
-    registry.insert(Builder::new("Trap").imm(trapcode));
-    registry.insert(Builder::new("CondTrap").value().imm(trapcode));
-    registry.insert(Builder::new("IntCondTrap").imm(intcc).value().imm(trapcode));
+    registry.insert(Builder::new("Trap").imm(&imm.trapcode));
+    registry.insert(Builder::new("CondTrap").value().imm(&imm.trapcode));
+    registry.insert(
+        Builder::new("IntCondTrap")
+            .imm(&imm.intcc)
+            .value()
+            .imm(&imm.trapcode),
+    );
     registry.insert(
         Builder::new("FloatCondTrap")
-            .imm(floatcc)
+            .imm(&imm.floatcc)
             .value()
-            .imm(trapcode),
+            .imm(&imm.trapcode),
     );
 
     registry

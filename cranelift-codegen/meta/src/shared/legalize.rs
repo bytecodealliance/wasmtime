@@ -2,12 +2,11 @@ use crate::cdsl::ast::{var, ExprBuilder, Literal};
 use crate::cdsl::instructions::{Instruction, InstructionGroup};
 use crate::cdsl::xform::{TransformGroupBuilder, TransformGroups};
 
-use crate::shared::OperandKinds;
-
+use crate::shared::immediates::Immediates;
 use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I16, I32, I64, I8};
 
-pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformGroups {
+pub fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGroups {
     let mut narrow = TransformGroupBuilder::new(
         "narrow",
         r#"
@@ -138,12 +137,6 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     // Custom expansions for stack memory accesses.
     expand.custom_legalize(insts.by_name("stack_load"), "expand_stack_load");
     expand.custom_legalize(insts.by_name("stack_store"), "expand_stack_store");
-
-    // List of immediates.
-    let imm64 = immediates.by_name("imm64");
-    let ieee32 = immediates.by_name("ieee32");
-    let ieee64 = immediates.by_name("ieee64");
-    let intcc = immediates.by_name("intcc");
 
     // List of variables to reuse in patterns.
     let x = var("x");
@@ -298,7 +291,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     }
 
     for &(int_ty, num) in &[(I8, 24), (I16, 16)] {
-        let imm = Literal::constant(imm64, -num);
+        let imm = Literal::constant(&imm.imm64, -num);
 
         widen.legalize(
             def!(a = clz.int_ty(b)),
@@ -322,7 +315,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     }
 
     for &(int_ty, num) in &[(I8, 1 << 8), (I16, 1 << 16)] {
-        let num = Literal::constant(imm64, num);
+        let num = Literal::constant(&imm.imm64, num);
         widen.legalize(
             def!(a = ctz.int_ty(b)),
             vec![
@@ -423,7 +416,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
         }
 
         for cc in &["eq", "ne", "ugt", "ult", "uge", "ule"] {
-            let w_cc = Literal::enumerator_for(intcc, cc);
+            let w_cc = Literal::enumerator_for(&imm.intcc, cc);
             widen.legalize(
                 def!(a = icmp_imm.int_ty(w_cc, b, c)),
                 vec![def!(x = uextend.I32(b)), def!(a = icmp_imm(w_cc, x, c))],
@@ -439,7 +432,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
         }
 
         for cc in &["sgt", "slt", "sge", "sle"] {
-            let w_cc = Literal::enumerator_for(intcc, cc);
+            let w_cc = Literal::enumerator_for(&imm.intcc, cc);
             widen.legalize(
                 def!(a = icmp_imm.int_ty(w_cc, b, c)),
                 vec![def!(x = sextend.I32(b)), def!(a = icmp_imm(w_cc, x, c))],
@@ -534,7 +527,7 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     }
 
     //# Expand bnot using xor.
-    let minus_one = Literal::constant(imm64, -1);
+    let minus_one = Literal::constant(&imm.imm64, -1);
     expand.legalize(
         def!(a = bnot(x)),
         vec![def!(y = iconst(minus_one)), def!(a = bxor(x, y))],
@@ -543,82 +536,82 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     //# Expand bitrev
     //# Adapted from Stack Overflow.
     //# https://stackoverflow.com/questions/746171/most-efficient-algorithm-for-bit-reversal-from-msb-lsb-to-lsb-msb-in-c
-    let imm64_1 = Literal::constant(imm64, 1);
-    let imm64_2 = Literal::constant(imm64, 2);
-    let imm64_4 = Literal::constant(imm64, 4);
+    let imm64_1 = Literal::constant(&imm.imm64, 1);
+    let imm64_2 = Literal::constant(&imm.imm64, 2);
+    let imm64_4 = Literal::constant(&imm.imm64, 4);
 
     widen.legalize(
         def!(a = bitrev.I8(x)),
         vec![
-            def!(a1 = band_imm(x, Literal::constant(imm64, 0xaa))),
+            def!(a1 = band_imm(x, Literal::constant(&imm.imm64, 0xaa))),
             def!(a2 = ushr_imm(a1, imm64_1)),
-            def!(a3 = band_imm(x, Literal::constant(imm64, 0x55))),
+            def!(a3 = band_imm(x, Literal::constant(&imm.imm64, 0x55))),
             def!(a4 = ishl_imm(a3, imm64_1)),
             def!(b = bor(a2, a4)),
-            def!(b1 = band_imm(b, Literal::constant(imm64, 0xcc))),
+            def!(b1 = band_imm(b, Literal::constant(&imm.imm64, 0xcc))),
             def!(b2 = ushr_imm(b1, imm64_2)),
-            def!(b3 = band_imm(b, Literal::constant(imm64, 0x33))),
+            def!(b3 = band_imm(b, Literal::constant(&imm.imm64, 0x33))),
             def!(b4 = ishl_imm(b3, imm64_2)),
             def!(c = bor(b2, b4)),
-            def!(c1 = band_imm(c, Literal::constant(imm64, 0xf0))),
+            def!(c1 = band_imm(c, Literal::constant(&imm.imm64, 0xf0))),
             def!(c2 = ushr_imm(c1, imm64_4)),
-            def!(c3 = band_imm(c, Literal::constant(imm64, 0x0f))),
+            def!(c3 = band_imm(c, Literal::constant(&imm.imm64, 0x0f))),
             def!(c4 = ishl_imm(c3, imm64_4)),
             def!(a = bor(c2, c4)),
         ],
     );
 
-    let imm64_8 = Literal::constant(imm64, 8);
+    let imm64_8 = Literal::constant(&imm.imm64, 8);
 
     widen.legalize(
         def!(a = bitrev.I16(x)),
         vec![
-            def!(a1 = band_imm(x, Literal::constant(imm64, 0xaaaa))),
+            def!(a1 = band_imm(x, Literal::constant(&imm.imm64, 0xaaaa))),
             def!(a2 = ushr_imm(a1, imm64_1)),
-            def!(a3 = band_imm(x, Literal::constant(imm64, 0x5555))),
+            def!(a3 = band_imm(x, Literal::constant(&imm.imm64, 0x5555))),
             def!(a4 = ishl_imm(a3, imm64_1)),
             def!(b = bor(a2, a4)),
-            def!(b1 = band_imm(b, Literal::constant(imm64, 0xcccc))),
+            def!(b1 = band_imm(b, Literal::constant(&imm.imm64, 0xcccc))),
             def!(b2 = ushr_imm(b1, imm64_2)),
-            def!(b3 = band_imm(b, Literal::constant(imm64, 0x3333))),
+            def!(b3 = band_imm(b, Literal::constant(&imm.imm64, 0x3333))),
             def!(b4 = ishl_imm(b3, imm64_2)),
             def!(c = bor(b2, b4)),
-            def!(c1 = band_imm(c, Literal::constant(imm64, 0xf0f0))),
+            def!(c1 = band_imm(c, Literal::constant(&imm.imm64, 0xf0f0))),
             def!(c2 = ushr_imm(c1, imm64_4)),
-            def!(c3 = band_imm(c, Literal::constant(imm64, 0x0f0f))),
+            def!(c3 = band_imm(c, Literal::constant(&imm.imm64, 0x0f0f))),
             def!(c4 = ishl_imm(c3, imm64_4)),
             def!(d = bor(c2, c4)),
-            def!(d1 = band_imm(d, Literal::constant(imm64, 0xff00))),
+            def!(d1 = band_imm(d, Literal::constant(&imm.imm64, 0xff00))),
             def!(d2 = ushr_imm(d1, imm64_8)),
-            def!(d3 = band_imm(d, Literal::constant(imm64, 0x00ff))),
+            def!(d3 = band_imm(d, Literal::constant(&imm.imm64, 0x00ff))),
             def!(d4 = ishl_imm(d3, imm64_8)),
             def!(a = bor(d2, d4)),
         ],
     );
 
-    let imm64_16 = Literal::constant(imm64, 16);
+    let imm64_16 = Literal::constant(&imm.imm64, 16);
 
     expand.legalize(
         def!(a = bitrev.I32(x)),
         vec![
-            def!(a1 = band_imm(x, Literal::constant(imm64, 0xaaaaaaaa))),
+            def!(a1 = band_imm(x, Literal::constant(&imm.imm64, 0xaaaaaaaa))),
             def!(a2 = ushr_imm(a1, imm64_1)),
-            def!(a3 = band_imm(x, Literal::constant(imm64, 0x55555555))),
+            def!(a3 = band_imm(x, Literal::constant(&imm.imm64, 0x55555555))),
             def!(a4 = ishl_imm(a3, imm64_1)),
             def!(b = bor(a2, a4)),
-            def!(b1 = band_imm(b, Literal::constant(imm64, 0xcccccccc))),
+            def!(b1 = band_imm(b, Literal::constant(&imm.imm64, 0xcccccccc))),
             def!(b2 = ushr_imm(b1, imm64_2)),
-            def!(b3 = band_imm(b, Literal::constant(imm64, 0x33333333))),
+            def!(b3 = band_imm(b, Literal::constant(&imm.imm64, 0x33333333))),
             def!(b4 = ishl_imm(b3, imm64_2)),
             def!(c = bor(b2, b4)),
-            def!(c1 = band_imm(c, Literal::constant(imm64, 0xf0f0f0f0))),
+            def!(c1 = band_imm(c, Literal::constant(&imm.imm64, 0xf0f0f0f0))),
             def!(c2 = ushr_imm(c1, imm64_4)),
-            def!(c3 = band_imm(c, Literal::constant(imm64, 0x0f0f0f0f))),
+            def!(c3 = band_imm(c, Literal::constant(&imm.imm64, 0x0f0f0f0f))),
             def!(c4 = ishl_imm(c3, imm64_4)),
             def!(d = bor(c2, c4)),
-            def!(d1 = band_imm(d, Literal::constant(imm64, 0xff00ff00))),
+            def!(d1 = band_imm(d, Literal::constant(&imm.imm64, 0xff00ff00))),
             def!(d2 = ushr_imm(d1, imm64_8)),
-            def!(d3 = band_imm(d, Literal::constant(imm64, 0x00ff00ff))),
+            def!(d3 = band_imm(d, Literal::constant(&imm.imm64, 0x00ff00ff))),
             def!(d4 = ishl_imm(d3, imm64_8)),
             def!(e = bor(d2, d4)),
             def!(e1 = ushr_imm(e, imm64_16)),
@@ -628,21 +621,21 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     );
 
     #[allow(overflowing_literals)]
-    let imm64_0xaaaaaaaaaaaaaaaa = Literal::constant(imm64, 0xaaaaaaaaaaaaaaaa);
-    let imm64_0x5555555555555555 = Literal::constant(imm64, 0x5555555555555555);
+    let imm64_0xaaaaaaaaaaaaaaaa = Literal::constant(&imm.imm64, 0xaaaaaaaaaaaaaaaa);
+    let imm64_0x5555555555555555 = Literal::constant(&imm.imm64, 0x5555555555555555);
     #[allow(overflowing_literals)]
-    let imm64_0xcccccccccccccccc = Literal::constant(imm64, 0xcccccccccccccccc);
-    let imm64_0x3333333333333333 = Literal::constant(imm64, 0x3333333333333333);
+    let imm64_0xcccccccccccccccc = Literal::constant(&imm.imm64, 0xcccccccccccccccc);
+    let imm64_0x3333333333333333 = Literal::constant(&imm.imm64, 0x3333333333333333);
     #[allow(overflowing_literals)]
-    let imm64_0xf0f0f0f0f0f0f0f0 = Literal::constant(imm64, 0xf0f0f0f0f0f0f0f0);
-    let imm64_0x0f0f0f0f0f0f0f0f = Literal::constant(imm64, 0x0f0f0f0f0f0f0f0f);
+    let imm64_0xf0f0f0f0f0f0f0f0 = Literal::constant(&imm.imm64, 0xf0f0f0f0f0f0f0f0);
+    let imm64_0x0f0f0f0f0f0f0f0f = Literal::constant(&imm.imm64, 0x0f0f0f0f0f0f0f0f);
     #[allow(overflowing_literals)]
-    let imm64_0xff00ff00ff00ff00 = Literal::constant(imm64, 0xff00ff00ff00ff00);
-    let imm64_0x00ff00ff00ff00ff = Literal::constant(imm64, 0x00ff00ff00ff00ff);
+    let imm64_0xff00ff00ff00ff00 = Literal::constant(&imm.imm64, 0xff00ff00ff00ff00);
+    let imm64_0x00ff00ff00ff00ff = Literal::constant(&imm.imm64, 0x00ff00ff00ff00ff);
     #[allow(overflowing_literals)]
-    let imm64_0xffff0000ffff0000 = Literal::constant(imm64, 0xffff0000ffff0000);
-    let imm64_0x0000ffff0000ffff = Literal::constant(imm64, 0x0000ffff0000ffff);
-    let imm64_32 = Literal::constant(imm64, 32);
+    let imm64_0xffff0000ffff0000 = Literal::constant(&imm.imm64, 0xffff0000ffff0000);
+    let imm64_0x0000ffff0000ffff = Literal::constant(&imm.imm64, 0x0000ffff0000ffff);
+    let imm64_32 = Literal::constant(&imm.imm64, 32);
 
     expand.legalize(
         def!(a = bitrev.I64(x)),
@@ -680,8 +673,12 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
 
     // Floating-point sign manipulations.
     for &(ty, const_inst, minus_zero) in &[
-        (F32, f32const, &Literal::bits(ieee32, 0x80000000)),
-        (F64, f64const, &Literal::bits(ieee64, 0x8000000000000000)),
+        (F32, f32const, &Literal::bits(&imm.ieee32, 0x80000000)),
+        (
+            F64,
+            f64const,
+            &Literal::bits(&imm.ieee64, 0x8000000000000000),
+        ),
     ] {
         expand.legalize(
             def!(a = fabs.ty(x)),
@@ -724,9 +721,9 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     )
     .chain_with(expand_id);
 
-    let imm64_0 = Literal::constant(imm64, 0);
-    let intcc_ne = Literal::enumerator_for(intcc, "ne");
-    let intcc_eq = Literal::enumerator_for(intcc, "eq");
+    let imm64_0 = Literal::constant(&imm.imm64, 0);
+    let intcc_ne = Literal::enumerator_for(&imm.intcc, "ne");
+    let intcc_eq = Literal::enumerator_for(&imm.intcc, "eq");
 
     expand_flags.legalize(
         def!(trapnz(x, c)),
