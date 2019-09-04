@@ -42,14 +42,13 @@ fn isa_constructor(
     builder: shared_settings::Builder,
 ) -> Box<dyn TargetIsa> {
     let level1 = match triple.architecture {
-        Architecture::Thumbv6m | Architecture::Thumbv7em | Architecture::Thumbv7m => {
-            &enc_tables::LEVEL1_T32[..]
+        Architecture::Arm(arm) => {
+            if arm.is_thumb() {
+                &enc_tables::LEVEL1_T32[..]
+            } else {
+                &enc_tables::LEVEL1_A32[..]
+            }
         }
-        Architecture::Arm
-        | Architecture::Armv4t
-        | Architecture::Armv5te
-        | Architecture::Armv7
-        | Architecture::Armv7s => &enc_tables::LEVEL1_A32[..],
         _ => panic!(),
     };
     Box::new(Isa {
