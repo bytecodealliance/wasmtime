@@ -11,7 +11,7 @@ use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::types;
 use crate::shared::{entities::EntityRefs, immediates::Immediates};
 
-pub fn define(
+pub(crate) fn define(
     all_instructions: &mut AllInstructions,
     format_registry: &FormatRegistry,
     imm: &Immediates,

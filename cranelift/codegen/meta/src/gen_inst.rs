@@ -1059,7 +1059,7 @@ fn gen_builder(instructions: &AllInstructions, formats: &FormatRegistry, fmt: &m
     fmt.line("}");
 }
 
-pub fn generate(
+pub(crate) fn generate(
     shared_defs: &SharedDefinitions,
     opcode_filename: &str,
     inst_builder_filename: &str,

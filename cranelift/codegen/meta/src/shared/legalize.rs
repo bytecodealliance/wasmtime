@@ -6,7 +6,7 @@ use crate::shared::immediates::Immediates;
 use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I16, I32, I64, I8};
 
-pub fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGroups {
+pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGroups {
     let mut narrow = TransformGroupBuilder::new(
         "narrow",
         r#"

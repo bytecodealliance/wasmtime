@@ -1,7 +1,7 @@
 use crate::cdsl::formats::{FormatRegistry, InstructionFormatBuilder as Builder};
 use crate::shared::{entities::EntityRefs, immediates::Immediates};
 
-pub fn define(imm: &Immediates, entities: &EntityRefs) -> FormatRegistry {
+pub(crate) fn define(imm: &Immediates, entities: &EntityRefs) -> FormatRegistry {
     let mut registry = FormatRegistry::new();
 
     registry.insert(Builder::new("Unary").value());

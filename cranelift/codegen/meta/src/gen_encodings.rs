@@ -1126,7 +1126,7 @@ fn gen_isa(defs: &SharedDefinitions, isa: &TargetIsa, fmt: &mut Formatter) {
     fmt.line("};");
 }
 
-pub fn generate(
+pub(crate) fn generate(
     defs: &SharedDefinitions,
     isa: &TargetIsa,
     filename: &str,
