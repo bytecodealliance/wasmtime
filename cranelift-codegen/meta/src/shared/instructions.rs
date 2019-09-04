@@ -8,14 +8,14 @@ use crate::cdsl::operands::{create_operand as operand, create_operand_doc as ope
 use crate::cdsl::type_inference::Constraint::WiderOrEq;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
-use crate::shared::immediates::Immediates;
-use crate::shared::{types, OperandKinds};
+use crate::shared::types;
+use crate::shared::{entities::EntityRefs, immediates::Immediates};
 
 pub fn define(
     all_instructions: &mut AllInstructions,
     format_registry: &FormatRegistry,
     imm: &Immediates,
-    entities: &OperandKinds,
+    entities: &EntityRefs,
 ) -> InstructionGroup {
     let mut ig = InstructionGroupBuilder::new(
         "base",
@@ -25,16 +25,6 @@ pub fn define(
     );
 
     // Operand kind shorthands.
-    let ebb = entities.by_name("ebb");
-    let jump_table = entities.by_name("jump_table");
-    let variable_args = entities.by_name("variable_args");
-    let func_ref = entities.by_name("func_ref");
-    let sig_ref = entities.by_name("sig_ref");
-    let stack_slot = entities.by_name("stack_slot");
-    let global_value = entities.by_name("global_value");
-    let heap = entities.by_name("heap");
-    let table = entities.by_name("table");
-
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
     let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
 
@@ -132,8 +122,8 @@ pub fn define(
     let Cond = &operand("Cond", &imm.intcc);
     let x = &operand("x", iB);
     let y = &operand("y", iB);
-    let EBB = &operand_doc("EBB", ebb, "Destination extended basic block");
-    let args = &operand_doc("args", variable_args, "EBB arguments");
+    let EBB = &operand_doc("EBB", &entities.ebb, "Destination extended basic block");
+    let args = &operand_doc("args", &entities.varargs, "EBB arguments");
 
     ig.push(
         Inst::new(
@@ -257,7 +247,7 @@ pub fn define(
     // The index into the br_table can be any type; legalizer will convert it to the right type.
     let x = &operand_doc("x", iB, "index into jump table");
     let entry = &operand_doc("entry", iAddr, "entry of jump table");
-    let JT = &operand("JT", jump_table);
+    let JT = &operand("JT", &entities.jump_table);
 
     ig.push(
         Inst::new(
@@ -433,7 +423,7 @@ pub fn define(
         .can_trap(true),
     );
 
-    let rvals = &operand_doc("rvals", variable_args, "return values");
+    let rvals = &operand_doc("rvals", &entities.varargs, "return values");
 
     ig.push(
         Inst::new(
@@ -467,8 +457,12 @@ pub fn define(
         .is_terminator(true),
     );
 
-    let FN = &operand_doc("FN", func_ref, "function to call, declared by `function`");
-    let args = &operand_doc("args", variable_args, "call arguments");
+    let FN = &operand_doc(
+        "FN",
+        &entities.func_ref,
+        "function to call, declared by `function`",
+    );
+    let args = &operand_doc("args", &entities.varargs, "call arguments");
 
     ig.push(
         Inst::new(
@@ -485,7 +479,7 @@ pub fn define(
         .is_call(true),
     );
 
-    let SIG = &operand_doc("SIG", sig_ref, "function signature");
+    let SIG = &operand_doc("SIG", &entities.sig_ref, "function signature");
     let callee = &operand_doc("callee", iAddr, "address of function to call");
 
     ig.push(
@@ -525,13 +519,13 @@ pub fn define(
         .operands_out(vec![addr]),
     );
 
-    let SS = &operand("SS", stack_slot);
+    let SS = &operand("SS", &entities.stack_slot);
     let Offset = &operand_doc("Offset", &imm.offset32, "Byte offset from base address");
     let x = &operand_doc("x", Mem, "Value to be stored");
     let a = &operand_doc("a", Mem, "Value loaded");
     let p = &operand("p", iAddr);
     let MemFlags = &operand("MemFlags", &imm.memflags);
-    let args = &operand_doc("args", variable_args, "Address arguments");
+    let args = &operand_doc("args", &entities.varargs, "Address arguments");
 
     ig.push(
         Inst::new(
@@ -917,7 +911,7 @@ pub fn define(
         .operands_out(vec![addr]),
     );
 
-    let GV = &operand("GV", global_value);
+    let GV = &operand("GV", &entities.global_value);
 
     ig.push(
         Inst::new(
@@ -947,7 +941,7 @@ pub fn define(
         TypeSetBuilder::new().ints(32..64).build(),
     );
 
-    let H = &operand("H", heap);
+    let H = &operand("H", &entities.heap);
     let p = &operand("p", HeapOffset);
     let Size = &operand_doc("Size", &imm.uimm32, "Size in bytes");
 
@@ -975,7 +969,7 @@ pub fn define(
         "An unsigned table offset",
         TypeSetBuilder::new().ints(32..64).build(),
     );
-    let T = &operand("T", table);
+    let T = &operand("T", &entities.table);
     let p = &operand("p", TableOffset);
     let Offset = &operand_doc("Offset", &imm.offset32, "Byte offset from element address");
 
@@ -1382,7 +1376,7 @@ pub fn define(
 
     let N = &operand_doc(
         "args",
-        variable_args,
+        &entities.varargs,
         "Variable number of args for Stackmap",
     );
 
