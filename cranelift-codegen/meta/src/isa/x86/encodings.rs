@@ -1744,16 +1744,17 @@ pub(crate) fn define(
     e.enc_both(ffcmp.bind(F32), rec_fcmp.opcodes(vec![0x0f, 0x2e]));
     e.enc_both(ffcmp.bind(F64), rec_fcmp.opcodes(vec![0x66, 0x0f, 0x2e]));
 
-    // SIMD vector size: eventually multiple vector sizes may be supported but for now only SSE-sized vectors are available
+    // SIMD vector size: eventually multiple vector sizes may be supported but for now only
+    // SSE-sized vectors are available.
     let sse_vector_size: u64 = 128;
 
     // SIMD splat: before x86 can use vector data, it must be moved to XMM registers; see
     // legalize.rs for how this is done; once there, x86_pshuf* (below) is used for broadcasting the
-    // value across the register
+    // value across the register.
 
     let allowed_simd_type = |t: &LaneType| t.lane_bits() >= 8 && t.lane_bits() < 128;
 
-    // PSHUFB, 8-bit shuffle using two XMM registers
+    // PSHUFB, 8-bit shuffle using two XMM registers.
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
         let instruction = x86_pshufb.bind_vector_from_lane(ty, sse_vector_size);
         let template = rec_fa.nonrex().opcodes(vec![0x66, 0x0f, 0x38, 00]);
@@ -1761,7 +1762,7 @@ pub(crate) fn define(
         e.enc64_isap(instruction, template, use_ssse3_simd);
     }
 
-    // PSHUFD, 32-bit shuffle using one XMM register and a u8 immediate
+    // PSHUFD, 32-bit shuffle using one XMM register and a u8 immediate.
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 32) {
         let instruction = x86_pshufd.bind_vector_from_lane(ty, sse_vector_size);
         let template = rec_r_ib_unsigned_fpr
@@ -1803,27 +1804,28 @@ pub(crate) fn define(
             if ty.lane_bits() < 64 {
                 e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap.clone());
             } else {
-                // turns out the 64-bit widths have REX/W encodings and only are available on x86_64
+                // It turns out the 64-bit widths have REX/W encodings and only are available on
+                // x86_64.
                 e.enc64_maybe_isap(instruction, template.rex().w(), isap.clone());
             }
         }
     }
 
-    // for legalizing insertlane with floats, INSERTPS from SSE4.1
+    // For legalizing insertlane with floats, INSERTPS from SSE4.1.
     {
         let instruction = x86_insertps.bind_vector_from_lane(F32, sse_vector_size);
         let template = rec_fa_ib.nonrex().opcodes(vec![0x66, 0x0f, 0x3a, 0x21]);
         e.enc_32_64_maybe_isap(instruction, template, Some(use_sse41_simd));
     }
 
-    // for legalizing insertlane with floats,  MOVSD from SSE2
+    // For legalizing insertlane with floats,  MOVSD from SSE2.
     {
         let instruction = x86_movsd.bind_vector_from_lane(F64, sse_vector_size);
         let template = rec_fa.nonrex().opcodes(vec![0xf2, 0x0f, 0x10]);
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE2
     }
 
-    // for legalizing insertlane with floats, MOVLHPS from SSE
+    // For legalizing insertlane with floats, MOVLHPS from SSE.
     {
         let instruction = x86_movlhps.bind_vector_from_lane(F64, sse_vector_size);
         let template = rec_fa.nonrex().opcodes(vec![0x0f, 0x16]);
@@ -1845,13 +1847,14 @@ pub(crate) fn define(
             if ty.lane_bits() < 64 {
                 e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap.clone());
             } else {
-                // turns out the 64-bit widths have REX/W encodings and only are available on x86_64
+                // It turns out the 64-bit widths have REX/W encodings and only are available on
+                // x86_64.
                 e.enc64_maybe_isap(instruction, template.rex().w(), isap.clone());
             }
         }
     }
 
-    // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8)
+    // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8).
     for from_type in ValueType::all_lane_types().filter(allowed_simd_type) {
         for to_type in
             ValueType::all_lane_types().filter(|t| allowed_simd_type(t) && *t != from_type)
@@ -1863,7 +1866,8 @@ pub(crate) fn define(
         }
     }
 
-    // SIMD raw bitcast floats to vector (and back); assumes that floats are already stored in an XMM register
+    // SIMD raw bitcast floats to vector (and back); assumes that floats are already stored in an
+    // XMM register.
     for float_type in &[F32, F64] {
         for lane_type in ValueType::all_lane_types().filter(allowed_simd_type) {
             e.enc_32_64_rec(

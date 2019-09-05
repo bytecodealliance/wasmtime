@@ -1537,7 +1537,9 @@ pub(crate) fn define(
         Extract lane ``Idx`` from ``x``.
 
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
-        must indicate a valid lane index for the type of ``x``.
+        must indicate a valid lane index for the type of ``x``. Note that the upper bits of ``a``
+        may or may not be zeroed depending on the ISA but the type system should prevent using 
+        ``a`` as anything other than the extracted value.
         "#,
         )
         .operands_in(vec![x, Idx])
@@ -2782,9 +2784,11 @@ pub(crate) fn define(
         Inst::new(
             "scalar_to_vector",
             r#"
-    Scalar To Vector -- move a value out of a scalar register and into a vector
-    register; the scalar will be moved to the lowest-order bits of the vector
-    register and any higher bits will be zeroed.
+    Scalar To Vector -- move a value out of a scalar register and into a vector register; the 
+    scalar will be moved to the lowest-order bits of the vector register. Note that this 
+    instruction is intended as a low-level legalization instruction and frontends should prefer 
+    insertlane; on certain architectures, scalar_to_vector may zero the highest-order bits for some
+    types (e.g. integers) but not for others (e.g. floats).
     "#,
         )
         .operands_in(vec![s])
