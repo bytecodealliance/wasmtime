@@ -1,3 +1,6 @@
+; TODO(ryzokuken): figure out a better legalization strategy for platforms that
+; platforms that don't have flags.
+
 ; Test the legalization of i64 arithmetic instructions.
 test legalizer
 target riscv32 supports_m=1

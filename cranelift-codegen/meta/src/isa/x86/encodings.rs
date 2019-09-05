@@ -372,6 +372,9 @@ pub fn define(
     let fsub = shared.by_name("fsub");
     let func_addr = shared.by_name("func_addr");
     let iadd = shared.by_name("iadd");
+    let iadd_cout = shared.by_name("iadd_cout");
+    let iadd_cin = shared.by_name("iadd_cin");
+    let iadd_carry = shared.by_name("iadd_carry");
     let iadd_imm = shared.by_name("iadd_imm");
     let icmp = shared.by_name("icmp");
     let icmp_imm = shared.by_name("icmp_imm");
@@ -556,6 +559,8 @@ pub fn define(
     let rec_rfurm = r.template("rfurm");
     let rec_rmov = r.template("rmov");
     let rec_rr = r.template("rr");
+    let rec_rcin = r.template("rcin");
+    let rec_rcarry = r.template("rcarry");
     let rec_rrx = r.template("rrx");
     let rec_safepoint = r.recipe("safepoint");
     let rec_setf_abcd = r.template("setf_abcd");
@@ -611,6 +616,10 @@ pub fn define(
     let mut e = PerCpuModeEncodings::new();
 
     e.enc_i32_i64(iadd, rec_rr.opcodes(vec![0x01]));
+    e.enc_i32_i64(iadd_cout, rec_rr.opcodes(vec![0x01]));
+    e.enc_i32_i64(iadd_cin, rec_rcin.opcodes(vec![0x11]));
+    e.enc_i32_i64(iadd_carry, rec_rcarry.opcodes(vec![0x11]));
+
     e.enc_i32_i64(isub, rec_rr.opcodes(vec![0x29]));
     e.enc_i32_i64(band, rec_rr.opcodes(vec![0x21]));
     e.enc_i32_i64(bor, rec_rr.opcodes(vec![0x09]));
