@@ -169,6 +169,14 @@ fn try_fold_redundant_jump(
         }
     };
 
+    // For the moment, only attempt to fold a branch to an ebb that is parameterless.
+    // These blocks are mainly produced by critical edge splitting.
+    //
+    // TODO: Allow folding blocks that define SSA values and function as phi nodes.
+    if func.dfg.num_ebb_params(first_dest) != 0 {
+        return false;
+    }
+
     // Look at the first instruction of the first branch's destination.
     // If it is an unconditional branch, maybe the second jump can be bypassed.
     let second_inst = func.layout.first_inst(first_dest).expect("Instructions");
