@@ -44,18 +44,19 @@
 
 use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
+use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{ArgumentLoc, InstBuilder, ValueDef};
 use crate::ir::{Ebb, Function, Inst, InstructionData, Layout, Opcode, SigRef, Value, ValueLoc};
 use crate::isa::{regs_overlap, RegClass, RegInfo, RegUnit};
 use crate::isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
 use crate::packed_option::PackedOption;
 use crate::regalloc::affinity::Affinity;
+use crate::regalloc::diversion::RegDiversions;
 use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::liverange::{LiveRange, LiveRangeContext};
 use crate::regalloc::register_set::RegisterSet;
 use crate::regalloc::solver::{Solver, SolverError};
-use crate::regalloc::RegDiversions;
 use crate::timing;
 use core::mem;
 use log::debug;
@@ -92,6 +93,7 @@ struct Context<'a> {
     encinfo: EncInfo,
 
     // References to contextual data structures we need.
+    cfg: &'a ControlFlowGraph,
     domtree: &'a DominatorTree,
     liveness: &'a mut Liveness,
 
@@ -126,6 +128,7 @@ impl Coloring {
         &mut self,
         isa: &dyn TargetIsa,
         func: &mut Function,
+        cfg: &ControlFlowGraph,
         domtree: &DominatorTree,
         liveness: &mut Liveness,
         tracker: &mut LiveValueTracker,
@@ -137,6 +140,7 @@ impl Coloring {
             cur: EncCursor::new(func, isa),
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
+            cfg,
             domtree,
             liveness,
             divert: &mut self.divert,
@@ -166,13 +170,13 @@ impl<'a> Context<'a> {
         debug!("Coloring {}:", ebb);
         let mut regs = self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_params();
-        self.divert.clear();
 
         // Now go through the instructions in `ebb` and color the values they define.
         self.cur.goto_top(ebb);
         while let Some(inst) = self.cur.next_inst() {
             self.cur.use_srcloc(inst);
-            if !self.cur.func.dfg[inst].opcode().is_ghost() {
+            let opcode = self.cur.func.dfg[inst].opcode();
+            if !opcode.is_ghost() {
                 // This is an instruction which either has an encoding or carries ABI-related
                 // register allocation constraints.
                 let enc = self.cur.func.encodings[inst];
@@ -189,6 +193,54 @@ impl<'a> Context<'a> {
                 self.process_ghost_kills(kills, &mut regs);
             }
             tracker.drop_dead(inst);
+
+            // We are not able to insert any regmove for diversion or un-diversion after the first
+            // branch. Instead, we record the diversion to be restored at the entry of the next EBB,
+            // which should have a single predecessor.
+            if opcode.is_branch() && cfg!(feature = "basic-blocks") {
+                // The next instruction is necessarily an unconditional branch.
+                if let Some(branch) = self.cur.next_inst() {
+                    debug!(
+                        "Skip coloring {}\n    from {}\n    with diversions {}",
+                        self.cur.display_inst(branch),
+                        regs.input.display(&self.reginfo),
+                        self.divert.display(&self.reginfo)
+                    );
+                    use crate::ir::instructions::BranchInfo::*;
+                    let target = match self.cur.func.dfg.analyze_branch(branch) {
+                        NotABranch | Table(_, _) => panic!(
+                            "unexpected instruction {} after a conditional branch",
+                            self.cur.display_inst(branch)
+                        ),
+                        SingleDest(ebb, _) => ebb,
+                    };
+
+                    // We have a single branch with a single target, and an EBB with a single
+                    // predecessor. Thus we can forward the diversion set to the next EBB.
+                    if self.cfg.pred_iter(target).count() == 1 {
+                        // Transfer the diversion to the next EBB.
+                        self.divert
+                            .save_for_ebb(&mut self.cur.func.entry_diversions, target);
+                        debug!(
+                            "Set entry-diversion for {} to\n      {}",
+                            target,
+                            self.divert.display(&self.reginfo)
+                        );
+                    } else {
+                        debug_assert!(
+                            self.divert.is_empty(),
+                            "Divert set is non-empty after the terminator."
+                        );
+                    }
+                    assert_eq!(
+                        self.cur.next_inst(),
+                        None,
+                        "Unexpected instruction after a branch group."
+                    );
+                } else {
+                    assert!(opcode.is_terminator());
+                }
+            }
         }
     }
 
@@ -205,7 +257,15 @@ impl<'a> Context<'a> {
             self.domtree,
         );
 
+        // Copy the content of the registered diversions to be reused at the
+        // entry of this basic block.
         self.divert.at_ebb(&self.cur.func.entry_diversions, ebb);
+        debug!(
+            "Start {} with entry-diversion set to\n      {}",
+            ebb,
+            self.divert.display(&self.reginfo)
+        );
+
         if self.cur.func.layout.entry_block() == Some(ebb) {
             // Parameters on the entry block have ABI constraints.
             self.color_entry_params(tracker.live())
@@ -231,17 +291,35 @@ impl<'a> Context<'a> {
                 "Live-in: {}:{} in {}",
                 lv.value,
                 lv.affinity.display(&self.reginfo),
-                self.cur.func.locations[lv.value].display(&self.reginfo)
+                self.divert
+                    .get(lv.value, &self.cur.func.locations)
+                    .display(&self.reginfo)
             );
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 let loc = self.cur.func.locations[lv.value];
-                match loc {
-                    ValueLoc::Reg(reg) => regs.take(rc, reg, lv.is_local),
+                let reg = match loc {
+                    ValueLoc::Reg(reg) => reg,
                     ValueLoc::Unassigned => panic!("Live-in {} wasn't assigned", lv.value),
                     ValueLoc::Stack(ss) => {
                         panic!("Live-in {} is in {}, should be register", lv.value, ss)
                     }
+                };
+                if lv.is_local {
+                    regs.take(rc, reg, lv.is_local);
+                } else {
+                    let loc = self.divert.get(lv.value, &self.cur.func.locations);
+                    let reg_divert = match loc {
+                        ValueLoc::Reg(reg) => reg,
+                        ValueLoc::Unassigned => {
+                            panic!("Diversion: Live-in {} wasn't assigned", lv.value)
+                        }
+                        ValueLoc::Stack(ss) => panic!(
+                            "Diversion: Live-in {} is in {}, should be register",
+                            lv.value, ss
+                        ),
+                    };
+                    regs.take_divert(rc, reg, reg_divert);
                 }
             }
         }
@@ -1154,5 +1232,11 @@ impl AvailableRegs {
         if !is_local {
             self.global.take(rc, reg);
         }
+    }
+
+    /// Take a diverted register from both sets for a non-local allocation.
+    pub fn take_divert(&mut self, rc: RegClass, reg: RegUnit, reg_divert: RegUnit) {
+        self.input.take(rc, reg_divert);
+        self.global.take(rc, reg);
     }
 }

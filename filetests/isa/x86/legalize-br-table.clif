@@ -1,6 +1,7 @@
 test compile
 
 target x86_64
+feature !"basic-blocks"
 ; regex: V=v\d+
 ; regex: EBB=ebb\d+
 

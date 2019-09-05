@@ -1,7 +1,7 @@
 test safepoint
-
 set enable_safepoints=true
 target x86_64
+feature !"basic-blocks"
 
 function %direct() -> r64 {
     fn0 = %none()

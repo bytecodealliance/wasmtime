@@ -554,6 +554,9 @@ ebb18:
     v196 = load.i8 v195
     v197 = uextend.i32 v196
     brz v197, ebb19
+    jump ebb164
+
+ebb164:
     v198 = global_value.i64 gv12
     trap user0
 
@@ -572,6 +575,9 @@ ebb19:
     v209 = load.i8 v208
     v210 = uextend.i32 v209
     brz v210, ebb20
+    jump ebb163
+
+ebb163:
     v211 = global_value.i64 gv13
     trap user0
 
@@ -605,6 +611,9 @@ ebb22:
     v233 = load.i8 v232
     v234 = uextend.i32 v233
     brz v234, ebb23
+    jump ebb162
+
+ebb162:
     v235 = global_value.i64 gv16
     trap user0
 
@@ -630,6 +639,9 @@ ebb24:
     v252 = load.i8 v251
     v253 = uextend.i32 v252
     brz v253, ebb25
+    jump ebb161
+
+ebb161:
     v254 = global_value.i64 gv17
     trap user0
 
@@ -666,6 +678,9 @@ ebb27:
     v278 = load.i8 v277
     v279 = uextend.i32 v278
     brz v279, ebb28
+    jump ebb160
+
+ebb160:
     v280 = global_value.i64 gv18
     trap user0
 
@@ -681,6 +696,9 @@ ebb28:
     v289 = load.i8 v288
     v290 = uextend.i32 v289
     brz v290, ebb29
+    jump ebb159
+
+ebb159:
     v291 = global_value.i64 gv19
     trap user0
 
@@ -699,6 +717,9 @@ ebb29:
     v302 = load.i8 v301
     v303 = uextend.i32 v302
     brz v303, ebb30
+    jump ebb158
+
+ebb158:
     v304 = global_value.i64 gv20
     trap user0
 
@@ -714,6 +735,9 @@ ebb30:
     v313 = load.i8 v312
     v314 = uextend.i32 v313
     brz v314, ebb31
+    jump ebb157
+
+ebb157:
     v315 = global_value.i64 gv21
     trap user0
 
@@ -887,6 +911,9 @@ ebb49(v1006: i16):
     v411 = load.i8 v410
     v412 = uextend.i32 v411
     brz v412, ebb50
+    jump ebb156
+
+ebb156:
     v413 = global_value.i64 gv28
     trap user0
 
@@ -908,6 +935,9 @@ ebb50:
     v424 = load.i8 v423
     v425 = uextend.i32 v424
     brz v425, ebb51
+    jump ebb155
+
+ebb155:
     v426 = global_value.i64 gv29
     trap user0
 
@@ -922,6 +952,9 @@ ebb51:
     v432 = bint.i8 v431
     v433 = uextend.i32 v432
     brz v433, ebb52
+    jump ebb154
+
+ebb154:
     v434 = global_value.i64 gv30
     trap user0
 
@@ -941,6 +974,9 @@ ebb52:
     v447 = load.i8 v446
     v448 = uextend.i32 v447
     brz v448, ebb53
+    jump ebb153
+
+ebb153:
     v449 = global_value.i64 gv31
     trap user0
 
@@ -960,6 +996,9 @@ ebb53:
     v462 = load.i8 v461
     v463 = uextend.i32 v462
     brz v463, ebb54
+    jump ebb152
+
+ebb152:
     v464 = global_value.i64 gv32
     trap user0
 
@@ -976,6 +1015,9 @@ ebb54:
     v474 = load.i8 v473
     v475 = uextend.i32 v474
     brz v475, ebb55
+    jump ebb151
+
+ebb151:
     v476 = global_value.i64 gv33
     trap user0
 
@@ -1002,6 +1044,9 @@ ebb56:
     v493 = load.i8 v492
     v494 = uextend.i32 v493
     brz v494, ebb57
+    jump ebb150
+
+ebb150:
     v495 = global_value.i64 gv34
     trap user0
 
@@ -1017,6 +1062,9 @@ ebb57:
     v504 = load.i8 v503
     v505 = uextend.i32 v504
     brz v505, ebb58
+    jump ebb149
+
+ebb149:
     v506 = global_value.i64 gv35
     trap user0
 
@@ -1032,6 +1080,9 @@ ebb58:
     v517 = load.i8 v516
     v518 = uextend.i32 v517
     brz v518, ebb59
+    jump ebb148
+
+ebb148:
     v519 = global_value.i64 gv36
     trap user0
 
@@ -1049,6 +1100,9 @@ ebb59:
     v530 = load.i8 v529
     v531 = uextend.i32 v530
     brz v531, ebb60
+    jump ebb147
+
+ebb147:
     v532 = global_value.i64 gv37
     trap user0
 
@@ -1065,6 +1119,9 @@ ebb60:
     v542 = load.i8 v541
     v543 = uextend.i32 v542
     brz v543, ebb61
+    jump ebb146
+
+ebb146:
     v544 = global_value.i64 gv38
     trap user0
 
@@ -1118,6 +1175,9 @@ ebb62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v10
     v556 = bint.i8 v555
     v557 = uextend.i32 v556
     brz v557, ebb63
+    jump ebb145
+
+ebb145:
     v558 = global_value.i64 gv39
     trap user0
 
@@ -1131,6 +1191,9 @@ ebb63:
     v566 = bint.i8 v565
     v567 = uextend.i32 v566
     brz v567, ebb64
+    jump ebb144
+
+ebb144:
     v568 = global_value.i64 gv40
     trap user0
 
@@ -1175,6 +1238,9 @@ ebb68(v584: i32):
     v593 = load.i8 v592
     v594 = uextend.i32 v593
     brz v594, ebb69
+    jump ebb143
+
+ebb143:
     v595 = global_value.i64 gv43
     trap user0
 
@@ -1185,6 +1251,9 @@ ebb69:
     v600 = bint.i8 v599
     v601 = uextend.i32 v600
     brnz v601, ebb70
+    jump ebb142
+
+ebb142:
     v602 = global_value.i64 gv44
     trap user0
 
@@ -1205,6 +1274,9 @@ ebb70:
     v618 = load.i8 v617
     v619 = uextend.i32 v618
     brz v619, ebb71
+    jump ebb141
+
+ebb141:
     v620 = global_value.i64 gv45
     trap user0
 
@@ -1225,6 +1297,9 @@ ebb71:
     v632 = load.i8 v631
     v633 = uextend.i32 v632
     brz v633, ebb72
+    jump ebb140
+
+ebb140:
     v634 = global_value.i64 gv46
     trap user0
 
@@ -1240,6 +1315,9 @@ ebb72:
     v644 = load.i8 v643
     v645 = uextend.i32 v644
     brz v645, ebb73
+    jump ebb139
+
+ebb139:
     v646 = global_value.i64 gv47
     trap user0
 
@@ -1266,6 +1344,9 @@ ebb74:
     v662 = load.i8 v661
     v663 = uextend.i32 v662
     brz v663, ebb75
+    jump ebb138
+
+ebb138:
     v664 = global_value.i64 gv48
     trap user0
 
@@ -1294,6 +1375,9 @@ ebb76:
     v686 = load.i8 v685
     v687 = uextend.i32 v686
     brz v687, ebb77
+    jump ebb137
+
+ebb137:
     v688 = global_value.i64 gv49
     trap user0
 
@@ -1465,6 +1549,9 @@ ebb96:
     v790 = load.i8 v789
     v791 = uextend.i32 v790
     brz v791, ebb97
+    jump ebb136
+
+ebb136:
     v792 = global_value.i64 gv58
     trap user0
 
@@ -1476,6 +1563,9 @@ ebb97:
     v797 = bint.i8 v796
     v798 = uextend.i32 v797
     brz v798, ebb98
+    jump ebb135
+
+ebb135:
     v799 = global_value.i64 gv59
     trap user0
 
@@ -1515,6 +1605,9 @@ ebb99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v10
     v813 = load.i8 v812
     v814 = uextend.i32 v813
     brz v814, ebb100
+    jump ebb134
+
+ebb134:
     v815 = global_value.i64 gv60
     trap user0
 
@@ -1534,6 +1627,9 @@ ebb100:
     v826 = load.i8 v825
     v827 = uextend.i32 v826
     brz v827, ebb101
+    jump ebb133
+
+ebb133:
     v828 = global_value.i64 gv61
     trap user0
 
@@ -1555,6 +1651,9 @@ ebb101:
     v839 = load.i8 v838
     v840 = uextend.i32 v839
     brz v840, ebb102
+    jump ebb132
+
+ebb132:
     v841 = global_value.i64 gv62
     trap user0
 
@@ -1574,6 +1673,9 @@ ebb102:
     v852 = load.i8 v851
     v853 = uextend.i32 v852
     brz v853, ebb103
+    jump ebb131
+
+ebb131:
     v854 = global_value.i64 gv63
     trap user0
 
@@ -1591,6 +1693,9 @@ ebb103:
     v866 = load.i8 v865
     v867 = uextend.i32 v866
     brz v867, ebb104
+    jump ebb130
+
+ebb130:
     v868 = global_value.i64 gv64
     trap user0
 
@@ -1607,6 +1712,9 @@ ebb104:
     v878 = load.i8 v877
     v879 = uextend.i32 v878
     brz v879, ebb105
+    jump ebb129
+
+ebb129:
     v880 = global_value.i64 gv65
     trap user0
 
@@ -1654,6 +1762,9 @@ ebb109(v896: i64):
     v905 = load.i8 v904
     v906 = uextend.i32 v905
     brz v906, ebb110
+    jump ebb128
+
+ebb128:
     v907 = global_value.i64 gv68
     trap user0
 
@@ -1664,6 +1775,9 @@ ebb110:
     v912 = bint.i8 v911
     v913 = uextend.i32 v912
     brnz v913, ebb111
+    jump ebb127
+
+ebb127:
     v914 = global_value.i64 gv69
     trap user0
 
@@ -1684,6 +1798,9 @@ ebb111:
     v930 = load.i8 v929
     v931 = uextend.i32 v930
     brz v931, ebb112
+    jump ebb126
+
+ebb126:
     v932 = global_value.i64 gv70
     trap user0
 
@@ -1709,6 +1826,9 @@ ebb113:
     v948 = load.i8 v947
     v949 = uextend.i32 v948
     brz v949, ebb114
+    jump ebb125
+
+ebb125:
     v950 = global_value.i64 gv71
     trap user0
 
@@ -1737,6 +1857,9 @@ ebb115:
     v972 = load.i8 v971
     v973 = uextend.i32 v972
     brz v973, ebb116
+    jump ebb123
+
+ebb123:
     v974 = global_value.i64 gv72
     trap user0
 
@@ -1752,6 +1875,9 @@ ebb116:
     v984 = load.i8 v983
     v985 = uextend.i32 v984
     brz v985, ebb117
+    jump ebb122
+
+ebb122:
     v986 = global_value.i64 gv73
     trap user0
 
@@ -1775,6 +1901,9 @@ ebb119:
     v1001 = load.i8 v1000
     v1002 = uextend.i32 v1001
     brz v1002, ebb120
+    jump ebb121
+
+ebb121:
     v1003 = global_value.i64 gv74
     trap user0
 
