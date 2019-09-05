@@ -63,7 +63,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-dg] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] [--enable-simd] <file> -o <output>
+    wasm2obj [--target TARGET] [-Odg] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] [--enable-simd] <file> -o <output>
     wasm2obj --help | --version
 
 Options:
@@ -78,6 +78,7 @@ Options:
                         used with --cache or --cache-config, creates default configuration and writes it to the disk,
                         will fail if specified file already exists (or default file if used with --cache)
     --enable-simd       enable proposed SIMD instructions
+    -O, --optimize      runs optimization passes on the translated functions
     --version           print the Cranelift version
     -d, --debug         enable debug output on stderr/stdout
 ";
@@ -93,6 +94,7 @@ struct Args {
     flag_cache_config_file: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
+    flag_optimize: bool,
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -143,6 +145,7 @@ fn main() {
         &args.arg_output,
         args.flag_g,
         args.flag_enable_simd,
+        args.flag_optimize,
     ) {
         Ok(()) => {}
         Err(message) => {
@@ -158,6 +161,7 @@ fn handle_module(
     output: &str,
     generate_debug_info: bool,
     enable_simd: bool,
+    enable_optimize: bool,
 ) -> Result<(), String> {
     let data = match read_wasm_file(path) {
         Ok(data) => data,
@@ -184,6 +188,11 @@ fn handle_module(
     if enable_simd {
         flag_builder.enable("enable_simd").unwrap();
     }
+
+    if enable_optimize {
+        flag_builder.set("opt_level", "best").unwrap();
+    }
+
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));
