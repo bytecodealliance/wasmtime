@@ -212,7 +212,7 @@ impl Context {
     /// Run the locations verifier on the function.
     pub fn verify_locations(&self, isa: &dyn TargetIsa) -> VerifierResult<()> {
         let mut errors = VerifierErrors::default();
-        let _ = verify_locations(isa, &self.func, None, &mut errors);
+        let _ = verify_locations(isa, &self.func, &self.cfg, None, &mut errors);
 
         if errors.is_empty() {
             Ok(())

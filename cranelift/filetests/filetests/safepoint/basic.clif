@@ -1,7 +1,7 @@
 test safepoint
-
 set enable_safepoints=true
 target x86_64
+feature !"basic-blocks"
 
 function %test(i32, r64, r64) -> r64 {
     ebb0(v0: i32, v1:r64, v2:r64):

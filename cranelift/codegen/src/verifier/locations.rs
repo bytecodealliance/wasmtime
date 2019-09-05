@@ -1,5 +1,6 @@
 //! Verify value locations.
 
+use crate::flowgraph::ControlFlowGraph;
 use crate::ir;
 use crate::isa;
 use crate::regalloc::liveness::Liveness;
@@ -21,6 +22,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 pub fn verify_locations(
     isa: &dyn isa::TargetIsa,
     func: &ir::Function,
+    cfg: &ControlFlowGraph,
     liveness: Option<&Liveness>,
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
@@ -30,6 +32,7 @@ pub fn verify_locations(
         func,
         reginfo: isa.register_info(),
         encinfo: isa.encoding_info(),
+        cfg,
         liveness,
     };
     verifier.check_constraints(errors)?;
@@ -41,6 +44,7 @@ struct LocationVerifier<'a> {
     func: &'a ir::Function,
     reginfo: isa::RegInfo,
     encinfo: isa::EncInfo,
+    cfg: &'a ControlFlowGraph,
     liveness: Option<&'a Liveness>,
 }
 
@@ -53,6 +57,7 @@ impl<'a> LocationVerifier<'a> {
         for ebb in self.func.layout.ebbs() {
             divert.at_ebb(&self.func.entry_diversions, ebb);
 
+            let mut is_after_branch = false;
             for inst in self.func.layout.ebb_insts(ebb) {
                 let enc = self.func.encodings[inst];
 
@@ -70,10 +75,11 @@ impl<'a> LocationVerifier<'a> {
                 if opcode.is_return() {
                     self.check_return_abi(inst, &divert, errors)?;
                 } else if opcode.is_branch() && !divert.is_empty() {
-                    self.check_cfg_edges(inst, &divert, errors)?;
+                    self.check_cfg_edges(inst, &mut divert, is_after_branch, errors)?;
                 }
 
                 self.update_diversions(inst, &mut divert, errors)?;
+                is_after_branch = opcode.is_branch();
             }
         }
 
@@ -284,8 +290,9 @@ impl<'a> LocationVerifier<'a> {
             return fatal!(
                 errors,
                 inst,
-                "inconsistent with global location {}",
-                self.func.locations[arg].display(&self.reginfo)
+                "inconsistent with global location {} ({})",
+                self.func.locations[arg].display(&self.reginfo),
+                self.func.dfg.display_inst(inst, None)
             );
         }
 
@@ -299,36 +306,51 @@ impl<'a> LocationVerifier<'a> {
     fn check_cfg_edges(
         &self,
         inst: ir::Inst,
-        divert: &RegDiversions,
+        divert: &mut RegDiversions,
+        is_after_branch: bool,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         use crate::ir::instructions::BranchInfo::*;
+        let dfg = &self.func.dfg;
+        let branch_kind = dfg.analyze_branch(inst);
 
         // We can only check CFG edges if we have a liveness analysis.
         let liveness = match self.liveness {
             Some(l) => l,
             None => return Ok(()),
         };
-        let dfg = &self.func.dfg;
 
-        match dfg.analyze_branch(inst) {
+        match branch_kind {
             NotABranch => panic!(
                 "No branch information for {}",
                 dfg.display_inst(inst, self.isa)
             ),
             SingleDest(ebb, _) => {
+                let unique_predecessor = self.cfg.pred_iter(ebb).count() == 1;
+                let mut val_to_remove = vec![];
                 for (&value, d) in divert.iter() {
                     let lr = &liveness[value];
-                    if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
+                    if is_after_branch && unique_predecessor {
+                        // Forward diversions based on the targeted branch.
+                        if !lr.is_livein(ebb, liveness.context(&self.func.layout)) {
+                            val_to_remove.push(value)
+                        }
+                    } else if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
                         return fatal!(
                             errors,
                             inst,
-                            "{} is diverted to {} and live in to {}",
+                            "SingleDest: {} is diverted to {} and live in to {}",
                             value,
                             d.to.display(&self.reginfo),
                             ebb
                         );
                     }
+                }
+                if is_after_branch && unique_predecessor {
+                    for val in val_to_remove.into_iter() {
+                        divert.remove(val);
+                    }
+                    debug_assert!(divert.check_ebb_entry(&self.func.entry_diversions, ebb));
                 }
             }
             Table(jt, ebb) => {
@@ -339,7 +361,7 @@ impl<'a> LocationVerifier<'a> {
                             return fatal!(
                                 errors,
                                 inst,
-                                "{} is diverted to {} and live in to {}",
+                                "Table.default: {} is diverted to {} and live in to {}",
                                 value,
                                 d.to.display(&self.reginfo),
                                 ebb
@@ -351,7 +373,7 @@ impl<'a> LocationVerifier<'a> {
                             return fatal!(
                                 errors,
                                 inst,
-                                "{} is diverted to {} and live in to {}",
+                                "Table.case: {} is diverted to {} and live in to {}",
                                 value,
                                 d.to.display(&self.reginfo),
                                 ebb
