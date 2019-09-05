@@ -2528,6 +2528,47 @@ pub fn define<'shared>(
             ),
     );
 
+    // Adding with carry
+
+    // XX /r, MR form. Add two GPR registers and get carry flag.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("rcin", f_ternary, 1)
+            .operands_in(vec![
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .operands_out(vec![0])
+            .clobbers_flags(true)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                    modrm_rr(in_reg0, in_reg1, sink);
+                "#,
+            ),
+    );
+
+    // XX /r, MR form. Add two GPR registers with carry flag.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("rcarry", f_ternary, 1)
+            .operands_in(vec![
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .operands_out(vec![
+                OperandConstraint::TiedInput(0),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .clobbers_flags(true)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                    modrm_rr(in_reg0, in_reg1, sink);
+                "#,
+            ),
+    );
+
     // Compare and set flags.
 
     // XX /r, MR form. Compare two GPR registers and set flags.

@@ -469,6 +469,14 @@ ebb0:
     ; asm: mov    %cl,(%eax,%ebx,1)
     istore8_complex v601, v521+v522      ; bin: heap_oob 88 0c 18
 
+    ; Carry Addition
+    ; asm: addl %esi, %ecx
+    [-,%rcx,%rflags] v701, v702 = iadd_cout v1, v2  ; bin: 01 f1
+    ; asm: adcl %esi, %ecx
+    [-,%rcx] v703 = iadd_cin v1, v2, v702           ; bin: 11 f1
+    ; asm: adcl %esi, %ecx
+    [-,%rcx,%rflags] v704, v705 = iadd_carry v1, v2, v702 ; bin: 11 f1
+
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 85 c9 74 0e

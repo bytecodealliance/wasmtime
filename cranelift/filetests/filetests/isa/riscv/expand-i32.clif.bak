@@ -1,3 +1,6 @@
+; TODO(ryzokuken): figure out a better legalization strategy for platforms that
+; platforms that don't have flags.
+
 ; Test the legalization of i32 instructions that don't have RISC-V versions.
 test legalizer
 

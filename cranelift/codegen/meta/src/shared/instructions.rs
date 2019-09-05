@@ -1864,8 +1864,8 @@ pub fn define(
     let a = &operand("a", iB);
     let x = &operand("x", iB);
     let y = &operand("y", iB);
-    let c_in = &operand_doc("c_in", b1, "Input carry flag");
-    let c_out = &operand_doc("c_out", b1, "Output carry flag");
+    let c_in = &operand_doc("c_in", iflags, "Input carry flag");
+    let c_out = &operand_doc("c_out", iflags, "Output carry flag");
     let b_in = &operand_doc("b_in", b1, "Input borrow flag");
     let b_out = &operand_doc("b_out", b1, "Output borrow flag");
 
