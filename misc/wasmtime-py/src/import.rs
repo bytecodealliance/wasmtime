@@ -62,7 +62,7 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
     let result = obj.call(py, PyTuple::new(py, args), None).expect("result");
     for i in 0..signature.returns.len() {
         let val = if result.is_none() {
-            0.into_object(py) // FIXME default ???
+            0.into_py(py) // FIXME default ???
         } else {
             if i > 0 {
                 panic!("multiple returns unsupported");
@@ -282,7 +282,7 @@ pub fn into_instance_from_obj(
 
             bound_functions.push(BoundPyFunction {
                 name: name.to_string(),
-                obj: item.into_object(py),
+                obj: item.into_py(py),
             });
         } else if item.get_type().is_subclass::<Memory>()? {
             let wasm_mem = item.cast_as::<Memory>()?;

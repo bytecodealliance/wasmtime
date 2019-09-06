@@ -30,22 +30,22 @@ pub fn pyobj_to_value(_: Python, p: &PyAny) -> PyResult<Value> {
 
 pub fn value_to_pyobj(py: Python, value: Value) -> PyResult<PyObject> {
     Ok(match value {
-        Value::I32(i) => i.into_object(py),
-        Value::U32(i) => i.into_object(py),
-        Value::I64(i) => i.into_object(py),
-        Value::U64(i) => i.into_object(py),
-        Value::F32(i) => i.into_object(py),
-        Value::F64(i) => i.into_object(py),
-        Value::String(i) => i.into_object(py),
+        Value::I32(i) => i.into_py(py),
+        Value::U32(i) => i.into_py(py),
+        Value::I64(i) => i.into_py(py),
+        Value::U64(i) => i.into_py(py),
+        Value::F32(i) => i.into_py(py),
+        Value::F64(i) => i.into_py(py),
+        Value::String(i) => i.into_py(py),
     })
 }
 
 pub unsafe fn read_value_from(py: Python, ptr: *mut i64, ty: ir::Type) -> PyObject {
     match ty {
-        ir::types::I32 => ptr::read(ptr as *const i32).into_object(py),
-        ir::types::I64 => ptr::read(ptr as *const i64).into_object(py),
-        ir::types::F32 => ptr::read(ptr as *const f32).into_object(py),
-        ir::types::F64 => ptr::read(ptr as *const f64).into_object(py),
+        ir::types::I32 => ptr::read(ptr as *const i32).into_py(py),
+        ir::types::I64 => ptr::read(ptr as *const i64).into_py(py),
+        ir::types::F32 => ptr::read(ptr as *const f32).into_py(py),
+        ir::types::F64 => ptr::read(ptr as *const f64).into_py(py),
         _ => panic!("TODO add PyResult to read_value_from"),
     }
 }
