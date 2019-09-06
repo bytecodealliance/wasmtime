@@ -4,7 +4,7 @@
 //! to automatically run the files in parallel.
 
 use std::env;
-use std::fs::{read_dir, DirEntry, File};
+use std::fs::{read_dir, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
@@ -16,6 +16,7 @@ fn main() {
 
     test_directory(&mut out, "misc_testsuite").expect("generating tests");
     test_directory(&mut out, "spec_testsuite").expect("generating tests");
+    test_file(&mut out, "spec_testsuite/proposals/simd/simd_const.wast").expect("generating tests");
 }
 
 fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
@@ -58,14 +59,18 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
         "    use super::{{native_isa, Path, WastContext, Compiler, Features}};"
     )?;
     for dir_entry in dir_entries {
-        write_testsuite_tests(out, dir_entry, testsuite)?;
+        write_testsuite_tests(out, &dir_entry.path(), testsuite)?;
     }
     writeln!(out, "}}")?;
     Ok(())
 }
 
-fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -> io::Result<()> {
-    let path = dir_entry.path();
+fn test_file(out: &mut File, testfile: &str) -> io::Result<()> {
+    let path = Path::new(testfile);
+    write_testsuite_tests(out, path, "single_file_spec_test")
+}
+
+fn write_testsuite_tests(out: &mut File, path: &Path, testsuite: &str) -> io::Result<()> {
     let stemstr = path
         .file_stem()
         .expect("file_stem")
