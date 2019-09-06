@@ -15,9 +15,12 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::string::{String, ToString};
 
-pub mod config;
-use config as cache_config; // so we have namespaced methods
+mod config;
 mod worker;
+
+pub use config::init;
+use config::{cache_config, CacheConfig};
+use worker::worker;
 
 lazy_static! {
     static ref SELF_MTIME: String = {
@@ -45,8 +48,9 @@ lazy_static! {
     };
 }
 
-pub struct ModuleCacheEntry {
+pub struct ModuleCacheEntry<'config> {
     mod_cache_path: Option<PathBuf>,
+    cache_config: &'config CacheConfig,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -68,7 +72,7 @@ type ModuleCacheDataTupleType = (
 
 struct Sha256Hasher(Sha256);
 
-impl ModuleCacheEntry {
+impl<'config> ModuleCacheEntry<'config> {
     pub fn new<'data>(
         module: &Module,
         function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
@@ -76,7 +80,25 @@ impl ModuleCacheEntry {
         compiler_name: &str,
         generate_debug_info: bool,
     ) -> Self {
-        let mod_cache_path = if cache_config::enabled() {
+        Self::new_with_config(
+            module,
+            function_body_inputs,
+            isa,
+            compiler_name,
+            generate_debug_info,
+            cache_config(),
+        )
+    }
+
+    fn new_with_config<'data>(
+        module: &Module,
+        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+        isa: &dyn isa::TargetIsa,
+        compiler_name: &str,
+        generate_debug_info: bool,
+        cache_config: &'config CacheConfig,
+    ) -> Self {
+        let mod_cache_path = if cache_config.enabled() {
             let hash = Sha256Hasher::digest(module, function_body_inputs);
             let compiler_dir = if cfg!(debug_assertions) {
                 format!(
@@ -98,7 +120,8 @@ impl ModuleCacheEntry {
                 mod_dbg = if generate_debug_info { ".d" } else { "" },
             );
             Some(
-                cache_config::directory()
+                cache_config
+                    .directory()
                     .join(isa.triple().to_string())
                     .join(compiler_dir)
                     .join(mod_filename),
@@ -107,7 +130,10 @@ impl ModuleCacheEntry {
             None
         };
 
-        Self { mod_cache_path }
+        Self {
+            mod_cache_path,
+            cache_config,
+        }
     }
 
     pub fn get_data(&self) -> Option<ModuleCacheData> {
@@ -121,14 +147,14 @@ impl ModuleCacheEntry {
             .map_err(|err| warn!("Failed to deserialize cached code: {}", err))
             .ok()?;
 
-        worker::on_cache_get_async(path); // call on success
+        worker().on_cache_get_async(path); // call on success
         Some(ret)
     }
 
     pub fn update_data(&self, data: &ModuleCacheData) {
         if self.update_data_impl(data).is_some() {
             let path = self.mod_cache_path.as_ref().unwrap();
-            worker::on_cache_update_async(path); // call on success
+            worker().on_cache_update_async(path); // call on success
         }
     }
 
@@ -140,7 +166,7 @@ impl ModuleCacheEntry {
             .ok()?;
         let compressed_data = zstd::encode_all(
             &serialized_data[..],
-            cache_config::baseline_compression_level(),
+            self.cache_config.baseline_compression_level(),
         )
         .map_err(|err| warn!("Failed to compress cached code: {}", err))
         .ok()?;

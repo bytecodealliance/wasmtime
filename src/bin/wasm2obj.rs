@@ -50,7 +50,7 @@ use std::str;
 use std::str::FromStr;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
-use wasmtime_environ::cache_config;
+use wasmtime_environ::cache_init;
 use wasmtime_environ::{
     Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo, Tunables, VMOffsets,
 };
@@ -123,7 +123,7 @@ fn main() {
         Some(prefix)
     };
 
-    let errors = cache_config::init(
+    let errors = cache_init(
         args.flag_cache || args.flag_cache_config_file.is_some(),
         args.flag_cache_config_file.as_ref(),
         args.flag_create_cache_config,

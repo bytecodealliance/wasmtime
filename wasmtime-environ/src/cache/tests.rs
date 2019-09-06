@@ -19,7 +19,7 @@ use tempfile;
 // Since cache system is a global thing, each test needs to be run in seperate process.
 // So, init() tests are run as integration tests.
 // However, caching is a private thing, an implementation detail, and needs to be tested
-// from the inside of the module. Thus we have one big test here.
+// from the inside of the module.
 
 #[test]
 fn test_write_read_cache() {
@@ -40,16 +40,17 @@ fn test_write_read_cache() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let errors = cache_config::init(true, Some(&config_path), false, None);
+    let errors = init(true, Some(&config_path), false, None);
     assert!(errors.is_empty());
-    assert!(cache_config::enabled());
+    let cache_config = cache_config();
+    assert!(cache_config.enabled());
     // assumption: config init creates cache directory and returns canonicalized path
     assert_eq!(
-        *cache_config::directory(),
+        *cache_config.directory(),
         fs::canonicalize(cache_dir).unwrap()
     );
     assert_eq!(
-        cache_config::baseline_compression_level(),
+        cache_config.baseline_compression_level(),
         baseline_compression_level
     );
 
@@ -276,7 +277,7 @@ fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
     ))
 }
 
-impl ModuleCacheEntry {
+impl ModuleCacheEntry<'_> {
     pub fn mod_cache_path(&self) -> &Option<PathBuf> {
         &self.mod_cache_path
     }

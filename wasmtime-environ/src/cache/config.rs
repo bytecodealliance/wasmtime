@@ -22,46 +22,53 @@ struct Config {
     cache: CacheConfig,
 }
 
-// todo: markdown documention of these options
+// todo: markdown documention of these options (name, format, default, explanation)
 // todo: don't flush default values (create config from simple template + url to docs)
 // todo: more user-friendly cache config creation
-#[derive(Serialize, Deserialize, Debug)]
-struct CacheConfig {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CacheConfig {
     #[serde(skip)]
-    pub errors: Vec<String>,
+    errors: Vec<String>,
 
-    pub enabled: bool,
-    pub directory: Option<PathBuf>,
+    enabled: bool,
+    directory: Option<PathBuf>,
     #[serde(rename = "worker-event-queue-size")]
-    pub worker_event_queue_size: Option<usize>,
+    worker_event_queue_size: Option<usize>,
     #[serde(rename = "baseline-compression-level")]
-    pub baseline_compression_level: Option<i32>,
+    baseline_compression_level: Option<i32>,
     #[serde(rename = "optimized-compression-level")]
-    pub optimized_compression_level: Option<i32>,
+    optimized_compression_level: Option<i32>,
     #[serde(rename = "optimized-compression-usage-counter-threshold")]
-    pub optimized_compression_usage_counter_threshold: Option<u64>,
+    optimized_compression_usage_counter_threshold: Option<u64>,
     #[serde(
         default,
         rename = "cleanup-interval-in-seconds",
         serialize_with = "serialize_duration",
         deserialize_with = "deserialize_duration"
     )] // todo unit?
-    pub cleanup_interval: Option<Duration>,
+    cleanup_interval: Option<Duration>,
     #[serde(
         default,
         rename = "optimizing-compression-task-timeout-in-seconds",
         serialize_with = "serialize_duration",
         deserialize_with = "deserialize_duration"
     )] // todo unit?
-    pub optimizing_compression_task_timeout: Option<Duration>,
+    optimizing_compression_task_timeout: Option<Duration>,
+    #[serde(
+        default,
+        rename = "allowed-clock-drift-for-locks-from-future",
+        serialize_with = "serialize_duration",
+        deserialize_with = "deserialize_duration"
+    )] // todo unit?
+    allowed_clock_drift_for_locks_from_future: Option<Duration>,
     #[serde(rename = "files-count-soft-limit")]
-    pub files_count_soft_limit: Option<u64>,
+    files_count_soft_limit: Option<u64>,
     #[serde(rename = "files-total-size-soft-limit")]
-    pub files_total_size_soft_limit: Option<u64>, // todo unit?
+    files_total_size_soft_limit: Option<u64>, // todo unit?
     #[serde(rename = "files-count-limit-percent-if-deleting")]
-    pub files_count_limit_percent_if_deleting: Option<u8>, // todo format: integer + %
+    files_count_limit_percent_if_deleting: Option<u8>, // todo format: integer + %
     #[serde(rename = "files-total-size-limit-percent-if-deleting")]
-    pub files_total_size_limit_percent_if_deleting: Option<u8>,
+    files_total_size_limit_percent_if_deleting: Option<u8>,
 }
 
 // toml-rs fails to serialize Duration ("values must be emitted before tables")
@@ -84,52 +91,13 @@ where
 static CONFIG: Once<CacheConfig> = Once::new();
 static INIT_CALLED: AtomicBool = AtomicBool::new(false);
 
-/// Returns true if and only if the cache is enabled.
-pub fn enabled() -> bool {
-    // Not everyone knows about the cache system, i.e. the tests,
-    // so the default is cache disabled.
-    CONFIG
-        .call_once(|| CacheConfig::new_cache_disabled())
-        .enabled
-}
-
-/// Returns path to the cache directory.
+/// Returns cache configuration.
 ///
-/// Panics if the cache is disabled.
-pub fn directory() -> &'static PathBuf {
-    &CONFIG
-        .r#try()
-        .expect("Cache system must be initialized")
-        .directory
-        .as_ref()
-        .expect("All cache system settings must be validated or defaulted")
+/// If system has not been initialized, it disables it.
+/// You mustn't call init() after it.
+pub fn cache_config() -> &'static CacheConfig {
+    CONFIG.call_once(|| CacheConfig::new_cache_disabled())
 }
-
-macro_rules! generate_setting_getter {
-    ($setting:ident: $setting_type:ty) => {
-        /// Returns `$setting`.
-        ///
-        /// Panics if the cache is disabled.
-        pub fn $setting() -> $setting_type {
-            CONFIG
-                .r#try()
-                .expect("Cache system must be initialized")
-                .$setting
-                .expect("All cache system settings must be validated or defaulted")
-        }
-    };
-}
-
-generate_setting_getter!(worker_event_queue_size: usize);
-generate_setting_getter!(baseline_compression_level: i32);
-generate_setting_getter!(optimized_compression_level: i32);
-generate_setting_getter!(optimized_compression_usage_counter_threshold: u64);
-generate_setting_getter!(cleanup_interval: Duration);
-generate_setting_getter!(optimizing_compression_task_timeout: Duration);
-generate_setting_getter!(files_count_soft_limit: u64);
-generate_setting_getter!(files_total_size_soft_limit: u64);
-generate_setting_getter!(files_count_limit_percent_if_deleting: u8);
-generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
 
 /// Initializes the cache system. Should be called exactly once,
 /// and before using the cache system. Otherwise it can panic.
@@ -178,12 +146,53 @@ const DEFAULT_OPTIMIZED_COMPRESSION_LEVEL: i32 = 20;
 const DEFAULT_OPTIMIZED_COMPRESSION_USAGE_COUNTER_THRESHOLD: u64 = 0x100;
 const DEFAULT_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const DEFAULT_OPTIMIZING_COMPRESSION_TASK_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+const DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_LOCKS_FROM_FUTURE: Duration =
+    Duration::from_secs(60 * 60 * 24);
 const DEFAULT_FILES_COUNT_SOFT_LIMIT: u64 = 0x10_000;
 const DEFAULT_FILES_TOTAL_SIZE_SOFT_LIMIT: u64 = 1024 * 1024 * 512;
 const DEFAULT_FILES_COUNT_LIMIT_PERCENT_IF_DELETING: u8 = 70;
 const DEFAULT_FILES_TOTAL_SIZE_LIMIT_PERCENT_IF_DELETING: u8 = 70;
 
+macro_rules! generate_setting_getter {
+    ($setting:ident: $setting_type:ty) => {
+        /// Returns `$setting`.
+        ///
+        /// Panics if the cache is disabled.
+        pub fn $setting(&self) -> $setting_type {
+            self
+                .$setting
+                .expect("All cache system settings must be validated or defaulted")
+        }
+    };
+}
+
 impl CacheConfig {
+    generate_setting_getter!(worker_event_queue_size: usize);
+    generate_setting_getter!(baseline_compression_level: i32);
+    generate_setting_getter!(optimized_compression_level: i32);
+    generate_setting_getter!(optimized_compression_usage_counter_threshold: u64);
+    generate_setting_getter!(cleanup_interval: Duration);
+    generate_setting_getter!(optimizing_compression_task_timeout: Duration);
+    generate_setting_getter!(allowed_clock_drift_for_locks_from_future: Duration);
+    generate_setting_getter!(files_count_soft_limit: u64);
+    generate_setting_getter!(files_total_size_soft_limit: u64);
+    generate_setting_getter!(files_count_limit_percent_if_deleting: u8);
+    generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
+
+    /// Returns true if and only if the cache is enabled.
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Returns path to the cache directory.
+    ///
+    /// Panics if the cache is disabled.
+    pub fn directory(&self) -> &PathBuf {
+        self.directory
+            .as_ref()
+            .expect("All cache system settings must be validated or defaulted")
+    }
+
     pub fn new_cache_disabled() -> Self {
         Self {
             errors: Vec::new(),
@@ -195,6 +204,7 @@ impl CacheConfig {
             optimized_compression_usage_counter_threshold: None,
             cleanup_interval: None,
             optimizing_compression_task_timeout: None,
+            allowed_clock_drift_for_locks_from_future: None,
             files_count_soft_limit: None,
             files_total_size_soft_limit: None,
             files_count_limit_percent_if_deleting: None,
@@ -237,6 +247,7 @@ impl CacheConfig {
         config.validate_optimized_compression_usage_counter_threshold_or_default();
         config.validate_cleanup_interval_or_default();
         config.validate_optimizing_compression_task_timeout_or_default();
+        config.validate_allowed_clock_drift_for_locks_from_future_or_default();
         config.validate_files_count_soft_limit_or_default();
         config.validate_files_total_size_soft_limit_or_default();
         config.validate_files_count_limit_percent_if_deleting_or_default();
@@ -407,6 +418,13 @@ impl CacheConfig {
         if self.optimizing_compression_task_timeout.is_none() {
             self.optimizing_compression_task_timeout =
                 Some(DEFAULT_OPTIMIZING_COMPRESSION_TASK_TIMEOUT);
+        }
+    }
+
+    fn validate_allowed_clock_drift_for_locks_from_future_or_default(&mut self) {
+        if self.allowed_clock_drift_for_locks_from_future.is_none() {
+            self.allowed_clock_drift_for_locks_from_future =
+                Some(DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_LOCKS_FROM_FUTURE);
         }
     }
 
