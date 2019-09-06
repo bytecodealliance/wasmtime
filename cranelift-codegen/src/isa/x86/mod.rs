@@ -142,6 +142,14 @@ impl TargetIsa for Isa {
         let _tt = timing::prologue_epilogue();
         abi::prologue_epilogue(func, self)
     }
+
+    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
+        ir::condcodes::IntCC::UnsignedLessThan
+    }
+
+    fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC {
+        ir::condcodes::IntCC::UnsignedLessThan
+    }
 }
 
 impl fmt::Display for Isa {

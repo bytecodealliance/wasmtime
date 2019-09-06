@@ -121,6 +121,14 @@ impl TargetIsa for Isa {
     fn emit_function_to_memory(&self, func: &ir::Function, sink: &mut MemoryCodeSink) {
         emit_function(func, binemit::emit_inst, sink, self)
     }
+
+    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
+        unimplemented!()
+    }
+
+    fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC {
+        unimplemented!()
+    }
 }
 
 #[cfg(test)]
