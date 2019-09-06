@@ -18,7 +18,7 @@ cranelift-bforest = { path = "../cranelift-bforest", version = "0.42.0", default
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
-target-lexicon = "0.8.0"
+target-lexicon = "0.8.1"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.

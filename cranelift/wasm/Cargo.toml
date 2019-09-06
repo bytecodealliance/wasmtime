@@ -23,7 +23,7 @@ serde = { version = "1.0.94", features = ["derive"], optional = true }
 
 [dev-dependencies]
 wabt = "0.9.1"
-target-lexicon = "0.8.0"
+target-lexicon = "0.8.1"
 
 [features]
 default = ["std"]
