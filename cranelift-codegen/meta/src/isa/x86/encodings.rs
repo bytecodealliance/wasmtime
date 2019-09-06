@@ -293,6 +293,12 @@ impl PerCpuModeEncodings {
         }
     }
 
+    /// Add the same encoding/template pairing to both X86_32 and X86_64
+    fn enc_32_64(&mut self, inst: impl Clone + Into<InstSpec>, template: Template) {
+        self.enc32(inst.clone(), template.clone());
+        self.enc64(inst, template);
+    }
+
     /// Add the same encoding/recipe pairing to both X86_32 and X86_64
     fn enc_32_64_rec(
         &mut self,
@@ -1957,6 +1963,40 @@ pub(crate) fn define(
         let instruction = bor.bind_vector_from_lane(ty, sse_vector_size);
         let template = rec_fa.nonrex().opcodes(vec![0x0f, 0x56]);
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
+    }
+
+    // SIMD register movement: store, load, spill, fill, regmove. All of these use encodings of
+    // MOVUPS and MOVAPS from SSE (TODO ideally all of these would either use MOVAPS when we have
+    // alignment or type-specific encodings, see https://github.com/CraneStation/cranelift/issues/1039).
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        // Store
+        let bound_store = store.bind_vector_from_lane(ty, sse_vector_size).bind_any();
+        e.enc_32_64(bound_store.clone(), rec_fst.opcodes(vec![0x0f, 0x11]));
+        e.enc_32_64(bound_store.clone(), rec_fstDisp8.opcodes(vec![0x0f, 0x11]));
+        e.enc_32_64(bound_store, rec_fstDisp32.opcodes(vec![0x0f, 0x11]));
+
+        // Load
+        let bound_load = load.bind_vector_from_lane(ty, sse_vector_size).bind_any();
+        e.enc_32_64(bound_load.clone(), rec_fld.opcodes(vec![0x0f, 0x10]));
+        e.enc_32_64(bound_load.clone(), rec_fldDisp8.opcodes(vec![0x0f, 0x10]));
+        e.enc_32_64(bound_load, rec_fldDisp32.opcodes(vec![0x0f, 0x10]));
+
+        // Spill
+        let bound_spill = spill.bind_vector_from_lane(ty, sse_vector_size);
+        e.enc_32_64(bound_spill, rec_fspillSib32.opcodes(vec![0x0f, 0x11]));
+        let bound_regspill = regspill.bind_vector_from_lane(ty, sse_vector_size);
+        e.enc_32_64(bound_regspill, rec_fregspill32.opcodes(vec![0x0f, 0x11]));
+
+        // Fill
+        let bound_fill = fill.bind_vector_from_lane(ty, sse_vector_size);
+        e.enc_32_64(bound_fill, rec_fillSib32.opcodes(vec![0x0f, 0x10]));
+        let bound_regfill = regfill.bind_vector_from_lane(ty, sse_vector_size);
+        e.enc_32_64(bound_regfill, rec_fregfill32.opcodes(vec![0x0f, 0x10]));
+
+        // Regmove
+        let bound_regmove = regmove.bind_vector_from_lane(ty, sse_vector_size);
+        e.enc_32_64(bound_regmove.clone(), rec_rmov.opcodes(vec![0x0f, 0x28]));
+        e.enc_32_64(bound_regmove, rec_frmov.opcodes(vec![0x0f, 0x28]));
     }
 
     // Reference type instructions
