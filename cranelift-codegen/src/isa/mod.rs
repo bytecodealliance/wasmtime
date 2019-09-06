@@ -66,7 +66,7 @@ use crate::timing;
 use core::fmt;
 use failure_derive::Fail;
 use std::boxed::Box;
-use target_lexicon::{Architecture, PointerWidth, Triple};
+use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 #[cfg(feature = "riscv")]
 mod riscv;
@@ -97,13 +97,13 @@ macro_rules! isa_builder {
         };
         #[cfg(not(feature = $feature))]
         fn $name(_triple: Triple) -> Result<Builder, LookupError> {
-            Err(LookupError::Unsupported)
+            Err(LookupError::SupportDisabled)
         }
         $name
     }};
 }
 
-/// Look for a supported ISA with the given `name`.
+/// Look for an ISA for the given `triple`.
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     match triple.architecture {
@@ -115,6 +115,13 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         Architecture::Aarch64 { .. } => isa_builder!(arm64, "arm64")(triple),
         _ => Err(LookupError::Unsupported),
     }
+}
+
+/// Look for a supported ISA with the given `name`.
+/// Return a builder that can create a corresponding `TargetIsa`.
+pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
+    use std::str::FromStr;
+    lookup(triple!(name))
 }
 
 /// Describes reason for target lookup failure
