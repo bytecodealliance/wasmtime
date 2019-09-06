@@ -65,7 +65,7 @@ pub struct Global {
     pub initializer: GlobalInit,
 }
 
-/// Globals are initialized via the four `const` operators or by referring to another import.
+/// Globals are initialized via the `const` operators or by referring to another import.
 #[derive(Debug, Clone, Copy, Hash)]
 pub enum GlobalInit {
     /// An `i32.const`.
@@ -76,6 +76,8 @@ pub enum GlobalInit {
     F32Const(u32),
     /// An `f64.const`.
     F64Const(u64),
+    /// A `vconst`.
+    V128Const([u8; 16]),
     /// A `get_global` of another global.
     GetGlobal(GlobalIndex),
     ///< The global is imported from, and thus initialized by, a different module.
