@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile;
-use wasmtime_environ::cache_config;
+use wasmtime_environ::cache_init;
 
 #[test]
 #[should_panic]
@@ -20,7 +20,7 @@ fn test_cache_fail_calling_init_twice() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let errors = cache_config::init(true, Some(&config_path), false, None);
+    let errors = cache_init(true, Some(&config_path), false, None);
     assert!(errors.is_empty());
-    let _errors = cache_config::init(true, Some(&config_path), false, None);
+    let _errors = cache_init(true, Some(&config_path), false, None);
 }

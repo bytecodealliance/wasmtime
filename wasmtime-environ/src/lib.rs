@@ -54,7 +54,7 @@ pub mod lightbeam;
 pub use crate::address_map::{
     FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges,
 };
-pub use crate::cache::config as cache_config;
+pub use crate::cache::init as cache_init;
 pub use crate::compilation::{
     Compilation, CompileError, Compiler, Relocation, RelocationTarget, Relocations,
 };

@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile;
-use wasmtime_environ::cache_config;
+use wasmtime_environ::cache_init;
 
 #[test]
 fn test_cache_fail_invalid_config() {
@@ -18,6 +18,6 @@ fn test_cache_fail_invalid_config() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let errors = cache_config::init(true, Some(&config_path), false, None);
+    let errors = cache_init(true, Some(&config_path), false, None);
     assert!(!errors.is_empty());
 }

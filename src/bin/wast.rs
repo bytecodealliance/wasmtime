@@ -33,7 +33,7 @@ use pretty_env_logger;
 use serde::Deserialize;
 use std::path::Path;
 use std::process;
-use wasmtime_environ::cache_config;
+use wasmtime_environ::cache_init;
 use wasmtime_jit::{Compiler, Features};
 use wasmtime_wast::WastContext;
 
@@ -89,7 +89,7 @@ fn main() {
         Some(prefix)
     };
 
-    let errors = cache_config::init(
+    let errors = cache_init(
         args.flag_cache || args.flag_cache_config_file.is_some(),
         args.flag_cache_config_file.as_ref(),
         args.flag_create_cache_config,

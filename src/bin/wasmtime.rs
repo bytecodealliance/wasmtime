@@ -45,7 +45,7 @@ use std::process::exit;
 use wabt;
 use wasi_common::preopen_dir;
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
-use wasmtime_environ::cache_config;
+use wasmtime_environ::cache_init;
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 use wasmtime_wasi::instantiate_wasi;
@@ -222,7 +222,7 @@ fn rmain() -> Result<(), Error> {
         Some(prefix)
     };
 
-    let errors = cache_config::init(
+    let errors = cache_init(
         args.flag_cache || args.flag_cache_config_file.is_some(),
         args.flag_cache_config_file.as_ref(),
         args.flag_create_cache_config,
