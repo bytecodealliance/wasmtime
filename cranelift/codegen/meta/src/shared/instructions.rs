@@ -1586,6 +1586,7 @@ pub(crate) fn define(
     let x = &operand("x", Int);
     let y = &operand("y", Int);
 
+    // TODO(ryzokuken): Add documentation for unsigned overflow.
     ig.push(
         Inst::new(
             "icmp",
