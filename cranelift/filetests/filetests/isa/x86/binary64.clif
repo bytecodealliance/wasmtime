@@ -746,11 +746,14 @@ ebb7:
 
     ; asm: ebb1:
 ebb1:
-    return                                       ; bin: c3
+    return                                      ; bin: c3
 
     ; asm: ebb2:
 ebb2:
-    jump ebb1                                   ; bin: eb fd
+    ; Add a no-op instruction to prevent fold_redundant_jump from removing this block.
+    ; asm: notq %rcx
+    [-,%rcx]             v5000 = bnot v1        ; bin: 48 f7 d1
+    jump ebb1                                   ; bin: eb fa
 }
 
 ; CPU flag instructions.
@@ -1349,11 +1352,14 @@ ebb7:
 
     ; asm: ebb1x:
 ebb1:
-    return                                       ; bin: c3
+    return                                      ; bin: c3
 
     ; asm: ebb2x:
 ebb2:
-    jump ebb1                                   ; bin: eb fd
+    ; Add a no-op instruction to prevent fold_redundant_jump from removing this block.
+    ; asm: notl %ecx
+    [-,%rcx]             v5000 = bnot v1        ; bin: f7 d1
+    jump ebb1                                   ; bin: eb fb
 
 }
 
