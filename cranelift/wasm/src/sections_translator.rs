@@ -14,6 +14,7 @@ use crate::translation_utils::{
 };
 use crate::{wasm_unsupported, HashMap};
 use core::convert::TryFrom;
+use cranelift_codegen::ir::immediates::Uimm128;
 use cranelift_codegen::ir::{self, AbiParam, Signature};
 use cranelift_entity::EntityRef;
 use std::vec::Vec;
@@ -201,6 +202,9 @@ pub fn parse_global_section(
             Operator::I64Const { value } => GlobalInit::I64Const(value),
             Operator::F32Const { value } => GlobalInit::F32Const(value.bits()),
             Operator::F64Const { value } => GlobalInit::F64Const(value.bits()),
+            Operator::V128Const { value } => {
+                GlobalInit::V128Const(Uimm128::from(value.bytes().to_vec().as_slice()))
+            }
             Operator::GetGlobal { global_index } => {
                 GlobalInit::GetGlobal(GlobalIndex::from_u32(global_index))
             }

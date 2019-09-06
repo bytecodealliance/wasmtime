@@ -179,6 +179,10 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
         I64 => builder.ins().iconst(ir::types::I64, 0),
         F32 => builder.ins().f32const(ir::immediates::Ieee32::with_bits(0)),
         F64 => builder.ins().f64const(ir::immediates::Ieee64::with_bits(0)),
+        V128 => {
+            let constant_handle = builder.func.dfg.constants.insert([0; 16].to_vec());
+            builder.ins().vconst(ir::types::I8X16, constant_handle)
+        }
         AnyRef => builder.ins().null(environ.reference_type()),
         ty => wasm_unsupported!("unsupported local type {:?}", ty),
     };
