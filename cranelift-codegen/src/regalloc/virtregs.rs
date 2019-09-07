@@ -21,6 +21,7 @@ use crate::packed_option::PackedOption;
 use crate::ref_slice::ref_slice;
 use core::cmp::Ordering;
 use core::fmt;
+use smallvec::SmallVec;
 use std::vec::Vec;
 
 /// A virtual register reference.
@@ -292,7 +293,7 @@ impl VirtRegs {
     /// Find the leader value and rank of the set containing `v`.
     /// Compress the path if needed.
     fn find(&mut self, mut val: Value) -> (Value, u32) {
-        let mut val_stack = vec![];
+        let mut val_stack = SmallVec::<[Value; 8]>::new();
         let found = loop {
             match UFEntry::decode(self.union_find[val]) {
                 UFEntry::Rank(rank) => break (val, rank),
