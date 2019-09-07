@@ -1,36 +1,36 @@
 //! Functions to go back and forth between WASI types in host and wasm32 representations.
 #![allow(unused)]
-use crate::{host, wasm32, Result};
+use crate::{host, wasm32, Error, Result};
 use std::convert::TryFrom;
 use std::mem::{align_of, size_of};
 use std::{ptr, slice};
 
 fn dec_ptr(memory: &[u8], ptr: wasm32::uintptr_t, len: usize) -> Result<*const u8> {
     // check for overflow
-    let checked_len = (ptr as usize).checked_add(len).ok_or(host::__WASI_EFAULT)?;
+    let checked_len = (ptr as usize).checked_add(len).ok_or(Error::EFAULT)?;
 
     // translate the pointer
     memory
         .get(ptr as usize..checked_len)
-        .ok_or(host::__WASI_EFAULT)
+        .ok_or(Error::EFAULT)
         .map(|mem| mem.as_ptr())
 }
 
 fn dec_ptr_mut(memory: &mut [u8], ptr: wasm32::uintptr_t, len: usize) -> Result<*mut u8> {
     // check for overflow
-    let checked_len = (ptr as usize).checked_add(len).ok_or(host::__WASI_EFAULT)?;
+    let checked_len = (ptr as usize).checked_add(len).ok_or(Error::EFAULT)?;
 
     // translate the pointer
     memory
         .get_mut(ptr as usize..checked_len)
-        .ok_or(host::__WASI_EFAULT)
+        .ok_or(Error::EFAULT)
         .map(|mem| mem.as_mut_ptr())
 }
 
 fn dec_ptr_to<'memory, T>(memory: &'memory [u8], ptr: wasm32::uintptr_t) -> Result<&'memory T> {
     // check that the ptr is aligned
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(host::__WASI_EINVAL);
+        return Err(Error::EINVAL);
     }
 
     dec_ptr(memory, ptr, size_of::<T>()).map(|p| unsafe { &*(p as *const T) })
@@ -42,7 +42,7 @@ fn dec_ptr_to_mut<'memory, T>(
 ) -> Result<&'memory mut T> {
     // check that the ptr is aligned
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(host::__WASI_EINVAL);
+        return Err(Error::EINVAL);
     }
 
     dec_ptr_mut(memory, ptr, size_of::<T>()).map(|p| unsafe { &mut *(p as *mut T) })
@@ -59,13 +59,13 @@ pub fn enc_pointee<T>(memory: &mut [u8], ptr: wasm32::uintptr_t, t: T) -> Result
 fn check_slice_of<T>(ptr: wasm32::uintptr_t, len: wasm32::size_t) -> Result<(usize, usize)> {
     // check alignment, and that length doesn't overflow
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(host::__WASI_EINVAL);
+        return Err(Error::EINVAL);
     }
     let len = dec_usize(len);
     let len_bytes = if let Some(len) = size_of::<T>().checked_mul(len) {
         len
     } else {
-        return Err(host::__WASI_EOVERFLOW);
+        return Err(Error::EOVERFLOW);
     };
 
     Ok((len, len_bytes))
@@ -94,13 +94,13 @@ pub fn dec_slice_of_mut<'memory, T>(
 pub fn enc_slice_of<T>(memory: &mut [u8], slice: &[T], ptr: wasm32::uintptr_t) -> Result<()> {
     // check alignment
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(host::__WASI_EINVAL);
+        return Err(Error::EINVAL);
     }
     // check that length doesn't overflow
     let len_bytes = if let Some(len) = size_of::<T>().checked_mul(slice.len()) {
         len
     } else {
-        return Err(host::__WASI_EOVERFLOW);
+        return Err(Error::EOVERFLOW);
     };
 
     // get the pointer into guest memory, and copy the bytes
@@ -357,7 +357,7 @@ pub fn dec_prestat(prestat: wasm32::__wasi_prestat_t) -> Result<host::__wasi_pre
                 u,
             })
         }
-        _ => Err(host::__WASI_EINVAL),
+        _ => Err(Error::EINVAL),
     }
 }
 
@@ -381,7 +381,7 @@ pub fn enc_prestat(prestat: host::__wasi_prestat_t) -> Result<wasm32::__wasi_pre
                 u,
             })
         }
-        _ => Err(host::__WASI_EINVAL),
+        _ => Err(Error::EINVAL),
     }
 }
 
@@ -497,7 +497,7 @@ pub fn dec_subscription(
                 fd: dec_fd(unsafe{u_orig.fd_readwrite.fd})
             }
         },
-        _  => return Err(wasm32::__WASI_EINVAL)
+        _  => return Err(Error::EINVAL)
     };
     Ok(host::__wasi_subscription_t { userdata, type_, u })
 }

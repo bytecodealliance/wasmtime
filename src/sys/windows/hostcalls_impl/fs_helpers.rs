@@ -1,7 +1,6 @@
 #![allow(non_camel_case_types)]
-use crate::sys::host_impl;
-use crate::{host, Result};
 use crate::hostcalls_impl::PathGet;
+use crate::{host, Error, Result};
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -62,13 +61,13 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
             Some(e) => {
                 log::debug!("openat error={:?}", e);
                 match WinError::from_u32(e as u32) {
-                    WinError::ERROR_INVALID_NAME => host::__WASI_ENOTDIR,
-                    e => host_impl::errno_from_win(e),
+                    WinError::ERROR_INVALID_NAME => Error::ENOTDIR,
+                    e => e.into(),
                 }
             }
             None => {
                 log::debug!("Inconvertible OS error: {}", e);
-                host::__WASI_EIO
+                Error::EIO
             }
         })
 }
@@ -84,13 +83,12 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
             // we need to strip the prefix from the absolute path
             // as otherwise we will error out since WASI is not capable
             // of dealing with absolute paths
-            let dir_path =
-                get_path_by_handle(dirfd.as_raw_handle()).map_err(host_impl::errno_from_win)?;
+            let dir_path = get_path_by_handle(dirfd.as_raw_handle())?;
             let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
             target_path
                 .strip_prefix(dir_path)
-                .map_err(|_| host::__WASI_ENOTCAPABLE)
-                .and_then(|path| path.to_str().map(String::from).ok_or(host::__WASI_EILSEQ))
+                .map_err(|_| Error::ENOTCAPABLE)
+                .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))
         }
         Err(e) => match e.raw_os_error() {
             Some(e) => {
@@ -101,20 +99,20 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
                             // strip "/" and check if exists
                             let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
                             if path.exists() && !path.is_dir() {
-                                Err(host::__WASI_ENOTDIR)
+                                Err(Error::ENOTDIR)
                             } else {
-                                Err(host::__WASI_ENOENT)
+                                Err(Error::ENOENT)
                             }
                         } else {
-                            Err(host::__WASI_ENOENT)
+                            Err(Error::ENOENT)
                         }
                     }
-                    e => Err(host_impl::errno_from_win(e)),
+                    e => Err(e.into()),
                 }
             }
             None => {
                 log::debug!("Inconvertible OS error: {}", e);
-                Err(host::__WASI_EIO)
+                Err(Error::EIO)
             }
         },
     }
@@ -135,10 +133,10 @@ pub(crate) fn concatenate<P: AsRef<Path>>(dirfd: &File, path: P) -> Result<PathB
     // WASI is not able to deal with absolute paths
     // so error out if absolute
     if path.as_ref().is_absolute() {
-        return Err(host::__WASI_ENOTCAPABLE);
+        return Err(Error::ENOTCAPABLE);
     }
 
-    let dir_path = get_path_by_handle(dirfd.as_raw_handle()).map_err(host_impl::errno_from_win)?;
+    let dir_path = get_path_by_handle(dirfd.as_raw_handle())?;
     // concatenate paths
     let mut out_path = PathBuf::from(dir_path);
     out_path.push(path.as_ref());

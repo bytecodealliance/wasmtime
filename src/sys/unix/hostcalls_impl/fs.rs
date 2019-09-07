@@ -3,9 +3,8 @@
 use super::fs_helpers::*;
 use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::PathGet;
-use crate::sys::errno_from_ioerror;
 use crate::sys::host_impl::{self, errno_from_nix};
-use crate::{host, Result};
+use crate::{host, Result, Error};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
 use std::ffi::CString;
@@ -18,11 +17,11 @@ pub(crate) fn fd_pread(
     buf: &mut [u8],
     offset: host::__wasi_filesize_t,
 ) -> Result<usize> {
-    file.read_at(buf, offset).map_err(errno_from_ioerror)
+    file.read_at(buf, offset).map_err(Into::into)
 }
 
 pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t) -> Result<usize> {
-    file.write_at(buf, offset).map_err(errno_from_ioerror)
+    file.write_at(buf, offset).map_err(Into::into)
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {
@@ -52,8 +51,8 @@ pub(crate) fn fd_advise(
     {
         use nix::fcntl::{posix_fadvise, PosixFadviseAdvice};
 
-        let offset = offset.try_into().map_err(|_| host::__WASI_EOVERFLOW)?;
-        let len = len.try_into().map_err(|_| host::__WASI_EOVERFLOW)?;
+        let offset = offset.try_into().map_err(|_| Error::EOVERFLOW)?;
+        let len = len.try_into().map_err(|_| Error::EOVERFLOW)?;
         let host_advice = match advice {
             host::__WASI_ADVICE_DONTNEED => PosixFadviseAdvice::POSIX_FADV_DONTNEED,
             host::__WASI_ADVICE_SEQUENTIAL => PosixFadviseAdvice::POSIX_FADV_SEQUENTIAL,
@@ -61,7 +60,7 @@ pub(crate) fn fd_advise(
             host::__WASI_ADVICE_NOREUSE => PosixFadviseAdvice::POSIX_FADV_NOREUSE,
             host::__WASI_ADVICE_RANDOM => PosixFadviseAdvice::POSIX_FADV_RANDOM,
             host::__WASI_ADVICE_NORMAL => PosixFadviseAdvice::POSIX_FADV_NORMAL,
-            _ => return Err(host::__WASI_EINVAL),
+            _ => return Err(Error::EINVAL),
         };
 
         posix_fadvise(file.as_raw_fd(), offset, len, host_advice)
@@ -85,7 +84,7 @@ pub(crate) fn fd_advise(
         | host::__WASI_ADVICE_NOREUSE
         | host::__WASI_ADVICE_RANDOM
         | host::__WASI_ADVICE_NORMAL => {}
-        _ => return Err(host::__WASI_EINVAL),
+        _ => return Err(Error::EINVAL),
     }
 
     Ok(())
@@ -93,7 +92,7 @@ pub(crate) fn fd_advise(
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
     use nix::libc::mkdirat;
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
     // nix doesn't expose mkdirat() yet
     match unsafe { mkdirat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0o777) } {
         0 => Ok(()),
@@ -104,9 +103,9 @@ pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::libc::linkat;
     let old_path_cstr =
-        CString::new(resolved_old.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+        CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
     let new_path_cstr =
-        CString::new(resolved_new.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+        CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     // Not setting AT_SYMLINK_FOLLOW fails on most filesystems
     let atflags = libc::AT_SYMLINK_FOLLOW;
@@ -174,12 +173,12 @@ pub(crate) fn path_open(
                         AtFlags::AT_SYMLINK_NOFOLLOW,
                     ) {
                         if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFSOCK) {
-                            return Err(host::__WASI_ENOTSUP);
+                            return Err(Error::ENOTSUP);
                         } else {
-                            return Err(host::__WASI_ENXIO);
+                            return Err(Error::ENXIO);
                         }
                     } else {
-                        return Err(host::__WASI_ENXIO);
+                        return Err(Error::ENXIO);
                     }
                 }
                 // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
@@ -193,18 +192,18 @@ pub(crate) fn path_open(
                         AtFlags::AT_SYMLINK_NOFOLLOW,
                     ) {
                         if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFLNK) {
-                            return Err(host::__WASI_ELOOP);
+                            return Err(Error::ELOOP);
                         }
                     }
-                    return Err(host::__WASI_ENOTDIR);
+                    return Err(Error::ENOTDIR);
                 }
                 // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
                 // a symlink.
                 Some(Errno::EMLINK) if !(nix_all_oflags & OFlag::O_NOFOLLOW).is_empty() => {
-                    return Err(host::__WASI_ELOOP);
+                    return Err(Error::ELOOP);
                 }
                 Some(e) => return Err(host_impl::errno_from_nix(e)),
-                None => return Err(host::__WASI_ENOSYS),
+                None => return Err(Error::ENOSYS),
             }
         }
     };
@@ -275,7 +274,7 @@ pub(crate) fn fd_readdir(
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
     use nix::errno::Errno;
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     // Linux requires that the buffer size is positive, whereas POSIX does not.
     // Use a fake buffer to store the results if the size is zero.
@@ -307,9 +306,9 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::libc::renameat;
     let old_path_cstr =
-        CString::new(resolved_old.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+        CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
     let new_path_cstr =
-        CString::new(resolved_new.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+        CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     let res = unsafe {
         renameat(
@@ -329,27 +328,19 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
 pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_filestat_t> {
     use std::os::unix::fs::MetadataExt;
 
-    let metadata = file.metadata().map_err(errno_from_ioerror)?;
+    let metadata = file.metadata()?;
     Ok(host::__wasi_filestat_t {
         st_dev: metadata.dev(),
         st_ino: metadata.ino(),
         st_nlink: metadata
             .nlink()
-            .try_into()
-            .map_err(|_| host::__WASI_EOVERFLOW)?, // u64 doesn't fit into u32
+            .try_into()?, // u64 doesn't fit into u32
         st_size: metadata.len(),
-        st_atim: metadata
-            .accessed()
-            .map_err(errno_from_ioerror)
-            .and_then(systemtime_to_timestamp)?,
+        st_atim: systemtime_to_timestamp(metadata.accessed()?)?,
         st_ctim: metadata
             .ctime()
-            .try_into()
-            .map_err(|_| host::__WASI_EOVERFLOW)?, // i64 doesn't fit into u64
-        st_mtim: metadata
-            .modified()
-            .map_err(errno_from_ioerror)
-            .and_then(systemtime_to_timestamp)?,
+            .try_into()?, // i64 doesn't fit into u64
+        st_mtim: systemtime_to_timestamp(metadata.modified()?)?,
         st_filetype: filetype(file, &metadata)?,
     })
 }
@@ -432,7 +423,7 @@ pub(crate) fn path_filestat_set_times(
     let set_mtim_now = fst_flags & host::__WASI_FILESTAT_SET_MTIM_NOW != 0;
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-        return Err(host::__WASI_EINVAL);
+        return Err(Error::EINVAL);
     }
 
     let atflags = match dirflags {
@@ -441,7 +432,7 @@ pub(crate) fn path_filestat_set_times(
     };
 
     let atim = if set_atim_now {
-        let st_atim = st_atim.try_into().map_err(|_| host::__WASI_EOVERFLOW)?;
+        let st_atim = st_atim.try_into().map_err(|_| Error::EOVERFLOW)?;
         TimeSpec::nanoseconds(st_atim)
     } else if set_atim_now {
         timespec_now()
@@ -450,7 +441,7 @@ pub(crate) fn path_filestat_set_times(
     };
 
     let mtim = if set_mtim {
-        let st_mtim = st_mtim.try_into().map_err(|_| host::__WASI_EOVERFLOW)?;
+        let st_mtim = st_mtim.try_into().map_err(|_| Error::EOVERFLOW)?;
         TimeSpec::nanoseconds(st_mtim)
     } else if set_atim_now {
         timespec_now()
@@ -466,9 +457,9 @@ pub(crate) fn path_filestat_set_times(
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     use nix::libc::symlinkat;
 
-    let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+    let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| Error::EILSEQ)?;
     let new_path_cstr =
-        CString::new(resolved.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+        CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     let res = unsafe {
         symlinkat(
@@ -488,7 +479,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use nix::errno;
     use nix::libc::unlinkat;
 
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     // nix doesn't expose unlinkat() yet
     match unsafe { unlinkat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0) } {
@@ -532,7 +523,7 @@ pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
     use nix::errno;
     use nix::libc::{unlinkat, AT_REMOVEDIR};
 
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| host::__WASI_EILSEQ)?;
+    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     // nix doesn't expose unlinkat() yet
     match unsafe {

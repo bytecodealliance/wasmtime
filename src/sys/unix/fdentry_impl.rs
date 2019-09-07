@@ -1,6 +1,5 @@
 use crate::fdentry::Descriptor;
-use crate::sys::{errno_from_host, errno_from_ioerror};
-use crate::{host, Result};
+use crate::{host, Error, Result};
 use std::io;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
@@ -25,10 +24,7 @@ pub(crate) fn determine_type_and_access_rights<Fd: AsRawFd>(
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(fd)?;
 
     use nix::fcntl::{fcntl, OFlag, F_GETFL};
-    let flags_bits = fcntl(fd.as_raw_fd(), F_GETFL).map_err(|err| {
-        err.as_errno()
-            .map_or(host::__WASI_EIO, |e| errno_from_host(e as i32))
-    })?;
+    let flags_bits = fcntl(fd.as_raw_fd(), F_GETFL)?;
     let flags = OFlag::from_bits_truncate(flags_bits);
     let accmode = flags & OFlag::O_ACCMODE;
     if accmode == OFlag::O_RDONLY {
@@ -51,7 +47,7 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
         // we just make a `File` here for convenience; we don't want it to close when it drops
         let file =
             std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(fd.as_raw_fd()) });
-        let ft = file.metadata().map_err(errno_from_ioerror)?.file_type();
+        let ft = file.metadata()?.file_type();
         if ft.is_block_device() {
             (
                 host::__WASI_FILETYPE_BLOCK_DEVICE,
@@ -59,10 +55,7 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
                 host::RIGHTS_BLOCK_DEVICE_INHERITING,
             )
         } else if ft.is_char_device() {
-            if nix::unistd::isatty(fd.as_raw_fd()).map_err(|err| {
-                err.as_errno()
-                    .map_or(host::__WASI_EIO, |e| errno_from_host(e as i32))
-            })? {
+            if nix::unistd::isatty(fd.as_raw_fd())? {
                 (
                     host::__WASI_FILETYPE_CHARACTER_DEVICE,
                     host::RIGHTS_TTY_BASE,
@@ -89,10 +82,7 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
             )
         } else if ft.is_socket() {
             use nix::sys::socket;
-            match socket::getsockopt(fd.as_raw_fd(), socket::sockopt::SockType).map_err(|err| {
-                err.as_errno()
-                    .map_or(host::__WASI_EIO, |e| errno_from_host(e as i32))
-            })? {
+            match socket::getsockopt(fd.as_raw_fd(), socket::sockopt::SockType)? {
                 socket::SockType::Datagram => (
                     host::__WASI_FILETYPE_SOCKET_DGRAM,
                     host::RIGHTS_SOCKET_BASE,
@@ -103,7 +93,7 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
                     host::RIGHTS_SOCKET_BASE,
                     host::RIGHTS_SOCKET_INHERITING,
                 ),
-                _ => return Err(host::__WASI_EINVAL),
+                _ => return Err(Error::EINVAL),
             }
         } else if ft.is_fifo() {
             (
@@ -112,7 +102,7 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
                 host::RIGHTS_REGULAR_FILE_INHERITING,
             )
         } else {
-            return Err(host::__WASI_EINVAL);
+            return Err(Error::EINVAL);
         }
     };
 

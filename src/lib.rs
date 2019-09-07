@@ -21,6 +21,7 @@
 )]
 
 mod ctx;
+mod error;
 mod fdentry;
 mod helpers;
 mod hostcalls_impl;
@@ -36,4 +37,5 @@ pub mod wasm32;
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use sys::preopen_dir;
 
-pub(crate) type Result<T> = std::result::Result<T, self::host::__wasi_errno_t>;
+pub type Error = error::Error;
+pub(crate) type Result<T> = std::result::Result<T, Error>;

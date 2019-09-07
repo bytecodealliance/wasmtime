@@ -2,7 +2,7 @@
 use crate::ctx::WasiCtx;
 use crate::memory::*;
 use crate::sys::hostcalls_impl;
-use crate::{host, wasm32, Result};
+use crate::{wasm32, Error, Result};
 use log::trace;
 use std::convert::TryFrom;
 
@@ -29,11 +29,8 @@ pub(crate) fn args_get(
 
         argv.push(arg_ptr);
 
-        let len =
-            wasm32::uintptr_t::try_from(arg_bytes.len()).map_err(|_| host::__WASI_EOVERFLOW)?;
-        argv_buf_offset = argv_buf_offset
-            .checked_add(len)
-            .ok_or(host::__WASI_EOVERFLOW)?;
+        let len = wasm32::uintptr_t::try_from(arg_bytes.len()).map_err(|_| Error::EOVERFLOW)?;
+        argv_buf_offset = argv_buf_offset.checked_add(len).ok_or(Error::EOVERFLOW)?;
     }
 
     enc_slice_of(memory, argv.as_slice(), argv_ptr)
@@ -90,11 +87,10 @@ pub(crate) fn environ_get(
 
         environ.push(env_ptr);
 
-        let len =
-            wasm32::uintptr_t::try_from(env_bytes.len()).map_err(|_| host::__WASI_EOVERFLOW)?;
+        let len = wasm32::uintptr_t::try_from(env_bytes.len()).map_err(|_| Error::EOVERFLOW)?;
         environ_buf_offset = environ_buf_offset
             .checked_add(len)
-            .ok_or(host::__WASI_EOVERFLOW)?;
+            .ok_or(Error::EOVERFLOW)?;
     }
 
     enc_slice_of(memory, environ.as_slice(), environ_ptr)
@@ -119,7 +115,7 @@ pub(crate) fn environ_sizes_get(
         .try_fold(0, |acc: u32, pair| {
             acc.checked_add(pair.as_bytes_with_nul().len() as u32)
         })
-        .ok_or(host::__WASI_EOVERFLOW)?;
+        .ok_or(Error::EOVERFLOW)?;
 
     trace!("     | *environ_count_ptr={:?}", environ_count);
 
@@ -202,7 +198,7 @@ pub(crate) fn poll_oneoff(
     );
 
     if nsubscriptions as u64 > wasm32::__wasi_filesize_t::max_value() {
-        return Err(host::__WASI_EINVAL);
+        return Err(Error::EINVAL);
     }
 
     enc_pointee(memory, nevents, 0)?;

@@ -4,7 +4,7 @@ macro_rules! hostcalls {
             pub fn $name($($arg: $ty,)*) -> $ret {
                 let ret = match crate::hostcalls_impl::$name($($arg,)*) {
                     Ok(()) => crate::host::__WASI_ESUCCESS,
-                    Err(e) => e,
+                    Err(e) => e.as_wasi_errno(),
                 };
 
                 crate::hostcalls::return_enc_errno(ret)

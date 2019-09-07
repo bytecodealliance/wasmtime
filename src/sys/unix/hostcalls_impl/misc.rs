@@ -2,7 +2,7 @@
 #![allow(unused_unsafe)]
 use crate::memory::*;
 use crate::sys::host_impl;
-use crate::{host, wasm32, Result};
+use crate::{host, wasm32, Result, Error};
 use nix::libc::{self, c_int};
 use std::cmp;
 use std::time::SystemTime;
@@ -14,7 +14,7 @@ pub(crate) fn clock_res_get(clock_id: host::__wasi_clockid_t) -> Result<host::__
         host::__WASI_CLOCK_MONOTONIC => libc::CLOCK_MONOTONIC,
         host::__WASI_CLOCK_PROCESS_CPUTIME_ID => libc::CLOCK_PROCESS_CPUTIME_ID,
         host::__WASI_CLOCK_THREAD_CPUTIME_ID => libc::CLOCK_THREAD_CPUTIME_ID,
-        _ => return Err(host::__WASI_EINVAL),
+        _ => return Err(Error::EINVAL),
     };
 
     // no `nix` wrapper for clock_getres, so we do it ourselves
@@ -30,11 +30,11 @@ pub(crate) fn clock_res_get(clock_id: host::__wasi_clockid_t) -> Result<host::__
     (timespec.tv_sec as host::__wasi_timestamp_t)
         .checked_mul(1_000_000_000)
         .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-        .map_or(Err(host::__WASI_EOVERFLOW), |resolution| {
+        .map_or(Err(Error::EOVERFLOW), |resolution| {
             // a supported clock can never return zero; this case will probably never get hit, but
             // make sure we follow the spec
             if resolution == 0 {
-                Err(host::__WASI_EINVAL)
+                Err(Error::EINVAL)
             } else {
                 Ok(resolution)
             }
@@ -48,7 +48,7 @@ pub(crate) fn clock_time_get(clock_id: host::__wasi_clockid_t) -> Result<host::_
         host::__WASI_CLOCK_MONOTONIC => libc::CLOCK_MONOTONIC,
         host::__WASI_CLOCK_PROCESS_CPUTIME_ID => libc::CLOCK_PROCESS_CPUTIME_ID,
         host::__WASI_CLOCK_THREAD_CPUTIME_ID => libc::CLOCK_THREAD_CPUTIME_ID,
-        _ => return Err(host::__WASI_EINVAL),
+        _ => return Err(Error::EINVAL),
     };
 
     // no `nix` wrapper for clock_getres, so we do it ourselves
@@ -63,7 +63,7 @@ pub(crate) fn clock_time_get(clock_id: host::__wasi_clockid_t) -> Result<host::_
     (timespec.tv_sec as host::__wasi_timestamp_t)
         .checked_mul(1_000_000_000)
         .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
-        .map_or(Err(host::__WASI_EOVERFLOW), |time| Ok(time))
+        .map_or(Err(Error::EOVERFLOW), |time| Ok(time))
 }
 
 pub(crate) fn poll_oneoff(
@@ -152,7 +152,7 @@ fn wasi_clock_to_relative_ns_delay(
     }
     let now: u128 = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|_| host::__WASI_ENOTCAPABLE)?
+        .map_err(|_| Error::ENOTCAPABLE)?
         .as_nanos();
     let deadline = wasi_clock.timeout as u128;
     Ok(deadline.saturating_sub(now))

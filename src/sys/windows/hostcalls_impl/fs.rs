@@ -8,8 +8,7 @@ use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
-use crate::sys::{errno_from_host, errno_from_ioerror};
-use crate::{host, Result};
+use crate::{host, Error, Result};
 use std::convert::TryInto;
 use std::fs::{File, Metadata, OpenOptions};
 use std::io::{self, Seek, SeekFrom};
@@ -37,23 +36,25 @@ fn write_at(mut file: &File, buf: &[u8], offset: u64) -> io::Result<usize> {
     Ok(nwritten)
 }
 
+// TODO refactor common code with unix
 pub(crate) fn fd_pread(
     file: &File,
     buf: &mut [u8],
     offset: host::__wasi_filesize_t,
 ) -> Result<usize> {
-    read_at(file, buf, offset).map_err(errno_from_ioerror)
+    read_at(file, buf, offset).map_err(Into::into)
 }
 
+// TODO refactor common code with unix
 pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t) -> Result<usize> {
-    write_at(file, buf, offset).map_err(errno_from_ioerror)
+    write_at(file, buf, offset).map_err(Into::into)
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {
     use winx::file::AccessMode;
     winx::file::get_file_access_mode(fd.as_raw_handle())
         .map(host_impl::fdflags_from_win)
-        .map_err(host_impl::errno_from_win)
+        .map_err(Into::into)
 }
 
 pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: host::__wasi_fdflags_t) -> Result<()> {
@@ -81,7 +82,7 @@ pub(crate) fn fd_advise(
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
     let path = resolved.concatenate()?;
-    std::fs::create_dir(&path).map_err(errno_from_ioerror)
+    std::fs::create_dir(&path).map_err(Into::into)
 }
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
@@ -133,11 +134,11 @@ pub(crate) fn path_open(
         Ok(file_type) => {
             // check if we are trying to open a symlink
             if file_type.is_symlink() {
-                return Err(host::__WASI_ELOOP);
+                return Err(Error::ELOOP);
             }
             // check if we are trying to open a file as a dir
             if file_type.is_file() && oflags & host::__WASI_O_DIRECTORY != 0 {
-                return Err(host::__WASI_ENOTDIR);
+                return Err(Error::ENOTDIR);
             }
         }
         Err(e) => match e.raw_os_error() {
@@ -147,14 +148,14 @@ pub(crate) fn path_open(
                 let e = WinError::from_u32(e as u32);
 
                 if e != WinError::ERROR_FILE_NOT_FOUND {
-                    return Err(host_impl::errno_from_win(e));
+                    return Err(e.into());
                 }
                 // file not found, let it proceed to actually
                 // trying to open it
             }
             None => {
                 log::debug!("Inconvertible OS error: {}", e);
-                return Err(host::__WASI_EIO);
+                return Err(Error::EIO);
             }
         },
     }
@@ -162,7 +163,7 @@ pub(crate) fn path_open(
     opts.access_mode(access_mode.bits())
         .custom_flags(flags.bits())
         .open(&path)
-        .map_err(errno_from_ioerror)
+        .map_err(Into::into)
 }
 
 pub(crate) fn fd_readdir(
@@ -177,19 +178,18 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     use winx::file::get_path_by_handle;
 
     let path = resolved.concatenate()?;
-    let target_path = path.read_link().map_err(errno_from_ioerror)?;
+    let target_path = path.read_link()?;
 
     // since on Windows we are effectively emulating 'at' syscalls
     // we need to strip the prefix from the absolute path
     // as otherwise we will error out since WASI is not capable
     // of dealing with absolute paths
-    let dir_path =
-        get_path_by_handle(resolved.dirfd().as_raw_handle()).map_err(host_impl::errno_from_win)?;
+    let dir_path = get_path_by_handle(resolved.dirfd().as_raw_handle())?;
     let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
     let target_path = target_path
         .strip_prefix(dir_path)
-        .map_err(|_| host::__WASI_ENOTCAPABLE)
-        .and_then(|path| path.to_str().map(String::from).ok_or(host::__WASI_EILSEQ))?;
+        .map_err(|_| Error::ENOTCAPABLE)
+        .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))?;
 
     if buf.len() > 0 {
         let mut chars = target_path.chars();
@@ -222,7 +222,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
     //
     // [std::fs::rename]: https://doc.rust-lang.org/std/fs/fn.rename.html
     if old_path.is_dir() && new_path.is_file() {
-        return Err(host::__WASI_ENOTDIR);
+        return Err(Error::ENOTDIR);
     }
 
     // TODO handle symlinks
@@ -237,21 +237,21 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                     // So most likely dealing with new_path == dir.
                     // Eliminate case old_path == file first.
                     if old_path.is_file() {
-                        Err(host::__WASI_EISDIR)
+                        Err(Error::EISDIR)
                     } else {
                         // Ok, let's try removing an empty dir at new_path if it exists
                         // and is a nonempty dir.
                         fs::remove_dir(&new_path)
                             .and_then(|()| fs::rename(old_path, new_path))
-                            .map_err(errno_from_ioerror)
+                            .map_err(Into::into)
                     }
                 }
-                e => Err(host_impl::errno_from_win(e)),
+                e => Err(e.into()),
             }
         }
         None => {
             log::debug!("Inconvertible OS error: {}", e);
-            Err(host::__WASI_EIO)
+            Err(Error::EIO)
         }
     })
 }
@@ -277,27 +277,15 @@ pub(crate) fn change_time(file: &File, _metadata: &Metadata) -> io::Result<i64> 
 }
 
 pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_filestat_t> {
-    let metadata = file.metadata().map_err(errno_from_ioerror)?;
+    let metadata = file.metadata()?;
     Ok(host::__wasi_filestat_t {
-        st_dev: device_id(file, &metadata).map_err(errno_from_ioerror)?,
-        st_ino: file_serial_no(file, &metadata).map_err(errno_from_ioerror)?,
-        st_nlink: num_hardlinks(file, &metadata)
-            .map_err(errno_from_ioerror)?
-            .try_into()
-            .map_err(|_| host::__WASI_EOVERFLOW)?, // u64 doesn't fit into u32
+        st_dev: device_id(file, &metadata)?,
+        st_ino: file_serial_no(file, &metadata)?,
+        st_nlink: num_hardlinks(file, &metadata)?.try_into()?, // u64 doesn't fit into u32
         st_size: metadata.len(),
-        st_atim: metadata
-            .accessed()
-            .map_err(errno_from_ioerror)
-            .and_then(systemtime_to_timestamp)?,
-        st_ctim: change_time(file, &metadata)
-            .map_err(errno_from_ioerror)?
-            .try_into()
-            .map_err(|_| host::__WASI_EOVERFLOW)?, // i64 doesn't fit into u64
-        st_mtim: metadata
-            .modified()
-            .map_err(errno_from_ioerror)
-            .and_then(systemtime_to_timestamp)?,
+        st_atim: systemtime_to_timestamp(metadata.accessed()?)?,
+        st_ctim: change_time(file, &metadata)?.try_into()?, // i64 doesn't fit into u64
+        st_mtim: systemtime_to_timestamp(metadata.modified()?)?,
         st_filetype: filetype(file, &metadata)?,
     })
 }
@@ -322,7 +310,7 @@ pub(crate) fn path_filestat_get(
     dirflags: host::__wasi_lookupflags_t,
 ) -> Result<host::__wasi_filestat_t> {
     let path = resolved.concatenate()?;
-    let file = File::open(path).map_err(errno_from_ioerror)?;
+    let file = File::open(path)?;
     fd_filestat_get_impl(&file)
 }
 
@@ -337,8 +325,7 @@ pub(crate) fn path_filestat_set_times(
     let path = resolved.concatenate()?;
     let file = OpenOptions::new()
         .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
-        .open(path)
-        .map_err(errno_from_ioerror)?;
+        .open(path)?;
     fd_filestat_set_times_impl(&file, st_atim, st_mtim, fst_flags)
 }
 
@@ -357,14 +344,14 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                 match WinError::from_u32(e as u32) {
                     WinError::ERROR_NOT_A_REPARSE_POINT => {
                         // try creating a dir symlink instead
-                        symlink_dir(old_path, new_path).map_err(errno_from_ioerror)
+                        symlink_dir(old_path, new_path).map_err(Into::into)
                     }
-                    e => Err(host_impl::errno_from_win(e)),
+                    e => Err(e.into()),
                 }
             }
             None => {
                 log::debug!("Inconvertible OS error: {}", e);
-                Err(host::__WASI_EIO)
+                Err(Error::EIO)
             }
         }
     })
@@ -377,8 +364,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     let path = resolved.concatenate()?;
     let file_type = path
         .symlink_metadata()
-        .map(|metadata| metadata.file_type())
-        .map_err(errno_from_ioerror)?;
+        .map(|metadata| metadata.file_type())?;
 
     // check if we're unlinking a symlink
     // NB this will get cleaned up a lot when [std::os::windows::fs::FileTypeExt]
@@ -393,27 +379,27 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
                     match WinError::from_u32(e as u32) {
                         WinError::ERROR_ACCESS_DENIED => {
                             // try unlinking a dir symlink instead
-                            fs::remove_dir(path).map_err(errno_from_ioerror)
+                            fs::remove_dir(path).map_err(Into::into)
                         }
-                        e => Err(host_impl::errno_from_win(e)),
+                        e => Err(e.into()),
                     }
                 }
                 None => {
                     log::debug!("Inconvertible OS error: {}", e);
-                    Err(host::__WASI_EIO)
+                    Err(Error::EIO)
                 }
             }
         })
     } else if file_type.is_dir() {
-        Err(host::__WASI_EISDIR)
+        Err(Error::EISDIR)
     } else if file_type.is_file() {
-        fs::remove_file(path).map_err(errno_from_ioerror)
+        fs::remove_file(path).map_err(Into::into)
     } else {
-        Err(host::__WASI_EINVAL)
+        Err(Error::EINVAL)
     }
 }
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
     let path = resolved.concatenate()?;
-    std::fs::remove_dir(&path).map_err(errno_from_ioerror)
+    std::fs::remove_dir(&path).map_err(Into::into)
 }

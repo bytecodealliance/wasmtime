@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(unused)]
-use crate::{host, Result};
+use crate::{host, Result, Error};
 use std::ffi::OsStr;
 use std::fs::OpenOptions;
 use std::os::windows::ffi::OsStrExt;
@@ -102,5 +102,5 @@ pub(crate) fn win_from_oflags(oflags: host::__wasi_oflags_t) -> CreationDisposit
 /// `__WASI_EILSEQ` error is returned.
 pub(crate) fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
     let vec: Vec<u16> = s.as_ref().encode_wide().collect();
-    String::from_utf16(&vec).map_err(|_| host::__WASI_EILSEQ)
+    String::from_utf16(&vec).map_err(|_| Error::EILSEQ)
 }

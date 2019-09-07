@@ -5,8 +5,8 @@ use crate::fdentry::{Descriptor, FdEntry};
 use crate::memory::*;
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::hostcalls_impl::fs_helpers::path_open_rights;
-use crate::sys::{errno_from_ioerror, host_impl, hostcalls_impl};
-use crate::{host, wasm32, Result};
+use crate::sys::{host_impl, hostcalls_impl};
+use crate::{host, wasm32, Error, Result};
 use filetime::{set_file_handle_times, FileTime};
 use log::trace;
 use std::fs::File;
@@ -20,11 +20,11 @@ pub(crate) fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> Resul
     if let Some(fdent) = wasi_ctx.fds.get(&fd) {
         // can't close preopened files
         if fdent.preopen_path.is_some() {
-            return Err(host::__WASI_ENOTSUP);
+            return Err(Error::ENOTSUP);
         }
     }
 
-    let mut fe = wasi_ctx.fds.remove(&fd).ok_or(host::__WASI_EBADF)?;
+    let mut fe = wasi_ctx.fds.remove(&fd).ok_or(Error::EBADF)?;
     fe.fd_object.needs_close = true;
 
     Ok(())
@@ -38,7 +38,7 @@ pub(crate) fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_DATASYNC, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
-    fd.sync_data().map_err(errno_from_ioerror)
+    fd.sync_data().map_err(Into::into)
 }
 
 pub(crate) fn fd_pread(
@@ -68,7 +68,7 @@ pub(crate) fn fd_pread(
 
     let offset = dec_filesize(offset);
     if offset > i64::max_value() as u64 {
-        return Err(host::__WASI_EIO);
+        return Err(Error::EIO);
     }
     let buf_size = iovs.iter().map(|v| v.buf_len).sum();
     let mut buf = vec![0; buf_size];
@@ -117,7 +117,7 @@ pub(crate) fn fd_pwrite(
 
     let offset = dec_filesize(offset);
     if offset > i64::max_value() as u64 {
-        return Err(host::__WASI_EIO);
+        return Err(Error::EIO);
     }
     let buf_size = iovs.iter().map(|v| v.buf_len).sum();
     let mut buf = Vec::with_capacity(buf_size);
@@ -160,10 +160,10 @@ pub(crate) fn fd_read(
     let maybe_host_nread = match &mut *fe.fd_object.descriptor {
         Descriptor::File(f) => f.read_vectored(&mut iovs),
         Descriptor::Stdin => io::stdin().lock().read_vectored(&mut iovs),
-        _ => return Err(host::__WASI_EBADF),
+        _ => return Err(Error::EBADF),
     };
 
-    let host_nread = maybe_host_nread.map_err(errno_from_ioerror)?;
+    let host_nread = maybe_host_nread?;
 
     trace!("     | *nread={:?}", host_nread);
 
@@ -181,14 +181,14 @@ pub(crate) fn fd_renumber(
     let to = dec_fd(to);
 
     if !wasi_ctx.contains_fd_entry(from) || !wasi_ctx.contains_fd_entry(to) {
-        return Err(host::__WASI_EBADF);
+        return Err(Error::EBADF);
     }
 
     // Don't allow renumbering over a pre-opened resource.
     // TODO: Eventually, we do want to permit this, once libpreopen in
     // userspace is capable of removing entries from its tables as well.
     if wasi_ctx.fds[&from].preopen_path.is_some() || wasi_ctx.fds[&to].preopen_path.is_some() {
-        return Err(host::__WASI_ENOTSUP);
+        return Err(Error::ENOTSUP);
     }
 
     // check if stdio fds
@@ -196,7 +196,7 @@ pub(crate) fn fd_renumber(
     if !wasi_ctx.fds[&from].fd_object.descriptor.is_file()
         || !wasi_ctx.fds[&to].fd_object.descriptor.is_file()
     {
-        return Err(host::__WASI_EBADF);
+        return Err(Error::EBADF);
     }
 
     let fe_from_dup = wasi_ctx.fds[&from]
@@ -244,9 +244,9 @@ pub(crate) fn fd_seek(
         host::__WASI_WHENCE_CUR => SeekFrom::Current(offset),
         host::__WASI_WHENCE_END => SeekFrom::End(offset),
         host::__WASI_WHENCE_SET => SeekFrom::Start(offset as u64),
-        _ => return Err(host::__WASI_EINVAL),
+        _ => return Err(Error::EINVAL),
     };
-    let host_newoffset = fd.seek(pos).map_err(errno_from_ioerror)?;
+    let host_newoffset = fd.seek(pos)?;
 
     trace!("     | *newoffset={:?}", host_newoffset);
 
@@ -266,7 +266,7 @@ pub(crate) fn fd_tell(
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_TELL, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
-    let host_offset = fd.seek(SeekFrom::Current(0)).map_err(errno_from_ioerror)?;
+    let host_offset = fd.seek(SeekFrom::Current(0))?;
 
     trace!("     | *newoffset={:?}", host_offset);
 
@@ -328,12 +328,12 @@ pub(crate) fn fd_fdstat_set_rights(
     );
 
     let fd = dec_fd(fd);
-    let fe = wasi_ctx.fds.get_mut(&fd).ok_or(host::__WASI_EBADF)?;
+    let fe = wasi_ctx.fds.get_mut(&fd).ok_or(Error::EBADF)?;
 
     if fe.rights_base & fs_rights_base != fs_rights_base
         || fe.rights_inheriting & fs_rights_inheriting != fs_rights_inheriting
     {
-        return Err(host::__WASI_ENOTCAPABLE);
+        return Err(Error::ENOTCAPABLE);
     }
     fe.rights_base = fs_rights_base;
     fe.rights_inheriting = fs_rights_inheriting;
@@ -348,7 +348,7 @@ pub(crate) fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()>
     let fd = wasi_ctx
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_SYNC, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
-    fd.sync_all().map_err(errno_from_ioerror)
+    fd.sync_all().map_err(Into::into)
 }
 
 pub(crate) fn fd_write(
@@ -377,20 +377,17 @@ pub(crate) fn fd_write(
 
     // perform unbuffered writes
     let host_nwritten = match &mut *fe.fd_object.descriptor {
-        Descriptor::File(f) => f.write_vectored(&iovs).map_err(errno_from_ioerror)?,
-        Descriptor::Stdin => return Err(host::__WASI_EBADF),
+        Descriptor::File(f) => f.write_vectored(&iovs)?,
+        Descriptor::Stdin => return Err(Error::EBADF),
         Descriptor::Stdout => {
             // lock for the duration of the scope
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
-            let nwritten = stdout.write_vectored(&iovs).map_err(errno_from_ioerror)?;
-            stdout.flush().map_err(errno_from_ioerror)?;
+            let nwritten = stdout.write_vectored(&iovs)?;
+            stdout.flush()?;
             nwritten
         }
-        Descriptor::Stderr => io::stderr()
-            .lock()
-            .write_vectored(&iovs)
-            .map_err(errno_from_ioerror)?,
+        Descriptor::Stderr => io::stderr().lock().write_vectored(&iovs)?,
     };
 
     trace!("     | *nwritten={:?}", host_nwritten);
@@ -439,17 +436,17 @@ pub(crate) fn fd_allocate(
         .get_fd_entry(fd, host::__WASI_RIGHT_FD_ALLOCATE, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
 
-    let metadata = fd.metadata().map_err(errno_from_ioerror)?;
+    let metadata = fd.metadata()?;
 
     let current_size = metadata.len();
-    let wanted_size = offset.checked_add(len).ok_or(host::__WASI_E2BIG)?;
+    let wanted_size = offset.checked_add(len).ok_or(Error::E2BIG)?;
     // This check will be unnecessary when rust-lang/rust#63326 is fixed
     if wanted_size > i64::max_value() as u64 {
-        return Err(host::__WASI_E2BIG);
+        return Err(Error::E2BIG);
     }
 
     if wanted_size > current_size {
-        fd.set_len(wanted_size).map_err(errno_from_ioerror)
+        fd.set_len(wanted_size).map_err(Into::into)
     } else {
         Ok(())
     }
@@ -782,7 +779,7 @@ pub(crate) fn fd_filestat_set_times_impl(
     let set_mtim_now = fst_flags & host::__WASI_FILESTAT_SET_MTIM_NOW != 0;
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-        return Err(host::__WASI_EINVAL);
+        return Err(Error::EINVAL);
     }
     let atim = if set_atim {
         let time = UNIX_EPOCH + Duration::from_nanos(st_atim);
@@ -803,7 +800,7 @@ pub(crate) fn fd_filestat_set_times_impl(
     } else {
         None
     };
-    set_file_handle_times(fd, atim, mtim).map_err(errno_from_ioerror)
+    set_file_handle_times(fd, atim, mtim).map_err(Into::into)
 }
 
 pub(crate) fn fd_filestat_set_size(
@@ -821,9 +818,9 @@ pub(crate) fn fd_filestat_set_size(
     let st_size = dec_filesize(st_size);
     // This check will be unnecessary when rust-lang/rust#63326 is fixed
     if st_size > i64::max_value() as u64 {
-        return Err(host::__WASI_E2BIG);
+        return Err(Error::E2BIG);
     }
-    fd.set_len(st_size).map_err(errno_from_ioerror)
+    fd.set_len(st_size).map_err(Into::into)
 }
 
 pub(crate) fn path_filestat_get(
@@ -1006,9 +1003,9 @@ pub(crate) fn fd_prestat_get(
     wasi_ctx
         .get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN, 0)
         .and_then(|fe| {
-            let po_path = fe.preopen_path.as_ref().ok_or(host::__WASI_ENOTSUP)?;
+            let po_path = fe.preopen_path.as_ref().ok_or(Error::ENOTSUP)?;
             if fe.fd_object.file_type != host::__WASI_FILETYPE_DIRECTORY {
-                return Err(host::__WASI_ENOTDIR);
+                return Err(Error::ENOTDIR);
             }
 
             let path = host_impl::path_from_host(po_path.as_os_str())?;
@@ -1047,15 +1044,15 @@ pub(crate) fn fd_prestat_dir_name(
     wasi_ctx
         .get_fd_entry(fd, host::__WASI_RIGHT_PATH_OPEN, 0)
         .and_then(|fe| {
-            let po_path = fe.preopen_path.as_ref().ok_or(host::__WASI_ENOTSUP)?;
+            let po_path = fe.preopen_path.as_ref().ok_or(Error::ENOTSUP)?;
             if fe.fd_object.file_type != host::__WASI_FILETYPE_DIRECTORY {
-                return Err(host::__WASI_ENOTDIR);
+                return Err(Error::ENOTDIR);
             }
 
             let path = host_impl::path_from_host(po_path.as_os_str())?;
 
             if path.len() > dec_usize(path_len) {
-                return Err(host::__WASI_ENAMETOOLONG);
+                return Err(Error::ENAMETOOLONG);
             }
 
             trace!("     | (path_ptr,path_len)='{}'", path);

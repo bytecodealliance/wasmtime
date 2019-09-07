@@ -8,7 +8,7 @@ cfg_if! {
         pub use self::unix::preopen_dir;
 
         pub(crate) fn errno_from_host(err: i32) -> host::__wasi_errno_t {
-            host_impl::errno_from_nix(nix::errno::from_i32(err))
+            host_impl::errno_from_nix(nix::errno::from_i32(err)).as_wasi_errno()
         }
     } else if #[cfg(windows)] {
         mod windows;
@@ -23,7 +23,7 @@ cfg_if! {
     }
 }
 
-pub(crate) fn errno_from_ioerror(e: std::io::Error) -> host::__wasi_errno_t {
+pub(crate) fn errno_from_ioerror(e: &std::io::Error) -> host::__wasi_errno_t {
     match e.raw_os_error() {
         Some(code) => errno_from_host(code),
         None => {

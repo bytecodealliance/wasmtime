@@ -1,6 +1,6 @@
 use crate::fdentry::FdEntry;
-use crate::sys::{dev_null, errno_from_ioerror};
-use crate::{host, Result};
+use crate::sys::dev_null;
+use crate::{host, Error, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -33,7 +33,7 @@ impl WasiCtxBuilder {
 
     pub fn args<S: AsRef<str>>(mut self, args: impl Iterator<Item = S>) -> Result<Self> {
         let args: Result<Vec<CString>> = args
-            .map(|arg| CString::new(arg.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE))
+            .map(|arg| CString::new(arg.as_ref()).map_err(|_| Error::ENOTCAPABLE))
             .collect();
         self.args = args?;
         Ok(self)
@@ -41,7 +41,7 @@ impl WasiCtxBuilder {
 
     pub fn arg(mut self, arg: &str) -> Result<Self> {
         self.args
-            .push(CString::new(arg).map_err(|_| host::__WASI_ENOTCAPABLE)?);
+            .push(CString::new(arg).map_err(|_| Error::ENOTCAPABLE)?);
         Ok(self)
     }
 
@@ -58,8 +58,8 @@ impl WasiCtxBuilder {
 
     pub fn env<S: AsRef<str>>(mut self, k: S, v: S) -> Result<Self> {
         self.env.insert(
-            CString::new(k.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE)?,
-            CString::new(v.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE)?,
+            CString::new(k.as_ref()).map_err(|_| Error::ENOTCAPABLE)?,
+            CString::new(v.as_ref()).map_err(|_| Error::ENOTCAPABLE)?,
         );
         Ok(self)
     }
@@ -71,11 +71,11 @@ impl WasiCtxBuilder {
         let env: Result<HashMap<CString, CString>> = envs
             .map(|t| {
                 let (k, v) = t.borrow();
-                let k = CString::new(k.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE);
-                let v = CString::new(v.as_ref()).map_err(|_| host::__WASI_ENOTCAPABLE);
+                let k = CString::new(k.as_ref()).map_err(|_| Error::ENOTCAPABLE);
+                let v = CString::new(v.as_ref()).map_err(|_| Error::ENOTCAPABLE);
                 match (k, v) {
                     (Ok(k), Ok(v)) => Ok((k, v)),
-                    _ => Err(host::__WASI_ENOTCAPABLE),
+                    _ => Err(Error::ENOTCAPABLE),
                 }
             })
             .collect();
@@ -92,12 +92,12 @@ impl WasiCtxBuilder {
         // startup code starts looking at fd 3 for preopens
         let mut preopen_fd = 3;
         for (guest_path, dir) in self.preopens {
-            if !dir.metadata().map_err(errno_from_ioerror)?.is_dir() {
-                return Err(host::__WASI_EBADF);
+            if !dir.metadata()?.is_dir() {
+                return Err(Error::EBADF);
             }
 
             while self.fds.contains_key(&preopen_fd) {
-                preopen_fd = preopen_fd.checked_add(1).ok_or(host::__WASI_ENFILE)?;
+                preopen_fd = preopen_fd.checked_add(1).ok_or(Error::ENFILE)?;
             }
             let mut fe = FdEntry::from(dir)?;
             fe.preopen_path = Some(guest_path);
@@ -161,7 +161,7 @@ impl WasiCtx {
         if let Some(fe) = self.fds.get(&fd) {
             Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
         } else {
-            Err(host::__WASI_EBADF)
+            Err(Error::EBADF)
         }
     }
 
@@ -174,7 +174,7 @@ impl WasiCtx {
         if let Some(fe) = self.fds.get_mut(&fd) {
             Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
         } else {
-            Err(host::__WASI_EBADF)
+            Err(Error::EBADF)
         }
     }
 
@@ -184,7 +184,7 @@ impl WasiCtx {
         rights_inheriting: host::__wasi_rights_t,
     ) -> Result<()> {
         if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0 {
-            Err(host::__WASI_ENOTCAPABLE)
+            Err(Error::ENOTCAPABLE)
         } else {
             Ok(())
         }
@@ -197,7 +197,7 @@ impl WasiCtx {
             if let Some(next_fd) = fd.checked_add(1) {
                 fd = next_fd;
             } else {
-                return Err(host::__WASI_EMFILE);
+                return Err(Error::EMFILE);
             }
         }
         self.fds.insert(fd, fe);

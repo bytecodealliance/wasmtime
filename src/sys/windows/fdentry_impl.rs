@@ -1,6 +1,5 @@
-use super::host_impl;
 use crate::fdentry::Descriptor;
-use crate::{host, Result};
+use crate::{host, Error, Result};
 use std::fs::File;
 use std::io;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, RawHandle};
@@ -29,8 +28,7 @@ pub(crate) fn determine_type_and_access_rights<Handle: AsRawHandle>(
 
     match file_type {
         host::__WASI_FILETYPE_DIRECTORY | host::__WASI_FILETYPE_REGULAR_FILE => {
-            let mode =
-                get_file_access_mode(handle.as_raw_handle()).map_err(host_impl::errno_from_win)?;
+            let mode = get_file_access_mode(handle.as_raw_handle())?;
             if mode.contains(AccessMode::FILE_GENERIC_READ) {
                 rights_base |= host::__WASI_RIGHT_FD_READ;
             }
@@ -55,8 +53,7 @@ pub(crate) fn determine_type_rights<Handle: AsRawHandle>(
     host::__wasi_rights_t,
 )> {
     let (file_type, rights_base, rights_inheriting) = {
-        let file_type =
-            winx::file::get_file_type(handle.as_raw_handle()).map_err(host_impl::errno_from_win)?;
+        let file_type = winx::file::get_file_type(handle.as_raw_handle())?;
         if file_type.is_char() {
             // character file: LPT device or console
             // TODO: rule out LPT device
@@ -70,7 +67,7 @@ pub(crate) fn determine_type_rights<Handle: AsRawHandle>(
             let file = std::mem::ManuallyDrop::new(unsafe {
                 File::from_raw_handle(handle.as_raw_handle())
             });
-            let meta = file.metadata().map_err(|_| host::__WASI_EINVAL)?;
+            let meta = file.metadata().map_err(|_| Error::EINVAL)?;
             if meta.is_dir() {
                 (
                     host::__WASI_FILETYPE_DIRECTORY,
@@ -84,7 +81,7 @@ pub(crate) fn determine_type_rights<Handle: AsRawHandle>(
                     host::RIGHTS_REGULAR_FILE_INHERITING,
                 )
             } else {
-                return Err(host::__WASI_EINVAL);
+                return Err(Error::EINVAL);
             }
         } else if file_type.is_pipe() {
             // pipe object: socket, named pipe or anonymous pipe
@@ -95,7 +92,7 @@ pub(crate) fn determine_type_rights<Handle: AsRawHandle>(
                 host::RIGHTS_SOCKET_INHERITING,
             )
         } else {
-            return Err(host::__WASI_EINVAL);
+            return Err(Error::EINVAL);
         }
     };
     Ok((file_type, rights_base, rights_inheriting))

@@ -2,87 +2,91 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-use crate::{host, memory, Result};
+use crate::{host, memory, Error, Result};
+use log::warn;
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
 
-pub(crate) fn errno_from_nix(errno: nix::errno::Errno) -> host::__wasi_errno_t {
+pub(crate) fn errno_from_nix(errno: nix::errno::Errno) -> Error {
     match errno {
-        nix::errno::Errno::EPERM => host::__WASI_EPERM,
-        nix::errno::Errno::ENOENT => host::__WASI_ENOENT,
-        nix::errno::Errno::ESRCH => host::__WASI_ESRCH,
-        nix::errno::Errno::EINTR => host::__WASI_EINTR,
-        nix::errno::Errno::EIO => host::__WASI_EIO,
-        nix::errno::Errno::ENXIO => host::__WASI_ENXIO,
-        nix::errno::Errno::E2BIG => host::__WASI_E2BIG,
-        nix::errno::Errno::ENOEXEC => host::__WASI_ENOEXEC,
-        nix::errno::Errno::EBADF => host::__WASI_EBADF,
-        nix::errno::Errno::ECHILD => host::__WASI_ECHILD,
-        nix::errno::Errno::EAGAIN => host::__WASI_EAGAIN,
-        nix::errno::Errno::ENOMEM => host::__WASI_ENOMEM,
-        nix::errno::Errno::EACCES => host::__WASI_EACCES,
-        nix::errno::Errno::EFAULT => host::__WASI_EFAULT,
-        nix::errno::Errno::EBUSY => host::__WASI_EBUSY,
-        nix::errno::Errno::EEXIST => host::__WASI_EEXIST,
-        nix::errno::Errno::EXDEV => host::__WASI_EXDEV,
-        nix::errno::Errno::ENODEV => host::__WASI_ENODEV,
-        nix::errno::Errno::ENOTDIR => host::__WASI_ENOTDIR,
-        nix::errno::Errno::EISDIR => host::__WASI_EISDIR,
-        nix::errno::Errno::EINVAL => host::__WASI_EINVAL,
-        nix::errno::Errno::ENFILE => host::__WASI_ENFILE,
-        nix::errno::Errno::EMFILE => host::__WASI_EMFILE,
-        nix::errno::Errno::ENOTTY => host::__WASI_ENOTTY,
-        nix::errno::Errno::ETXTBSY => host::__WASI_ETXTBSY,
-        nix::errno::Errno::EFBIG => host::__WASI_EFBIG,
-        nix::errno::Errno::ENOSPC => host::__WASI_ENOSPC,
-        nix::errno::Errno::ESPIPE => host::__WASI_ESPIPE,
-        nix::errno::Errno::EROFS => host::__WASI_EROFS,
-        nix::errno::Errno::EMLINK => host::__WASI_EMLINK,
-        nix::errno::Errno::EPIPE => host::__WASI_EPIPE,
-        nix::errno::Errno::EDOM => host::__WASI_EDOM,
-        nix::errno::Errno::ERANGE => host::__WASI_ERANGE,
-        nix::errno::Errno::EDEADLK => host::__WASI_EDEADLK,
-        nix::errno::Errno::ENAMETOOLONG => host::__WASI_ENAMETOOLONG,
-        nix::errno::Errno::ENOLCK => host::__WASI_ENOLCK,
-        nix::errno::Errno::ENOSYS => host::__WASI_ENOSYS,
-        nix::errno::Errno::ENOTEMPTY => host::__WASI_ENOTEMPTY,
-        nix::errno::Errno::ELOOP => host::__WASI_ELOOP,
-        nix::errno::Errno::ENOMSG => host::__WASI_ENOMSG,
-        nix::errno::Errno::EIDRM => host::__WASI_EIDRM,
-        nix::errno::Errno::ENOLINK => host::__WASI_ENOLINK,
-        nix::errno::Errno::EPROTO => host::__WASI_EPROTO,
-        nix::errno::Errno::EMULTIHOP => host::__WASI_EMULTIHOP,
-        nix::errno::Errno::EBADMSG => host::__WASI_EBADMSG,
-        nix::errno::Errno::EOVERFLOW => host::__WASI_EOVERFLOW,
-        nix::errno::Errno::EILSEQ => host::__WASI_EILSEQ,
-        nix::errno::Errno::ENOTSOCK => host::__WASI_ENOTSOCK,
-        nix::errno::Errno::EDESTADDRREQ => host::__WASI_EDESTADDRREQ,
-        nix::errno::Errno::EMSGSIZE => host::__WASI_EMSGSIZE,
-        nix::errno::Errno::EPROTOTYPE => host::__WASI_EPROTOTYPE,
-        nix::errno::Errno::ENOPROTOOPT => host::__WASI_ENOPROTOOPT,
-        nix::errno::Errno::EPROTONOSUPPORT => host::__WASI_EPROTONOSUPPORT,
-        nix::errno::Errno::EAFNOSUPPORT => host::__WASI_EAFNOSUPPORT,
-        nix::errno::Errno::EADDRINUSE => host::__WASI_EADDRINUSE,
-        nix::errno::Errno::EADDRNOTAVAIL => host::__WASI_EADDRNOTAVAIL,
-        nix::errno::Errno::ENETDOWN => host::__WASI_ENETDOWN,
-        nix::errno::Errno::ENETUNREACH => host::__WASI_ENETUNREACH,
-        nix::errno::Errno::ENETRESET => host::__WASI_ENETRESET,
-        nix::errno::Errno::ECONNABORTED => host::__WASI_ECONNABORTED,
-        nix::errno::Errno::ECONNRESET => host::__WASI_ECONNRESET,
-        nix::errno::Errno::ENOBUFS => host::__WASI_ENOBUFS,
-        nix::errno::Errno::EISCONN => host::__WASI_EISCONN,
-        nix::errno::Errno::ENOTCONN => host::__WASI_ENOTCONN,
-        nix::errno::Errno::ETIMEDOUT => host::__WASI_ETIMEDOUT,
-        nix::errno::Errno::ECONNREFUSED => host::__WASI_ECONNREFUSED,
-        nix::errno::Errno::EHOSTUNREACH => host::__WASI_EHOSTUNREACH,
-        nix::errno::Errno::EALREADY => host::__WASI_EALREADY,
-        nix::errno::Errno::EINPROGRESS => host::__WASI_EINPROGRESS,
-        nix::errno::Errno::ESTALE => host::__WASI_ESTALE,
-        nix::errno::Errno::EDQUOT => host::__WASI_EDQUOT,
-        nix::errno::Errno::ECANCELED => host::__WASI_ECANCELED,
-        nix::errno::Errno::EOWNERDEAD => host::__WASI_EOWNERDEAD,
-        nix::errno::Errno::ENOTRECOVERABLE => host::__WASI_ENOTRECOVERABLE,
-        _ => host::__WASI_ENOSYS,
+        nix::errno::Errno::EPERM => Error::EPERM,
+        nix::errno::Errno::ENOENT => Error::ENOENT,
+        nix::errno::Errno::ESRCH => Error::ESRCH,
+        nix::errno::Errno::EINTR => Error::EINTR,
+        nix::errno::Errno::EIO => Error::EIO,
+        nix::errno::Errno::ENXIO => Error::ENXIO,
+        nix::errno::Errno::E2BIG => Error::E2BIG,
+        nix::errno::Errno::ENOEXEC => Error::ENOEXEC,
+        nix::errno::Errno::EBADF => Error::EBADF,
+        nix::errno::Errno::ECHILD => Error::ECHILD,
+        nix::errno::Errno::EAGAIN => Error::EAGAIN,
+        nix::errno::Errno::ENOMEM => Error::ENOMEM,
+        nix::errno::Errno::EACCES => Error::EACCES,
+        nix::errno::Errno::EFAULT => Error::EFAULT,
+        nix::errno::Errno::EBUSY => Error::EBUSY,
+        nix::errno::Errno::EEXIST => Error::EEXIST,
+        nix::errno::Errno::EXDEV => Error::EXDEV,
+        nix::errno::Errno::ENODEV => Error::ENODEV,
+        nix::errno::Errno::ENOTDIR => Error::ENOTDIR,
+        nix::errno::Errno::EISDIR => Error::EISDIR,
+        nix::errno::Errno::EINVAL => Error::EINVAL,
+        nix::errno::Errno::ENFILE => Error::ENFILE,
+        nix::errno::Errno::EMFILE => Error::EMFILE,
+        nix::errno::Errno::ENOTTY => Error::ENOTTY,
+        nix::errno::Errno::ETXTBSY => Error::ETXTBSY,
+        nix::errno::Errno::EFBIG => Error::EFBIG,
+        nix::errno::Errno::ENOSPC => Error::ENOSPC,
+        nix::errno::Errno::ESPIPE => Error::ESPIPE,
+        nix::errno::Errno::EROFS => Error::EROFS,
+        nix::errno::Errno::EMLINK => Error::EMLINK,
+        nix::errno::Errno::EPIPE => Error::EPIPE,
+        nix::errno::Errno::EDOM => Error::EDOM,
+        nix::errno::Errno::ERANGE => Error::ERANGE,
+        nix::errno::Errno::EDEADLK => Error::EDEADLK,
+        nix::errno::Errno::ENAMETOOLONG => Error::ENAMETOOLONG,
+        nix::errno::Errno::ENOLCK => Error::ENOLCK,
+        nix::errno::Errno::ENOSYS => Error::ENOSYS,
+        nix::errno::Errno::ENOTEMPTY => Error::ENOTEMPTY,
+        nix::errno::Errno::ELOOP => Error::ELOOP,
+        nix::errno::Errno::ENOMSG => Error::ENOMSG,
+        nix::errno::Errno::EIDRM => Error::EIDRM,
+        nix::errno::Errno::ENOLINK => Error::ENOLINK,
+        nix::errno::Errno::EPROTO => Error::EPROTO,
+        nix::errno::Errno::EMULTIHOP => Error::EMULTIHOP,
+        nix::errno::Errno::EBADMSG => Error::EBADMSG,
+        nix::errno::Errno::EOVERFLOW => Error::EOVERFLOW,
+        nix::errno::Errno::EILSEQ => Error::EILSEQ,
+        nix::errno::Errno::ENOTSOCK => Error::ENOTSOCK,
+        nix::errno::Errno::EDESTADDRREQ => Error::EDESTADDRREQ,
+        nix::errno::Errno::EMSGSIZE => Error::EMSGSIZE,
+        nix::errno::Errno::EPROTOTYPE => Error::EPROTOTYPE,
+        nix::errno::Errno::ENOPROTOOPT => Error::ENOPROTOOPT,
+        nix::errno::Errno::EPROTONOSUPPORT => Error::EPROTONOSUPPORT,
+        nix::errno::Errno::EAFNOSUPPORT => Error::EAFNOSUPPORT,
+        nix::errno::Errno::EADDRINUSE => Error::EADDRINUSE,
+        nix::errno::Errno::EADDRNOTAVAIL => Error::EADDRNOTAVAIL,
+        nix::errno::Errno::ENETDOWN => Error::ENETDOWN,
+        nix::errno::Errno::ENETUNREACH => Error::ENETUNREACH,
+        nix::errno::Errno::ENETRESET => Error::ENETRESET,
+        nix::errno::Errno::ECONNABORTED => Error::ECONNABORTED,
+        nix::errno::Errno::ECONNRESET => Error::ECONNRESET,
+        nix::errno::Errno::ENOBUFS => Error::ENOBUFS,
+        nix::errno::Errno::EISCONN => Error::EISCONN,
+        nix::errno::Errno::ENOTCONN => Error::ENOTCONN,
+        nix::errno::Errno::ETIMEDOUT => Error::ETIMEDOUT,
+        nix::errno::Errno::ECONNREFUSED => Error::ECONNREFUSED,
+        nix::errno::Errno::EHOSTUNREACH => Error::EHOSTUNREACH,
+        nix::errno::Errno::EALREADY => Error::EALREADY,
+        nix::errno::Errno::EINPROGRESS => Error::EINPROGRESS,
+        nix::errno::Errno::ESTALE => Error::ESTALE,
+        nix::errno::Errno::EDQUOT => Error::EDQUOT,
+        nix::errno::Errno::ECANCELED => Error::ECANCELED,
+        nix::errno::Errno::EOWNERDEAD => Error::EOWNERDEAD,
+        nix::errno::Errno::ENOTRECOVERABLE => Error::ENOTRECOVERABLE,
+        other => {
+            warn!("Unknown error from nix: {}", other);
+            Error::ENOSYS
+        }
     }
 }
 
@@ -179,14 +183,12 @@ pub(crate) fn filestat_from_nix(
     fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<host::__wasi_timestamp_t> {
         secs.checked_mul(1_000_000_000)
             .and_then(|sec_nsec| sec_nsec.checked_add(nsecs))
-            .ok_or(host::__WASI_EOVERFLOW)
+            .ok_or(Error::EOVERFLOW)
     }
 
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
-    let dev =
-        host::__wasi_device_t::try_from(filestat.st_dev).map_err(|_| host::__WASI_EOVERFLOW)?;
-    let ino =
-        host::__wasi_inode_t::try_from(filestat.st_ino).map_err(|_| host::__WASI_EOVERFLOW)?;
+    let dev = host::__wasi_device_t::try_from(filestat.st_dev).map_err(|_| Error::EOVERFLOW)?;
+    let ino = host::__wasi_inode_t::try_from(filestat.st_ino).map_err(|_| Error::EOVERFLOW)?;
     let st_atim = filestat_to_timestamp(filestat.st_atime as u64, filestat.st_atime_nsec as u64)?;
     let st_ctim = filestat_to_timestamp(filestat.st_ctime as u64, filestat.st_ctime_nsec as u64)?;
     let st_mtim = filestat_to_timestamp(filestat.st_mtime as u64, filestat.st_mtime_nsec as u64)?;
@@ -222,7 +224,7 @@ pub(crate) fn dirent_filetype_from_host(
             Ok(host::__WASI_FILETYPE_UNKNOWN)
         }
         libc::DT_UNKNOWN => Ok(host::__WASI_FILETYPE_UNKNOWN),
-        _ => Err(host::__WASI_EINVAL),
+        _ => Err(Error::EINVAL),
     }
 }
 
@@ -233,7 +235,7 @@ pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<host::_
         .to_bytes()
         .len();
     if d_namlen > u32::max_value() as usize {
-        return Err(host::__WASI_EIO);
+        return Err(Error::EIO);
     }
     let d_type = dirent_filetype_from_host(host_entry)?;
     entry.d_ino = memory::enc_inode(host_entry.d_ino);

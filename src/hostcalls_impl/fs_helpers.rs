@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
+use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::*;
-use crate::sys::{errno_from_host, host_impl};
-use crate::{host, Result};
+use crate::{host, Error, Result};
 use std::fs::File;
 use std::path::{Component, Path};
 
@@ -33,13 +33,10 @@ pub(crate) fn path_get(
 
     if path.contains('\0') {
         // if contains NUL, return EILSEQ
-        return Err(host::__WASI_EILSEQ);
+        return Err(Error::EILSEQ);
     }
 
-    let dirfd = dirfd.try_clone().map_err(|err| {
-        err.raw_os_error()
-            .map_or(host::__WASI_EBADF, errno_from_host)
-    })?;
+    let dirfd = dirfd.try_clone()?;
 
     // Stack of directory file descriptors. Index 0 always corresponds with the directory provided
     // to this function. Entering a directory causes a file descriptor to be pushed, while handling
@@ -64,7 +61,7 @@ pub(crate) fn path_get(
                 let ends_with_slash = cur_path.ends_with('/');
                 let mut components = Path::new(&cur_path).components();
                 let head = match components.next() {
-                    None => return Err(host::__WASI_ENOENT),
+                    None => return Err(Error::ENOENT),
                     Some(p) => p,
                 };
                 let tail = components.as_path();
@@ -80,18 +77,18 @@ pub(crate) fn path_get(
                 match head {
                     Component::Prefix(_) | Component::RootDir => {
                         // path is absolute!
-                        return Err(host::__WASI_ENOTCAPABLE);
+                        return Err(Error::ENOTCAPABLE);
                     }
                     Component::CurDir => {
                         // "." so skip
                     }
                     Component::ParentDir => {
                         // ".." so pop a dir
-                        let _ = dir_stack.pop().ok_or(host::__WASI_ENOTCAPABLE)?;
+                        let _ = dir_stack.pop().ok_or(Error::ENOTCAPABLE)?;
 
                         // we're not allowed to pop past the original directory
                         if dir_stack.is_empty() {
-                            return Err(host::__WASI_ENOTCAPABLE);
+                            return Err(Error::ENOTCAPABLE);
                         }
                     }
                     Component::Normal(head) => {
@@ -102,41 +99,44 @@ pub(crate) fn path_get(
                         }
 
                         if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
-                            match openat(dir_stack.last().ok_or(host::__WASI_ENOTCAPABLE)?, &head) {
+                            match openat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head) {
                                 Ok(new_dir) => {
                                     dir_stack.push(new_dir);
                                 }
-                                Err(e)
-                                    if e == host::__WASI_ELOOP
-                                        || e == host::__WASI_EMLINK
-                                        || e == host::__WASI_ENOTDIR =>
-                                // Check to see if it was a symlink. Linux indicates
-                                // this with ENOTDIR because of the O_DIRECTORY flag.
-                                {
-                                    // attempt symlink expansion
-                                    let mut link_path = readlinkat(
-                                        dir_stack.last().ok_or(host::__WASI_ENOTCAPABLE)?,
-                                        &head,
-                                    )?;
-
-                                    symlink_expansions += 1;
-                                    if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                        return Err(host::__WASI_ELOOP);
-                                    }
-
-                                    if head.ends_with('/') {
-                                        link_path.push('/');
-                                    }
-
-                                    log::debug!(
-                                        "attempted symlink expansion link_path={:?}",
-                                        link_path
-                                    );
-
-                                    path_stack.push(link_path);
-                                }
                                 Err(e) => {
-                                    return Err(e);
+                                    match e.as_wasi_errno() {
+                                        host::__WASI_ELOOP
+                                        | host::__WASI_EMLINK
+                                        | host::__WASI_ENOTDIR =>
+                                        // Check to see if it was a symlink. Linux indicates
+                                        // this with ENOTDIR because of the O_DIRECTORY flag.
+                                        {
+                                            // attempt symlink expansion
+                                            let mut link_path = readlinkat(
+                                                dir_stack.last().ok_or(Error::ENOTCAPABLE)?,
+                                                &head,
+                                            )?;
+
+                                            symlink_expansions += 1;
+                                            if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
+                                                return Err(Error::ELOOP);
+                                            }
+
+                                            if head.ends_with('/') {
+                                                link_path.push('/');
+                                            }
+
+                                            log::debug!(
+                                                "attempted symlink expansion link_path={:?}",
+                                                link_path
+                                            );
+
+                                            path_stack.push(link_path);
+                                        }
+                                        _ => {
+                                            return Err(e);
+                                        }
+                                    }
                                 }
                             }
 
@@ -146,14 +146,11 @@ pub(crate) fn path_get(
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion
-                            match readlinkat(
-                                dir_stack.last().ok_or(host::__WASI_ENOTCAPABLE)?,
-                                &head,
-                            ) {
+                            match readlinkat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head) {
                                 Ok(mut link_path) => {
                                     symlink_expansions += 1;
                                     if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                        return Err(host::__WASI_ELOOP);
+                                        return Err(Error::ELOOP);
                                     }
 
                                     if head.ends_with('/') {
@@ -169,7 +166,9 @@ pub(crate) fn path_get(
                                     continue;
                                 }
                                 Err(e) => {
-                                    if e != host::__WASI_EINVAL && e != host::__WASI_ENOENT {
+                                    if e.as_wasi_errno() != host::__WASI_EINVAL
+                                        && e.as_wasi_errno() != host::__WASI_ENOENT
+                                    {
                                         return Err(e);
                                     }
                                 }
@@ -178,7 +177,7 @@ pub(crate) fn path_get(
 
                         // not a symlink, so we're done;
                         return Ok(PathGet {
-                            dirfd: dir_stack.pop().ok_or(host::__WASI_ENOTCAPABLE)?,
+                            dirfd: dir_stack.pop().ok_or(Error::ENOTCAPABLE)?,
                             path: head,
                         });
                     }
@@ -188,7 +187,7 @@ pub(crate) fn path_get(
                 // no further components to process. means we've hit a case like "." or "a/..", or if the
                 // input path has trailing slashes and `needs_final_component` is not set
                 return Ok(PathGet {
-                    dirfd: dir_stack.pop().ok_or(host::__WASI_ENOTCAPABLE)?,
+                    dirfd: dir_stack.pop().ok_or(Error::ENOTCAPABLE)?,
                     path: String::from("."),
                 });
             }

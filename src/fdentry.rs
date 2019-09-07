@@ -1,5 +1,5 @@
-use crate::sys::{errno_from_ioerror, fdentry_impl};
-use crate::{host, Result};
+use crate::sys::fdentry_impl;
+use crate::{host, Error, Result};
 
 use std::mem::ManuallyDrop;
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ impl Descriptor {
     pub fn as_file(&self) -> Result<&fs::File> {
         match self {
             Descriptor::File(f) => Ok(f),
-            _ => Err(host::__WASI_EBADF),
+            _ => Err(Error::EBADF),
         }
     }
 
@@ -91,9 +91,7 @@ impl FdEntry {
     }
 
     pub fn duplicate(file: &fs::File) -> Result<Self> {
-        file.try_clone()
-            .map_err(errno_from_ioerror)
-            .and_then(Self::from)
+        Self::from(file.try_clone()?)
     }
 
     pub fn duplicate_stdin() -> Result<Self> {
