@@ -21,6 +21,7 @@ hashmap_core = { version = "0.1.9", optional = true }
 target-lexicon = "0.8.1"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
+smallvec = { version = "0.6.10" }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
