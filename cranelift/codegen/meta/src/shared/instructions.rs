@@ -1587,6 +1587,7 @@ pub(crate) fn define(
     let y = &operand("y", Int);
 
     // TODO(ryzokuken): Add documentation for unsigned overflow.
+    // TODO(ryzokuken): Add documentation for signed overflow.
     ig.push(
         Inst::new(
             "icmp",

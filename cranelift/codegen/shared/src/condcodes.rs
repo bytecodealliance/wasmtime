@@ -51,6 +51,10 @@ pub enum IntCC {
     UnsignedGreaterThan,
     /// Unsigned `<=`.
     UnsignedLessThanOrEqual,
+    /// Signed Overflow.
+    Overflow,
+    /// Signed No Overflow.
+    NotOverflow,
 }
 
 impl CondCode for IntCC {
@@ -67,6 +71,8 @@ impl CondCode for IntCC {
             UnsignedGreaterThanOrEqual => UnsignedLessThan,
             UnsignedGreaterThan => UnsignedLessThanOrEqual,
             UnsignedLessThanOrEqual => UnsignedGreaterThan,
+            Overflow => NotOverflow,
+            NotOverflow => Overflow,
         }
     }
 
@@ -83,6 +89,8 @@ impl CondCode for IntCC {
             UnsignedGreaterThanOrEqual => UnsignedLessThanOrEqual,
             UnsignedLessThan => UnsignedGreaterThan,
             UnsignedLessThanOrEqual => UnsignedGreaterThanOrEqual,
+            Overflow => Overflow,
+            NotOverflow => NotOverflow,
         }
     }
 }
@@ -101,6 +109,8 @@ impl Display for IntCC {
             UnsignedGreaterThanOrEqual => "uge",
             UnsignedLessThan => "ult",
             UnsignedLessThanOrEqual => "ule",
+            Overflow => "of",
+            NotOverflow => "nof",
         })
     }
 }
@@ -121,6 +131,8 @@ impl FromStr for IntCC {
             "ugt" => Ok(UnsignedGreaterThan),
             "ule" => Ok(UnsignedLessThanOrEqual),
             "ult" => Ok(UnsignedLessThan),
+            "of" => Ok(Overflow),
+            "nof" => Ok(NotOverflow),
             _ => Err(()),
         }
     }
@@ -270,7 +282,7 @@ mod tests {
     use super::*;
     use std::string::ToString;
 
-    static INT_ALL: [IntCC; 10] = [
+    static INT_ALL: [IntCC; 12] = [
         IntCC::Equal,
         IntCC::NotEqual,
         IntCC::SignedLessThan,
@@ -281,6 +293,8 @@ mod tests {
         IntCC::UnsignedGreaterThanOrEqual,
         IntCC::UnsignedGreaterThan,
         IntCC::UnsignedLessThanOrEqual,
+        IntCC::Overflow,
+        IntCC::NotOverflow,
     ];
 
     #[test]

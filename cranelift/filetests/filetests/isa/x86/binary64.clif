@@ -862,6 +862,10 @@ ebb11:
     trapif ugt v11, user0                          ; bin: 76 02 user0 0f 0b
     ; asm: jnbe .+4; ud2
     trapif ule v11, user0                          ; bin: 77 02 user0 0f 0b
+    ; asm: jo .+4; ud2
+    trapif of v11, user0                          ; bin: 71 02 user0 0f 0b
+    ; asm: jno .+4; ud2
+    trapif nof v11, user0                          ; bin: 70 02 user0 0f 0b
 
     ; Debug trap.
     debugtrap ; bin: cc
