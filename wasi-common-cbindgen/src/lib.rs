@@ -2,7 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{ArgCaptured, FnArg, Pat, PatIdent, Type, TypeReference, TypeSlice};
+use syn::{FnArg, Pat, PatType, Type, TypeReference, TypeSlice};
 
 #[proc_macro_attribute]
 pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenStream {
@@ -14,7 +14,7 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
     let vis = &function.vis;
 
     // generate C fn name prefixed with __wasi_
-    let fn_ident = &function.ident;
+    let fn_ident = &function.sig.ident;
     let concatenated = format!("wasi_common_{}", fn_ident);
     let c_fn_ident = syn::Ident::new(&concatenated, fn_ident.span());
 
@@ -22,18 +22,26 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
     let mut arg_ident = Vec::new();
     let mut arg_type = Vec::new();
     let mut call_arg_ident = Vec::new();
-    for input in &function.decl.inputs {
+    for input in &function.sig.inputs {
         match input {
-            FnArg::Captured(ArgCaptured {
-                pat: Pat::Ident(pat @ PatIdent { .. }),
+            FnArg::Typed(PatType {
+                attrs,
+                pat,
                 colon_token: _,
                 ty,
             }) => {
                 // parse arg identifier
-                let ident = &pat.ident;
+                let ident = if let Pat::Ident(ident) = &**pat {
+                    &ident.ident
+                } else {
+                    panic!("expected function input to be an identifier")
+                };
+                if !attrs.is_empty() {
+                    panic!("unsupported attributes on function arg");
+                }
                 arg_ident.push(quote!(#ident));
                 // parse arg type
-                if let Type::Reference(ty @ TypeReference { .. }) = &ty {
+                if let Type::Reference(ty @ TypeReference { .. }) = &**ty {
                     // if we're here, then we found a &-ref
                     // so substitute it for *mut since we're exporting to C
                     let elem = &*ty.elem;
@@ -67,12 +75,14 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
                     call_arg_ident.push(quote!(#ident));
                 }
             }
-            _ => {}
+            _ => {
+                unimplemented!("unrecognized function input pattern");
+            }
         }
     }
 
     // capture output arg
-    let output = &function.decl.output;
+    let output = &function.sig.output;
 
     let result = quote! {
         #function

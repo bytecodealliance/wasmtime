@@ -10,8 +10,8 @@ description = "Interface generator utilities used by wasi-common"
 proc-macro = true
 
 [dependencies]
-syn = { version = "0.15.34", features = ["full"] }
-quote = "0.6.12"
+syn = { version = "1.0.5", features = ["full"] }
+quote = "1.0.2"
 
 [dev-dependencies]
 trybuild = "1.0.4"
