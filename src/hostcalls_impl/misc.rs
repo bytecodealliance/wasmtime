@@ -29,7 +29,7 @@ pub(crate) fn args_get(
 
         argv.push(arg_ptr);
 
-        let len = wasm32::uintptr_t::try_from(arg_bytes.len()).map_err(|_| Error::EOVERFLOW)?;
+        let len = wasm32::uintptr_t::try_from(arg_bytes.len())?;
         argv_buf_offset = argv_buf_offset.checked_add(len).ok_or(Error::EOVERFLOW)?;
     }
 
@@ -87,7 +87,7 @@ pub(crate) fn environ_get(
 
         environ.push(env_ptr);
 
-        let len = wasm32::uintptr_t::try_from(env_bytes.len()).map_err(|_| Error::EOVERFLOW)?;
+        let len = wasm32::uintptr_t::try_from(env_bytes.len())?;
         environ_buf_offset = environ_buf_offset
             .checked_add(len)
             .ok_or(Error::EOVERFLOW)?;

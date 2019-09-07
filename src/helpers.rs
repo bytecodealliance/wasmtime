@@ -6,5 +6,5 @@ pub(crate) fn systemtime_to_timestamp(st: SystemTime) -> Result<u64> {
         .map_err(|_| Error::EINVAL)? // date earlier than UNIX_EPOCH
         .as_nanos()
         .try_into()
-        .map_err(|_| Error::EOVERFLOW) // u128 doesn't fit into u64
+        .map_err(Into::into) // u128 doesn't fit into u64
 }

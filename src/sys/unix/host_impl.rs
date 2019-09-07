@@ -187,8 +187,8 @@ pub(crate) fn filestat_from_nix(
     }
 
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
-    let dev = host::__wasi_device_t::try_from(filestat.st_dev).map_err(|_| Error::EOVERFLOW)?;
-    let ino = host::__wasi_inode_t::try_from(filestat.st_ino).map_err(|_| Error::EOVERFLOW)?;
+    let dev = host::__wasi_device_t::try_from(filestat.st_dev)?;
+    let ino = host::__wasi_inode_t::try_from(filestat.st_ino)?;
     let st_atim = filestat_to_timestamp(filestat.st_atime as u64, filestat.st_atime_nsec as u64)?;
     let st_ctim = filestat_to_timestamp(filestat.st_ctime as u64, filestat.st_ctime_nsec as u64)?;
     let st_mtim = filestat_to_timestamp(filestat.st_mtime as u64, filestat.st_mtime_nsec as u64)?;

@@ -4,7 +4,7 @@ use super::fs_helpers::*;
 use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::PathGet;
 use crate::sys::host_impl::{self, errno_from_nix};
-use crate::{host, Result, Error};
+use crate::{host, Error, Result};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
 use std::ffi::CString;
@@ -51,8 +51,8 @@ pub(crate) fn fd_advise(
     {
         use nix::fcntl::{posix_fadvise, PosixFadviseAdvice};
 
-        let offset = offset.try_into().map_err(|_| Error::EOVERFLOW)?;
-        let len = len.try_into().map_err(|_| Error::EOVERFLOW)?;
+        let offset = offset.try_into()?;
+        let len = len.try_into()?;
         let host_advice = match advice {
             host::__WASI_ADVICE_DONTNEED => PosixFadviseAdvice::POSIX_FADV_DONTNEED,
             host::__WASI_ADVICE_SEQUENTIAL => PosixFadviseAdvice::POSIX_FADV_SEQUENTIAL,
@@ -102,10 +102,8 @@ pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::libc::linkat;
-    let old_path_cstr =
-        CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
-    let new_path_cstr =
-        CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let new_path_cstr = CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     // Not setting AT_SYMLINK_FOLLOW fails on most filesystems
     let atflags = libc::AT_SYMLINK_FOLLOW;
@@ -305,10 +303,8 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::libc::renameat;
-    let old_path_cstr =
-        CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
-    let new_path_cstr =
-        CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let new_path_cstr = CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     let res = unsafe {
         renameat(
@@ -332,14 +328,10 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_
     Ok(host::__wasi_filestat_t {
         st_dev: metadata.dev(),
         st_ino: metadata.ino(),
-        st_nlink: metadata
-            .nlink()
-            .try_into()?, // u64 doesn't fit into u32
+        st_nlink: metadata.nlink().try_into()?, // u64 doesn't fit into u32
         st_size: metadata.len(),
         st_atim: systemtime_to_timestamp(metadata.accessed()?)?,
-        st_ctim: metadata
-            .ctime()
-            .try_into()?, // i64 doesn't fit into u64
+        st_ctim: metadata.ctime().try_into()?, // i64 doesn't fit into u64
         st_mtim: systemtime_to_timestamp(metadata.modified()?)?,
         st_filetype: filetype(file, &metadata)?,
     })
@@ -432,7 +424,7 @@ pub(crate) fn path_filestat_set_times(
     };
 
     let atim = if set_atim_now {
-        let st_atim = st_atim.try_into().map_err(|_| Error::EOVERFLOW)?;
+        let st_atim = st_atim.try_into()?;
         TimeSpec::nanoseconds(st_atim)
     } else if set_atim_now {
         timespec_now()
@@ -441,7 +433,7 @@ pub(crate) fn path_filestat_set_times(
     };
 
     let mtim = if set_mtim {
-        let st_mtim = st_mtim.try_into().map_err(|_| Error::EOVERFLOW)?;
+        let st_mtim = st_mtim.try_into()?;
         TimeSpec::nanoseconds(st_mtim)
     } else if set_atim_now {
         timespec_now()
@@ -458,8 +450,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     use nix::libc::symlinkat;
 
     let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| Error::EILSEQ)?;
-    let new_path_cstr =
-        CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let new_path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
 
     let res = unsafe {
         symlinkat(
