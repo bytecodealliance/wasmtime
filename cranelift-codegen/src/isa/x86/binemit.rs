@@ -272,8 +272,8 @@ fn sib<CS: CodeSink + ?Sized>(scale: u8, index: RegUnit, base: RegUnit, sink: &m
 fn icc2opc(cond: IntCC) -> u16 {
     use crate::ir::condcodes::IntCC::*;
     match cond {
-        // 0x0 = Overflow.
-        // 0x1 = !Overflow.
+        Overflow => 0x0,
+        NotOverflow => 0x1,
         UnsignedLessThan => 0x2,
         UnsignedGreaterThanOrEqual => 0x3,
         Equal => 0x4,

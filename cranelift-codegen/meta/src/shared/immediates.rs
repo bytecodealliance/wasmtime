@@ -129,6 +129,8 @@ impl Immediates {
                 intcc_values.insert("ugt", "UnsignedGreaterThan");
                 intcc_values.insert("ule", "UnsignedLessThanOrEqual");
                 intcc_values.insert("ult", "UnsignedLessThan");
+                intcc_values.insert("of", "Overflow");
+                intcc_values.insert("nof", "NotOverflow");
                 Builder::new_enum("intcc", intcc_values)
                     .doc("An integer comparison condition code.")
                     .default_member("cond")

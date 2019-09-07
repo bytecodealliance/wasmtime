@@ -2920,21 +2920,9 @@ pub(crate) fn define<'shared>(
                     {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
                     modrm_rr(in_reg0, in_reg1, sink);
                     // `setCC` instruction, no REX.
-                    use crate::ir::condcodes::IntCC::*;
-                    let setcc = match cond {
-                        Equal => 0x94,
-                        NotEqual => 0x95,
-                        SignedLessThan => 0x9c,
-                        SignedGreaterThanOrEqual => 0x9d,
-                        SignedGreaterThan => 0x9f,
-                        SignedLessThanOrEqual => 0x9e,
-                        UnsignedLessThan => 0x92,
-                        UnsignedGreaterThanOrEqual => 0x93,
-                        UnsignedGreaterThan => 0x97,
-                        UnsignedLessThanOrEqual => 0x96,
-                    };
+                    let setcc = 0x90 | icc2opc(cond);
                     sink.put1(0x0f);
-                    sink.put1(setcc);
+                    sink.put1(setcc as u8);
                     modrm_rr(out_reg0, 0, sink);
                 "#,
             ),
@@ -2971,21 +2959,9 @@ pub(crate) fn define<'shared>(
                         let imm: i64 = imm.into();
                         sink.put1(imm as u8);
                         // `setCC` instruction, no REX.
-                        use crate::ir::condcodes::IntCC::*;
-                        let setcc = match cond {
-                            Equal => 0x94,
-                            NotEqual => 0x95,
-                            SignedLessThan => 0x9c,
-                            SignedGreaterThanOrEqual => 0x9d,
-                            SignedGreaterThan => 0x9f,
-                            SignedLessThanOrEqual => 0x9e,
-                            UnsignedLessThan => 0x92,
-                            UnsignedGreaterThanOrEqual => 0x93,
-                            UnsignedGreaterThan => 0x97,
-                            UnsignedLessThanOrEqual => 0x96,
-                        };
+                        let setcc = 0x90 | icc2opc(cond);
                         sink.put1(0x0f);
-                        sink.put1(setcc);
+                        sink.put1(setcc as u8);
                         modrm_rr(out_reg0, 0, sink);
                     "#,
                 ),
@@ -3006,21 +2982,9 @@ pub(crate) fn define<'shared>(
                         let imm: i64 = imm.into();
                         sink.put4(imm as u32);
                         // `setCC` instruction, no REX.
-                        use crate::ir::condcodes::IntCC::*;
-                        let setcc = match cond {
-                            Equal => 0x94,
-                            NotEqual => 0x95,
-                            SignedLessThan => 0x9c,
-                            SignedGreaterThanOrEqual => 0x9d,
-                            SignedGreaterThan => 0x9f,
-                            SignedLessThanOrEqual => 0x9e,
-                            UnsignedLessThan => 0x92,
-                            UnsignedGreaterThanOrEqual => 0x93,
-                            UnsignedGreaterThan => 0x97,
-                            UnsignedLessThanOrEqual => 0x96,
-                        };
+                        let setcc = 0x90 | icc2opc(cond);
                         sink.put1(0x0f);
-                        sink.put1(setcc);
+                        sink.put1(setcc as u8);
                         modrm_rr(out_reg0, 0, sink);
                     "#,
                 ),
