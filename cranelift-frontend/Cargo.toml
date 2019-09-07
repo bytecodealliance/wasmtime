@@ -15,6 +15,7 @@ cranelift-codegen = { path = "../cranelift-codegen", version = "0.42.0", default
 target-lexicon = "0.8.1"
 log = { version = "0.4.6", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
+smallvec = { version = "0.6.10" }
 
 [features]
 default = ["std"]

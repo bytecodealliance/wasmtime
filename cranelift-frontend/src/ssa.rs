@@ -16,6 +16,7 @@ use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::packed_option::ReservedValue;
+use smallvec::SmallVec;
 use std::vec::Vec;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
@@ -123,9 +124,11 @@ impl PredBlock {
     }
 }
 
+type PredBlockSmallVec = SmallVec<[PredBlock; 4]>;
+
 struct EbbHeaderBlockData {
     // The predecessors of the Ebb header block, with the block and branch instruction.
-    predecessors: Vec<PredBlock>,
+    predecessors: PredBlockSmallVec,
     // A ebb header block is sealed if all of its predecessors have been declared.
     sealed: bool,
     // The ebb which this block is part of.
@@ -366,7 +369,7 @@ impl SSABuilder {
     /// Predecessors have to be added with `declare_ebb_predecessor`.
     pub fn declare_ebb_header_block(&mut self, ebb: Ebb) -> Block {
         let block = self.blocks.push(BlockData::EbbHeader(EbbHeaderBlockData {
-            predecessors: Vec::new(),
+            predecessors: PredBlockSmallVec::new(),
             sealed: false,
             ebb,
             undef_variables: Vec::new(),
@@ -587,7 +590,8 @@ impl SSABuilder {
                 // There is disagreement in the predecessors on which value to use so we have
                 // to keep the ebb argument. To avoid borrowing `self` for the whole loop,
                 // temporarily detach the predecessors list and replace it with an empty list.
-                let mut preds = mem::replace(self.predecessors_mut(dest_ebb), Vec::new());
+                let mut preds =
+                    mem::replace(self.predecessors_mut(dest_ebb), PredBlockSmallVec::new());
                 for &mut PredBlock {
                     block: ref mut pred_block,
                     branch: ref mut last_inst,
@@ -699,7 +703,7 @@ impl SSABuilder {
     }
 
     /// Same as predecessors, but for &mut.
-    fn predecessors_mut(&mut self, ebb: Ebb) -> &mut Vec<PredBlock> {
+    fn predecessors_mut(&mut self, ebb: Ebb) -> &mut PredBlockSmallVec {
         let block = self.header_block(ebb);
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("should not happen"),
