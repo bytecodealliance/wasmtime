@@ -1,7 +1,0 @@
-{
-    "editor.formatOnSave": true,
-    "rust-client.disableRustup": false,
-    // "rust.target": "x86_64-pc-windows-gnu",
-    //"rust.sysroot": "/home/marcin/.rustup/toolchains/stable-x86_64-pc-windows-gnu/",
-    "rust.all_targets": false
-}
