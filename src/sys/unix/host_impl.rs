@@ -178,8 +178,6 @@ pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> host::__wasi_f
 pub(crate) fn filestat_from_nix(
     filestat: nix::sys::stat::FileStat,
 ) -> Result<host::__wasi_filestat_t> {
-    use std::convert::TryFrom;
-
     fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<host::__wasi_timestamp_t> {
         secs.checked_mul(1_000_000_000)
             .and_then(|sec_nsec| sec_nsec.checked_add(nsecs))
@@ -187,8 +185,8 @@ pub(crate) fn filestat_from_nix(
     }
 
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
-    let dev = host::__wasi_device_t::try_from(filestat.st_dev)?;
-    let ino = host::__wasi_inode_t::try_from(filestat.st_ino)?;
+    let dev = host::__wasi_device_t::from(filestat.st_dev);
+    let ino = host::__wasi_inode_t::from(filestat.st_ino);
     let st_atim = filestat_to_timestamp(filestat.st_atime as u64, filestat.st_atime_nsec as u64)?;
     let st_ctim = filestat_to_timestamp(filestat.st_ctime as u64, filestat.st_ctime_nsec as u64)?;
     let st_mtim = filestat_to_timestamp(filestat.st_mtime as u64, filestat.st_mtime_nsec as u64)?;

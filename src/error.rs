@@ -134,11 +134,18 @@ impl Error {
     pub(crate) fn as_wasi_errno(&self) -> host::__wasi_errno_t {
         match self {
             Self::Wasi(no) => no.as_raw_errno(),
+            Self::Io(e) => errno_from_ioerror(e.to_owned()),
             #[cfg(unix)]
-            Self::Nix(err) => {
-                crate::sys::host_impl::errno_from_nix(err.as_errno().unwrap()).as_wasi_errno()
-            } // FIXME unwrap
-            Self::Io(e) => errno_from_ioerror(e.to_owned()), // fixme clone
+            Self::Nix(err) => err
+                .as_errno()
+                .map_or_else(
+                    || {
+                        log::debug!("Unknown nix errno: {}", err);
+                        Self::ENOSYS
+                    },
+                    crate::sys::host_impl::errno_from_nix,
+                )
+                .as_wasi_errno(),
             #[cfg(windows)]
             Self::Win(err) => crate::sys::host_impl::errno_from_win(*err),
         }

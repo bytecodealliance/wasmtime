@@ -50,7 +50,7 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
         Mode::empty(),
     )
     .map(|new_fd| unsafe { File::from_raw_fd(new_fd) })
-    .map_err(|e| host_impl::errno_from_nix(e.as_errno().unwrap()))
+    .map_err(Into::into)
 }
 
 pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
@@ -60,7 +60,7 @@ pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
     let readlink_buf = &mut [0u8; libc::PATH_MAX as usize + 1];
 
     fcntl::readlinkat(dirfd.as_raw_fd(), path, readlink_buf)
-        .map_err(|e| host_impl::errno_from_nix(e.as_errno().unwrap()))
+        .map_err(Into::into)
         .and_then(host_impl::path_from_host)
 }
 

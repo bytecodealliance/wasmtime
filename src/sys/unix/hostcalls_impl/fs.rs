@@ -442,8 +442,7 @@ pub(crate) fn path_filestat_set_times(
     };
 
     let fd = resolved.dirfd().as_raw_fd().into();
-    utimensat(fd, resolved.path(), &atim, &mtim, atflags)
-        .map_err(|e| host_impl::errno_from_nix(e.as_errno().unwrap()))
+    utimensat(fd, resolved.path(), &atim, &mtim, atflags).map_err(Into::into)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
