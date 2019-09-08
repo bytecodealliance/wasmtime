@@ -1,9 +1,9 @@
 use crate::host;
 use crate::sys::errno_from_ioerror;
 use failure::Fail;
+use std::convert::Infallible;
 use std::fmt;
 use std::num::TryFromIntError;
-use std::convert::Infallible;
 
 #[derive(Clone, Copy, Debug, Fail)]
 pub enum WasiError {
