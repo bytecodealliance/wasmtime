@@ -74,7 +74,7 @@ pub(crate) fn fd_advise(
         | host::__WASI_ADVICE_NOREUSE
         | host::__WASI_ADVICE_RANDOM
         | host::__WASI_ADVICE_NORMAL => {}
-        _ => return Err(host::__WASI_EINVAL),
+        _ => return Err(Error::EINVAL),
     }
 
     Ok(())

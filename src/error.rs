@@ -3,6 +3,7 @@ use crate::sys::errno_from_ioerror;
 use failure::Fail;
 use std::fmt;
 use std::num::TryFromIntError;
+use std::convert::Infallible;
 
 #[derive(Clone, Copy, Debug, Fail)]
 pub enum WasiError {
@@ -131,6 +132,12 @@ impl From<std::io::Error> for Error {
 impl From<TryFromIntError> for Error {
     fn from(_: TryFromIntError) -> Self {
         Self::Wasi(WasiError::EOVERFLOW)
+    }
+}
+
+impl From<Infallible> for Error {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
     }
 }
 
