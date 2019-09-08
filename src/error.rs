@@ -1,8 +1,10 @@
 use crate::host;
 use crate::sys::errno_from_ioerror;
+use failure::Fail;
+use std::fmt;
 use std::num::TryFromIntError;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Fail)]
 pub enum WasiError {
     ESUCCESS = 0,
     E2BIG = 1,
@@ -89,6 +91,15 @@ impl WasiError {
     }
 }
 
+impl fmt::Display for WasiError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            _ => write!(f, "{:?}", self),
+        }
+    }
+}
+
+#[derive(Debug, Fail)]
 pub enum Error {
     Wasi(WasiError),
     Io(std::io::Error),
@@ -227,4 +238,12 @@ impl Error {
     pub const ETXTBSY: Self = Error::Wasi(WasiError::ETXTBSY);
     pub const EXDEV: Self = Error::Wasi(WasiError::EXDEV);
     pub const ENOTCAPABLE: Self = Error::Wasi(WasiError::ENOTCAPABLE);
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            _ => write!(f, "{:?}", self),
+        }
+    }
 }
