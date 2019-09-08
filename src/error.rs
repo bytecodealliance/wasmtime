@@ -1,5 +1,4 @@
 use crate::host;
-use crate::sys::errno_from_ioerror;
 use failure::Fail;
 use std::convert::Infallible;
 use std::fmt;
@@ -251,6 +250,16 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             _ => write!(f, "{:?}", self),
+        }
+    }
+}
+
+fn errno_from_ioerror(e: &std::io::Error) -> host::__wasi_errno_t {
+    match e.raw_os_error() {
+        Some(code) => crate::sys::errno_from_host(code),
+        None => {
+            log::debug!("Inconvertible OS error: {}", e);
+            host::__WASI_EIO
         }
     }
 }

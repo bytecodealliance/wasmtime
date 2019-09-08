@@ -22,13 +22,3 @@ cfg_if! {
         compile_error!("wasi-common doesn't compile for this platform yet");
     }
 }
-
-pub(crate) fn errno_from_ioerror(e: &std::io::Error) -> host::__wasi_errno_t {
-    match e.raw_os_error() {
-        Some(code) => errno_from_host(code),
-        None => {
-            log::debug!("Inconvertible OS error: {}", e);
-            host::__WASI_EIO
-        }
-    }
-}
