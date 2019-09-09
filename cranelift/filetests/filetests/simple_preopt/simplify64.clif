@@ -1,5 +1,7 @@
 test simple_preopt
-target i686
+target x86_64
+
+;; 64-bits platforms.
 
 function %iadd_imm(i32) -> i32 {
 ebb0(v0: i32):
