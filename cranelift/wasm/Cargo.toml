@@ -26,7 +26,7 @@ wabt = "0.9.1"
 target-lexicon = "0.8.1"
 
 [features]
-default = ["std"]
+default = ["std", "basic-blocks"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std"]
 core = ["hashbrown", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
 enable-serde = ["serde"]

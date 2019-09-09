@@ -46,7 +46,7 @@ indicatif = "0.12.0"
 walkdir = "2.2"
 
 [features]
-default = ["disas", "wasm", "cranelift-codegen/all-arch"]
+default = ["disas", "wasm", "cranelift-codegen/all-arch", "basic-blocks"]
 disas = ["capstone"]
 wasm = ["wabt", "cranelift-wasm"]
 basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-blocks",

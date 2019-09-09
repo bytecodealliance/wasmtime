@@ -32,7 +32,7 @@ smallvec = { version = "0.6.10" }
 cranelift-codegen-meta = { path = "meta", version = "0.46.1" }
 
 [features]
-default = ["std"]
+default = ["std", "basic-blocks"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two

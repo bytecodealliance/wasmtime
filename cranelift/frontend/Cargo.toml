@@ -18,7 +18,7 @@ hashbrown = { version = "0.6", optional = true }
 smallvec = { version = "0.6.10" }
 
 [features]
-default = ["std"]
+default = ["std", "basic-blocks"]
 std = ["cranelift-codegen/std"]
 core = ["hashbrown", "cranelift-codegen/core"]
 
