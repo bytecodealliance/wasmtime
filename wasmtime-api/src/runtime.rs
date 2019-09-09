@@ -79,6 +79,9 @@ impl Engine {
 
 // Store
 
+/// The SignatureRegistry allow register new cranelift signature,
+/// and also quickly retrive the signature back using registration
+/// index.
 pub(crate) trait SignatureRegistry {
     fn register_cranelift_signature(
         &mut self,
