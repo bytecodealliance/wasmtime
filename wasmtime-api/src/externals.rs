@@ -1,10 +1,9 @@
 use crate::callable::{Callable, NativeCallable, WasmtimeFn, WrappedCallable};
 use crate::runtime::Store;
-use crate::table_utils;
 use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
 use crate::trap::Trap;
 use crate::types::{ExternType, FuncType, GlobalType, MemoryType, TableType, ValType};
-use crate::values::Val;
+use crate::values::{from_checked_anyfunc, into_checked_anyfunc, AnyRef, Val};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::result::Result;
@@ -244,20 +243,62 @@ impl Global {
 pub struct Table {
     store: Rc<RefCell<Store>>,
     r#type: TableType,
-    #[allow(dead_code)]
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::Export,
 }
 
+fn get_table_item(
+    handle: &InstanceHandle,
+    store: &Rc<RefCell<Store>>,
+    table_index: cranelift_wasm::DefinedTableIndex,
+    item_index: u32,
+) -> Val {
+    if let Some(item) = handle.table_get(table_index, item_index) {
+        from_checked_anyfunc(item, store)
+    } else {
+        AnyRef::null().into()
+    }
+}
+
+fn set_table_item(
+    handle: &mut InstanceHandle,
+    store: &Rc<RefCell<Store>>,
+    table_index: cranelift_wasm::DefinedTableIndex,
+    item_index: u32,
+    val: Val,
+) -> bool {
+    let item = into_checked_anyfunc(val, store);
+    if let Some(item_ref) = handle.table_get_mut(table_index, item_index) {
+        *item_ref = item;
+        true
+    } else {
+        false
+    }
+}
+
 impl Table {
-    pub fn new(store: Rc<RefCell<Store>>, r#type: TableType, _init: Val) -> Table {
+    pub fn new(store: Rc<RefCell<Store>>, r#type: TableType, init: Val) -> Table {
         match r#type.element() {
             ValType::FuncRef => (),
             _ => panic!("table is not for funcref"),
         }
-        // TODO implement _init initialization
-        let (wasmtime_handle, wasmtime_export) =
+        let (mut wasmtime_handle, wasmtime_export) =
             generate_table_export(&r#type).expect("generated table");
+
+        // Initialize entries with the init value.
+        match wasmtime_export {
+            wasmtime_runtime::Export::Table { definition, .. } => {
+                let index = wasmtime_handle.table_index(unsafe { &*definition });
+                let len = unsafe { (*definition).current_elements as u32 };
+                for i in 0..len {
+                    let _success =
+                        set_table_item(&mut wasmtime_handle, &store, index, i, init.clone());
+                    assert!(_success);
+                }
+            }
+            _ => panic!("global definition not found"),
+        }
+
         Table {
             store,
             r#type,
@@ -270,31 +311,49 @@ impl Table {
         &self.r#type
     }
 
-    fn wasmtime_table_definition(&self) -> *mut wasmtime_runtime::VMTableDefinition {
+    fn wasmtime_table_index(&self) -> cranelift_wasm::DefinedTableIndex {
         match self.wasmtime_export {
-            wasmtime_runtime::Export::Table { definition, .. } => definition,
+            wasmtime_runtime::Export::Table { definition, .. } => {
+                self.wasmtime_handle.table_index(unsafe { &*definition })
+            }
             _ => panic!("global definition not found"),
         }
     }
 
     pub fn get(&self, index: u32) -> Val {
-        let definition = self.wasmtime_table_definition();
-        unsafe { table_utils::get_item(definition, &self.store, index) }
+        let table_index = self.wasmtime_table_index();
+        get_table_item(&self.wasmtime_handle, &self.store, table_index, index)
     }
 
     pub fn set(&self, index: u32, val: Val) -> bool {
-        let definition = self.wasmtime_table_definition();
-        unsafe { table_utils::set_item(definition, &self.store, index, val) }
+        let table_index = self.wasmtime_table_index();
+        let mut wasmtime_handle = self.wasmtime_handle.clone();
+        set_table_item(&mut wasmtime_handle, &self.store, table_index, index, val)
     }
 
     pub fn size(&self) -> u32 {
-        let definition = self.wasmtime_table_definition();
-        unsafe { table_utils::get_size(definition) }
+        match self.wasmtime_export {
+            wasmtime_runtime::Export::Table { definition, .. } => unsafe {
+                (*definition).current_elements as u32
+            },
+            _ => panic!("global definition not found"),
+        }
     }
 
     pub fn grow(&mut self, delta: u32, init: Val) -> bool {
-        let definition = self.wasmtime_table_definition();
-        unsafe { table_utils::grow_table(definition, &self.r#type, &self.store, delta, init) }
+        let index = self.wasmtime_table_index();
+        if let Some(len) = self.wasmtime_handle.table_grow(index, delta) {
+            let mut wasmtime_handle = self.wasmtime_handle.clone();
+            for i in 0..delta {
+                let i = len as u32 - (delta - i);
+                let _success =
+                    set_table_item(&mut wasmtime_handle, &self.store, index, i, init.clone());
+                assert!(_success);
+            }
+            true
+        } else {
+            false
+        }
     }
 
     pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {

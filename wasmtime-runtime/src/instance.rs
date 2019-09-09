@@ -622,6 +622,47 @@ impl Instance {
         }
         None
     }
+
+    /// Grow table by the specified amount of elements.
+    ///
+    /// Returns `None` if table can't be grown by the specified amount
+    /// of elements.
+    pub(crate) fn table_grow(&mut self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
+        let result = self
+            .tables
+            .get_mut(table_index)
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
+            .grow(delta);
+
+        // Keep current the VMContext pointers used by compiled wasm code.
+        *self.table_mut(table_index) = self.tables[table_index].vmtable();
+
+        result
+    }
+
+    // Get table element by index.
+    pub(crate) fn table_get(
+        &self,
+        table_index: DefinedTableIndex,
+        index: u32,
+    ) -> Option<&VMCallerCheckedAnyfunc> {
+        self.tables
+            .get(table_index)
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
+            .get(index)
+    }
+
+    // Get table mutable element by index.
+    pub(crate) fn table_get_mut(
+        &mut self,
+        table_index: DefinedTableIndex,
+        index: u32,
+    ) -> Option<&mut VMCallerCheckedAnyfunc> {
+        self.tables
+            .get_mut(table_index)
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
+            .get_mut(index)
+    }
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
@@ -870,6 +911,41 @@ impl InstanceHandle {
     /// of pages.
     pub fn memory_grow(&mut self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
         self.instance_mut().memory_grow(memory_index, delta)
+    }
+
+    /// Return the table index for the given `VMTableDefinition` in this instance.
+    pub fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
+        self.instance().table_index(table)
+    }
+
+    /// Grow table in this instance by the specified amount of pages.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount
+    /// of pages.
+    pub fn table_grow(&mut self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
+        self.instance_mut().table_grow(table_index, delta)
+    }
+
+    /// Get table element reference.
+    ///
+    /// Returns `None` if index is out of bounds.
+    pub fn table_get(
+        &self,
+        table_index: DefinedTableIndex,
+        index: u32,
+    ) -> Option<&VMCallerCheckedAnyfunc> {
+        self.instance().table_get(table_index, index)
+    }
+
+    /// Get mutable table element reference.
+    ///
+    /// Returns `None` if index is out of bounds.
+    pub fn table_get_mut(
+        &mut self,
+        table_index: DefinedTableIndex,
+        index: u32,
+    ) -> Option<&mut VMCallerCheckedAnyfunc> {
+        self.instance_mut().table_get_mut(table_index, index)
     }
 }
 
