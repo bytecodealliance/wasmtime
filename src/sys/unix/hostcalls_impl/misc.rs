@@ -2,7 +2,7 @@
 #![allow(unused_unsafe)]
 use crate::memory::*;
 use crate::sys::host_impl;
-use crate::{host, wasm32, Result, Error};
+use crate::{host, wasm32, Error, Result};
 use nix::libc::{self, c_int};
 use std::cmp;
 use std::time::SystemTime;
