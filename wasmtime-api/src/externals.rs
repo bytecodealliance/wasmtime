@@ -116,6 +116,7 @@ impl Func {
         &self.r#type
     }
 
+    #[cfg(feature = "wasm-c-api")]
     pub(crate) fn callable(&self) -> &Rc<dyn WrappedCallable + 'static> {
         &self.callable
     }
