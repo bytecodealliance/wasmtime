@@ -1,6 +1,8 @@
-use crate::callable::WrappedCallable;
+use crate::callable::{WasmtimeFn, WrappedCallable};
+use crate::runtime::{SignatureRegistry, Store};
 use crate::types::ValType;
 use std::any::Any;
+use std::cell::RefCell;
 use std::fmt;
 use std::ptr;
 use std::rc::Rc;
@@ -198,4 +200,56 @@ impl Into<AnyRef> for Val {
             _ => panic!("Invalid conversion of {:?} to anyref.", self),
         }
     }
+}
+
+pub(crate) fn into_checked_anyfunc(
+    val: Val,
+    store: &Rc<RefCell<Store>>,
+) -> wasmtime_runtime::VMCallerCheckedAnyfunc {
+    match val {
+        Val::AnyRef(AnyRef::Null) => wasmtime_runtime::VMCallerCheckedAnyfunc {
+            func_ptr: ptr::null(),
+            type_index: wasmtime_runtime::VMSharedSignatureIndex::default(),
+            vmctx: ptr::null_mut(),
+        },
+        Val::AnyRef(AnyRef::Func(f)) | Val::FuncRef(f) => {
+            let (vmctx, func_ptr, signature) = match f.0.wasmtime_export() {
+                wasmtime_runtime::Export::Function {
+                    vmctx,
+                    address,
+                    signature,
+                } => (*vmctx, *address, signature),
+                _ => panic!("expected function export"),
+            };
+            let type_index = store.borrow_mut().register_cranelift_signature(signature);
+            wasmtime_runtime::VMCallerCheckedAnyfunc {
+                func_ptr,
+                type_index,
+                vmctx,
+            }
+        }
+        _ => panic!("val is not funcref"),
+    }
+}
+
+pub(crate) fn from_checked_anyfunc(
+    item: &wasmtime_runtime::VMCallerCheckedAnyfunc,
+    store: &Rc<RefCell<Store>>,
+) -> Val {
+    if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {
+        return Val::AnyRef(AnyRef::Null);
+    }
+    let signature = store
+        .borrow()
+        .lookup_cranelift_signature(item.type_index)
+        .expect("signature")
+        .clone();
+    let instance_handle = unsafe { wasmtime_runtime::InstanceHandle::from_vmctx(item.vmctx) };
+    let export = wasmtime_runtime::Export::Function {
+        address: item.func_ptr,
+        signature,
+        vmctx: item.vmctx,
+    };
+    let f = WasmtimeFn::new(store.clone(), instance_handle, export);
+    Val::FuncRef(FuncRef(Rc::new(f)))
 }

@@ -32,6 +32,48 @@ impl Table {
         }
     }
 
+    /// Returns the number of allocated elements.
+    pub fn size(&self) -> u32 {
+        self.vec.len() as u32
+    }
+
+    /// Grow table by the specified amount of elements.
+    ///
+    /// Returns `None` if table can't be grown by the specified amount
+    /// of elements.
+    pub fn grow(&mut self, delta: u32) -> Option<u32> {
+        let new_len = match self.size().checked_add(delta) {
+            Some(len) => {
+                if let Some(max) = self.maximum {
+                    if len > max {
+                        return None;
+                    }
+                }
+                len
+            }
+            None => {
+                return None;
+            }
+        };
+        self.vec
+            .resize(new_len as usize, VMCallerCheckedAnyfunc::default());
+        Some(new_len)
+    }
+
+    /// Get reference to the specified element.
+    ///
+    /// Returns `None` if the index is out of bounds.
+    pub fn get(&self, index: u32) -> Option<&VMCallerCheckedAnyfunc> {
+        self.vec.get(index as usize)
+    }
+
+    /// Get mutable reference to the specified element.
+    ///
+    /// Returns `None` if the index is out of bounds.
+    pub fn get_mut(&mut self, index: u32) -> Option<&mut VMCallerCheckedAnyfunc> {
+        self.vec.get_mut(index as usize)
+    }
+
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.
     pub fn vmtable(&mut self) -> VMTableDefinition {
         VMTableDefinition {
