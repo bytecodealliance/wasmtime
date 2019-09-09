@@ -5,7 +5,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
-use crate::ir::immediates::Uimm128;
+use crate::ir::immediates::V128Imm;
 use crate::ir::{
     DataFlowGraph, DisplayFunctionAnnotations, Ebb, Function, Inst, SigRef, Type, Value, ValueDef,
     ValueLoc,
@@ -509,15 +509,15 @@ pub fn write_operands(
             constant_handle, ..
         } => {
             let data = dfg.constants.get(constant_handle);
-            let uimm128 = Uimm128::from(&data[..]);
-            write!(w, " {}", uimm128)
+            let v128 = V128Imm::from(&data[..]);
+            write!(w, " {}", v128)
         }
         Shuffle { mask, args, .. } => {
             let data = dfg.immediates.get(mask).expect(
                 "Expected the shuffle mask to already be inserted into the immediates table",
             );
-            let uimm128 = Uimm128::from(&data[..]);
-            write!(w, " {}, {}, {}", args[0], args[1], uimm128)
+            let v128 = V128Imm::from(&data[..]);
+            write!(w, " {}, {}, {}", args[0], args[1], v128)
         }
         IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
