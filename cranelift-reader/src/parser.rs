@@ -9,7 +9,7 @@ use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm128, Uimm32, Uimm64};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, V128Imm};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -597,7 +597,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume a Uimm128 immediate; due to size restrictions on InstructionData, Uimm128
     // is boxed in cranelift-codegen/meta/src/shared/immediates.rs
-    fn match_uimm128(&mut self, err_msg: &str) -> ParseResult<Uimm128> {
+    fn match_uimm128(&mut self, err_msg: &str) -> ParseResult<V128Imm> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like hex code.
@@ -614,7 +614,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal list form (e.g. [0 1 2...])
-    fn match_uimm128_or_literals(&mut self, controlling_type: Type) -> ParseResult<Uimm128> {
+    fn match_uimm128_or_literals(&mut self, controlling_type: Type) -> ParseResult<V128Imm> {
         if self.optional(Token::LBracket) {
             // parse using a list of values, e.g. vconst.i32x4 [0 1 2 3]
             let uimm128 = self.parse_literals_to_uimm128(controlling_type)?;
@@ -838,7 +838,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a list of literals (i.e. integers, floats, booleans); e.g.
-    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<Uimm128> {
+    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<V128Imm> {
         macro_rules! consume {
             ( $ty:ident, $match_fn:expr ) => {{
                 assert!($ty.is_vector());
@@ -846,7 +846,7 @@ impl<'a> Parser<'a> {
                 for _ in 0..$ty.lane_count() {
                     v.push($match_fn?);
                 }
-                Uimm128::from_iter(v)
+                V128Imm::from_iter(v)
             }};
         }
 

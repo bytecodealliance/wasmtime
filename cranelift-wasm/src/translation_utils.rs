@@ -4,7 +4,7 @@ use crate::wasm_unsupported;
 use core::u32;
 use cranelift_codegen::entity::entity_impl;
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::immediates::Uimm128;
+use cranelift_codegen::ir::immediates::V128Imm;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 use wasmparser;
@@ -78,7 +78,7 @@ pub enum GlobalInit {
     /// An `f64.const`.
     F64Const(u64),
     /// A `vconst`.
-    V128Const(Uimm128),
+    V128Const(V128Imm),
     /// A `get_global` of another global.
     GetGlobal(GlobalIndex),
     ///< The global is imported from, and thus initialized by, a different module.
