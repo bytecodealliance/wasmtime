@@ -52,7 +52,7 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {
     use winx::file::AccessMode;
-    winx::file::get_file_access_mode(fd.as_raw_handle())
+    unsafe { winx::file::get_file_access_mode(fd.as_raw_handle()) }
         .map(host_impl::fdflags_from_win)
         .map_err(Into::into)
 }
@@ -175,7 +175,7 @@ pub(crate) fn fd_readdir(
 }
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
-    use winx::file::get_path_by_handle;
+    use winx::file::get_file_path;
 
     let path = resolved.concatenate()?;
     let target_path = path.read_link()?;
@@ -184,7 +184,7 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     // we need to strip the prefix from the absolute path
     // as otherwise we will error out since WASI is not capable
     // of dealing with absolute paths
-    let dir_path = get_path_by_handle(resolved.dirfd().as_raw_handle())?;
+    let dir_path = get_file_path(resolved.dirfd())?;
     let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
     let target_path = target_path
         .strip_prefix(dir_path)

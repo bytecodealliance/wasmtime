@@ -583,7 +583,7 @@ pub(crate) fn path_open(
     let fd = hostcalls_impl::path_open(resolved, read, write, oflags, fs_flags)?;
 
     // Determine the type of the new file descriptor and which rights contradict with this type
-    let (_ty, max_base, max_inheriting) = determine_type_rights(&fd)?;
+    let (_ty, max_base, max_inheriting) = unsafe { determine_type_rights(&fd) }?;
     let mut fe = FdEntry::from(fd)?;
     fe.rights_base &= max_base;
     fe.rights_inheriting &= max_inheriting;

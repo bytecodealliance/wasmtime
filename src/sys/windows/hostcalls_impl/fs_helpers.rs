@@ -73,7 +73,7 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
 }
 
 pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
-    use winx::file::get_path_by_handle;
+    use winx::file::get_file_path;
     use winx::winerror::WinError;
 
     let path = concatenate(dirfd, Path::new(s_path))?;
@@ -83,7 +83,7 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
             // we need to strip the prefix from the absolute path
             // as otherwise we will error out since WASI is not capable
             // of dealing with absolute paths
-            let dir_path = get_path_by_handle(dirfd.as_raw_handle())?;
+            let dir_path = get_file_path(dirfd)?;
             let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
             target_path
                 .strip_prefix(dir_path)
@@ -128,7 +128,7 @@ pub(crate) fn strip_extended_prefix<P: AsRef<OsStr>>(path: P) -> OsString {
 }
 
 pub(crate) fn concatenate<P: AsRef<Path>>(dirfd: &File, path: P) -> Result<PathBuf> {
-    use winx::file::get_path_by_handle;
+    use winx::file::get_file_path;
 
     // WASI is not able to deal with absolute paths
     // so error out if absolute
@@ -136,7 +136,7 @@ pub(crate) fn concatenate<P: AsRef<Path>>(dirfd: &File, path: P) -> Result<PathB
         return Err(Error::ENOTCAPABLE);
     }
 
-    let dir_path = get_path_by_handle(dirfd.as_raw_handle())?;
+    let dir_path = get_file_path(dirfd)?;
     // concatenate paths
     let mut out_path = PathBuf::from(dir_path);
     out_path.push(path.as_ref());

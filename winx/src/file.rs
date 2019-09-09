@@ -45,8 +45,8 @@ impl FileType {
     }
 }
 
-pub fn get_file_type(handle: RawHandle) -> Result<FileType> {
-    let file_type = unsafe { FileType(GetFileType(handle)) };
+pub unsafe fn get_file_type(handle: RawHandle) -> Result<FileType> {
+    let file_type = FileType(GetFileType(handle));
     let err = winerror::WinError::last();
     if file_type.is_unknown() && err != winerror::WinError::ERROR_SUCCESS {
         Err(err)
@@ -314,7 +314,7 @@ bitflags! {
     }
 }
 
-pub fn get_file_access_mode(handle: RawHandle) -> Result<AccessMode> {
+pub unsafe fn get_file_access_mode(handle: RawHandle) -> Result<AccessMode> {
     use winapi::shared::minwindef::FALSE;
     use winapi::um::accctrl;
     use winapi::um::aclapi::GetSecurityInfo;
@@ -357,11 +357,12 @@ pub fn get_file_access_mode(handle: RawHandle) -> Result<AccessMode> {
     }
 }
 
-pub fn get_path_by_handle(handle: RawHandle) -> Result<OsString> {
+pub fn get_file_path(file: &File) -> Result<OsString> {
     use winapi::um::fileapi::GetFinalPathNameByHandleW;
 
     let mut raw_path: Vec<u16> = vec![0; WIDE_MAX_PATH as usize];
 
+    let handle = file.as_raw_handle();
     let read_len =
         unsafe { GetFinalPathNameByHandleW(handle, raw_path.as_mut_ptr(), WIDE_MAX_PATH, 0) };
 

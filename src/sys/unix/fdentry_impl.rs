@@ -29,7 +29,8 @@ impl AsRawFd for Descriptor {
     }
 }
 
-pub(crate) fn determine_type_and_access_rights<Fd: AsRawFd>(
+/// This function is unsafe because it operates on a raw file descriptor.
+pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
     fd: &Fd,
 ) -> Result<(
     host::__wasi_filetype_t,
@@ -51,7 +52,8 @@ pub(crate) fn determine_type_and_access_rights<Fd: AsRawFd>(
     Ok((file_type, rights_base, rights_inheriting))
 }
 
-pub(crate) fn determine_type_rights<Fd: AsRawFd>(
+/// This function is unsafe because it operates on a raw file descriptor.
+pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
     fd: &Fd,
 ) -> Result<(
     host::__wasi_filetype_t,
@@ -60,8 +62,7 @@ pub(crate) fn determine_type_rights<Fd: AsRawFd>(
 )> {
     let (file_type, rights_base, rights_inheriting) = {
         // we just make a `File` here for convenience; we don't want it to close when it drops
-        let file =
-            std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(fd.as_raw_fd()) });
+        let file = std::mem::ManuallyDrop::new(std::fs::File::from_raw_fd(fd.as_raw_fd()));
         let ft = file.metadata()?.file_type();
         if ft.is_block_device() {
             (

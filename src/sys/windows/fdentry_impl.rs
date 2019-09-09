@@ -45,7 +45,8 @@ impl AsRawHandle for Descriptor {
     }
 }
 
-pub(crate) fn determine_type_and_access_rights<Handle: AsRawHandle>(
+/// This function is unsafe because it operates on a raw file handle.
+pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
     handle: &Handle,
 ) -> Result<(
     host::__wasi_filetype_t,
@@ -75,7 +76,8 @@ pub(crate) fn determine_type_and_access_rights<Handle: AsRawHandle>(
     Ok((file_type, rights_base, rights_inheriting))
 }
 
-pub(crate) fn determine_type_rights<Handle: AsRawHandle>(
+/// This function is unsafe because it operates on a raw file handle.
+pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
     handle: &Handle,
 ) -> Result<(
     host::__wasi_filetype_t,
