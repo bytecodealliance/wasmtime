@@ -5,8 +5,6 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{settings, Context};
 use cranelift_native::builder as host_isa_builder;
 use memmap::MmapMut;
-use region;
-use region::Protection;
 
 /// Run a function on a host
 pub struct FunctionRunner {
@@ -66,7 +64,8 @@ impl FunctionRunner {
             .map_err(|e| e.to_string())?;
         let mut code_page =
             MmapMut::map_anon(code_info.total_size as usize).map_err(|e| e.to_string())?;
-        let callable_fn: fn() -> bool = unsafe {
+
+        unsafe {
             context.emit_to_memory(
                 self.isa.as_ref(),
                 code_page.as_mut_ptr(),
@@ -74,14 +73,10 @@ impl FunctionRunner {
                 traps,
                 stackmaps,
             );
-            region::protect(
-                code_page.as_mut_ptr(),
-                code_page.len(),
-                Protection::ReadExecute,
-            )
-            .map_err(|e| e.to_string())?;
-            mem::transmute(code_page.as_mut_ptr())
         };
+
+        let code_page = code_page.make_exec().map_err(|e| e.to_string())?;
+        let callable_fn: fn() -> bool = unsafe { mem::transmute(code_page.as_ptr()) };
 
         // execute
         match callable_fn() {
