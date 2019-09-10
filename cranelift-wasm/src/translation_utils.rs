@@ -115,35 +115,43 @@ pub struct Memory {
 
 /// Helper function translating wasmparser types to Cranelift types when possible.
 pub fn type_to_type(ty: wasmparser::Type) -> WasmResult<ir::Type> {
-    Ok(match ty {
-        wasmparser::Type::I32 => ir::types::I32,
-        wasmparser::Type::I64 => ir::types::I64,
-        wasmparser::Type::F32 => ir::types::F32,
-        wasmparser::Type::F64 => ir::types::F64,
-        ty => wasm_unsupported!("unsupported wasm type {:?}", ty),
-    })
+    match ty {
+        wasmparser::Type::I32 => Ok(ir::types::I32),
+        wasmparser::Type::I64 => Ok(ir::types::I64),
+        wasmparser::Type::F32 => Ok(ir::types::F32),
+        wasmparser::Type::F64 => Ok(ir::types::F64),
+        ty => wasm_unsupported!("type_to_type: wasm type {:?}", ty),
+    }
 }
 
 /// Helper function translating wasmparser possible table types to Cranelift types when possible,
 /// or None for Func tables.
 pub fn tabletype_to_type(ty: wasmparser::Type) -> WasmResult<Option<ir::Type>> {
-    Ok(match ty {
-        wasmparser::Type::I32 => Some(ir::types::I32),
-        wasmparser::Type::I64 => Some(ir::types::I64),
-        wasmparser::Type::F32 => Some(ir::types::F32),
-        wasmparser::Type::F64 => Some(ir::types::F64),
-        wasmparser::Type::AnyFunc => None,
-        ty => wasm_unsupported!("unsupported table wasm type {:?}", ty),
-    })
+    match ty {
+        wasmparser::Type::I32 => Ok(Some(ir::types::I32)),
+        wasmparser::Type::I64 => Ok(Some(ir::types::I64)),
+        wasmparser::Type::F32 => Ok(Some(ir::types::F32)),
+        wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
+        wasmparser::Type::AnyFunc => Ok(None),
+        ty => wasm_unsupported!("tabletype_to_type: table wasm type {:?}", ty),
+    }
 }
 
 /// Helper function translating wasmparser block signatures to Cranelift types when possible.
-pub fn blocktype_to_type(ty: wasmparser::TypeOrFuncType) -> WasmResult<ir::Type> {
-    match ty {
-        wasmparser::TypeOrFuncType::Type(ty) => type_to_type(ty),
-        wasmparser::TypeOrFuncType::FuncType(_) => {
-            wasm_unsupported!("multi-value block signature {:?}", ty);
-        }
+pub fn blocktype_to_type(ty_or_ft: wasmparser::TypeOrFuncType) -> WasmResult<Option<ir::Type>> {
+    match ty_or_ft {
+        wasmparser::TypeOrFuncType::Type(ty) => match ty {
+            wasmparser::Type::I32 => Ok(Some(ir::types::I32)),
+            wasmparser::Type::I64 => Ok(Some(ir::types::I64)),
+            wasmparser::Type::F32 => Ok(Some(ir::types::F32)),
+            wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
+            wasmparser::Type::EmptyBlockType => Ok(None),
+            ty => wasm_unsupported!("blocktype_to_type: type {:?}", ty),
+        },
+        wasmparser::TypeOrFuncType::FuncType(_) => wasm_unsupported!(
+            "blocktype_to_type: multi-value block signature {:?}",
+            ty_or_ft
+        ),
     }
 }
 
