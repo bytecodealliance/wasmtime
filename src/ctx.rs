@@ -3,6 +3,7 @@ use crate::sys::dev_null;
 use crate::{host, Error, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::env;
 use std::ffi::CString;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -43,6 +44,11 @@ impl WasiCtxBuilder {
         self.args
             .push(CString::new(arg).map_err(|_| Error::ENOTCAPABLE)?);
         Ok(self)
+    }
+
+    /// Inherit the command-line arguments from the host process.
+    pub fn inherit_args(self) -> Result<Self> {
+        self.args(env::args())
     }
 
     pub fn inherit_stdio(mut self) -> Result<Self> {
