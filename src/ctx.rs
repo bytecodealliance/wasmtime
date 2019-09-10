@@ -127,9 +127,9 @@ impl WasiCtxBuilder {
 
 #[derive(Debug)]
 pub struct WasiCtx {
-    pub fds: HashMap<host::__wasi_fd_t, FdEntry>,
-    pub args: Vec<CString>,
-    pub env: Vec<CString>,
+    pub(crate) fds: HashMap<host::__wasi_fd_t, FdEntry>,
+    pub(crate) args: Vec<CString>,
+    pub(crate) env: Vec<CString>,
 }
 
 impl WasiCtx {
@@ -148,11 +148,11 @@ impl WasiCtx {
             .and_then(|ctx| ctx.build())
     }
 
-    pub fn contains_fd_entry(&self, fd: host::__wasi_fd_t) -> bool {
+    pub(crate) fn contains_fd_entry(&self, fd: host::__wasi_fd_t) -> bool {
         self.fds.contains_key(&fd)
     }
 
-    pub fn get_fd_entry(
+    pub(crate) fn get_fd_entry(
         &self,
         fd: host::__wasi_fd_t,
         rights_base: host::__wasi_rights_t,
@@ -165,7 +165,7 @@ impl WasiCtx {
         }
     }
 
-    pub fn get_fd_entry_mut(
+    pub(crate) fn get_fd_entry_mut(
         &mut self,
         fd: host::__wasi_fd_t,
         rights_base: host::__wasi_rights_t,
@@ -190,7 +190,7 @@ impl WasiCtx {
         }
     }
 
-    pub fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<host::__wasi_fd_t> {
+    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<host::__wasi_fd_t> {
         // never insert where stdio handles usually are
         let mut fd = 3;
         while self.fds.contains_key(&fd) {
