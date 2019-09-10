@@ -1,5 +1,5 @@
 use crate::callable::{WasmtimeFn, WrappedCallable};
-use crate::runtime::{SignatureRegistry, Store};
+use crate::runtime::Store;
 use crate::types::ValType;
 use std::any::Any;
 use std::cell::RefCell;

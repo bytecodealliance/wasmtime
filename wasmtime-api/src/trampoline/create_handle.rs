@@ -12,11 +12,11 @@ use std::cell::{RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::runtime::SignatureRegistry;
+use crate::runtime::Store;
 
 pub(crate) fn create_handle(
     module: Module,
-    signature_registry: Option<RefMut<dyn SignatureRegistry>>,
+    signature_registry: Option<RefMut<Store>>,
     finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle, Error> {

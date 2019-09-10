@@ -79,20 +79,6 @@ impl Engine {
 
 // Store
 
-/// The SignatureRegistry allow register new cranelift signature,
-/// and also quickly retrive the signature back using registration
-/// index.
-pub(crate) trait SignatureRegistry {
-    fn register_cranelift_signature(
-        &mut self,
-        signature: &ir::Signature,
-    ) -> wasmtime_runtime::VMSharedSignatureIndex;
-    fn lookup_cranelift_signature(
-        &self,
-        type_index: wasmtime_runtime::VMSharedSignatureIndex,
-    ) -> Option<&ir::Signature>;
-}
-
 pub struct Store {
     engine: Rc<RefCell<Engine>>,
     context: Context,
@@ -127,10 +113,8 @@ impl Store {
     ) -> &Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> {
         &self.global_exports
     }
-}
 
-impl SignatureRegistry for Store {
-    fn register_cranelift_signature(
+    pub(crate) fn register_cranelift_signature(
         &mut self,
         signature: &ir::Signature,
     ) -> wasmtime_runtime::VMSharedSignatureIndex {
@@ -144,7 +128,8 @@ impl SignatureRegistry for Store {
         }
         index
     }
-    fn lookup_cranelift_signature(
+
+    pub(crate) fn lookup_cranelift_signature(
         &self,
         type_index: wasmtime_runtime::VMSharedSignatureIndex,
     ) -> Option<&ir::Signature> {
