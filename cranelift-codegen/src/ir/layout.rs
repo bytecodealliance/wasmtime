@@ -60,6 +60,11 @@ impl Layout {
         self.first_ebb = None;
         self.last_ebb = None;
     }
+
+    /// Returns the capacity of the `EbbData` map.
+    pub fn ebb_capacity(&self) -> usize {
+        self.ebbs.capacity()
+    }
 }
 
 /// Sequence numbers.

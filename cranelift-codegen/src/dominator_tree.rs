@@ -226,7 +226,13 @@ impl DominatorTree {
 
     /// Allocate and compute a dominator tree.
     pub fn with_function(func: &Function, cfg: &ControlFlowGraph) -> Self {
-        let mut domtree = Self::new();
+        let ebb_capacity = func.layout.ebb_capacity();
+        let mut domtree = Self {
+            nodes: SecondaryMap::with_capacity(ebb_capacity),
+            postorder: Vec::with_capacity(ebb_capacity),
+            stack: Vec::new(),
+            valid: false,
+        };
         domtree.compute(func, cfg);
         domtree
     }
