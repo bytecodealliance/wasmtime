@@ -52,6 +52,20 @@ where
         }
     }
 
+    /// Create a new, empty map with the specified capacity.
+    ///
+    /// The map will be able to hold exactly `capacity` elements without reallocating.
+    pub fn with_capacity(capacity: usize) -> Self
+    where
+        V: Default,
+    {
+        Self {
+            elems: Vec::with_capacity(capacity),
+            default: Default::default(),
+            unused: PhantomData,
+        }
+    }
+
     /// Create a new empty map with a specified default value.
     ///
     /// This constructor does not require V to implement Default.
@@ -61,6 +75,11 @@ where
             default,
             unused: PhantomData,
         }
+    }
+
+    /// Returns the number of elements the map can hold without reallocating.
+    pub fn capacity(&self) -> usize {
+        self.elems.capacity()
     }
 
     /// Get the element at `k` if it exists.
