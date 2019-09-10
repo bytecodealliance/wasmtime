@@ -112,7 +112,6 @@ impl Instance {
                 // HACK ensure all handles, instantiated outside Store, present in
                 // the store's SignatureRegistry, e.g. WASI instances that are
                 // imported into this store using the from_handle() method.
-                use crate::runtime::SignatureRegistry;
                 let _ = store.borrow_mut().register_cranelift_signature(signature);
             }
             export_names_map.insert(name.to_owned(), exports.len());
