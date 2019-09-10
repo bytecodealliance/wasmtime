@@ -566,6 +566,7 @@ pub(crate) fn define(
     let rec_rfurm = r.template("rfurm");
     let rec_rmov = r.template("rmov");
     let rec_rr = r.template("rr");
+    let rec_rout = r.template("rout");
     let rec_rin = r.template("rin");
     let rec_rio = r.template("rio");
     let rec_rrx = r.template("rrx");
@@ -631,12 +632,12 @@ pub(crate) fn define(
     );
 
     e.enc_i32_i64(iadd, rec_rr.opcodes(vec![0x01]));
-    e.enc_i32_i64(iadd_cout, rec_rr.opcodes(vec![0x01]));
+    e.enc_i32_i64(iadd_cout, rec_rout.opcodes(vec![0x01]));
     e.enc_i32_i64(iadd_cin, rec_rin.opcodes(vec![0x11]));
     e.enc_i32_i64(iadd_carry, rec_rio.opcodes(vec![0x11]));
 
     e.enc_i32_i64(isub, rec_rr.opcodes(vec![0x29]));
-    e.enc_i32_i64(isub_bout, rec_rr.opcodes(vec![0x29]));
+    e.enc_i32_i64(isub_bout, rec_rout.opcodes(vec![0x29]));
     e.enc_i32_i64(isub_bin, rec_rin.opcodes(vec![0x19]));
     e.enc_i32_i64(isub_borrow, rec_rio.opcodes(vec![0x19]));
 
