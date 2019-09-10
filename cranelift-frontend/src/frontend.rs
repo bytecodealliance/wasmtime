@@ -908,6 +908,7 @@ mod tests {
             let block0 = builder.create_ebb();
             let block1 = builder.create_ebb();
             let block2 = builder.create_ebb();
+            let block3 = builder.create_ebb();
             let x = Variable::new(0);
             let y = Variable::new(1);
             let z = Variable::new(2);
@@ -945,7 +946,13 @@ mod tests {
             }
             {
                 let arg = builder.use_var(y);
-                builder.ins().brnz(arg, block2, &[]);
+                builder.ins().brnz(arg, block3, &[]);
+            }
+            builder.ins().jump(block2, &[]);
+
+            builder.switch_to_block(block2);
+            if !lazy_seal {
+                builder.seal_block(block2);
             }
             {
                 let arg1 = builder.use_var(z);
@@ -958,9 +965,9 @@ mod tests {
                 builder.ins().return_(&[arg]);
             }
 
-            builder.switch_to_block(block2);
+            builder.switch_to_block(block3);
             if !lazy_seal {
-                builder.seal_block(block2);
+                builder.seal_block(block3);
             }
 
             {
