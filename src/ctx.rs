@@ -8,6 +8,7 @@ use std::ffi::CString;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
+/// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
     fds: HashMap<host::__wasi_fd_t, FdEntry>,
     preopens: HashMap<PathBuf, File>,
@@ -32,6 +33,7 @@ impl WasiCtxBuilder {
         Ok(builder)
     }
 
+    /// Add arguments to the command-line arguments list.
     pub fn args<S: AsRef<str>>(mut self, args: impl Iterator<Item = S>) -> Result<Self> {
         let args: Result<Vec<CString>> = args
             .map(|arg| CString::new(arg.as_ref()).map_err(|_| Error::ENOTCAPABLE))
@@ -40,6 +42,7 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
+    /// Add an argument to the command-line arguments list.
     pub fn arg(mut self, arg: &str) -> Result<Self> {
         self.args
             .push(CString::new(arg).map_err(|_| Error::ENOTCAPABLE)?);
@@ -51,6 +54,7 @@ impl WasiCtxBuilder {
         self.args(env::args())
     }
 
+    /// Inherit the stdin, stdout, and stderr streams from the host process.
     pub fn inherit_stdio(mut self) -> Result<Self> {
         self.fds.insert(0, FdEntry::duplicate_stdin()?);
         self.fds.insert(1, FdEntry::duplicate_stdout()?);
@@ -58,10 +62,12 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
+    /// Inherit the environment variables from the host process.
     pub fn inherit_env(self) -> Result<Self> {
         self.envs(std::env::vars())
     }
 
+    /// Add an entry to the environment.
     pub fn env<S: AsRef<str>>(mut self, k: S, v: S) -> Result<Self> {
         self.env.insert(
             CString::new(k.as_ref()).map_err(|_| Error::ENOTCAPABLE)?,
@@ -70,6 +76,7 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
+    /// Add entries to the environment.
     pub fn envs<S: AsRef<str>, T: Borrow<(S, S)>>(
         mut self,
         envs: impl Iterator<Item = T>,
@@ -89,11 +96,13 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
+    /// Add a preopened directory.
     pub fn preopened_dir<P: AsRef<Path>>(mut self, dir: File, guest_path: P) -> Self {
         self.preopens.insert(guest_path.as_ref().to_owned(), dir);
         self
     }
 
+    /// Build a `WasiCtx`, consuming this `WasiCtxBuilder`.
     pub fn build(mut self) -> Result<WasiCtx> {
         // startup code starts looking at fd 3 for preopens
         let mut preopen_fd = 3;
