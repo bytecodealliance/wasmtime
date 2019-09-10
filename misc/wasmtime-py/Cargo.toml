@@ -27,5 +27,5 @@ region = "2.0.0"
 wasmparser = "0.37.1"
 
 [dependencies.pyo3]
-version = "0.7.0-alpha.1"
+version = "0.8.0"
 features = ["extension-module"]
