@@ -8,7 +8,7 @@ use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
-use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent};
+use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 
 // Runtime Environment
 
@@ -227,6 +227,7 @@ impl Config {
     pub fn profiler(&mut self, profile: ProfilingStrategy) -> Result<&mut Self> {
         self.profiler = match profile {
             ProfilingStrategy::JitDump => Arc::new(JitDumpAgent::new()?) as Arc<dyn ProfilingAgent>,
+            ProfilingStrategy::VTune => Arc::new(VTuneAgent::new()?) as Arc<dyn ProfilingAgent>,
             ProfilingStrategy::None => Arc::new(NullProfilerAgent),
         };
         Ok(self)
@@ -404,6 +405,9 @@ pub enum ProfilingStrategy {
     /// Collect profiling info for "jitdump" file format, used with `perf` on
     /// Linux.
     JitDump,
+
+    /// Collect profiling info using the "ittapi", used with `VTune` on Linux.
+    VTune,
 }
 
 // Engine

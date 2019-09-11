@@ -7,6 +7,8 @@
 - [Examples](./examples.md)
   - [Markdown parser](./examples-markdown.md)
   - [Profiling WebAssembly](./examples-profiling.md)
+    - [Profiling with Perf](./examples-profiling-perf.md)
+    - [Profiling with VTune](./examples-profiling-vtune.md)
   - [Embedding in Rust](./examples-rust-embed.md)
     - [Hello, world!](./examples-rust-hello-world.md)
     - [Calculating the GCD](./examples-rust-gcd.md)

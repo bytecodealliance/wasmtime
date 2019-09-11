@@ -30,6 +30,7 @@ typedef uint8_t wasmtime_profiling_strategy_t;
 enum wasmtime_profiling_strategy_t { // ProfilingStrategy
   WASMTIME_PROFILING_STRATEGY_NONE,
   WASMTIME_PROFILING_STRATEGY_JITDUMP,
+  WASMTIME_PROFILING_STRATEGY_VTUNE,
 };
 
 #define WASMTIME_CONFIG_PROP(ret, name, ty) \
