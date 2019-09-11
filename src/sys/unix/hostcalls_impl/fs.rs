@@ -423,7 +423,7 @@ pub(crate) fn path_filestat_set_times(
         _ => UtimensatFlags::NoFollowSymlink,
     };
 
-    let atim = if set_atim_now {
+    let atim = if set_atim {
         let st_atim = st_atim.try_into()?;
         TimeSpec::nanoseconds(st_atim)
     } else if set_atim_now {
@@ -435,7 +435,7 @@ pub(crate) fn path_filestat_set_times(
     let mtim = if set_mtim {
         let st_mtim = st_mtim.try_into()?;
         TimeSpec::nanoseconds(st_mtim)
-    } else if set_atim_now {
+    } else if set_mtim_now {
         timespec_now()
     } else {
         timespec_omit()
