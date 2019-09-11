@@ -1999,6 +1999,17 @@ pub(crate) fn define(
         e.enc_32_64(bound_regmove, rec_frmov.opcodes(vec![0x0f, 0x28]));
     }
 
+    // SIMD integer addition
+    for (ty, opcodes) in &[
+        (I8, &[0x66, 0x0f, 0xfc]),  // PADDB from SSE2
+        (I16, &[0x66, 0x0f, 0xfd]), // PADDW from SSE2
+        (I32, &[0x66, 0x0f, 0xfe]), // PADDD from SSE2
+        (I64, &[0x66, 0x0f, 0xd4]), // PADDQ from SSE2
+    ] {
+        let iadd = iadd.bind_vector_from_lane(ty.clone(), sse_vector_size);
+        e.enc_32_64(iadd, rec_fa.opcodes(opcodes.to_vec()));
+    }
+
     // Reference type instructions
 
     // Null references implemented as iconst 0.
