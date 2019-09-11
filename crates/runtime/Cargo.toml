@@ -11,6 +11,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
+wasmtime-profiling = { path = "../profiling" }
 wasmtime-environ = { path = "../environ", version = "0.9.0" }
 region = "2.0.0"
 libc = { version = "0.2.60", default-features = false }

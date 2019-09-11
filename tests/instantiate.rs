@@ -24,7 +24,7 @@ fn test_environ_translate() {
     let cache_config = CacheConfig::new_cache_disabled();
     let mut compiler = Compiler::new(isa, CompilationStrategy::Auto, cache_config);
     unsafe {
-        let instance = instantiate(&mut compiler, &data, &mut resolver, false);
+        let instance = instantiate(&mut compiler, &data, &mut resolver, false, None);
         assert!(instance.is_ok());
     }
 }
