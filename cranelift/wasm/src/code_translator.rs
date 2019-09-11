@@ -986,6 +986,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // to WASM using the less specific v128 type for certain operations and more specific
             // types (e.g. i8x16) for others.
         }
+        Operator::I8x16Add | Operator::I16x8Add | Operator::I32x4Add | Operator::I64x2Add => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().iadd(a, b))
+        }
         Operator::V128Load { .. }
         | Operator::V128Store { .. }
         | Operator::I8x16Eq
@@ -1041,7 +1045,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I8x16Shl
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
-        | Operator::I8x16Add
         | Operator::I8x16AddSaturateS
         | Operator::I8x16AddSaturateU
         | Operator::I8x16Sub
@@ -1054,7 +1057,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8Shl
         | Operator::I16x8ShrS
         | Operator::I16x8ShrU
-        | Operator::I16x8Add
         | Operator::I16x8AddSaturateS
         | Operator::I16x8AddSaturateU
         | Operator::I16x8Sub
@@ -1067,7 +1069,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4Shl
         | Operator::I32x4ShrS
         | Operator::I32x4ShrU
-        | Operator::I32x4Add
         | Operator::I32x4Sub
         | Operator::I32x4Mul
         | Operator::I64x2Neg
@@ -1076,7 +1077,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2Shl
         | Operator::I64x2ShrS
         | Operator::I64x2ShrU
-        | Operator::I64x2Add
         | Operator::I64x2Sub
         | Operator::F32x4Abs
         | Operator::F32x4Neg
