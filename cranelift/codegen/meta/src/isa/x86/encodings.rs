@@ -1992,11 +1992,19 @@ pub(crate) fn define(
         e.enc_32_64(bound_fill, rec_fillSib32.opcodes(vec![0x0f, 0x10]));
         let bound_regfill = regfill.bind_vector_from_lane(ty, sse_vector_size);
         e.enc_32_64(bound_regfill, rec_fregfill32.opcodes(vec![0x0f, 0x10]));
+        let bound_fill_nop = fill_nop.bind_vector_from_lane(ty, sse_vector_size);
+        e.enc_32_64_rec(bound_fill_nop, rec_ffillnull, 0);
 
         // Regmove
         let bound_regmove = regmove.bind_vector_from_lane(ty, sse_vector_size);
         e.enc_32_64(bound_regmove.clone(), rec_rmov.opcodes(vec![0x0f, 0x28]));
         e.enc_32_64(bound_regmove, rec_frmov.opcodes(vec![0x0f, 0x28]));
+
+        // Copy
+        let bound_copy = copy.bind_vector_from_lane(ty, sse_vector_size);
+        e.enc_32_64(bound_copy, rec_furm.opcodes(vec![0x0f, 0x28])); // MOVAPS from SSE
+        let bound_copy_nop = copy_nop.bind_vector_from_lane(ty, sse_vector_size);
+        e.enc_32_64_rec(bound_copy_nop, rec_stacknull, 0);
     }
 
     // SIMD integer addition
