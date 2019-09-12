@@ -157,7 +157,16 @@ cfg_if::cfg_if! {
     if #[cfg(linux)] {
         /// Ignore tests that aren't supported yet.
         fn ignore(_testsuite: &str, _name: &str) -> bool {
-            false
+            if testsuite == "misc_testsuite" {
+                match name {
+                    "path_rename_trailing_slashes" => true,
+                    "path_symlink_trailing_slashes" => true,
+                    "remove_directory_trailing_slashes" => true,
+                    _ => false,
+                }
+            } else {
+                unreachable!()
+            }
         }
     } else if #[cfg(not(any(linux, windows)))] {
         /// Ignore tests that aren't supported yet.
@@ -165,6 +174,9 @@ cfg_if::cfg_if! {
             if testsuite == "misc_testsuite" {
                 match name {
                     "fd_readdir" => true,
+                    "path_rename_trailing_slashes" => true,
+                    "path_symlink_trailing_slashes" => true,
+                    "remove_directory_trailing_slashes" => true,
                     _ => false,
                 }
             } else {
@@ -182,6 +194,9 @@ cfg_if::cfg_if! {
                     "clock_time_get" => true,
                     "truncation_rights" => true,
                     "fd_readdir" => true,
+                    "path_rename_trailing_slashes" => true,
+                    "path_symlink_trailing_slashes" => true,
+                    "remove_directory_trailing_slashes" => true,
                     _ => false,
                 }
             } else {
