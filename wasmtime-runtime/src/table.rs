@@ -4,6 +4,7 @@
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use cranelift_wasm::TableElementType;
+use std::convert::{TryFrom, TryInto};
 use std::vec::Vec;
 use wasmtime_environ::{TablePlan, TableStyle};
 
@@ -23,7 +24,10 @@ impl Table {
                 unimplemented!("tables of types other than anyfunc ({})", ty)
             }
         };
-
+        assert!(
+            plan.table.minimum <= std::u32::MAX,
+            "Invariant check: vec.len() <= u32::MAX"
+        );
         match plan.style {
             TableStyle::CallerChecksSignature => Self {
                 vec: vec![VMCallerCheckedAnyfunc::default(); plan.table.minimum as usize],
@@ -34,7 +38,7 @@ impl Table {
 
     /// Returns the number of allocated elements.
     pub fn size(&self) -> u32 {
-        self.vec.len() as u32
+        self.vec.len().try_into().unwrap()
     }
 
     /// Grow table by the specified amount of elements.
@@ -55,8 +59,14 @@ impl Table {
                 return None;
             }
         };
-        self.vec
-            .resize(new_len as usize, VMCallerCheckedAnyfunc::default());
+        assert!(
+            new_len <= std::u32::MAX,
+            "Invariant check: vec.len() <= u32::MAX"
+        );
+        self.vec.resize(
+            usize::try_from(new_len).unwrap(),
+            VMCallerCheckedAnyfunc::default(),
+        );
         Some(new_len)
     }
 
@@ -78,7 +88,7 @@ impl Table {
     pub fn vmtable(&mut self) -> VMTableDefinition {
         VMTableDefinition {
             base: self.vec.as_mut_ptr() as *mut u8,
-            current_elements: self.vec.len(),
+            current_elements: self.vec.len().try_into().unwrap(),
         }
     }
 }

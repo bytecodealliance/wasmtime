@@ -45,7 +45,7 @@ pub fn layout_vmcontext(
     for (index, table) in module.table_plans.iter().skip(num_tables_imports) {
         let def_index = module.defined_table_index(index).unwrap();
         let offset = ofs.vmctx_vmtable_definition(def_index) as usize;
-        let current_elements = table.table.minimum as usize;
+        let current_elements = table.table.minimum;
         unsafe {
             assert_eq!(
                 ::std::mem::size_of::<u32>() as u8,
@@ -56,7 +56,7 @@ pub fn layout_vmcontext(
                 .as_mut_ptr()
                 .add(offset)
                 .add(ofs.vmtable_definition_current_elements() as usize);
-            ptr::write(to as *mut u32, current_elements as u32);
+            ptr::write(to as *mut u32, current_elements);
         }
         table_relocs.push(TableRelocation {
             index: def_index.index(),
