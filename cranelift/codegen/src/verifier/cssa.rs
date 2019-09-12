@@ -118,8 +118,12 @@ impl<'a> CssaVerifier<'a> {
                     if self.preorder.dominates(prev_ebb, def_ebb)
                         && self.domtree.dominates(prev_def, def, &self.func.layout)
                     {
-                        let ctx = self.liveness.context(&self.func.layout);
-                        if self.liveness[prev_val].overlaps_def(def, def_ebb, ctx) {
+                        if self.liveness[prev_val].overlaps_def(
+                            def,
+                            def_ebb,
+                            self.liveness.forest(),
+                            &self.func.layout,
+                        ) {
                             return fatal!(
                                 errors,
                                 val,
