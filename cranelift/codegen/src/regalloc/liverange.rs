@@ -142,13 +142,13 @@ use core::marker::PhantomData;
 /// Inserting new instructions in the layout is safe, but removing instructions is not. Besides the
 /// instructions using or defining their value, `LiveRange` structs can contain references to
 /// branch and jump instructions.
-pub type LiveRange = GenLiveRange<Layout>;
+pub type LiveRange = GenericLiveRange<Layout>;
 
 /// Generic live range implementation.
 ///
 /// The intended generic parameter is `PO=Layout`, but tests are simpler with a mock order.
 /// Use `LiveRange` instead of using this generic directly.
-pub struct GenLiveRange<PO: ProgramOrder> {
+pub struct GenericLiveRange<PO: ProgramOrder> {
     /// The value described by this live range.
     /// This member can't be modified in case the live range is stored in a `SparseMap`.
     value: Value,
@@ -216,7 +216,7 @@ impl<'a, PO: ProgramOrder> bforest::Comparator<Ebb> for Cmp<'a, PO> {
     }
 }
 
-impl<PO: ProgramOrder> GenLiveRange<PO> {
+impl<PO: ProgramOrder> GenericLiveRange<PO> {
     /// Create a new live range for `value` defined at `def`.
     ///
     /// The live range will be created as dead, but it can be extended with `extend_in_ebb()`.
@@ -307,7 +307,7 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
             c.insert(ebb, to);
         }
 
-        // Now `c` to left pointing at an interval that ends in `to`.
+        // Now `c` is left pointing at an interval that ends in `to`.
         debug_assert_eq!(c.value(), Some(to));
 
         // See if it can be coalesced with the following interval.
@@ -449,7 +449,7 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
 }
 
 /// Allow a `LiveRange` to be stored in a `SparseMap` indexed by values.
-impl<PO: ProgramOrder> SparseMapValue<Value> for GenLiveRange<PO> {
+impl<PO: ProgramOrder> SparseMapValue<Value> for GenericLiveRange<PO> {
     fn key(&self) -> Value {
         self.value
     }
@@ -457,7 +457,7 @@ impl<PO: ProgramOrder> SparseMapValue<Value> for GenLiveRange<PO> {
 
 #[cfg(test)]
 mod tests {
-    use super::{GenLiveRange, LiveRangeContext};
+    use super::{GenericLiveRange, LiveRangeContext};
     use crate::bforest;
     use crate::entity::EntityRef;
     use crate::ir::{Ebb, Inst, Value};
@@ -510,7 +510,11 @@ mod tests {
         }
 
         // Validate the live range invariants.
-        fn validate(&self, lr: &GenLiveRange<ProgOrder>, forest: &bforest::MapForest<Ebb, Inst>) {
+        fn validate(
+            &self,
+            lr: &GenericLiveRange<ProgOrder>,
+            forest: &bforest::MapForest<Ebb, Inst>,
+        ) {
             // The def interval must cover a single EBB.
             let def_ebb = self.pp_ebb(lr.def_begin);
             assert_eq!(def_ebb, self.pp_ebb(lr.def_end));
@@ -554,7 +558,7 @@ mod tests {
         let i1 = Inst::new(1);
         let i2 = Inst::new(2);
         let e2 = Ebb::new(2);
-        let lr = GenLiveRange::new(v0, i1.into(), Default::default());
+        let lr = GenericLiveRange::new(v0, i1.into(), Default::default());
         let forest = &bforest::MapForest::new();
         let ctx = LiveRangeContext::new(PO, forest);
         assert!(lr.is_dead());
@@ -574,7 +578,7 @@ mod tests {
     fn dead_arg_range() {
         let v0 = Value::new(0);
         let e2 = Ebb::new(2);
-        let lr = GenLiveRange::new(v0, e2.into(), Default::default());
+        let lr = GenericLiveRange::new(v0, e2.into(), Default::default());
         let forest = &bforest::MapForest::new();
         let ctx = LiveRangeContext::new(PO, forest);
         assert!(lr.is_dead());
@@ -593,7 +597,7 @@ mod tests {
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
-        let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
+        let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
         let forest = &mut bforest::MapForest::new();
 
         assert_eq!(lr.extend_in_ebb(e10, i13, PO, forest), false);
@@ -617,7 +621,7 @@ mod tests {
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
-        let mut lr = GenLiveRange::new(v0, e10.into(), Default::default());
+        let mut lr = GenericLiveRange::new(v0, e10.into(), Default::default());
         let forest = &mut bforest::MapForest::new();
 
         // Extending a dead EBB argument in its own block should not indicate that a live-in
@@ -652,7 +656,7 @@ mod tests {
         let i21 = Inst::new(21);
         let i22 = Inst::new(22);
         let i23 = Inst::new(23);
-        let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
+        let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
         let forest = &mut bforest::MapForest::new();
 
         assert_eq!(lr.extend_in_ebb(e10, i12, PO, forest), false);
@@ -691,7 +695,7 @@ mod tests {
         let i31 = Inst::new(31);
         let e40 = Ebb::new(40);
         let i41 = Inst::new(41);
-        let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
+        let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
         let forest = &mut bforest::MapForest::new();
 
         assert_eq!(lr.extend_in_ebb(e30, i31, PO, forest), true);
@@ -717,7 +721,7 @@ mod tests {
             [(e20, i41)]
         );
 
-        let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
+        let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
 
         assert_eq!(lr.extend_in_ebb(e40, i41, PO, forest), true);
         assert_eq!(
