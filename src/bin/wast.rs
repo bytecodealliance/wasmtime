@@ -33,7 +33,7 @@ use pretty_env_logger;
 use serde::Deserialize;
 use std::path::Path;
 use std::process;
-use wasmtime_environ::cache_init;
+use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_jit::{Compiler, Features};
 use wasmtime_wast::WastContext;
 
@@ -41,7 +41,8 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    wast [-do] [--enable-simd] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] <file>...
+    wast [-do] [--enable-simd] [--cache | --cache-config=<cache_config_file>] <file>...
+    wast --create-cache-config [--cache-config=<cache_config_file>]
     wast --help | --version
 
 Options:
@@ -50,10 +51,12 @@ Options:
     -o, --optimize      runs optimization passes on the translated functions
     -c, --cache         enable caching system, use default configuration
     --cache-config=<cache_config_file>
-                        enable caching system, use specified cache configuration
+                        enable caching system, use specified cache configuration;
+                        can be used with --create-cache-config to specify custom file
     --create-cache-config
-                        used with --cache or --cache-config, creates default configuration and writes it to the disk,
-                        will fail if specified file already exists (or default file if used with --cache)
+                        creates default configuration and writes it to the disk,
+                        use with --cache-config to specify custom config file
+                        instead of default one
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
 ";
@@ -65,7 +68,7 @@ struct Args {
     flag_function: Option<String>,
     flag_optimize: bool,
     flag_cache: bool, // TODO change to disable cache after implementing cache eviction
-    flag_cache_config_file: Option<String>,
+    flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
 }
@@ -89,10 +92,25 @@ fn main() {
         Some(prefix)
     };
 
+    if args.flag_create_cache_config {
+        match cache_create_new_config(args.flag_cache_config) {
+            Ok(path) => {
+                println!(
+                    "Successfully created new configuation file at {}",
+                    path.display()
+                );
+                return;
+            }
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                process::exit(1);
+            }
+        }
+    }
+
     let errors = cache_init(
-        args.flag_cache || args.flag_cache_config_file.is_some(),
-        args.flag_cache_config_file.as_ref(),
-        args.flag_create_cache_config,
+        args.flag_cache || args.flag_cache_config.is_some(),
+        args.flag_cache_config.as_ref(),
         log_config,
     );
 

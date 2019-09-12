@@ -58,6 +58,9 @@
             <Component Id="README" Guid="*">
                 <File Id="README.md" Source="README.md" KeyPath="yes" Checksum="yes"/>
             </Component>
+            <Component Id="CACHE_CONFIGURATION" Guid="*">
+                <File Id="CACHE_CONFIGURATION.md" Source="CACHE_CONFIGURATION.md" KeyPath="yes" Checksum="yes"/>
+            </Component>
         </DirectoryRef>
 
         <DirectoryRef Id="BINDIR">
@@ -74,6 +77,7 @@
             <ComponentRef Id="wasm2obj.exe" />
             <ComponentRef Id="LICENSE" />
             <ComponentRef Id="README" />
+            <ComponentRef Id="CACHE_CONFIGURATION" />
             <ComponentRef Id="InstallDir" />
         </Feature>
         <Feature Id="AddToPath"

@@ -4,7 +4,10 @@ use super::worker;
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
-use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
+use serde::{
+    de::{self, Deserializer},
+    Deserialize,
+};
 use spin::Once;
 use std::fmt::Debug;
 use std::fs;
@@ -17,74 +20,78 @@ use std::vec::Vec;
 
 // wrapped, so we have named section in config,
 // also, for possible future compatibility
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 struct Config {
     cache: CacheConfig,
 }
 
-// todo: markdown documention of these options (name, format, default, explanation)
-// todo: don't flush default values (create config from simple template + url to docs)
-// todo: more user-friendly cache config creation
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CacheConfig {
     #[serde(skip)]
     errors: Vec<String>,
 
     enabled: bool,
     directory: Option<PathBuf>,
-    #[serde(rename = "worker-event-queue-size")]
-    worker_event_queue_size: Option<usize>,
+    #[serde(
+        default,
+        rename = "worker-event-queue-size",
+        deserialize_with = "deserialize_si_prefix"
+    )]
+    worker_event_queue_size: Option<u64>,
     #[serde(rename = "baseline-compression-level")]
     baseline_compression_level: Option<i32>,
     #[serde(rename = "optimized-compression-level")]
     optimized_compression_level: Option<i32>,
-    #[serde(rename = "optimized-compression-usage-counter-threshold")]
+    #[serde(
+        default,
+        rename = "optimized-compression-usage-counter-threshold",
+        deserialize_with = "deserialize_si_prefix"
+    )]
     optimized_compression_usage_counter_threshold: Option<u64>,
     #[serde(
         default,
-        rename = "cleanup-interval-in-seconds",
-        serialize_with = "serialize_duration",
+        rename = "cleanup-interval",
         deserialize_with = "deserialize_duration"
-    )] // todo unit?
+    )]
     cleanup_interval: Option<Duration>,
     #[serde(
         default,
-        rename = "optimizing-compression-task-timeout-in-seconds",
-        serialize_with = "serialize_duration",
+        rename = "optimizing-compression-task-timeout",
         deserialize_with = "deserialize_duration"
-    )] // todo unit?
+    )]
     optimizing_compression_task_timeout: Option<Duration>,
     #[serde(
         default,
-        rename = "allowed-clock-drift-for-locks-from-future",
-        serialize_with = "serialize_duration",
+        rename = "allowed-clock-drift-for-files-from-future",
         deserialize_with = "deserialize_duration"
-    )] // todo unit?
-    allowed_clock_drift_for_locks_from_future: Option<Duration>,
-    #[serde(rename = "files-count-soft-limit")]
-    files_count_soft_limit: Option<u64>,
-    #[serde(rename = "files-total-size-soft-limit")]
-    files_total_size_soft_limit: Option<u64>, // todo unit?
-    #[serde(rename = "files-count-limit-percent-if-deleting")]
-    files_count_limit_percent_if_deleting: Option<u8>, // todo format: integer + %
-    #[serde(rename = "files-total-size-limit-percent-if-deleting")]
+    )]
+    allowed_clock_drift_for_files_from_future: Option<Duration>,
+    #[serde(
+        default,
+        rename = "file-count-soft-limit",
+        deserialize_with = "deserialize_si_prefix"
+    )]
+    file_count_soft_limit: Option<u64>,
+    #[serde(
+        default,
+        rename = "files-total-size-soft-limit",
+        deserialize_with = "deserialize_disk_space"
+    )]
+    files_total_size_soft_limit: Option<u64>,
+    #[serde(
+        default,
+        rename = "file-count-limit-percent-if-deleting",
+        deserialize_with = "deserialize_percent"
+    )]
+    file_count_limit_percent_if_deleting: Option<u8>,
+    #[serde(
+        default,
+        rename = "files-total-size-limit-percent-if-deleting",
+        deserialize_with = "deserialize_percent"
+    )]
     files_total_size_limit_percent_if_deleting: Option<u8>,
-}
-
-// toml-rs fails to serialize Duration ("values must be emitted before tables")
-// so we're providing custom functions for it
-fn serialize_duration<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    duration.map(|d| d.as_secs()).serialize(serializer)
-}
-
-fn deserialize_duration<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    Ok(Option::<u64>::deserialize(deserializer)?.map(Duration::from_secs))
 }
 
 // Private static, so only internal function can access it.
@@ -105,7 +112,6 @@ pub fn cache_config() -> &'static CacheConfig {
 pub fn init<P: AsRef<Path> + Debug>(
     enabled: bool,
     config_file: Option<P>,
-    create_new_config: bool,
     init_file_per_thread_logger: Option<&'static str>,
 ) -> &'static Vec<String> {
     INIT_CALLED
@@ -116,9 +122,9 @@ pub fn init<P: AsRef<Path> + Debug>(
         "Cache system init must be called before using the system."
     );
     let conf_file_str = format!("{:?}", config_file);
-    let conf = CONFIG.call_once(|| CacheConfig::from_file(enabled, config_file, create_new_config));
+    let conf = CONFIG.call_once(|| CacheConfig::from_file(enabled, config_file));
     if conf.errors.is_empty() {
-        if conf.enabled {
+        if conf.enabled() {
             worker::init(init_file_per_thread_logger);
         }
         debug!("Cache init(\"{}\"): {:#?}", conf_file_str, conf)
@@ -131,27 +137,183 @@ pub fn init<P: AsRef<Path> + Debug>(
     &conf.errors
 }
 
+/// Creates a new configuration file at specified path, or default path if None is passed.
+/// Fails if file already exists.
+pub fn create_new_config<P: AsRef<Path> + Debug>(
+    config_file: Option<P>,
+) -> Result<PathBuf, String> {
+    trace!("Creating new config file, path: {:?}", config_file);
+
+    let config_file = config_file.as_ref().map_or_else(
+        || DEFAULT_CONFIG_PATH.as_ref().map(|p| p.as_ref()),
+        |p| Ok(p.as_ref()),
+    )?;
+
+    if config_file.exists() {
+        Err(format!(
+            "Specified config file already exists! Path: {}",
+            config_file.display()
+        ))?;
+    }
+
+    let parent_dir = config_file
+        .parent()
+        .ok_or_else(|| format!("Invalid cache config path: {}", config_file.display()))?;
+
+    fs::create_dir_all(parent_dir).map_err(|err| {
+        format!(
+            "Failed to create config directory, config path: {}, error: {}",
+            config_file.display(),
+            err
+        )
+    })?;
+
+    let content = "\
+# Comment out certain settings to use default values.
+# For more settings, please refer to the documentation:
+# https://github.com/CraneStation/wasmtime/blob/master/CACHE_CONFIGURATION.md
+
+[cache]
+enabled = true
+";
+
+    fs::write(&config_file, &content).map_err(|err| {
+        format!(
+            "Failed to flush config to the disk, path: {}, msg: {}",
+            config_file.display(),
+            err
+        )
+    })?;
+
+    Ok(config_file.to_path_buf())
+}
+
 // permitted levels from: https://docs.rs/zstd/0.4.28+zstd.1.4.3/zstd/stream/write/struct.Encoder.html
 const ZSTD_COMPRESSION_LEVELS: std::ops::RangeInclusive<i32> = 0..=21;
 lazy_static! {
     static ref PROJECT_DIRS: Option<ProjectDirs> =
         ProjectDirs::from("", "CraneStation", "wasmtime");
+    static ref DEFAULT_CONFIG_PATH: Result<PathBuf, String> = PROJECT_DIRS
+        .as_ref()
+        .map(|proj_dirs| proj_dirs.config_dir().join("wasmtime-cache-config.toml"))
+        .ok_or("Config file not specified and failed to get the default".to_string());
 }
-// TODO: values to be tuned
+
+// Default settings, you're welcome to tune them!
 // TODO: what do we want to warn users about?
-const DEFAULT_WORKER_EVENT_QUEUE_SIZE: usize = 0x10;
-const WORKER_EVENT_QUEUE_SIZE_WARNING_TRESHOLD: usize = 3;
+
+// At the moment of writing, the modules couldn't depend on anothers,
+// so we have at most one module per wasmtime instance
+// if changed, update CACHE_CONFIGURATION.md
+const DEFAULT_WORKER_EVENT_QUEUE_SIZE: u64 = 0x10;
+const WORKER_EVENT_QUEUE_SIZE_WARNING_TRESHOLD: u64 = 3;
+// should be quick and provide good enough compression
+// if changed, update CACHE_CONFIGURATION.md
 const DEFAULT_BASELINE_COMPRESSION_LEVEL: i32 = zstd::DEFAULT_COMPRESSION_LEVEL;
+// should provide significantly better compression than baseline
+// if changed, update CACHE_CONFIGURATION.md
 const DEFAULT_OPTIMIZED_COMPRESSION_LEVEL: i32 = 20;
+// shouldn't be to low to avoid recompressing too many files
+// if changed, update CACHE_CONFIGURATION.md
 const DEFAULT_OPTIMIZED_COMPRESSION_USAGE_COUNTER_THRESHOLD: u64 = 0x100;
+// if changed, update CACHE_CONFIGURATION.md
 const DEFAULT_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60);
+// if changed, update CACHE_CONFIGURATION.md
 const DEFAULT_OPTIMIZING_COMPRESSION_TASK_TIMEOUT: Duration = Duration::from_secs(30 * 60);
-const DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_LOCKS_FROM_FUTURE: Duration =
+// the default assumes problems with timezone configuration on network share + some clock drift
+// please notice 24 timezones = max 23h difference between some of them
+// if changed, update CACHE_CONFIGURATION.md
+const DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_FILES_FROM_FUTURE: Duration =
     Duration::from_secs(60 * 60 * 24);
-const DEFAULT_FILES_COUNT_SOFT_LIMIT: u64 = 0x10_000;
+// if changed, update CACHE_CONFIGURATION.md
+const DEFAULT_FILE_COUNT_SOFT_LIMIT: u64 = 0x10_000;
+// if changed, update CACHE_CONFIGURATION.md
 const DEFAULT_FILES_TOTAL_SIZE_SOFT_LIMIT: u64 = 1024 * 1024 * 512;
-const DEFAULT_FILES_COUNT_LIMIT_PERCENT_IF_DELETING: u8 = 70;
+// if changed, update CACHE_CONFIGURATION.md
+const DEFAULT_FILE_COUNT_LIMIT_PERCENT_IF_DELETING: u8 = 70;
+// if changed, update CACHE_CONFIGURATION.md
 const DEFAULT_FILES_TOTAL_SIZE_LIMIT_PERCENT_IF_DELETING: u8 = 70;
+
+// Deserializers of our custom formats
+// can be replaced with const generics later
+macro_rules! generate_deserializer {
+    ($name:ident($numname:ident: $numty:ty, $unitname:ident: &str) -> $retty:ty {$body:expr}) => {
+        fn $name<'de, D>(deserializer: D) -> Result<$retty, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let text = Option::<String>::deserialize(deserializer)?;
+            let text = match text {
+                None => return Ok(None),
+                Some(text) => text,
+            };
+            let text = text.trim();
+            let split_point = text.find(|c: char| !c.is_numeric());
+            let (num, unit) = split_point.map_or_else(|| (text, ""), |p| text.split_at(p));
+            let deserialized = (|| {
+                let $numname = num.parse::<$numty>().ok()?;
+                let $unitname = unit.trim();
+                $body
+            })();
+            if deserialized.is_some() {
+                Ok(deserialized)
+            } else {
+                Err(de::Error::custom(
+                    "Invalid value, please refer to the documentation",
+                ))
+            }
+        }
+    };
+}
+
+generate_deserializer!(deserialize_duration(num: u64, unit: &str) -> Option<Duration> {
+    match unit {
+        "s" => Some(Duration::from_secs(num)),
+        "m" => Some(Duration::from_secs(num * 60)),
+        "h" => Some(Duration::from_secs(num * 60 * 60)),
+        "d" => Some(Duration::from_secs(num * 60 * 60 * 24)),
+        _ => None,
+    }
+});
+
+generate_deserializer!(deserialize_si_prefix(num: u64, unit: &str) -> Option<u64> {
+    match unit {
+        "" => Some(num),
+        "K" => num.checked_mul(1_000),
+        "M" => num.checked_mul(1_000_000),
+        "G" => num.checked_mul(1_000_000_000),
+        "T" => num.checked_mul(1_000_000_000_000),
+        "P" => num.checked_mul(1_000_000_000_000_000),
+        _ => None,
+    }
+});
+
+generate_deserializer!(deserialize_disk_space(num: u64, unit: &str) -> Option<u64> {
+    match unit {
+        "" => Some(num),
+        "K" => num.checked_mul(1_000),
+        "Ki" => num.checked_mul(1u64 << 10),
+        "M" => num.checked_mul(1_000_000),
+        "Mi" => num.checked_mul(1u64 << 20),
+        "G" => num.checked_mul(1_000_000_000),
+        "Gi" => num.checked_mul(1u64 << 30),
+        "T" => num.checked_mul(1_000_000_000_000),
+        "Ti" => num.checked_mul(1u64 << 40),
+        "P" => num.checked_mul(1_000_000_000_000_000),
+        "Pi" => num.checked_mul(1u64 << 50),
+        _ => None,
+    }
+});
+
+generate_deserializer!(deserialize_percent(num: u8, unit: &str) -> Option<u8> {
+    match unit {
+        "%" => Some(num),
+        _ => None,
+    }
+});
+
+static CACHE_IMPROPER_CONFIG_ERROR_MSG: &'static str =
+    "Cache system should be enabled and all settings must be validated or defaulted";
 
 macro_rules! generate_setting_getter {
     ($setting:ident: $setting_type:ty) => {
@@ -161,22 +323,22 @@ macro_rules! generate_setting_getter {
         pub fn $setting(&self) -> $setting_type {
             self
                 .$setting
-                .expect("All cache system settings must be validated or defaulted")
+                .expect(CACHE_IMPROPER_CONFIG_ERROR_MSG)
         }
     };
 }
 
 impl CacheConfig {
-    generate_setting_getter!(worker_event_queue_size: usize);
+    generate_setting_getter!(worker_event_queue_size: u64);
     generate_setting_getter!(baseline_compression_level: i32);
     generate_setting_getter!(optimized_compression_level: i32);
     generate_setting_getter!(optimized_compression_usage_counter_threshold: u64);
     generate_setting_getter!(cleanup_interval: Duration);
     generate_setting_getter!(optimizing_compression_task_timeout: Duration);
-    generate_setting_getter!(allowed_clock_drift_for_locks_from_future: Duration);
-    generate_setting_getter!(files_count_soft_limit: u64);
+    generate_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
+    generate_setting_getter!(file_count_soft_limit: u64);
     generate_setting_getter!(files_total_size_soft_limit: u64);
-    generate_setting_getter!(files_count_limit_percent_if_deleting: u8);
+    generate_setting_getter!(file_count_limit_percent_if_deleting: u8);
     generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
 
     /// Returns true if and only if the cache is enabled.
@@ -190,7 +352,7 @@ impl CacheConfig {
     pub fn directory(&self) -> &PathBuf {
         self.directory
             .as_ref()
-            .expect("All cache system settings must be validated or defaulted")
+            .expect(CACHE_IMPROPER_CONFIG_ERROR_MSG)
     }
 
     pub fn new_cache_disabled() -> Self {
@@ -204,10 +366,10 @@ impl CacheConfig {
             optimized_compression_usage_counter_threshold: None,
             cleanup_interval: None,
             optimizing_compression_task_timeout: None,
-            allowed_clock_drift_for_locks_from_future: None,
-            files_count_soft_limit: None,
+            allowed_clock_drift_for_files_from_future: None,
+            file_count_soft_limit: None,
             files_total_size_soft_limit: None,
-            files_count_limit_percent_if_deleting: None,
+            file_count_limit_percent_if_deleting: None,
             files_total_size_limit_percent_if_deleting: None,
         }
     }
@@ -224,20 +386,15 @@ impl CacheConfig {
         conf
     }
 
-    pub fn from_file<P: AsRef<Path>>(
-        enabled: bool,
-        config_file: Option<P>,
-        create_new_config: bool,
-    ) -> Self {
+    pub fn from_file<P: AsRef<Path>>(enabled: bool, config_file: Option<P>) -> Self {
         if !enabled {
             return Self::new_cache_disabled();
         }
 
-        let (mut config, path_if_flush_to_disk) =
-            match Self::load_and_parse_file(config_file, create_new_config) {
-                Ok(data) => data,
-                Err(err) => return Self::new_cache_with_errors(vec![err]),
-            };
+        let mut config = match Self::load_and_parse_file(config_file) {
+            Ok(data) => data,
+            Err(err) => return Self::new_cache_with_errors(vec![err]),
+        };
 
         // validate values and fill in defaults
         config.validate_directory_or_default();
@@ -247,46 +404,30 @@ impl CacheConfig {
         config.validate_optimized_compression_usage_counter_threshold_or_default();
         config.validate_cleanup_interval_or_default();
         config.validate_optimizing_compression_task_timeout_or_default();
-        config.validate_allowed_clock_drift_for_locks_from_future_or_default();
-        config.validate_files_count_soft_limit_or_default();
+        config.validate_allowed_clock_drift_for_files_from_future_or_default();
+        config.validate_file_count_soft_limit_or_default();
         config.validate_files_total_size_soft_limit_or_default();
-        config.validate_files_count_limit_percent_if_deleting_or_default();
+        config.validate_file_count_limit_percent_if_deleting_or_default();
         config.validate_files_total_size_limit_percent_if_deleting_or_default();
-
-        path_if_flush_to_disk.map(|p| config.flush_to_disk(p));
 
         config.disable_if_any_error();
         config
     }
 
-    fn load_and_parse_file<P: AsRef<Path>>(
-        config_file: Option<P>,
-        create_new_config: bool,
-    ) -> Result<(Self, Option<PathBuf>), String> {
+    fn load_and_parse_file<P: AsRef<Path>>(config_file: Option<P>) -> Result<Self, String> {
         // get config file path
-        let (config_file, user_custom_file) = match config_file {
-            Some(p) => (PathBuf::from(p.as_ref()), true),
-            None => match &*PROJECT_DIRS {
-                Some(proj_dirs) => (
-                    proj_dirs.config_dir().join("wasmtime-cache-config.toml"),
-                    false,
-                ),
-                None => Err("Config file not specified and failed to get the default".to_string())?,
-            },
-        };
+        let (config_file, user_custom_file) = config_file.as_ref().map_or_else(
+            || DEFAULT_CONFIG_PATH.as_ref().map(|p| (p.as_ref(), false)),
+            |p| Ok((p.as_ref(), true)),
+        )?;
 
-        // read config, or create an empty one
+        // read config, or use default one
         let entity_exists = config_file.exists();
-        match (create_new_config, entity_exists, user_custom_file) {
-            (true, true, _) => Err(format!(
-                "Tried to create a new config, but given entity already exists, path: {}",
-                config_file.display()
-            )),
-            (true, false, _) => Ok((Self::new_cache_enabled_template(), Some(config_file))),
-            (false, false, false) => Ok((Self::new_cache_enabled_template(), None)),
-            (false, _, _) => match fs::read(&config_file) {
+        match (entity_exists, user_custom_file) {
+            (false, false) => Ok(Self::new_cache_enabled_template()),
+            _ => match fs::read(&config_file) {
                 Ok(bytes) => match toml::from_slice::<Config>(&bytes[..]) {
-                    Ok(config) => Ok((config.cache, None)),
+                    Ok(config) => Ok(config.cache),
                     Err(err) => Err(format!(
                         "Failed to parse config file, path: {}, error: {}",
                         config_file.display(),
@@ -421,16 +562,16 @@ impl CacheConfig {
         }
     }
 
-    fn validate_allowed_clock_drift_for_locks_from_future_or_default(&mut self) {
-        if self.allowed_clock_drift_for_locks_from_future.is_none() {
-            self.allowed_clock_drift_for_locks_from_future =
-                Some(DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_LOCKS_FROM_FUTURE);
+    fn validate_allowed_clock_drift_for_files_from_future_or_default(&mut self) {
+        if self.allowed_clock_drift_for_files_from_future.is_none() {
+            self.allowed_clock_drift_for_files_from_future =
+                Some(DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_FILES_FROM_FUTURE);
         }
     }
 
-    fn validate_files_count_soft_limit_or_default(&mut self) {
-        if self.files_count_soft_limit.is_none() {
-            self.files_count_soft_limit = Some(DEFAULT_FILES_COUNT_SOFT_LIMIT);
+    fn validate_file_count_soft_limit_or_default(&mut self) {
+        if self.file_count_soft_limit.is_none() {
+            self.file_count_soft_limit = Some(DEFAULT_FILE_COUNT_SOFT_LIMIT);
         }
     }
 
@@ -440,13 +581,13 @@ impl CacheConfig {
         }
     }
 
-    fn validate_files_count_limit_percent_if_deleting_or_default(&mut self) {
-        if self.files_count_limit_percent_if_deleting.is_none() {
-            self.files_count_limit_percent_if_deleting =
-                Some(DEFAULT_FILES_COUNT_LIMIT_PERCENT_IF_DELETING);
+    fn validate_file_count_limit_percent_if_deleting_or_default(&mut self) {
+        if self.file_count_limit_percent_if_deleting.is_none() {
+            self.file_count_limit_percent_if_deleting =
+                Some(DEFAULT_FILE_COUNT_LIMIT_PERCENT_IF_DELETING);
         }
 
-        let percent = self.files_count_limit_percent_if_deleting.unwrap();
+        let percent = self.file_count_limit_percent_if_deleting.unwrap();
         if percent > 100 {
             self.errors.push(format!(
                 "Invalid files count limit percent if deleting: {} not in range 0-100%",
@@ -470,66 +611,6 @@ impl CacheConfig {
         }
     }
 
-    fn flush_to_disk(&mut self, path: PathBuf) {
-        if !self.errors.is_empty() {
-            return;
-        }
-
-        trace!(
-            "Flushing cache config file to the disk, path: {}",
-            path.display()
-        );
-
-        let parent_dir = match path.parent() {
-            Some(p) => p,
-            None => {
-                self.errors
-                    .push(format!("Invalid cache config path: {}", path.display()));
-                return;
-            }
-        };
-
-        match fs::create_dir_all(parent_dir) {
-            Ok(()) => (),
-            Err(err) => {
-                self.errors.push(format!(
-                    "Failed to create config directory, config path: {}, error: {}",
-                    path.display(),
-                    err
-                ));
-                return;
-            }
-        };
-
-        let serialized = match self.exec_as_config(|config| toml::to_string_pretty(&config)) {
-            Ok(data) => data,
-            Err(err) => {
-                self.errors.push(format!(
-                    "Failed to serialize config, (unused) path: {}, msg: {}",
-                    path.display(),
-                    err
-                ));
-                return;
-            }
-        };
-
-        let header = "# Automatically generated with defaults.\n\
-                      # Comment out certain fields to use default values.\n\n";
-
-        let content = format!("{}{}", header, serialized);
-        match fs::write(&path, &content) {
-            Ok(()) => (),
-            Err(err) => {
-                self.errors.push(format!(
-                    "Failed to flush config to the disk, path: {}, msg: {}",
-                    path.display(),
-                    err
-                ));
-                return;
-            }
-        }
-    }
-
     fn disable_if_any_error(&mut self) {
         if !self.errors.is_empty() {
             let mut conf = Self::new_cache_disabled();
@@ -537,14 +618,7 @@ impl CacheConfig {
             mem::swap(&mut self.errors, &mut conf.errors);
         }
     }
-
-    fn exec_as_config<T>(&mut self, closure: impl FnOnce(&mut Config) -> T) -> T {
-        let mut config = Config {
-            cache: CacheConfig::new_cache_disabled(),
-        };
-        mem::swap(self, &mut config.cache);
-        let ret = closure(&mut config);
-        mem::swap(self, &mut config.cache);
-        ret
-    }
 }
+
+#[cfg(test)]
+mod tests;

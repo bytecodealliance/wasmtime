@@ -69,6 +69,7 @@ pub(super) fn init(init_file_per_thread_logger: Option<&'static str>) {
     WORKER.call_once(|| worker);
 }
 
+#[derive(Debug, Clone)]
 enum CacheEvent {
     OnCacheGet(PathBuf),
     OnCacheUpdate(PathBuf),
@@ -79,7 +80,11 @@ impl Worker {
         cache_config: &CacheConfig,
         init_file_per_thread_logger: Option<&'static str>,
     ) -> Self {
-        let (tx, rx) = sync_channel(cache_config.worker_event_queue_size());
+        let queue_size = match cache_config.worker_event_queue_size() {
+            num if num <= usize::max_value() as u64 => num as usize,
+            _ => usize::max_value(),
+        };
+        let (tx, rx) = sync_channel(queue_size);
 
         #[cfg(test)]
         let stats = Arc::new(WorkerStats::default());
@@ -117,15 +122,16 @@ impl Worker {
     fn send_cache_event(&self, event: CacheEvent) {
         #[cfg(test)]
         let stats: &WorkerStats = self.stats.borrow();
-        match self.sender.try_send(event) {
+        match self.sender.try_send(event.clone()) {
             Ok(()) => {
                 #[cfg(test)]
                 stats.sent.fetch_add(1, atomic::Ordering::SeqCst);
             }
             Err(err) => {
                 info!(
-                    "Failed to send asynchronously message to worker thread: {}",
-                    err
+                    "Failed to send asynchronously message to worker thread, \
+                     event: {:?}, error: {}",
+                    event, err
                 );
 
                 #[cfg(test)]
@@ -285,7 +291,7 @@ impl WorkerThread {
             path.as_ref(),
             self.cache_config.optimizing_compression_task_timeout(),
             self.cache_config
-                .allowed_clock_drift_for_locks_from_future(),
+                .allowed_clock_drift_for_files_from_future(),
         ) {
             p
         } else {
@@ -406,7 +412,7 @@ impl WorkerThread {
             &cleanup_file,
             self.cache_config.cleanup_interval(),
             self.cache_config
-                .allowed_clock_drift_for_locks_from_future(),
+                .allowed_clock_drift_for_files_from_future(),
         )
         .is_none()
         {
@@ -438,7 +444,7 @@ impl WorkerThread {
         let mut start_delete_idx_if_deleting_recognized_items: Option<usize> = None;
 
         let total_size_limit = self.cache_config.files_total_size_soft_limit();
-        let files_count_limit = self.cache_config.files_count_soft_limit();
+        let file_count_limit = self.cache_config.file_count_soft_limit();
         let tsl_if_deleting = total_size_limit
             .checked_mul(
                 self.cache_config
@@ -446,8 +452,8 @@ impl WorkerThread {
             )
             .unwrap()
             / 100;
-        let fcl_if_deleting = files_count_limit
-            .checked_mul(self.cache_config.files_count_limit_percent_if_deleting() as u64)
+        let fcl_if_deleting = file_count_limit
+            .checked_mul(self.cache_config.file_count_limit_percent_if_deleting() as u64)
             .unwrap()
             / 100;
 
@@ -466,7 +472,7 @@ impl WorkerThread {
                 }
             }
 
-            if total_size >= total_size_limit || (idx + 1) as u64 >= files_count_limit {
+            if total_size >= total_size_limit || (idx + 1) as u64 >= file_count_limit {
                 start_delete_idx = start_delete_idx_if_deleting_recognized_items;
                 break;
             }
@@ -578,7 +584,7 @@ impl WorkerThread {
                                     Some(&entry),
                                     &path,
                                     cache_config.cleanup_interval(),
-                                    cache_config.allowed_clock_drift_for_locks_from_future(),
+                                    cache_config.allowed_clock_drift_for_files_from_future(),
                                 ) {
                                     continue; // skip active lock
                                 }
@@ -597,7 +603,7 @@ impl WorkerThread {
                                 Some(&entry),
                                 &path,
                                 cache_config.optimizing_compression_task_timeout(),
-                                cache_config.allowed_clock_drift_for_locks_from_future(),
+                                cache_config.allowed_clock_drift_for_files_from_future(),
                             ) {
                                 add_unrecognized!(file: path);
                             } // else: skip active lock

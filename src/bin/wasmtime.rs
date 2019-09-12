@@ -45,7 +45,7 @@ use std::process::exit;
 use wabt;
 use wasi_common::preopen_dir;
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
-use wasmtime_environ::cache_init;
+use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 use wasmtime_wasi::instantiate_wasi;
@@ -62,8 +62,9 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime --create-cache-config [--cache-config=<cache_config_file>]
     wasmtime --help | --version
 
 Options:
@@ -71,10 +72,12 @@ Options:
     -o, --optimize      runs optimization passes on the translated functions
     -c, --cache         enable caching system, use default configuration
     --cache-config=<cache_config_file>
-                        enable caching system, use specified cache configuration
+                        enable caching system, use specified cache configuration;
+                        can be used with --create-cache-config to specify custom file
     --create-cache-config
-                        used with --cache or --cache-config, creates default configuration and writes it to the disk,
-                        will fail if specified file already exists (or default file if used with --cache)
+                        creates default configuration and writes it to the disk,
+                        use with --cache-config to specify custom config file
+                        instead of default one
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
@@ -94,7 +97,7 @@ struct Args {
     arg_arg: Vec<String>,
     flag_optimize: bool,
     flag_cache: bool, // TODO change to disable cache after implementing cache eviction
-    flag_cache_config_file: Option<String>,
+    flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_debug: bool,
     flag_g: bool,
@@ -222,10 +225,25 @@ fn rmain() -> Result<(), Error> {
         Some(prefix)
     };
 
+    if args.flag_create_cache_config {
+        match cache_create_new_config(args.flag_cache_config) {
+            Ok(path) => {
+                println!(
+                    "Successfully created new configuation file at {}",
+                    path.display()
+                );
+                return Ok(());
+            }
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                exit(1);
+            }
+        }
+    }
+
     let errors = cache_init(
-        args.flag_cache || args.flag_cache_config_file.is_some(),
-        args.flag_cache_config_file.as_ref(),
-        args.flag_create_cache_config,
+        args.flag_cache || args.flag_cache_config.is_some(),
+        args.flag_cache_config.as_ref(),
         log_config,
     );
 
