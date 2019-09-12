@@ -217,7 +217,7 @@ pub struct VMTableDefinition {
     pub base: *mut u8,
 
     /// The current number of elements in the table.
-    pub current_elements: usize,
+    pub current_elements: u32,
 }
 
 #[cfg(test)]

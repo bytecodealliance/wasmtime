@@ -290,7 +290,7 @@ impl Table {
         match wasmtime_export {
             wasmtime_runtime::Export::Table { definition, .. } => {
                 let index = wasmtime_handle.table_index(unsafe { &*definition });
-                let len = unsafe { (*definition).current_elements as u32 };
+                let len = unsafe { (*definition).current_elements };
                 for i in 0..len {
                     let _success =
                         set_table_item(&mut wasmtime_handle, &store, index, i, init.clone());
@@ -335,7 +335,7 @@ impl Table {
     pub fn size(&self) -> u32 {
         match self.wasmtime_export {
             wasmtime_runtime::Export::Table { definition, .. } => unsafe {
-                (*definition).current_elements as u32
+                (*definition).current_elements
             },
             _ => panic!("global definition not found"),
         }
@@ -346,7 +346,7 @@ impl Table {
         if let Some(len) = self.wasmtime_handle.table_grow(index, delta) {
             let mut wasmtime_handle = self.wasmtime_handle.clone();
             for i in 0..delta {
-                let i = len as u32 - (delta - i);
+                let i = len - (delta - i);
                 let _success =
                     set_table_item(&mut wasmtime_handle, &self.store, index, i, init.clone());
                 assert!(_success);

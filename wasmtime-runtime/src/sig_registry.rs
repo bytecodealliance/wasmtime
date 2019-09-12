@@ -29,6 +29,12 @@ impl SignatureRegistry {
         match self.signature_hash.entry(sig.clone()) {
             hash_map::Entry::Occupied(entry) => *entry.get(),
             hash_map::Entry::Vacant(entry) => {
+                // Keep `signature_hash` len under 2**32 -- VMSharedSignatureIndex::new(std::u32::MAX)
+                // is reserved for VMSharedSignatureIndex::default().
+                debug_assert!(
+                    len < std::u32::MAX as usize,
+                    "Invariant check: signature_hash.len() < std::u32::MAX"
+                );
                 let sig_id = VMSharedSignatureIndex::new(u32::try_from(len).unwrap());
                 entry.insert(sig_id);
                 sig_id
