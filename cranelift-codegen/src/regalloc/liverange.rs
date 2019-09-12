@@ -179,32 +179,6 @@ pub struct GenericLiveRange<PO: ProgramOrder> {
     po: PhantomData<*const PO>,
 }
 
-/// Context information needed to query a `LiveRange`.
-pub struct LiveRangeContext<'a, PO: 'a + ProgramOrder> {
-    /// Ordering of EBBs.
-    pub order: &'a PO,
-    /// Memory pool.
-    pub forest: &'a bforest::MapForest<Ebb, Inst>,
-}
-
-impl<'a, PO: ProgramOrder> LiveRangeContext<'a, PO> {
-    /// Make a new context.
-    pub fn new(order: &'a PO, forest: &'a bforest::MapForest<Ebb, Inst>) -> Self {
-        Self { order, forest }
-    }
-}
-
-impl<'a, PO: ProgramOrder> Clone for LiveRangeContext<'a, PO> {
-    fn clone(&self) -> Self {
-        LiveRangeContext {
-            order: self.order,
-            forest: self.forest,
-        }
-    }
-}
-
-impl<'a, PO: ProgramOrder> Copy for LiveRangeContext<'a, PO> {}
-
 /// Forest of B-trees used for storing live ranges.
 pub type LiveRangeForest = bforest::MapForest<Ebb, Inst>;
 
@@ -371,13 +345,13 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     /// If the live range is live through all of `ebb`, the terminator of `ebb` is a correct
     /// answer, but it is also possible that an even later program point is returned. So don't
     /// depend on the returned `Inst` to belong to `ebb`.
-    pub fn livein_local_end(&self, ebb: Ebb, ctx: LiveRangeContext<PO>) -> Option<Inst> {
-        let cmp = Cmp(ctx.order);
+    pub fn livein_local_end(&self, ebb: Ebb, forest: &LiveRangeForest, order: &PO) -> Option<Inst> {
+        let cmp = Cmp(order);
         self.liveins
-            .get_or_less(ebb, ctx.forest, &cmp)
+            .get_or_less(ebb, forest, &cmp)
             .and_then(|(_, inst)| {
                 // We have an entry that ends at `inst`.
-                if ctx.order.cmp(inst, ebb) == Ordering::Greater {
+                if order.cmp(inst, ebb) == Ordering::Greater {
                     Some(inst)
                 } else {
                     None
@@ -388,16 +362,16 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     /// Is this value live-in to `ebb`?
     ///
     /// An EBB argument is not considered to be live in.
-    pub fn is_livein(&self, ebb: Ebb, ctx: LiveRangeContext<PO>) -> bool {
-        self.livein_local_end(ebb, ctx).is_some()
+    pub fn is_livein(&self, ebb: Ebb, forest: &LiveRangeForest, order: &PO) -> bool {
+        self.livein_local_end(ebb, forest, order).is_some()
     }
 
     /// Get all the live-in intervals.
     ///
     /// Note that the intervals are stored in a compressed form so each entry may span multiple
     /// EBBs where the value is live in.
-    pub fn liveins<'a>(&'a self, ctx: LiveRangeContext<'a, PO>) -> bforest::MapIter<'a, Ebb, Inst> {
-        self.liveins.iter(ctx.forest)
+    pub fn liveins<'a>(&'a self, forest: &'a LiveRangeForest) -> bforest::MapIter<'a, Ebb, Inst> {
+        self.liveins.iter(forest)
     }
 
     /// Check if this live range overlaps a definition in `ebb`.
@@ -405,7 +379,8 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         &self,
         def: ExpandedProgramPoint,
         ebb: Ebb,
-        ctx: LiveRangeContext<PO>,
+        forest: &LiveRangeForest,
+        order: &PO,
     ) -> bool {
         // Two defs at the same program point always overlap, even if one is dead.
         if def == self.def_begin.into() {
@@ -413,38 +388,39 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         }
 
         // Check for an overlap with the local range.
-        if ctx.order.cmp(def, self.def_begin) != Ordering::Less
-            && ctx.order.cmp(def, self.def_end) == Ordering::Less
+        if order.cmp(def, self.def_begin) != Ordering::Less
+            && order.cmp(def, self.def_end) == Ordering::Less
         {
             return true;
         }
 
         // Check for an overlap with a live-in range.
-        match self.livein_local_end(ebb, ctx) {
-            Some(inst) => ctx.order.cmp(def, inst) == Ordering::Less,
+        match self.livein_local_end(ebb, forest, order) {
+            Some(inst) => order.cmp(def, inst) == Ordering::Less,
             None => false,
         }
     }
 
     /// Check if this live range reaches a use at `user` in `ebb`.
-    pub fn reaches_use(&self, user: Inst, ebb: Ebb, ctx: LiveRangeContext<PO>) -> bool {
+    pub fn reaches_use(&self, user: Inst, ebb: Ebb, forest: &LiveRangeForest, order: &PO) -> bool {
         // Check for an overlap with the local range.
-        if ctx.order.cmp(user, self.def_begin) == Ordering::Greater
-            && ctx.order.cmp(user, self.def_end) != Ordering::Greater
+        if order.cmp(user, self.def_begin) == Ordering::Greater
+            && order.cmp(user, self.def_end) != Ordering::Greater
         {
             return true;
         }
 
         // Check for an overlap with a live-in range.
-        match self.livein_local_end(ebb, ctx) {
-            Some(inst) => ctx.order.cmp(user, inst) != Ordering::Greater,
+        match self.livein_local_end(ebb, forest, order) {
+            Some(inst) => order.cmp(user, inst) != Ordering::Greater,
             None => false,
         }
     }
 
     /// Check if this live range is killed at `user` in `ebb`.
-    pub fn killed_at(&self, user: Inst, ebb: Ebb, ctx: LiveRangeContext<PO>) -> bool {
-        self.def_local_end() == user.into() || self.livein_local_end(ebb, ctx) == Some(user)
+    pub fn killed_at(&self, user: Inst, ebb: Ebb, forest: &LiveRangeForest, order: &PO) -> bool {
+        self.def_local_end() == user.into()
+            || self.livein_local_end(ebb, forest, order) == Some(user)
     }
 }
 
@@ -457,7 +433,7 @@ impl<PO: ProgramOrder> SparseMapValue<Value> for GenericLiveRange<PO> {
 
 #[cfg(test)]
 mod tests {
-    use super::{GenericLiveRange, LiveRangeContext};
+    use super::GenericLiveRange;
     use crate::bforest;
     use crate::entity::EntityRef;
     use crate::ir::{Ebb, Inst, Value};
@@ -560,18 +536,17 @@ mod tests {
         let e2 = Ebb::new(2);
         let lr = GenericLiveRange::new(v0, i1.into(), Default::default());
         let forest = &bforest::MapForest::new();
-        let ctx = LiveRangeContext::new(PO, forest);
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), i1.into());
         assert_eq!(lr.def_local_end(), i1.into());
-        assert_eq!(lr.livein_local_end(e2, ctx), None);
-        PO.validate(&lr, ctx.forest);
+        assert_eq!(lr.livein_local_end(e2, forest, PO), None);
+        PO.validate(&lr, forest);
 
         // A dead live range overlaps its own def program point.
-        assert!(lr.overlaps_def(i1.into(), e0, ctx));
-        assert!(!lr.overlaps_def(i2.into(), e0, ctx));
-        assert!(!lr.overlaps_def(e0.into(), e0, ctx));
+        assert!(lr.overlaps_def(i1.into(), e0, forest, PO));
+        assert!(!lr.overlaps_def(i2.into(), e0, forest, PO));
+        assert!(!lr.overlaps_def(e0.into(), e0, forest, PO));
     }
 
     #[test]
@@ -580,14 +555,13 @@ mod tests {
         let e2 = Ebb::new(2);
         let lr = GenericLiveRange::new(v0, e2.into(), Default::default());
         let forest = &bforest::MapForest::new();
-        let ctx = LiveRangeContext::new(PO, forest);
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), e2.into());
         assert_eq!(lr.def_local_end(), e2.into());
         // The def interval of an EBB argument does not count as live-in.
-        assert_eq!(lr.livein_local_end(e2, ctx), None);
-        PO.validate(&lr, ctx.forest);
+        assert_eq!(lr.livein_local_end(e2, forest, PO), None);
+        PO.validate(&lr, forest);
     }
 
     #[test]
@@ -664,25 +638,16 @@ mod tests {
         // Adding a live-in interval.
         assert_eq!(lr.extend_in_ebb(e20, i22, PO, forest), true);
         PO.validate(&lr, forest);
-        assert_eq!(
-            lr.livein_local_end(e20, LiveRangeContext::new(PO, forest)),
-            Some(i22)
-        );
+        assert_eq!(lr.livein_local_end(e20, forest, PO), Some(i22));
 
         // Non-extending the live-in.
         assert_eq!(lr.extend_in_ebb(e20, i21, PO, forest), false);
-        assert_eq!(
-            lr.livein_local_end(e20, LiveRangeContext::new(PO, forest)),
-            Some(i22)
-        );
+        assert_eq!(lr.livein_local_end(e20, forest, PO), Some(i22));
 
         // Extending the existing live-in.
         assert_eq!(lr.extend_in_ebb(e20, i23, PO, forest), false);
         PO.validate(&lr, forest);
-        assert_eq!(
-            lr.livein_local_end(e20, LiveRangeContext::new(PO, forest)),
-            Some(i23)
-        );
+        assert_eq!(lr.livein_local_end(e20, forest, PO), Some(i23));
     }
 
     #[test]
@@ -699,52 +664,29 @@ mod tests {
         let forest = &mut bforest::MapForest::new();
 
         assert_eq!(lr.extend_in_ebb(e30, i31, PO, forest), true);
-        assert_eq!(
-            lr.liveins(LiveRangeContext::new(PO, forest))
-                .collect::<Vec<_>>(),
-            [(e30, i31)]
-        );
+        assert_eq!(lr.liveins(forest).collect::<Vec<_>>(), [(e30, i31)]);
 
         // Coalesce to previous
         assert_eq!(lr.extend_in_ebb(e40, i41, PO, forest), true);
-        assert_eq!(
-            lr.liveins(LiveRangeContext::new(PO, forest))
-                .collect::<Vec<_>>(),
-            [(e30, i41)]
-        );
+        assert_eq!(lr.liveins(forest).collect::<Vec<_>>(), [(e30, i41)]);
 
         // Coalesce to next
         assert_eq!(lr.extend_in_ebb(e20, i21, PO, forest), true);
-        assert_eq!(
-            lr.liveins(LiveRangeContext::new(PO, forest))
-                .collect::<Vec<_>>(),
-            [(e20, i41)]
-        );
+        assert_eq!(lr.liveins(forest).collect::<Vec<_>>(), [(e20, i41)]);
 
         let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
 
         assert_eq!(lr.extend_in_ebb(e40, i41, PO, forest), true);
-        assert_eq!(
-            lr.liveins(LiveRangeContext::new(PO, forest))
-                .collect::<Vec<_>>(),
-            [(e40, i41)]
-        );
+        assert_eq!(lr.liveins(forest).collect::<Vec<_>>(), [(e40, i41)]);
 
         assert_eq!(lr.extend_in_ebb(e20, i21, PO, forest), true);
         assert_eq!(
-            lr.liveins(LiveRangeContext::new(PO, forest))
-                .collect::<Vec<_>>(),
+            lr.liveins(forest).collect::<Vec<_>>(),
             [(e20, i21), (e40, i41)]
         );
 
         // Coalesce to previous and next
         assert_eq!(lr.extend_in_ebb(e30, i31, PO, forest), true);
-        assert_eq!(
-            lr.liveins(LiveRangeContext::new(PO, forest))
-                .collect::<Vec<_>>(),
-            [(e20, i41)]
-        );
+        assert_eq!(lr.liveins(forest).collect::<Vec<_>>(), [(e20, i41)]);
     }
-
-    // TODO: Add more tests that exercise the binary search algorithm.
 }

@@ -319,17 +319,18 @@ impl<'a> Context<'a> {
             for (idx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
                 let mut reguse = RegUse::new(arg, idx, op.regclass.into());
                 let lr = &self.liveness[arg];
-                let ctx = self.liveness.context(&self.cur.func.layout);
                 match op.kind {
                     ConstraintKind::Stack => continue,
                     ConstraintKind::FixedReg(_) => reguse.fixed = true,
                     ConstraintKind::Tied(_) => {
                         // A tied operand must kill the used value.
-                        reguse.tied = !lr.killed_at(inst, ebb, ctx);
+                        reguse.tied =
+                            !lr.killed_at(inst, ebb, self.liveness.forest(), &self.cur.func.layout);
                     }
                     ConstraintKind::FixedTied(_) => {
                         reguse.fixed = true;
-                        reguse.tied = !lr.killed_at(inst, ebb, ctx);
+                        reguse.tied =
+                            !lr.killed_at(inst, ebb, self.liveness.forest(), &self.cur.func.layout);
                     }
                     ConstraintKind::Reg => {}
                 }

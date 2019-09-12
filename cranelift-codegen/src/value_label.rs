@@ -96,8 +96,8 @@ where
     ebbs.sort_by_key(|ebb| func.offsets[*ebb]); // Ensure inst offsets always increase
     let encinfo = isa.encoding_info();
     let values_locations = &func.locations;
-    let liveness_context = regalloc.liveness().context(&func.layout);
     let liveness_ranges = regalloc.liveness().ranges();
+    let liveness_forest = regalloc.liveness().forest();
 
     let mut ranges = HashMap::new();
     let mut add_range = |label, range: (u32, u32), loc: ValueLoc| {
@@ -126,7 +126,10 @@ where
             // Remove killed values.
             tracked_values.retain(|(x, label, start_offset, last_loc)| {
                 let range = liveness_ranges.get(*x);
-                if range.expect("value").killed_at(inst, ebb, liveness_context) {
+                if range
+                    .expect("value")
+                    .killed_at(inst, ebb, &liveness_forest, &func.layout)
+                {
                     add_range(*label, (*start_offset, end_offset), *last_loc);
                     return false;
                 }
@@ -173,7 +176,7 @@ where
                 // Ignore dead/inactive Values.
                 let range = liveness_ranges.get(*v);
                 match range {
-                    Some(r) => r.reaches_use(inst, ebb, liveness_context),
+                    Some(r) => r.reaches_use(inst, ebb, &liveness_forest, &func.layout),
                     None => false,
                 }
             });
