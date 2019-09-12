@@ -30,7 +30,7 @@ docopt = "1.0.1"
 serde = { "version" = "1.0.94", features = ["derive"] }
 faerie = "0.10.1"
 failure = "0.1"
-target-lexicon = { version = "0.4.0", default-features = false }
+target-lexicon = { version = "0.8.1", default-features = false }
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.1"
 wabt = "0.9"
