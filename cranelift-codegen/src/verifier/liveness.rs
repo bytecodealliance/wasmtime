@@ -2,13 +2,12 @@
 
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::ir::entities::AnyEntity;
-use crate::ir::{ExpandedProgramPoint, Function, Inst, ProgramOrder, ProgramPoint, Value};
+use crate::ir::{ExpandedProgramPoint, Function, ProgramPoint, Value};
 use crate::isa::TargetIsa;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::liverange::LiveRange;
 use crate::timing;
 use crate::verifier::{VerifierErrors, VerifierStepResult};
-use core::cmp::Ordering;
 
 /// Verify liveness information for `func`.
 ///
@@ -65,6 +64,7 @@ impl<'a> LivenessVerifier<'a> {
 
     /// Check all instructions.
     fn check_insts(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        let lr_ctx = self.liveness.context(&self.func.layout);
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 let encoding = self.func.encodings[inst];
@@ -106,7 +106,9 @@ impl<'a> LivenessVerifier<'a> {
                         Some(lr) => lr,
                         None => return fatal!(errors, inst, "{} has no live range", val),
                     };
-                    if !self.live_at_use(lr, inst) {
+
+                    debug_assert!(lr_ctx.order.inst_ebb(inst).unwrap() == ebb);
+                    if !lr.reaches_use(inst, ebb, lr_ctx) {
                         return fatal!(errors, inst, "{} is not live at this use", val);
                     }
 
@@ -124,24 +126,6 @@ impl<'a> LivenessVerifier<'a> {
             }
         }
         Ok(())
-    }
-
-    /// Is `lr` live at the use `inst`?
-    fn live_at_use(&self, lr: &LiveRange, inst: Inst) -> bool {
-        let ctx = self.liveness.context(&self.func.layout);
-
-        // Check if `inst` is in the def range, not including the def itself.
-        if ctx.order.cmp(lr.def(), inst) == Ordering::Less
-            && ctx.order.cmp(inst, lr.def_local_end()) != Ordering::Greater
-        {
-            return true;
-        }
-
-        // Otherwise see if `inst` is in one of the live-in ranges.
-        match lr.livein_local_end(ctx.order.inst_ebb(inst).unwrap(), ctx) {
-            Some(end) => ctx.order.cmp(inst, end) != Ordering::Greater,
-            None => false,
-        }
     }
 
     /// Check the integrity of the live range `lr`.
@@ -220,11 +204,13 @@ impl<'a> LivenessVerifier<'a> {
                 }
             };
 
+            let lr_ctx = self.liveness.context(&self.func.layout);
+
             // Check all the EBBs in the interval independently.
             loop {
                 // If `val` is live-in at `ebb`, it must be live at all the predecessors.
-                for BasicBlock { inst: pred, .. } in self.cfg.pred_iter(ebb) {
-                    if !self.live_at_use(lr, pred) {
+                for BasicBlock { inst: pred, ebb } in self.cfg.pred_iter(ebb) {
+                    if !lr.reaches_use(pred, ebb, lr_ctx) {
                         return fatal!(
                             errors,
                             pred,
