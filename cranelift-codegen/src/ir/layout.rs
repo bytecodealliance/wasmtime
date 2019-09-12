@@ -698,7 +698,7 @@ impl Layout {
 
 #[derive(Clone, Debug, Default)]
 struct InstNode {
-    // The Ebb containing this instruction, or `None` if the instruction is not yet inserted.
+    /// The Ebb containing this instruction, or `None` if the instruction is not yet inserted.
     ebb: PackedOption<Ebb>,
     prev: PackedOption<Inst>,
     next: PackedOption<Inst>,
