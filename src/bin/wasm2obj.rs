@@ -50,7 +50,7 @@ use std::str;
 use std::str::FromStr;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
-use wasmtime_environ::cache_init;
+use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_environ::{
     Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo, Tunables, VMOffsets,
 };
@@ -63,7 +63,8 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-Odg] [--cache | --cache-config=<cache_config_file>] [--create-cache-config] [--enable-simd] <file> -o <output>
+    wasm2obj [--target TARGET] [-Odg] [--cache | --cache-config=<cache_config_file>] [--enable-simd] <file> -o <output>
+    wasm2obj --create-cache-config [--cache-config=<cache_config_file>]
     wasm2obj --help | --version
 
 Options:
@@ -73,10 +74,12 @@ Options:
     -g                  generate debug information
     -c, --cache         enable caching system, use default configuration
     --cache-config=<cache_config_file>
-                        enable caching system, use specified cache configuration
+                        enable caching system, use specified cache configuration;
+                        can be used with --create-cache-config to specify custom file
     --create-cache-config
-                        used with --cache or --cache-config, creates default configuration and writes it to the disk,
-                        will fail if specified file already exists (or default file if used with --cache)
+                        creates default configuration and writes it to the disk,
+                        use with --cache-config to specify custom config file
+                        instead of default one
     --enable-simd       enable proposed SIMD instructions
     -O, --optimize      runs optimization passes on the translated functions
     --version           print the Cranelift version
@@ -91,7 +94,7 @@ struct Args {
     flag_g: bool,
     flag_debug: bool,
     flag_cache: bool, // TODO change to disable cache after implementing cache eviction
-    flag_cache_config_file: Option<String>,
+    flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
     flag_optimize: bool,
@@ -123,10 +126,25 @@ fn main() {
         Some(prefix)
     };
 
+    if args.flag_create_cache_config {
+        match cache_create_new_config(args.flag_cache_config) {
+            Ok(path) => {
+                println!(
+                    "Successfully created new configuation file at {}",
+                    path.display()
+                );
+                return;
+            }
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                process::exit(1);
+            }
+        }
+    }
+
     let errors = cache_init(
-        args.flag_cache || args.flag_cache_config_file.is_some(),
-        args.flag_cache_config_file.as_ref(),
-        args.flag_create_cache_config,
+        args.flag_cache || args.flag_cache_config.is_some(),
+        args.flag_cache_config.as_ref(),
         log_config,
     );
 

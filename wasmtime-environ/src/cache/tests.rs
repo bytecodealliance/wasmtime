@@ -40,7 +40,7 @@ fn test_write_read_cache() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let errors = init(true, Some(&config_path), false, None);
+    let errors = init(true, Some(&config_path), None);
     assert!(errors.is_empty());
     let cache_config = cache_config();
     assert!(cache_config.enabled());

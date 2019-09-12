@@ -18,8 +18,8 @@ use std::string::{String, ToString};
 mod config;
 mod worker;
 
-pub use config::init;
 use config::{cache_config, CacheConfig};
+pub use config::{create_new_config, init};
 use worker::worker;
 
 lazy_static! {

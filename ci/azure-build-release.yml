@@ -71,7 +71,7 @@ steps:
     if [ "$AGENT_OS" = "Windows_NT" ]; then
       ext=.exe
     fi
-    cp LICENSE README.md target/release/{wasmtime,wasm2obj}$ext $BUILD_BINARIESDIRECTORY/$BASENAME
+    cp LICENSE README.md CACHE_CONFIGURATION.md target/release/{wasmtime,wasm2obj}$ext $BUILD_BINARIESDIRECTORY/$BASENAME
   displayName: Copy binaries
 
 - bash: |

@@ -18,6 +18,6 @@ fn test_cache_fail_invalid_config() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let errors = cache_init(true, Some(&config_path), false, None);
+    let errors = cache_init(true, Some(&config_path), None);
     assert!(!errors.is_empty());
 }
