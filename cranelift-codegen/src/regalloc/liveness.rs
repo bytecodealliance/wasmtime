@@ -181,7 +181,7 @@ use crate::ir::dfg::ValueDef;
 use crate::ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
 use crate::isa::{EncInfo, OperandConstraint, TargetIsa};
 use crate::regalloc::affinity::Affinity;
-use crate::regalloc::liverange::{LiveRange, LiveRangeForest};
+use crate::regalloc::liverange::LiveRange;
 use crate::timing;
 use core::mem;
 use core::ops::Index;
@@ -249,14 +249,13 @@ fn extend_to_use(
     worklist: &mut Vec<Ebb>,
     func: &Function,
     cfg: &ControlFlowGraph,
-    forest: &mut LiveRangeForest,
 ) {
     // This is our scratch working space, and we'll leave it empty when we return.
     debug_assert!(worklist.is_empty());
 
     // Extend the range locally in `ebb`.
     // If there already was a live interval in that block, we're done.
-    if lr.extend_in_ebb(ebb, to, &func.layout, forest) {
+    if lr.extend_in_ebb(ebb, to, &func.layout) {
         worklist.push(ebb);
     }
 
@@ -277,7 +276,7 @@ fn extend_to_use(
             inst: branch,
         } in cfg.pred_iter(livein)
         {
-            if lr.extend_in_ebb(pred, branch, &func.layout, forest) {
+            if lr.extend_in_ebb(pred, branch, &func.layout) {
                 // This predecessor EBB also became live-in. We need to process it later.
                 worklist.push(pred);
             }
@@ -291,9 +290,6 @@ fn extend_to_use(
 pub struct Liveness {
     /// The live ranges that have been computed so far.
     ranges: LiveRangeSet,
-
-    /// Memory pool for the live ranges.
-    forest: LiveRangeForest,
 
     /// Working space for the `extend_to_use` algorithm.
     /// This vector is always empty, except for inside that function.
@@ -309,14 +305,8 @@ impl Liveness {
     pub fn new() -> Self {
         Self {
             ranges: LiveRangeSet::new(),
-            forest: LiveRangeForest::new(),
             worklist: Vec::new(),
         }
-    }
-
-    /// Current forest storage.
-    pub fn forest(&self) -> &LiveRangeForest {
-        &self.forest
     }
 
     /// Current live ranges.
@@ -327,7 +317,6 @@ impl Liveness {
     /// Clear all data structures in this liveness analysis.
     pub fn clear(&mut self) {
         self.ranges.clear();
-        self.forest.clear();
         self.worklist.clear();
     }
 
@@ -376,7 +365,7 @@ impl Liveness {
     ) -> &mut Affinity {
         debug_assert_eq!(Some(ebb), layout.inst_ebb(user));
         let lr = self.ranges.get_mut(value).expect("Value has no live range");
-        let livein = lr.extend_in_ebb(ebb, user, layout, &mut self.forest);
+        let livein = lr.extend_in_ebb(ebb, user, layout);
         debug_assert!(!livein, "{} should already be live in {}", value, ebb);
         &mut lr.affinity
     }
@@ -431,15 +420,7 @@ impl Liveness {
                     let lr = get_or_create(&mut self.ranges, arg, isa, func, &encinfo);
 
                     // Extend the live range to reach this use.
-                    extend_to_use(
-                        lr,
-                        ebb,
-                        inst,
-                        &mut self.worklist,
-                        func,
-                        cfg,
-                        &mut self.forest,
-                    );
+                    extend_to_use(lr, ebb, inst, &mut self.worklist, func, cfg);
 
                     // Apply operand constraint, ignoring any variable arguments after the fixed
                     // operands described by `operand_constraints`. Variable arguments are either

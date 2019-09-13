@@ -196,12 +196,7 @@ impl<'a> Context<'a> {
             // to be live at the use.
             for i in 0..num_params {
                 let param = self.func.dfg.ebb_params(ebb)[i];
-                if self.liveness[param].reaches_use(
-                    pred_inst,
-                    pred_ebb,
-                    self.liveness.forest(),
-                    &self.func.layout,
-                ) {
+                if self.liveness[param].reaches_use(pred_inst, pred_ebb, &self.func.layout) {
                     self.isolate_param(ebb, param);
                 }
             }
@@ -255,7 +250,7 @@ impl<'a> Context<'a> {
                 );
 
                 // The only other possibility is that `arg` is live-in to `ebb`.
-                lr.is_livein(ebb, self.liveness.forest(), &self.func.layout)
+                lr.is_livein(ebb, &self.func.layout)
             };
 
             if interference {
@@ -435,12 +430,7 @@ impl<'a> Context<'a> {
 
             // Check for interference between `parent` and `value`. Since `parent` dominates
             // `value`, we only have to check if it overlaps the definition.
-            if self.liveness[parent.value].overlaps_def(
-                node.def,
-                node.ebb,
-                self.liveness.forest(),
-                &self.func.layout,
-            ) {
+            if self.liveness[parent.value].overlaps_def(node.def, node.ebb, &self.func.layout) {
                 // The two values are interfering, so they can't be in the same virtual register.
                 debug!("-> interference: {} overlaps def of {}", parent, value);
                 return false;
@@ -626,12 +616,7 @@ impl<'a> Context<'a> {
                 // Check if the parent value interferes with the virtual copy.
                 let inst = node.def.unwrap_inst();
                 if node.set_id != parent.set_id
-                    && self.liveness[parent.value].reaches_use(
-                        inst,
-                        node.ebb,
-                        self.liveness.forest(),
-                        &self.func.layout,
-                    )
+                    && self.liveness[parent.value].reaches_use(inst, node.ebb, &self.func.layout)
                 {
                     debug!(
                         " - interference: {} overlaps vcopy at {}:{}",
@@ -655,12 +640,7 @@ impl<'a> Context<'a> {
             // Both node and parent are values, so check for interference.
             debug_assert!(node.is_value() && parent.is_value());
             if node.set_id != parent.set_id
-                && self.liveness[parent.value].overlaps_def(
-                    node.def,
-                    node.ebb,
-                    self.liveness.forest(),
-                    &self.func.layout,
-                )
+                && self.liveness[parent.value].overlaps_def(node.def, node.ebb, &self.func.layout)
             {
                 // The two values are interfering.
                 debug!(" - interference: {} overlaps def of {}", parent, node.value);
