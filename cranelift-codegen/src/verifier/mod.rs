@@ -1775,21 +1775,47 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult<()> {
         let inst_data = &self.func.dfg[inst];
 
-        // If this is some sort of a store instruction, get the memflags, else, just return.
-        let memflags = match *inst_data {
+        match *inst_data {
             ir::InstructionData::Store { flags, .. }
-            | ir::InstructionData::StoreComplex { flags, .. } => flags,
-            _ => return Ok(()),
-        };
-
-        if memflags.readonly() {
-            fatal!(
-                errors,
-                inst,
-                "A store instruction cannot have the `readonly` MemFlag"
-            )
-        } else {
-            Ok(())
+            | ir::InstructionData::StoreComplex { flags, .. } => {
+                if flags.readonly() {
+                    fatal!(
+                        errors,
+                        inst,
+                        "A store instruction cannot have the `readonly` MemFlag"
+                    )
+                } else {
+                    Ok(())
+                }
+            }
+            ir::InstructionData::ExtractLane {
+                opcode: ir::instructions::Opcode::Extractlane,
+                lane,
+                arg,
+                ..
+            }
+            | ir::InstructionData::InsertLane {
+                opcode: ir::instructions::Opcode::Insertlane,
+                lane,
+                args: [arg, _],
+                ..
+            } => {
+                // We must be specific about the opcodes above because other instructions are using
+                // the ExtractLane/InsertLane formats.
+                let ty = self.func.dfg.value_type(arg);
+                if u16::from(lane) >= ty.lane_count() {
+                    fatal!(
+                        errors,
+                        inst,
+                        "The lane {} does not index into the type {}",
+                        lane,
+                        ty
+                    )
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
         }
     }
 

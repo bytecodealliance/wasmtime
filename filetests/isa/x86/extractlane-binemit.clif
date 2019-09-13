@@ -2,8 +2,8 @@ test binemit
 set enable_simd
 target x86_64 haswell
 
-; for extractlane, floats are legalized differently than integers and booleans; integers and booleans use x86_pextr
-; which is manually placed in the IR so that it can be binemit-tested
+; for extractlane, floats are legalized differently than integers and booleans; integers and
+; booleans use x86_pextr which is manually placed in the IR so that it can be binemit-tested
 
 function %test_extractlane_b8() {
 ebb0:
