@@ -63,8 +63,7 @@ pub(crate) fn fd_advise(
             _ => return Err(Error::EINVAL),
         };
 
-        posix_fadvise(file.as_raw_fd(), offset, len, host_advice)
-            .map_err(|err| errno_from_nix(err.as_errno().unwrap()))?;
+        posix_fadvise(file.as_raw_fd(), offset, len, host_advice)?;
     }
 
     Ok(())
