@@ -107,7 +107,7 @@ impl<'a> LivenessVerifier<'a> {
                     };
 
                     debug_assert!(self.func.layout.inst_ebb(inst).unwrap() == ebb);
-                    if !lr.reaches_use(inst, ebb, self.liveness.forest(), &self.func.layout) {
+                    if !lr.reaches_use(inst, ebb, &self.func.layout) {
                         return fatal!(errors, inst, "{} is not live at this use", val);
                     }
 
@@ -179,7 +179,7 @@ impl<'a> LivenessVerifier<'a> {
         }
 
         // Now check the live-in intervals against the CFG.
-        for (mut ebb, end) in lr.liveins(self.liveness.forest()) {
+        for (mut ebb, end) in lr.liveins() {
             if !l.is_ebb_inserted(ebb) {
                 return fatal!(
                     errors,
@@ -207,7 +207,7 @@ impl<'a> LivenessVerifier<'a> {
             loop {
                 // If `val` is live-in at `ebb`, it must be live at all the predecessors.
                 for BasicBlock { inst: pred, ebb } in self.cfg.pred_iter(ebb) {
-                    if !lr.reaches_use(pred, ebb, self.liveness.forest(), &self.func.layout) {
+                    if !lr.reaches_use(pred, ebb, &self.func.layout) {
                         return fatal!(
                             errors,
                             pred,

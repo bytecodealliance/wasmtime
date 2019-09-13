@@ -334,10 +334,10 @@ impl<'a> LocationVerifier<'a> {
                     let lr = &liveness[value];
                     if is_after_branch && unique_predecessor {
                         // Forward diversions based on the targeted branch.
-                        if !lr.is_livein(ebb, liveness.forest(), &self.func.layout) {
+                        if !lr.is_livein(ebb, &self.func.layout) {
                             val_to_remove.push(value)
                         }
-                    } else if lr.is_livein(ebb, liveness.forest(), &self.func.layout) {
+                    } else if lr.is_livein(ebb, &self.func.layout) {
                         return fatal!(
                             errors,
                             inst,
@@ -359,7 +359,7 @@ impl<'a> LocationVerifier<'a> {
                 for (&value, d) in divert.iter() {
                     let lr = &liveness[value];
                     if let Some(ebb) = ebb {
-                        if lr.is_livein(ebb, liveness.forest(), &self.func.layout) {
+                        if lr.is_livein(ebb, &self.func.layout) {
                             return fatal!(
                                 errors,
                                 inst,
@@ -371,7 +371,7 @@ impl<'a> LocationVerifier<'a> {
                         }
                     }
                     for ebb in self.func.jump_tables[jt].iter() {
-                        if lr.is_livein(*ebb, liveness.forest(), &self.func.layout) {
+                        if lr.is_livein(*ebb, &self.func.layout) {
                             return fatal!(
                                 errors,
                                 inst,

@@ -324,13 +324,11 @@ impl<'a> Context<'a> {
                     ConstraintKind::FixedReg(_) => reguse.fixed = true,
                     ConstraintKind::Tied(_) => {
                         // A tied operand must kill the used value.
-                        reguse.tied =
-                            !lr.killed_at(inst, ebb, self.liveness.forest(), &self.cur.func.layout);
+                        reguse.tied = !lr.killed_at(inst, ebb, &self.cur.func.layout);
                     }
                     ConstraintKind::FixedTied(_) => {
                         reguse.fixed = true;
-                        reguse.tied =
-                            !lr.killed_at(inst, ebb, self.liveness.forest(), &self.cur.func.layout);
+                        reguse.tied = !lr.killed_at(inst, ebb, &self.cur.func.layout);
                     }
                     ConstraintKind::Reg => {}
                 }

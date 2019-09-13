@@ -198,7 +198,7 @@ impl LiveValueTracker {
                     .expect("Immediate dominator value has no live range");
 
                 // Check if this value is live-in here.
-                if let Some(endpoint) = lr.livein_local_end(ebb, liveness.forest(), layout) {
+                if let Some(endpoint) = lr.livein_local_end(ebb, layout) {
                     self.live.push(value, endpoint, lr);
                 }
             }
