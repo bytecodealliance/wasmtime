@@ -190,6 +190,22 @@ impl<'a, PO: ProgramOrder> bforest::Comparator<Ebb> for Cmp<'a, PO> {
     }
 }
 
+/// A simple helper macro to make comparisons more natural to read.
+macro_rules! cmp {
+    ($order:ident, $a:ident > $b:expr) => {
+        $order.cmp($a, $b) == Ordering::Greater
+    };
+    ($order:ident, $a:ident >= $b:expr) => {
+        $order.cmp($a, $b) != Ordering::Less
+    };
+    ($order:ident, $a:ident < $b:expr) => {
+        $order.cmp($a, $b) == Ordering::Less
+    };
+    ($order:ident, $a:ident <= $b:expr) => {
+        $order.cmp($a, $b) != Ordering::Greater
+    };
+}
+
 impl<PO: ProgramOrder> GenericLiveRange<PO> {
     /// Create a new live range for `value` defined at `def`.
     ///
@@ -227,15 +243,13 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         //
         // We're assuming here that `to` never precedes `def_begin` in the same EBB, but we can't
         // check it without a method for getting `to`'s EBB.
-        if order.cmp(ebb, self.def_end) != Ordering::Greater
-            && order.cmp(to, self.def_begin) != Ordering::Less
-        {
+        if cmp!(order, ebb <= self.def_end) && cmp!(order, to >= self.def_begin) {
             let to_pp = to.into();
             debug_assert_ne!(
                 to_pp, self.def_begin,
                 "Can't use value in the defining instruction."
             );
-            if order.cmp(to, self.def_end) == Ordering::Greater {
+            if cmp!(order, to > self.def_end) {
                 self.def_end = to_pp;
             }
             return false;
@@ -249,7 +263,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         if let Some(end) = c.goto(ebb) {
             // There's an interval beginning at `ebb`. See if it extends.
             first_time_livein = false;
-            if order.cmp(end, to) == Ordering::Less {
+            if cmp!(order, end < to) {
                 *c.value_mut().unwrap() = to;
             } else {
                 return first_time_livein;
@@ -257,10 +271,10 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         } else if let Some((_, end)) = c.prev() {
             // There's no interval beginning at `ebb`, but we could still be live-in at `ebb` with
             // a coalesced interval that begins before and ends after.
-            if order.cmp(end, ebb) == Ordering::Greater {
+            if cmp!(order, end > ebb) {
                 // Yep, the previous interval overlaps `ebb`.
                 first_time_livein = false;
-                if order.cmp(end, to) == Ordering::Less {
+                if cmp!(order, end < to) {
                     *c.value_mut().unwrap() = to;
                 } else {
                     return first_time_livein;
@@ -351,7 +365,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
             .get_or_less(ebb, forest, &cmp)
             .and_then(|(_, inst)| {
                 // We have an entry that ends at `inst`.
-                if order.cmp(inst, ebb) == Ordering::Greater {
+                if cmp!(order, inst > ebb) {
                     Some(inst)
                 } else {
                     None
@@ -388,15 +402,13 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         }
 
         // Check for an overlap with the local range.
-        if order.cmp(def, self.def_begin) != Ordering::Less
-            && order.cmp(def, self.def_end) == Ordering::Less
-        {
+        if cmp!(order, def >= self.def_begin) && cmp!(order, def < self.def_end) {
             return true;
         }
 
         // Check for an overlap with a live-in range.
         match self.livein_local_end(ebb, forest, order) {
-            Some(inst) => order.cmp(def, inst) == Ordering::Less,
+            Some(inst) => cmp!(order, def < inst),
             None => false,
         }
     }
@@ -404,15 +416,13 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     /// Check if this live range reaches a use at `user` in `ebb`.
     pub fn reaches_use(&self, user: Inst, ebb: Ebb, forest: &LiveRangeForest, order: &PO) -> bool {
         // Check for an overlap with the local range.
-        if order.cmp(user, self.def_begin) == Ordering::Greater
-            && order.cmp(user, self.def_end) != Ordering::Greater
-        {
+        if cmp!(order, user > self.def_begin) && cmp!(order, user <= self.def_end) {
             return true;
         }
 
         // Check for an overlap with a live-in range.
         match self.livein_local_end(ebb, forest, order) {
-            Some(inst) => order.cmp(user, inst) != Ordering::Greater,
+            Some(inst) => cmp!(order, user <= inst),
             None => false,
         }
     }
