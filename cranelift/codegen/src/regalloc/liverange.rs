@@ -58,8 +58,16 @@
 //!
 //! # Implementation notes
 //!
-//! A few notes about the implementation of this data structure. This should not concern someone
-//! only looking to use the public interface.
+//! A few notes about the implementation of the live intervals field `liveins`. This should not
+//! concern someone only looking to use the public interface.
+//!
+//! ## Current representation
+//!
+//! Our current implementation uses a B-tree map with the necessary interface for an efficient
+//! implementation of coalescing, implemented as a generic data-structure bforest::Map.
+//!
+//! A `BTreeMap<Ebb, Inst>` could have been used for the live-in intervals, but it doesn't provide
+//! the necessary API to make coalescing easy, nor does it optimize for our types' sizes.
 //!
 //! ## EBB ordering
 //!
@@ -99,13 +107,6 @@
 //! It is more complicated to work with, though, so it is probably not worth it. The performance
 //! benefits of switching to a numerical EBB order only appears if the binary search is doing
 //! EBB-EBB comparisons.
-//!
-//! ## B-tree representation
-//!
-//! A `BTreeMap<Ebb, Inst>` could also be used for the live-in intervals. It looks like the
-//! standard library B-tree doesn't provide the necessary interface for an efficient implementation
-//! of coalescing, so we would need to roll our own.
-//!
 
 use crate::bforest;
 use crate::entity::SparseMapValue;
