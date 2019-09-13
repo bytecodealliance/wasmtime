@@ -3,7 +3,7 @@
 use super::fs_helpers::*;
 use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::PathGet;
-use crate::sys::host_impl::{self, errno_from_nix};
+use crate::sys::host_impl;
 use crate::{host, Error, Result};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
@@ -69,7 +69,7 @@ pub(crate) fn fd_advise(
     Ok(())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub(crate) fn fd_advise(
     _file: &File,
     advice: host::__wasi_advice_t,
@@ -87,6 +87,46 @@ pub(crate) fn fd_advise(
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn fd_advise(
+    file: &File,
+    advice: host::__wasi_advice_t,
+    offset: host::__wasi_filesize_t,
+    len: host::__wasi_filesize_t,
+) -> Result<()> {
+    use nix::errno::Errno;
+
+    match advice {
+        host::__WASI_ADVICE_DONTNEED => return Ok(()),
+        // unfortunately, the advisory syscall in macOS doesn't take any flags of this
+        // sort (unlike on Linux), hence, they are left here as a noop
+        host::__WASI_ADVICE_SEQUENTIAL
+        | host::__WASI_ADVICE_WILLNEED
+        | host::__WASI_ADVICE_NOREUSE
+        | host::__WASI_ADVICE_RANDOM
+        | host::__WASI_ADVICE_NORMAL => {}
+        _ => return Err(Error::EINVAL),
+    }
+
+    // From macOS man pages:
+    // F_RDADVISE   Issue an advisory read async with no copy to user.
+    //
+    // The F_RDADVISE command operates on the following structure which holds information passed from
+    // the user to the system:
+    //
+    // struct radvisory {
+    //      off_t   ra_offset;  /* offset into the file */
+    //      int     ra_count;   /* size of the read     */
+    // };
+    let advisory = libc::radvisory {
+        ra_offset: offset.try_into()?,
+        ra_count: len.try_into()?,
+    };
+
+    let res = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_RDADVISE, &advisory) };
+    Errno::result(res).map(|_| ()).map_err(Error::from)
 }
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
