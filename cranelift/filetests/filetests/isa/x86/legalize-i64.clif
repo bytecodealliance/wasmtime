@@ -9,8 +9,8 @@ ebb0(v1: i64, v2: i64):
     v10 = iadd v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
-    ; nextln: $(v10_lsb=$V), $(carry=$V) = iadd_cout $v1_lsb, $v2_lsb
-    ; nextln: $(v10_msb=$V) = iadd_cin $v1_msb, $v2_msb, $carry
+    ; nextln: $(v10_lsb=$V), $(carry=$V) = iadd_ifcout $v1_lsb, $v2_lsb
+    ; nextln: $(v10_msb=$V) = iadd_ifcin $v1_msb, $v2_msb, $carry
     ; nextln: v10 = iconcat $v10_lsb, $v10_msb
     return v10
 }
@@ -20,8 +20,8 @@ ebb0(v1: i64, v2: i64):
     v10 = isub v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
-    ; nextln: $(v10_lsb=$V), $(borrow=$V) = isub_bout $v1_lsb, $v2_lsb
-    ; nextln: $(v10_msb=$V) = isub_bin $v1_msb, $v2_msb, $borrow
+    ; nextln: $(v10_lsb=$V), $(borrow=$V) = isub_ifbout $v1_lsb, $v2_lsb
+    ; nextln: $(v10_msb=$V) = isub_ifbin $v1_msb, $v2_msb, $borrow
     ; nextln: v10 = iconcat $v10_lsb, $v10_msb
     return v10
 }

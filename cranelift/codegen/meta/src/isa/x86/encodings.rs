@@ -384,9 +384,9 @@ pub(crate) fn define(
     let func_addr = shared.by_name("func_addr");
     let get_pinned_reg = shared.by_name("get_pinned_reg");
     let iadd = shared.by_name("iadd");
-    let iadd_cout = shared.by_name("iadd_cout");
-    let iadd_cin = shared.by_name("iadd_cin");
-    let iadd_carry = shared.by_name("iadd_carry");
+    let iadd_ifcout = shared.by_name("iadd_ifcout");
+    let iadd_ifcin = shared.by_name("iadd_ifcin");
+    let iadd_ifcarry = shared.by_name("iadd_ifcarry");
     let iadd_imm = shared.by_name("iadd_imm");
     let icmp = shared.by_name("icmp");
     let icmp_imm = shared.by_name("icmp_imm");
@@ -407,9 +407,9 @@ pub(crate) fn define(
     let istore8 = shared.by_name("istore8");
     let istore8_complex = shared.by_name("istore8_complex");
     let isub = shared.by_name("isub");
-    let isub_bout = shared.by_name("isub_bout");
-    let isub_bin = shared.by_name("isub_bin");
-    let isub_borrow = shared.by_name("isub_borrow");
+    let isub_ifbout = shared.by_name("isub_ifbout");
+    let isub_ifbin = shared.by_name("isub_ifbin");
+    let isub_ifborrow = shared.by_name("isub_ifborrow");
     let jump = shared.by_name("jump");
     let jump_table_base = shared.by_name("jump_table_base");
     let jump_table_entry = shared.by_name("jump_table_entry");
@@ -647,14 +647,14 @@ pub(crate) fn define(
     );
 
     e.enc_i32_i64(iadd, rec_rr.opcodes(vec![0x01]));
-    e.enc_i32_i64(iadd_cout, rec_rout.opcodes(vec![0x01]));
-    e.enc_i32_i64(iadd_cin, rec_rin.opcodes(vec![0x11]));
-    e.enc_i32_i64(iadd_carry, rec_rio.opcodes(vec![0x11]));
+    e.enc_i32_i64(iadd_ifcout, rec_rout.opcodes(vec![0x01]));
+    e.enc_i32_i64(iadd_ifcin, rec_rin.opcodes(vec![0x11]));
+    e.enc_i32_i64(iadd_ifcarry, rec_rio.opcodes(vec![0x11]));
 
     e.enc_i32_i64(isub, rec_rr.opcodes(vec![0x29]));
-    e.enc_i32_i64(isub_bout, rec_rout.opcodes(vec![0x29]));
-    e.enc_i32_i64(isub_bin, rec_rin.opcodes(vec![0x19]));
-    e.enc_i32_i64(isub_borrow, rec_rio.opcodes(vec![0x19]));
+    e.enc_i32_i64(isub_ifbout, rec_rout.opcodes(vec![0x29]));
+    e.enc_i32_i64(isub_ifbin, rec_rin.opcodes(vec![0x19]));
+    e.enc_i32_i64(isub_ifborrow, rec_rio.opcodes(vec![0x19]));
 
     e.enc_i32_i64(band, rec_rr.opcodes(vec![0x21]));
     e.enc_i32_i64(bor, rec_rr.opcodes(vec![0x09]));

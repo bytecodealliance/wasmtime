@@ -1879,10 +1879,16 @@ pub(crate) fn define(
     let a = &operand("a", iB);
     let x = &operand("x", iB);
     let y = &operand("y", iB);
-    let c_in = &operand_doc("c_in", iflags, "Input carry flag");
-    let c_out = &operand_doc("c_out", iflags, "Output carry flag");
-    let b_in = &operand_doc("b_in", iflags, "Input borrow flag");
-    let b_out = &operand_doc("b_out", iflags, "Output borrow flag");
+
+    let c_in = &operand_doc("c_in", b1, "Input carry flag");
+    let c_out = &operand_doc("c_out", b1, "Output carry flag");
+    let b_in = &operand_doc("b_in", b1, "Input borrow flag");
+    let b_out = &operand_doc("b_out", b1, "Output borrow flag");
+
+    let c_if_in = &operand("c_in", iflags);
+    let c_if_out = &operand("c_out", iflags);
+    let b_if_in = &operand("b_in", iflags);
+    let b_if_out = &operand("b_out", iflags);
 
     ig.push(
         Inst::new(
@@ -1901,6 +1907,26 @@ pub(crate) fn define(
         "#,
         )
         .operands_in(vec![x, y, c_in])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "iadd_ifcin",
+            r#"
+        Add integers with carry in.
+
+        Same as `iadd` with an additional carry flag input. Computes:
+
+        ```text
+            a = x + y + c_{in} \pmod 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y, c_if_in])
         .operands_out(vec![a]),
     );
 
@@ -1927,6 +1953,27 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "iadd_ifcout",
+            r#"
+        Add integers with carry out.
+
+        Same as `iadd` with an additional carry flag output.
+
+        ```text
+            a &= x + y \pmod 2^B \\
+            c_{out} &= x+y >= 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a, c_if_out]),
+    );
+
+    ig.push(
+        Inst::new(
             "iadd_carry",
             r#"
         Add integers with carry in and out.
@@ -1948,6 +1995,27 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "iadd_ifcarry",
+            r#"
+        Add integers with carry in and out.
+
+        Same as `iadd` with an additional carry flag input and output.
+
+        ```text
+            a &= x + y + c_{in} \pmod 2^B \\
+            c_{out} &= x + y + c_{in} >= 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y, c_if_in])
+        .operands_out(vec![a, c_if_out]),
+    );
+
+    ig.push(
+        Inst::new(
             "isub_bin",
             r#"
         Subtract integers with borrow in.
@@ -1963,6 +2031,26 @@ pub(crate) fn define(
         "#,
         )
         .operands_in(vec![x, y, b_in])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "isub_ifbin",
+            r#"
+        Subtract integers with borrow in.
+
+        Same as `isub` with an additional borrow flag input. Computes:
+
+        ```text
+            a = x - (y + b_{in}) \pmod 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y, b_if_in])
         .operands_out(vec![a]),
     );
 
@@ -1989,6 +2077,27 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "isub_ifbout",
+            r#"
+        Subtract integers with borrow out.
+
+        Same as `isub` with an additional borrow flag output.
+
+        ```text
+            a &= x - y \pmod 2^B \\
+            b_{out} &= x < y
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a, b_if_out]),
+    );
+
+    ig.push(
+        Inst::new(
             "isub_borrow",
             r#"
         Subtract integers with borrow in and out.
@@ -2006,6 +2115,27 @@ pub(crate) fn define(
         )
         .operands_in(vec![x, y, b_in])
         .operands_out(vec![a, b_out]),
+    );
+
+    ig.push(
+        Inst::new(
+            "isub_ifborrow",
+            r#"
+        Subtract integers with borrow in and out.
+
+        Same as `isub` with an additional borrow flag input and output.
+
+        ```text
+            a &= x - (y + b_{in}) \pmod 2^B \\
+            b_{out} &= x < y + b_{in}
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y, b_if_in])
+        .operands_out(vec![a, b_if_out]),
     );
 
     let bits = &TypeVar::new(
