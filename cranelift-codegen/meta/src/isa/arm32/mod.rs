@@ -66,9 +66,9 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let mut t32 = CpuMode::new("T32");
 
     // TODO refine these.
-    let narrow = shared_defs.transform_groups.by_name("narrow");
-    a32.legalize_default(narrow);
-    t32.legalize_default(narrow);
+    let narrow_flags = shared_defs.transform_groups.by_name("narrow_flags");
+    a32.legalize_default(narrow_flags);
+    t32.legalize_default(narrow_flags);
 
     let cpu_modes = vec![a32, t32];
 

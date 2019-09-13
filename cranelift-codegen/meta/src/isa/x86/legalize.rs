@@ -305,7 +305,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     Use x86-specific instructions if needed."#,
     )
     .isa("x86")
-    .chain_with(shared.transform_groups.by_name("narrow").id);
+    .chain_with(shared.transform_groups.by_name("narrow_flags").id);
 
     // SIMD
     let uimm8_zero = Literal::constant(&imm.uimm8, 0x00);

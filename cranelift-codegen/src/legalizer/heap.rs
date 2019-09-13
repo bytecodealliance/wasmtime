@@ -82,7 +82,7 @@ fn dynamic_addr(
     } else {
         // We need an overflow check for the adjusted offset.
         let access_size_val = pos.ins().iconst(offset_ty, access_size as i64);
-        let (adj_offset, overflow) = pos.ins().iadd_cout(offset, access_size_val);
+        let (adj_offset, overflow) = pos.ins().iadd_ifcout(offset, access_size_val);
         pos.ins().trapnz(overflow, ir::TrapCode::HeapOutOfBounds);
         oob = pos
             .ins()

@@ -1253,7 +1253,7 @@ mod tests {
         assert_eq!(pos.func.dfg.resolve_aliases(v1), v1);
 
         let arg0 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
-        let (s, c) = pos.ins().iadd_cout(v1, arg0);
+        let (s, c) = pos.ins().iadd_ifcout(v1, arg0);
         let iadd = match pos.func.dfg.value_def(s) {
             ValueDef::Result(i, 0) => i,
             _ => panic!(),
@@ -1263,7 +1263,7 @@ mod tests {
         pos.func.dfg.clear_results(iadd);
         pos.func.dfg.attach_result(iadd, s);
 
-        // Replace `iadd_cout` with a normal `iadd` and an `ifcmp`.
+        // Replace `iadd_ifcout` with a normal `iadd` and an `ifcmp`.
         pos.func.dfg.replace(iadd).iadd(v1, arg0);
         let c2 = pos.ins().ifcmp(s, v1);
         pos.func.dfg.change_to_alias(c, c2);

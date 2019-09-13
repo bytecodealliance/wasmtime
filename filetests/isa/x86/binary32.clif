@@ -471,19 +471,19 @@ ebb0:
 
     ; Carry Addition
     ; asm: addl %esi, %ecx
-    [-,%rcx,%rflags] v701, v702 = iadd_cout v1, v2  ; bin: 01 f1
+    [-,%rcx,%rflags] v701, v702 = iadd_ifcout v1, v2  ; bin: 01 f1
     ; asm: adcl %esi, %ecx
-    [-,%rcx] v703 = iadd_cin v1, v2, v702           ; bin: 11 f1
+    [-,%rcx] v703 = iadd_ifcin v1, v2, v702           ; bin: 11 f1
     ; asm: adcl %esi, %ecx
-    [-,%rcx,%rflags] v704, v705 = iadd_carry v1, v2, v702 ; bin: 11 f1
+    [-,%rcx,%rflags] v704, v705 = iadd_ifcarry v1, v2, v702 ; bin: 11 f1
 
     ; Borrow Subtraction
     ; asm: subl %esi, %ecx
-    [-,%rcx,%rflags] v706, v707 = isub_bout v1, v2         ; bin: 29 f1
+    [-,%rcx,%rflags] v706, v707 = isub_ifbout v1, v2         ; bin: 29 f1
     ; asm: sbbl %esi, %ecx
-    [-,%rcx] v708 = isub_bin v1, v2, v707                  ; bin: 19 f1
+    [-,%rcx] v708 = isub_ifbin v1, v2, v707                  ; bin: 19 f1
     ; asm: sbbl %esi, %ecx
-    [-,%rcx,%rflags] v709, v710 = isub_borrow v1, v2, v707 ; bin: 19 f1
+    [-,%rcx,%rflags] v709, v710 = isub_ifborrow v1, v2, v707 ; bin: 19 f1
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1
