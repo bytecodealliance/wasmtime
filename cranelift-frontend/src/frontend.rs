@@ -523,7 +523,10 @@ impl FunctionBuilder {
     /// **Note:** this function has to be called at the creation of the `Ebb` before adding
     /// instructions to it, otherwise this could interfere with SSA construction.
     pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
-        debug_assert!(self.func_ctx.ebbs[ebb].pristine);
+        debug_assert!(
+            self.func_ctx.ebbs[ebb].pristine,
+            "You can't add EBB parameters after adding any instruction"
+        );
         debug_assert_eq!(
             self.func_ctx.ebbs[ebb].user_param_count,
             self.func.dfg.num_ebb_params(ebb)
