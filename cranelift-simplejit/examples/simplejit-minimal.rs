@@ -7,6 +7,7 @@ fn main() {
     let mut module: Module<SimpleJITBackend> =
         Module::new(SimpleJITBuilder::new(default_libcall_names()));
     let mut ctx = module.make_context();
+    let mut func_ctx = FunctionBuilderContext::new();
 
     let mut sig_a = module.make_signature();
     sig_a.params.push(AbiParam::new(types::I32));
@@ -24,8 +25,8 @@ fn main() {
 
     ctx.func.signature = sig_a;
     ctx.func.name = ExternalName::user(0, func_a.as_u32());
-    ctx.func = {
-        let mut bcx: FunctionBuilder = FunctionBuilder::new(ctx.func);
+    {
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
         let ebb = bcx.create_ebb();
 
         bcx.switch_to_block(ebb);
@@ -35,15 +36,15 @@ fn main() {
         let add = bcx.ins().iadd(cst, param);
         bcx.ins().return_(&[add]);
         bcx.seal_all_blocks();
-        bcx.finalize()
-    };
+        bcx.finalize();
+    }
     module.define_function(func_a, &mut ctx).unwrap();
     module.clear_context(&mut ctx);
 
     ctx.func.signature = sig_b;
     ctx.func.name = ExternalName::user(0, func_b.as_u32());
-    ctx.func = {
-        let mut bcx: FunctionBuilder = FunctionBuilder::new(ctx.func);
+    {
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
         let ebb = bcx.create_ebb();
 
         bcx.switch_to_block(ebb);
@@ -57,8 +58,8 @@ fn main() {
         };
         bcx.ins().return_(&[value]);
         bcx.seal_all_blocks();
-        bcx.finalize()
-    };
+        bcx.finalize();
+    }
     module.define_function(func_b, &mut ctx).unwrap();
     module.clear_context(&mut ctx);
 

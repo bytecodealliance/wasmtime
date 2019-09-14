@@ -543,7 +543,8 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 func.collect_debug_info();
             }
             self.trans
-                .translate(body_bytes, body_offset, func, &mut func_environ)?
+                .translate(body_bytes, body_offset, &mut func, &mut func_environ)?;
+            func
         };
         self.func_bytecode_sizes.push(body_bytes.len());
         self.info.function_bodies.push(func);
