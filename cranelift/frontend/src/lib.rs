@@ -3,7 +3,7 @@
 //! Provides a straightforward way to create a Cranelift IR function and fill it with instructions
 //! corresponding to your source program written in another language.
 //!
-//! To get started, create an [`Function`](../cranelift_codegen/ir/function/struct.Function.html) and
+//! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and
 //! pass it as an argument to a [`FunctionBuilder`](struct.FunctionBuilder.html).
 //!
 //! # Mutable variables and Cranelift IR values
@@ -61,7 +61,7 @@
 //! }
 //! ```
 //!
-//! Here is how you build the corresponding Cranelift IR function using `Function`:
+//! Here is how you build the corresponding Cranelift IR function using `FunctionBuilderContext`:
 //!
 //! ```rust
 //! extern crate cranelift_codegen;
@@ -73,15 +73,16 @@
 //! use cranelift_codegen::isa::CallConv;
 //! use cranelift_codegen::settings;
 //! use cranelift_codegen::verifier::verify_function;
-//! use cranelift_frontend::{FunctionBuilder, Variable};
+//! use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::SystemV);
 //!     sig.returns.push(AbiParam::new(I32));
 //!     sig.params.push(AbiParam::new(I32));
-//!     let func = {
-//!         let func = Function::with_name_signature(ExternalName::user(0, 0), sig);
-//!         let mut builder = FunctionBuilder::new(func);
+//!     let mut fn_builder_ctx = FunctionBuilderContext::new();
+//!     let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+//!     {
+//!         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 //!
 //!         let block0 = builder.create_ebb();
 //!         let block1 = builder.create_ebb();
@@ -151,8 +152,8 @@
 //!         builder.ins().jump(block1, &[]);
 //!         builder.seal_block(block1);
 //!
-//!         builder.finalize()
-//!     };
+//!         builder.finalize();
+//!     }
 //!
 //!     let flags = settings::Flags::new(settings::builder());
 //!     let res = verify_function(&func, &flags);
@@ -194,7 +195,7 @@ use hashmap_core::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-pub use crate::frontend::FunctionBuilder;
+pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use crate::switch::Switch;
 pub use crate::variable::Variable;
 

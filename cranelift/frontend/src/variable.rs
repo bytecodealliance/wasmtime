@@ -1,6 +1,6 @@
 //! A basic `Variable` implementation.
 //!
-//! `FunctionBuilder` and related types have a `Variable`
+//! `FunctionBuilderContext`, `FunctionBuilder`, and related types have a `Variable`
 //! type parameter, to allow frontends that identify variables with
 //! their own index types to use them directly. Frontends which don't
 //! can use the `Variable` defined here.
