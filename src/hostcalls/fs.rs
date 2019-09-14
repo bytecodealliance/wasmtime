@@ -43,7 +43,7 @@ hostcalls! {
     ) -> wasm32::__wasi_errno_t;
 
     pub fn fd_seek(
-        wasi_ctx: &WasiCtx,
+        wasi_ctx: &mut WasiCtx,
         memory: &mut [u8],
         fd: wasm32::__wasi_fd_t,
         offset: wasm32::__wasi_filedelta_t,
@@ -52,7 +52,7 @@ hostcalls! {
     ) -> wasm32::__wasi_errno_t;
 
     pub fn fd_tell(
-        wasi_ctx: &WasiCtx,
+        wasi_ctx: &mut WasiCtx,
         memory: &mut [u8],
         fd: wasm32::__wasi_fd_t,
         newoffset: wasm32::uintptr_t,
@@ -139,7 +139,7 @@ hostcalls! {
     ) -> wasm32::__wasi_errno_t;
 
     pub fn fd_readdir(
-        wasi_ctx: &WasiCtx,
+        wasi_ctx: &mut WasiCtx,
         memory: &mut [u8],
         fd: wasm32::__wasi_fd_t,
         buf: wasm32::uintptr_t,

@@ -5,7 +5,7 @@ use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
 use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
-use crate::sys::fdentry_impl::determine_type_rights;
+use crate::sys::fdentry_impl::{determine_type_rights, OsFile};
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
 use crate::{host, Error, Result};
@@ -167,7 +167,7 @@ pub(crate) fn path_open(
 }
 
 pub(crate) fn fd_readdir(
-    fd: &File,
+    fd: &mut OsFile,
     host_buf: &mut [u8],
     cookie: host::__wasi_dircookie_t,
 ) -> Result<usize> {

@@ -158,7 +158,7 @@ pub(crate) fn fd_read(
         .collect();
 
     let maybe_host_nread = match &mut *fe.fd_object.descriptor {
-        Descriptor::File(f) => f.read_vectored(&mut iovs),
+        Descriptor::OsFile(file) => file.read_vectored(&mut iovs),
         Descriptor::Stdin => io::stdin().lock().read_vectored(&mut iovs),
         _ => return Err(Error::EBADF),
     };
@@ -203,7 +203,7 @@ pub(crate) fn fd_renumber(
         .fd_object
         .descriptor
         .as_file()
-        .and_then(FdEntry::duplicate)?;
+        .and_then(|file| FdEntry::duplicate(file))?;
 
     wasi_ctx.fds.insert(to, fe_from_dup);
     wasi_ctx.fds.remove(&from);
@@ -212,7 +212,7 @@ pub(crate) fn fd_renumber(
 }
 
 pub(crate) fn fd_seek(
-    wasi_ctx: &WasiCtx,
+    wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
     offset: wasm32::__wasi_filedelta_t,
@@ -236,9 +236,9 @@ pub(crate) fn fd_seek(
     } else {
         host::__WASI_RIGHT_FD_SEEK | host::__WASI_RIGHT_FD_TELL
     };
-    let mut fd = wasi_ctx
-        .get_fd_entry(fd, rights, 0)
-        .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let fd = wasi_ctx
+        .get_fd_entry_mut(fd, rights, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file_mut())?;
 
     let pos = match whence {
         host::__WASI_WHENCE_CUR => SeekFrom::Current(offset),
@@ -254,7 +254,7 @@ pub(crate) fn fd_seek(
 }
 
 pub(crate) fn fd_tell(
-    wasi_ctx: &WasiCtx,
+    wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
     newoffset: wasm32::uintptr_t,
@@ -262,9 +262,9 @@ pub(crate) fn fd_tell(
     trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
 
     let fd = dec_fd(fd);
-    let mut fd = wasi_ctx
-        .get_fd_entry(fd, host::__WASI_RIGHT_FD_TELL, 0)
-        .and_then(|fe| fe.fd_object.descriptor.as_file())?;
+    let fd = wasi_ctx
+        .get_fd_entry_mut(fd, host::__WASI_RIGHT_FD_TELL, 0)
+        .and_then(|fe| fe.fd_object.descriptor.as_file_mut())?;
 
     let host_offset = fd.seek(SeekFrom::Current(0))?;
 
@@ -377,7 +377,7 @@ pub(crate) fn fd_write(
 
     // perform unbuffered writes
     let host_nwritten = match &mut *fe.fd_object.descriptor {
-        Descriptor::File(f) => f.write_vectored(&iovs)?,
+        Descriptor::OsFile(file) => file.write_vectored(&iovs)?,
         Descriptor::Stdin => return Err(Error::EBADF),
         Descriptor::Stdout => {
             // lock for the duration of the scope
@@ -595,7 +595,7 @@ pub(crate) fn path_open(
 }
 
 pub(crate) fn fd_readdir(
-    wasi_ctx: &WasiCtx,
+    wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
     buf: wasm32::uintptr_t,
@@ -615,17 +615,16 @@ pub(crate) fn fd_readdir(
     enc_usize_byref(memory, buf_used, 0)?;
 
     let fd = dec_fd(fd);
-    let fd = wasi_ctx
-        .get_fd_entry(fd, host::__WASI_RIGHT_FD_READDIR, 0)
-        .and_then(|fe| fe.fd_object.descriptor.as_file())?;
-
+    let file = wasi_ctx
+        .get_fd_entry_mut(fd, host::__WASI_RIGHT_FD_READDIR, 0)
+        .and_then(|entry| entry.fd_object.descriptor.as_file_mut())?;
     let host_buf = dec_slice_of_mut::<u8>(memory, buf, buf_len)?;
 
     trace!("     | (buf,buf_len)={:?}", host_buf);
 
     let cookie = dec_dircookie(cookie);
 
-    let host_bufused = hostcalls_impl::fd_readdir(fd, host_buf, cookie)?;
+    let host_bufused = hostcalls_impl::fd_readdir(file, host_buf, cookie)?;
 
     trace!("     | *buf_used={:?}", host_bufused);
 

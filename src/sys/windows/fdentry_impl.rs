@@ -2,12 +2,42 @@ use crate::fdentry::Descriptor;
 use crate::{host, Error, Result};
 use std::fs::File;
 use std::io;
+use std::ops::{Deref, DerefMut};
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, RawHandle};
+
+#[derive(Debug)]
+pub(crate) struct OsFile(File);
+
+impl From<File> for OsFile {
+    fn from(file: File) -> Self {
+        Self(file)
+    }
+}
+
+impl AsRawHandle for OsFile {
+    fn as_raw_handle(&self) -> RawHandle {
+        self.0.as_raw_handle()
+    }
+}
+
+impl Deref for OsFile {
+    type Target = File;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for OsFile {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 impl AsRawHandle for Descriptor {
     fn as_raw_handle(&self) -> RawHandle {
         match self {
-            Descriptor::File(f) => f.as_raw_handle(),
+            Descriptor::OsFile(file) => file.as_raw_handle(),
             Descriptor::Stdin => io::stdin().as_raw_handle(),
             Descriptor::Stdout => io::stdout().as_raw_handle(),
             Descriptor::Stderr => io::stderr().as_raw_handle(),

@@ -2,6 +2,18 @@ pub(crate) mod fdentry_impl;
 pub(crate) mod host_impl;
 pub(crate) mod hostcalls_impl;
 
+#[cfg(any(
+    target_os = "macos",
+    target_os = "netbsd",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "ios",
+    target_os = "dragonfly"
+))]
+mod bsd;
+#[cfg(target_os = "linux")]
+mod linux;
+
 use crate::Result;
 use std::fs::File;
 use std::path::Path;

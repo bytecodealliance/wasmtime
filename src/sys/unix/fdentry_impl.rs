@@ -3,10 +3,25 @@ use crate::{host, Error, Result};
 use std::io;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        pub(crate) use super::linux::osfile::*;
+    } else if #[cfg(any(
+            target_os = "macos",
+            target_os = "netbsd",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "ios",
+            target_os = "dragonfly"
+    ))] {
+        pub(crate) use super::bsd::osfile::*;
+    }
+}
+
 impl AsRawFd for Descriptor {
     fn as_raw_fd(&self) -> RawFd {
         match self {
-            Descriptor::File(f) => f.as_raw_fd(),
+            Descriptor::OsFile(file) => file.as_raw_fd(),
             Descriptor::Stdin => io::stdin().as_raw_fd(),
             Descriptor::Stdout => io::stdout().as_raw_fd(),
             Descriptor::Stderr => io::stderr().as_raw_fd(),
