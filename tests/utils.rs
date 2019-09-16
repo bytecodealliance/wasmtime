@@ -1,10 +1,8 @@
-use std::env;
-use std::ffi::OsStr;
 use std::fs;
-use std::path::{Component, Path};
-use std::time::SystemTime;
+use std::path::Path;
+use tempfile::{Builder, TempDir};
 
-pub fn read_wasm<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
+pub fn read_wasm(path: &Path) -> Result<Vec<u8>, String> {
     let data = fs::read(path).map_err(|err| err.to_string())?;
     if data.starts_with(&[b'\0', b'a', b's', b'm']) {
         Ok(data)
@@ -13,33 +11,20 @@ pub fn read_wasm<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
     }
 }
 
-pub fn prepare_workspace<S: AsRef<str>>(exe_name: S) -> Result<String, String> {
-    let mut workspace = env::temp_dir();
-    let time_now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|err| err.to_string())?;
-    let subdir = format!(
-        "wasi_common_tests_{}_{}",
-        exe_name.as_ref(),
-        time_now.as_secs()
-    );
-    workspace.push(subdir);
-    fs::create_dir(workspace.as_path()).map_err(|err| err.to_string())?;
-
-    Ok(workspace
-        .as_os_str()
-        .to_str()
-        .ok_or("couldn't convert to str".to_owned())?
-        .to_string())
+pub fn prepare_workspace(exe_name: &str) -> Result<TempDir, String> {
+    let prefix = format!("wasi_common_{}", exe_name);
+    Builder::new()
+        .prefix(&prefix)
+        .tempdir()
+        .map_err(|e| format!("couldn't create workspace in temp files: {}", e))
 }
 
-pub fn extract_exec_name_from_path<P: AsRef<Path>>(path: P) -> Result<String, String> {
-    Ok(path
-        .as_ref()
-        .components()
-        .next_back()
-        .map(Component::as_os_str)
-        .and_then(OsStr::to_str)
-        .ok_or("couldn't convert to str".to_owned())?
-        .to_owned())
+pub fn extract_exec_name_from_path(path: &Path) -> Result<String, String> {
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .map(String::from)
+        .ok_or(format!(
+            "couldn't extract the file stem from path {}",
+            path.display()
+        ))
 }

@@ -113,7 +113,7 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
         "    fn {}() -> Result<(), String> {{",
         avoid_keywords(&stemstr.replace("-", "_"))
     )?;
-    write!(out, "        setup_log();")?;
+    writeln!(out, "        setup_log();")?;
     write!(out, "        let path = std::path::Path::new(\"")?;
     // Write out the string with escape_debug to prevent special characters such
     // as backslash from being reinterpreted.
@@ -129,7 +129,11 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
     let workspace = if no_preopens(testsuite, stemstr) {
         "None"
     } else {
-        "Some(&utils::prepare_workspace(&bin_name)?)"
+        writeln!(
+            out,
+            "        let workspace = utils::prepare_workspace(&bin_name)?;"
+        )?;
+        "Some(workspace.path())"
     };
     writeln!(
         out,
