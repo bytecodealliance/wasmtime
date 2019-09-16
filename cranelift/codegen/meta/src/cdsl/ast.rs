@@ -4,9 +4,10 @@ use crate::cdsl::operands::{OperandKind, OperandKindFields};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{TypeSetBuilder, TypeVar};
 
-use cranelift_entity::{entity_impl, PrimaryMap};
+use cranelift_entity::{entity_impl, PrimaryMap, SparseMap, SparseMapValue};
 
 use std::fmt;
+use std::iter::IntoIterator;
 
 pub(crate) enum Expr {
     Var(VarIndex),
@@ -82,7 +83,7 @@ impl DefPool {
     pub fn next_index(&self) -> DefIndex {
         self.pool.next_key()
     }
-    pub fn create(&mut self, apply: Apply, defined_vars: Vec<VarIndex>) -> DefIndex {
+    pub fn create_inst(&mut self, apply: Apply, defined_vars: Vec<VarIndex>) -> DefIndex {
         self.pool.push(Def {
             apply,
             defined_vars,
@@ -93,6 +94,55 @@ impl DefPool {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct DefIndex(u32);
 entity_impl!(DefIndex);
+
+/// A definition which would lead to generate a block creation.
+#[derive(Clone)]
+pub(crate) struct Block {
+    /// Instruction index after which the block entry is set.
+    pub location: DefIndex,
+    /// Variable holding the new created block.
+    pub name: VarIndex,
+}
+
+pub(crate) struct BlockPool {
+    pool: SparseMap<DefIndex, Block>,
+}
+
+impl SparseMapValue<DefIndex> for Block {
+    fn key(&self) -> DefIndex {
+        self.location
+    }
+}
+
+impl BlockPool {
+    pub fn new() -> Self {
+        Self {
+            pool: SparseMap::new(),
+        }
+    }
+    pub fn get(&self, index: DefIndex) -> Option<&Block> {
+        self.pool.get(index)
+    }
+    pub fn create_block(&mut self, name: VarIndex, location: DefIndex) {
+        if self.pool.contains_key(location) {
+            panic!("Attempt to insert 2 blocks after the same instruction")
+        }
+        self.pool.insert(Block { location, name });
+    }
+    pub fn is_empty(&self) -> bool {
+        self.pool.is_empty()
+    }
+}
+
+// Implement IntoIterator such that we can iterate over blocks which are in the block pool.
+impl<'a> IntoIterator for &'a BlockPool {
+    type Item = <&'a SparseMap<DefIndex, Block> as IntoIterator>::Item;
+    type IntoIter = <&'a SparseMap<DefIndex, Block> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.pool.into_iter()
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) enum Literal {
@@ -518,6 +568,7 @@ pub(crate) enum DummyExpr {
     Var(DummyVar),
     Literal(Literal),
     Apply(InstSpec, Vec<DummyExpr>),
+    Block(DummyVar),
 }
 
 #[derive(Clone)]
@@ -561,6 +612,11 @@ impl ExprBuilder {
             defined_vars,
         }
     }
+
+    pub fn block(name: DummyVar) -> Self {
+        let expr = DummyExpr::Block(name);
+        Self { expr }
+    }
 }
 
 macro_rules! def_rhs {
@@ -591,4 +647,12 @@ macro_rules! def {
     ($($tt:tt)*) => {
         def_rhs!($($tt)*).assign_to(Vec::new())
     }
+}
+
+// Helper macro to define legalization recipes.
+macro_rules! ebb {
+    // An basic block definition, splitting the current block in 2.
+    ($block: ident) => {
+        ExprBuilder::block($block).assign_to(Vec::new())
+    };
 }
