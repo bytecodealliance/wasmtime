@@ -606,6 +606,8 @@ pub enum FormatPredicateKind {
     /// `2^scale`.
     IsUnsignedInt(usize, usize),
 
+    /// Is the immediate format field member an integer equal to zero?
+    IsZeroInt,
     /// Is the immediate format field member equal to zero? (float32 version)
     IsZero32BitFloat,
 
@@ -679,6 +681,9 @@ impl FormatPredicateNode {
                 "predicates::is_unsigned_int({}, {}, {})",
                 self.member_name, width, scale
             ),
+            FormatPredicateKind::IsZeroInt => {
+                format!("predicates::is_zero_int({})", self.member_name)
+            }
             FormatPredicateKind::IsZero32BitFloat => {
                 format!("predicates::is_zero_32_bit_float({})", self.member_name)
             }
@@ -888,6 +893,17 @@ impl InstructionPredicate {
             format,
             field_name,
             FormatPredicateKind::IsUnsignedInt(width, scale),
+        ))
+    }
+
+    pub fn new_is_zero_int(
+        format: &InstructionFormat,
+        field_name: &'static str,
+    ) -> InstructionPredicateNode {
+        InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
+            format,
+            field_name,
+            FormatPredicateKind::IsZeroInt,
         ))
     }
 
