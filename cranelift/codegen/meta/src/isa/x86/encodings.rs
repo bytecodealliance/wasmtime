@@ -614,6 +614,7 @@ pub(crate) fn define(
     let rec_trapif = r.recipe("trapif");
     let rec_trapff = r.recipe("trapff");
     let rec_u_id = r.template("u_id");
+    let rec_u_id_z = r.template("u_id_z");
     let rec_umr = r.template("umr");
     let rec_umr_reg_to_ssa = r.template("umr_reg_to_ssa");
     let rec_ur = r.template("ur");
@@ -749,6 +750,35 @@ pub(crate) fn define(
         e.enc_both(bconst.bind(ty), rec_pu_id_bool.opcodes(vec![0xb8]));
     }
     e.enc64(bconst.bind(B64), rec_pu_id_bool.opcodes(vec![0xb8]).rex());
+
+    let is_zero_int = InstructionPredicate::new_is_zero_int(f_unary_imm, "imm");
+    e.enc_both_instp(
+        iconst.bind(I8),
+        rec_u_id_z.opcodes(vec![0x30]),
+        is_zero_int.clone(),
+    );
+    // You may expect that i16 encodings would have an 0x66 prefix on the opcode to indicate that
+    // encodings should be on 16-bit operands (f.ex, "xor %ax, %ax"). Cranelift currently does not
+    // know that it can drop the 0x66 prefix and clear the upper half of a 32-bit register in these
+    // scenarios, so we explicitly select a wider but permissible opcode.
+    //
+    // This effectively formalizes the i16->i32 widening that Cranelift performs when there isn't
+    // an appropriate i16 encoding available.
+    e.enc_both_instp(
+        iconst.bind(I16),
+        rec_u_id_z.opcodes(vec![0x31]),
+        is_zero_int.clone(),
+    );
+    e.enc_both_instp(
+        iconst.bind(I32),
+        rec_u_id_z.opcodes(vec![0x31]),
+        is_zero_int.clone(),
+    );
+    e.enc_x86_64_instp(
+        iconst.bind(I64),
+        rec_u_id_z.opcodes(vec![0x31]),
+        is_zero_int,
+    );
 
     // Shifts and rotates.
     // Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
