@@ -138,6 +138,27 @@ impl Transform {
     }
 }
 
+/// Inserts, if not present, a name in the `symbol_table`. Then returns its index in the variable
+/// pool `var_pool`. If the variable was not present in the symbol table, then add it to the list of
+/// `defined_vars`.
+fn var_index(
+    name: &'static str,
+    symbol_table: &mut SymbolTable,
+    defined_vars: &mut Vec<VarIndex>,
+    var_pool: &mut VarPool,
+) -> VarIndex {
+    match symbol_table.get(name) {
+        Some(&existing_var) => existing_var,
+        None => {
+            // Materialize the variable.
+            let new_var = var_pool.create(name);
+            symbol_table.insert(name, new_var);
+            defined_vars.push(new_var);
+            new_var
+        }
+    }
+}
+
 /// Given a list of symbols defined in a Def, rewrite them to local symbols. Yield the new locals.
 fn rewrite_defined_vars(
     position: PatternPosition,
@@ -149,16 +170,7 @@ fn rewrite_defined_vars(
 ) -> Vec<VarIndex> {
     let mut new_defined_vars = Vec::new();
     for var in &dummy_def.defined_vars {
-        let own_var = match symbol_table.get(var.name) {
-            Some(&existing_var) => existing_var,
-            None => {
-                // Materialize the variable.
-                let new_var = var_pool.create(var.name);
-                symbol_table.insert(var.name, new_var);
-                defined_vars.push(new_var);
-                new_var
-            }
-        };
+        let own_var = var_index(var.name, symbol_table, defined_vars, var_pool);
         var_pool.get_mut(own_var).set_def(position, def_index);
         new_defined_vars.push(own_var);
     }
@@ -197,23 +209,12 @@ fn rewrite_expr(
     for (i, arg) in dummy_args.into_iter().enumerate() {
         match arg {
             DummyExpr::Var(var) => {
-                let own_var = match symbol_table.get(var.name) {
-                    Some(&own_var) => {
-                        let var = var_pool.get(own_var);
-                        assert!(
-                            var.is_input() || var.get_def(position).is_some(),
-                            format!("{:?} used as both input and def", var)
-                        );
-                        own_var
-                    }
-                    None => {
-                        // First time we're using this variable.
-                        let own_var = var_pool.create(var.name);
-                        symbol_table.insert(var.name, own_var);
-                        input_vars.push(own_var);
-                        own_var
-                    }
-                };
+                let own_var = var_index(var.name, symbol_table, input_vars, var_pool);
+                let var = var_pool.get(own_var);
+                assert!(
+                    var.is_input() || var.get_def(position).is_some(),
+                    format!("{:?} used as both input and def", var)
+                );
                 args.push(Expr::Var(own_var));
             }
             DummyExpr::Literal(literal) => {
