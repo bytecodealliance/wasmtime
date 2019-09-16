@@ -93,6 +93,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let isub_borrow = insts.by_name("isub_borrow");
     let isub_ifbin = insts.by_name("isub_ifbin");
     let isub_ifbout = insts.by_name("isub_ifbout");
+    let jump = insts.by_name("jump");
     let load = insts.by_name("load");
     let popcnt = insts.by_name("popcnt");
     let rotl = insts.by_name("rotl");
@@ -189,6 +190,8 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let ah = var("ah");
     let cc = var("cc");
     let ebb = var("ebb");
+    let ebb1 = var("ebb1");
+    let ebb2 = var("ebb2");
     let ptr = var("ptr");
     let flags = var("flags");
     let offset = var("off");
@@ -259,11 +262,13 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     );
 
     narrow.legalize(
-        def!(brnz.I128(x, ebb, vararg)),
+        def!(brnz.I128(x, ebb1, vararg)),
         vec![
             def!((xl, xh) = isplit(x)),
-            def!(brnz(xl, ebb, vararg)),
-            def!(brnz(xh, ebb, vararg)),
+            def!(brnz(xl, ebb1, vararg)),
+            def!(jump(ebb2, Literal::empty_vararg())),
+            ebb!(ebb2),
+            def!(brnz(xh, ebb1, vararg)),
         ],
     );
 
