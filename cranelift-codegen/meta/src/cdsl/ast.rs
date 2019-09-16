@@ -111,6 +111,9 @@ pub(crate) enum Literal {
 
     /// A value of an integer immediate operand.
     Int(i64),
+
+    /// A empty list of variable set of arguments.
+    EmptyVarArgs,
 }
 
 impl Literal {
@@ -147,11 +150,16 @@ impl Literal {
         Literal::Int(value)
     }
 
+    pub fn empty_vararg() -> Self {
+        Literal::EmptyVarArgs
+    }
+
     pub fn to_rust_code(&self) -> String {
         match self {
             Literal::Enumerator { rust_type, value } => format!("{}::{}", rust_type, value),
             Literal::Bits { rust_type, value } => format!("{}::with_bits({:#x})", rust_type, value),
             Literal::Int(val) => val.to_string(),
+            Literal::EmptyVarArgs => "&[]".into(),
         }
     }
 }
@@ -388,7 +396,7 @@ impl Apply {
                              obtained enum value '{}'",
                             op.kind.name, value
                         ),
-                        Literal::Bits { .. } | Literal::Int(_) => {}
+                        Literal::Bits { .. } | Literal::Int(_) | Literal::EmptyVarArgs => {}
                     },
                     _ => {
                         panic!(
