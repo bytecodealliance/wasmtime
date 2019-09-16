@@ -131,19 +131,27 @@ fn split_any(
 }
 
 pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Ebb) {
-    let mut repairs = Vec::new();
     let pos = &mut FuncCursor::new(func).at_top(ebb);
+    let ebb_params = pos.func.dfg.ebb_params(ebb);
 
-    for (num, ebb_param) in pos
-        .func
-        .dfg
-        .ebb_params(ebb)
-        .to_vec()
-        .into_iter()
-        .enumerate()
+    // Add further splittable types here.
+    fn type_requires_splitting(ty: Type) -> bool {
+        ty == ir::types::I128
+    }
+
+    // A shortcut.  If none of the param types require splitting, exit now.  This helps because
+    // the loop below necessarily has to copy the ebb params into a new vector, so it's better to
+    // avoid doing so when possible.
+    if !ebb_params
+        .iter()
+        .any(|ebb_param| type_requires_splitting(pos.func.dfg.value_type(*ebb_param)))
     {
-        let ty = pos.func.dfg.value_type(ebb_param);
-        if ty != ir::types::I128 {
+        return;
+    }
+
+    let mut repairs = Vec::new();
+    for (num, ebb_param) in ebb_params.to_vec().into_iter().enumerate() {
+        if !type_requires_splitting(pos.func.dfg.value_type(ebb_param)) {
             continue;
         }
 
