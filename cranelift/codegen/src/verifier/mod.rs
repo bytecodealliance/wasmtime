@@ -696,6 +696,13 @@ impl<'a> Verifier<'a> {
                 }
             }
 
+            Unary {
+                opcode: Opcode::Bitcast,
+                arg,
+            } => {
+                self.verify_bitcast(inst, arg, errors)?;
+            }
+
             // Exhaustive list so we can't forget to add new formats
             Unary { .. }
             | UnaryImm { .. }
@@ -978,6 +985,28 @@ impl<'a> Verifier<'a> {
                 "instruction result {} is not defined by the instruction",
                 v
             ),
+        }
+    }
+
+    fn verify_bitcast(
+        &self,
+        inst: Inst,
+        arg: Value,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let typ = self.func.dfg.ctrl_typevar(inst);
+        let value_type = self.func.dfg.value_type(arg);
+
+        if typ.lane_bits() < value_type.lane_bits() {
+            fatal!(
+                errors,
+                inst,
+                "The bitcast argument {} doesn't fit in a type of {} bits",
+                arg,
+                typ.lane_bits()
+            )
+        } else {
+            Ok(())
         }
     }
 
