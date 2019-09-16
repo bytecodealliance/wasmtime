@@ -28,10 +28,9 @@ mod hostcalls_impl;
 mod sys;
 #[macro_use]
 mod macros;
-
-pub mod host;
+mod host;
 pub mod hostcalls;
-pub mod memory;
+mod memory;
 pub mod wasm32;
 
 pub use ctx::{WasiCtx, WasiCtxBuilder};

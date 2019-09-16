@@ -27,14 +27,14 @@ winx = { path = "winx" }
 winapi = "0.3"
 
 [dev-dependencies]
-wasmtime-runtime = { git = "https://github.com/cranestation/wasmtime", rev = "44367ba" }
-wasmtime-environ = { git = "https://github.com/cranestation/wasmtime", rev = "44367ba" }
-wasmtime-jit = { git = "https://github.com/cranestation/wasmtime", rev = "44367ba" }
-wasmtime-wasi = { git = "https://github.com/cranestation/wasmtime", rev = "44367ba" }
-cranelift-codegen = "0.40.0"
-cranelift-entity = "0.40.0"
-cranelift-wasm = "0.40.0"
-cranelift-native = "0.40.0"
+wasmtime-runtime = { git = "https://github.com/cranestation/wasmtime", rev = "042c877" }
+wasmtime-environ = { git = "https://github.com/cranestation/wasmtime", rev = "042c877" }
+wasmtime-jit = { git = "https://github.com/cranestation/wasmtime", rev = "042c877" }
+wasmtime-wasi = { git = "https://github.com/cranestation/wasmtime", rev = "042c877" }
+cranelift-codegen = "0.41.0"
+cranelift-entity = "0.41.0"
+cranelift-wasm = "0.41.0"
+cranelift-native = "0.41.0"
 target-lexicon = "0.4.0"
 pretty_env_logger = "0.3.0"
 
