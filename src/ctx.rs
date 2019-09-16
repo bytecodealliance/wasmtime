@@ -163,11 +163,11 @@ impl WasiCtx {
             .and_then(|ctx| ctx.build())
     }
 
-    pub(crate) fn contains_fd_entry(&self, fd: host::__wasi_fd_t) -> bool {
+    pub(crate) unsafe fn contains_fd_entry(&self, fd: host::__wasi_fd_t) -> bool {
         self.fds.contains_key(&fd)
     }
 
-    pub(crate) fn get_fd_entry(
+    pub(crate) unsafe fn get_fd_entry(
         &self,
         fd: host::__wasi_fd_t,
         rights_base: host::__wasi_rights_t,
@@ -180,7 +180,7 @@ impl WasiCtx {
         }
     }
 
-    pub(crate) fn get_fd_entry_mut(
+    pub(crate) unsafe fn get_fd_entry_mut(
         &mut self,
         fd: host::__wasi_fd_t,
         rights_base: host::__wasi_rights_t,

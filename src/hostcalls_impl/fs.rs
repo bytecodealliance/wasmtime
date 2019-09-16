@@ -13,7 +13,7 @@ use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub(crate) fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()> {
+pub(crate) unsafe fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()> {
     trace!("fd_close(fd={:?})", fd);
 
     let fd = dec_fd(fd);
@@ -30,7 +30,7 @@ pub(crate) fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -> Resul
     Ok(())
 }
 
-pub(crate) fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()> {
+pub(crate) unsafe fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()> {
     trace!("fd_datasync(fd={:?})", fd);
 
     let fd = dec_fd(fd);
@@ -41,7 +41,7 @@ pub(crate) fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result
     fd.sync_data().map_err(Into::into)
 }
 
-pub(crate) fn fd_pread(
+pub(crate) unsafe fn fd_pread(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -80,7 +80,7 @@ pub(crate) fn fd_pread(
             break;
         }
         let vec_len = std::cmp::min(iov.buf_len, left);
-        unsafe { std::slice::from_raw_parts_mut(iov.buf as *mut u8, vec_len) }
+        std::slice::from_raw_parts_mut(iov.buf as *mut u8, vec_len)
             .copy_from_slice(&buf[buf_offset..buf_offset + vec_len]);
         buf_offset += vec_len;
         left -= vec_len;
@@ -91,7 +91,7 @@ pub(crate) fn fd_pread(
     enc_usize_byref(memory, nread, host_nread)
 }
 
-pub(crate) fn fd_pwrite(
+pub(crate) unsafe fn fd_pwrite(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -122,9 +122,10 @@ pub(crate) fn fd_pwrite(
     let buf_size = iovs.iter().map(|v| v.buf_len).sum();
     let mut buf = Vec::with_capacity(buf_size);
     for iov in &iovs {
-        buf.extend_from_slice(unsafe {
-            std::slice::from_raw_parts(iov.buf as *const u8, iov.buf_len)
-        });
+        buf.extend_from_slice(std::slice::from_raw_parts(
+            iov.buf as *const u8,
+            iov.buf_len,
+        ));
     }
     let host_nwritten = hostcalls_impl::fd_pwrite(fd, &buf, offset)?;
 
@@ -133,7 +134,7 @@ pub(crate) fn fd_pwrite(
     enc_usize_byref(memory, nwritten, host_nwritten)
 }
 
-pub(crate) fn fd_read(
+pub(crate) unsafe fn fd_read(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -154,7 +155,7 @@ pub(crate) fn fd_read(
     let fe = wasi_ctx.get_fd_entry_mut(fd, host::__WASI_RIGHT_FD_READ, 0)?;
     let mut iovs: Vec<io::IoSliceMut> = iovs
         .iter_mut()
-        .map(|vec| unsafe { host::iovec_to_host_mut(vec) })
+        .map(|vec| host::iovec_to_host_mut(vec))
         .collect();
 
     let maybe_host_nread = match &mut *fe.fd_object.descriptor {
@@ -170,7 +171,7 @@ pub(crate) fn fd_read(
     enc_usize_byref(memory, nread, host_nread)
 }
 
-pub(crate) fn fd_renumber(
+pub(crate) unsafe fn fd_renumber(
     wasi_ctx: &mut WasiCtx,
     from: wasm32::__wasi_fd_t,
     to: wasm32::__wasi_fd_t,
@@ -211,7 +212,7 @@ pub(crate) fn fd_renumber(
     Ok(())
 }
 
-pub(crate) fn fd_seek(
+pub(crate) unsafe fn fd_seek(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -253,7 +254,7 @@ pub(crate) fn fd_seek(
     enc_filesize_byref(memory, newoffset, host_newoffset)
 }
 
-pub(crate) fn fd_tell(
+pub(crate) unsafe fn fd_tell(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -273,7 +274,7 @@ pub(crate) fn fd_tell(
     enc_filesize_byref(memory, newoffset, host_offset)
 }
 
-pub(crate) fn fd_fdstat_get(
+pub(crate) unsafe fn fd_fdstat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -298,7 +299,7 @@ pub(crate) fn fd_fdstat_get(
     enc_fdstat_byref(memory, fdstat_ptr, fdstat)
 }
 
-pub(crate) fn fd_fdstat_set_flags(
+pub(crate) unsafe fn fd_fdstat_set_flags(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
     fdflags: wasm32::__wasi_fdflags_t,
@@ -314,7 +315,7 @@ pub(crate) fn fd_fdstat_set_flags(
     hostcalls_impl::fd_fdstat_set_flags(fd, fdflags)
 }
 
-pub(crate) fn fd_fdstat_set_rights(
+pub(crate) unsafe fn fd_fdstat_set_rights(
     wasi_ctx: &mut WasiCtx,
     fd: wasm32::__wasi_fd_t,
     fs_rights_base: wasm32::__wasi_rights_t,
@@ -341,7 +342,7 @@ pub(crate) fn fd_fdstat_set_rights(
     Ok(())
 }
 
-pub(crate) fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()> {
+pub(crate) unsafe fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()> {
     trace!("fd_sync(fd={:?})", fd);
 
     let fd = dec_fd(fd);
@@ -351,7 +352,7 @@ pub(crate) fn fd_sync(wasi_ctx: &WasiCtx, fd: wasm32::__wasi_fd_t) -> Result<()>
     fd.sync_all().map_err(Into::into)
 }
 
-pub(crate) fn fd_write(
+pub(crate) unsafe fn fd_write(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -370,10 +371,7 @@ pub(crate) fn fd_write(
     let fd = dec_fd(fd);
     let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
     let fe = wasi_ctx.get_fd_entry_mut(fd, host::__WASI_RIGHT_FD_WRITE, 0)?;
-    let iovs: Vec<io::IoSlice> = iovs
-        .iter()
-        .map(|vec| unsafe { host::iovec_to_host(vec) })
-        .collect();
+    let iovs: Vec<io::IoSlice> = iovs.iter().map(|vec| host::iovec_to_host(vec)).collect();
 
     // perform unbuffered writes
     let host_nwritten = match &mut *fe.fd_object.descriptor {
@@ -395,7 +393,7 @@ pub(crate) fn fd_write(
     enc_usize_byref(memory, nwritten, host_nwritten)
 }
 
-pub(crate) fn fd_advise(
+pub(crate) unsafe fn fd_advise(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
     offset: wasm32::__wasi_filesize_t,
@@ -421,7 +419,7 @@ pub(crate) fn fd_advise(
     hostcalls_impl::fd_advise(fd, advice, offset, len)
 }
 
-pub(crate) fn fd_allocate(
+pub(crate) unsafe fn fd_allocate(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
     offset: wasm32::__wasi_filesize_t,
@@ -452,7 +450,7 @@ pub(crate) fn fd_allocate(
     }
 }
 
-pub(crate) fn path_create_directory(
+pub(crate) unsafe fn path_create_directory(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     dirfd: wasm32::__wasi_fd_t,
@@ -480,7 +478,7 @@ pub(crate) fn path_create_directory(
     hostcalls_impl::path_create_directory(resolved)
 }
 
-pub(crate) fn path_link(
+pub(crate) unsafe fn path_link(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     old_dirfd: wasm32::__wasi_fd_t,
@@ -524,7 +522,7 @@ pub(crate) fn path_link(
     hostcalls_impl::path_link(resolved_old, resolved_new)
 }
 
-pub(crate) fn path_open(
+pub(crate) unsafe fn path_open(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     dirfd: wasm32::__wasi_fd_t,
@@ -583,7 +581,7 @@ pub(crate) fn path_open(
     let fd = hostcalls_impl::path_open(resolved, read, write, oflags, fs_flags)?;
 
     // Determine the type of the new file descriptor and which rights contradict with this type
-    let (_ty, max_base, max_inheriting) = unsafe { determine_type_rights(&fd) }?;
+    let (_ty, max_base, max_inheriting) = determine_type_rights(&fd)?;
     let mut fe = FdEntry::from(fd)?;
     fe.rights_base &= max_base;
     fe.rights_inheriting &= max_inheriting;
@@ -594,7 +592,7 @@ pub(crate) fn path_open(
     enc_fd_byref(memory, fd_out_ptr, guest_fd)
 }
 
-pub(crate) fn fd_readdir(
+pub(crate) unsafe fn fd_readdir(
     wasi_ctx: &mut WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -631,7 +629,7 @@ pub(crate) fn fd_readdir(
     enc_usize_byref(memory, buf_used, host_bufused)
 }
 
-pub(crate) fn path_readlink(
+pub(crate) unsafe fn path_readlink(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     dirfd: wasm32::__wasi_fd_t,
@@ -673,7 +671,7 @@ pub(crate) fn path_readlink(
     enc_usize_byref(memory, buf_used, host_bufused)
 }
 
-pub(crate) fn path_rename(
+pub(crate) unsafe fn path_rename(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     old_dirfd: wasm32::__wasi_fd_t,
@@ -715,7 +713,7 @@ pub(crate) fn path_rename(
     hostcalls_impl::path_rename(resolved_old, resolved_new)
 }
 
-pub(crate) fn fd_filestat_get(
+pub(crate) unsafe fn fd_filestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -739,7 +737,7 @@ pub(crate) fn fd_filestat_get(
     enc_filestat_byref(memory, filestat_ptr, host_filestat)
 }
 
-pub(crate) fn fd_filestat_set_times(
+pub(crate) unsafe fn fd_filestat_set_times(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
     st_atim: wasm32::__wasi_timestamp_t,
@@ -802,7 +800,7 @@ pub(crate) fn fd_filestat_set_times_impl(
     set_file_handle_times(fd, atim, mtim).map_err(Into::into)
 }
 
-pub(crate) fn fd_filestat_set_size(
+pub(crate) unsafe fn fd_filestat_set_size(
     wasi_ctx: &WasiCtx,
     fd: wasm32::__wasi_fd_t,
     st_size: wasm32::__wasi_filesize_t,
@@ -822,7 +820,7 @@ pub(crate) fn fd_filestat_set_size(
     fd.set_len(st_size).map_err(Into::into)
 }
 
-pub(crate) fn path_filestat_get(
+pub(crate) unsafe fn path_filestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     dirfd: wasm32::__wasi_fd_t,
@@ -857,7 +855,7 @@ pub(crate) fn path_filestat_get(
     enc_filestat_byref(memory, filestat_ptr, host_filestat)
 }
 
-pub(crate) fn path_filestat_set_times(
+pub(crate) unsafe fn path_filestat_set_times(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     dirfd: wasm32::__wasi_fd_t,
@@ -896,7 +894,7 @@ pub(crate) fn path_filestat_set_times(
     hostcalls_impl::path_filestat_set_times(resolved, dirflags, st_atim, st_mtim, fst_flags)
 }
 
-pub(crate) fn path_symlink(
+pub(crate) unsafe fn path_symlink(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     old_path_ptr: wasm32::uintptr_t,
@@ -931,7 +929,7 @@ pub(crate) fn path_symlink(
     hostcalls_impl::path_symlink(old_path, resolved_new)
 }
 
-pub(crate) fn path_unlink_file(
+pub(crate) unsafe fn path_unlink_file(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     dirfd: wasm32::__wasi_fd_t,
@@ -958,7 +956,7 @@ pub(crate) fn path_unlink_file(
     hostcalls_impl::path_unlink_file(resolved)
 }
 
-pub(crate) fn path_remove_directory(
+pub(crate) unsafe fn path_remove_directory(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     dirfd: wasm32::__wasi_fd_t,
@@ -985,7 +983,7 @@ pub(crate) fn path_remove_directory(
     hostcalls_impl::path_remove_directory(resolved)
 }
 
-pub(crate) fn fd_prestat_get(
+pub(crate) unsafe fn fd_prestat_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
@@ -1024,7 +1022,7 @@ pub(crate) fn fd_prestat_get(
         })
 }
 
-pub(crate) fn fd_prestat_dir_name(
+pub(crate) unsafe fn fd_prestat_dir_name(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     fd: wasm32::__wasi_fd_t,
