@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-pub trait MapWithDefault<K, V: Default> {
+pub(crate) trait MapWithDefault<K, V: Default> {
     fn get_or_default(&mut self, k: K) -> &mut V;
 }
 

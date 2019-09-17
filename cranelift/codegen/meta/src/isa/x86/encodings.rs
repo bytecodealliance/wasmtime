@@ -18,7 +18,7 @@ use crate::shared::Definitions as SharedDefinitions;
 
 use super::recipes::{RecipeGroup, Template};
 
-pub struct PerCpuModeEncodings {
+pub(crate) struct PerCpuModeEncodings {
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
     pub recipes: Recipes,

@@ -431,7 +431,7 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     gen_display(group, fmt);
 }
 
-pub fn generate(
+pub(crate) fn generate(
     settings: &SettingGroup,
     parent_group: ParentGroup,
     filename: &str,

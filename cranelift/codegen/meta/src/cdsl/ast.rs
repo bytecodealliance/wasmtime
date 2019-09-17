@@ -8,7 +8,7 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 
 use std::fmt;
 
-pub enum Expr {
+pub(crate) enum Expr {
     Var(VarIndex),
     Literal(Literal),
 }
@@ -43,7 +43,7 @@ impl Expr {
 }
 
 /// An AST definition associates a set of variables with the values produced by an expression.
-pub struct Def {
+pub(crate) struct Def {
     pub apply: Apply,
     pub defined_vars: Vec<VarIndex>,
 }
@@ -66,7 +66,7 @@ impl Def {
     }
 }
 
-pub struct DefPool {
+pub(crate) struct DefPool {
     pool: PrimaryMap<DefIndex, Def>,
 }
 
@@ -91,11 +91,11 @@ impl DefPool {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct DefIndex(u32);
+pub(crate) struct DefIndex(u32);
 entity_impl!(DefIndex);
 
 #[derive(Clone, Debug)]
-pub enum Literal {
+pub(crate) enum Literal {
     /// A value of an enumerated immediate operand.
     ///
     /// Some immediate operand kinds like `intcc` and `floatcc` have an enumerated range of values
@@ -157,7 +157,7 @@ impl Literal {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum PatternPosition {
+pub(crate) enum PatternPosition {
     Source,
     Destination,
 }
@@ -179,7 +179,7 @@ pub enum PatternPosition {
 /// deleted immediately.
 ///
 /// Temporary values are defined only in the destination pattern.
-pub struct Var {
+pub(crate) struct Var {
     pub name: &'static str,
 
     /// The `Def` defining this variable in a source pattern.
@@ -307,10 +307,10 @@ impl fmt::Debug for Var {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct VarIndex(u32);
+pub(crate) struct VarIndex(u32);
 entity_impl!(VarIndex);
 
-pub struct VarPool {
+pub(crate) struct VarPool {
     pool: PrimaryMap<VarIndex, Var>,
 }
 
@@ -335,7 +335,7 @@ impl VarPool {
 ///
 /// An `Apply` AST expression is created by using function call syntax on instructions. This
 /// applies to both bound and unbound polymorphic instructions.
-pub struct Apply {
+pub(crate) struct Apply {
     pub inst: Instruction,
     pub args: Vec<Expr>,
     pub value_types: Vec<ValueType>,
@@ -506,14 +506,14 @@ impl Apply {
 
 // Simple helpers for legalize actions construction.
 
-pub enum DummyExpr {
+pub(crate) enum DummyExpr {
     Var(DummyVar),
     Literal(Literal),
     Apply(InstSpec, Vec<DummyExpr>),
 }
 
 #[derive(Clone)]
-pub struct DummyVar {
+pub(crate) struct DummyVar {
     pub name: &'static str,
 }
 
@@ -528,16 +528,16 @@ impl Into<DummyExpr> for Literal {
     }
 }
 
-pub fn var(name: &'static str) -> DummyVar {
+pub(crate) fn var(name: &'static str) -> DummyVar {
     DummyVar { name }
 }
 
-pub struct DummyDef {
+pub(crate) struct DummyDef {
     pub expr: DummyExpr,
     pub defined_vars: Vec<DummyVar>,
 }
 
-pub struct ExprBuilder {
+pub(crate) struct ExprBuilder {
     expr: DummyExpr,
 }
 

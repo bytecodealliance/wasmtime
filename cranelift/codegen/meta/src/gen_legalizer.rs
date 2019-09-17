@@ -577,7 +577,7 @@ fn gen_isa(
 }
 
 /// Generate the legalizer files.
-pub fn generate(
+pub(crate) fn generate(
     isas: &Vec<TargetIsa>,
     format_registry: &FormatRegistry,
     transform_groups: &TransformGroups,

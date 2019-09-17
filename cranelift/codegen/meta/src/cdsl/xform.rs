@@ -17,7 +17,7 @@ use std::iter::FromIterator;
 /// cases when it applies.
 ///
 /// The source pattern can contain only a single instruction.
-pub struct Transform {
+pub(crate) struct Transform {
     pub src: DefIndex,
     pub dst: Vec<DefIndex>,
     pub var_pool: VarPool,
@@ -268,7 +268,7 @@ fn rewrite_def_list(
 }
 
 /// A group of related transformations.
-pub struct TransformGroup {
+pub(crate) struct TransformGroup {
     pub name: &'static str,
     pub doc: &'static str,
     pub chain_with: Option<TransformGroupIndex>,
@@ -294,10 +294,10 @@ impl TransformGroup {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TransformGroupIndex(u32);
+pub(crate) struct TransformGroupIndex(u32);
 entity_impl!(TransformGroupIndex);
 
-pub struct TransformGroupBuilder {
+pub(crate) struct TransformGroupBuilder {
     name: &'static str,
     doc: &'static str,
     chain_with: Option<TransformGroupIndex>,
@@ -369,7 +369,7 @@ impl TransformGroupBuilder {
     }
 }
 
-pub struct TransformGroups {
+pub(crate) struct TransformGroups {
     groups: PrimaryMap<TransformGroupIndex, TransformGroup>,
 }
 

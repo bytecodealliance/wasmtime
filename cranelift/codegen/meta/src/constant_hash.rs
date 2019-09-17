@@ -1,6 +1,6 @@
 use std::iter;
 
-pub fn simple_hash(s: &str) -> usize {
+pub(crate) fn simple_hash(s: &str) -> usize {
     let mut h: u32 = 5381;
     for c in s.chars() {
         h = (h ^ c as u32).wrapping_add(h.rotate_right(6));
@@ -11,7 +11,7 @@ pub fn simple_hash(s: &str) -> usize {
 /// Compute an open addressed, quadratically probed hash table containing
 /// `items`. The returned table is a list containing the elements of the
 /// iterable `items` and `None` in unused slots.
-pub fn generate_table<'cont, T, I: iter::Iterator<Item = &'cont T>, H: Fn(&T) -> usize>(
+pub(crate) fn generate_table<'cont, T, I: iter::Iterator<Item = &'cont T>, H: Fn(&T) -> usize>(
     items: I,
     num_items: usize,
     hash_function: H,
