@@ -1,10 +1,32 @@
 use super::osfile::OsFile;
+use crate::hostcalls_impl::PathGet;
 use crate::sys::host_impl;
 use crate::{host, Error, Result};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
+use std::ffi::CString;
 use std::fs::File;
 use std::os::unix::prelude::AsRawFd;
+
+pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
+    use nix::libc::renameat;
+    let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let new_path_cstr = CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+
+    let res = unsafe {
+        renameat(
+            resolved_old.dirfd().as_raw_fd(),
+            old_path_cstr.as_ptr(),
+            resolved_new.dirfd().as_raw_fd(),
+            new_path_cstr.as_ptr(),
+        )
+    };
+    if res != 0 {
+        Err(host_impl::errno_from_nix(nix::errno::Errno::last()))
+    } else {
+        Ok(())
+    }
+}
 
 pub(crate) fn fd_readdir(
     os_file: &mut OsFile,

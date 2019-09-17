@@ -707,8 +707,11 @@ pub(crate) unsafe fn path_rename(
     let new_dirfd = wasi_ctx
         .get_fd_entry(new_dirfd, host::__WASI_RIGHT_PATH_RENAME_TARGET, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
-    let resolved_old = path_get(old_dirfd, 0, old_path, false)?;
-    let resolved_new = path_get(new_dirfd, 0, new_path, false)?;
+    let resolved_old = path_get(old_dirfd, 0, old_path, true)?;
+    let resolved_new = path_get(new_dirfd, 0, new_path, true)?;
+
+    log::debug!("path_rename resolved_old={:?}", resolved_old);
+    log::debug!("path_rename resolved_new={:?}", resolved_new);
 
     hostcalls_impl::path_rename(resolved_old, resolved_new)
 }

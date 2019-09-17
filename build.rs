@@ -163,7 +163,6 @@ cfg_if::cfg_if! {
         fn ignore(testsuite: &str, name: &str) -> bool {
             if testsuite == "misc_testsuite" {
                 match name {
-                    "path_rename_trailing_slashes" => true,
                     "path_symlink_trailing_slashes" => true,
                     _ => false,
                 }

@@ -207,26 +207,6 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     }
 }
 
-pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
-    use nix::libc::renameat;
-    let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
-    let new_path_cstr = CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
-
-    let res = unsafe {
-        renameat(
-            resolved_old.dirfd().as_raw_fd(),
-            old_path_cstr.as_ptr(),
-            resolved_new.dirfd().as_raw_fd(),
-            new_path_cstr.as_ptr(),
-        )
-    };
-    if res != 0 {
-        Err(host_impl::errno_from_nix(nix::errno::Errno::last()))
-    } else {
-        Ok(())
-    }
-}
-
 pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_filestat_t> {
     use std::os::unix::fs::MetadataExt;
 

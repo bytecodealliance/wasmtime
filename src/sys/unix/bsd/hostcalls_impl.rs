@@ -1,10 +1,60 @@
 use super::osfile::OsFile;
+use crate::hostcalls_impl::PathGet;
 use crate::sys::host_impl;
 use crate::{host, Error, Result};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
+use std::ffi::CString;
 use std::fs::File;
 use std::os::unix::prelude::AsRawFd;
+
+pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
+    use nix::{errno::Errno, fcntl::AtFlags, libc::renameat, sys::stat::fstatat};
+    let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let new_path_cstr = CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+
+    let res = unsafe {
+        renameat(
+            resolved_old.dirfd().as_raw_fd(),
+            old_path_cstr.as_ptr(),
+            resolved_new.dirfd().as_raw_fd(),
+            new_path_cstr.as_ptr(),
+        )
+    };
+    if res != 0 {
+        // Currently, this is verified to be correct on macOS, where
+        // ENOENT can be returned in case when we try to rename a file
+        // into a name with a trailing slash. On macOS, if the latter does
+        // not exist, an ENOENT is thrown, whereas on Linux we observe the
+        // correct behaviour of throwing an ENOTDIR since the destination is
+        // indeed not a directory.
+        //
+        // TODO
+        // Verify on other BSD-based OSes.
+        match Errno::last() {
+            Errno::ENOENT => {
+                // check if the source path exists
+                if let Ok(_) = fstatat(
+                    resolved_old.dirfd().as_raw_fd(),
+                    resolved_old.path(),
+                    AtFlags::AT_SYMLINK_NOFOLLOW,
+                ) {
+                    // check if destination contains a trailing slash
+                    if resolved_new.path().contains('/') {
+                        Err(Error::ENOTDIR)
+                    } else {
+                        Err(Error::ENOENT)
+                    }
+                } else {
+                    Err(Error::ENOENT)
+                }
+            }
+            x => Err(host_impl::errno_from_nix(x)),
+        }
+    } else {
+        Ok(())
+    }
+}
 
 pub(crate) fn fd_readdir(
     os_file: &mut OsFile,
