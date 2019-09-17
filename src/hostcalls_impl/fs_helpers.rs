@@ -5,6 +5,7 @@ use crate::{host, Error, Result};
 use std::fs::File;
 use std::path::{Component, Path};
 
+#[derive(Debug)]
 pub(crate) struct PathGet {
     dirfd: File,
     path: String,

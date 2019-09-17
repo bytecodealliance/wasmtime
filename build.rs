@@ -165,7 +165,6 @@ cfg_if::cfg_if! {
                 match name {
                     "path_rename_trailing_slashes" => true,
                     "path_symlink_trailing_slashes" => true,
-                    "remove_directory_trailing_slashes" => true,
                     _ => false,
                 }
             } else {

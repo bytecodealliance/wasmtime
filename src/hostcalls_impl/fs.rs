@@ -978,7 +978,9 @@ pub(crate) unsafe fn path_remove_directory(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_REMOVE_DIRECTORY, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
-    let resolved = path_get(dirfd, 0, path, false)?;
+    let resolved = path_get(dirfd, 0, path, true)?;
+
+    log::debug!("path_remove_directory resolved={:?}", resolved);
 
     hostcalls_impl::path_remove_directory(resolved)
 }
