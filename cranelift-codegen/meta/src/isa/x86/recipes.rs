@@ -13,7 +13,7 @@ use crate::shared::Definitions as SharedDefinitions;
 /// Helper data structure to create recipes and template recipes.
 /// It contains all the recipes and recipe templates that might be used in the encodings crate of
 /// this same directory.
-pub struct RecipeGroup<'builder> {
+pub(crate) struct RecipeGroup<'builder> {
     /// Memoized format pointer, to pass it to builders later.
     formats: &'builder FormatRegistry,
 

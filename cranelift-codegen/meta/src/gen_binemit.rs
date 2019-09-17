@@ -211,7 +211,7 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
     fmt.line("}");
 }
 
-pub fn generate(
+pub(crate) fn generate(
     formats: &FormatRegistry,
     isa_name: &str,
     recipes: &Recipes,

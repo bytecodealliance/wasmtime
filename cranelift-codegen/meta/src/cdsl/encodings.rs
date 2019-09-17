@@ -20,7 +20,7 @@ use crate::cdsl::types::ValueType;
 /// 3. With operands providing constraints: `icmp.i32(intcc.eq, x, y)`.
 ///
 /// If the instruction is polymorphic, all type variables must be provided.
-pub struct EncodingContent {
+pub(crate) struct EncodingContent {
     /// The `Instruction` or `BoundInstruction` being encoded.
     inst: InstSpec,
 
@@ -49,9 +49,9 @@ impl EncodingContent {
     }
 }
 
-pub type Encoding = Rc<EncodingContent>;
+pub(crate) type Encoding = Rc<EncodingContent>;
 
-pub struct EncodingBuilder {
+pub(crate) struct EncodingBuilder {
     inst: InstSpec,
     recipe: EncodingRecipeNumber,
     encbits: u16,

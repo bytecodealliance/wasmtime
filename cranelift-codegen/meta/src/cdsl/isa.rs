@@ -8,7 +8,7 @@ use crate::cdsl::regs::IsaRegs;
 use crate::cdsl::settings::SettingGroup;
 use crate::cdsl::xform::{TransformGroupIndex, TransformGroups};
 
-pub struct TargetIsa {
+pub(crate) struct TargetIsa {
     pub name: &'static str,
     pub instructions: InstructionGroup,
     pub settings: SettingGroup,

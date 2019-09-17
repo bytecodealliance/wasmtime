@@ -18,7 +18,7 @@ fn enc(inst: impl Into<InstSpec>, recipe: EncodingRecipeNumber, bits: u16) -> En
     EncodingBuilder::new(inst.into(), recipe, bits)
 }
 
-pub struct PerCpuModeEncodings<'defs> {
+pub(crate) struct PerCpuModeEncodings<'defs> {
     pub inst_pred_reg: InstructionPredicateRegistry,
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
