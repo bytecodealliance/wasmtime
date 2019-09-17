@@ -55,7 +55,7 @@ ensure_installed() {
     program="$1"
     toolchain="${2:-stable}"
     if has_toolchain $toolchain; then
-        if cargo +$toolchain install --list | grep -q $program; then
+        if grep -q $program <(cargo +$toolchain install --list); then
             echo "$program found"
         else
             echo "installing $program"
