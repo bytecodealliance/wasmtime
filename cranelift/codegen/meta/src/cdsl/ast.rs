@@ -8,7 +8,6 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 
 use std::fmt;
 
-#[derive(Debug)]
 pub enum Expr {
     Var(VarIndex),
     Literal(Literal),
@@ -95,54 +94,37 @@ impl DefPool {
 pub struct DefIndex(u32);
 entity_impl!(DefIndex);
 
-#[derive(Debug, Clone)]
-enum LiteralValue {
+#[derive(Clone, Debug)]
+pub enum Literal {
     /// A value of an enumerated immediate operand.
     ///
     /// Some immediate operand kinds like `intcc` and `floatcc` have an enumerated range of values
     /// corresponding to a Rust enum type. An `Enumerator` object is an AST leaf node representing one
     /// of the values.
-    Enumerator(&'static str),
+    Enumerator {
+        rust_type: String,
+        value: &'static str,
+    },
 
     /// A bitwise value of an immediate operand, used for bitwise exact floating point constants.
-    Bits(u64),
+    Bits { rust_type: String, value: u64 },
 
     /// A value of an integer immediate operand.
     Int(i64),
 }
 
-#[derive(Clone)]
-pub struct Literal {
-    kind: OperandKind,
-    value: LiteralValue,
-}
-
-impl fmt::Debug for Literal {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(
-            fmt,
-            "Literal(kind={}, value={:?})",
-            self.kind.name, self.value
-        )
-    }
-}
-
 impl Literal {
     pub fn enumerator_for(kind: &OperandKind, value: &'static str) -> Self {
-        if let OperandKindFields::ImmEnum(values) = &kind.fields {
-            assert!(
-                values.get(value).is_some(),
-                format!(
-                    "nonexistent value '{}' in enumeration '{}'",
-                    value, kind.name
-                )
-            );
-        } else {
-            panic!("enumerator is for enum values");
-        }
-        Self {
-            kind: kind.clone(),
-            value: LiteralValue::Enumerator(value),
+        let value = match &kind.fields {
+            OperandKindFields::ImmEnum(values) => values.get(value).expect(&format!(
+                "nonexistent value '{}' in enumeration '{}'",
+                value, kind.name
+            )),
+            _ => panic!("enumerator is for enum values"),
+        };
+        Literal::Enumerator {
+            rust_type: kind.rust_type.clone(),
+            value,
         }
     }
 
@@ -151,36 +133,25 @@ impl Literal {
             OperandKindFields::ImmValue => {}
             _ => panic!("bits_of is for immediate scalar types"),
         }
-        Self {
-            kind: kind.clone(),
-            value: LiteralValue::Bits(bits),
+        Literal::Bits {
+            rust_type: kind.rust_type.clone(),
+            value: bits,
         }
     }
 
     pub fn constant(kind: &OperandKind, value: i64) -> Self {
         match kind.fields {
             OperandKindFields::ImmValue => {}
-            _ => panic!("bits_of is for immediate scalar types"),
+            _ => panic!("constant is for immediate scalar types"),
         }
-        Self {
-            kind: kind.clone(),
-            value: LiteralValue::Int(value),
-        }
+        Literal::Int(value)
     }
 
     pub fn to_rust_code(&self) -> String {
-        let maybe_values = match &self.kind.fields {
-            OperandKindFields::ImmEnum(values) => Some(values),
-            OperandKindFields::ImmValue => None,
-            _ => panic!("impossible per construction"),
-        };
-
-        match self.value {
-            LiteralValue::Enumerator(value) => {
-                format!("{}::{}", self.kind.rust_type, maybe_values.unwrap()[value])
-            }
-            LiteralValue::Bits(bits) => format!("{}::with_bits({:#x})", self.kind.rust_type, bits),
-            LiteralValue::Int(val) => val.to_string(),
+        match self {
+            Literal::Enumerator { rust_type, value } => format!("{}::{}", rust_type, value),
+            Literal::Bits { rust_type, value } => format!("{}::with_bits({:#x})", rust_type, value),
+            Literal::Int(val) => val.to_string(),
         }
     }
 }
@@ -364,7 +335,6 @@ impl VarPool {
 ///
 /// An `Apply` AST expression is created by using function call syntax on instructions. This
 /// applies to both bound and unbound polymorphic instructions.
-#[derive(Debug)]
 pub struct Apply {
     pub inst: Instruction,
     pub args: Vec<Expr>,
@@ -395,13 +365,38 @@ impl Apply {
             let arg = &args[imm_index];
             if let Some(literal) = arg.maybe_literal() {
                 let op = &inst.operands_in[imm_index];
-                assert!(
-                    op.kind.name == literal.kind.name,
-                    format!(
-                        "Passing literal of kind {} to field of wrong kind {}",
-                        literal.kind.name, op.kind.name
-                    )
-                );
+                match &op.kind.fields {
+                    OperandKindFields::ImmEnum(values) => {
+                        if let Literal::Enumerator { value, .. } = literal {
+                            assert!(
+                                values.iter().any(|(_key, v)| v == value),
+                                "Nonexistent enum value '{}' passed to field of kind '{}' -- \
+                                 did you use the right enum?",
+                                value,
+                                op.kind.name
+                            );
+                        } else {
+                            panic!(
+                                "Passed non-enum field value {:?} to field of kind {}",
+                                literal, op.kind.name
+                            );
+                        }
+                    }
+                    OperandKindFields::ImmValue => match &literal {
+                        Literal::Enumerator { value, .. } => panic!(
+                            "Expected immediate value in immediate field of kind '{}', \
+                             obtained enum value '{}'",
+                            op.kind.name, value
+                        ),
+                        Literal::Bits { .. } | Literal::Int(_) => {}
+                    },
+                    _ => {
+                        panic!(
+                            "Literal passed to non-literal field of kind {}",
+                            op.kind.name
+                        );
+                    }
+                }
             }
         }
 
