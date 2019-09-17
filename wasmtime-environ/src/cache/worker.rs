@@ -6,8 +6,6 @@
 //! Background tasks can be CPU intensive, but the worker thread has low priority.
 
 use super::{cache_config, fs_write_atomic, CacheConfig};
-#[cfg(test)]
-use core::borrow::Borrow;
 use log::{debug, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use spin::Once;
@@ -19,31 +17,34 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{self, AtomicBool};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 #[cfg(test)]
-use std::sync::{atomic::AtomicU32, Arc};
-use std::thread::{self};
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread;
 use std::time::Duration;
+#[cfg(not(test))]
 use std::time::SystemTime;
 use std::vec::Vec;
+#[cfg(test)]
+use tests::system_time_stub::SystemTimeStub as SystemTime;
 
 pub(super) struct Worker {
     sender: SyncSender<CacheEvent>,
     #[cfg(test)]
-    stats: Arc<WorkerStats>,
+    stats: Arc<(Mutex<WorkerStats>, Condvar)>,
 }
 
 struct WorkerThread {
     receiver: Receiver<CacheEvent>,
     cache_config: CacheConfig,
     #[cfg(test)]
-    stats: Arc<WorkerStats>,
+    stats: Arc<(Mutex<WorkerStats>, Condvar)>,
 }
 
 #[cfg(test)]
 #[derive(Default)]
 struct WorkerStats {
-    dropped: AtomicU32,
-    sent: AtomicU32,
-    handled: AtomicU32,
+    dropped: u32,
+    sent: u32,
+    handled: u32,
 }
 
 static WORKER: Once<Worker> = Once::new();
@@ -87,7 +88,7 @@ impl Worker {
         let (tx, rx) = sync_channel(queue_size);
 
         #[cfg(test)]
-        let stats = Arc::new(WorkerStats::default());
+        let stats = Arc::new((Mutex::new(WorkerStats::default()), Condvar::new()));
 
         let worker_thread = WorkerThread {
             receiver: rx,
@@ -101,7 +102,7 @@ impl Worker {
         // non-tests binary has only a static worker, so Rust doesn't drop it
         thread::spawn(move || worker_thread.run(init_file_per_thread_logger));
 
-        Worker {
+        Self {
             sender: tx,
             #[cfg(test)]
             stats: stats,
@@ -121,11 +122,15 @@ impl Worker {
     #[inline]
     fn send_cache_event(&self, event: CacheEvent) {
         #[cfg(test)]
-        let stats: &WorkerStats = self.stats.borrow();
+        let mut stats = self
+            .stats
+            .0
+            .lock()
+            .expect("Failed to acquire worker stats lock");
         match self.sender.try_send(event.clone()) {
             Ok(()) => {
                 #[cfg(test)]
-                stats.sent.fetch_add(1, atomic::Ordering::SeqCst);
+                let _ = stats.sent += 1;
             }
             Err(err) => {
                 info!(
@@ -135,24 +140,30 @@ impl Worker {
                 );
 
                 #[cfg(test)]
-                stats.dropped.fetch_add(1, atomic::Ordering::SeqCst);
+                let _ = stats.dropped += 1;
             }
         }
     }
 
-    #[allow(dead_code)] // todo for worker tests
     #[cfg(test)]
     pub(super) fn events_dropped(&self) -> u32 {
-        let stats: &WorkerStats = self.stats.borrow();
-        stats.dropped.load(atomic::Ordering::SeqCst)
+        let stats = self
+            .stats
+            .0
+            .lock()
+            .expect("Failed to acquire worker stats lock");
+        stats.dropped
     }
 
-    // todo wait_for_* instead?
-    #[allow(dead_code)] // todo for worker tests
     #[cfg(test)]
-    pub(super) fn all_events_handled(&self) -> bool {
-        let stats: &WorkerStats = self.stats.borrow();
-        stats.sent.load(atomic::Ordering::SeqCst) == stats.handled.load(atomic::Ordering::SeqCst)
+    pub(super) fn wait_for_all_events_handled(&self) {
+        let (stats, condvar) = &*self.stats;
+        let mut stats = stats.lock().expect("Failed to acquire worker stats lock");
+        while stats.handled != stats.sent {
+            stats = condvar
+                .wait(stats)
+                .expect("Failed to reacquire worker stats lock");
+        }
     }
 }
 
@@ -186,6 +197,7 @@ enum CacheEntry {
 
 impl WorkerThread {
     fn run(self, init_file_per_thread_logger: Option<&'static str>) {
+        #[cfg(not(test))] // We want to test the worker without relying on init() being called
         assert!(INIT_CALLED.load(atomic::Ordering::SeqCst));
 
         if let Some(prefix) = init_file_per_thread_logger {
@@ -197,7 +209,7 @@ impl WorkerThread {
         Self::lower_thread_priority();
 
         #[cfg(test)]
-        let stats: &WorkerStats = self.stats.borrow();
+        let (stats, condvar) = &*self.stats;
 
         for event in self.receiver.iter() {
             match event {
@@ -206,7 +218,11 @@ impl WorkerThread {
             }
 
             #[cfg(test)]
-            stats.handled.fetch_add(1, atomic::Ordering::SeqCst);
+            {
+                let mut stats = stats.lock().expect("Failed to acquire worker stats lock");
+                stats.handled += 1;
+                condvar.notify_all();
+            }
         }
 
         // The receiver can stop iteration iff the channel has hung up.
@@ -422,13 +438,29 @@ impl WorkerThread {
         trace!("Trying to clean up cache");
 
         let mut cache_index = self.list_cache_contents();
+        let future_tolerance = SystemTime::now()
+            .checked_add(
+                self.cache_config
+                    .allowed_clock_drift_for_files_from_future(),
+            )
+            .expect("Brace your cache, the next Big Bang is coming (time overflow)");
         cache_index.sort_unstable_by(|lhs, rhs| {
             // sort by age
             use CacheEntry::*;
             match (lhs, rhs) {
                 (Recognized { mtime: lhs_mt, .. }, Recognized { mtime: rhs_mt, .. }) => {
-                    rhs_mt.cmp(lhs_mt)
-                } // later == younger
+                    match (*lhs_mt > future_tolerance, *rhs_mt > future_tolerance) {
+                        // later == younger
+                        (false, false) => rhs_mt.cmp(lhs_mt),
+                        // files from far future are treated as oldest recognized files
+                        // we want to delete them, so the cache keeps track of recent files
+                        // however, we don't delete them uncodintionally,
+                        // because .stats file can be overwritten with a meaningful mtime
+                        (true, false) => cmp::Ordering::Greater,
+                        (false, true) => cmp::Ordering::Less,
+                        (true, true) => cmp::Ordering::Equal,
+                    }
+                }
                 // unrecognized is kind of infinity
                 (Recognized { .. }, Unrecognized { .. }) => cmp::Ordering::Less,
                 (Unrecognized { .. }, Recognized { .. }) => cmp::Ordering::Greater,
@@ -467,12 +499,12 @@ impl WorkerThread {
 
             total_size += size;
             if start_delete_idx_if_deleting_recognized_items.is_none() {
-                if total_size >= tsl_if_deleting || (idx + 1) as u64 >= fcl_if_deleting {
+                if total_size > tsl_if_deleting || (idx + 1) as u64 > fcl_if_deleting {
                     start_delete_idx_if_deleting_recognized_items = Some(idx);
                 }
             }
 
-            if total_size >= total_size_limit || (idx + 1) as u64 >= file_count_limit {
+            if total_size > total_size_limit || (idx + 1) as u64 > file_count_limit {
                 start_delete_idx = start_delete_idx_if_deleting_recognized_items;
                 break;
             }
@@ -593,20 +625,28 @@ impl WorkerThread {
                         add_unrecognized!(file: path);
                     }
                     (2, false) => {
-                        // assumption: only mod cache (no ext), .stats & .wip-* files
                         let ext = path.extension();
                         if ext.is_none() || ext == Some(OsStr::new("stats")) {
+                            // mod or stats file
                             cache_files.insert(path, entry);
                         } else {
-                            // assume it's .wip file (lock)
-                            if is_fs_lock_expired(
-                                Some(&entry),
-                                &path,
-                                cache_config.optimizing_compression_task_timeout(),
-                                cache_config.allowed_clock_drift_for_files_from_future(),
-                            ) {
+                            let recognized = if let Some(ext_str) = ext.unwrap().to_str() {
+                                // check if valid lock
+                                ext_str.starts_with("wip-")
+                                    && !is_fs_lock_expired(
+                                        Some(&entry),
+                                        &path,
+                                        cache_config.optimizing_compression_task_timeout(),
+                                        cache_config.allowed_clock_drift_for_files_from_future(),
+                                    )
+                            } else {
+                                // if it's None, i.e. not valid UTF-8 string, then that's not our lock for sure
+                                false
+                            };
+
+                            if !recognized {
                                 add_unrecognized!(file: path);
-                            } // else: skip active lock
+                            }
                         }
                     }
                     (_, is_dir) => add_unrecognized!(is_dir, path),
@@ -661,7 +701,7 @@ impl WorkerThread {
                         );
                         vec.push(CacheEntry::Recognized {
                             path: mod_path.to_path_buf(),
-                            mtime: stats_mtime,
+                            mtime: stats_mtime.into(), // .into() called for the SystemTimeStub if cfg(test)
                             size: mod_metadata.len(),
                         })
                     }
@@ -677,7 +717,7 @@ impl WorkerThread {
                         );
                         vec.push(CacheEntry::Recognized {
                             path: mod_path.to_path_buf(),
-                            mtime: mod_mtime,
+                            mtime: mod_mtime.into(), // .into() called for the SystemTimeStub if cfg(test)
                             size: mod_metadata.len(),
                         })
                     }
@@ -833,8 +873,7 @@ fn is_fs_lock_expired(
     allowed_future_drift: Duration,
 ) -> bool {
     let mtime = match entry
-        .map(|e| e.metadata())
-        .unwrap_or_else(|| path.metadata())
+        .map_or_else(|| path.metadata(), |e| e.metadata())
         .and_then(|metadata| metadata.modified())
     {
         Ok(mt) => mt,
@@ -848,7 +887,8 @@ fn is_fs_lock_expired(
         }
     };
 
-    match mtime.elapsed() {
+    // DON'T use: mtime.elapsed() -- we must call SystemTime directly for the tests to be deterministic
+    match SystemTime::now().duration_since(mtime) {
         Ok(elapsed) => elapsed >= threshold,
         Err(err) => {
             trace!(
@@ -864,4 +904,5 @@ fn is_fs_lock_expired(
     }
 }
 
-// todo tests
+#[cfg(test)]
+mod tests;

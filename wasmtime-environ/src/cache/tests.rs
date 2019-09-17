@@ -1,3 +1,4 @@
+use super::config::tests::test_prolog;
 use super::*;
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
 use crate::compilation::{CodeAndJTOffsets, Relocation, RelocationTarget};
@@ -14,22 +15,17 @@ use std::fs;
 use std::str::FromStr;
 use std::vec::Vec;
 use target_lexicon::triple;
-use tempfile;
 
 // Since cache system is a global thing, each test needs to be run in seperate process.
 // So, init() tests are run as integration tests.
 // However, caching is a private thing, an implementation detail, and needs to be tested
 // from the inside of the module.
+// We test init() in exactly one test, rest of the tests doesn't rely on it.
 
 #[test]
-fn test_write_read_cache() {
-    pretty_env_logger::init();
-    let dir = tempfile::tempdir().expect("Can't create temporary directory");
-
-    let cache_dir = dir.path().join("cache-dir");
-    let baseline_compression_level = 5;
-
-    let config_path = dir.path().join("cache-config.toml");
+fn test_cache_init() {
+    let (_tempdir, cache_dir, config_path) = test_prolog();
+    let baseline_compression_level = 4;
     let config_content = format!(
         "[cache]\n\
          enabled = true\n\
@@ -42,6 +38,8 @@ fn test_write_read_cache() {
 
     let errors = init(true, Some(&config_path), None);
     assert!(errors.is_empty());
+
+    // test if we can use config
     let cache_config = cache_config();
     assert!(cache_config.enabled());
     // assumption: config init creates cache directory and returns canonicalized path
@@ -52,6 +50,31 @@ fn test_write_read_cache() {
     assert_eq!(
         cache_config.baseline_compression_level(),
         baseline_compression_level
+    );
+
+    // test if we can use worker
+    let worker = worker();
+    worker.on_cache_update_async(config_path);
+}
+
+#[test]
+fn test_write_read_cache() {
+    let (_tempdir, cache_dir, config_path) = test_prolog();
+    let cache_config = load_config!(
+        config_path,
+        "[cache]\n\
+         enabled = true\n\
+         directory = {cache_dir}\n\
+         baseline-compression-level = 3\n",
+        cache_dir
+    );
+    assert!(cache_config.enabled());
+    let worker = Worker::start_new(&cache_config, None);
+
+    // assumption: config load creates cache directory and returns canonicalized path
+    assert_eq!(
+        *cache_config.directory(),
+        fs::canonicalize(cache_dir).unwrap()
     );
 
     let mut rng = SmallRng::from_seed([
@@ -72,27 +95,59 @@ fn test_write_read_cache() {
     let compiler1 = "test-1";
     let compiler2 = "test-2";
 
-    let entry1 = ModuleCacheEntry::new(&module1, &function_body_inputs1, &*isa1, compiler1, false);
-    assert!(entry1.mod_cache_path().is_some());
+    let entry1 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(
+        &module1,
+        &function_body_inputs1,
+        &*isa1,
+        compiler1,
+        false,
+        &cache_config,
+        &worker,
+    ));
+    assert!(entry1.0.is_some());
     assert!(entry1.get_data().is_none());
     let data1 = new_module_cache_data(&mut rng);
     entry1.update_data(&data1);
     assert_eq!(entry1.get_data().expect("Cache should be available"), data1);
 
-    let entry2 = ModuleCacheEntry::new(&module2, &function_body_inputs1, &*isa1, compiler1, false);
+    let entry2 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(
+        &module2,
+        &function_body_inputs1,
+        &*isa1,
+        compiler1,
+        false,
+        &cache_config,
+        &worker,
+    ));
     let data2 = new_module_cache_data(&mut rng);
     entry2.update_data(&data2);
     assert_eq!(entry1.get_data().expect("Cache should be available"), data1);
     assert_eq!(entry2.get_data().expect("Cache should be available"), data2);
 
-    let entry3 = ModuleCacheEntry::new(&module1, &function_body_inputs2, &*isa1, compiler1, false);
+    let entry3 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(
+        &module1,
+        &function_body_inputs2,
+        &*isa1,
+        compiler1,
+        false,
+        &cache_config,
+        &worker,
+    ));
     let data3 = new_module_cache_data(&mut rng);
     entry3.update_data(&data3);
     assert_eq!(entry1.get_data().expect("Cache should be available"), data1);
     assert_eq!(entry2.get_data().expect("Cache should be available"), data2);
     assert_eq!(entry3.get_data().expect("Cache should be available"), data3);
 
-    let entry4 = ModuleCacheEntry::new(&module1, &function_body_inputs1, &*isa2, compiler1, false);
+    let entry4 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(
+        &module1,
+        &function_body_inputs1,
+        &*isa2,
+        compiler1,
+        false,
+        &cache_config,
+        &worker,
+    ));
     let data4 = new_module_cache_data(&mut rng);
     entry4.update_data(&data4);
     assert_eq!(entry1.get_data().expect("Cache should be available"), data1);
@@ -100,7 +155,15 @@ fn test_write_read_cache() {
     assert_eq!(entry3.get_data().expect("Cache should be available"), data3);
     assert_eq!(entry4.get_data().expect("Cache should be available"), data4);
 
-    let entry5 = ModuleCacheEntry::new(&module1, &function_body_inputs1, &*isa1, compiler2, false);
+    let entry5 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(
+        &module1,
+        &function_body_inputs1,
+        &*isa1,
+        compiler2,
+        false,
+        &cache_config,
+        &worker,
+    ));
     let data5 = new_module_cache_data(&mut rng);
     entry5.update_data(&data5);
     assert_eq!(entry1.get_data().expect("Cache should be available"), data1);
@@ -186,7 +249,6 @@ fn new_function_body_inputs<'data>(
 }
 
 fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
-    // WARNING: if method changed, update PartialEq impls below, too!
     let funcs = (0..rng.gen_range(0, 10))
         .map(|i| {
             let mut sm = SecondaryMap::new(); // doesn't implement from iterator
@@ -275,10 +337,4 @@ fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
         value_ranges,
         stack_slots,
     ))
-}
-
-impl ModuleCacheEntry<'_> {
-    pub fn mod_cache_path(&self) -> &Option<PathBuf> {
-        &self.mod_cache_path
-    }
 }
