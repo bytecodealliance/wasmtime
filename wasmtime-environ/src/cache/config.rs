@@ -621,4 +621,5 @@ impl CacheConfig {
 }
 
 #[cfg(test)]
-mod tests;
+#[macro_use]
+pub mod tests;
