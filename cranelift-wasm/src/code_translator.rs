@@ -1000,6 +1000,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = state.pop2();
             state.push1(builder.ins().iadd(a, b))
         }
+        Operator::I8x16Sub | Operator::I16x8Sub | Operator::I32x4Sub | Operator::I64x2Sub => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().isub(a, b))
+        }
         Operator::I8x16Eq
         | Operator::I8x16Ne
         | Operator::I8x16LtS
@@ -1055,7 +1059,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I8x16ShrU
         | Operator::I8x16AddSaturateS
         | Operator::I8x16AddSaturateU
-        | Operator::I8x16Sub
         | Operator::I8x16SubSaturateS
         | Operator::I8x16SubSaturateU
         | Operator::I8x16Mul
@@ -1067,7 +1070,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8ShrU
         | Operator::I16x8AddSaturateS
         | Operator::I16x8AddSaturateU
-        | Operator::I16x8Sub
         | Operator::I16x8SubSaturateS
         | Operator::I16x8SubSaturateU
         | Operator::I16x8Mul
@@ -1077,7 +1079,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4Shl
         | Operator::I32x4ShrS
         | Operator::I32x4ShrU
-        | Operator::I32x4Sub
         | Operator::I32x4Mul
         | Operator::I64x2Neg
         | Operator::I64x2AnyTrue
@@ -1085,7 +1086,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2Shl
         | Operator::I64x2ShrS
         | Operator::I64x2ShrU
-        | Operator::I64x2Sub
         | Operator::F32x4Abs
         | Operator::F32x4Neg
         | Operator::F32x4Sqrt

@@ -294,6 +294,18 @@ pub static PSHUFB: [u8; 4] = [0x66, 0x0f, 0x38, 0x00];
 /// store the result in xmm1 (SSE2).
 pub static PSHUFD: [u8; 3] = [0x66, 0x0f, 0x70];
 
+/// Subtract packed byte integers in xmm2/m128 from packed byte integers in xmm1 (SSE2).
+pub static PSUBB: [u8; 3] = [0x66, 0x0f, 0xf8];
+
+/// Subtract packed word integers in xmm2/m128 from packed word integers in xmm1 (SSE2).
+pub static PSUBW: [u8; 3] = [0x66, 0x0f, 0xf9];
+
+/// Subtract packed doubleword integers in xmm2/m128 from doubleword byte integers in xmm1 (SSE2).
+pub static PSUBD: [u8; 3] = [0x66, 0x0f, 0xfa];
+
+/// Subtract packed quadword integers in xmm2/m128 from xmm1 (SSE2).
+pub static PSUBQ: [u8; 3] = [0x66, 0x0f, 0xfb];
+
 /// Push r{16,32,64}.
 pub static PUSH_REG: [u8; 1] = [0x50];
 

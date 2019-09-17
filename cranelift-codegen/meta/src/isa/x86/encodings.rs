@@ -1940,6 +1940,12 @@ pub(crate) fn define(
         e.enc_32_64(iadd, rec_fa.opcodes(*opcodes));
     }
 
+    // SIMD integer subtraction
+    for (ty, opcodes) in &[(I8, &PSUBB), (I16, &PSUBW), (I32, &PSUBD), (I64, &PSUBQ)] {
+        let isub = isub.bind_vector_from_lane(ty.clone(), sse_vector_size);
+        e.enc_32_64(isub, rec_fa.opcodes(*opcodes));
+    }
+
     // SIMD icmp using PCMPEQ*
     let mut pcmpeq_mapping: HashMap<u64, (&[u8], Option<SettingPredicateNumber>)> = HashMap::new();
     pcmpeq_mapping.insert(8, (&PCMPEQB, None));
