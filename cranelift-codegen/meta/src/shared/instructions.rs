@@ -1722,8 +1722,7 @@ pub(crate) fn define(
         Wrapping integer multiplication: `a := x y \pmod{2^B}`.
 
         This instruction does not depend on the signed/unsigned interpretation
-        of the
-        operands.
+        of the operands.
 
         Polymorphic over all integer types (vector and scalar).
         "#,

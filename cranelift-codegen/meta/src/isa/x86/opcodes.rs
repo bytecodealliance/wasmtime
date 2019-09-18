@@ -281,6 +281,14 @@ pub static PINSRB: [u8; 4] = [0x66, 0x0f, 0x3a, 0x20];
 /// Insert word (SSE2).
 pub static PINSRW: [u8; 3] = [0x66, 0x0f, 0xc4];
 
+/// Multiply the packed signed word integers in xmm1 and xmm2/m128, and store the low 16 bits of
+/// the results in xmm1 (SSE2).
+pub static PMULLW: [u8; 3] = [0x66, 0x0f, 0xd5];
+
+/// Multiply the packed doubleword signed integers in xmm1 and xmm2/m128 and store the low 32
+/// bits of each product in xmm1 (SSE4.1).
+pub static PMULLD: [u8; 4] = [0x66, 0x0f, 0x38, 0x40];
+
 /// Pop top of stack into r{16,32,64}; increment stack pointer.
 pub static POP_REG: [u8; 1] = [0x58];
 
