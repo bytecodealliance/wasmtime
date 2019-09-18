@@ -62,17 +62,17 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
     wasmtime --create-cache-config [--cache-config=<cache_config_file>]
     wasmtime --help | --version
 
 Options:
     --invoke=<fn>       name of function to run
     -o, --optimize      runs optimization passes on the translated functions
-    -c, --cache         enable caching system, use default configuration
+    --disable-cache     disables cache system
     --cache-config=<cache_config_file>
-                        enable caching system, use specified cache configuration;
+                        use specified cache configuration;
                         can be used with --create-cache-config to specify custom file
     --create-cache-config
                         creates default configuration and writes it to the disk,
@@ -96,7 +96,7 @@ struct Args {
     arg_file: String,
     arg_arg: Vec<String>,
     flag_optimize: bool,
-    flag_cache: bool, // TODO change to disable cache after implementing cache eviction
+    flag_disable_cache: bool,
     flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_debug: bool,
@@ -242,7 +242,7 @@ fn rmain() -> Result<(), Error> {
     }
 
     let errors = cache_init(
-        args.flag_cache || args.flag_cache_config.is_some(),
+        !args.flag_disable_cache,
         args.flag_cache_config.as_ref(),
         log_config,
     );

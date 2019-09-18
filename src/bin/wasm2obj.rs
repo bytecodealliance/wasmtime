@@ -63,7 +63,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-Odg] [--cache | --cache-config=<cache_config_file>] [--enable-simd] <file> -o <output>
+    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] [--enable-simd] <file> -o <output>
     wasm2obj --create-cache-config [--cache-config=<cache_config_file>]
     wasm2obj --help | --version
 
@@ -72,9 +72,9 @@ Options:
     -h, --help          print this help message
     --target <TARGET>   build for the target triple; default is the host machine
     -g                  generate debug information
-    -c, --cache         enable caching system, use default configuration
+    --disable-cache     disables cache system
     --cache-config=<cache_config_file>
-                        enable caching system, use specified cache configuration;
+                        use specified cache configuration;
                         can be used with --create-cache-config to specify custom file
     --create-cache-config
                         creates default configuration and writes it to the disk,
@@ -93,7 +93,7 @@ struct Args {
     arg_target: Option<String>,
     flag_g: bool,
     flag_debug: bool,
-    flag_cache: bool, // TODO change to disable cache after implementing cache eviction
+    flag_disable_cache: bool,
     flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
@@ -143,7 +143,7 @@ fn main() {
     }
 
     let errors = cache_init(
-        args.flag_cache || args.flag_cache_config.is_some(),
+        !args.flag_disable_cache,
         args.flag_cache_config.as_ref(),
         log_config,
     );
