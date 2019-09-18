@@ -251,6 +251,18 @@ pub static PADDQ: [u8; 3] = [0x66, 0x0f, 0xd4];
 /// Add packed word integers from xmm2/m128 and xmm1 (SSE2).
 pub static PADDW: [u8; 3] = [0x66, 0x0f, 0xfd];
 
+/// Add packed signed byte integers from xmm2/m128 and xmm1 saturate the results (SSE).
+pub static PADDSB: [u8; 3] = [0x66, 0x0f, 0xec];
+
+/// Add packed signed word integers from xmm2/m128 and xmm1 saturate the results (SSE).
+pub static PADDSW: [u8; 3] = [0x66, 0x0f, 0xed];
+
+/// Add packed unsigned byte integers from xmm2/m128 and xmm1 saturate the results (SSE).
+pub static PADDUSB: [u8; 3] = [0x66, 0x0f, 0xdc];
+
+/// Add packed unsigned word integers from xmm2/m128 and xmm1 saturate the results (SSE).
+pub static PADDUSW: [u8; 3] = [0x66, 0x0f, 0xdd];
+
 /// Compare packed data for equal (SSE2).
 pub static PCMPEQB: [u8; 3] = [0x66, 0x0f, 0x74];
 

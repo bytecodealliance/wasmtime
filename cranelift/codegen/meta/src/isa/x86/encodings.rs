@@ -464,6 +464,7 @@ pub(crate) fn define(
     let rotl_imm = shared.by_name("rotl_imm");
     let rotr = shared.by_name("rotr");
     let rotr_imm = shared.by_name("rotr_imm");
+    let sadd_sat = shared.by_name("sadd_sat");
     let safepoint = shared.by_name("safepoint");
     let scalar_to_vector = shared.by_name("scalar_to_vector");
     let selectif = shared.by_name("selectif");
@@ -490,6 +491,7 @@ pub(crate) fn define(
     let trueff = shared.by_name("trueff");
     let trueif = shared.by_name("trueif");
     let trunc = shared.by_name("trunc");
+    let uadd_sat = shared.by_name("uadd_sat");
     let uextend = shared.by_name("uextend");
     let uload16 = shared.by_name("uload16");
     let uload16_complex = shared.by_name("uload16_complex");
@@ -1938,6 +1940,24 @@ pub(crate) fn define(
         let iadd = iadd.bind_vector_from_lane(ty.clone(), sse_vector_size);
         e.enc_32_64(iadd, rec_fa.opcodes(*opcodes));
     }
+
+    // SIMD integer saturating addition
+    e.enc_32_64(
+        sadd_sat.bind_vector_from_lane(I8, sse_vector_size),
+        rec_fa.opcodes(&PADDSB),
+    );
+    e.enc_32_64(
+        sadd_sat.bind_vector_from_lane(I16, sse_vector_size),
+        rec_fa.opcodes(&PADDSW),
+    );
+    e.enc_32_64(
+        uadd_sat.bind_vector_from_lane(I8, sse_vector_size),
+        rec_fa.opcodes(&PADDUSB),
+    );
+    e.enc_32_64(
+        uadd_sat.bind_vector_from_lane(I16, sse_vector_size),
+        rec_fa.opcodes(&PADDUSW),
+    );
 
     // SIMD integer subtraction
     for (ty, opcodes) in &[(I8, &PSUBB), (I16, &PSUBW), (I32, &PSUBD), (I64, &PSUBQ)] {
