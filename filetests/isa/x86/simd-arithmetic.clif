@@ -164,3 +164,29 @@ ebb0:
     return v4
 }
 ; run
+
+function %sadd_sat_i8x16() -> b1 {
+ebb0:
+[-, %xmm2]    v0 = vconst.i8x16 [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+[-, %xmm3]    v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+[-, %xmm2]    v2 = sadd_sat v0, v1 ; bin: 66 0f ec d3
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 127
+
+    return v4
+}
+; run
+
+function %uadd_sat_i16x8() -> b1 {
+ebb0:
+[-, %xmm2]    v0 = vconst.i16x8 [-1 0 0 0 0 0 0 0]
+[-, %xmm3]    v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1]
+
+[-, %xmm2]    v2 = uadd_sat v0, v1 ; bin: 66 0f dd d3
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 65535
+
+    return v4
+}
+; run

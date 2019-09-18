@@ -1000,6 +1000,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = state.pop2();
             state.push1(builder.ins().iadd(a, b))
         }
+        Operator::I8x16AddSaturateS | Operator::I16x8AddSaturateS => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().sadd_sat(a, b))
+        }
+        Operator::I8x16AddSaturateU | Operator::I16x8AddSaturateU => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().uadd_sat(a, b))
+        }
         Operator::I8x16Sub | Operator::I16x8Sub | Operator::I32x4Sub | Operator::I64x2Sub => {
             let (a, b) = state.pop2();
             state.push1(builder.ins().isub(a, b))
@@ -1064,8 +1072,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I8x16Shl
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
-        | Operator::I8x16AddSaturateS
-        | Operator::I8x16AddSaturateU
         | Operator::I8x16SubSaturateS
         | Operator::I8x16SubSaturateU
         | Operator::I8x16Mul
@@ -1074,8 +1080,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8Shl
         | Operator::I16x8ShrS
         | Operator::I16x8ShrU
-        | Operator::I16x8AddSaturateS
-        | Operator::I16x8AddSaturateU
         | Operator::I16x8SubSaturateS
         | Operator::I16x8SubSaturateU
         | Operator::I32x4AnyTrue
