@@ -64,7 +64,6 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let f64const = insts.by_name("f64const");
     let fcopysign = insts.by_name("fcopysign");
     let fcvt_from_sint = insts.by_name("fcvt_from_sint");
-    let fcvt_from_uint = insts.by_name("fcvt_from_uint");
     let fneg = insts.by_name("fneg");
     let iadd = insts.by_name("iadd");
     let iadd_cin = insts.by_name("iadd_cin");
@@ -542,21 +541,12 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         ],
     );
 
-    // Expansions for fcvt_from_{u,s}int for smaller integer types.
-    // These use expand and not widen because the controlling type variable for
-    // these instructions are f32/f64, which are legalized as part of the expand
+    // Expansion for fcvt_from_sint for smaller integer types.
+    // This uses expand and not widen because the controlling type variable for
+    // this instruction is f32/f64, which is legalized as part of the expand
     // group.
     for &dest_ty in &[F32, F64] {
         for &src_ty in &[I8, I16] {
-            let bound_inst = fcvt_from_uint.bind(dest_ty).bind(src_ty);
-            expand.legalize(
-                def!(a = bound_inst(b)),
-                vec![
-                    def!(x = uextend.I32(b)),
-                    def!(a = fcvt_from_uint.dest_ty(x)),
-                ],
-            );
-
             let bound_inst = fcvt_from_sint.bind(dest_ty).bind(src_ty);
             expand.legalize(
                 def!(a = bound_inst(b)),

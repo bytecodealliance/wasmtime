@@ -406,12 +406,16 @@ fn expand_fcvt_from_uint(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    // Conversion from unsigned 32-bit is easy on x86-64.
-    // TODO: This should be guarded by an ISA check.
-    if xty == ir::types::I32 {
-        let wide = pos.ins().uextend(ir::types::I64, x);
-        pos.func.dfg.replace(inst).fcvt_from_sint(ty, wide);
-        return;
+    // Conversion from an unsigned int smaller than 64bit is easy on x86-64.
+    match xty {
+        ir::types::I8 | ir::types::I16 | ir::types::I32 => {
+            // TODO: This should be guarded by an ISA check.
+            let wide = pos.ins().uextend(ir::types::I64, x);
+            pos.func.dfg.replace(inst).fcvt_from_sint(ty, wide);
+            return;
+        }
+        ir::types::I64 => {}
+        _ => unimplemented!(),
     }
 
     let old_ebb = pos.func.layout.pp_ebb(inst);
