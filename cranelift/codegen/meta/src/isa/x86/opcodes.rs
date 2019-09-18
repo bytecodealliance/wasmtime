@@ -326,6 +326,22 @@ pub static PSUBD: [u8; 3] = [0x66, 0x0f, 0xfa];
 /// Subtract packed quadword integers in xmm2/m128 from xmm1 (SSE2).
 pub static PSUBQ: [u8; 3] = [0x66, 0x0f, 0xfb];
 
+/// Subtract packed signed byte integers in xmm2/m128 from packed signed byte integers in xmm1
+/// and saturate results (SSE2).
+pub static PSUBSB: [u8; 3] = [0x66, 0x0f, 0xe8];
+
+/// Subtract packed signed word integers in xmm2/m128 from packed signed word integers in xmm1
+/// and saturate results (SSE2).
+pub static PSUBSW: [u8; 3] = [0x66, 0x0f, 0xe9];
+
+/// Subtract packed unsigned byte integers in xmm2/m128 from packed unsigned byte integers in xmm1
+/// and saturate results (SSE2).
+pub static PSUBUSB: [u8; 3] = [0x66, 0x0f, 0xd8];
+
+/// Subtract packed unsigned word integers in xmm2/m128 from packed unsigned word integers in xmm1
+/// and saturate results (SSE2).
+pub static PSUBUSW: [u8; 3] = [0x66, 0x0f, 0xd9];
+
 /// Push r{16,32,64}.
 pub static PUSH_REG: [u8; 1] = [0x50];
 

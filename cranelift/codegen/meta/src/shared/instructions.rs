@@ -1738,6 +1738,36 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "usub_sat",
+            r#"
+        Subtract with unsigned saturation.
+
+        This is similar to `isub` but the operands are interpreted as unsigned integers and their 
+        difference, instead of wrapping, will be saturated to the lowest unsigned integer for
+        the controlling type (e.g. `0x00` for i8).
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "ssub_sat",
+            r#"
+        Subtract with signed saturation.
+
+        This is similar to `isub` but the operands are interpreted as signed integers and their 
+        difference, instead of wrapping, will be saturated to the lowest or highest 
+        signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8).
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
             "ineg",
             r#"
         Integer negation: `a := -x \pmod{2^B}`.

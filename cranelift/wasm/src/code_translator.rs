@@ -1012,6 +1012,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = state.pop2();
             state.push1(builder.ins().isub(a, b))
         }
+        Operator::I8x16SubSaturateS | Operator::I16x8SubSaturateS => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().ssub_sat(a, b))
+        }
+        Operator::I8x16SubSaturateU | Operator::I16x8SubSaturateU => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().usub_sat(a, b))
+        }
         Operator::I8x16Neg | Operator::I16x8Neg | Operator::I32x4Neg | Operator::I64x2Neg => {
             let a = state.pop1();
             state.push1(builder.ins().ineg(a))
@@ -1072,16 +1080,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I8x16Shl
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
-        | Operator::I8x16SubSaturateS
-        | Operator::I8x16SubSaturateU
         | Operator::I8x16Mul
         | Operator::I16x8AnyTrue
         | Operator::I16x8AllTrue
         | Operator::I16x8Shl
         | Operator::I16x8ShrS
         | Operator::I16x8ShrU
-        | Operator::I16x8SubSaturateS
-        | Operator::I16x8SubSaturateU
         | Operator::I32x4AnyTrue
         | Operator::I32x4AllTrue
         | Operator::I32x4Shl
