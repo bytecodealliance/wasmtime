@@ -17,7 +17,7 @@ function %test_extractlane_i16() {
 ebb0:
 [-, %rax]   v0 = iconst.i16 4
 [-, %xmm1]  v1 = splat.i16x8 v0
-[-, %rax]   v2 = x86_pextr v1, 4    ; bin: 66 0f c5 c8 04
+[-, %rax]   v2 = x86_pextr v1, 4    ; bin: 66 0f 3a 15 c8 04
             return
 }
 
