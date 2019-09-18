@@ -97,6 +97,30 @@ jobs:
         RUST_BACKTRACE: 1
       condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
 
+- job: Fuzz_regression
+  displayName: Fuzz regression
+  pool:
+    vmImage: "ubuntu-16.04"
+  variables:
+    toolchain: nightly
+  steps:
+    - template: ci/azure-install-rust.yml
+    - bash: cargo install cargo-fuzz
+    - bash: ci/fuzzit.sh local-regression
+
+- job: Fuzz
+  condition: ne(variables['Build.Reason'], 'PullRequest')
+  pool:
+    vmImage: "ubuntu-16.04"
+  variables:
+    toolchain: nightly
+  steps:
+    - template: ci/azure-install-rust.yml
+    - bash: cargo install cargo-fuzz
+    - bash: ci/fuzzit.sh fuzzing
+      env:
+        FUZZIT_API_KEY: $(FUZZIT_API_KEY)
+
 - job: Build
   strategy:
     matrix:

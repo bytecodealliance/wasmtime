@@ -8,6 +8,7 @@ into executable machine code.
 
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
 [![Travis Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
+[![Fuzzit Status](https://app.fuzzit.dev/badge?org_id=CraneStation)](https://app.fuzzit.dev/orgs/CraneStation/dashboard)
 [![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
 ![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
 
