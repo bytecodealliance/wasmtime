@@ -434,11 +434,11 @@ impl Memory {
         }
     }
 
-    pub fn data(&self) -> &mut [u8] {
-        unsafe {
-            let definition = &*self.wasmtime_memory_definition();
-            slice::from_raw_parts_mut(definition.base, definition.current_length)
-        }
+    // Marked unsafe due to posibility that wasmtime can resize internal memory
+    // from other threads.
+    pub unsafe fn data(&self) -> &mut [u8] {
+        let definition = &*self.wasmtime_memory_definition();
+        slice::from_raw_parts_mut(definition.base, definition.current_length)
     }
 
     pub fn data_ptr(&self) -> *mut u8 {
