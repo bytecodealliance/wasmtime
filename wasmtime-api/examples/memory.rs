@@ -103,9 +103,9 @@ fn main() -> Result<(), Error> {
     println!("Checking memory...");
     check!(memory.borrow().size(), 2u32);
     check!(memory.borrow().data_size(), 0x20000usize);
-    check!(memory.borrow().data()[0], 0);
-    check!(memory.borrow().data()[0x1000], 1);
-    check!(memory.borrow().data()[0x1003], 4);
+    check!(unsafe { memory.borrow().data()[0] }, 0);
+    check!(unsafe { memory.borrow().data()[0x1000] }, 1);
+    check!(unsafe { memory.borrow().data()[0x1003] }, 4);
 
     check!(call!(size_func,), 2);
     check!(call!(load_func, 0), 0);
@@ -116,13 +116,15 @@ fn main() -> Result<(), Error> {
 
     // Mutate memory.
     println!("Mutating memory...");
-    memory.borrow_mut().data()[0x1003] = 5;
+    unsafe {
+        memory.borrow_mut().data()[0x1003] = 5;
+    }
 
     check_ok!(store_func, 0x1002, 6);
     check_trap!(store_func, 0x20000, 0);
 
-    check!(memory.borrow().data()[0x1002], 6);
-    check!(memory.borrow().data()[0x1003], 5);
+    check!(unsafe { memory.borrow().data()[0x1002] }, 6);
+    check!(unsafe { memory.borrow().data()[0x1003] }, 5);
     check!(call!(load_func, 0x1002), 6);
     check!(call!(load_func, 0x1003), 5);
 
