@@ -22,6 +22,12 @@ impl IntoBytes for u8 {
     }
 }
 
+impl IntoBytes for i16 {
+    fn into_bytes(self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
+    }
+}
+
 impl IntoBytes for i32 {
     fn into_bytes(self) -> Vec<u8> {
         self.to_le_bytes().to_vec()
@@ -429,6 +435,7 @@ impl FromIterator<bool> for V128Imm {
 }
 
 construct_uimm128_from_iterator_of!(u8, 16);
+construct_uimm128_from_iterator_of!(i16, 8);
 construct_uimm128_from_iterator_of!(i32, 4);
 construct_uimm128_from_iterator_of!(Ieee32, 4);
 construct_uimm128_from_iterator_of!(Imm64, 2);

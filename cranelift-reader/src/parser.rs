@@ -665,6 +665,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume a signed 16-bit immediate.
+    fn match_imm16(&mut self, err_msg: &str) -> ParseResult<i16> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like an integer.
+            // Parse it as a i16 to check for overflow and other issues.
+            text.parse()
+                .map_err(|_| self.error("expected i16 decimal immediate"))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
     // Match and consume an i32 immediate.
     // This is used for stack argument byte offsets.
     fn match_imm32(&mut self, err_msg: &str) -> ParseResult<i32> {
@@ -855,7 +868,7 @@ impl<'a> Parser<'a> {
         } else {
             let uimm128 = match ty.lane_type() {
                 I8 => consume!(ty, self.match_uimm8("Expected an 8-bit unsigned integer")),
-                I16 => unimplemented!(), // TODO no 16-bit match yet
+                I16 => consume!(ty, self.match_imm16("Expected a 16-bit integer")),
                 I32 => consume!(ty, self.match_imm32("Expected a 32-bit integer")),
                 I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")),
                 F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float...")),
