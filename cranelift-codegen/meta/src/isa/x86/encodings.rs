@@ -480,6 +480,7 @@ pub(crate) fn define(
     let sqrt = shared.by_name("sqrt");
     let sshr = shared.by_name("sshr");
     let sshr_imm = shared.by_name("sshr_imm");
+    let ssub_sat = shared.by_name("ssub_sat");
     let stack_addr = shared.by_name("stack_addr");
     let store = shared.by_name("store");
     let store_complex = shared.by_name("store_complex");
@@ -501,6 +502,7 @@ pub(crate) fn define(
     let uload8_complex = shared.by_name("uload8_complex");
     let ushr = shared.by_name("ushr");
     let ushr_imm = shared.by_name("ushr_imm");
+    let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
     let x86_bsf = x86.by_name("x86_bsf");
     let x86_bsr = x86.by_name("x86_bsr");
@@ -1964,6 +1966,24 @@ pub(crate) fn define(
         let isub = isub.bind_vector_from_lane(ty.clone(), sse_vector_size);
         e.enc_32_64(isub, rec_fa.opcodes(*opcodes));
     }
+
+    // SIMD integer saturating subtraction
+    e.enc_32_64(
+        ssub_sat.bind_vector_from_lane(I8, sse_vector_size),
+        rec_fa.opcodes(&PSUBSB),
+    );
+    e.enc_32_64(
+        ssub_sat.bind_vector_from_lane(I16, sse_vector_size),
+        rec_fa.opcodes(&PSUBSW),
+    );
+    e.enc_32_64(
+        usub_sat.bind_vector_from_lane(I8, sse_vector_size),
+        rec_fa.opcodes(&PSUBUSB),
+    );
+    e.enc_32_64(
+        usub_sat.bind_vector_from_lane(I16, sse_vector_size),
+        rec_fa.opcodes(&PSUBUSW),
+    );
 
     // SIMD integer multiplication: the x86 ISA does not have instructions for multiplying I8x16
     // and I64x2 and these are (at the time of writing) not necessary for WASM SIMD.
