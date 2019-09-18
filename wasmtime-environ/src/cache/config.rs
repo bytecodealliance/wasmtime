@@ -150,7 +150,9 @@ pub fn init<P: AsRef<Path> + Debug>(
     let conf_file_str = format!("{:?}", config_file);
     let conf = CONFIG.call_once(|| CacheConfig::from_file(enabled, config_file, create_new_config));
     if conf.errors.is_empty() {
-        worker::init(init_file_per_thread_logger);
+        if conf.enabled {
+            worker::init(init_file_per_thread_logger);
+        }
         debug!("Cache init(\"{}\"): {:#?}", conf_file_str, conf)
     } else {
         error!(
