@@ -120,3 +120,47 @@ ebb0:
 
     return ; bin: c3
 }
+
+function %imul_i32x4() -> b1 {
+ebb0:
+[-, %xmm0]    v0 = vconst.i32x4 [-1 0 1 -2147483647] ; e.g. -2147483647 == 0x80_00_00_01
+[-, %xmm1]    v1 = vconst.i32x4 [2 2 2 2]
+[-, %xmm0]    v2 = imul v0, v1 ; bin: 66 0f 38 40 c1
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, -2
+
+    v5 = extractlane v2, 1
+    v6 = icmp_imm eq v5, 0
+
+    v7 = extractlane v2, 3
+    v8 = icmp_imm eq v7, 2 ; 0x80_00_00_01 * 2 == 0x1_00_00_00_02 (and the 1 is dropped)
+
+    v9 = band v4, v6
+    v10 = band v8, v9
+    return v10
+}
+; run
+
+function %imul_i16x8() -> b1 {
+ebb0:
+[-, %xmm1]    v0 = vconst.i16x8 [-1 0 1 32767 0 0 0 0] ; e.g. 32767 == 0x7f_ff
+[-, %xmm2]    v1 = vconst.i16x8 [2 2 2 2 0 0 0 0]
+[-, %xmm1]    v2 = imul v0, v1 ; bin: 66 0f d5 ca
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0xfffe ; TODO -2 will not work here and below because v3 is being
+    ; uextend-ed, not sextend-ed
+
+    v5 = extractlane v2, 1
+    v6 = icmp_imm eq v5, 0
+
+    v7 = extractlane v2, 3
+    v8 = icmp_imm eq v7, 0xfffe ; 0x7f_ff * 2 == 0xff_fe
+
+    v9 = band v4, v6
+    v10 = band v8, v9
+
+    return v4
+}
+; run

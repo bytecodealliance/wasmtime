@@ -1945,6 +1945,16 @@ pub(crate) fn define(
         e.enc_32_64(isub, rec_fa.opcodes(*opcodes));
     }
 
+    // SIMD integer multiplication: the x86 ISA does not have instructions for multiplying I8x16
+    // and I64x2 and these are (at the time of writing) not necessary for WASM SIMD.
+    for (ty, opcodes, isap) in &[
+        (I16, &PMULLW[..], None),
+        (I32, &PMULLD[..], Some(use_sse41_simd)),
+    ] {
+        let imul = imul.bind_vector_from_lane(ty.clone(), sse_vector_size);
+        e.enc_32_64_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
+    }
+
     // SIMD icmp using PCMPEQ*
     let mut pcmpeq_mapping: HashMap<u64, (&[u8], Option<SettingPredicateNumber>)> = HashMap::new();
     pcmpeq_mapping.insert(8, (&PCMPEQB, None));
