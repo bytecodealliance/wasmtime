@@ -37,8 +37,7 @@ pub struct ObjectBuilder {
 
 impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
-    /// can be passed to
-    /// [`Module::new`](cranelift_module/struct.Module.html#method.new].
+    /// can be passed to [`Module::new`](cranelift_module::Module::new).
     ///
     /// `collect_traps` setting determines whether trap information is collected in the
     /// `ObjectProduct`.
