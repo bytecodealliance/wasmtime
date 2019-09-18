@@ -269,8 +269,8 @@ pub static PEXTR: [u8; 4] = [0x66, 0x0f, 0x3a, 0x16];
 /// Extract byte (SSE4.1).
 pub static PEXTRB: [u8; 4] = [0x66, 0x0f, 0x3a, 0x14];
 
-/// Extract word (SSE2). There is a 4-byte SSE4.1 variant that can also move to m/16.
-pub static PEXTRW_SSE2: [u8; 3] = [0x66, 0x0f, 0xc5];
+/// Extract word (SSE4.1). There is a 3-byte SSE2 variant that can also move to m/16.
+pub static PEXTRW: [u8; 4] = [0x66, 0x0f, 0x3a, 0x15];
 
 /// Insert doubleword or quadword, depending on REX.W (SSE4.1).
 pub static PINSR: [u8; 4] = [0x66, 0x0f, 0x3a, 0x22];

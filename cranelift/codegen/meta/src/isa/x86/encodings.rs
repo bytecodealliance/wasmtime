@@ -1798,23 +1798,22 @@ pub(crate) fn define(
     }
 
     // SIMD extractlane
-    let mut x86_pextr_mapping: HashMap<u64, (&'static [u8], Option<SettingPredicateNumber>)> =
-        HashMap::new();
-    x86_pextr_mapping.insert(8, (&PEXTRB, Some(use_sse41_simd)));
-    x86_pextr_mapping.insert(16, (&PEXTRW_SSE2, None));
-    x86_pextr_mapping.insert(32, (&PEXTR, Some(use_sse41_simd)));
-    x86_pextr_mapping.insert(64, (&PEXTR, Some(use_sse41_simd)));
+    let mut x86_pextr_mapping: HashMap<u64, &'static [u8]> = HashMap::new();
+    x86_pextr_mapping.insert(8, &PEXTRB);
+    x86_pextr_mapping.insert(16, &PEXTRW);
+    x86_pextr_mapping.insert(32, &PEXTR);
+    x86_pextr_mapping.insert(64, &PEXTR);
 
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        if let Some((opcode, isap)) = x86_pextr_mapping.get(&ty.lane_bits()) {
+        if let Some(opcode) = x86_pextr_mapping.get(&ty.lane_bits()) {
             let instruction = x86_pextr.bind_vector_from_lane(ty, sse_vector_size);
             let template = rec_r_ib_unsigned_gpr.opcodes(opcode);
             if ty.lane_bits() < 64 {
-                e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap.clone());
+                e.enc_32_64_maybe_isap(instruction, template.nonrex(), Some(use_sse41_simd));
             } else {
                 // It turns out the 64-bit widths have REX/W encodings and only are available on
                 // x86_64.
-                e.enc64_maybe_isap(instruction, template.rex().w(), isap.clone());
+                e.enc64_maybe_isap(instruction, template.rex().w(), Some(use_sse41_simd));
             }
         }
     }
