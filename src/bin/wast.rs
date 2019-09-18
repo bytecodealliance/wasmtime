@@ -41,7 +41,7 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    wast [-do] [--enable-simd] [--cache | --cache-config=<cache_config_file>] <file>...
+    wast [-do] [--enable-simd] [--disable-cache | --cache-config=<cache_config_file>] <file>...
     wast --create-cache-config [--cache-config=<cache_config_file>]
     wast --help | --version
 
@@ -49,9 +49,9 @@ Options:
     -h, --help          print this help message
     --version           print the Cranelift version
     -o, --optimize      runs optimization passes on the translated functions
-    -c, --cache         enable caching system, use default configuration
+    --disable-cache     disables cache system
     --cache-config=<cache_config_file>
-                        enable caching system, use specified cache configuration;
+                        use specified cache configuration;
                         can be used with --create-cache-config to specify custom file
     --create-cache-config
                         creates default configuration and writes it to the disk,
@@ -67,7 +67,7 @@ struct Args {
     flag_debug: bool,
     flag_function: Option<String>,
     flag_optimize: bool,
-    flag_cache: bool, // TODO change to disable cache after implementing cache eviction
+    flag_disable_cache: bool,
     flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
@@ -109,7 +109,7 @@ fn main() {
     }
 
     let errors = cache_init(
-        args.flag_cache || args.flag_cache_config.is_some(),
+        !args.flag_disable_cache,
         args.flag_cache_config.as_ref(),
         log_config,
     );
