@@ -12,7 +12,7 @@ name = "_wasmtime"
 crate-type = ["cdylib"]
 
 [dependencies]
-cranelift-codegen = "0.41.0"
+cranelift-codegen = "0.43.0"
 cranelift-native = "0.41.0"
 cranelift-entity = "0.41.0"
 cranelift-wasm = "0.41.0"
