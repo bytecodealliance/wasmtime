@@ -851,7 +851,7 @@ impl TypeSetBuilder {
 
     pub fn build(self) -> TypeSet {
         let min_lanes = if self.includes_scalars { 1 } else { 2 };
-;
+
         let bools = range_to_set(self.bools.to_range(1..MAX_BITS, None))
             .into_iter()
             .filter(legal_bool)

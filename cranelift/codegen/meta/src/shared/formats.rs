@@ -65,7 +65,7 @@ pub(crate) fn define(imm: &Immediates, entities: &EntityRefs) -> FormatRegistry 
             .value()
             .value(),
     );
-    registry.insert(Builder::new("FloatCond").imm(&imm.floatcc).value());;
+    registry.insert(Builder::new("FloatCond").imm(&imm.floatcc).value());
 
     registry.insert(
         Builder::new("IntSelect")
