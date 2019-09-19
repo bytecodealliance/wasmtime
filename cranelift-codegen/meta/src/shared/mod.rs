@@ -29,7 +29,7 @@ pub(crate) fn define() -> Definitions {
     let mut all_instructions = AllInstructions::new();
 
     let immediates = Immediates::new();
-    let entities = EntityRefs::new();;
+    let entities = EntityRefs::new();
     let format_registry = formats::define(&immediates, &entities);
     let instructions = instructions::define(
         &mut all_instructions,
