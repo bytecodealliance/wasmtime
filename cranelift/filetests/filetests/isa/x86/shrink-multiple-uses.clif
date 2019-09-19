@@ -1,5 +1,5 @@
 test shrink
-set opt_level=best
+set opt_level=speed_and_size
 target x86_64
 
 function %test_multiple_uses(i32 [%rdi]) -> i32 {

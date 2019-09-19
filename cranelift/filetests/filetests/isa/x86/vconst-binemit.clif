@@ -1,5 +1,5 @@
 test binemit
-set opt_level=best
+set opt_level=speed_and_size
 set enable_simd
 target x86_64
 

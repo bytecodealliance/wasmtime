@@ -1,5 +1,5 @@
 test binemit
-set opt_level=best
+set opt_level=speed_and_size
 target x86_64
 
 ; Test that instruction shrinking eliminates REX prefixes when possible.
