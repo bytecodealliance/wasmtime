@@ -18,9 +18,9 @@ use crate::entity::{EntityList, ListPool};
 use crate::entity::{Keys, PrimaryMap, SecondaryMap};
 use crate::ir::{Function, Value};
 use crate::packed_option::PackedOption;
-use crate::ref_slice::ref_slice;
 use core::cmp::Ordering;
 use core::fmt;
+use core::slice;
 use smallvec::SmallVec;
 use std::vec::Vec;
 
@@ -104,7 +104,7 @@ impl VirtRegs {
         'a: 'b,
     {
         self.get(*value)
-            .map_or_else(|| ref_slice(value), |vr| self.values(vr))
+            .map_or_else(|| slice::from_ref(value), |vr| self.values(vr))
     }
 
     /// Check if `a` and `b` belong to the same congruence class.

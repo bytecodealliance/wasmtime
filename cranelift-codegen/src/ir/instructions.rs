@@ -18,7 +18,6 @@ use crate::isa;
 
 use crate::bitset::BitSet;
 use crate::entity;
-use crate::ref_slice::{ref_slice, ref_slice_mut};
 
 /// Some instructions use an external list of argument values because there is not enough space in
 /// the 16-byte `InstructionData` struct. These value lists are stored in a memory pool in
