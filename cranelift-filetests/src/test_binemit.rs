@@ -162,7 +162,7 @@ impl SubTest for TestBinEmit {
                                 recipe_constraints.satisfied(inst, &divert, &func)
                             });
 
-                        if opt_level == OptLevel::Best {
+                        if opt_level == OptLevel::SpeedAndSize {
                             // Get the smallest legal encoding
                             legal_encodings
                                 .min_by_key(|&e| encinfo.byte_size(e, inst, &divert, &func))

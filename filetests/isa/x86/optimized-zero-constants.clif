@@ -1,6 +1,6 @@
 ; Check that floating-point constants equal to zero are optimized correctly.
 test binemit
-set opt_level=best
+set opt_level=speed_and_size
 target x86_64
 
 function %zero_const_32bit_no_rex() -> f32 fast {

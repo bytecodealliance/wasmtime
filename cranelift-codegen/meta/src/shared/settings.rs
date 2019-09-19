@@ -8,11 +8,12 @@ pub fn define() -> SettingGroup {
         r#"
         Optimization level:
 
-        - default: Very profitable optimizations enabled, none slow.
-        - best: Enable all optimizations
-        - fastest: Optimize for compile time by disabling most optimizations.
+        - none: Minimise compile time by disabling most optimizations.
+        - speed: Generate the fastest possible code
+        - speed_and_size: like "speed", but also perform transformations
+          aimed at reducing code size.
         "#,
-        vec!["default", "best", "fastest"],
+        vec!["none", "speed", "speed_and_size"],
     );
 
     settings.add_bool(

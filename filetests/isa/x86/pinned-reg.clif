@@ -2,7 +2,7 @@ test compile
 
 set enable_pinned_reg=true
 set use_pinned_reg_as_heap_base=true
-set opt_level=best
+set opt_level=speed_and_size
 
 target x86_64
 

@@ -1,6 +1,6 @@
 ; binary emission of 64-bit code.
 test binemit
-set opt_level=best
+set opt_level=speed_and_size
 set is_pic
 target x86_64 haswell
 

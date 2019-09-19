@@ -1,5 +1,5 @@
 test binemit
-set opt_level=best
+set opt_level=speed_and_size
 set avoid_div_traps
 set baldrdash_prologue_words=3
 set allones_funcaddrs
