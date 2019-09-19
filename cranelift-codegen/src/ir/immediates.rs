@@ -809,7 +809,7 @@ impl Ieee32 {
 
     /// Create a new `Ieee32` representing the number `x`.
     pub fn with_float(x: f32) -> Self {
-        Ieee32(unsafe { mem::transmute(x) })
+        Ieee32(x.to_bits())
     }
 
     /// Get the bitwise representation.
@@ -882,7 +882,7 @@ impl Ieee64 {
 
     /// Create a new `Ieee64` representing the number `x`.
     pub fn with_float(x: f64) -> Self {
-        Ieee64(unsafe { mem::transmute(x) })
+        Ieee64(x.to_bits())
     }
 
     /// Get the bitwise representation.
