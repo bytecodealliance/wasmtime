@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-object"
-version = "0.43.0"
+version = "0.43.1"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/CraneStation/cranelift"
@@ -10,8 +10,8 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.43.0" }
-cranelift-module = { path = "../cranelift-module", version = "0.43.0" }
+cranelift-codegen = { path = "../cranelift-codegen", version = "0.43.1" }
+cranelift-module = { path = "../cranelift-module", version = "0.43.1" }
 object = { version = "0.14.0", default-features = false, features = ["write"] }
 target-lexicon = "0.8.1"
 
