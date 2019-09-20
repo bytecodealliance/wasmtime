@@ -13,7 +13,7 @@ doctest = false
 
 [dependencies]
 cranelift-codegen = "0.41.0"
-cranelift-native = "0.41.0"
+cranelift-native = "0.43.1"
 failure = "0.1.5"
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
 wasmtime-jit = { path = "../../wasmtime-jit" }
