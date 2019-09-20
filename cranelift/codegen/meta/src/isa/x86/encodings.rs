@@ -1989,7 +1989,7 @@ pub(crate) fn define(
 
         // Fill
         let bound_fill = fill.bind_vector_from_lane(ty, sse_vector_size);
-        e.enc_32_64(bound_fill, rec_fillSib32.opcodes(vec![0x0f, 0x10]));
+        e.enc_32_64(bound_fill, rec_ffillSib32.opcodes(vec![0x0f, 0x10]));
         let bound_regfill = regfill.bind_vector_from_lane(ty, sse_vector_size);
         e.enc_32_64(bound_regfill, rec_fregfill32.opcodes(vec![0x0f, 0x10]));
         let bound_fill_nop = fill_nop.bind_vector_from_lane(ty, sse_vector_size);
@@ -1997,7 +1997,6 @@ pub(crate) fn define(
 
         // Regmove
         let bound_regmove = regmove.bind_vector_from_lane(ty, sse_vector_size);
-        e.enc_32_64(bound_regmove.clone(), rec_rmov.opcodes(vec![0x0f, 0x28]));
         e.enc_32_64(bound_regmove, rec_frmov.opcodes(vec![0x0f, 0x28]));
 
         // Copy
