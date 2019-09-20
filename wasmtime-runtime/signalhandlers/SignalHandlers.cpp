@@ -408,6 +408,10 @@ HandleTrap(CONTEXT* context)
 {
     assert(sAlreadyHandlingTrap);
 
+    if (!CheckIfTrapAtAddress(ContextToPC(context))) {
+        return false;
+    }
+
     RecordTrap(ContextToPC(context));
 
     // Unwind calls longjmp, so it doesn't run the automatic

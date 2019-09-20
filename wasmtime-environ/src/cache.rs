@@ -1,5 +1,5 @@
 use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
-use crate::compilation::{Compilation, Relocations};
+use crate::compilation::{Compilation, Relocations, Traps};
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
 use core::hash::Hasher;
@@ -60,6 +60,7 @@ pub struct ModuleCacheData {
     address_transforms: ModuleAddressMap,
     value_ranges: ValueLabelsRanges,
     stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+    traps: Traps,
 }
 
 type ModuleCacheDataTupleType = (
@@ -68,6 +69,7 @@ type ModuleCacheDataTupleType = (
     ModuleAddressMap,
     ValueLabelsRanges,
     PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+    Traps,
 );
 
 struct Sha256Hasher(Sha256);
@@ -210,6 +212,7 @@ impl ModuleCacheData {
             address_transforms: data.2,
             value_ranges: data.3,
             stack_slots: data.4,
+            traps: data.5,
         }
     }
 
@@ -220,6 +223,7 @@ impl ModuleCacheData {
             self.address_transforms,
             self.value_ranges,
             self.stack_slots,
+            self.traps,
         )
     }
 }

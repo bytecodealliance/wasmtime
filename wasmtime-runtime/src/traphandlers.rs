@@ -1,9 +1,12 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
+use crate::trap_registry::get_trap_registry;
+use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
 use core::cell::Cell;
 use core::ptr;
+use cranelift_codegen::ir;
 use std::string::String;
 
 extern "C" {
@@ -16,8 +19,21 @@ extern "C" {
 }
 
 thread_local! {
-    static TRAP_PC: Cell<*const u8> = Cell::new(ptr::null());
+    static RECORDED_TRAP: Cell<Option<TrapDescription>> = Cell::new(None);
     static JMP_BUF: Cell<*const u8> = Cell::new(ptr::null());
+}
+
+/// Check if there is a trap at given PC
+#[doc(hidden)]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn CheckIfTrapAtAddress(_pc: *const u8) -> i8 {
+    // TODO: stack overflow can happen at any random time (i.e. in malloc() in memory.grow)
+    // and it's really hard to determine if the cause was stack overflow and if it happened
+    // in WebAssembly module.
+    // So, let's assume that any untrusted code called from WebAssembly doesn't trap.
+    // Then, if we have called some WebAssembly code, it means the trap is stack overflow.
+    JMP_BUF.with(|ptr| !ptr.get().is_null()) as i8
 }
 
 /// Record the Trap code and wasm bytecode offset in TLS somewhere
@@ -25,8 +41,22 @@ thread_local! {
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "C" fn RecordTrap(pc: *const u8) {
-    // TODO: Look up the wasm bytecode offset and trap code and record them instead.
-    TRAP_PC.with(|data| data.set(pc));
+    // TODO: please see explanation in CheckIfTrapAtAddress.
+    let registry = get_trap_registry();
+    let trap_desc = registry
+        .get_trap(pc as usize)
+        .unwrap_or_else(|| TrapDescription {
+            source_loc: ir::SourceLoc::default(),
+            trap_code: ir::TrapCode::StackOverflow,
+        });
+    RECORDED_TRAP.with(|data| {
+        assert_eq!(
+            data.get(),
+            None,
+            "Only one trap per thread can be recorded at a moment!"
+        );
+        data.set(Some(trap_desc))
+    });
 }
 
 #[doc(hidden)]
@@ -50,13 +80,17 @@ pub extern "C" fn LeaveScope(ptr: *const u8) {
     JMP_BUF.with(|buf| buf.set(ptr))
 }
 
-fn trap_message(_vmctx: *mut VMContext) -> String {
-    let pc = TRAP_PC.with(|data| data.replace(ptr::null()));
+fn trap_message() -> String {
+    let trap_desc = RECORDED_TRAP
+        .with(|data| data.replace(None))
+        .expect("trap_message must be called after trap occurred");
 
-    // TODO: Record trap metadata in the VMContext, and look up the
-    // pc to obtain the TrapCode and SourceLoc.
-
-    format!("wasm trap at {:?}", pc)
+    format!(
+        "wasm trap: code {:?}, source location: {}",
+        // todo print the error message from wast tests
+        trap_desc.trap_code,
+        trap_desc.source_loc,
+    )
 }
 
 /// Call the wasm function pointed to by `callee`. `values_vec` points to
@@ -69,7 +103,7 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
     values_vec: *mut u8,
 ) -> Result<(), String> {
     if WasmtimeCallTrampoline(vmctx as *mut u8, callee, values_vec) == 0 {
-        Err(trap_message(vmctx))
+        Err(trap_message())
     } else {
         Ok(())
     }
@@ -83,7 +117,7 @@ pub unsafe extern "C" fn wasmtime_call(
     callee: *const VMFunctionBody,
 ) -> Result<(), String> {
     if WasmtimeCall(vmctx as *mut u8, callee) == 0 {
-        Err(trap_message(vmctx))
+        Err(trap_message())
     } else {
         Ok(())
     }
