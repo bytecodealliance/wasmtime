@@ -1,7 +1,7 @@
 use super::config::tests::test_prolog;
 use super::*;
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::compilation::{CodeAndJTOffsets, Relocation, RelocationTarget};
+use crate::compilation::{CodeAndJTOffsets, Relocation, RelocationTarget, TrapInformation};
 use crate::module::{MemoryPlan, MemoryStyle, Module};
 use cranelift_codegen::{binemit, ir, isa, settings, ValueLocRange};
 use cranelift_entity::EntityRef;
@@ -330,11 +330,24 @@ fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
         })
         .collect();
 
+    let traps = (0..rng.gen_range(0, 0xd))
+        .map(|i| {
+            ((i..i + rng.gen_range(0, 4))
+                .map(|_| TrapInformation {
+                    code_offset: rng.gen(),
+                    source_loc: ir::SourceLoc::new(rng.gen()),
+                    trap_code: ir::TrapCode::StackOverflow,
+                })
+                .collect())
+        })
+        .collect();
+
     ModuleCacheData::from_tuple((
         Compilation::new(funcs),
         relocs,
         trans,
         value_ranges,
         stack_slots,
+        traps,
     ))
 }

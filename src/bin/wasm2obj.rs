@@ -233,7 +233,8 @@ fn handle_module(
         )
     };
 
-    let (compilation, relocations, address_transform, value_ranges, stack_slots) =
+    // TODO: use the traps information
+    let (compilation, relocations, address_transform, value_ranges, stack_slots, _traps) =
         Cranelift::compile_module(
             &module,
             lazy_function_body_inputs,

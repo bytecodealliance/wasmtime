@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 
+int8_t CheckIfTrapAtAddress(const uint8_t* pc);
 // Record the Trap code and wasm bytecode offset in TLS somewhere
 void RecordTrap(const uint8_t* pc);
 

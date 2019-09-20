@@ -6,6 +6,7 @@ use crate::address_map::{
 use crate::cache::{ModuleCacheData, ModuleCacheEntry};
 use crate::compilation::{
     CodeAndJTOffsets, Compilation, CompileError, Relocation, RelocationTarget, Relocations,
+    TrapInformation, Traps,
 };
 use crate::func_environ::{
     get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
@@ -103,6 +104,31 @@ impl RelocSink {
     }
 }
 
+struct TrapSink {
+    pub traps: Vec<TrapInformation>,
+}
+
+impl TrapSink {
+    fn new() -> Self {
+        Self { traps: Vec::new() }
+    }
+}
+
+impl binemit::TrapSink for TrapSink {
+    fn trap(
+        &mut self,
+        code_offset: binemit::CodeOffset,
+        source_loc: ir::SourceLoc,
+        trap_code: ir::TrapCode,
+    ) {
+        self.traps.push(TrapInformation {
+            code_offset,
+            source_loc,
+            trap_code,
+        });
+    }
+}
+
 fn get_function_address_map<'data>(
     context: &Context,
     data: &FunctionBodyData<'data>,
@@ -161,6 +187,7 @@ impl crate::compilation::Compiler for Cranelift {
             ModuleAddressMap,
             ValueLabelsRanges,
             PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+            Traps,
         ),
         CompileError,
     > {
@@ -180,6 +207,7 @@ impl crate::compilation::Compiler for Cranelift {
                 let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
                 let mut value_ranges = PrimaryMap::with_capacity(function_body_inputs.len());
                 let mut stack_slots = PrimaryMap::with_capacity(function_body_inputs.len());
+                let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
 
                 function_body_inputs
                     .into_iter()
@@ -207,7 +235,7 @@ impl crate::compilation::Compiler for Cranelift {
 
                         let mut code_buf: Vec<u8> = Vec::new();
                         let mut reloc_sink = RelocSink::new(func_index);
-                        let mut trap_sink = binemit::NullTrapSink {};
+                        let mut trap_sink = TrapSink::new();
                         let mut stackmap_sink = binemit::NullStackmapSink {};
                         context
                             .compile_and_emit(
@@ -247,12 +275,21 @@ impl crate::compilation::Compiler for Cranelift {
                             address_transform,
                             ranges,
                             stack_slots,
+                            trap_sink.traps,
                         ))
                     })
                     .collect::<Result<Vec<_>, CompileError>>()?
                     .into_iter()
                     .for_each(
-                        |(function, func_jt_offsets, relocs, address_transform, ranges, sss)| {
+                        |(
+                            function,
+                            func_jt_offsets,
+                            relocs,
+                            address_transform,
+                            ranges,
+                            sss,
+                            function_traps,
+                        )| {
                             functions.push(CodeAndJTOffsets {
                                 body: function,
                                 jt_offsets: func_jt_offsets,
@@ -263,6 +300,7 @@ impl crate::compilation::Compiler for Cranelift {
                             }
                             value_ranges.push(ranges.unwrap_or(std::collections::HashMap::new()));
                             stack_slots.push(sss);
+                            traps.push(function_traps);
                         },
                     );
 
@@ -274,6 +312,7 @@ impl crate::compilation::Compiler for Cranelift {
                     address_transforms,
                     value_ranges,
                     stack_slots,
+                    traps,
                 ));
                 cache_entry.update_data(&data);
                 data

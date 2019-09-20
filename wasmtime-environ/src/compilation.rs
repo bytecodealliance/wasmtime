@@ -129,6 +129,20 @@ pub enum RelocationTarget {
 /// Relocations to apply to function bodies.
 pub type Relocations = PrimaryMap<DefinedFuncIndex, Vec<Relocation>>;
 
+/// Information about trap.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct TrapInformation {
+    /// The offset of the trapping instruction in native code. It is relative to the beginning of the function.
+    pub code_offset: binemit::CodeOffset,
+    /// Location of trapping instruction in WebAssembly binary module.
+    pub source_loc: ir::SourceLoc,
+    /// Code of the trap.
+    pub trap_code: ir::TrapCode,
+}
+
+/// Information about traps associated with the functions where the traps are placed.
+pub type Traps = PrimaryMap<DefinedFuncIndex, Vec<TrapInformation>>;
+
 /// An error while compiling WebAssembly to machine code.
 #[derive(Fail, Debug)]
 pub enum CompileError {
@@ -156,6 +170,7 @@ pub trait Compiler {
             ModuleAddressMap,
             ValueLabelsRanges,
             PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+            Traps,
         ),
         CompileError,
     >;

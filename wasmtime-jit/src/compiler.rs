@@ -4,6 +4,7 @@ use super::HashMap;
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
 use crate::target_tunables::target_tunables;
+use core::convert::TryFrom;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::Context;
@@ -17,9 +18,12 @@ use std::vec::Vec;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::{
     Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, ModuleVmctxInfo,
-    Relocations, Tunables, VMOffsets,
+    Relocations, Traps, Tunables, VMOffsets,
 };
-use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
+use wasmtime_runtime::{
+    get_mut_trap_registry, InstantiationError, SignatureRegistry, TrapRegistrationGuard,
+    VMFunctionBody,
+};
 
 /// A WebAssembly code JIT compiler.
 ///
@@ -33,6 +37,7 @@ pub struct Compiler {
     isa: Box<dyn TargetIsa>,
 
     code_memory: CodeMemory,
+    trap_registration_guards: Vec<TrapRegistrationGuard>,
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
     signatures: SignatureRegistry,
 
@@ -46,10 +51,25 @@ impl Compiler {
         Self {
             isa,
             code_memory: CodeMemory::new(),
+            trap_registration_guards: Vec::new(),
             trampoline_park: HashMap::new(),
             signatures: SignatureRegistry::new(),
             fn_builder_ctx: FunctionBuilderContext::new(),
         }
+    }
+}
+
+impl Drop for Compiler {
+    fn drop(&mut self) {
+        // We must deregister traps before freeing the code memory.
+        // Otherwise, we have a race:
+        // - Compiler #1 dropped code memory, but hasn't deregistered the trap yet
+        // - Compiler #2 allocated code memory and tries to register a trap,
+        //   but the trap at certain address happens to be already registered,
+        //   since Compiler #1 hasn't deregistered it yet => assertion in trap registry fails.
+        // Having a custom drop implementation we are independent from the field order
+        // in the struct what reduces potential human error.
+        self.trap_registration_guards.clear();
     }
 }
 
@@ -84,7 +104,7 @@ impl Compiler {
         ),
         SetupError,
     > {
-        let (compilation, relocations, address_transform, value_ranges, stack_slots) =
+        let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
             DefaultCompiler::compile_module(
                 module,
                 function_body_inputs,
@@ -100,6 +120,12 @@ impl Compiler {
                     message
                 )))
             })?;
+
+        register_traps(
+            &allocated_functions,
+            &traps,
+            &mut self.trap_registration_guards,
+        );
 
         let dbg = if let Some(debug_data) = debug_data {
             let target_config = self.isa.frontend_config();
@@ -307,6 +333,24 @@ fn allocate_functions(
         result.push(fat_ptr);
     }
     Ok(result)
+}
+
+fn register_traps(
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    traps: &Traps,
+    trap_registration_guards: &mut Vec<TrapRegistrationGuard>,
+) {
+    let mut trap_registry = get_mut_trap_registry();
+    for (func_addr, func_traps) in allocated_functions.values().zip(traps.values()) {
+        for trap_desc in func_traps.iter() {
+            let func_addr = *func_addr as *const u8 as usize;
+            let offset = usize::try_from(trap_desc.code_offset).unwrap();
+            let trap_addr = func_addr + offset;
+            let guard =
+                trap_registry.register_trap(trap_addr, trap_desc.source_loc, trap_desc.trap_code);
+            trap_registration_guards.push(guard);
+        }
+    }
 }
 
 /// We don't expect trampoline compilation to produce any relocations, so
