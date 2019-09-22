@@ -80,7 +80,7 @@ pub enum WasmError {
 /// on the arguments to this macro.
 #[macro_export]
 macro_rules! wasm_unsupported {
-    ($($arg:tt)*) => { return Err($crate::environ::WasmError::Unsupported(format!($($arg)*))) }
+    ($($arg:tt)*) => { $crate::environ::WasmError::Unsupported(format!($($arg)*)) }
 }
 
 impl From<BinaryReaderError> for WasmError {
