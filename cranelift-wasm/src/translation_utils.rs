@@ -124,7 +124,7 @@ pub fn type_to_type(ty: wasmparser::Type) -> WasmResult<ir::Type> {
         wasmparser::Type::F32 => Ok(ir::types::F32),
         wasmparser::Type::F64 => Ok(ir::types::F64),
         wasmparser::Type::V128 => Ok(ir::types::I8X16),
-        ty => wasm_unsupported!("type_to_type: wasm type {:?}", ty),
+        ty => Err(wasm_unsupported!("type_to_type: wasm type {:?}", ty)),
     }
 }
 
@@ -138,7 +138,10 @@ pub fn tabletype_to_type(ty: wasmparser::Type) -> WasmResult<Option<ir::Type>> {
         wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
         wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
         wasmparser::Type::AnyFunc => Ok(None),
-        ty => wasm_unsupported!("tabletype_to_type: table wasm type {:?}", ty),
+        ty => Err(wasm_unsupported!(
+            "tabletype_to_type: table wasm type {:?}",
+            ty
+        )),
     }
 }
 
@@ -152,12 +155,12 @@ pub fn blocktype_to_type(ty_or_ft: wasmparser::TypeOrFuncType) -> WasmResult<Opt
             wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
             wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
             wasmparser::Type::EmptyBlockType => Ok(None),
-            ty => wasm_unsupported!("blocktype_to_type: type {:?}", ty),
+            ty => Err(wasm_unsupported!("blocktype_to_type: type {:?}", ty)),
         },
-        wasmparser::TypeOrFuncType::FuncType(_) => wasm_unsupported!(
+        wasmparser::TypeOrFuncType::FuncType(_) => Err(wasm_unsupported!(
             "blocktype_to_type: multi-value block signature {:?}",
             ty_or_ft
-        ),
+        )),
     }
 }
 
@@ -181,10 +184,10 @@ pub fn num_return_values(ty: wasmparser::TypeOrFuncType) -> WasmResult<usize> {
             | wasmparser::Type::I64
             | wasmparser::Type::F64
             | wasmparser::Type::V128 => Ok(1),
-            ty => wasm_unsupported!("unsupported return value type {:?}", ty),
+            ty => Err(wasm_unsupported!("unsupported return value type {:?}", ty)),
         },
         wasmparser::TypeOrFuncType::FuncType(_) => {
-            wasm_unsupported!("multi-value block signature {:?}", ty);
+            Err(wasm_unsupported!("multi-value block signature {:?}", ty))
         }
     }
 }

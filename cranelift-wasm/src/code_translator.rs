@@ -907,7 +907,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64AtomicRmw16UCmpxchg { .. }
         | Operator::I64AtomicRmw32UCmpxchg { .. }
         | Operator::Fence { .. } => {
-            wasm_unsupported!("proposed thread operator {:?}", op);
+            return Err(wasm_unsupported!("proposed thread operator {:?}", op));
         }
         Operator::MemoryInit { .. }
         | Operator::DataDrop { .. }
@@ -920,7 +920,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::TableSet { .. }
         | Operator::TableGrow { .. }
         | Operator::TableSize { .. } => {
-            wasm_unsupported!("proposed bulk memory operator {:?}", op);
+            return Err(wasm_unsupported!("proposed bulk memory operator {:?}", op));
         }
         Operator::V128Const { value } => {
             let handle = builder.func.dfg.constants.insert(value.bytes().to_vec());
@@ -1109,7 +1109,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8LoadSplat { .. }
         | Operator::I32x4LoadSplat { .. }
         | Operator::I64x2LoadSplat { .. } => {
-            wasm_unsupported!("proposed SIMD operator {:?}", op);
+            return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
     };
     Ok(())
