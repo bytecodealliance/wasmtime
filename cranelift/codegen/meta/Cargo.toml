@@ -9,6 +9,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
+cranelift-codegen-shared = { path = "../shared", version = "0.43.1" }
 cranelift-entity = { path = "../../cranelift-entity", version = "0.43.1", default-features = false }
 
 [badges]
