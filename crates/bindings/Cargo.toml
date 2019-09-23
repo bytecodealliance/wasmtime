@@ -1,0 +1,17 @@
+[package]
+name = "wasmtime-bindings"
+version = "0.2.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Debug utils for WebAsssembly code in Cranelift"
+repository = "https://github.com/CraneStation/wasmtime"
+documentation = "https://docs.rs/wasmtime-bindings-macro/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm", "debuginfo"]
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+cranelift-codegen = "0.49.0"
+wasmtime-runtime = { path = "../runtime" }
+target-lexicon = { version = "0.9.0", default-features = false }

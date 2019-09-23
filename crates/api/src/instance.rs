@@ -1,8 +1,9 @@
 use crate::context::Context;
 use crate::externals::Extern;
-use crate::module::Module;
+use crate::module::{Module, ModuleCodeSource};
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
+use crate::trampoline::create_handle_for_trait;
 use crate::{HashMap, HashSet};
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
@@ -70,8 +71,26 @@ impl Instance {
             .zip(externs.iter())
             .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
             .collect::<Vec<_>>();
-        let (mut instance_handle, contexts) =
-            instantiate_in_context(module.borrow().binary(), imports, context, exports)?;
+
+        let (mut instance_handle, contexts) = match module.borrow().source() {
+            ModuleCodeSource::Binary(binary) => {
+                instantiate_in_context(binary, imports, context, exports)?
+            }
+            ModuleCodeSource::Factory {
+                state_builder,
+                addresses,
+            } => {
+                let exports = module
+                    .borrow()
+                    .exports()
+                    .iter()
+                    .map(|e| e.clone())
+                    .zip(addresses.clone().into_iter())
+                    .collect::<Vec<_>>();
+                let handle = create_handle_for_trait(&**state_builder, &exports, externs, &store)?;
+                (handle, HashSet::new())
+            }
+        };
 
         let exports = {
             let module = module.borrow();

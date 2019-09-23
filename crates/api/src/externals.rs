@@ -1,4 +1,4 @@
-use crate::callable::{Callable, NativeCallable, WasmtimeFn, WrappedCallable};
+use crate::callable::{Callable, NativeCallable, RawCallable, WasmtimeFn, WrappedCallable};
 use crate::r#ref::{AnyRef, HostRef};
 use crate::runtime::Store;
 use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
@@ -133,6 +133,23 @@ impl Func {
             callable,
             r#type,
         }
+    }
+
+    pub fn from_raw(
+        store: &HostRef<Store>,
+        address: *const u8,
+        signature: cranelift_codegen::ir::Signature,
+    ) -> Self {
+        let callable = RawCallable::new(address, signature.clone(), store);
+        let ty = FuncType::from_cranelift_signature(signature);
+        Func::from_wrapped(store, ty, Rc::new(callable))
+    }
+
+    pub fn raw_parts(&self) -> (wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export) {
+        (
+            self.callable.wasmtime_handle().clone(),
+            self.callable.wasmtime_export().clone(),
+        )
     }
 
     pub fn r#type(&self) -> &FuncType {

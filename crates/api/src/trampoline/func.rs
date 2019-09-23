@@ -2,7 +2,7 @@
 
 use super::create_handle::create_handle;
 use crate::r#ref::HostRef;
-use crate::{Callable, FuncType, Store, Trap, Val};
+use crate::{Callable, ExportType, Extern, ExternType, FuncType, Store, Trap, Val};
 use alloc::{boxed::Box, rc::Rc, string::ToString, vec::Vec};
 use anyhow::Result;
 use core::cmp;
@@ -240,6 +240,63 @@ pub fn create_handle_with_function(
         finished_functions,
         Box::new(trampoline_state),
     )
+}
+
+pub fn create_handle_for_wrapped(
+    address: *const VMFunctionBody,
+    sig: ir::Signature,
+    store: &HostRef<Store>,
+) -> Result<InstanceHandle> {
+    let mut module = Module::new();
+    let mut finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody> =
+        PrimaryMap::new();
+
+    let sig_id = module.signatures.push(sig.clone());
+    let func_id = module.functions.push(sig_id);
+    module
+        .exports
+        .insert("wrapped".to_string(), Export::Function(func_id));
+
+    finished_functions.push(address);
+
+    create_handle(
+        module,
+        Some(store.borrow_mut()),
+        finished_functions,
+        Box::new(()),
+    )
+}
+
+pub fn create_handle_for_trait(
+    state_builder: &dyn crate::module::HandleStateBuilder,
+    exports: &[(ExportType, *const wasmtime_runtime::VMFunctionBody)],
+    externs: &[Extern],
+    store: &HostRef<Store>,
+) -> Result<InstanceHandle> {
+    let mut module = Module::new();
+    let mut finished_functions: PrimaryMap<
+        DefinedFuncIndex,
+        *const wasmtime_runtime::VMFunctionBody,
+    > = PrimaryMap::new();
+
+    for (e, address) in exports {
+        let f = if let ExternType::ExternFunc(f) = e.r#type() {
+            f
+        } else {
+            panic!();
+        };
+        let sig_id = module.signatures.push(f.get_cranelift_signature().clone());
+        let func_id = module.functions.push(sig_id);
+        module
+            .exports
+            .insert(e.name().to_string(), Export::Function(func_id));
+
+        finished_functions.push(*address);
+    }
+
+    let state = state_builder.build_state(externs);
+
+    create_handle(module, Some(store.borrow_mut()), finished_functions, state)
 }
 
 /// We don't expect trampoline compilation to produce any relocations, so

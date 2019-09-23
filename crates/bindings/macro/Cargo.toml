@@ -1,0 +1,23 @@
+[package]
+name = "wasmtime-bindings-macro"
+version = "0.2.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Debug utils for WebAsssembly code in Cranelift"
+repository = "https://github.com/CraneStation/wasmtime"
+documentation = "https://docs.rs/wasmtime-bindings-macro/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm", "debuginfo"]
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0.2"
+syn = "1.0.5"
+proc-macro2 = "1.0.3"
+
+[features]
+default = ["syn/full", "syn/extra-traits"]

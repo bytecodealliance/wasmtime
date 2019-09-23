@@ -6,7 +6,7 @@ mod global;
 mod memory;
 mod table;
 
-use self::func::create_handle_with_function;
+use self::func::{create_handle_for_wrapped, create_handle_with_function};
 use self::global::create_global;
 use self::memory::create_handle_with_memory;
 use self::table::create_handle_with_table;
@@ -26,6 +26,18 @@ pub fn generate_func_export(
     let export = instance.lookup("trampoline").expect("trampoline export");
     Ok((instance, export))
 }
+
+pub fn wrap_func_export(
+    address: *const wasmtime_runtime::VMFunctionBody,
+    sig: cranelift_codegen::ir::Signature,
+    store: &HostRef<Store>,
+) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
+    let mut instance = create_handle_for_wrapped(address, sig, store)?;
+    let export = instance.lookup("wrapped").expect("wrapped export");
+    Ok((instance, export))
+}
+
+pub use func::create_handle_for_trait;
 
 pub fn generate_global_export(
     gt: &GlobalType,

@@ -1,6 +1,6 @@
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
-use crate::trampoline::generate_func_export;
+use crate::trampoline::{generate_func_export, wrap_func_export};
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
@@ -143,6 +143,36 @@ impl NativeCallable {
 impl WrappedCallable for NativeCallable {
     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
         self.callable.call(params, results)
+    }
+    fn wasmtime_handle(&self) -> &InstanceHandle {
+        &self.instance
+    }
+    fn wasmtime_export(&self) -> &Export {
+        &self.export
+    }
+}
+
+pub struct RawCallable {
+    instance: InstanceHandle,
+    export: Export,
+}
+
+impl RawCallable {
+    pub fn new(address: *const u8, signature: ir::Signature, store: &HostRef<Store>) -> Self {
+        let (instance, export) = wrap_func_export(
+            address as *const wasmtime_runtime::VMFunctionBody,
+            signature,
+            store,
+        )
+        .expect("wrapped export");
+        RawCallable { instance, export }
+    }
+}
+
+impl WrappedCallable for RawCallable {
+    fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+        // TODO similar to WasmtimeFn::call
+        unimplemented!();
     }
     fn wasmtime_handle(&self) -> &InstanceHandle {
         &self.instance

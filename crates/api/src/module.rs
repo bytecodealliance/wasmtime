@@ -1,3 +1,4 @@
+use crate::externals::Extern;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::types::{
@@ -6,6 +7,9 @@ use crate::types::{
 };
 use alloc::{boxed::Box, string::String, vec::Vec};
 use anyhow::Result;
+use std::any::Any;
+use std::rc::Rc;
+
 use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
@@ -170,12 +174,25 @@ fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[Ex
     Ok((imports.into_boxed_slice(), exports.into_boxed_slice()))
 }
 
+pub trait HandleStateBuilder {
+    fn build_state(&self, imports: &[Extern]) -> Box<dyn Any>;
+}
+
 #[derive(Clone)]
 pub struct Module {
     store: HostRef<Store>,
-    binary: Box<[u8]>,
+    source: ModuleCodeSource,
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
+}
+
+#[derive(Clone)]
+pub(crate) enum ModuleCodeSource {
+    Binary(Box<[u8]>),
+    Factory {
+        state_builder: Rc<dyn HandleStateBuilder>,
+        addresses: Vec<*const wasmtime_runtime::VMFunctionBody>,
+    },
 }
 
 impl Module {
@@ -183,13 +200,13 @@ impl Module {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(Module {
             store: store.clone(),
-            binary: binary.into(),
+            source: ModuleCodeSource::Binary(binary.into()),
             imports,
             exports,
         })
     }
-    pub(crate) fn binary(&self) -> &[u8] {
-        &self.binary
+    pub(crate) fn source(&self) -> &ModuleCodeSource {
+        &self.source
     }
     pub fn validate(_store: &Store, binary: &[u8]) -> bool {
         validate(binary, None).is_ok()
@@ -199,5 +216,30 @@ impl Module {
     }
     pub fn exports(&self) -> &[ExportType] {
         &self.exports
+    }
+    pub fn from_raw_parts(
+        store: &HostRef<Store>,
+        exports: &[(String, cranelift_codegen::ir::Signature, *const u8)],
+        state_builder: Rc<dyn HandleStateBuilder>,
+    ) -> Result<Module> {
+        let (exports, addresses): (Vec<_>, Vec<_>) = exports
+            .iter()
+            .map(|(name, sig, address)| {
+                let ft = FuncType::from_cranelift_signature(sig.clone());
+                (
+                    ExportType::new(name.clone().into(), ExternType::ExternFunc(ft)),
+                    *address as *const wasmtime_runtime::VMFunctionBody,
+                )
+            })
+            .unzip();
+        Ok(Module {
+            store: store.clone(),
+            source: ModuleCodeSource::Factory {
+                state_builder,
+                addresses,
+            },
+            imports: Box::new([]),
+            exports: exports.into_boxed_slice(),
+        })
     }
 }
