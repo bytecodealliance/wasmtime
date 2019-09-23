@@ -10,8 +10,6 @@
 //! dead code warning.
 
 use crate::ir;
-use crate::ir::condcodes::IntCC;
-use std::string::ToString;
 
 /// Check that an integer value is zero.
 #[allow(dead_code)]
@@ -85,14 +83,6 @@ pub fn has_length_of(value_list: &ir::ValueList, num: usize, func: &ir::Function
     value_list.len(&func.dfg.value_lists) == num
 }
 
-#[allow(dead_code)]
-pub fn match_condition_code_to_str(
-    condition_code: IntCC,
-    stringified_condition_code: &str,
-) -> bool {
-    condition_code.to_string().eq(stringified_condition_code)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,11 +135,5 @@ mod tests {
     fn is_all_ones() {
         assert!(!is_all_ones_128_bit(&[0; 16]));
         assert!(is_all_ones_128_bit(&[0xff; 16]));
-    }
-
-    #[test]
-    fn condition_code() {
-        assert!(match_condition_code_to_str(IntCC::Equal, "eq"));
-        assert!(!match_condition_code_to_str(IntCC::Equal, "ne"));
     }
 }
