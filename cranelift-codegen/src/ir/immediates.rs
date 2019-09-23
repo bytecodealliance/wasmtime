@@ -6,7 +6,6 @@
 
 use core::fmt::{self, Display, Formatter};
 use core::iter::FromIterator;
-use core::mem;
 use core::str::{from_utf8, FromStr};
 use core::{i32, u32};
 use std::vec::Vec;
@@ -931,6 +930,7 @@ impl IntoBytes for Ieee64 {
 mod tests {
     use super::*;
     use core::fmt::Display;
+    use core::mem;
     use core::str::FromStr;
     use core::{f32, f64};
     use std::string::ToString;
