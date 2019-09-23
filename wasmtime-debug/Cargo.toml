@@ -14,12 +14,12 @@ edition = "2018"
 [dependencies]
 gimli = "0.19.0"
 wasmparser = { version = "0.36.0" }
-cranelift-codegen = { version = "0.41.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.41.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.41.0", features = ["enable-serde"] }
-faerie = "0.10.1"
+cranelift-codegen = { version = "0.43.1", features = ["enable-serde"] }
+cranelift-entity = { version = "0.43.1", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.43.1", features = ["enable-serde"] }
+faerie = "0.11.0"
 wasmtime-environ = { path = "../wasmtime-environ", default-features = false }
-target-lexicon = { version = "0.4.0", default-features = false }
+target-lexicon = { version = "0.8.1", default-features = false }
 failure = { version = "0.1.3", default-features = false }
 failure_derive = { version = "0.1.3", default-features = false }
 

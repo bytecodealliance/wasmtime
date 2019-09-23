@@ -14,10 +14,10 @@ wasmtime-runtime = { path = "../wasmtime-runtime" }
 wasmtime-environ = { path = "../wasmtime-environ" }
 wasmtime-jit = { path = "../wasmtime-jit" }
 wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "8ea7a983d8b1364e5f62d2adf0e74b3b8db1c9b3"}
-cranelift-codegen = { version = "0.41.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.41.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.41.0", features = ["enable-serde"] }
-target-lexicon = "0.4.0"
+cranelift-codegen = { version = "0.43.1", features = ["enable-serde"] }
+cranelift-entity = { version = "0.43.1", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.43.1", features = ["enable-serde"] }
+target-lexicon = "0.8.1"
 log = { version = "0.4.8", default-features = false }
 
 [badges]

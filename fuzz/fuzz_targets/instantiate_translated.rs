@@ -21,5 +21,12 @@ fuzz_target!(|data: &[u8]| {
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     let mut compiler = Compiler::new(isa);
     let mut imports_resolver = NullResolver {};
-    let _instance = instantiate(&mut compiler, &wasm, &mut imports_resolver).unwrap();
+    let _instance = instantiate(
+        &mut compiler,
+        &wasm,
+        &mut imports_resolver,
+        Default::default(),
+        true,
+    )
+    .unwrap();
 });
