@@ -15,7 +15,7 @@ version="0.43.1"
 #
 # The main Cargo.toml in the top-level directory is the cranelift-tools crate which we don't publish.
 echo "Updating crate versions to $version"
-for crate in . cranelift-* cranelift-codegen/meta; do
+for crate in . cranelift-* cranelift-codegen/shared cranelift-codegen/meta; do
     # Update the version number of this crate to $version.
     sed -i.bk -e "s/^version = .*/version = \"$version\"/" \
         "$crate/Cargo.toml"
@@ -38,7 +38,7 @@ echo git tag v$version
 echo git push
 echo git push origin v$version
 for crate in \
-    entity bforest codegen/meta codegen frontend native \
+    entity bforest codegen/shared codegen/meta codegen frontend native \
     preopt \
     reader wasm module \
     faerie umbrella simplejit
