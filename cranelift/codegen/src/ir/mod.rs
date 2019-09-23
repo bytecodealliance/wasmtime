@@ -26,7 +26,9 @@ mod valueloc;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
-pub use crate::ir::builder::{InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase};
+pub use crate::ir::builder::{
+    InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase, ReplaceBuilder,
+};
 pub use crate::ir::constant::{ConstantData, ConstantOffset, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::entities::{
