@@ -12,16 +12,16 @@ name = "_wasmtime"
 crate-type = ["cdylib"]
 
 [dependencies]
-cranelift-codegen = "0.41.0"
-cranelift-native = "0.41.0"
-cranelift-entity = "0.41.0"
-cranelift-wasm = "0.41.0"
-cranelift-frontend = "0.41.0"
+cranelift-codegen = "0.43.1"
+cranelift-native = "0.43.1"
+cranelift-entity = "0.43.1"
+cranelift-wasm = "0.43.1"
+cranelift-frontend = "0.43.1"
 wasmtime-environ = { path = "../../wasmtime-environ" }
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
 wasmtime-jit = { path = "../../wasmtime-jit" }
 wasmtime-runtime = { path = "../../wasmtime-runtime" }
-target-lexicon = { version = "0.4.0", default-features = false }
+target-lexicon = { version = "0.8.1", default-features = false }
 failure = "0.1"
 region = "2.0.0"
 wasmparser = "0.38.0"

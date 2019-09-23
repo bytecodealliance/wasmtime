@@ -1260,6 +1260,7 @@ fn initialize_globals(instance: &mut Instance) {
             GlobalInit::I64Const(x) => *unsafe { (*to).as_i64_mut() } = x,
             GlobalInit::F32Const(x) => *unsafe { (*to).as_f32_bits_mut() } = x,
             GlobalInit::F64Const(x) => *unsafe { (*to).as_f64_bits_mut() } = x,
+            GlobalInit::V128Const(x) => *unsafe { (*to).as_u128_bits_mut() } = x.0,
             GlobalInit::GetGlobal(x) => {
                 let from = if let Some(def_x) = module.defined_global_index(x) {
                     instance.global_mut(def_x)
