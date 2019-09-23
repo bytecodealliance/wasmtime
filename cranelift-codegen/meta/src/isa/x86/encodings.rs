@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+use cranelift_codegen_shared::condcodes::IntCC;
 use std::collections::HashMap;
 
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
@@ -2071,7 +2072,7 @@ pub(crate) fn define(
             let instruction = icmp.bind_vector_from_lane(ty, sse_vector_size);
             let f_int_compare = formats.get(formats.by_name("IntCompare"));
             let has_eq_condition_code =
-                InstructionPredicate::new_has_condition_code(f_int_compare, "eq", "cond");
+                InstructionPredicate::new_has_condition_code(f_int_compare, IntCC::Equal, "cond");
             let template = rec_icscc_fpr.nonrex().opcodes(opcodes.clone());
             e.enc_32_64_func(instruction, template, |builder| {
                 let builder = builder.inst_predicate(has_eq_condition_code);

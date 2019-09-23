@@ -13,6 +13,7 @@ use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::types::{LaneType, ReferenceType, ValueType, VectorType};
 use crate::cdsl::typevar::TypeVar;
+use cranelift_codegen_shared::condcodes::IntCC;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct OpcodeNumber(u32);
@@ -630,7 +631,7 @@ pub enum FormatPredicateKind {
     IsColocatedData,
 
     /// Does the operation have a specific condition code?
-    HasConditionCode(&'static str),
+    HasConditionCode(IntCC),
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -718,7 +719,7 @@ impl FormatPredicateNode {
                 format!("predicates::is_colocated_data({}, func)", self.member_name)
             }
             FormatPredicateKind::HasConditionCode(code) => format!(
-                "predicates::match_condition_code_to_str({}, \"{}\")",
+                "predicates::is_equal({}, IntCC::{:?})",
                 self.member_name, code
             ),
         }
@@ -1006,7 +1007,7 @@ impl InstructionPredicate {
 
     pub fn new_has_condition_code(
         format: &InstructionFormat,
-        condition_code: &'static str,
+        condition_code: IntCC,
         field_name: &'static str,
     ) -> InstructionPredicateNode {
         InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
