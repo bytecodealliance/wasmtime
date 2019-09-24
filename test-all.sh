@@ -52,6 +52,7 @@ banner "Rust unit tests"
 #RUST_BACKTRACE=1 cargo test --all
 RUST_BACKTRACE=1 cargo test \
   --package wasmtime \
+  --package wasmtime-api \
   --package wasmtime-wasi \
   --package wasmtime-wast \
   --package wasmtime-debug \

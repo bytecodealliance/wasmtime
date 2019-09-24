@@ -56,9 +56,6 @@ impl WrappedCallable for WasmtimeFn {
             _ => panic!("unexpected export type in Callable"),
         };
 
-        let mut store = self.store.borrow_mut();
-
-        let context = store.context();
         let value_size = mem::size_of::<u64>();
         let mut values_vec: Vec<u64> = vec![0; max(params.len(), results.len())];
 
@@ -78,7 +75,10 @@ impl WrappedCallable for WasmtimeFn {
         }
 
         // Get the trampoline to call for this function.
-        let exec_code_buf = context
+        let exec_code_buf = self
+            .store
+            .borrow_mut()
+            .context()
             .compiler()
             .get_published_trampoline(body, &signature, value_size)
             .map_err(|_| HostRef::new(Trap::fake()))?; //was ActionError::Setup)?;
