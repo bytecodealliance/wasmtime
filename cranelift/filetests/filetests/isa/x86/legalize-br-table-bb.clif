@@ -1,4 +1,5 @@
 test compile
+set opt_level=speed_and_size
 target x86_64
 feature "basic-blocks"
 ; regex: V=v\d+
