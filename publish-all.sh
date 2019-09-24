@@ -9,7 +9,7 @@ topdir=$(dirname "$0")
 cd "$topdir"
 
 # All the cranelift-* crates have the same version number
-version="0.43.1"
+version="0.44.0"
 
 # Update all of the Cargo.toml files.
 #
