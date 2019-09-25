@@ -86,11 +86,28 @@ fn trap_message() -> String {
         .expect("trap_message must be called after trap occurred");
 
     format!(
-        "wasm trap: code {:?}, source location: {}",
-        // todo print the error message from wast tests
-        trap_desc.trap_code,
+        "wasm trap: {}, source location: {}",
+        trap_code_to_expected_string(trap_desc.trap_code),
         trap_desc.source_loc,
     )
+}
+
+fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
+    use ir::TrapCode::*;
+    match trap_code {
+        StackOverflow => "call stack exhausted".to_string(),
+        HeapOutOfBounds => "out of bounds memory access".to_string(),
+        TableOutOfBounds => "undefined element".to_string(),
+        OutOfBounds => "out of bounds".to_string(), // Note: not covered by the test suite
+        IndirectCallToNull => "uninitialized element".to_string(),
+        BadSignature => "indirect call type mismatch".to_string(),
+        IntegerOverflow => "integer overflow".to_string(),
+        IntegerDivisionByZero => "integer divide by zero".to_string(),
+        BadConversionToInteger => "invalid conversion to integer".to_string(),
+        UnreachableCodeReached => "unreachable".to_string(),
+        Interrupt => "interrupt".to_string(), // Note: not covered by the test suite
+        User(x) => format!("user trap {}", x), // Note: not covered by the test suite
+    }
 }
 
 /// Call the wasm function pointed to by `callee`. `values_vec` points to

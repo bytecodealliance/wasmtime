@@ -128,6 +128,10 @@ fn main() {
     let mut flag_builder = settings::builder();
     let mut features: Features = Default::default();
 
+    // There are two possible traps for division, and this way
+    // we get the proper one if code traps.
+    flag_builder.enable("avoid_div_traps").unwrap();
+
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
         flag_builder.enable("enable_verifier").unwrap();

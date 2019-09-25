@@ -258,6 +258,10 @@ fn rmain() -> Result<(), Error> {
     let mut flag_builder = settings::builder();
     let mut features: Features = Default::default();
 
+    // There are two possible traps for division, and this way
+    // we get the proper one if code traps.
+    flag_builder.enable("avoid_div_traps")?;
+
     // Enable/disable producing of debug info.
     let debug_info = args.flag_g;
 
