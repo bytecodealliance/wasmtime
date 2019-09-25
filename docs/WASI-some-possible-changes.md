@@ -74,8 +74,8 @@ pair.
 
 ## Remove `fd_allocate`?
 
-Darwin doesn't implement `fd_allocate`, despite it being a in POSIX
-since 2001. So we don't currently know any way to implement `fd_allocate`
+Darwin doesn't implement `posix_fallocate` (similar to `fd_allocate`), despite it being
+in POSIX since 2001. So we don't currently know any way to implement `fd_allocate`
 on Darwin that's safe from race conditions. Should we remove it from the API?
 
 ## Redesign `fstflags_t`
