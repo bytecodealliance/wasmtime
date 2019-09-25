@@ -11,7 +11,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = "0.43.1"
+cranelift-codegen = "0.44.0"
 failure = "0.1"
 walrus = "0.11.0"
 wasmparser = "0.36.0"
