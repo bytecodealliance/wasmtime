@@ -259,6 +259,7 @@ declare_vec!(wasm_importtype_vec_t, *mut wasm_importtype_t);
 pub struct wasm_exporttype_t {
     ty: ExportType,
     name_cache: Option<wasm_name_t>,
+    type_cache: Option<wasm_externtype_t>,
 }
 
 declare_vec!(wasm_exporttype_vec_t, *mut wasm_exporttype_t);
@@ -711,6 +712,7 @@ pub unsafe extern "C" fn wasm_module_new(
         .map(|e| wasm_exporttype_t {
             ty: e.clone(),
             name_cache: None,
+            type_cache: None,
         })
         .collect::<Vec<_>>();
     let module = Box::new(wasm_module_t {
@@ -903,11 +905,14 @@ pub unsafe extern "C" fn wasm_exporttype_name(et: *const wasm_exporttype_t) -> *
 pub unsafe extern "C" fn wasm_exporttype_type(
     et: *const wasm_exporttype_t,
 ) -> *const wasm_externtype_t {
-    let ty = Box::new(wasm_externtype_t {
-        ty: (*et).ty.r#type().clone(),
-        cache: wasm_externtype_t_type_cache::Empty,
-    });
-    Box::into_raw(ty)
+    if (*et).type_cache.is_none() {
+        let et = (et as *mut wasm_exporttype_t).as_mut().unwrap();
+        et.type_cache = Some(wasm_externtype_t {
+            ty: (*et).ty.r#type().clone(),
+            cache: wasm_externtype_t_type_cache::Empty,
+        });
+    }
+    (*et).type_cache.as_ref().unwrap()
 }
 
 #[no_mangle]
