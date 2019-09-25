@@ -316,6 +316,10 @@ fn rmain() -> Result<(), Error> {
         "wasi_unstable".to_owned(),
         Instance::from_handle(store.clone(), wasi)?,
     );
+    module_registry.insert(
+        "wasi_unstable_preview0".to_owned(),
+        Instance::from_handle(store.clone(), wasi)?,
+    );
 
     // Load the preload wasm modules.
     for filename in &args.flag_preload {

@@ -22,7 +22,10 @@ void handleFiles(void) {
         __builtin_trap();
 
     EM_ASM(" \
-        const imports = { wasi_unstable: WASIPolyfill }; \
+        const imports = {\
+            wasi_unstable: WASIPolyfill, \
+            wasi_unstable_preview0: WASIPolyfill \
+        }; \
         let file = document.getElementById('input').files[0]; \
         let file_with_mime_type = file.slice(0, file.size, 'application/wasm'); \
         let response = new Response(file_with_mime_type); \
