@@ -500,6 +500,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         } => {
             translate_load(*offset, ir::Opcode::Load, F64, builder, state, environ)?;
         }
+        Operator::V128Load {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            translate_load(*offset, ir::Opcode::Load, I8X16, builder, state, environ)?;
+        }
         /****************************** Store instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cranelift.
          * The memory base address is provided by the environment.
@@ -538,6 +543,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             memarg: MemoryImmediate { flags: _, offset },
         } => {
             translate_store(*offset, ir::Opcode::Istore32, builder, state, environ)?;
+        }
+        Operator::V128Store {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            translate_store(*offset, ir::Opcode::Store, builder, state, environ)?;
         }
         /****************************** Nullary Operators ************************************/
         Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, i64::from(*value))),
@@ -990,9 +1000,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = state.pop2();
             state.push1(builder.ins().iadd(a, b))
         }
-        Operator::V128Load { .. }
-        | Operator::V128Store { .. }
-        | Operator::I8x16Eq
+        Operator::I8x16Eq
         | Operator::I8x16Ne
         | Operator::I8x16LtS
         | Operator::I8x16LtU
