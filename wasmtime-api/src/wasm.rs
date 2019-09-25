@@ -815,6 +815,7 @@ fn from_valtype(ty: &ValType) -> wasm_valkind_t {
         ValType::F64 => 3,
         ValType::AnyRef => 128,
         ValType::FuncRef => 129,
+        _ => panic!("wasm_valkind_t has no known conversion for {:?}", ty),
     }
 }
 
