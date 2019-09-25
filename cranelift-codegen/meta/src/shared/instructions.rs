@@ -1586,8 +1586,6 @@ pub(crate) fn define(
     let x = &operand("x", Int);
     let y = &operand("y", Int);
 
-    // TODO(ryzokuken): Add documentation for unsigned overflow.
-    // TODO(ryzokuken): Add documentation for signed overflow.
     ig.push(
         Inst::new(
             "icmp",
@@ -1597,16 +1595,21 @@ pub(crate) fn define(
         The condition code determines if the operands are interpreted as signed
         or unsigned integers.
 
-        ====== ======== =========
-        Signed Unsigned Condition
-        ====== ======== =========
-        eq     eq       Equal
-        ne     ne       Not equal
-        slt    ult      Less than
-        sge    uge      Greater than or equal
-        sgt    ugt      Greater than
-        sle    ule      Less than or equal
-        ====== ======== =========
+        | Signed | Unsigned | Condition             |
+        |--------|----------|-----------------------|
+        | eq     | eq       | Equal                 |
+        | ne     | ne       | Not equal             |
+        | slt    | ult      | Less than             |
+        | sge    | uge      | Greater than or equal |
+        | sgt    | ugt      | Greater than          |
+        | sle    | ule      | Less than or equal    |
+        | of     | *        | Overflow              |
+        | nof    | *        | No Overflow           |
+
+        \* The unsigned version of overflow conditions have ISA-specific
+        semantics and thus have been kept as methods on the TargetIsa trait as
+        [unsigned_add_overflow_condition][isa::TargetIsa::unsigned_add_overflow_condition] and
+        [unsigned_sub_overflow_condition][isa::TargetIsa::unsigned_sub_overflow_condition].
 
         When this instruction compares integer vectors, it returns a boolean
         vector of lane-wise comparisons.
