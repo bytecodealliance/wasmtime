@@ -124,28 +124,6 @@ impl ControlStackFrame {
     }
 }
 
-/// VisibleTranslationState wraps a TranslationState with an interface appropriate for users
-/// outside this `cranelift-wasm`.
-///
-/// VisibleTranslationState is currently very minimal (only exposing reachability information), but
-/// is anticipated to grow in the future, with functions to inspect or modify the wasm operand
-/// stack for example.
-pub struct VisibleTranslationState<'a> {
-    state: &'a TranslationState,
-}
-
-impl<'a> VisibleTranslationState<'a> {
-    /// Build a VisibleTranslationState from an existing TranslationState
-    pub fn new(state: &'a TranslationState) -> Self {
-        VisibleTranslationState { state }
-    }
-
-    /// True if the current translation state expresses reachable code, false if it is unreachable
-    pub fn reachable(&self) -> bool {
-        self.state.reachable
-    }
-}
-
 /// Contains information passed along during the translation and that records:
 ///
 /// - The current value and control stacks.
@@ -154,12 +132,12 @@ impl<'a> VisibleTranslationState<'a> {
 pub struct TranslationState {
     /// A stack of values corresponding to the active values in the input wasm function at this
     /// point.
-    pub stack: Vec<Value>,
+    pub(crate) stack: Vec<Value>,
     /// A stack of active control flow operations at this point in the input wasm function.
-    pub control_stack: Vec<ControlStackFrame>,
+    pub(crate) control_stack: Vec<ControlStackFrame>,
     /// Is the current translation state still reachable? This is false when translating operators
     /// like End, Return, or Unreachable.
-    pub reachable: bool,
+    pub(crate) reachable: bool,
 
     // Map of global variables that have already been created by `FuncEnvironment::make_global`.
     globals: HashMap<GlobalIndex, GlobalVariable>,
@@ -181,9 +159,18 @@ pub struct TranslationState {
     functions: HashMap<FuncIndex, (ir::FuncRef, usize)>,
 }
 
+// Public methods that are exposed to non-`cranelift_wasm` API consumers.
+impl TranslationState {
+    /// True if the current translation state expresses reachable code, false if it is unreachable.
+    #[inline]
+    pub fn reachable(&self) -> bool {
+        self.reachable
+    }
+}
+
 impl TranslationState {
     /// Construct a new, empty, `TranslationState`
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             stack: Vec::new(),
             control_stack: Vec::new(),
@@ -211,7 +198,7 @@ impl TranslationState {
     ///
     /// This resets the state to containing only a single block representing the whole function.
     /// The exit block is the last block in the function which will contain the return instruction.
-    pub fn initialize(&mut self, sig: &ir::Signature, exit_block: Ebb) {
+    pub(crate) fn initialize(&mut self, sig: &ir::Signature, exit_block: Ebb) {
         self.clear();
         self.push_block(
             exit_block,
@@ -223,34 +210,34 @@ impl TranslationState {
     }
 
     /// Push a value.
-    pub fn push1(&mut self, val: Value) {
+    pub(crate) fn push1(&mut self, val: Value) {
         self.stack.push(val);
     }
 
     /// Push multiple values.
-    pub fn pushn(&mut self, vals: &[Value]) {
+    pub(crate) fn pushn(&mut self, vals: &[Value]) {
         self.stack.extend_from_slice(vals);
     }
 
     /// Pop one value.
-    pub fn pop1(&mut self) -> Value {
+    pub(crate) fn pop1(&mut self) -> Value {
         self.stack.pop().unwrap()
     }
 
     /// Peek at the top of the stack without popping it.
-    pub fn peek1(&self) -> Value {
+    pub(crate) fn peek1(&self) -> Value {
         *self.stack.last().unwrap()
     }
 
     /// Pop two values. Return them in the order they were pushed.
-    pub fn pop2(&mut self) -> (Value, Value) {
+    pub(crate) fn pop2(&mut self) -> (Value, Value) {
         let v2 = self.stack.pop().unwrap();
         let v1 = self.stack.pop().unwrap();
         (v1, v2)
     }
 
     /// Pop three values. Return them in the order they were pushed.
-    pub fn pop3(&mut self) -> (Value, Value, Value) {
+    pub(crate) fn pop3(&mut self) -> (Value, Value, Value) {
         let v3 = self.stack.pop().unwrap();
         let v2 = self.stack.pop().unwrap();
         let v1 = self.stack.pop().unwrap();
@@ -260,18 +247,18 @@ impl TranslationState {
     /// Pop the top `n` values on the stack.
     ///
     /// The popped values are not returned. Use `peekn` to look at them before popping.
-    pub fn popn(&mut self, n: usize) {
+    pub(crate) fn popn(&mut self, n: usize) {
         let new_len = self.stack.len() - n;
         self.stack.truncate(new_len);
     }
 
     /// Peek at the top `n` values on the stack in the order they were pushed.
-    pub fn peekn(&self, n: usize) -> &[Value] {
+    pub(crate) fn peekn(&self, n: usize) -> &[Value] {
         &self.stack[self.stack.len() - n..]
     }
 
     /// Push a block on the control stack.
-    pub fn push_block(&mut self, following_code: Ebb, num_result_types: usize) {
+    pub(crate) fn push_block(&mut self, following_code: Ebb, num_result_types: usize) {
         self.control_stack.push(ControlStackFrame::Block {
             destination: following_code,
             original_stack_size: self.stack.len(),
@@ -281,7 +268,7 @@ impl TranslationState {
     }
 
     /// Push a loop on the control stack.
-    pub fn push_loop(&mut self, header: Ebb, following_code: Ebb, num_result_types: usize) {
+    pub(crate) fn push_loop(&mut self, header: Ebb, following_code: Ebb, num_result_types: usize) {
         self.control_stack.push(ControlStackFrame::Loop {
             header,
             destination: following_code,
@@ -291,7 +278,12 @@ impl TranslationState {
     }
 
     /// Push an if on the control stack.
-    pub fn push_if(&mut self, branch_inst: Inst, following_code: Ebb, num_result_types: usize) {
+    pub(crate) fn push_if(
+        &mut self,
+        branch_inst: Inst,
+        following_code: Ebb,
+        num_result_types: usize,
+    ) {
         self.control_stack.push(ControlStackFrame::If {
             branch_inst,
             destination: following_code,
@@ -308,7 +300,7 @@ impl TranslationState {
     /// Get the `GlobalVariable` reference that should be used to access the global variable
     /// `index`. Create the reference if necessary.
     /// Also return the WebAssembly type of the global.
-    pub fn get_global<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_global<FE: FuncEnvironment + ?Sized>(
         &mut self,
         func: &mut ir::Function,
         index: u32,
@@ -323,7 +315,7 @@ impl TranslationState {
 
     /// Get the `Heap` reference that should be used to access linear memory `index`.
     /// Create the reference if necessary.
-    pub fn get_heap<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_heap<FE: FuncEnvironment + ?Sized>(
         &mut self,
         func: &mut ir::Function,
         index: u32,
@@ -338,7 +330,7 @@ impl TranslationState {
 
     /// Get the `Table` reference that should be used to access table `index`.
     /// Create the reference if necessary.
-    pub fn get_table<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_table<FE: FuncEnvironment + ?Sized>(
         &mut self,
         func: &mut ir::Function,
         index: u32,
@@ -355,7 +347,7 @@ impl TranslationState {
     /// `index`. Also return the number of WebAssembly arguments in the signature.
     ///
     /// Create the signature if necessary.
-    pub fn get_indirect_sig<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_indirect_sig<FE: FuncEnvironment + ?Sized>(
         &mut self,
         func: &mut ir::Function,
         index: u32,
@@ -375,7 +367,7 @@ impl TranslationState {
     /// `index`. Also return the number of WebAssembly arguments in the signature.
     ///
     /// Create the function reference if necessary.
-    pub fn get_direct_func<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_direct_func<FE: FuncEnvironment + ?Sized>(
         &mut self,
         func: &mut ir::Function,
         index: u32,
