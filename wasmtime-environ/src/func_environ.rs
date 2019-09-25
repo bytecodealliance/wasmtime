@@ -569,6 +569,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
 
+        // Dereference table_entry_addr to get the function address.
+        let mem_flags = ir::MemFlags::trusted();
+        let func_addr = pos.ins().load(
+            pointer_type,
+            mem_flags,
+            table_entry_addr,
+            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
+        );
+
+        // Check whether `func_addr` is null.
+        pos.ins().trapz(func_addr, ir::TrapCode::IndirectCallToNull);
+
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
@@ -598,15 +610,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 pos.ins().trapz(cmp, ir::TrapCode::BadSignature);
             }
         }
-
-        // Dereference table_entry_addr to get the function address.
-        let mem_flags = ir::MemFlags::trusted();
-        let func_addr = pos.ins().load(
-            pointer_type,
-            mem_flags,
-            table_entry_addr,
-            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
-        );
 
         let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
 

@@ -203,6 +203,11 @@ fn handle_module(
         }),
     };
     let mut flag_builder = settings::builder();
+
+    // There are two possible traps for division, and this way
+    // we get the proper one if code traps.
+    flag_builder.enable("avoid_div_traps").unwrap();
+
     if enable_simd {
         flag_builder.enable("enable_simd").unwrap();
     }

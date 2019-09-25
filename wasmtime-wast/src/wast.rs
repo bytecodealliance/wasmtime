@@ -289,10 +289,16 @@ impl WastContext {
                         ActionOutcome::Trapped {
                             message: trap_message,
                         } => {
-                            println!(
-                                "{}:{}: TODO: Check the assert_trap message: expected {}, got {}",
-                                filename, line, message, trap_message
-                            );
+                            if !trap_message.contains(&message) {
+                                return Err(WastFileError {
+                                    filename: filename.to_string(),
+                                    line,
+                                    error: WastError::Assert(format!(
+                                        "expected {}, got {}",
+                                        message, trap_message
+                                    )),
+                                });
+                            }
                         }
                     }
                 }
@@ -315,10 +321,16 @@ impl WastContext {
                         ActionOutcome::Trapped {
                             message: trap_message,
                         } => {
-                            println!(
-                                "{}:{}: TODO: Check the assert_exhaustion message: expected {}, got {}",
-                                filename, line, message, trap_message
-                            );
+                            if !trap_message.contains(&message) {
+                                return Err(WastFileError {
+                                    filename: filename.to_string(),
+                                    line,
+                                    error: WastError::Assert(format!(
+                                        "expected exhaustion with {}, got {}",
+                                        message, trap_message
+                                    )),
+                                });
+                            }
                         }
                     }
                 }
