@@ -4,7 +4,7 @@
 [submodule "lightbeam"]
 	path = lightbeam
 	url = https://github.com/CraneStation/lightbeam.git
-	branch = master
+	branch = rustfmt
 [submodule "wasmtime-api/c-examples/wasm-c-api"]
 	path = wasmtime-api/c-examples/wasm-c-api
 	url = https://github.com/WebAssembly/wasm-c-api
