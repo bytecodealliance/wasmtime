@@ -13,8 +13,8 @@ edition = "2018"
 [dependencies]
 cranelift-codegen = "0.44.0"
 failure = "0.1"
-walrus = "0.11.0"
-wasmparser = "0.36.0"
-wasm-webidl-bindings = "0.4.0"
+walrus = "0.12.0"
+wasmparser = "0.39.1"
+wasm-webidl-bindings = "0.5.0"
 wasmtime-jit = { path = '../wasmtime-jit' }
 wasmtime-runtime = { path = '../wasmtime-runtime' }

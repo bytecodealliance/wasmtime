@@ -189,7 +189,7 @@ impl Module {
         &self.binary
     }
     pub fn validate(_store: &Store, binary: &[u8]) -> bool {
-        validate(binary, None)
+        validate(binary, None).is_ok()
     }
     pub fn imports(&self) -> &[ImportType] {
         &self.imports

@@ -37,7 +37,7 @@ wabt = "0.9"
 libc = "0.2.60"
 errno = "0.2.4"
 rayon = "1.1"
-wasm-webidl-bindings = "0.4"
+wasm-webidl-bindings = "0.5"
 
 # build.rs tests whether to enable a workaround for the libc strtof function.
 [target.'cfg(target_os = "linux")'.build-dependencies]
