@@ -1,5 +1,5 @@
 use cranelift_codegen::ir::types::{Type, I32, I64};
-use log::trace;
+use log::{error, trace};
 use wasi_common::{hostcalls, wasm32, WasiCtx};
 use wasmtime_runtime::{Export, VMContext};
 
@@ -76,10 +76,10 @@ impl AbiRet for () {
 
 fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasm32::__wasi_errno_t> {
     unsafe {
-        vmctx.host_state().downcast_mut::<WasiCtx>().ok_or_else(|| {
-            panic!("no host state named WasiCtx available");
-            wasm32::__WASI_EINVAL
-        })
+        vmctx
+            .host_state()
+            .downcast_mut::<WasiCtx>()
+            .ok_or_else(|| panic!("no host state named WasiCtx available"))
     }
 }
 
