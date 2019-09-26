@@ -4,7 +4,6 @@ use crate::{
     SetupError,
 };
 use cranelift_codegen::isa::TargetIsa;
-use std::borrow::ToOwned;
 use std::boxed::Box;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -116,12 +115,8 @@ impl Context {
     fn validate(&mut self, data: &[u8]) -> Result<(), String> {
         // TODO: Fix Cranelift to be able to perform validation itself, rather
         // than calling into wasmparser ourselves here.
-        if validate(data, Some(self.features.clone().into())) {
-            Ok(())
-        } else {
-            // TODO: Work with wasmparser to get better error messages.
-            Err("module did not validate".to_owned())
-        }
+        validate(data, Some(self.features.clone().into()))
+            .map_err(|e| format!("module did not validate: {}", e.to_string()))
     }
 
     fn instantiate(&mut self, data: &[u8]) -> Result<InstanceHandle, SetupError> {
