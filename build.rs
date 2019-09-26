@@ -37,6 +37,12 @@ fn main() {
                 strategy,
             )
             .expect("generating tests");
+
+            let multi_value_suite = Path::new("spec_testsuite")
+                .join("proposals")
+                .join("multi-value");
+            let multi_value_suite = multi_value_suite.display().to_string();
+            test_directory(&mut out, &multi_value_suite, strategy).expect("generating tests");
         } else {
             println!("cargo:warning=The spec testsuite is disabled. To enable, run `git submodule update --remote`.");
         }
@@ -94,7 +100,8 @@ fn start_test_module(out: &mut File, testsuite: &str) -> io::Result<()> {
             .expect("testsuite filename should have a stem")
             .to_str()
             .expect("testsuite filename should be representable as a string")
-            .replace("-", "_"),
+            .replace("-", "_")
+            .replace("/", "_")
     )?;
     writeln!(
         out,
@@ -131,7 +138,8 @@ fn write_testsuite_tests(
     )?;
     writeln!(
         out,
-        "            let features = Features {{ simd: true, ..Default::default() }};"
+        "            let features = Features {{ simd: true, multi_value: {}, ..Default::default() }};",
+        testsuite.contains("multi-value")
     )?;
     writeln!(
         out,
@@ -159,18 +167,32 @@ fn write_testsuite_tests(
 
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
+    let is_multi_value = testsuite.ends_with("multi-value");
     match strategy {
         #[cfg(feature = "lightbeam")]
         "Lightbeam" => match (testsuite, name) {
             ("single_file_spec_test", "simd_const") => return true,
+            (_, _) if is_multi_value => return true,
             _ => (),
         },
-        "Cranelift" => {}
+        "Cranelift" => match (testsuite, name) {
+            // We don't currently support more return values than available
+            // registers, and this contains a function with many, many more
+            // return values than that.
+            (_, "func") if is_multi_value => return true,
+            _ => {}
+        },
         _ => panic!("unrecognized strategy"),
     }
 
     if cfg!(windows) {
         return match (testsuite, name) {
+            // Currently, our multi-value support only works with however many
+            // extra return registers we have available, and windows' fastcall
+            // ABI only has a single return register, so we need to wait on full
+            // multi-value support in Cranelift.
+            (_, _) if is_multi_value => true,
+
             ("spec_testsuite", "address") => true,
             ("spec_testsuite", "align") => true,
             ("spec_testsuite", "call") => true,
