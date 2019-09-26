@@ -9,6 +9,7 @@ use crate::shared::Definitions as SharedDefinitions;
 mod encodings;
 mod instructions;
 mod legalize;
+mod opcodes;
 mod recipes;
 mod registers;
 mod settings;

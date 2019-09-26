@@ -10,6 +10,8 @@ use crate::cdsl::regs::IsaRegs;
 use crate::cdsl::settings::SettingGroup;
 use crate::shared::Definitions as SharedDefinitions;
 
+use crate::isa::x86::opcodes;
+
 /// Helper data structure to create recipes and template recipes.
 /// It contains all the recipes and recipe templates that might be used in the encodings crate of
 /// this same directory.
@@ -186,7 +188,7 @@ pub struct Template<'builder> {
     /// Value of the RRR bits (between 0 and 0b111).
     rrr_bits: u16,
     /// Opcode bytes.
-    op_bytes: Vec<u8>,
+    op_bytes: &'static [u8],
 }
 
 impl<'builder> Template<'builder> {
@@ -204,7 +206,7 @@ impl<'builder> Template<'builder> {
             rex: false,
             w_bit: 0,
             rrr_bits: 0,
-            op_bytes: Vec::new(),
+            op_bytes: &opcodes::EMPTY,
         }
     }
 
@@ -226,7 +228,7 @@ impl<'builder> Template<'builder> {
     }
 
     // Copy setters.
-    pub fn opcodes(&self, op_bytes: Vec<u8>) -> Self {
+    pub fn opcodes(&self, op_bytes: &'static [u8]) -> Self {
         assert!(!op_bytes.is_empty());
         let mut copy = self.clone();
         copy.op_bytes = op_bytes;
