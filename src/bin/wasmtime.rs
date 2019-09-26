@@ -314,7 +314,7 @@ fn rmain() -> Result<(), Error> {
 
     module_registry.insert(
         "wasi_unstable".to_owned(),
-        Instance::from_handle(store.clone(), wasi)?,
+        Instance::from_handle(store.clone(), wasi.clone())?,
     );
     module_registry.insert(
         "wasi_unstable_preview0".to_owned(),
