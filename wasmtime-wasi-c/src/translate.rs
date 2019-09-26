@@ -26,19 +26,19 @@ unsafe fn decode_ptr(
                 let last = match (ptr as usize).checked_add(len - 1) {
                     Some(sum) => sum,
                     None => {
-                        println!("!!! overflow");
+                        debug!("overflow in decode_ptr");
                         return Err(host::__WASI_EFAULT as host::__wasi_errno_t);
                     }
                 };
                 // Check for out of bounds.
                 if last >= (*definition).current_length {
-                    println!("!!! out of bounds");
+                    debug!("out of bounds in decode_ptr");
                     return Err(host::__WASI_EFAULT as host::__wasi_errno_t);
                 }
             }
             // Check alignment.
             if (ptr as usize) % align != 0 {
-                println!("!!! bad alignment: {} % {}", ptr, align);
+                debug!("bad alignment in decode_ptr: {} % {}", ptr, align);
                 return Err(host::__WASI_EINVAL as host::__wasi_errno_t);
             }
             // Ok, translate the address.
@@ -47,8 +47,8 @@ unsafe fn decode_ptr(
         // No export named "memory", or the export isn't a memory.
         // FIXME: Is EINVAL the best code here?
         x => {
-            println!(
-                "!!! no export named \"memory\", or the export isn't a mem: {:?}",
+            error!(
+                "no export named \"memory\", or the export isn't a mem: {:?}",
                 x
             );
             Err(host::__WASI_EINVAL as host::__wasi_errno_t)
