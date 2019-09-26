@@ -137,10 +137,11 @@ pub struct FuncType {
 
 impl FuncType {
     pub fn new(params: Box<[ValType]>, results: Box<[ValType]>) -> FuncType {
-        let signature: ir::Signature = {
-            use cranelift_codegen::ir::*;
-            use cranelift_codegen::isa::CallConv;
-
+        use cranelift_codegen::ir::*;
+        use cranelift_codegen::isa::CallConv;
+        use target_lexicon::HOST;
+        let call_conv = CallConv::triple_default(&HOST);
+        let signature: Signature = {
             let mut params = params
                 .iter()
                 .map(|p| AbiParam::new(p.get_cranelift_type()))
@@ -154,7 +155,7 @@ impl FuncType {
             Signature {
                 params,
                 returns,
-                call_conv: CallConv::SystemV,
+                call_conv,
             }
         };
         FuncType {
