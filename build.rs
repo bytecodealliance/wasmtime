@@ -167,6 +167,7 @@ fn ignore(testsuite: &str, name: &str) -> bool {
         {
             return match (testsuite, name) {
                 ("spec_testsuite", "const") => true,
+                ("single_file_spec_test", "simd_const") => true,
                 (_, _) => false,
             };
         }
