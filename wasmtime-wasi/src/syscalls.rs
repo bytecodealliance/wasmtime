@@ -77,7 +77,7 @@ impl AbiRet for () {
 fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasm32::__wasi_errno_t> {
     unsafe {
         vmctx.host_state().downcast_mut::<WasiCtx>().ok_or_else(|| {
-            println!("!!! no host state named WasiCtx available");
+            panic!("no host state named WasiCtx available");
             wasm32::__WASI_EINVAL
         })
     }
@@ -95,8 +95,8 @@ fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasm32::__wasi_errno_t
                 (*definition).current_length,
             )),
             x => {
-                println!(
-                    "!!! no export named \"memory\", or the export isn't a mem: {:?}",
+                error!(
+                    "no export named \"memory\", or the export isn't a mem: {:?}",
                     x
                 );
                 Err(wasm32::__WASI_EINVAL)
