@@ -11,10 +11,10 @@ edition = "2018"
 default-run = "wasmtime"
 
 [dependencies]
-cranelift-codegen = { version = "0.44.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.44.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.44.0", features = ["enable-serde"] }
-cranelift-native = "0.44.0"
+cranelift-codegen = { version = "0.46.1", features = ["enable-serde"] }
+cranelift-entity = { version = "0.46.1", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.46.1", features = ["enable-serde"] }
+cranelift-native = "0.46.1"
 wasmtime-api = { path = "wasmtime-api" }
 wasmtime-debug = { path = "wasmtime-debug" }
 wasmtime-environ = { path = "wasmtime-environ" }

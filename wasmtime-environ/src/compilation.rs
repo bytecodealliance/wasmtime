@@ -7,7 +7,7 @@ use crate::module_environ::FunctionBodyData;
 use alloc::vec::Vec;
 use cranelift_codegen::{binemit, ir, isa, CodegenError};
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, ModuleTranslationState, WasmError};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
@@ -164,6 +164,7 @@ pub trait Compiler {
     /// Compile a parsed module with the given `TargetIsa`.
     fn compile_module<'data, 'module>(
         module: &'module module::Module,
+        module_translation: &ModuleTranslationState,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,

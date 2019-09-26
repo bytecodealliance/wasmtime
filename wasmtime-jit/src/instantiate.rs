@@ -80,6 +80,7 @@ impl<'data> RawCompiledModule<'data> {
 
         let (allocated_functions, jt_offsets, relocations, dbg_image) = compiler.compile(
             &translation.module,
+            translation.module_translation.as_ref().unwrap(),
             translation.function_body_inputs,
             debug_data,
         )?;

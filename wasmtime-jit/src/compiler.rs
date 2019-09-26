@@ -14,7 +14,7 @@ use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_wasm::{DefinedFuncIndex, DefinedMemoryIndex};
+use cranelift_wasm::{DefinedFuncIndex, DefinedMemoryIndex, ModuleTranslationState};
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::{
     Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, ModuleVmctxInfo,
@@ -104,6 +104,7 @@ impl Compiler {
     pub(crate) fn compile<'data>(
         &mut self,
         module: &Module,
+        module_translation: &ModuleTranslationState,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         debug_data: Option<DebugInfoData>,
     ) -> Result<
@@ -122,6 +123,7 @@ impl Compiler {
                 CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
                     wasmtime_environ::cranelift::Cranelift::compile_module(
                         module,
+                        module_translation,
                         function_body_inputs,
                         &*self.isa,
                         debug_data.is_some(),

@@ -20,6 +20,7 @@ impl crate::compilation::Compiler for Lightbeam {
     /// associated relocations.
     fn compile_module<'data, 'module>(
         module: &'module Module,
+        module_translation: &ModuleTranslationState,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         // TODO
