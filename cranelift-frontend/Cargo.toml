@@ -14,13 +14,13 @@ edition = "2018"
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.44.0", default-features = false }
 target-lexicon = "0.8.1"
 log = { version = "0.4.6", default-features = false }
-hashmap_core = { version = "0.1.9", optional = true }
+hashbrown = { version = "0.6", optional = true }
 smallvec = { version = "0.6.10" }
 
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]
-core = ["hashmap_core", "cranelift-codegen/core"]
+core = ["hashbrown", "cranelift-codegen/core"]
 
 # Temporary feature that enforces basic block semantics.
 basic-blocks = ["cranelift-codegen/basic-blocks"]

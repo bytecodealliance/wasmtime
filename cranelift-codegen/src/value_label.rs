@@ -1,11 +1,12 @@
 use crate::ir::{Function, SourceLoc, Value, ValueLabel, ValueLabelAssignments, ValueLoc};
 use crate::isa::TargetIsa;
 use crate::regalloc::{Context, RegDiversions};
-use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
-use std::iter::Iterator;
-use std::ops::Bound::*;
-use std::ops::Deref;
+use crate::HashMap;
+use core::cmp::Ordering;
+use core::iter::Iterator;
+use core::ops::Bound::*;
+use core::ops::Deref;
+use std::collections::BTreeMap;
 use std::vec::Vec;
 
 #[cfg(feature = "enable-serde")]

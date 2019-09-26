@@ -8,6 +8,11 @@ use crate::fx::FxHashMap;
 use core::hash::Hash;
 use core::mem;
 
+#[cfg(not(feature = "std"))]
+use crate::fx::FxHasher;
+#[cfg(not(feature = "std"))]
+type Hasher = core::hash::BuildHasherDefault<FxHasher>;
+
 struct Val<K, V> {
     value: V,
     next_key: Option<K>,
@@ -16,7 +21,10 @@ struct Val<K, V> {
 
 /// A view into an occupied entry in a `ScopedHashMap`. It is part of the `Entry` enum.
 pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
+    #[cfg(feature = "std")]
     entry: super::hash_map::OccupiedEntry<'a, K, Val<K, V>>,
+    #[cfg(not(feature = "std"))]
+    entry: super::hash_map::OccupiedEntry<'a, K, Val<K, V>, Hasher>,
 }
 
 impl<'a, K, V> OccupiedEntry<'a, K, V> {
@@ -28,12 +36,15 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
 
 /// A view into a vacant entry in a `ScopedHashMap`. It is part of the `Entry` enum.
 pub struct VacantEntry<'a, K: 'a, V: 'a> {
+    #[cfg(feature = "std")]
     entry: super::hash_map::VacantEntry<'a, K, Val<K, V>>,
+    #[cfg(not(feature = "std"))]
+    entry: super::hash_map::VacantEntry<'a, K, Val<K, V>, Hasher>,
     next_key: Option<K>,
     depth: usize,
 }
 
-impl<'a, K, V> VacantEntry<'a, K, V> {
+impl<'a, K: Hash, V> VacantEntry<'a, K, V> {
     /// Sets the value of the entry with the `VacantEntry`'s key.
     pub fn insert(self, value: V) {
         self.entry.insert(Val {

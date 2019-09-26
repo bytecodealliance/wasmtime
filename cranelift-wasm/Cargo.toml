@@ -15,7 +15,7 @@ wasmparser = { version = "0.39.1", default-features = false }
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.44.0", default-features = false }
 cranelift-entity = { path = "../cranelift-entity", version = "0.44.0", default-features = false }
 cranelift-frontend = { path = "../cranelift-frontend", version = "0.44.0", default-features = false }
-hashmap_core = { version = "0.1.9", optional = true }
+hashbrown = { version = "0.6", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 log = { version = "0.4.6", default-features = false }
@@ -28,7 +28,7 @@ target-lexicon = "0.8.1"
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std"]
-core = ["hashmap_core", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
+core = ["hashbrown", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
 enable-serde = ["serde"]
 
 # Temporary feature that enforces basic block semantics.

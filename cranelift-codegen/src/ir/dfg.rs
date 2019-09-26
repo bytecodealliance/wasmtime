@@ -13,12 +13,12 @@ use crate::ir::{
 use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
+use crate::HashMap;
 use core::fmt;
 use core::iter;
 use core::mem;
 use core::ops::{Index, IndexMut};
 use core::u16;
-use std::collections::HashMap;
 use std::vec::Vec;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as

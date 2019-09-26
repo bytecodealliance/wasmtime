@@ -50,7 +50,7 @@ extern crate alloc as std;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashmap_core::{map as hash_map, HashMap, HashSet};
+use hashbrown::{hash_map, HashMap, HashSet};
 #[cfg(feature = "std")]
 use std::collections::{hash_map, HashMap, HashSet};
 

@@ -99,7 +99,7 @@ impl<'a> MemoryCodeSink<'a> {
         unsafe {
             #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut T, x);
-            self.offset += std::mem::size_of::<T>() as isize;
+            self.offset += core::mem::size_of::<T>() as isize;
         }
     }
 }
