@@ -96,6 +96,32 @@ impl CondCode for IntCC {
 }
 
 impl IntCC {
+    /// Get the corresponding IntCC with the equal component removed.
+    /// For conditions without a zero component, this is a no-op.
+    pub fn without_equal(self) -> Self {
+        use self::IntCC::*;
+        match self {
+            SignedGreaterThan | SignedGreaterThanOrEqual => SignedGreaterThan,
+            SignedLessThan | SignedLessThanOrEqual => SignedLessThan,
+            UnsignedGreaterThan | UnsignedGreaterThanOrEqual => UnsignedGreaterThan,
+            UnsignedLessThan | UnsignedLessThanOrEqual => UnsignedLessThan,
+            _ => self,
+        }
+    }
+
+    /// Get the corresponding IntCC with the signed component removed.
+    /// For conditions without a signed component, this is a no-op.
+    pub fn unsigned(self) -> Self {
+        use self::IntCC::*;
+        match self {
+            SignedGreaterThan | UnsignedGreaterThan => UnsignedGreaterThan,
+            SignedGreaterThanOrEqual | UnsignedGreaterThanOrEqual => UnsignedGreaterThanOrEqual,
+            SignedLessThan | UnsignedLessThan => UnsignedLessThan,
+            SignedLessThanOrEqual | UnsignedLessThanOrEqual => UnsignedLessThanOrEqual,
+            _ => self,
+        }
+    }
+
     /// Get the corresponding string condition code for the IntCC object.
     pub fn to_static_str(self) -> &'static str {
         use self::IntCC::*;
