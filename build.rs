@@ -76,11 +76,7 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
     if ignore(testsuite, stemstr) {
         writeln!(out, "    #[ignore]")?;
     }
-    writeln!(
-        out,
-        "    fn {}() {{",
-        avoid_keywords(&stemstr.replace("-", "_"))
-    )?;
+    writeln!(out, "    fn r#{}() {{", &stemstr.replace("-", "_"))?;
     writeln!(out, "        let isa = native_isa();")?;
     writeln!(out, "        let compiler = Compiler::new(isa);")?;
     writeln!(
@@ -105,18 +101,6 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
     writeln!(out, "    }}")?;
     writeln!(out)?;
     Ok(())
-}
-
-/// Rename tests which have the same name as Rust keywords.
-fn avoid_keywords(name: &str) -> &str {
-    match name {
-        "if" => "if_",
-        "loop" => "loop_",
-        "type" => "type_",
-        "const" => "const_",
-        "return" => "return_",
-        other => other,
-    }
 }
 
 /// Ignore tests that aren't supported yet.
