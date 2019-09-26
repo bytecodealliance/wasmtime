@@ -250,6 +250,8 @@ pub type wasm_externkind_t = u8;
 #[derive(Clone)]
 pub struct wasm_importtype_t {
     ty: ImportType,
+    module_cache: Option<wasm_name_t>,
+    name_cache: Option<wasm_name_t>,
 }
 
 declare_vec!(wasm_importtype_vec_t, *mut wasm_importtype_t);
@@ -704,7 +706,11 @@ pub unsafe extern "C" fn wasm_module_new(
     let imports = module
         .imports()
         .iter()
-        .map(|i| wasm_importtype_t { ty: i.clone() })
+        .map(|i| wasm_importtype_t {
+            ty: i.clone(),
+            module_cache: None,
+            name_cache: None,
+        })
         .collect::<Vec<_>>();
     let exports = module
         .exports()
@@ -740,6 +746,24 @@ pub unsafe extern "C" fn wasm_store_new(engine: *mut wasm_engine_t) -> *mut wasm
 #[no_mangle]
 pub unsafe extern "C" fn wasm_valtype_vec_new_empty(out: *mut wasm_valtype_vec_t) {
     (*out).set_uninitialized(0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_valtype_vec_new(
+    out: *mut wasm_valtype_vec_t,
+    size: usize,
+    data: *const *mut wasm_valtype_t,
+) {
+    let slice = slice::from_raw_parts(data, size);
+    (*out).set_from_slice(slice);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_valtype_vec_new_uninitialized(
+    out: *mut wasm_valtype_vec_t,
+    size: usize,
+) {
+    (*out).set_uninitialized(size);
 }
 
 #[no_mangle]
@@ -800,16 +824,6 @@ pub unsafe extern "C" fn wasm_valtype_new(kind: wasm_valkind_t) -> *mut wasm_val
         ty: into_valtype(kind),
     });
     Box::into_raw(ty)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasm_valtype_vec_new(
-    out: *mut wasm_valtype_vec_t,
-    size: usize,
-    data: *const *mut wasm_valtype_t,
-) {
-    let slice = slice::from_raw_parts(data, size);
-    (*out).set_from_slice(slice);
 }
 
 #[no_mangle]
@@ -890,6 +904,42 @@ pub unsafe extern "C" fn wasm_trap_origin(_trap: *const wasm_trap_t) -> *mut was
 #[no_mangle]
 pub unsafe extern "C" fn wasm_trap_trace(_trap: *const wasm_trap_t, out: *mut wasm_frame_vec_t) {
     (*out).set_uninitialized(0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_importtype_module(
+    it: *const wasm_importtype_t,
+) -> *const wasm_name_t {
+    if (*it).module_cache.is_none() {
+        let it = (it as *mut wasm_importtype_t).as_mut().unwrap();
+        it.module_cache = Some(wasm_name_t::from_name(&it.ty.module()));
+    }
+    (*it).module_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_importtype_name(it: *const wasm_importtype_t) -> *const wasm_name_t {
+    if (*it).name_cache.is_none() {
+        let it = (it as *mut wasm_importtype_t).as_mut().unwrap();
+        it.name_cache = Some(wasm_name_t::from_name(&it.ty.name()));
+    }
+    (*it).name_cache.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_importtype_type(
+    it: *const wasm_importtype_t,
+) -> *const wasm_externtype_t {
+    let ty = Box::new(wasm_externtype_t {
+        ty: (*it).ty.r#type().clone(),
+        cache: wasm_externtype_t_type_cache::Empty,
+    });
+    Box::into_raw(ty)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_importtype_vec_delete(vec: *mut wasm_importtype_vec_t) {
+    (*vec).uninitialize();
 }
 
 #[no_mangle]
@@ -1138,10 +1188,18 @@ pub unsafe extern "C" fn wasm_module_exports(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_module_imports(
-    _module: *const wasm_module_t,
-    _out: *mut wasm_importtype_vec_t,
+    module: *const wasm_module_t,
+    out: *mut wasm_importtype_vec_t,
 ) {
-    unimplemented!("wasm_module_imports");
+    let buffer = (*module)
+        .imports
+        .iter()
+        .map(|it| {
+            let it = Box::new(it.clone());
+            Box::into_raw(it)
+        })
+        .collect::<Vec<_>>();
+    (*out).set_buffer(buffer);
 }
 
 #[no_mangle]
