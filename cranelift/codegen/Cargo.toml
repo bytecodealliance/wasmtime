@@ -18,7 +18,7 @@ cranelift-entity = { path = "../cranelift-entity", version = "0.44.0", default-f
 cranelift-bforest = { path = "../cranelift-bforest", version = "0.44.0", default-features = false }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
-hashmap_core = { version = "0.1.9", optional = true }
+hashbrown = { version = "0.6", optional = true }
 target-lexicon = "0.8.1"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
@@ -43,10 +43,10 @@ std = [
     "cranelift-codegen-meta/std"
 ]
 
-# The "core" features enables use of "hashmap_core" since core doesn't have
+# The "core" features enables use of "hashbrown" since core doesn't have
 # a HashMap implementation, and a workaround for Cargo #4866.
 core = [
-    "hashmap_core",
+    "hashbrown",
     "cranelift-codegen-meta/core"
 ]
 

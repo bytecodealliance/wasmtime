@@ -191,9 +191,9 @@ extern crate alloc as std;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashmap_core::HashMap;
+use hashbrown::{hash_map, HashMap};
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+use std::collections::{hash_map, HashMap};
 
 pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use crate::switch::Switch;

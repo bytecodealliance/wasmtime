@@ -4,7 +4,7 @@ use crate::isa::TargetIsa;
 use std::vec::Vec;
 
 type Num = u32;
-const NUM_BITS: usize = std::mem::size_of::<Num>() * 8;
+const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 
 /// Wrapper class for longer bit vectors that cannot be represented by a single BitSet.
 #[derive(Clone, Debug)]
@@ -20,7 +20,7 @@ impl Stackmap {
         isa: &dyn TargetIsa,
     ) -> Self {
         let loc = &func.locations;
-        let mut live_ref_in_stack_slot = std::collections::HashSet::new();
+        let mut live_ref_in_stack_slot = crate::HashSet::new();
         // References can be in registers, and live registers values are pushed onto the stack before calls and traps.
         // TODO: Implement register maps. If a register containing a reference is spilled and reused after a safepoint,
         // it could contain a stale reference value if the garbage collector relocated the value.

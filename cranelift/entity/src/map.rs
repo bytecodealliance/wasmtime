@@ -3,6 +3,7 @@
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
 use crate::EntityRef;
+use core::cmp::min;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::slice;
@@ -12,7 +13,6 @@ use serde::{
     ser::{SerializeSeq, Serializer},
     Deserialize, Serialize,
 };
-use std::cmp::min;
 use std::vec::Vec;
 
 /// A mapping `K -> V` for densely indexed entity references.
