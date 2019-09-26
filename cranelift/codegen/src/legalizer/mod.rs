@@ -672,3 +672,67 @@ fn narrow_iconst(
 
     unimplemented!("missing encoding or legalization for iconst.{:?}", ty);
 }
+
+fn narrow_icmp_imm(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    use crate::ir::condcodes::{CondCode, IntCC};
+
+    let (arg, cond, imm): (ir::Value, IntCC, i64) = match func.dfg[inst] {
+        ir::InstructionData::IntCompareImm {
+            opcode: ir::Opcode::IcmpImm,
+            arg,
+            cond,
+            imm,
+        } => (arg, cond, imm.into()),
+        _ => panic!("unexpected instruction in narrow_icmp_imm"),
+    };
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let ty = pos.func.dfg.ctrl_typevar(inst);
+    let ty_half = ty.half_width().unwrap();
+
+    let imm_low = pos
+        .ins()
+        .iconst(ty_half, imm & (1u128 << ty_half.bits() - 1) as i64);
+    let imm_high = pos
+        .ins()
+        .iconst(ty_half, imm.wrapping_shr(ty_half.bits().into()));
+    let (arg_low, arg_high) = pos.ins().isplit(arg);
+
+    match cond {
+        IntCC::Equal => {
+            let res_low = pos.ins().icmp(cond, arg_low, imm_low);
+            let res_high = pos.ins().icmp(cond, arg_high, imm_high);
+            pos.func.dfg.replace(inst).band(res_low, res_high);
+        }
+        IntCC::NotEqual => {
+            let res_low = pos.ins().icmp(cond, arg_low, imm_low);
+            let res_high = pos.ins().icmp(cond, arg_high, imm_high);
+            pos.func.dfg.replace(inst).bor(res_low, res_high);
+        }
+        IntCC::SignedGreaterThan
+        | IntCC::SignedGreaterThanOrEqual
+        | IntCC::SignedLessThan
+        | IntCC::SignedLessThanOrEqual
+        | IntCC::UnsignedGreaterThan
+        | IntCC::UnsignedGreaterThanOrEqual
+        | IntCC::UnsignedLessThan
+        | IntCC::UnsignedLessThanOrEqual => {
+            let b1 = pos.ins().icmp(cond.without_equal(), arg_high, imm_high);
+            let b2 = pos
+                .ins()
+                .icmp(cond.inverse().without_equal(), arg_high, imm_high);
+            let b3 = pos.ins().icmp(cond.unsigned(), arg_low, imm_low);
+            let c1 = pos.ins().bnot(b2);
+            let c2 = pos.ins().band(c1, b3);
+            pos.func.dfg.replace(inst).bor(b1, c2);
+        }
+        _ => unimplemented!("missing legalization for condition {:?}", cond),
+    }
+}
