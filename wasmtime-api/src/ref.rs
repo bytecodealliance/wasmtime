@@ -1,7 +1,8 @@
-use std::any::Any;
-use std::cell::{self, RefCell};
-use std::fmt;
-use std::rc::{Rc, Weak};
+use alloc::boxed::Box;
+use alloc::rc::{Rc, Weak};
+use core::any::Any;
+use core::cell::{self, RefCell};
+use core::fmt;
 
 pub trait HostInfo {
     fn finalize(&mut self) {}

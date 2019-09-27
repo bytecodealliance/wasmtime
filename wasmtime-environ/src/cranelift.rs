@@ -14,6 +14,7 @@ use crate::func_environ::{
 };
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
+use alloc::vec::Vec;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
@@ -22,7 +23,6 @@ use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::vec::Vec;
 
 /// Implementation of a relocation sink that just saves all the information for later
 pub struct RelocSink {

@@ -21,19 +21,14 @@
         clippy::use_self
     )
 )]
-#![no_std]
+
+#[macro_use]
+extern crate alloc;
 
 #[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc as std;
+use hashbrown::{hash_map, HashMap, HashSet};
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate std;
-
-#[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap};
-#[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap};
+use std::collections::{hash_map, HashMap, HashSet};
 
 #[macro_use]
 extern crate failure_derive;

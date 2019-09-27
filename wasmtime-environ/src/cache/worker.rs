@@ -6,10 +6,12 @@
 //! Background tasks can be CPU intensive, but the worker thread has low priority.
 
 use super::{cache_config, fs_write_atomic, CacheConfig};
+use alloc::vec::Vec;
+use core::cmp;
+use core::time::Duration;
 use log::{debug, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use spin::Once;
-use std::cmp;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
@@ -19,10 +21,8 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 #[cfg(test)]
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::time::Duration;
 #[cfg(not(test))]
 use std::time::SystemTime;
-use std::vec::Vec;
 #[cfg(test)]
 use tests::system_time_stub::SystemTimeStub as SystemTime;
 

@@ -1,6 +1,9 @@
 //! Module for configuring the cache system.
 
 use super::worker;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use core::time::Duration;
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
@@ -13,10 +16,7 @@ use std::fmt::Debug;
 use std::fs;
 use std::mem;
 use std::path::{Path, PathBuf};
-use std::string::{String, ToString};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
-use std::vec::Vec;
 
 // wrapped, so we have named section in config,
 // also, for possible future compatibility

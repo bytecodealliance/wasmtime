@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use cranelift_entity::PrimaryMap;
 use failure::Error;
 use wasmtime_environ::Module;

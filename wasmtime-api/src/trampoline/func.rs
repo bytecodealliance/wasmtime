@@ -14,8 +14,11 @@ use failure::Error;
 use wasmtime_environ::{Export, Module};
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
 
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use core::cmp;
-use std::rc::Rc;
 
 use crate::{Callable, FuncType, Store, Trap, Val};
 

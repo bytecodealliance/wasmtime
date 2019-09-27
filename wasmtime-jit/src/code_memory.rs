@@ -1,10 +1,10 @@
 //! Memory management for executable code.
 
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::{cmp, mem};
 use region;
-use std::boxed::Box;
-use std::string::String;
-use std::vec::Vec;
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
 /// Memory manager for executable code.

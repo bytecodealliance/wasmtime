@@ -1,3 +1,5 @@
+use alloc::string::String;
+use alloc::vec::Vec;
 use faerie::{Artifact, Decl};
 use wasmtime_environ::DataInitializer;
 

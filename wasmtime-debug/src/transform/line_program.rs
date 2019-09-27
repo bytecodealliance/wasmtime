@@ -1,7 +1,8 @@
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
+use core::iter::FromIterator;
 use cranelift_entity::EntityRef;
 use failure::Error;
-use std::collections::BTreeMap;
-use std::iter::FromIterator;
 
 use gimli;
 

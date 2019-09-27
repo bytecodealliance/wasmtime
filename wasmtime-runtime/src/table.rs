@@ -3,9 +3,9 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
+use alloc::vec::Vec;
+use core::convert::{TryFrom, TryInto};
 use cranelift_wasm::TableElementType;
-use std::convert::{TryFrom, TryInto};
-use std::vec::Vec;
 use wasmtime_environ::{TablePlan, TableStyle};
 
 /// A table instance.
@@ -25,7 +25,7 @@ impl Table {
             }
         };
         assert!(
-            plan.table.minimum <= std::u32::MAX,
+            plan.table.minimum <= core::u32::MAX,
             "Invariant check: vec.len() <= u32::MAX"
         );
         match plan.style {
@@ -60,7 +60,7 @@ impl Table {
             }
         };
         assert!(
-            new_len <= std::u32::MAX,
+            new_len <= core::u32::MAX,
             "Invariant check: vec.len() <= u32::MAX"
         );
         self.vec.resize(

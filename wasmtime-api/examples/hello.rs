@@ -1,9 +1,9 @@
 //! Translation of hello example
 
+use alloc::rc::Rc;
+use core::cell::Ref;
 use failure::{bail, format_err, Error};
-use std::cell::Ref;
 use std::fs::read;
-use std::rc::Rc;
 use wasmtime_api::*;
 
 struct HelloCallback;

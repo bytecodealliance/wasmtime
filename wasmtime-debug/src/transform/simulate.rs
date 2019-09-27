@@ -1,9 +1,11 @@
 use crate::read_debuginfo::WasmFileInfo;
 pub use crate::read_debuginfo::{DebugInfoData, FunctionMetadata, WasmType};
+use crate::{HashMap, HashSet};
+use alloc::string::String;
+use alloc::vec::Vec;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::get_vmctx_value_label;
 use failure::Error;
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 

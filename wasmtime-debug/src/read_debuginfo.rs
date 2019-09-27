@@ -1,3 +1,6 @@
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasmparser::{self, ModuleReader, SectionCode};

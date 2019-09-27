@@ -8,10 +8,10 @@ extern crate wasmparser;
 extern crate wasmtime_environ;
 extern crate wasmtime_jit;
 
+use alloc::rc::Rc;
+use core::cell::RefCell;
 use cranelift_codegen::settings;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use wasmparser::validate;
 use wasmtime_jit::{CompilationStrategy, CompiledModule, Compiler, NullResolver};
 

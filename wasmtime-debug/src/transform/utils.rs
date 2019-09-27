@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use cranelift_wasm::DefinedFuncIndex;
 use failure::Error;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};

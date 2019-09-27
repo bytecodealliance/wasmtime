@@ -1,6 +1,6 @@
-use std::cell::{RefCell, RefMut};
-use std::hash::{Hash, Hasher};
-use std::rc::Rc;
+use alloc::rc::Rc;
+use core::cell::{RefCell, RefMut};
+use core::hash::{Hash, Hasher};
 
 use wasmtime_jit::{CompilationStrategy, Compiler, Features};
 

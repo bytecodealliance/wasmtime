@@ -18,10 +18,10 @@ use target_lexicon::HOST;
 use wasmtime_environ::{Export, Module};
 use wasmtime_runtime::{Imports, InstanceHandle, VMContext, VMFunctionBody};
 
+use alloc::rc::Rc;
+use core::cell::RefCell;
 use core::cmp;
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 
 struct BoundPyFunction {
     name: String,

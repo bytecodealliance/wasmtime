@@ -1,3 +1,5 @@
+extern crate alloc;
+
 mod instantiate;
 mod syscalls;
 

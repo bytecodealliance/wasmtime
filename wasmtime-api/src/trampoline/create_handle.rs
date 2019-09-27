@@ -7,10 +7,13 @@ use failure::Error;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 
-use std::any::Any;
-use std::cell::{RefCell, RefMut};
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use crate::{HashMap, HashSet};
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::any::Any;
+use core::cell::{RefCell, RefMut};
 
 use crate::runtime::Store;
 

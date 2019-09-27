@@ -1,3 +1,5 @@
+use crate::{HashMap, HashSet};
+use alloc::vec::Vec;
 use cranelift_codegen::ir::{StackSlots, ValueLabel, ValueLoc};
 use cranelift_codegen::isa::RegUnit;
 use cranelift_codegen::ValueLabelsRanges;
@@ -6,7 +8,6 @@ use cranelift_wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use failure::Error;
 use gimli::write;
 use gimli::{self, Expression, Operation, Reader, ReaderOffset, Register, X86_64};
-use std::collections::{HashMap, HashSet};
 
 use super::address_transform::AddressTransform;
 
@@ -193,7 +194,7 @@ impl CompiledExpression {
         addr_tr: &AddressTransform,
         frame_info: Option<&FunctionFrameInfo>,
         endian: gimli::RunTimeEndian,
-    ) -> std::vec::Vec<(write::Address, u64, write::Expression)> {
+    ) -> alloc::vec::Vec<(write::Address, u64, write::Expression)> {
         if scope.len() == 0 {
             return vec![];
         }

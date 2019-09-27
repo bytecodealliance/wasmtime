@@ -8,8 +8,8 @@ mod memory;
 mod table;
 
 use crate::r#ref::HostRef;
+use alloc::rc::Rc;
 use failure::Error;
-use std::rc::Rc;
 
 use self::func::create_handle_with_function;
 use self::global::create_global;

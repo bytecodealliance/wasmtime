@@ -1,6 +1,6 @@
 use super::*;
 use crate::cache::config::tests::test_prolog;
-use std::iter::repeat;
+use core::iter::repeat;
 use std::process;
 // load_config! comes from crate::cache(::config::tests);
 

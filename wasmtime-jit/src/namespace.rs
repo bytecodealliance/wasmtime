@@ -4,7 +4,7 @@
 
 use super::HashMap;
 use crate::resolver::Resolver;
-use std::string::String;
+use alloc::string::String;
 use wasmtime_runtime::{Export, InstanceHandle};
 
 /// A namespace containing instances keyed by name.

@@ -204,7 +204,7 @@ fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
         if unsafe {
             strtof(
                 b"8.8817847263968443574e-16" as *const u8 as *const libc::c_char,
-                std::ptr::null_mut(),
+                core::ptr::null_mut(),
             )
         }
         .to_bits()

@@ -1,15 +1,15 @@
 use crate::action::{get, inspect_memory, invoke};
+use crate::HashMap;
 use crate::{
     instantiate, ActionError, ActionOutcome, CompilationStrategy, Compiler, InstanceHandle,
     Namespace, RuntimeValue, SetupError,
 };
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::string::{String, ToString};
+use core::cell::RefCell;
+use core::{fmt, str};
 use cranelift_codegen::isa::TargetIsa;
-use std::boxed::Box;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::string::{String, ToString};
-use std::{fmt, str};
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
 
 /// Indicates an unknown instance was specified.
