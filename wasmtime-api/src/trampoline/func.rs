@@ -85,11 +85,14 @@ fn make_trampoline(
     let pointer_type = isa.pointer_type();
     let mut stub_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
-    // Add the `vmctx` parameter.
+    // Add the callee `vmctx` parameter.
     stub_sig.params.push(ir::AbiParam::special(
         pointer_type,
         ir::ArgumentPurpose::VMContext,
     ));
+
+    // Add the caller `vmctx` parameter.
+    stub_sig.params.push(ir::AbiParam::new(pointer_type));
 
     // Add the `call_id` parameter.
     stub_sig.params.push(ir::AbiParam::new(types::I32));

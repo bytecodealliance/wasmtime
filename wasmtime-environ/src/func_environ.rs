@@ -131,6 +131,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             func.import_signature(Signature {
                 params: vec![
                     AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    AbiParam::new(self.pointer_type()),
                     AbiParam::new(I32),
                     AbiParam::new(I32),
                 ],
@@ -169,6 +170,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             func.import_signature(Signature {
                 params: vec![
                     AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    AbiParam::new(self.pointer_type()),
                     AbiParam::new(I32),
                 ],
                 returns: vec![AbiParam::new(I32)],
@@ -614,13 +616,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
 
         // First append the callee vmctx address.
-        let vmctx = pos.ins().load(
+        let callee_vmctx = pos.ins().load(
             pointer_type,
             mem_flags,
             table_entry_addr,
             i32::from(self.offsets.vmcaller_checked_anyfunc_vmctx()),
         );
-        real_call_args.push(vmctx);
+        real_call_args.push(callee_vmctx);
+
+        // Next append the caller vmctx address.
+        let caller_vmctx_global = self.vmctx(&mut pos.func);
+        let caller_vmctx = pos.ins().global_value(pointer_type, caller_vmctx_global);
+        real_call_args.push(caller_vmctx);
 
         // Then append the regular call arguments.
         real_call_args.extend_from_slice(call_args);
@@ -635,12 +642,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         callee: ir::FuncRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
+        let pointer_type = self.pointer_type();
         let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
 
         // Handle direct calls to locally-defined functions.
         if !self.module.is_imported_function(callee_index) {
-            // First append the callee vmctx address.
-            real_call_args.push(pos.func.special_param(ArgumentPurpose::VMContext).unwrap());
+            let vmctx_global = self.vmctx(&mut pos.func);
+            let vmctx = pos.ins().global_value(pointer_type, vmctx_global);
+
+            // First append the callee and caller vmctx addresses.
+            real_call_args.push(vmctx);
+            real_call_args.push(vmctx);
 
             // Then append the regular call arguments.
             real_call_args.extend_from_slice(call_args);
@@ -650,7 +662,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // Handle direct calls to imported functions. We use an indirect call
         // so that we don't have to patch the code at runtime.
-        let pointer_type = self.pointer_type();
         let sig_ref = pos.func.dfg.ext_funcs[callee].signature;
         let vmctx = self.vmctx(&mut pos.func);
         let base = pos.ins().global_value(pointer_type, vmctx);
@@ -665,8 +676,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // First append the callee vmctx address.
         let vmctx_offset =
             i32::try_from(self.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
-        let vmctx = pos.ins().load(pointer_type, mem_flags, base, vmctx_offset);
-        real_call_args.push(vmctx);
+        let callee_vmctx = pos.ins().load(pointer_type, mem_flags, base, vmctx_offset);
+        real_call_args.push(callee_vmctx);
+
+        // Next append the caller vmctx address.
+        let caller_vmctx_global = self.vmctx(&mut pos.func);
+        let caller_vmctx = pos.ins().global_value(pointer_type, caller_vmctx_global);
+        real_call_args.push(caller_vmctx);
 
         // Then append the regular call arguments.
         real_call_args.extend_from_slice(call_args);

@@ -456,8 +456,12 @@ impl Instance {
             }
         };
 
+        // There is no caller vmctx since we're invoking a wasm function from
+        // outside of any module.
+        let caller_vmctx = ptr::null_mut();
+
         // Make the call.
-        unsafe { wasmtime_call(callee_vmctx, callee_address) }
+        unsafe { wasmtime_call(callee_vmctx, caller_vmctx, callee_address) }
             .map_err(InstantiationError::StartTrap)
     }
 

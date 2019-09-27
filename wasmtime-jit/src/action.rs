@@ -186,10 +186,15 @@ pub fn invoke(
     // Make all JIT code produced thus far executable.
     compiler.publish_compiled_code();
 
+    // There is no caller vmctx since we're invoking a wasm function from
+    // outside of any module.
+    let caller_vmctx = ptr::null_mut();
+
     // Call the trampoline.
     if let Err(message) = unsafe {
         wasmtime_call_trampoline(
             callee_vmctx,
+            caller_vmctx,
             exec_code_buf,
             values_vec.as_mut_ptr() as *mut u8,
         )

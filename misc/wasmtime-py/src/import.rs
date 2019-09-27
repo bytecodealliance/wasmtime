@@ -91,11 +91,14 @@ fn make_trampoline(
     let pointer_type = isa.pointer_type();
     let mut stub_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
-    // Add the `vmctx` parameter.
+    // Add the callee `vmctx` parameter.
     stub_sig.params.push(ir::AbiParam::special(
         pointer_type,
         ir::ArgumentPurpose::VMContext,
     ));
+
+    // Add the caller `vmctx` parameter.
+    stub_sig.params.push(ir::AbiParam::new(pointer_type));
 
     // Add the `call_id` parameter.
     stub_sig.params.push(ir::AbiParam::new(types::I32));
@@ -208,6 +211,7 @@ fn get_signature_from_py_annotation(
         pointer_type,
         ir::ArgumentPurpose::VMContext,
     ));
+    params.push(ir::AbiParam::new(pointer_type));
     let mut returns = None;
     for (name, value) in annot.iter() {
         let ty = parse_annotation_type(&value.to_string());

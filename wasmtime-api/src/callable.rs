@@ -47,7 +47,7 @@ impl WrappedCallable for WasmtimeFn {
         use core::cmp::max;
         use core::{mem, ptr};
 
-        let (vmctx, body, signature) = match self.wasmtime_export() {
+        let (callee_vmctx, body, signature) = match self.wasmtime_export() {
             Export::Function {
                 vmctx,
                 address,
@@ -83,10 +83,15 @@ impl WrappedCallable for WasmtimeFn {
             .get_published_trampoline(body, &signature, value_size)
             .map_err(|_| HostRef::new(Trap::fake()))?; //was ActionError::Setup)?;
 
+        // There is no caller vmctx since we're invoking a wasm function from
+        // outside of any module.
+        let caller_vmctx = ptr::null_mut();
+
         // Call the trampoline.
         if let Err(message) = unsafe {
             wasmtime_runtime::wasmtime_call_trampoline(
-                vmctx,
+                callee_vmctx,
+                caller_vmctx,
                 exec_code_buf,
                 values_vec.as_mut_ptr() as *mut u8,
             )

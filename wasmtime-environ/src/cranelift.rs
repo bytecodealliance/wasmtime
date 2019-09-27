@@ -237,6 +237,7 @@ impl crate::compilation::Compiler for Cranelift {
                         let mut reloc_sink = RelocSink::new(func_index);
                         let mut trap_sink = TrapSink::new();
                         let mut stackmap_sink = binemit::NullStackmapSink {};
+                        println!("func {}", context.func.display(isa));
                         context
                             .compile_and_emit(
                                 isa,

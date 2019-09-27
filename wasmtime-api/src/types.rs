@@ -150,7 +150,13 @@ impl FuncType {
                 .iter()
                 .map(|p| AbiParam::new(p.get_cranelift_type()))
                 .collect::<Vec<_>>();
-            params.insert(0, AbiParam::special(types::I64, ArgumentPurpose::VMContext));
+            let ptr_ty = match HOST.pointer_width().unwrap() {
+                target_lexicon::PointerWidth::U16 => panic!("16-bit pointers not supported"),
+                target_lexicon::PointerWidth::U32 => types::I32,
+                target_lexicon::PointerWidth::U64 => types::I64,
+            };
+            params.insert(0, AbiParam::special(ptr_ty, ArgumentPurpose::VMContext));
+            params.insert(1, AbiParam::new(ptr_ty));
 
             Signature {
                 params,

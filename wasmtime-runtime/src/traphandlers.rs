@@ -11,11 +11,16 @@ use std::string::String;
 
 extern "C" {
     fn WasmtimeCallTrampoline(
-        vmctx: *mut u8,
+        callee_vmctx: *mut u8,
+        caller_vmctx: *mut u8,
         callee: *const VMFunctionBody,
         values_vec: *mut u8,
     ) -> i32;
-    fn WasmtimeCall(vmctx: *mut u8, callee: *const VMFunctionBody) -> i32;
+    fn WasmtimeCall(
+        callee_vmctx: *mut u8,
+        caller_vmctx: *mut u8,
+        callee: *const VMFunctionBody,
+    ) -> i32;
 }
 
 thread_local! {
@@ -115,11 +120,18 @@ fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
 /// return values will be written.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_call_trampoline(
-    vmctx: *mut VMContext,
+    callee_vmctx: *mut VMContext,
+    caller_vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
 ) -> Result<(), String> {
-    if WasmtimeCallTrampoline(vmctx as *mut u8, callee, values_vec) == 0 {
+    if WasmtimeCallTrampoline(
+        callee_vmctx as *mut u8,
+        caller_vmctx as *mut u8,
+        callee,
+        values_vec,
+    ) == 0
+    {
         Err(trap_message())
     } else {
         Ok(())
@@ -130,10 +142,11 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
 /// return values.
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_call(
-    vmctx: *mut VMContext,
+    callee_vmctx: *mut VMContext,
+    caller_vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
 ) -> Result<(), String> {
-    if WasmtimeCall(vmctx as *mut u8, callee) == 0 {
+    if WasmtimeCall(callee_vmctx as *mut u8, caller_vmctx as *mut u8, callee) == 0 {
         Err(trap_message())
     } else {
         Ok(())

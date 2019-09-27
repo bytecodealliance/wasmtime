@@ -358,11 +358,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
 /// Add environment-specific function parameters.
 pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir::Signature {
-    // Prepend the vmctx argument.
+    // Prepend the callee vmctx argument.
     sig.params.insert(
         0,
         AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
     );
+    // Prepend the caller vmctx argument.
+    sig.params.insert(1, AbiParam::new(pointer_type));
     sig
 }
 
