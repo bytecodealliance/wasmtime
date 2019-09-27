@@ -47,7 +47,9 @@ fn into_func_type(mt: wasmparser::FuncType) -> FuncType {
 }
 
 fn into_table_type(tt: wasmparser::TableType) -> TableType {
-    assert!(tt.element_type == wasmparser::Type::AnyFunc);
+    assert!(
+        tt.element_type == wasmparser::Type::AnyFunc || tt.element_type == wasmparser::Type::AnyRef
+    );
     let ty = into_valtype(&tt.element_type);
     let limits = Limits::new(
         tt.limits.initial,
@@ -118,8 +120,10 @@ fn read_imports_and_exports(
                             let sig = &sigs[index as usize];
                             ExternType::ExternFunc(sig.clone())
                         }
-                        ImportSectionEntryType::Table(_tt) => {
-                            unimplemented!("ImportSectionEntryType::Table")
+                        ImportSectionEntryType::Table(tt) => {
+                            let table = into_table_type(tt);
+                            tables.push(table.clone());
+                            ExternType::ExternTable(table)
                         }
                         ImportSectionEntryType::Memory(mt) => {
                             let memory = into_memory_type(mt);
