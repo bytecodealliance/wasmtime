@@ -10,12 +10,12 @@ use wasmtime_runtime::{Export, VMContext};
 /// This is unsafe due to trusting the contents of vmctx. The pointer result
 /// is bounds and alignment checked.
 unsafe fn decode_ptr(
-    vmctx: &mut VMContext,
+    fixme: &mut VMContext,
     ptr: wasm32::uintptr_t,
     len: usize,
     align: usize,
 ) -> Result<*mut u8, host::__wasi_errno_t> {
-    match vmctx.lookup_global_export("memory") {
+    match fixme.lookup("memory") {
         Some(Export::Memory {
             definition,
             vmctx: _,

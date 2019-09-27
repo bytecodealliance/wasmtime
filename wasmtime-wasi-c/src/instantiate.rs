@@ -6,8 +6,6 @@ use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs::File;
 use std::mem;
@@ -27,7 +25,6 @@ pub(crate) struct WASIState {
 /// Return an instance implementing the "wasi" interface.
 pub fn instantiate_wasi_c(
     prefix: &str,
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     preopened_dirs: &[(String, File)],
     argv: &[String],
     environ: &[(String, String)],
@@ -163,7 +160,6 @@ pub fn instantiate_wasi_c(
 
     InstanceHandle::new(
         Rc::new(module),
-        global_exports,
         finished_functions.into_boxed_slice(),
         imports,
         &data_initializers,

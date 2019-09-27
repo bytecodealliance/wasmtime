@@ -294,7 +294,6 @@ fn rmain() -> Result<(), Error> {
     );
 
     // Make wasi available by default.
-    let global_exports = store.borrow().global_exports().clone();
     let preopen_dirs = compute_preopen_dirs(&args.flag_dir, &args.flag_mapdir);
     let argv = compute_argv(&args.arg_file, &args.arg_arg);
     let environ = compute_environ(&args.flag_env);
@@ -302,14 +301,14 @@ fn rmain() -> Result<(), Error> {
     let wasi = if args.flag_wasi_c {
         #[cfg(feature = "wasi-c")]
         {
-            instantiate_wasi_c("", global_exports.clone(), &preopen_dirs, &argv, &environ)?
+            instantiate_wasi_c("", &preopen_dirs, &argv, &environ)?
         }
         #[cfg(not(feature = "wasi-c"))]
         {
             bail!("wasi-c feature not enabled at build time")
         }
     } else {
-        instantiate_wasi("", global_exports.clone(), &preopen_dirs, &argv, &environ)?
+        instantiate_wasi("", &preopen_dirs, &argv, &environ)?
     };
 
     module_registry.insert(

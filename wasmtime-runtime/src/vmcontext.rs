@@ -564,8 +564,8 @@ impl VMContext {
         self.instance().host_state()
     }
 
-    /// Lookup an export in the global exports namespace.
-    pub unsafe fn lookup_global_export(&mut self, field: &str) -> Option<crate::export::Export> {
-        self.instance().lookup_global_export(field)
+    /// Lookup an export.
+    pub unsafe fn lookup(&mut self, field: &str) -> Option<crate::export::Export> {
+        self.instance().lookup(field)
     }
 }

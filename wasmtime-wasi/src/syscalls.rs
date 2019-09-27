@@ -83,9 +83,9 @@ fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasm32::__wasi_er
     }
 }
 
-fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasm32::__wasi_errno_t> {
+fn get_memory(fixme: &mut VMContext) -> Result<&mut [u8], wasm32::__wasi_errno_t> {
     unsafe {
-        match vmctx.lookup_global_export("memory") {
+        match fixme.lookup("memory") {
             Some(Export::Memory {
                 definition,
                 vmctx: _,

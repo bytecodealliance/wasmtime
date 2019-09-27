@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::context::{create_compiler, Context};
 use crate::r#ref::HostRef;
@@ -83,7 +81,6 @@ impl Engine {
 pub struct Store {
     engine: HostRef<Engine>,
     context: Context,
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     signature_cache: HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>,
 }
 
@@ -95,7 +92,6 @@ impl Store {
         Store {
             engine,
             context: Context::create(flags, features, debug_info),
-            global_exports: Rc::new(RefCell::new(HashMap::new())),
             signature_cache: HashMap::new(),
         }
     }
@@ -106,13 +102,6 @@ impl Store {
 
     pub(crate) fn context(&mut self) -> &mut Context {
         &mut self.context
-    }
-
-    // Specific to wasmtime: hack to pass memory around to wasi
-    pub fn global_exports(
-        &self,
-    ) -> &Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> {
-        &self.global_exports
     }
 
     pub(crate) fn register_cranelift_signature(

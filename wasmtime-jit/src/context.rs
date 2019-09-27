@@ -5,9 +5,6 @@ use crate::{
 };
 use cranelift_codegen::isa::TargetIsa;
 use std::boxed::Box;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
 use std::string::{String, ToString};
 use std::{fmt, str};
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
@@ -75,7 +72,6 @@ impl Into<ValidatingParserConfig> for Features {
 pub struct Context {
     namespace: Namespace,
     compiler: Box<Compiler>,
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     debug_info: bool,
     features: Features,
 }
@@ -86,7 +82,6 @@ impl Context {
         Self {
             namespace: Namespace::new(),
             compiler,
-            global_exports: Rc::new(RefCell::new(HashMap::new())),
             debug_info: false,
             features: Default::default(),
         }
@@ -123,13 +118,7 @@ impl Context {
         self.validate(&data).map_err(SetupError::Validate)?;
         let debug_info = self.debug_info();
 
-        instantiate(
-            &mut *self.compiler,
-            &data,
-            &mut self.namespace,
-            Rc::clone(&self.global_exports),
-            debug_info,
-        )
+        instantiate(&mut *self.compiler, &data, &mut self.namespace, debug_info)
     }
 
     /// Return the instance associated with the given name.
@@ -232,13 +221,5 @@ impl Context {
         len: usize,
     ) -> Result<&'instance [u8], ActionError> {
         inspect_memory(instance, field_name, start, len)
-    }
-
-    /// Return a handle to the global_exports mapping, needed by some modules
-    /// for instantiation.
-    pub fn get_global_exports(
-        &mut self,
-    ) -> Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> {
-        Rc::clone(&mut self.global_exports)
     }
 }

@@ -4,9 +4,7 @@ use crate::module::Module;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use failure::Error;
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 
 use wasmtime_jit::{instantiate, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle};
@@ -29,18 +27,11 @@ pub fn instantiate_in_context(
     data: &[u8],
     imports: Vec<(String, String, Extern)>,
     mut context: Context,
-    exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
 ) -> Result<(InstanceHandle, HashSet<Context>), Error> {
     let mut contexts = HashSet::new();
     let debug_info = context.debug_info();
     let mut resolver = SimpleResolver { imports };
-    let instance = instantiate(
-        &mut context.compiler(),
-        data,
-        &mut resolver,
-        exports,
-        debug_info,
-    )?;
+    let instance = instantiate(&mut context.compiler(), data, &mut resolver, debug_info)?;
     contexts.insert(context);
     Ok((instance, contexts))
 }
@@ -62,7 +53,6 @@ impl Instance {
         externs: &[Extern],
     ) -> Result<Instance, Error> {
         let context = store.borrow_mut().context().clone();
-        let exports = store.borrow_mut().global_exports().clone();
         let imports = module
             .borrow()
             .imports()
@@ -71,7 +61,7 @@ impl Instance {
             .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
             .collect::<Vec<_>>();
         let (mut instance_handle, contexts) =
-            instantiate_in_context(module.borrow().binary(), imports, context, exports)?;
+            instantiate_in_context(module.borrow().binary(), imports, context)?;
 
         let exports = {
             let module = module.borrow();

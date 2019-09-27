@@ -16,8 +16,6 @@ use crate::vmcontext::{
     VMTableDefinition, VMTableImport,
 };
 use core::any::Any;
-use core::borrow::Borrow;
-use core::cell::RefCell;
 use core::slice;
 use core::{mem, ptr};
 use cranelift_entity::EntityRef;
@@ -29,10 +27,10 @@ use cranelift_wasm::{
 use indexmap;
 use std::borrow::ToOwned;
 use std::boxed::Box;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::rc::Rc;
-use std::string::{String, ToString};
+use std::string::String;
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 fn signature_id(
@@ -199,11 +197,6 @@ pub(crate) struct Instance {
 
     /// Offsets in the `vmctx` region.
     offsets: VMOffsets,
-
-    /// A global namespace of exports. This is a temporary mechanism to avoid
-    /// cyclic dependencies when one module wants to import from another and
-    /// make its memory available too, that will be obviated by host-bindings.
-    global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
 
     /// WebAssembly linear memory data.
     memories: BoxedSlice<DefinedMemoryIndex, LinearMemory>,
@@ -612,17 +605,6 @@ impl Instance {
         foreign_instance.memory_size(foreign_index)
     }
 
-    pub(crate) fn lookup_global_export(&self, field: &str) -> Option<Export> {
-        let cell: &RefCell<HashMap<std::string::String, core::option::Option<Export>>> =
-            self.global_exports.borrow();
-        let map: &mut HashMap<std::string::String, core::option::Option<Export>> =
-            &mut cell.borrow_mut();
-        if let Some(Some(export)) = map.get(field) {
-            return Some(export.clone());
-        }
-        None
-    }
-
     /// Grow table by the specified amount of elements.
     ///
     /// Returns `None` if table can't be grown by the specified amount
@@ -675,7 +657,6 @@ impl InstanceHandle {
     /// Create a new `InstanceHandle` pointing at a new `Instance`.
     pub fn new(
         module: Rc<Module>,
-        global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         imports: Imports,
         data_initializers: &[DataInitializer<'_>],
@@ -717,7 +698,6 @@ impl InstanceHandle {
                 dependencies: imports.dependencies,
                 mmap: instance_mmap,
                 module,
-                global_exports,
                 offsets,
                 memories,
                 tables,
@@ -787,27 +767,6 @@ impl InstanceHandle {
         initialize_tables(instance)?;
         initialize_memories(instance, data_initializers)?;
         initialize_globals(instance);
-
-        // Collect the exports for the global export map.
-        for (field, decl) in &instance.module.exports {
-            use std::collections::hash_map::Entry::*;
-            let cell: &RefCell<HashMap<std::string::String, core::option::Option<Export>>> =
-                instance.global_exports.borrow();
-            let map: &mut HashMap<std::string::String, core::option::Option<Export>> =
-                &mut cell.borrow_mut();
-            match map.entry(field.to_string()) {
-                Vacant(entry) => {
-                    entry.insert(Some(lookup_by_declaration(
-                        &instance.module,
-                        &mut instance.vmctx,
-                        &instance.offsets,
-                        &instance.finished_functions,
-                        &decl,
-                    )));
-                }
-                Occupied(ref mut entry) => *entry.get_mut() = None,
-            }
-        }
 
         // Ensure that our signal handlers are ready for action.
         // TODO: Move these calls out of `InstanceHandle`.
