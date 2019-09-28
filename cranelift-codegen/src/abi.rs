@@ -5,7 +5,7 @@
 
 use crate::ir::{AbiParam, ArgumentExtension, ArgumentLoc, Type};
 use core::cmp::Ordering;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Legalization action to perform on a single argument or return value when converting a
 /// signature.

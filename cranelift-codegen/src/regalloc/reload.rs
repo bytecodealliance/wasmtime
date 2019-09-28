@@ -22,7 +22,7 @@ use crate::regalloc::liveness::Liveness;
 use crate::timing;
 use crate::topo_order::TopoOrder;
 use log::debug;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Reusable data structures for the reload pass.
 pub struct Reload {

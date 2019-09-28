@@ -75,9 +75,9 @@ use crate::timing;
 use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter, Write};
 use failure_derive::Fail;
-use std::collections::BTreeSet;
-use std::string::String;
-use std::vec::Vec;
+use alloc::collections::BTreeSet;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;

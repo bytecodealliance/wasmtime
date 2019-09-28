@@ -9,7 +9,7 @@ use crate::timing;
 use core::cmp;
 use core::cmp::Ordering;
 use core::mem;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
 /// room for modifications of the dominator tree.

@@ -4,7 +4,7 @@ use crate::ir::{Function, InstBuilder, InstructionData, Opcode, TrapCode};
 use crate::isa::TargetIsa;
 use crate::regalloc::live_value_tracker::LiveValueTracker;
 use crate::regalloc::liveness::Liveness;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 fn insert_and_encode_safepoint<'f>(
     pos: &mut FuncCursor<'f>,

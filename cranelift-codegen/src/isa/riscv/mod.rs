@@ -16,7 +16,7 @@ use crate::isa::Builder as IsaBuilder;
 use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
 use core::fmt;
-use std::boxed::Box;
+use alloc::boxed::Box;
 use target_lexicon::{PointerWidth, Triple};
 
 #[allow(dead_code)]
@@ -138,7 +138,7 @@ mod tests {
     use crate::isa;
     use crate::settings::{self, Configurable};
     use core::str::FromStr;
-    use std::string::{String, ToString};
+    use alloc::string::{String, ToString};
     use target_lexicon::triple;
 
     fn encstr(isa: &dyn isa::TargetIsa, enc: Result<isa::Encoding, isa::Legalize>) -> String {

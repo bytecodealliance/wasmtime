@@ -148,7 +148,7 @@ mod tests {
     use super::*;
     use crate::entity::EntityRef;
     use crate::ir::{Ebb, Inst};
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn convert() {

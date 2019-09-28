@@ -4,7 +4,7 @@
 //! between a conditional branch and the following terminator.
 #![cfg(feature = "basic-blocks")]
 
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;

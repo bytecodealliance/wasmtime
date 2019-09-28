@@ -10,9 +10,9 @@ use crate::verifier::{VerifierError, VerifierErrors};
 use crate::write::{decorate_function, FuncWriter, PlainWriter};
 use core::fmt;
 use core::fmt::Write;
-use std::boxed::Box;
-use std::string::{String, ToString};
-use std::vec::Vec;
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 /// Pretty-print a verifier error.
 pub fn pretty_verifier_error<'a>(

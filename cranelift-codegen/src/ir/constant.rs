@@ -11,8 +11,8 @@
 use crate::ir::Constant;
 use crate::HashMap;
 use cranelift_entity::EntityRef;
-use std::collections::BTreeMap;
-use std::vec::Vec;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
 /// This type describes the actual constant data.
 pub type ConstantData = Vec<u8>;

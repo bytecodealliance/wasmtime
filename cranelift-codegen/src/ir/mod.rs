@@ -100,7 +100,7 @@ pub struct ValueLabelStart {
 #[derive(Debug, Clone)]
 pub enum ValueLabelAssignments {
     /// Original value labels assigned at transform.
-    Starts(std::vec::Vec<ValueLabelStart>),
+    Starts(alloc::vec::Vec<ValueLabelStart>),
 
     /// A value alias to original value.
     Alias {

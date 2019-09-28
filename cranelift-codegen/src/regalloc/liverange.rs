@@ -477,7 +477,7 @@ mod tests {
     use crate::ir::{Ebb, Inst, Value};
     use crate::ir::{ExpandedProgramPoint, ProgramOrder};
     use core::cmp::Ordering;
-    use std::vec::Vec;
+    use alloc::vec::Vec;
 
     // Dummy program order which simply compares indexes.
     // It is assumed that EBBs have indexes that are multiples of 10, and instructions have indexes

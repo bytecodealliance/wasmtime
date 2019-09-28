@@ -8,7 +8,7 @@ include!(concat!(env!("OUT_DIR"), "/registers-riscv.rs"));
 mod tests {
     use super::{FPR, GPR, INFO};
     use crate::isa::RegUnit;
-    use std::string::{String, ToString};
+    use alloc::string::{String, ToString};
 
     #[test]
     fn unit_encodings() {

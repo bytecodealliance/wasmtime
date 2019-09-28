@@ -6,8 +6,8 @@ use core::cmp::Ordering;
 use core::iter::Iterator;
 use core::ops::Bound::*;
 use core::ops::Deref;
-use std::collections::BTreeMap;
-use std::vec::Vec;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};

@@ -11,7 +11,7 @@ use core::fmt;
 use core::ops::{Index, IndexMut};
 use core::slice;
 use core::str::FromStr;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -343,7 +343,7 @@ mod tests {
     use super::*;
     use crate::ir::types;
     use crate::ir::Function;
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn stack_slot() {

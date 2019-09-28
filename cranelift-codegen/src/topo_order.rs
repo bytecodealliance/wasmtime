@@ -3,7 +3,7 @@
 use crate::dominator_tree::DominatorTree;
 use crate::entity::EntitySet;
 use crate::ir::{Ebb, Layout};
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Present EBBs in a topological order such that all dominating EBBs are guaranteed to be visited
 /// before the current EBB.

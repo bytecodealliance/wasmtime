@@ -12,7 +12,7 @@ include!(concat!(env!("OUT_DIR"), "/settings-riscv.rs"));
 mod tests {
     use super::{builder, Flags};
     use crate::settings::{self, Configurable};
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn display_default() {

@@ -22,7 +22,7 @@ use core::cmp::Ordering;
 use core::fmt;
 use core::slice;
 use smallvec::SmallVec;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// A virtual register reference.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
