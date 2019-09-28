@@ -455,8 +455,8 @@ impl From<Table> for AnyEntity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::u32;
     use alloc::string::ToString;
+    use core::u32;
 
     #[test]
     fn value_with_number() {

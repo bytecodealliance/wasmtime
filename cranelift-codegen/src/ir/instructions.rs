@@ -6,10 +6,10 @@
 //! A large part of this module is auto-generated from the instruction descriptions in the meta
 //! directory.
 
+use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::ops::{Deref, DerefMut};
 use core::str::FromStr;
-use alloc::vec::Vec;
 
 use crate::ir;
 use crate::ir::types;

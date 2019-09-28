@@ -14,9 +14,9 @@ use crate::isa::{RegInfo, TargetIsa};
 use crate::packed_option::ReservedValue;
 use crate::value_label::ValueLabelsRanges;
 use crate::HashSet;
-use core::fmt::{self, Write};
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::fmt::{self, Write};
 
 /// A `FuncWriter` used to decorate functions during printing.
 pub trait FuncWriter {

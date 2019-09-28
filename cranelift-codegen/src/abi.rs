@@ -4,8 +4,8 @@
 //! `TargetIsa::legalize_signature()` method.
 
 use crate::ir::{AbiParam, ArgumentExtension, ArgumentLoc, Type};
-use core::cmp::Ordering;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 
 /// Legalization action to perform on a single argument or return value when converting a
 /// signature.

@@ -72,12 +72,12 @@ use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
 use crate::settings::FlagsOrIsa;
 use crate::timing;
-use core::cmp::Ordering;
-use core::fmt::{self, Display, Formatter, Write};
-use failure_derive::Fail;
 use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
+use core::fmt::{self, Display, Formatter, Write};
+use failure_derive::Fail;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;

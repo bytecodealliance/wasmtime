@@ -3,10 +3,10 @@
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
 use crate::EntityRef;
+use alloc::boxed::Box;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::slice;
-use alloc::boxed::Box;
 
 /// A slice mapping `K -> V` allocating dense entity references.
 ///

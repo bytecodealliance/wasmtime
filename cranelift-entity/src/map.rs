@@ -3,6 +3,7 @@
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
 use crate::EntityRef;
+use alloc::vec::Vec;
 use core::cmp::min;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
@@ -13,7 +14,6 @@ use serde::{
     ser::{SerializeSeq, Serializer},
     Deserialize, Serialize,
 };
-use alloc::vec::Vec;
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///

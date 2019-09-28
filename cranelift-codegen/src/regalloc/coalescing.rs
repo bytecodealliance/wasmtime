@@ -17,12 +17,12 @@ use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::virtregs::{VirtReg, VirtRegs};
 use crate::timing;
+use alloc::vec::Vec;
 use core::cmp;
 use core::fmt;
 use core::iter;
 use core::slice;
 use log::debug;
-use alloc::vec::Vec;
 
 // # Implementation
 //

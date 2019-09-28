@@ -4,9 +4,9 @@
 //! The actual table of destinations is stored in a `JumpTableData` struct defined in this module.
 
 use crate::ir::entities::Ebb;
+use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::slice::{Iter, IterMut};
-use alloc::vec::Vec;
 
 /// Contents of a jump table.
 ///

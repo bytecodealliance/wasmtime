@@ -4,11 +4,11 @@
 //! Each type here should have a corresponding definition in the
 //! `cranelift-codegen/meta/src/shared/immediates` crate in the meta language.
 
+use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::iter::FromIterator;
 use core::str::{from_utf8, FromStr};
 use core::{i32, u32};
-use alloc::vec::Vec;
 
 /// Convert a type into a vector of bytes; all implementors in this file must use little-endian
 /// orderings of bytes to match WebAssembly's little-endianness.
@@ -936,11 +936,11 @@ impl IntoBytes for Ieee64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::string::ToString;
     use core::fmt::Display;
     use core::mem;
     use core::str::FromStr;
     use core::{f32, f64};
-    use alloc::string::ToString;
 
     #[test]
     fn format_imm64() {

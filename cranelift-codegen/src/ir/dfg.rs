@@ -14,12 +14,12 @@ use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
 use crate::HashMap;
+use alloc::vec::Vec;
 use core::fmt;
 use core::iter;
 use core::mem;
 use core::ops::{Index, IndexMut};
 use core::u16;
-use alloc::vec::Vec;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either

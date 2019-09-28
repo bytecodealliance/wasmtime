@@ -120,8 +120,8 @@ impl FromStr for ExternalName {
 mod tests {
     use super::ExternalName;
     use crate::ir::LibCall;
-    use core::u32;
     use alloc::string::ToString;
+    use core::u32;
 
     #[test]
     fn display_testcase() {

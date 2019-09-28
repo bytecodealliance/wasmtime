@@ -7,9 +7,9 @@
 
 use crate::ir::{ArgumentLoc, ExternalName, SigRef, Type};
 use crate::isa::{CallConv, RegInfo, RegUnit};
+use alloc::vec::Vec;
 use core::fmt;
 use core::str::FromStr;
-use alloc::vec::Vec;
 
 /// Function signature.
 ///
