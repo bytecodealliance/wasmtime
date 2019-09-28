@@ -6,7 +6,7 @@ use crate::packed_option::PackedOption;
 use core::fmt;
 use core::marker::PhantomData;
 #[cfg(test)]
-use std::string::String;
+use alloc::string::String;
 
 /// Tag type defining forest types for a set.
 struct SetTypes<K>(PhantomData<K>);
@@ -321,7 +321,7 @@ where
 
     /// Get a text version of the path to the current position.
     fn tpath(&self) -> String {
-        use std::string::ToString;
+        use alloc::string::ToString;
         self.path.to_string()
     }
 }
@@ -358,7 +358,7 @@ mod tests {
     use super::super::NodeData;
     use super::*;
     use core::mem;
-    use std::vec::Vec;
+    use alloc::vec::Vec;
 
     #[test]
     fn node_size() {

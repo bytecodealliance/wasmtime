@@ -585,7 +585,7 @@ where
 mod tests {
     use super::*;
     use core::mem;
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     // Forest impl for a set implementation.
     struct TF();
