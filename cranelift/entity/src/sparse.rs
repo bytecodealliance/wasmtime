@@ -12,7 +12,7 @@ use crate::EntityRef;
 use core::mem;
 use core::slice;
 use core::u32;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Trait for extracting keys from values stored in a `SparseMap`.
 ///

@@ -31,7 +31,6 @@
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", deny(unstable_features))]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
@@ -52,12 +51,7 @@
 )]
 #![no_std]
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc as std;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate std;
+extern crate alloc;
 
 // Re-export core so that the macros works with both std and no_std crates
 #[doc(hidden)]

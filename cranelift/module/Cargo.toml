@@ -12,14 +12,14 @@ edition = "2018"
 
 [dependencies]
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.44.0", default-features = false }
-cranelift-entity = { path = "../cranelift-entity", version = "0.44.0", default-features = false }
+cranelift-entity = { path = "../cranelift-entity", version = "0.44.0" }
 hashbrown = { version = "0.6", optional = true }
 failure = { version = "0.1.1", default-features = false }
 log = { version = "0.4.6", default-features = false }
 
 [features]
 default = ["std"]
-std = ["cranelift-codegen/std", "cranelift-entity/std"]
+std = ["cranelift-codegen/std"]
 core = ["hashbrown", "cranelift-codegen/core"]
 
 [badges]

@@ -15,9 +15,6 @@ edition = "2018"
 serde = { version = "1.0.94", features = ["derive"], optional = true }
 
 [features]
-default = ["std"]
-std = []
-core = []
 enable-serde = ["serde"]
 
 [badges]

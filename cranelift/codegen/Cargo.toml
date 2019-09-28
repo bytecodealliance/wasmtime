@@ -14,7 +14,7 @@ edition = "2018"
 
 [dependencies]
 cranelift-codegen-shared = { path = "./shared", version = "0.44.0" }
-cranelift-entity = { path = "../cranelift-entity", version = "0.44.0", default-features = false }
+cranelift-entity = { path = "../cranelift-entity", version = "0.44.0" }
 cranelift-bforest = { path = "../cranelift-bforest", version = "0.44.0" }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
@@ -37,10 +37,7 @@ default = ["std"]
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
-std = [
-    "cranelift-entity/std",
-    "cranelift-codegen-meta/std"
-]
+std = ["cranelift-codegen-meta/std"]
 
 # The "core" features enables use of "hashbrown" since core doesn't have
 # a HashMap implementation, and a workaround for Cargo #4866.
