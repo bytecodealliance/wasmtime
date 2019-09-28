@@ -20,13 +20,6 @@
 )]
 #![no_std]
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc as std;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate std;
-
 mod constant_folding;
 
 use cranelift_codegen::{isa::TargetIsa, settings::FlagsOrIsa, CodegenResult, Context};
