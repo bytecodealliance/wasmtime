@@ -109,7 +109,7 @@ use core::fmt;
 use core::mem;
 use core::u16;
 use log::debug;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// A variable in the constraint problem.
 ///
@@ -1160,7 +1160,7 @@ mod tests {
     use crate::isa::{RegClass, RegInfo, RegUnit, TargetIsa};
     use crate::regalloc::RegisterSet;
     use core::str::FromStr;
-    use std::boxed::Box;
+    use alloc::boxed::Box;
     use target_lexicon::triple;
 
     // Make an arm32 `TargetIsa`, if possible.

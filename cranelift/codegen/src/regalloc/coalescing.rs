@@ -22,7 +22,7 @@ use core::fmt;
 use core::iter;
 use core::slice;
 use log::debug;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 // # Implementation
 //

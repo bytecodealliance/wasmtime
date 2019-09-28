@@ -15,8 +15,8 @@ use crate::packed_option::ReservedValue;
 use crate::value_label::ValueLabelsRanges;
 use crate::HashSet;
 use core::fmt::{self, Write};
-use std::string::String;
-use std::vec::Vec;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 /// A `FuncWriter` used to decorate functions during printing.
 pub trait FuncWriter {
@@ -759,7 +759,7 @@ mod tests {
     use crate::cursor::{Cursor, CursorPosition, FuncCursor};
     use crate::ir::types;
     use crate::ir::{ExternalName, Function, InstBuilder, StackSlotData, StackSlotKind};
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn basic() {

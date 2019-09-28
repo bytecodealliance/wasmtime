@@ -6,7 +6,7 @@
 use crate::ir::entities::Ebb;
 use core::fmt::{self, Display, Formatter};
 use core::slice::{Iter, IterMut};
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Contents of a jump table.
 ///
@@ -85,7 +85,7 @@ mod tests {
     use super::JumpTableData;
     use crate::entity::EntityRef;
     use crate::ir::Ebb;
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn empty() {

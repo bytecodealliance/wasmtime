@@ -69,7 +69,7 @@ use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::ir::{self, Ebb, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
 use core::iter;
 use smallvec::SmallVec;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
 /// if possible.

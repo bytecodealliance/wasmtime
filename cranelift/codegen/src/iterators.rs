@@ -44,7 +44,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::vec::Vec;
+    use alloc::vec::Vec;
 
     #[test]
     fn adjpairs() {

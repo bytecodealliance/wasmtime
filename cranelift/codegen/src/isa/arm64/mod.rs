@@ -16,7 +16,7 @@ use crate::isa::Builder as IsaBuilder;
 use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
 use core::fmt;
-use std::boxed::Box;
+use alloc::boxed::Box;
 use target_lexicon::Triple;
 
 #[allow(dead_code)]

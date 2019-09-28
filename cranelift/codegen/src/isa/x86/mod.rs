@@ -18,7 +18,7 @@ use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::timing;
 use core::fmt;
-use std::boxed::Box;
+use alloc::boxed::Box;
 use target_lexicon::{PointerWidth, Triple};
 
 #[allow(dead_code)]

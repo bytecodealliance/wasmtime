@@ -29,7 +29,7 @@ use crate::timing;
 use crate::topo_order::TopoOrder;
 use core::fmt;
 use log::debug;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Return a top-level register class which contains `unit`.
 fn toprc_containing_regunit(unit: RegUnit, reginfo: &RegInfo) -> RegClass {

@@ -12,7 +12,7 @@ use crate::partition_slice::partition_slice;
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::liverange::LiveRange;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 type ValueList = EntityList<Value>;
 

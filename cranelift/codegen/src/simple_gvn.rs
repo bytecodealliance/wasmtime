@@ -7,7 +7,7 @@ use crate::scoped_hash_map::ScopedHashMap;
 use crate::timing;
 use core::cell::{Ref, RefCell};
 use core::hash::{Hash, Hasher};
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {

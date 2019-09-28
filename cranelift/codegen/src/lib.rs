@@ -35,16 +35,15 @@
         clippy::nonminimal_bool,
         clippy::option_map_unwrap_or,
         clippy::option_map_unwrap_or_else,
-        clippy::print_stdout,
+        clippy::print_allocout,
         clippy::unicode_not_nfc,
         clippy::use_self
     )
 )]
 #![no_std]
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc as std;
+extern crate alloc;
+
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate std;

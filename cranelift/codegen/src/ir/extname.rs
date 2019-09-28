@@ -121,7 +121,7 @@ mod tests {
     use super::ExternalName;
     use crate::ir::LibCall;
     use core::u32;
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn display_testcase() {

@@ -19,7 +19,7 @@ use core::iter;
 use core::mem;
 use core::ops::{Index, IndexMut};
 use core::u16;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
@@ -1093,7 +1093,7 @@ mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types;
     use crate::ir::{Function, InstructionData, Opcode, TrapCode};
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn make_inst() {

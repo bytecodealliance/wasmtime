@@ -8,7 +8,7 @@ use core::fmt::{self, Display, Formatter};
 use core::iter::FromIterator;
 use core::str::{from_utf8, FromStr};
 use core::{i32, u32};
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Convert a type into a vector of bytes; all implementors in this file must use little-endian
 /// orderings of bytes to match WebAssembly's little-endianness.
@@ -940,7 +940,7 @@ mod tests {
     use core::mem;
     use core::str::FromStr;
     use core::{f32, f64};
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[test]
     fn format_imm64() {

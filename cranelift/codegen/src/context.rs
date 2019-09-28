@@ -34,7 +34,7 @@ use crate::unreachable_code::eliminate_unreachable_code;
 use crate::value_label::{build_value_labels_ranges, ComparableSourceLoc, ValueLabelsRanges};
 use crate::verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
 use log::debug;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
