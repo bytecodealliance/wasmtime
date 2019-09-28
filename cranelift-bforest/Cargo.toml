@@ -14,11 +14,6 @@ edition = "2018"
 [dependencies]
 cranelift-entity = { path = "../cranelift-entity", version = "0.44.0", default-features = false }
 
-[features]
-default = ["std"]
-std = ["cranelift-entity/std"]
-core = []
-
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }

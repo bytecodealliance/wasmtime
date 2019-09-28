@@ -231,7 +231,7 @@ where
 
     /// Get a text version of the path to `key`.
     fn tpath<C: Comparator<K>>(&self, key: K, forest: &MapForest<K, V>, comp: &C) -> String {
-        use std::string::ToString;
+        use alloc::string::ToString;
         match self.root.expand() {
             None => "map(empty)".to_string(),
             Some(root) => {
@@ -420,7 +420,7 @@ where
 
     /// Get a text version of the path to the current position.
     fn tpath(&self) -> String {
-        use std::string::ToString;
+        use alloc::string::ToString;
         self.path.to_string()
     }
 }
@@ -430,7 +430,7 @@ mod tests {
     use super::super::NodeData;
     use super::*;
     use core::mem;
-    use std::vec::Vec;
+    use alloc::vec::Vec;
 
     #[test]
     fn node_size() {

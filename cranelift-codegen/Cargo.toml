@@ -15,7 +15,7 @@ edition = "2018"
 [dependencies]
 cranelift-codegen-shared = { path = "./shared", version = "0.44.0" }
 cranelift-entity = { path = "../cranelift-entity", version = "0.44.0", default-features = false }
-cranelift-bforest = { path = "../cranelift-bforest", version = "0.44.0", default-features = false }
+cranelift-bforest = { path = "../cranelift-bforest", version = "0.44.0" }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 hashbrown = { version = "0.6", optional = true }
@@ -39,7 +39,6 @@ default = ["std"]
 # features need to be enabled.
 std = [
     "cranelift-entity/std",
-    "cranelift-bforest/std",
     "cranelift-codegen-meta/std"
 ]
 

@@ -15,7 +15,6 @@
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", warn(unstable_features))]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 #![cfg_attr(
@@ -34,13 +33,8 @@
 #![no_std]
 
 #[cfg(test)]
-#[cfg(not(feature = "std"))]
 #[macro_use]
-extern crate alloc as std;
-#[cfg(test)]
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate std;
+extern crate alloc;
 
 #[macro_use]
 extern crate cranelift_entity as entity;
