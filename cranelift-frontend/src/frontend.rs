@@ -13,7 +13,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::packed_option::PackedOption;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
@@ -899,7 +899,7 @@ mod tests {
     use cranelift_codegen::isa::CallConv;
     use cranelift_codegen::settings;
     use cranelift_codegen::verifier::verify_function;
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     fn sample_function(lazy_seal: bool) {
         let mut sig = Signature::new(CallConv::SystemV);

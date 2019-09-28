@@ -17,7 +17,7 @@ use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, T
 use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::packed_option::ReservedValue;
 use smallvec::SmallVec;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
