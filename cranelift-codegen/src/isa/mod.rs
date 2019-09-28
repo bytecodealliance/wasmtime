@@ -25,7 +25,7 @@
 //! # fn main() {
 //! use cranelift_codegen::isa;
 //! use cranelift_codegen::settings::{self, Configurable};
-//! use alloc::str::FromStr;
+//! use std::str::FromStr;
 //! use target_lexicon::Triple;
 //!
 //! let shared_builder = settings::builder();
