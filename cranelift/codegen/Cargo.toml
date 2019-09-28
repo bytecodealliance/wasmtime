@@ -29,7 +29,7 @@ smallvec = { version = "0.6.10" }
 # accomodated in `tests`.
 
 [build-dependencies]
-cranelift-codegen-meta = { path = "meta", version = "0.44.0", default-features = false }
+cranelift-codegen-meta = { path = "meta", version = "0.44.0" }
 
 [features]
 default = ["std"]
@@ -37,14 +37,11 @@ default = ["std"]
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
-std = ["cranelift-codegen-meta/std"]
+std = []
 
 # The "core" features enables use of "hashbrown" since core doesn't have
 # a HashMap implementation, and a workaround for Cargo #4866.
-core = [
-    "hashbrown",
-    "cranelift-codegen-meta/core"
-]
+core = ["hashbrown"]
 
 # This enables some additional functions useful for writing tests, but which
 # can significantly increase the size of the library.
