@@ -18,11 +18,6 @@ cranelift-entity = { path = "../cranelift-entity", version = "0.44.0" }
 # cranelift currently supports.
 # rustc_apfloat = { version = "0.1.2", default-features = false }
 
-[features]
-default = ["std"]
-std = ["cranelift-codegen/std"]
-core = ["cranelift-codegen/core"]
-
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }
