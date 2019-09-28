@@ -21,10 +21,10 @@ for LIB in $LIBS; do
     pushd "$LIB" >/dev/null
 
     # Test with just "core" enabled.
-    cargo +nightly test --no-default-features --features core
+    cargo +nightly test --no-default-features --features "core all-arch"
 
     # Test with "core" and "std" enabled at the same time.
-    cargo +nightly test --features core
+    cargo +nightly test --features "core all-arch"
 
     popd >/dev/null
 done
