@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 wasmparser = { version = "0.39.1", default-features = false }
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.44.0", default-features = false }
-cranelift-entity = { path = "../cranelift-entity", version = "0.44.0", default-features = false }
+cranelift-entity = { path = "../cranelift-entity", version = "0.44.0" }
 cranelift-frontend = { path = "../cranelift-frontend", version = "0.44.0", default-features = false }
 hashbrown = { version = "0.6", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }

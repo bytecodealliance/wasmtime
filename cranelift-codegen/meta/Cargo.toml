@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 cranelift-codegen-shared = { path = "../shared", version = "0.44.0" }
-cranelift-entity = { path = "../../cranelift-entity", version = "0.44.0", default-features = false }
+cranelift-entity = { path = "../../cranelift-entity", version = "0.44.0" }
 
 [badges]
 maintenance = { status = "experimental" }
@@ -18,6 +18,6 @@ travis-ci = { repository = "CraneStation/cranelift" }
 
 [features]
 default = ["std"]
-std = ["cranelift-entity/std"]
+std = []
 # The "core" feature enables a workaround for Cargo #4866.
-core = ["cranelift-entity/core"]
+core = []

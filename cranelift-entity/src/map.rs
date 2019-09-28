@@ -13,7 +13,7 @@ use serde::{
     ser::{SerializeSeq, Serializer},
     Deserialize, Serialize,
 };
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///
@@ -222,7 +222,7 @@ where
     where
         D: Deserializer<'de>,
     {
-        use std::fmt;
+        use alloc::fmt;
         struct SecondaryMapVisitor<K, V> {
             unused: PhantomData<fn(K) -> V>,
         }

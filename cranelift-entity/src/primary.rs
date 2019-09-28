@@ -9,8 +9,8 @@ use core::ops::{Index, IndexMut};
 use core::slice;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
-use std::boxed::Box;
-use std::vec::Vec;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///
