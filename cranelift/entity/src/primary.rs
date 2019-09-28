@@ -3,14 +3,14 @@ use crate::boxed_slice::BoxedSlice;
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
 use crate::EntityRef;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::slice;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
-use alloc::boxed::Box;
-use alloc::vec::Vec;
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///

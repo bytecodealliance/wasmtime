@@ -22,11 +22,11 @@
 
 use crate::constant_hash::{probe, simple_hash};
 use crate::isa::TargetIsa;
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use core::fmt;
 use core::str;
 use failure_derive::Fail;
-use alloc::boxed::Box;
-use alloc::string::{String, ToString};
 
 /// A string-based configurator for settings groups.
 ///

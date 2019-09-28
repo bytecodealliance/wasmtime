@@ -10,9 +10,9 @@
 
 use crate::ir::Constant;
 use crate::HashMap;
-use cranelift_entity::EntityRef;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use cranelift_entity::EntityRef;
 
 /// This type describes the actual constant data.
 pub type ConstantData = Vec<u8>;

@@ -429,8 +429,8 @@ where
 mod tests {
     use super::super::NodeData;
     use super::*;
-    use core::mem;
     use alloc::vec::Vec;
+    use core::mem;
 
     #[test]
     fn node_size() {

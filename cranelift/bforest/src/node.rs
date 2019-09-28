@@ -584,8 +584,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::mem;
     use alloc::string::ToString;
+    use core::mem;
 
     // Forest impl for a set implementation.
     struct TF();

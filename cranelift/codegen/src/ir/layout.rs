@@ -750,8 +750,8 @@ mod tests {
     use crate::cursor::{Cursor, CursorPosition};
     use crate::entity::EntityRef;
     use crate::ir::{Ebb, Inst, ProgramOrder, SourceLoc};
-    use core::cmp::Ordering;
     use alloc::vec::Vec;
+    use core::cmp::Ordering;
 
     struct LayoutCursor<'f> {
         /// Borrowed function layout. Public so it can be re-borrowed from this cursor.

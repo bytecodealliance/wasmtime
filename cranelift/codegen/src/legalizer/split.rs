@@ -67,9 +67,9 @@
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::ir::{self, Ebb, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
+use alloc::vec::Vec;
 use core::iter;
 use smallvec::SmallVec;
-use alloc::vec::Vec;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
 /// if possible.

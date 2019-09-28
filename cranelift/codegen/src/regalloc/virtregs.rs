@@ -18,11 +18,11 @@ use crate::entity::{EntityList, ListPool};
 use crate::entity::{Keys, PrimaryMap, SecondaryMap};
 use crate::ir::{Function, Value};
 use crate::packed_option::PackedOption;
+use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
 use core::slice;
 use smallvec::SmallVec;
-use alloc::vec::Vec;
 
 /// A virtual register reference.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

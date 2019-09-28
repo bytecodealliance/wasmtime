@@ -183,9 +183,9 @@ use crate::isa::{EncInfo, OperandConstraint, TargetIsa};
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liverange::LiveRange;
 use crate::timing;
+use alloc::vec::Vec;
 use core::mem;
 use core::ops::Index;
-use alloc::vec::Vec;
 
 /// A set of live ranges, indexed by value number.
 type LiveRangeSet = SparseMap<Value, LiveRange>;

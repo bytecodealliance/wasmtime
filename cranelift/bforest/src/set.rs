@@ -3,10 +3,10 @@
 use super::{Comparator, Forest, Node, NodeData, NodePool, Path, SetValue, INNER_SIZE};
 use crate::packed_option::PackedOption;
 #[cfg(test)]
+use alloc::string::String;
+#[cfg(test)]
 use core::fmt;
 use core::marker::PhantomData;
-#[cfg(test)]
-use alloc::string::String;
 
 /// Tag type defining forest types for a set.
 struct SetTypes<K>(PhantomData<K>);
@@ -357,8 +357,8 @@ where
 mod tests {
     use super::super::NodeData;
     use super::*;
-    use core::mem;
     use alloc::vec::Vec;
+    use core::mem;
 
     #[test]
     fn node_size() {

@@ -21,8 +21,8 @@ use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use crate::regalloc::liveness::Liveness;
 use crate::timing;
 use crate::topo_order::TopoOrder;
-use log::debug;
 use alloc::vec::Vec;
+use log::debug;
 
 /// Reusable data structures for the reload pass.
 pub struct Reload {

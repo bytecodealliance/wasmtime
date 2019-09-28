@@ -6,6 +6,7 @@
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
 use crate::Variable;
+use alloc::vec::Vec;
 use core::mem;
 use core::u32;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
@@ -17,7 +18,6 @@ use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, T
 use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::packed_option::ReservedValue;
 use smallvec::SmallVec;
-use alloc::vec::Vec;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///

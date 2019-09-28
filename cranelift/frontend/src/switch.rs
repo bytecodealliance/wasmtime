@@ -1,9 +1,9 @@
 use super::HashMap;
 use crate::frontend::FunctionBuilder;
+use alloc::vec::Vec;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::*;
 use log::debug;
-use alloc::vec::Vec;
 
 type EntryIndex = u64;
 
@@ -290,8 +290,8 @@ impl ContiguousCaseRange {
 mod tests {
     use super::*;
     use crate::frontend::FunctionBuilderContext;
-    use cranelift_codegen::ir::Function;
     use alloc::string::ToString;
+    use cranelift_codegen::ir::Function;
 
     macro_rules! setup {
         ($default:expr, [$($index:expr,)*]) => {{

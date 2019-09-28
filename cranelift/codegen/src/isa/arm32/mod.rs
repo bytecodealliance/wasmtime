@@ -15,8 +15,8 @@ use crate::isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encoding
 use crate::isa::Builder as IsaBuilder;
 use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
-use core::fmt;
 use alloc::boxed::Box;
+use core::fmt;
 use target_lexicon::{Architecture, Triple};
 
 #[allow(dead_code)]

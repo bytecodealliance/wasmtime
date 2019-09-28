@@ -6,12 +6,12 @@
 use crate::entity::{Iter, IterMut, Keys, PrimaryMap};
 use crate::ir::{StackSlot, Type};
 use crate::packed_option::PackedOption;
+use alloc::vec::Vec;
 use core::cmp;
 use core::fmt;
 use core::ops::{Index, IndexMut};
 use core::slice;
 use core::str::FromStr;
-use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};

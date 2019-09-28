@@ -2,12 +2,12 @@ use crate::ir::{Function, SourceLoc, Value, ValueLabel, ValueLabelAssignments, V
 use crate::isa::TargetIsa;
 use crate::regalloc::{Context, RegDiversions};
 use crate::HashMap;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::iter::Iterator;
 use core::ops::Bound::*;
 use core::ops::Deref;
-use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};

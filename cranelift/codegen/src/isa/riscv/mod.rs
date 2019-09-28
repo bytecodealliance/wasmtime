@@ -15,8 +15,8 @@ use crate::isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encoding
 use crate::isa::Builder as IsaBuilder;
 use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
-use core::fmt;
 use alloc::boxed::Box;
+use core::fmt;
 use target_lexicon::{PointerWidth, Triple};
 
 #[allow(dead_code)]
@@ -137,8 +137,8 @@ mod tests {
     use crate::ir::{Function, InstructionData, Opcode};
     use crate::isa;
     use crate::settings::{self, Configurable};
-    use core::str::FromStr;
     use alloc::string::{String, ToString};
+    use core::str::FromStr;
     use target_lexicon::triple;
 
     fn encstr(isa: &dyn isa::TargetIsa, enc: Result<isa::Encoding, isa::Legalize>) -> String {

@@ -63,9 +63,9 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use crate::timing;
+use alloc::boxed::Box;
 use core::fmt;
 use failure_derive::Fail;
-use alloc::boxed::Box;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 #[cfg(feature = "riscv")]

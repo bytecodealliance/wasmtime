@@ -1,9 +1,9 @@
 //! Small lists of entity references.
 use crate::packed_option::ReservedValue;
 use crate::EntityRef;
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::mem;
-use alloc::vec::Vec;
 
 /// A small list of entity references allocated from a pool.
 ///
