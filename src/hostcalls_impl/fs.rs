@@ -652,7 +652,7 @@ pub(crate) unsafe fn path_readlink(
     enc_usize_byref(memory, buf_used, 0)?;
 
     let dirfd = dec_fd(dirfd);
-    let path = dec_slice_of::<u8>(memory, path_ptr, path_len).and_then(host::path_from_vec)?;
+    let path = dec_slice_of::<u8>(memory, path_ptr, path_len).and_then(host::path_from_slice)?;
 
     trace!("     | (path_ptr,path_len)='{}'", &path);
 

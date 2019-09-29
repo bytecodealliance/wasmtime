@@ -508,14 +508,6 @@ pub(crate) fn path_from_slice<'a>(s: &'a [u8]) -> Result<&'a str> {
     str::from_utf8(s).map_err(|_| Error::EILSEQ)
 }
 
-/// Creates owned WASI path from byte vector.
-///
-/// NB WASI spec requires bytes to be valid UTF-8. Otherwise,
-/// `__WASI_EILSEQ` error is returned.
-pub(crate) fn path_from_vec<S: Into<Vec<u8>>>(s: S) -> Result<String> {
-    String::from_utf8(s.into()).map_err(|_| Error::EILSEQ)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
