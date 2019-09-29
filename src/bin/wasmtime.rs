@@ -278,7 +278,7 @@ fn rmain() -> Result<(), Error> {
 
     // Enable optimization if requested.
     if args.flag_optimize {
-        flag_builder.set("opt_level", "best")?;
+        flag_builder.set("opt_level", "speed")?;
     }
 
     let config = Config::new(settings::Flags::new(flag_builder), features, debug_info);
