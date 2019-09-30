@@ -16,6 +16,7 @@ use crate::isa::RegUnit;
 use crate::isa::{self, TargetIsa};
 use crate::predicates;
 use crate::regalloc::RegDiversions;
+use std::vec::Vec;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-x86.rs"));
@@ -928,7 +929,7 @@ fn convert_shuffle(
             .clone();
         if a == b {
             // PSHUFB the first argument (since it is the same as the second).
-            let constructed_mask = mask
+            let constructed_mask: Vec<u8> = mask
                 .iter()
                 // If the mask is greater than 15 it still may be referring to a lane in b.
                 .map(|&b| if b > 15 { b.wrapping_sub(16) } else { b })
@@ -942,7 +943,8 @@ fn convert_shuffle(
             pos.func.dfg.replace(inst).x86_pshufb(a, mask_value);
         } else {
             // PSHUFB the first argument, placing zeroes for unused lanes.
-            let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
+            let constructed_mask: Vec<u8> =
+                mask.iter().cloned().map(zero_unknown_lane_index).collect();
             let handle = pos.func.dfg.constants.insert(constructed_mask);
             // Move the built mask into another XMM register.
             let a_type = pos.func.dfg.value_type(a);
@@ -951,7 +953,7 @@ fn convert_shuffle(
             let shuffled_first_arg = pos.ins().x86_pshufb(a, mask_value);
 
             // PSHUFB the second argument, placing zeroes for unused lanes.
-            let constructed_mask = mask
+            let constructed_mask: Vec<u8> = mask
                 .iter()
                 .map(|b| b.wrapping_sub(16))
                 .map(zero_unknown_lane_index)

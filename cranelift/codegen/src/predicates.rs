@@ -10,6 +10,7 @@
 //! dead code warning.
 
 use crate::ir;
+use crate::ir::ConstantData;
 
 /// Check that an integer value is zero.
 #[allow(dead_code)]
@@ -33,14 +34,14 @@ pub fn is_zero_32_bit_float<T: Into<ir::immediates::Ieee32>>(x: T) -> bool {
 
 /// Check that a 128-bit vector contains all zeroes.
 #[allow(dead_code)]
-pub fn is_all_zeroes_128_bit<'b, T: PartialEq<&'b [u8; 16]>>(x: T) -> bool {
-    x.eq(&&[0; 16])
+pub fn is_all_zeroes(x: &ConstantData) -> bool {
+    x.iter().all(|&f| f == 0)
 }
 
 /// Check that a 128-bit vector contains all ones.
 #[allow(dead_code)]
-pub fn is_all_ones_128_bit<'b, T: PartialEq<&'b [u8; 16]>>(x: T) -> bool {
-    x.eq(&&[0xff; 16])
+pub fn is_all_ones(x: &ConstantData) -> bool {
+    x.iter().all(|&f| f == 0xff)
 }
 
 /// Check that `x` is the same as `y`.
@@ -123,17 +124,17 @@ mod tests {
     }
 
     #[test]
-    fn is_all_zeroes() {
-        assert!(is_all_zeroes_128_bit(&[0; 16]));
-        assert!(is_all_zeroes_128_bit(vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-        ]));
-        assert!(!is_all_zeroes_128_bit(&[1; 16]));
+    fn check_is_all_zeroes() {
+        assert!(is_all_zeroes(&[0; 16].as_ref().into()));
+        assert!(is_all_zeroes(
+            &vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into()
+        ));
+        assert!(!is_all_zeroes(&[1; 16].as_ref().into()));
     }
 
     #[test]
-    fn is_all_ones() {
-        assert!(!is_all_ones_128_bit(&[0; 16]));
-        assert!(is_all_ones_128_bit(&[0xff; 16]));
+    fn check_is_all_ones() {
+        assert!(!is_all_ones(&[0; 16].as_ref().into()));
+        assert!(is_all_ones(&[0xff; 16].as_ref().into()));
     }
 }

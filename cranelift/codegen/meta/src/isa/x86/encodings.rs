@@ -1848,14 +1848,14 @@ pub(crate) fn define<'defs>(
         let instruction = vconst.bind(vector(ty, sse_vector_size));
 
         let is_zero_128bit =
-            InstructionPredicate::new_is_all_zeroes_128bit(f_unary_const, "constant_handle");
+            InstructionPredicate::new_is_all_zeroes(f_unary_const, "constant_handle");
         let template = rec_vconst_optimized.nonrex().opcodes(&PXOR);
         e.enc_32_64_func(instruction.clone(), template, |builder| {
             builder.inst_predicate(is_zero_128bit)
         });
 
         let is_ones_128bit =
-            InstructionPredicate::new_is_all_ones_128bit(f_unary_const, "constant_handle");
+            InstructionPredicate::new_is_all_ones(f_unary_const, "constant_handle");
         let template = rec_vconst_optimized.nonrex().opcodes(&PCMPEQB);
         e.enc_32_64_func(instruction, template, |builder| {
             builder.inst_predicate(is_ones_128bit)

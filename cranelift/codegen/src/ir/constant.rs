@@ -12,10 +12,65 @@ use crate::ir::Constant;
 use crate::HashMap;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use core::fmt;
+use core::slice::Iter;
 use cranelift_entity::EntityRef;
 
-/// This type describes the actual constant data.
-pub type ConstantData = Vec<u8>;
+/// This type describes the actual constant data. Note that the bytes stored in this structure are
+/// expected to be in little-endian order; this is due to ease-of-use when interacting with
+/// WebAssembly values, which are [little-endian by design]
+/// (https://github.com/WebAssembly/design/blob/master/Portability.md).
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+pub struct ConstantData(Vec<u8>);
+
+impl From<Vec<u8>> for ConstantData {
+    fn from(v: Vec<u8>) -> Self {
+        Self(v)
+    }
+}
+
+impl From<&[u8]> for ConstantData {
+    fn from(v: &[u8]) -> Self {
+        Self(v.to_vec())
+    }
+}
+
+impl ConstantData {
+    /// Return the number of bytes in the constant.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Iterate over the constant's bytes.
+    pub fn iter(&self) -> Iter<u8> {
+        self.0.iter()
+    }
+}
+
+impl fmt::Display for ConstantData {
+    /// Print the constant data in hexadecimal format, e.g. 0x000102030405060708090a0b0c0d0e0f.
+    /// This function will flip the stored order of bytes--little-endian--to the more readable
+    /// big-endian ordering. Any zero bytes in high-order bytes will be discarded in the formatted
+    /// string.
+    ///
+    /// ```
+    /// use cranelift_codegen::ir::ConstantData;
+    /// let data = ConstantData::from([3, 2, 1, 0, 0].as_ref()); // note the little-endian order
+    /// assert_eq!(data.to_string(), "0x010203");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x")?;
+        let mut bytes_written = 0;
+        for b in self.0.iter().rev().skip_while(|&&b| b == 0) {
+            write!(f, "{:02x}", b)?;
+            bytes_written += 1;
+        }
+        if bytes_written < 1 {
+            write!(f, "00")?;
+        }
+        Ok(())
+    }
+}
 
 /// This type describes an offset in bytes within a constant pool.
 pub type ConstantOffset = u32;
@@ -79,7 +134,8 @@ impl ConstantPool {
     /// Insert constant data into the pool, returning a handle for later referencing; when constant
     /// data is inserted that is a duplicate of previous constant data, the existing handle will be
     /// returned.
-    pub fn insert(&mut self, constant_value: ConstantData) -> Constant {
+    pub fn insert(&mut self, constant_value: impl Into<ConstantData>) -> Constant {
+        let constant_value = constant_value.into();
         if self.values_to_handles.contains_key(&constant_value) {
             self.values_to_handles.get(&constant_value).unwrap().clone()
         } else {
@@ -153,6 +209,7 @@ impl ConstantPool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::string::ToString;
 
     #[test]
     fn empty() {
@@ -194,7 +251,7 @@ mod tests {
         sut.insert(vec![4, 5, 6]);
         sut.insert(vec![1, 2, 3]);
         let data = sut.iter().map(|(_, v)| v).collect::<Vec<&ConstantData>>();
-        assert_eq!(data, vec![&vec![1, 2, 3], &vec![4, 5, 6]]);
+        assert_eq!(data, vec![&vec![1, 2, 3].into(), &vec![4, 5, 6].into()]);
     }
 
     #[test]
@@ -202,7 +259,7 @@ mod tests {
         let mut sut = ConstantPool::new();
         let data = vec![1, 2, 3];
         let handle = sut.insert(data.clone());
-        assert_eq!(sut.get(handle), &data);
+        assert_eq!(sut.get(handle), &data.into());
     }
 
     #[test]
@@ -227,5 +284,23 @@ mod tests {
         let mut sut = ConstantPool::new();
         let a = sut.insert(vec![1]);
         sut.get_offset(a); // panics, set_offset should have been called
+    }
+
+    #[test]
+    fn display_constant_data() {
+        assert_eq!(ConstantData::from([0].as_ref()).to_string(), "0x00");
+        assert_eq!(ConstantData::from([42].as_ref()).to_string(), "0x2a");
+        assert_eq!(
+            ConstantData::from([3, 2, 1, 0].as_ref()).to_string(),
+            "0x010203"
+        );
+        assert_eq!(
+            ConstantData::from(3735928559u32.to_le_bytes().as_ref()).to_string(),
+            "0xdeadbeef"
+        );
+        assert_eq!(
+            ConstantData::from(0x0102030405060708u64.to_le_bytes().as_ref()).to_string(),
+            "0x0102030405060708"
+        );
     }
 }

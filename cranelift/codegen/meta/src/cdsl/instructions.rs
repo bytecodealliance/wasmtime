@@ -734,10 +734,10 @@ pub enum FormatPredicateKind {
     IsZero64BitFloat,
 
     /// Is the immediate format field member equal zero in all lanes?
-    IsAllZeroes128Bit,
+    IsAllZeroes,
 
     /// Does the immediate format field member have ones in all bits of all lanes?
-    IsAllOnes128Bit,
+    IsAllOnes,
 
     /// Has the value list (in member_name) the size specified in parameter?
     LengthEquals(usize),
@@ -818,12 +818,12 @@ impl FormatPredicateNode {
             FormatPredicateKind::IsZero64BitFloat => {
                 format!("predicates::is_zero_64_bit_float({})", self.member_name)
             }
-            FormatPredicateKind::IsAllZeroes128Bit => format!(
-                "predicates::is_all_zeroes_128_bit(func.dfg.constants.get({}))",
+            FormatPredicateKind::IsAllZeroes => format!(
+                "predicates::is_all_zeroes(func.dfg.constants.get({}))",
                 self.member_name
             ),
-            FormatPredicateKind::IsAllOnes128Bit => format!(
-                "predicates::is_all_ones_128_bit(func.dfg.constants.get({}))",
+            FormatPredicateKind::IsAllOnes => format!(
+                "predicates::is_all_ones(func.dfg.constants.get({}))",
                 self.member_name
             ),
             FormatPredicateKind::LengthEquals(num) => format!(
@@ -1069,25 +1069,25 @@ impl InstructionPredicate {
         ))
     }
 
-    pub fn new_is_all_zeroes_128bit(
+    pub fn new_is_all_zeroes(
         format: &InstructionFormat,
         field_name: &'static str,
     ) -> InstructionPredicateNode {
         InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
             format,
             field_name,
-            FormatPredicateKind::IsAllZeroes128Bit,
+            FormatPredicateKind::IsAllZeroes,
         ))
     }
 
-    pub fn new_is_all_ones_128bit(
+    pub fn new_is_all_ones(
         format: &InstructionFormat,
         field_name: &'static str,
     ) -> InstructionPredicateNode {
         InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
             format,
             field_name,
-            FormatPredicateKind::IsAllOnes128Bit,
+            FormatPredicateKind::IsAllOnes,
         ))
     }
 

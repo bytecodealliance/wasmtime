@@ -508,9 +508,8 @@ pub fn write_operands(
         UnaryConst {
             constant_handle, ..
         } => {
-            let data = dfg.constants.get(constant_handle);
-            let v128 = V128Imm::from(&data[..]);
-            write!(w, " {}", v128)
+            let constant_data = dfg.constants.get(constant_handle);
+            write!(w, " {}", constant_data)
         }
         Shuffle { mask, args, .. } => {
             let data = dfg.immediates.get(mask).expect(
