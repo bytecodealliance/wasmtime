@@ -62,12 +62,16 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
                         arg_ident.push(quote!(#len_ident));
                         arg_type.push(quote!(usize));
                     } else {
-                        // & or &mut type
-                        // so simply substitute with *mut type
-                        arg_type.push(quote!(*mut #elem));
-                        // we need to properly dereference the substituted raw
-                        // pointer if we are to properly call the hostcall fn
-                        call_arg_ident.push(quote!(&mut *#ident));
+                        // & or &mut type; substitute with *const or *mut type.
+                        // Also, we need to properly dereference the substituted raw
+                        // pointer if we are to properly call the hostcall fn.
+                        if ty.mutability.is_none() {
+                            arg_type.push(quote!(*const #elem));
+                            call_arg_ident.push(quote!(&*#ident));
+                        } else {
+                            arg_type.push(quote!(*mut #elem));
+                            call_arg_ident.push(quote!(&mut *#ident));
+                        }
                     }
                 } else {
                     arg_type.push(quote!(#ty));

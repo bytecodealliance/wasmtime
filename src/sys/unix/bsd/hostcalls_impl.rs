@@ -62,7 +62,7 @@ pub(crate) fn fd_readdir(
     cookie: host::__wasi_dircookie_t,
 ) -> Result<usize> {
     use crate::sys::unix::bsd::osfile::DirStream;
-    use libc::{fdopendir, memcpy, readdir, rewinddir, seekdir, telldir};
+    use libc::{fdopendir, readdir, rewinddir, seekdir, telldir};
     use nix::errno::Errno;
     use std::mem::ManuallyDrop;
     use std::sync::Mutex;
@@ -129,9 +129,9 @@ pub(crate) fn fd_readdir(
         host_buf_offset += std::mem::size_of_val(&entry);
         let name_ptr = unsafe { *host_entry }.d_name.as_ptr();
         unsafe {
-            memcpy(
-                host_buf_ptr.offset(host_buf_offset.try_into()?) as *mut _,
+            std::ptr::copy_nonoverlapping(
                 name_ptr as *const _,
+                host_buf_ptr.offset(host_buf_offset.try_into()?) as *mut _,
                 name_len,
             )
         };

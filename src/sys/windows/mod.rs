@@ -3,11 +3,15 @@ pub(crate) mod host_impl;
 pub(crate) mod hostcalls_impl;
 
 use crate::Result;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::path::Path;
 
 pub(crate) fn dev_null() -> Result<File> {
-    File::open("NUL").map_err(Into::into)
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("NUL")
+        .map_err(Into::into)
 }
 
 pub fn preopen_dir<P: AsRef<Path>>(path: P) -> Result<File> {

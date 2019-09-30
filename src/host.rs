@@ -479,23 +479,23 @@ pub(crate) struct __wasi_subscription_t___wasi_subscription_u___wasi_subscriptio
 }
 
 #[allow(unused)]
-pub(crate) unsafe fn ciovec_to_host<'a>(ciovec: &'a __wasi_ciovec_t) -> io::IoSlice<'a> {
+pub(crate) unsafe fn ciovec_to_host(ciovec: &__wasi_ciovec_t) -> io::IoSlice {
     let slice = slice::from_raw_parts(ciovec.buf as *const u8, ciovec.buf_len);
     io::IoSlice::new(slice)
 }
 
 #[allow(unused)]
-pub(crate) unsafe fn ciovec_to_host_mut<'a>(ciovec: &'a mut __wasi_ciovec_t) -> io::IoSliceMut<'a> {
+pub(crate) unsafe fn ciovec_to_host_mut(ciovec: &mut __wasi_ciovec_t) -> io::IoSliceMut {
     let slice = slice::from_raw_parts_mut(ciovec.buf as *mut u8, ciovec.buf_len);
     io::IoSliceMut::new(slice)
 }
 
-pub(crate) unsafe fn iovec_to_host<'a>(iovec: &'a __wasi_iovec_t) -> io::IoSlice<'a> {
+pub(crate) unsafe fn iovec_to_host(iovec: &__wasi_iovec_t) -> io::IoSlice {
     let slice = slice::from_raw_parts(iovec.buf as *const u8, iovec.buf_len);
     io::IoSlice::new(slice)
 }
 
-pub(crate) unsafe fn iovec_to_host_mut<'a>(iovec: &'a mut __wasi_iovec_t) -> io::IoSliceMut<'a> {
+pub(crate) unsafe fn iovec_to_host_mut(iovec: &mut __wasi_iovec_t) -> io::IoSliceMut {
     let slice = slice::from_raw_parts_mut(iovec.buf as *mut u8, iovec.buf_len);
     io::IoSliceMut::new(slice)
 }

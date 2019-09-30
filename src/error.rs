@@ -87,8 +87,8 @@ pub enum WasiError {
 }
 
 impl WasiError {
-    pub fn as_raw_errno(&self) -> host::__wasi_errno_t {
-        *self as host::__wasi_errno_t
+    pub fn as_raw_errno(self) -> host::__wasi_errno_t {
+        self as host::__wasi_errno_t
     }
 }
 
