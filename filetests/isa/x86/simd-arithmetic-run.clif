@@ -1,0 +1,155 @@
+test run
+set enable_simd
+target x86_64 skylake
+
+function %iadd_i32x4() -> b1 {
+ebb0:
+    v0 = vconst.i32x4 [1 1 1 1]
+    v1 = vconst.i32x4 [1 2 3 4]
+    v2 = iadd v0, v1
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 2
+
+    v5 = extractlane v2, 3
+    v6 = icmp_imm eq v5, 5
+    ; TODO replace extractlanes with vector comparison
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+function %iadd_i8x16_with_overflow() -> b1 {
+ebb0:
+    v0 = vconst.i8x16 [255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255]
+    v1 = vconst.i8x16 [2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2]
+    v2 = iadd v0, v1
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 1
+    ; TODO replace extractlane with vector comparison
+
+    return v4
+}
+; run
+
+function %isub_i32x4() -> b1 {
+ebb0:
+    v0 = vconst.i32x4 [1 1 1 1]
+    v1 = vconst.i32x4 [1 2 3 4]
+    v2 = isub v0, v1
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0
+
+    v5 = extractlane v2, 1
+    v6 = icmp_imm eq v5, 0xffffffff
+    ; TODO replace extractlanes with vector comparison
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+
+function %ineg_i32x4() -> b1 {
+ebb0:
+    v0 = vconst.i32x4 [1 1 1 1]
+    v2 = ineg v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, -1
+
+    return v4
+}
+; run
+
+function %imul_i32x4() -> b1 {
+ebb0:
+    v0 = vconst.i32x4 [-1 0 1 -2147483647] ; e.g. -2147483647 == 0x80_00_00_01
+    v1 = vconst.i32x4 [2 2 2 2]
+    v2 = imul v0, v1
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, -2
+
+    v5 = extractlane v2, 1
+    v6 = icmp_imm eq v5, 0
+
+    v7 = extractlane v2, 3
+    v8 = icmp_imm eq v7, 2 ; 0x80_00_00_01 * 2 == 0x1_00_00_00_02 (and the 1 is dropped)
+
+    v9 = band v4, v6
+    v10 = band v8, v9
+    return v10
+}
+; run
+
+function %imul_i16x8() -> b1 {
+ebb0:
+    v0 = vconst.i16x8 [-1 0 1 32767 0 0 0 0] ; e.g. 32767 == 0x7f_ff
+    v1 = vconst.i16x8 [2 2 2 2 0 0 0 0]
+    v2 = imul v0, v1
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0xfffe ; 0xfffe == -2; -2 will not work here and below because v3 is
+    ; being uextend-ed, not sextend-ed
+
+    v5 = extractlane v2, 1
+    v6 = icmp_imm eq v5, 0
+
+    v7 = extractlane v2, 3
+    v8 = icmp_imm eq v7, 0xfffe ; 0x7f_ff * 2 == 0xff_fe
+
+    v9 = band v4, v6
+    v10 = band v8, v9
+
+    return v4
+}
+; run
+
+function %sadd_sat_i8x16() -> b1 {
+ebb0:
+    v0 = vconst.i8x16 [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+    v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+    v2 = sadd_sat v0, v1
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 127
+
+    return v4
+}
+; run
+
+function %uadd_sat_i16x8() -> b1 {
+ebb0:
+    v0 = vconst.i16x8 [-1 0 0 0 0 0 0 0]
+    v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1]
+
+    v2 = uadd_sat v0, v1
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 65535
+
+    return v4
+}
+; run
+
+function %sub_sat_i8x16() -> b1 {
+ebb0:
+    v0 = vconst.i8x16 [128 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] ; 128 == 0x80 == -128
+    v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+    v2 = ssub_sat v0, v1
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0x80 ; 0x80 == -128
+
+    ; now re-use 0x80 as an unsigned 128
+    v5 = usub_sat v0, v2
+    v6 = extractlane v5, 0
+    v7 = icmp_imm eq v6, 0
+
+    v8 = band v4, v7
+    return v8
+}
+; run
