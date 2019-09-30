@@ -1975,13 +1975,17 @@ pub(crate) fn define<'defs>(
 
     // SIMD logical operations
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        // band
+        // and
         let band = band.bind(vector(ty, sse_vector_size));
         e.enc_32_64(band, rec_fa.opcodes(&PAND));
 
-        // bor
+        // or
         let bor = bor.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bor, rec_fa.nonrex().opcodes(&POR));
+        e.enc_32_64(bor, rec_fa.opcodes(&POR));
+
+        // xor
+        let bxor = bxor.bind(vector(ty, sse_vector_size));
+        e.enc_32_64(bxor, rec_fa.opcodes(&PXOR));
     }
 
     // SIMD icmp using PCMPEQ*
