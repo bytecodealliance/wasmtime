@@ -263,6 +263,9 @@ pub static PADDUSB: [u8; 3] = [0x66, 0x0f, 0xdc];
 /// Add packed unsigned word integers from xmm2/m128 and xmm1 saturate the results (SSE).
 pub static PADDUSW: [u8; 3] = [0x66, 0x0f, 0xdd];
 
+/// Bitwise AND of xmm2/m128 and xmm1 (SSE2).
+pub static PAND: [u8; 3] = [0x66, 0x0f, 0xdb];
+
 /// Compare packed data for equal (SSE2).
 pub static PCMPEQB: [u8; 3] = [0x66, 0x0f, 0x74];
 
