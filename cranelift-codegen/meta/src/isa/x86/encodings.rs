@@ -1874,13 +1874,6 @@ pub(crate) fn define<'defs>(
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
     }
 
-    // SIMD bor using ORPS
-    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        let instruction = bor.bind(vector(ty, sse_vector_size));
-        let template = rec_fa.nonrex().opcodes(&ORPS);
-        e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
-    }
-
     // SIMD register movement: store, load, spill, fill, regmove. All of these use encodings of
     // MOVUPS and MOVAPS from SSE (TODO ideally all of these would either use MOVAPS when we have
     // alignment or type-specific encodings, see https://github.com/CraneStation/cranelift/issues/1039).
@@ -1978,6 +1971,12 @@ pub(crate) fn define<'defs>(
     ] {
         let imul = imul.bind(vector(ty.clone(), sse_vector_size));
         e.enc_32_64_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
+    }
+
+    // SIMD bor
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let bor = bor.bind(vector(ty, sse_vector_size));
+        e.enc_32_64(bor, rec_fa.nonrex().opcodes(&POR));
     }
 
     // SIMD icmp using PCMPEQ*

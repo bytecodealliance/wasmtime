@@ -307,6 +307,9 @@ pub static POP_REG: [u8; 1] = [0x58];
 /// Returns the count of number of bits set to 1.
 pub static POPCNT: [u8; 3] = [0xf3, 0x0f, 0xb8];
 
+/// Bitwise OR of xmm2/m128 and xmm1 (SSE2).
+pub static POR: [u8; 3] = [0x66, 0x0f, 0xeb];
+
 /// Shuffle bytes in xmm1 according to contents of xmm2/m128 (SSE3).
 pub static PSHUFB: [u8; 4] = [0x66, 0x0f, 0x38, 0x00];
 
