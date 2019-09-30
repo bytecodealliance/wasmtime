@@ -1973,8 +1973,13 @@ pub(crate) fn define<'defs>(
         e.enc_32_64_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
     }
 
-    // SIMD bor
+    // SIMD logical operations
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        // band
+        let band = band.bind(vector(ty, sse_vector_size));
+        e.enc_32_64(band, rec_fa.opcodes(&PAND));
+
+        // bor
         let bor = bor.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bor, rec_fa.nonrex().opcodes(&POR));
     }
