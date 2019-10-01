@@ -44,6 +44,10 @@ fn unwrap_inst(
         .args
         .iter()
         .enumerate()
+        .filter(|(arg_num, _)| {
+            // Variable args are specially handled after extracting args.
+            !inst.operands_in[*arg_num].is_varargs()
+        })
         .map(|(arg_num, arg)| match &arg {
             Expr::Var(var_index) => var_pool.get(*var_index).name.as_ref(),
             Expr::Literal(_) => {
@@ -122,16 +126,9 @@ fn unwrap_inst(
                 } else if op.is_value() {
                     let n = inst.value_opnums.iter().position(|&i| i == op_num).unwrap();
                     fmtln!(fmt, "pos.func.dfg.resolve_aliases(args[{}]),", n);
-                } else if op.is_varargs() {
-                    let n = inst.imm_opnums.iter().chain(inst.value_opnums.iter()).max().map(|n| n + 1).unwrap_or(0);
-                    // We need to create a `Vec` here, as using a slice would result in a borrowck
-                    // error later on.
-                    fmtln!(fmt, "\
-                        args.iter().skip({}).map(|&arg| pos.func.dfg.resolve_aliases(arg)).collect::<Vec<_>>(),\
-                    ", n);
                 } else {
-                    // This is a value list argument.
-                    assert!(iform.has_value_list);
+                    // This is a value list argument or a varargs.
+                    assert!(iform.has_value_list || op.is_varargs());
                 }
             };
 
@@ -167,10 +164,14 @@ fn unwrap_inst(
             let name = &var_pool
                 .get(apply.args[i].maybe_var().expect("vararg without name"))
                 .name;
-
-            // Above name is set to an `Vec` representing the varargs. However it is expected to be
-            // `&[Value]` below, so we borrow it.
-            fmtln!(fmt, "let {} = &{};", name, name);
+            let n = inst
+                .imm_opnums
+                .iter()
+                .chain(inst.value_opnums.iter())
+                .max()
+                .copied()
+                .unwrap_or(0);
+            fmtln!(fmt, "let {} = &Vec::from(&args[{}..]);", name, n);
         }
     }
 
