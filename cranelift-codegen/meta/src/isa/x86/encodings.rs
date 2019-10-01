@@ -1759,24 +1759,22 @@ pub(crate) fn define(
     }
 
     // SIMD insertlane
-    let mut x86_pinsr_mapping: HashMap<u64, (&'static [u8], Option<SettingPredicateNumber>)> =
-        HashMap::new();
-    x86_pinsr_mapping.insert(8, (&PINSRB, Some(use_sse41_simd)));
-    x86_pinsr_mapping.insert(16, (&PINSRW, None));
-    x86_pinsr_mapping.insert(32, (&PINSR, Some(use_sse41_simd)));
-    x86_pinsr_mapping.insert(64, (&PINSR, Some(use_sse41_simd)));
-
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        if let Some((opcode, isap)) = x86_pinsr_mapping.get(&ty.lane_bits()) {
-            let instruction = x86_pinsr.bind_vector_from_lane(ty, sse_vector_size);
-            let template = rec_r_ib_unsigned_r.opcodes(opcode);
-            if ty.lane_bits() < 64 {
-                e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap.clone());
-            } else {
-                // It turns out the 64-bit widths have REX/W encodings and only are available on
-                // x86_64.
-                e.enc64_maybe_isap(instruction, template.rex().w(), isap.clone());
-            }
+        let (opcode, isap): (&[_], _) = match ty.lane_bits() {
+            8 => (&PINSRB, Some(use_sse41_simd)),
+            16 => (&PINSRW, None),
+            32 | 64 => (&PINSR, Some(use_sse41_simd)),
+            _ => panic!("invalid size for SIMD insertlane"),
+        };
+
+        let instruction = x86_pinsr.bind_vector_from_lane(ty, sse_vector_size);
+        let template = rec_r_ib_unsigned_r.opcodes(opcode);
+        if ty.lane_bits() < 64 {
+            e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap);
+        } else {
+            // It turns out the 64-bit widths have REX/W encodings and only are available on
+            // x86_64.
+            e.enc64_maybe_isap(instruction, template.rex().w(), isap);
         }
     }
 
@@ -1802,23 +1800,22 @@ pub(crate) fn define(
     }
 
     // SIMD extractlane
-    let mut x86_pextr_mapping: HashMap<u64, &'static [u8]> = HashMap::new();
-    x86_pextr_mapping.insert(8, &PEXTRB);
-    x86_pextr_mapping.insert(16, &PEXTRW);
-    x86_pextr_mapping.insert(32, &PEXTR);
-    x86_pextr_mapping.insert(64, &PEXTR);
-
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        if let Some(opcode) = x86_pextr_mapping.get(&ty.lane_bits()) {
-            let instruction = x86_pextr.bind_vector_from_lane(ty, sse_vector_size);
-            let template = rec_r_ib_unsigned_gpr.opcodes(opcode);
-            if ty.lane_bits() < 64 {
-                e.enc_32_64_maybe_isap(instruction, template.nonrex(), Some(use_sse41_simd));
-            } else {
-                // It turns out the 64-bit widths have REX/W encodings and only are available on
-                // x86_64.
-                e.enc64_maybe_isap(instruction, template.rex().w(), Some(use_sse41_simd));
-            }
+        let opcode = match ty.lane_bits() {
+            8 => &PEXTRB,
+            16 => &PEXTRW,
+            32 | 64 => &PEXTR,
+            _ => panic!("invalid size for SIMD extractlane"),
+        };
+
+        let instruction = x86_pextr.bind_vector_from_lane(ty, sse_vector_size);
+        let template = rec_r_ib_unsigned_gpr.opcodes(opcode);
+        if ty.lane_bits() < 64 {
+            e.enc_32_64_maybe_isap(instruction, template.nonrex(), Some(use_sse41_simd));
+        } else {
+            // It turns out the 64-bit widths have REX/W encodings and only are available on
+            // x86_64.
+            e.enc64_maybe_isap(instruction, template.rex().w(), Some(use_sse41_simd));
         }
     }
 
@@ -1996,27 +1993,28 @@ pub(crate) fn define(
     }
 
     // SIMD icmp using PCMPEQ*
-    let mut pcmpeq_mapping: HashMap<u64, (&[u8], Option<SettingPredicateNumber>)> = HashMap::new();
-    pcmpeq_mapping.insert(8, (&PCMPEQB, None));
-    pcmpeq_mapping.insert(16, (&PCMPEQW, None));
-    pcmpeq_mapping.insert(32, (&PCMPEQD, None));
-    pcmpeq_mapping.insert(64, (&PCMPEQQ, Some(use_sse41_simd)));
     for ty in ValueType::all_lane_types().filter(|t| t.is_int() && allowed_simd_type(t)) {
-        if let Some((opcodes, isa_predicate)) = pcmpeq_mapping.get(&ty.lane_bits()) {
-            let instruction = icmp.bind_vector_from_lane(ty, sse_vector_size);
-            let f_int_compare = formats.get(formats.by_name("IntCompare"));
-            let has_eq_condition_code =
-                InstructionPredicate::new_has_condition_code(f_int_compare, IntCC::Equal, "cond");
-            let template = rec_icscc_fpr.nonrex().opcodes(*opcodes);
-            e.enc_32_64_func(instruction, template, |builder| {
-                let builder = builder.inst_predicate(has_eq_condition_code);
-                if let Some(p) = isa_predicate {
-                    builder.isa_predicate(*p)
-                } else {
-                    builder
-                }
-            });
-        }
+        let (opcodes, isa_predicate): (&[_], _) = match ty.lane_bits() {
+            8 => (&PCMPEQB, None),
+            16 => (&PCMPEQW, None),
+            32 => (&PCMPEQD, None),
+            64 => (&PCMPEQQ, Some(use_sse41_simd)),
+            _ => panic!("invalid size for SIMD icmp"),
+        };
+
+        let instruction = icmp.bind_vector_from_lane(ty, sse_vector_size);
+        let f_int_compare = formats.get(formats.by_name("IntCompare"));
+        let has_eq_condition_code =
+            InstructionPredicate::new_has_condition_code(f_int_compare, IntCC::Equal, "cond");
+        let template = rec_icscc_fpr.nonrex().opcodes(opcodes);
+        e.enc_32_64_func(instruction, template, |builder| {
+            let builder = builder.inst_predicate(has_eq_condition_code);
+            if let Some(p) = isa_predicate {
+                builder.isa_predicate(p)
+            } else {
+                builder
+            }
+        });
     }
 
     // Reference type instructions
