@@ -18,12 +18,12 @@ use crate::shared::types::{Bool, Float, Int, Reference};
 use cranelift_codegen_shared::condcodes::IntCC;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct OpcodeNumber(u32);
+pub(crate) struct OpcodeNumber(u32);
 entity_impl!(OpcodeNumber);
 
-pub type AllInstructions = PrimaryMap<OpcodeNumber, Instruction>;
+pub(crate) type AllInstructions = PrimaryMap<OpcodeNumber, Instruction>;
 
-pub struct InstructionGroupBuilder<'format_reg, 'all_inst> {
+pub(crate) struct InstructionGroupBuilder<'format_reg, 'all_inst> {
     _name: &'static str,
     _doc: &'static str,
     format_registry: &'format_reg FormatRegistry,
@@ -67,7 +67,7 @@ impl<'format_reg, 'all_inst> InstructionGroupBuilder<'format_reg, 'all_inst> {
 /// Every instruction must belong to exactly one instruction group. A given
 /// target architecture can support instructions from multiple groups, and it
 /// does not necessarily support all instructions in a group.
-pub struct InstructionGroup {
+pub(crate) struct InstructionGroup {
     _name: &'static str,
     _doc: &'static str,
     instructions: Vec<Instruction>,
@@ -85,20 +85,20 @@ impl InstructionGroup {
 /// Instructions can have parameters bound to them to specialize them for more specific encodings
 /// (e.g. the encoding for adding two float types may be different than that of adding two
 /// integer types)
-pub trait Bindable {
+pub(crate) trait Bindable {
     /// Bind a parameter to an instruction
     fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction;
 }
 
 #[derive(Debug)]
-pub struct PolymorphicInfo {
+pub(crate) struct PolymorphicInfo {
     pub use_typevar_operand: bool,
     pub ctrl_typevar: TypeVar,
     pub other_typevars: Vec<TypeVar>,
 }
 
 #[derive(Debug)]
-pub struct InstructionContent {
+pub(crate) struct InstructionContent {
     /// Instruction mnemonic, also becomes opcode name.
     pub name: String,
     pub camel_name: String,
@@ -153,7 +153,7 @@ pub struct InstructionContent {
 }
 
 #[derive(Clone, Debug)]
-pub struct Instruction {
+pub(crate) struct Instruction {
     content: Rc<InstructionContent>,
 }
 
@@ -221,7 +221,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-pub struct InstructionBuilder {
+pub(crate) struct InstructionBuilder {
     name: String,
     doc: String,
     operands_in: Option<Vec<Operand>>,
@@ -384,7 +384,7 @@ impl InstructionBuilder {
 
 /// A thin wrapper like Option<ValueType>, but with more precise semantics.
 #[derive(Clone)]
-pub enum ValueTypeOrAny {
+pub(crate) enum ValueTypeOrAny {
     ValueType(ValueType),
     Any,
 }
@@ -467,7 +467,7 @@ impl Display for Immediate {
 }
 
 #[derive(Clone)]
-pub struct BoundInstruction {
+pub(crate) struct BoundInstruction {
     pub inst: Instruction,
     pub value_types: Vec<ValueTypeOrAny>,
     pub immediate_values: Vec<Immediate>,
@@ -941,7 +941,7 @@ impl InstructionPredicateNode {
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub struct InstructionPredicate {
+pub(crate) struct InstructionPredicate {
     node: Option<InstructionPredicateNode>,
 }
 
@@ -1191,15 +1191,16 @@ impl InstructionPredicate {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct InstructionPredicateNumber(u32);
+pub(crate) struct InstructionPredicateNumber(u32);
 entity_impl!(InstructionPredicateNumber);
 
-pub type InstructionPredicateMap = PrimaryMap<InstructionPredicateNumber, InstructionPredicate>;
+pub(crate) type InstructionPredicateMap =
+    PrimaryMap<InstructionPredicateNumber, InstructionPredicate>;
 
 /// A registry of predicates to help deduplicating them, during Encodings construction. When the
 /// construction process is over, it needs to be extracted with `extract` and associated to the
 /// TargetIsa.
-pub struct InstructionPredicateRegistry {
+pub(crate) struct InstructionPredicateRegistry {
     /// Maps a predicate number to its actual predicate.
     map: InstructionPredicateMap,
 
@@ -1231,7 +1232,7 @@ impl InstructionPredicateRegistry {
 }
 
 /// An instruction specification, containing an instruction that has bound types or not.
-pub enum InstSpec {
+pub(crate) enum InstSpec {
     Inst(Instruction),
     Bound(BoundInstruction),
 }

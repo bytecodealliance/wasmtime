@@ -103,7 +103,7 @@ impl Into<OperandConstraint> for Stack {
 /// branch instructions. It is an `(origin, bits)` tuple describing the exact
 /// range that can be encoded in a branch instruction.
 #[derive(Clone)]
-pub struct EncodingRecipe {
+pub(crate) struct EncodingRecipe {
     /// Short mnemonic name for this recipe.
     pub name: String,
 
@@ -158,13 +158,13 @@ impl PartialEq for EncodingRecipe {
 impl Eq for EncodingRecipe {}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct EncodingRecipeNumber(u32);
+pub(crate) struct EncodingRecipeNumber(u32);
 entity_impl!(EncodingRecipeNumber);
 
-pub type Recipes = PrimaryMap<EncodingRecipeNumber, EncodingRecipe>;
+pub(crate) type Recipes = PrimaryMap<EncodingRecipeNumber, EncodingRecipe>;
 
 #[derive(Clone)]
-pub struct EncodingRecipeBuilder {
+pub(crate) struct EncodingRecipeBuilder {
     pub name: String,
     format: InstructionFormatIndex,
     pub base_size: u64,

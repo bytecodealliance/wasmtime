@@ -7,7 +7,7 @@ use crate::cdsl::regs::IsaRegs;
 use crate::shared::Definitions as SharedDefinitions;
 
 /// An helper to create recipes and use them when defining the RISCV encodings.
-pub struct RecipeGroup<'formats> {
+pub(crate) struct RecipeGroup<'formats> {
     /// Memoized format registry, to pass it to the builders.
     formats: &'formats FormatRegistry,
 

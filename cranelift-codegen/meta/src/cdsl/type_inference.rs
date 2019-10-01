@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-pub enum Constraint {
+pub(crate) enum Constraint {
     /// Constraint specifying that a type var tv1 must be wider than or equal to type var tv2 at
     /// runtime. This requires that:
     /// 1) They have the same number of lanes
