@@ -95,10 +95,11 @@ impl CondCode for IntCC {
     }
 }
 
-impl Display for IntCC {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+impl IntCC {
+    /// Get the corresponding string condition code for the IntCC object.
+    pub fn to_static_str(self) -> &'static str {
         use self::IntCC::*;
-        f.write_str(match *self {
+        match self {
             Equal => "eq",
             NotEqual => "ne",
             SignedGreaterThan => "sgt",
@@ -111,7 +112,13 @@ impl Display for IntCC {
             UnsignedLessThanOrEqual => "ule",
             Overflow => "of",
             NotOverflow => "nof",
-        })
+        }
+    }
+}
+
+impl Display for IntCC {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.write_str(self.to_static_str())
     }
 }
 
