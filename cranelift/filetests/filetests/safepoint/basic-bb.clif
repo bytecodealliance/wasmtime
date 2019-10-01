@@ -32,10 +32,19 @@ function %test(i32, r64, r64) -> r64 {
 ; nextln:   v10 = copy v0
 ; nextln:   jump ebb1(v10)
 ; nextln: 
+; nextln: ebb7:
+; nextln:   regmove.i32 v5, %rcx -> %rax
+; nextln:   jump ebb1(v5)
+; nextln: 
 ; nextln: ebb1(v3: i32 [%rax]):
 ; nextln:   v8 = iconst.i32 1
 ; nextln:   v4 = isub v8, v3
 ; nextln:   jump ebb2(v4)
+; nextln: 
+; nextln: ebb8:
+; nextln:   v9 = copy.i32 v0
+; nextln:   regmove v9, %rax -> %rcx
+; nextln:   jump ebb2(v9)
 ; nextln: 
 ; nextln: ebb2(v5: i32 [%rcx]):
 ; nextln:   safepoint v1, v2
@@ -60,13 +69,4 @@ function %test(i32, r64, r64) -> r64 {
 ; nextln: ebb6:
 ; nextln:   regmove.r64 v2, %rdx -> %rax
 ; nextln:   return v2
-; nextln: 
-; nextln: ebb7:
-; nextln:   regmove.i32 v5, %rcx -> %rax
-; nextln:   jump ebb1(v5)
-; nextln: 
-; nextln: ebb8:
-; nextln:   v9 = copy.i32 v0
-; nextln:   regmove v9, %rax -> %rcx
-; nextln:   jump ebb2(v9)
 ; nextln: }
