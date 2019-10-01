@@ -164,7 +164,7 @@ fn replace_nonrex_constraints(
 /// Encodings, in encodings.rs. This is an idiosyncrasy of the x86 meta-language, and could be
 /// reconsidered later.
 #[derive(Clone)]
-pub struct Template<'builder> {
+pub(crate) struct Template<'builder> {
     /// Mapping of format indexes to format data, used in the build() method.
     formats: &'builder FormatRegistry,
 
