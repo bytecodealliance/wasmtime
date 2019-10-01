@@ -51,10 +51,13 @@ use std::str::FromStr;
 use target_lexicon::Triple;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::{cache_create_new_config, cache_init};
-use wasmtime_environ::{
-    Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo, Tunables, VMOffsets,
-};
+use wasmtime_environ::{Compiler, ModuleEnvironment, ModuleVmctxInfo, Tunables, VMOffsets};
 use wasmtime_obj::emit_module;
+
+#[cfg(feature = "lightbeam")]
+type DefaultCompiler = wasmtime_environ::lightbeam::Lightbeam;
+#[cfg(not(feature = "lightbeam"))]
+type DefaultCompiler = wasmtime_environ::cranelift::Cranelift;
 
 const USAGE: &str = "
 Wasm to native object translation utility.
@@ -240,7 +243,7 @@ fn handle_module(
 
     // TODO: use the traps information
     let (compilation, relocations, address_transform, value_ranges, stack_slots, _traps) =
-        Cranelift::compile_module(
+        DefaultCompiler::compile_module(
             &module,
             lazy_function_body_inputs,
             &*isa,
