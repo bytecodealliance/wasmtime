@@ -103,20 +103,20 @@ ebb0(v0: i32):
     v2 = iconst.i32 2
     jump ebb1(v1, v2)
 
+    ; check:  $(splitEdge=$EBB):
+    ; check:    $(nv11b=$V) = copy.i32 v11
+    ; not:      copy
+    ; check:    jump ebb1($nv11b, v12)
+
 ebb1(v10: i32, v11: i32):
     ; v11 needs to be isolated because it interferes with v10.
     ; check: ebb1(v10: i32 [$LOC], $(nv11a=$V): i32 [$LOC])
     ; check: v11 = copy $nv11a
     v12 = iadd v10, v11
     v13 = icmp ult v12, v0
-    ; check:  brnz v13, $(splitEdge=$EBB)
+    ; check:  brnz v13, $splitEdge
     brnz v13, ebb1(v11, v12)
     jump ebb2
-
-    ; check:  $splitEdge:
-    ; check:    $(nv11b=$V) = copy.i32 v11
-    ; not:      copy
-    ; check:   jump ebb1($nv11b, v12)
 
 ebb2:
     return v12

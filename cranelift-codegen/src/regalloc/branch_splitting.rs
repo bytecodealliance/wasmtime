@@ -22,7 +22,6 @@ pub fn run(
 ) {
     let mut ctx = Context {
         has_new_blocks: false,
-        has_fallthrough_return: None,
         cur: EncCursor::new(func, isa),
         domtree,
         topo,
@@ -34,12 +33,6 @@ pub fn run(
 struct Context<'a> {
     /// True if new blocks were inserted.
     has_new_blocks: bool,
-
-    /// Record whether newly inserted empty blocks should be inserted last, or before the last, to
-    /// avoid disturbing the expected control flow of `fallthroug_return` statements.
-    ///
-    /// This value is computed when needed. The Option wraps the computed value if any.
-    has_fallthrough_return: Option<bool>,
 
     /// Current instruction as well as reference to function and ISA.
     cur: EncCursor<'a>,
@@ -89,7 +82,13 @@ impl<'a> Context<'a> {
         // If there are any parameters, split the edge.
         if self.should_split_edge(target) {
             // Create the block the branch will jump to.
-            let new_ebb = self.make_empty_ebb();
+            let new_ebb = self.cur.func.dfg.make_ebb();
+
+            // Insert the new block before the destination, such that it can fallthrough in the
+            // target block.
+            assert_ne!(Some(target), self.cur.layout().entry_block());
+            self.cur.layout_mut().insert_ebb(new_ebb, target);
+            self.has_new_blocks = true;
 
             // Extract the arguments of the branch instruction, split the Ebb parameters and the
             // branch arguments
@@ -155,28 +154,6 @@ impl<'a> Context<'a> {
             // Reset the cursor to point to new terminator of the old ebb.
             self.cur.goto_inst(jump);
         }
-    }
-
-    // A new ebb must be inserted before the last ebb because the last ebb may have a
-    // fallthrough_return and can't have anything after it.
-    fn make_empty_ebb(&mut self) -> Ebb {
-        let last_ebb = self.cur.layout().last_ebb().unwrap();
-        if self.has_fallthrough_return == None {
-            let last_inst = self.cur.layout().last_inst(last_ebb).unwrap();
-            self.has_fallthrough_return =
-                Some(self.cur.func.dfg[last_inst].opcode() == Opcode::FallthroughReturn);
-        }
-        let new_ebb = self.cur.func.dfg.make_ebb();
-        if self.has_fallthrough_return == Some(true) {
-            // Insert before the last block which has a fallthrough_return
-            // instruction.
-            self.cur.layout_mut().insert_ebb(new_ebb, last_ebb);
-        } else {
-            // Insert after the last block.
-            self.cur.layout_mut().insert_ebb_after(new_ebb, last_ebb);
-        }
-        self.has_new_blocks = true;
-        new_ebb
     }
 
     /// Returns whether we should introduce a new branch.
