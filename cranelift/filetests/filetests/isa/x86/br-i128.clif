@@ -4,6 +4,11 @@ target x86_64
 function u0:0(i128) -> i8 fast {
 ebb0(v0: i128):
     brz v0, ebb2
+    ; check: v0 = iconcat v3, v4
+    ; nextln: v5 = icmp_imm eq v3, 0
+    ; nextln: v6 = icmp_imm eq v4, 0
+    ; nextln: v7 = band v5, v6
+    ; nextln: brnz v7, ebb2
     jump ebb1
 
 ebb1:
@@ -18,7 +23,14 @@ ebb2:
 function u0:1(i128) -> i8 fast {
 ebb0(v0: i128):
     brnz v0, ebb2
+    ; check: v0 = iconcat v3, v4
+    ; nextln: brnz v3, ebb2
+    ; nextln: fallthrough ebb3
+
+    ; check: ebb3:
+    ; nextln: brnz.i64 v4, ebb2
     jump ebb1
+    ; nextln: fallthrough ebb1
 
 ebb1:
     v1 = iconst.i8 0

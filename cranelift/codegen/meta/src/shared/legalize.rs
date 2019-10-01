@@ -257,7 +257,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
                 )
             ),
             def!(c = band(a, b)),
-            def!(brz(c, ebb, vararg)),
+            def!(brnz(c, ebb, vararg)),
         ],
     );
 
