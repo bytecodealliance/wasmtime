@@ -6,7 +6,7 @@ use crate::packed_option::PackedOption;
 use core::fmt;
 use core::marker::PhantomData;
 #[cfg(test)]
-use std::string::String;
+use alloc::string::String;
 
 /// Tag type defining forest types for a map.
 struct MapTypes<K, V>(PhantomData<(K, V)>);
