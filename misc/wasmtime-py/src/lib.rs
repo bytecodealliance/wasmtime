@@ -69,7 +69,7 @@ pub fn instantiate(
         isa_builder.finish(cranelift_codegen::settings::Flags::new(flag_builder))
     };
 
-    let mut context = wasmtime_jit::Context::with_isa(isa);
+    let mut context = wasmtime_jit::Context::with_isa(isa, wasmtime_jit::CompilationStrategy::Auto);
     context.set_debug_info(generate_debug_info);
     let global_exports = context.get_global_exports();
 

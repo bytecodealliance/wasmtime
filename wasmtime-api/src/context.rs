@@ -2,7 +2,7 @@ use std::cell::{RefCell, RefMut};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use wasmtime_jit::{Compiler, Features};
+use wasmtime_jit::{CompilationStrategy, Compiler, Features};
 
 use cranelift_codegen::settings;
 
@@ -59,5 +59,5 @@ pub(crate) fn create_compiler(flags: settings::Flags) -> Compiler {
         isa_builder.finish(flags)
     };
 
-    Compiler::new(isa)
+    Compiler::new(isa, CompilationStrategy::Auto)
 }

@@ -25,6 +25,20 @@ use wasmtime_runtime::{
     VMFunctionBody,
 };
 
+/// Select which kind of compilation to use.
+#[derive(Copy, Clone, Debug)]
+pub enum CompilationStrategy {
+    /// Let Wasmtime pick the strategy.
+    Auto,
+
+    /// Compile all functions with Cranelift.
+    AlwaysCranelift,
+
+    /// Compile all functions with Lightbeam.
+    #[cfg(feature = "lightbeam")]
+    AlwaysLightbeam,
+}
+
 /// A WebAssembly code JIT compiler.
 ///
 /// A `Compiler` instance owns the executable memory that it allocates.
@@ -40,6 +54,7 @@ pub struct Compiler {
     trap_registration_guards: Vec<TrapRegistrationGuard>,
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
     signatures: SignatureRegistry,
+    strategy: CompilationStrategy,
 
     /// The `FunctionBuilderContext`, shared between trampline function compilations.
     fn_builder_ctx: FunctionBuilderContext,
@@ -47,7 +62,7 @@ pub struct Compiler {
 
 impl Compiler {
     /// Construct a new `Compiler`.
-    pub fn new(isa: Box<dyn TargetIsa>) -> Self {
+    pub fn new(isa: Box<dyn TargetIsa>, strategy: CompilationStrategy) -> Self {
         Self {
             isa,
             code_memory: CodeMemory::new(),
@@ -55,6 +70,7 @@ impl Compiler {
             trampoline_park: HashMap::new(),
             signatures: SignatureRegistry::new(),
             fn_builder_ctx: FunctionBuilderContext::new(),
+            strategy,
         }
     }
 }
@@ -72,11 +88,6 @@ impl Drop for Compiler {
         self.trap_registration_guards.clear();
     }
 }
-
-#[cfg(feature = "lightbeam")]
-type DefaultCompiler = wasmtime_environ::lightbeam::Lightbeam;
-#[cfg(not(feature = "lightbeam"))]
-type DefaultCompiler = wasmtime_environ::cranelift::Cranelift;
 
 impl Compiler {
     /// Return the target's frontend configuration settings.
@@ -105,12 +116,27 @@ impl Compiler {
         SetupError,
     > {
         let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
-            DefaultCompiler::compile_module(
-                module,
-                function_body_inputs,
-                &*self.isa,
-                debug_data.is_some(),
-            )
+            match self.strategy {
+                // For now, interpret `Auto` as `AlwaysCranelift` since that's the most stable
+                // implementation.
+                CompilationStrategy::Auto | CompilationStrategy::AlwaysCranelift => {
+                    wasmtime_environ::cranelift::Cranelift::compile_module(
+                        module,
+                        function_body_inputs,
+                        &*self.isa,
+                        debug_data.is_some(),
+                    )
+                }
+                #[cfg(feature = "lightbeam")]
+                CompilationStrategy::AlwaysLightbeam => {
+                    wasmtime_environ::lightbeam::Lightbeam::compile_module(
+                        module,
+                        function_body_inputs,
+                        &*self.isa,
+                        debug_data.is_some(),
+                    )
+                }
+            }
             .map_err(SetupError::Compile)?;
 
         let allocated_functions =

@@ -14,12 +14,24 @@ fn main() {
     let mut out = File::create(out_dir.join("wast_testsuite_tests.rs"))
         .expect("error generating test source file");
 
-    test_directory(&mut out, "misc_testsuite").expect("generating tests");
-    test_directory(&mut out, "spec_testsuite").expect("generating tests");
-    test_file(&mut out, "spec_testsuite/proposals/simd/simd_const.wast").expect("generating tests");
+    for strategy in &["AlwaysCranelift", "AlwaysLightbeam"] {
+        writeln!(out, "#[allow(non_snake_case)]").expect("generating tests");
+        writeln!(out, "mod {} {{", strategy).expect("generating tests");
+
+        test_directory(&mut out, "misc_testsuite", strategy).expect("generating tests");
+        test_directory(&mut out, "spec_testsuite", strategy).expect("generating tests");
+        test_file(
+            &mut out,
+            "spec_testsuite/proposals/simd/simd_const.wast",
+            strategy,
+        )
+        .expect("generating tests");
+
+        writeln!(out, "}}").expect("generating tests");
+    }
 }
 
-fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
+fn test_directory(out: &mut File, testsuite: &str, strategy: &str) -> io::Result<()> {
     let mut dir_entries: Vec<_> = read_dir(testsuite)
         .expect("reading testsuite directory")
         .map(|r| r.expect("reading testsuite directory entry"))
@@ -44,76 +56,127 @@ fn test_directory(out: &mut File, testsuite: &str) -> io::Result<()> {
 
     dir_entries.sort_by_key(|dir| dir.path());
 
+    start_test_module(out, testsuite)?;
+    for dir_entry in dir_entries {
+        write_testsuite_tests(out, &dir_entry.path(), testsuite, strategy)?;
+    }
+    finish_test_module(out)
+}
+
+fn test_file(out: &mut File, testfile: &str, strategy: &str) -> io::Result<()> {
+    let testsuite = "single_file_spec_test";
+    let path = Path::new(testfile);
+    start_test_module(out, testsuite)?;
+    write_testsuite_tests(out, path, testsuite, strategy)?;
+    finish_test_module(out)
+}
+
+fn start_test_module(out: &mut File, testsuite: &str) -> io::Result<()> {
     writeln!(
         out,
-        "mod {} {{",
+        "    mod {} {{",
         Path::new(testsuite)
             .file_stem()
             .expect("testsuite filename should have a stem")
             .to_str()
             .expect("testsuite filename should be representable as a string")
-            .replace("-", "_")
+            .replace("-", "_"),
     )?;
     writeln!(
         out,
-        "    use super::{{native_isa, Path, WastContext, Compiler, Features}};"
-    )?;
-    for dir_entry in dir_entries {
-        write_testsuite_tests(out, &dir_entry.path(), testsuite)?;
-    }
-    writeln!(out, "}}")?;
-    Ok(())
+        "        use super::super::{{native_isa, Path, WastContext, Compiler, Features, CompilationStrategy}};"
+    )
 }
 
-fn test_file(out: &mut File, testfile: &str) -> io::Result<()> {
-    let path = Path::new(testfile);
-    write_testsuite_tests(out, path, "single_file_spec_test")
+fn finish_test_module(out: &mut File) -> io::Result<()> {
+    writeln!(out, "    }}")
 }
 
-fn write_testsuite_tests(out: &mut File, path: &Path, testsuite: &str) -> io::Result<()> {
+fn write_testsuite_tests(
+    out: &mut File,
+    path: &Path,
+    testsuite: &str,
+    strategy: &str,
+) -> io::Result<()> {
     let stemstr = path
         .file_stem()
         .expect("file_stem")
         .to_str()
         .expect("to_str");
 
-    writeln!(out, "    #[test]")?;
-    if ignore(testsuite, stemstr) {
-        writeln!(out, "    #[ignore]")?;
+    writeln!(out, "        #[test]")?;
+    if ignore(testsuite, stemstr, strategy) {
+        writeln!(out, "        #[ignore]")?;
     }
-    writeln!(out, "    fn r#{}() {{", &stemstr.replace("-", "_"))?;
-    writeln!(out, "        let isa = native_isa();")?;
-    writeln!(out, "        let compiler = Compiler::new(isa);")?;
+    writeln!(out, "        fn r#{}() {{", &stemstr.replace("-", "_"))?;
+    writeln!(out, "            let isa = native_isa();")?;
     writeln!(
         out,
-        "        let features = Features {{ simd: true, ..Default::default() }};"
+        "            let compiler = Compiler::new(isa, CompilationStrategy::{});",
+        strategy
     )?;
     writeln!(
         out,
-        "        let mut wast_context = WastContext::new(Box::new(compiler)).with_features(features);"
+        "            let features = Features {{ simd: true, ..Default::default() }};"
     )?;
-    writeln!(out, "        wast_context")?;
-    writeln!(out, "            .register_spectest()")?;
     writeln!(
         out,
-        "            .expect(\"instantiating \\\"spectest\\\"\");"
+        "            let mut wast_context = WastContext::new(Box::new(compiler)).with_features(features);"
     )?;
-    writeln!(out, "        wast_context")?;
-    write!(out, "            .run_file(Path::new(\"")?;
+    writeln!(out, "            wast_context")?;
+    writeln!(out, "                .register_spectest()")?;
+    writeln!(
+        out,
+        "                .expect(\"instantiating \\\"spectest\\\"\");"
+    )?;
+    writeln!(out, "            wast_context")?;
+    write!(out, "                .run_file(Path::new(\"")?;
     // Write out the string with escape_debug to prevent special characters such
     // as backslash from being reinterpreted.
     for c in path.display().to_string().chars() {
         write!(out, "{}", c.escape_debug())?;
     }
     writeln!(out, "\"))")?;
-    writeln!(out, "            .expect(\"error running wast file\");",)?;
-    writeln!(out, "    }}")?;
+    writeln!(out, "                .expect(\"error running wast file\");",)?;
+    writeln!(out, "        }}")?;
     writeln!(out)?;
     Ok(())
 }
 
 /// Ignore tests that aren't supported yet.
-fn ignore(testsuite: &str, name: &str) -> bool {
+fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
+    match strategy {
+        #[cfg(feature = "lightbeam")]
+        "AlwaysLightbeam" => match (testsuite, name) {
+            ("misc_testsuite", "memory_grow")
+            | ("misc_testsuite", "misc_traps")
+            | ("single_file_spec_test", "simd_const")
+            | ("spec_testsuite", "address")
+            | ("spec_testsuite", "align")
+            | ("spec_testsuite", "call")
+            | ("spec_testsuite", "call_indirect")
+            | ("spec_testsuite", "conversions")
+            | ("spec_testsuite", "elem")
+            | ("spec_testsuite", "func_ptrs")
+            | ("spec_testsuite", "globals")
+            | ("spec_testsuite", "i32")
+            | ("spec_testsuite", "i64")
+            | ("spec_testsuite", "if")
+            | ("spec_testsuite", "imports")
+            | ("spec_testsuite", "int_exprs")
+            | ("spec_testsuite", "linking")
+            | ("spec_testsuite", "memory_grow")
+            | ("spec_testsuite", "memory_trap")
+            | ("spec_testsuite", "select")
+            | ("spec_testsuite", "traps")
+            | ("spec_testsuite", "unreachable")
+            | ("spec_testsuite", "unwind") => return true,
+            _ => (),
+        },
+        "AlwaysCranelift" => {}
+        _ => panic!("unrecognized strategy"),
+    }
+
     if cfg!(windows) {
         return match (testsuite, name) {
             ("spec_testsuite", "address") => true,

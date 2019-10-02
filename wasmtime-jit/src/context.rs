@@ -1,7 +1,7 @@
 use crate::action::{get, inspect_memory, invoke};
 use crate::{
-    instantiate, ActionError, ActionOutcome, Compiler, InstanceHandle, Namespace, RuntimeValue,
-    SetupError,
+    instantiate, ActionError, ActionOutcome, CompilationStrategy, Compiler, InstanceHandle,
+    Namespace, RuntimeValue, SetupError,
 };
 use cranelift_codegen::isa::TargetIsa;
 use std::boxed::Box;
@@ -103,8 +103,8 @@ impl Context {
     }
 
     /// Construct a new instance of `Context` with the given target.
-    pub fn with_isa(isa: Box<dyn TargetIsa>) -> Self {
-        Self::new(Box::new(Compiler::new(isa)))
+    pub fn with_isa(isa: Box<dyn TargetIsa>, strategy: CompilationStrategy) -> Self {
+        Self::new(Box::new(Compiler::new(isa, strategy)))
     }
 
     /// Retrieve the context features
