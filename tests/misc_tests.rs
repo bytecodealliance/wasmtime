@@ -1,9 +1,9 @@
 mod runtime;
 mod utils;
 
-use std::sync::{Once, ONCE_INIT};
+use std::sync::Once;
 
-static LOG_INIT: Once = ONCE_INIT;
+static LOG_INIT: Once = Once::new();
 
 fn setup_log() {
     LOG_INIT.call_once(|| {
