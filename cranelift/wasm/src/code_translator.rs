@@ -23,10 +23,10 @@
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
 use super::{hash_map, HashMap};
-use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmResult};
-use crate::state::{ControlStackFrame, TranslationState};
+use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmResult, WasmTypesMap};
+use crate::state::{ControlStackFrame, ElseData, TranslationState};
 use crate::translation_utils::{
-    blocktype_to_type, f32_translation, f64_translation, num_return_values,
+    blocktype_params_results, ebb_with_params, f32_translation, f64_translation,
 };
 use crate::translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
 use crate::wasm_unsupported;
@@ -43,13 +43,14 @@ use wasmparser::{MemoryImmediate, Operator};
 /// Translates wasm operators into Cranelift IR instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
+    wasm_types: &WasmTypesMap,
     op: &Operator,
     builder: &mut FunctionBuilder,
     state: &mut TranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
     if !state.reachable {
-        translate_unreachable_operator(&op, builder, state);
+        translate_unreachable_operator(wasm_types, &op, builder, state)?;
         return Ok(());
     }
 
@@ -132,27 +133,52 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *  possible `Ebb`'s arguments values.
          ***********************************************************************************/
         Operator::Block { ty } => {
-            let next = builder.create_ebb();
-            if let Some(ty_cre) = blocktype_to_type(*ty)? {
-                builder.append_ebb_param(next, ty_cre);
-            }
-            state.push_block(next, num_return_values(*ty)?);
+            let (params, results) = blocktype_params_results(wasm_types, *ty)?;
+            let next = ebb_with_params(builder, results)?;
+            state.push_block(next, params.len(), results.len());
         }
         Operator::Loop { ty } => {
-            let loop_body = builder.create_ebb();
-            let next = builder.create_ebb();
-            if let Some(ty_cre) = blocktype_to_type(*ty)? {
-                builder.append_ebb_param(next, ty_cre);
-            }
-            builder.ins().jump(loop_body, &[]);
-            state.push_loop(loop_body, next, num_return_values(*ty)?);
+            let (params, results) = blocktype_params_results(wasm_types, *ty)?;
+            let loop_body = ebb_with_params(builder, params)?;
+            let next = ebb_with_params(builder, results)?;
+            builder.ins().jump(loop_body, state.peekn(params.len()));
+            state.push_loop(loop_body, next, params.len(), results.len());
+
+            // Pop the initial `Ebb` actuals and replace them with the `Ebb`'s
+            // params since control flow joins at the top of the loop.
+            state.popn(params.len());
+            state.stack.extend_from_slice(builder.ebb_params(loop_body));
+
             builder.switch_to_block(loop_body);
             environ.translate_loop_header(builder.cursor())?;
         }
         Operator::If { ty } => {
             let val = state.pop1();
-            let if_not = builder.create_ebb();
-            let jump_inst = builder.ins().brz(val, if_not, &[]);
+
+            let (params, results) = blocktype_params_results(wasm_types, *ty)?;
+            let (destination, else_data) = if params == results {
+                // It is possible there is no `else` block, so we will only
+                // allocate an ebb for it if/when we find the `else`. For now,
+                // we if the condition isn't true, then we jump directly to the
+                // destination ebb following the whole `if...end`. If we do end
+                // up discovering an `else`, then we will allocate an ebb for it
+                // and go back and patch the jump.
+                let destination = ebb_with_params(builder, results)?;
+                let branch_inst = builder
+                    .ins()
+                    .brz(val, destination, state.peekn(params.len()));
+                (destination, ElseData::NoElse { branch_inst })
+            } else {
+                // The `if` type signature is not valid without an `else` block,
+                // so we eagerly allocate the `else` block here.
+                let destination = ebb_with_params(builder, results)?;
+                let else_block = ebb_with_params(builder, params)?;
+                builder
+                    .ins()
+                    .brz(val, else_block, state.peekn(params.len()));
+                builder.seal_block(else_block);
+                (destination, ElseData::WithElse { else_block })
+            };
 
             #[cfg(feature = "basic-blocks")]
             {
@@ -168,41 +194,63 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             //   and we add nothing;
             // - either the If have an Else clause, in that case the destination of this jump
             //   instruction will be changed later when we translate the Else operator.
-            if let Some(ty_cre) = blocktype_to_type(*ty)? {
-                builder.append_ebb_param(if_not, ty_cre);
-            }
-            state.push_if(jump_inst, if_not, num_return_values(*ty)?);
+            state.push_if(destination, else_data, params.len(), results.len(), *ty);
         }
         Operator::Else => {
-            // We take the control frame pushed by the if, use its ebb as the else body
-            // and push a new control frame with a new ebb for the code after the if/then/else
-            // At the end of the then clause we jump to the destination
             let i = state.control_stack.len() - 1;
-            let (destination, return_count, branch_inst, ref mut reachable_from_top) =
-                match state.control_stack[i] {
-                    ControlStackFrame::If {
-                        destination,
-                        num_return_values,
-                        branch_inst,
-                        reachable_from_top,
-                        ..
-                    } => (
-                        destination,
-                        num_return_values,
-                        branch_inst,
-                        reachable_from_top,
-                    ),
-                    _ => panic!("should not happen"),
-                };
-            // The if has an else, so there's no branch to the end from the top.
-            *reachable_from_top = false;
-            builder.ins().jump(destination, state.peekn(return_count));
-            state.popn(return_count);
-            // We change the target of the branch instruction
-            let else_ebb = builder.create_ebb();
-            builder.change_jump_destination(branch_inst, else_ebb);
-            builder.seal_block(else_ebb);
-            builder.switch_to_block(else_ebb);
+            match state.control_stack[i] {
+                ControlStackFrame::If {
+                    else_data: ElseData::NoElse { branch_inst },
+                    ref mut reachable_from_top,
+                    blocktype,
+                    ..
+                } => {
+                    // We take the control frame pushed by the if, use its ebb
+                    // as the else body and push a new control frame with a new
+                    // ebb for the code after the if/then/else. At the end of the
+                    // then clause we jump to the destination.
+
+                    // The `if` has an `else`, so there's no branch to the end from the top.
+                    *reachable_from_top = false;
+
+                    let (params, _results) = blocktype_params_results(wasm_types, blocktype)?;
+                    let else_ebb = ebb_with_params(builder, params)?;
+                    builder.ins().jump(else_ebb, state.peekn(params.len()));
+                    state.popn(params.len());
+
+                    // You might be expecting that we push the parameters for this
+                    // `else` block here, something like this:
+                    //
+                    //     state.pushn(&control_stack_frame.params);
+                    //
+                    // We don't do that because they are already on the top of the stack
+                    // for us: we pushed the parameters twice when we saw the initial
+                    // `if` so that we wouldn't have to save the parameters in the
+                    // `ControlStackFrame` as another `Vec` allocation.
+
+                    builder.change_jump_destination(branch_inst, else_ebb);
+                    builder.seal_block(else_ebb);
+                    builder.switch_to_block(else_ebb);
+
+                    // NB: we don't bother updating the control frame's
+                    // `ElseData` because nothing else will read it.
+                }
+                ControlStackFrame::If {
+                    destination,
+                    num_return_values,
+                    else_data: ElseData::WithElse { else_block, .. },
+                    reachable_from_top,
+                    ..
+                } => {
+                    debug_assert!(!reachable_from_top);
+                    builder
+                        .ins()
+                        .jump(destination, state.peekn(num_return_values));
+                    state.popn(num_return_values);
+                    builder.switch_to_block(else_block);
+                }
+                _ => unreachable!(),
+            }
         }
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
@@ -211,6 +259,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder
                     .ins()
                     .jump(frame.following_code(), state.peekn(return_count));
+                // You might expect that if we just finished an `if` block that
+                // didn't have a corresponding `else` block, then we would clean
+                // up our duplicate set of parameters that we pushed earlier
+                // right here. However, we don't have to explicitly do that,
+                // since we truncate the stack back to the original height
+                // below.
             }
             builder.switch_to_block(frame.following_code());
             builder.seal_block(frame.following_code());
@@ -1139,40 +1193,71 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state must be updated accordingly.
 fn translate_unreachable_operator(
+    wasm_types: &WasmTypesMap,
     op: &Operator,
     builder: &mut FunctionBuilder,
     state: &mut TranslationState,
-) {
+) -> WasmResult<()> {
     match *op {
-        Operator::If { ty: _ } => {
+        Operator::If { ty } => {
             // Push a placeholder control stack entry. The if isn't reachable,
             // so we don't have any branches anywhere.
-            state.push_if(ir::Inst::reserved_value(), ir::Ebb::reserved_value(), 0);
+            state.push_if(
+                ir::Ebb::reserved_value(),
+                ElseData::NoElse {
+                    branch_inst: ir::Inst::reserved_value(),
+                },
+                0,
+                0,
+                ty,
+            );
         }
         Operator::Loop { ty: _ } | Operator::Block { ty: _ } => {
-            state.push_block(ir::Ebb::reserved_value(), 0);
+            state.push_block(ir::Ebb::reserved_value(), 0, 0);
         }
         Operator::Else => {
             let i = state.control_stack.len() - 1;
-            if let ControlStackFrame::If {
-                branch_inst,
-                ref mut reachable_from_top,
-                ..
-            } = state.control_stack[i]
-            {
-                if *reachable_from_top {
-                    // We have a branch from the top of the if to the else.
-                    state.reachable = true;
-                    // And because there's an else, there can no longer be a
-                    // branch from the top directly to the end.
-                    *reachable_from_top = false;
+            match state.control_stack[i] {
+                ControlStackFrame::If {
+                    else_data: ElseData::NoElse { branch_inst },
+                    ref mut reachable_from_top,
+                    blocktype,
+                    ..
+                } => {
+                    if *reachable_from_top {
+                        // We have a branch from the top of the if to the else.
+                        state.reachable = true;
+                        // And because there's an else, there can no longer be a
+                        // branch from the top directly to the end.
+                        *reachable_from_top = false;
 
-                    // We change the target of the branch instruction
-                    let else_ebb = builder.create_ebb();
-                    builder.change_jump_destination(branch_inst, else_ebb);
-                    builder.seal_block(else_ebb);
-                    builder.switch_to_block(else_ebb);
+                        let (params, _results) = blocktype_params_results(wasm_types, blocktype)?;
+                        let else_ebb = ebb_with_params(builder, params)?;
+
+                        // We change the target of the branch instruction.
+                        builder.change_jump_destination(branch_inst, else_ebb);
+                        builder.seal_block(else_ebb);
+                        builder.switch_to_block(else_ebb);
+
+                        // Again, no need to push the parameters for the `else`,
+                        // since we already did when we saw the original `if`. See
+                        // the comment for translating `Operator::Else` in
+                        // `translate_operator` for details.
+                    }
                 }
+                ControlStackFrame::If {
+                    else_data: ElseData::WithElse { else_block, .. },
+                    reachable_from_top,
+                    ..
+                } => {
+                    debug_assert!(
+                        !reachable_from_top,
+                        "should not be reachable from top if we have an else block"
+                    );
+                    builder.switch_to_block(else_block);
+                    state.reachable = true;
+                }
+                _ => unreachable!(),
             }
         }
         Operator::End => {
@@ -1192,7 +1277,17 @@ fn translate_unreachable_operator(
                     false
                 }
                 ControlStackFrame::If {
-                    reachable_from_top, ..
+                    else_data: ElseData::WithElse { .. },
+                    reachable_from_top,
+                    ..
+                } => {
+                    debug_assert!(!reachable_from_top);
+                    true
+                }
+                ControlStackFrame::If {
+                    else_data: ElseData::NoElse { .. },
+                    reachable_from_top,
+                    ..
                 } => {
                     // A reachable if without an else has a branch from the top
                     // directly to the bottom.
@@ -1216,6 +1311,8 @@ fn translate_unreachable_operator(
             // We don't translate because this is unreachable code
         }
     }
+
+    Ok(())
 }
 
 /// Get the address+offset to use for a heap access.
@@ -1342,7 +1439,7 @@ fn translate_br_if_args(
         // code that comes after it
         frame.set_branched_to_exit();
         let return_count = if frame.is_loop() {
-            0
+            frame.num_param_values()
         } else {
             frame.num_return_values()
         };

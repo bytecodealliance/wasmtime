@@ -1,10 +1,11 @@
 //! Helper functions and structures for the translation.
-use crate::environ::WasmResult;
+use crate::environ::{WasmResult, WasmTypesMap};
 use crate::wasm_unsupported;
 use core::u32;
 use cranelift_codegen::entity::entity_impl;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::immediates::V128Imm;
+use cranelift_frontend::FunctionBuilder;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 use wasmparser;
@@ -145,23 +146,61 @@ pub fn tabletype_to_type(ty: wasmparser::Type) -> WasmResult<Option<ir::Type>> {
     }
 }
 
-/// Helper function translating wasmparser block signatures to Cranelift types when possible.
-pub fn blocktype_to_type(ty_or_ft: wasmparser::TypeOrFuncType) -> WasmResult<Option<ir::Type>> {
-    match ty_or_ft {
+/// Get the parameter and result types for the given Wasm blocktype.
+pub fn blocktype_params_results(
+    wasm_types: &WasmTypesMap,
+    ty_or_ft: wasmparser::TypeOrFuncType,
+) -> WasmResult<(&[wasmparser::Type], &[wasmparser::Type])> {
+    Ok(match ty_or_ft {
         wasmparser::TypeOrFuncType::Type(ty) => match ty {
-            wasmparser::Type::I32 => Ok(Some(ir::types::I32)),
-            wasmparser::Type::I64 => Ok(Some(ir::types::I64)),
-            wasmparser::Type::F32 => Ok(Some(ir::types::F32)),
-            wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
-            wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
-            wasmparser::Type::EmptyBlockType => Ok(None),
-            ty => Err(wasm_unsupported!("blocktype_to_type: type {:?}", ty)),
+            wasmparser::Type::I32 => (&[], &[wasmparser::Type::I32]),
+            wasmparser::Type::I64 => (&[], &[wasmparser::Type::I64]),
+            wasmparser::Type::F32 => (&[], &[wasmparser::Type::F32]),
+            wasmparser::Type::F64 => (&[], &[wasmparser::Type::F64]),
+            wasmparser::Type::V128 => (&[], &[wasmparser::Type::V128]),
+            wasmparser::Type::EmptyBlockType => (&[], &[]),
+            ty => return Err(wasm_unsupported!("blocktype_params_results: type {:?}", ty)),
         },
-        wasmparser::TypeOrFuncType::FuncType(_) => Err(wasm_unsupported!(
-            "blocktype_to_type: multi-value block signature {:?}",
-            ty_or_ft
-        )),
+        wasmparser::TypeOrFuncType::FuncType(ty_index) => {
+            let sig_idx = SignatureIndex::from_u32(ty_index);
+            let (ref params, ref returns) = wasm_types.inner[sig_idx];
+            (&*params, &*returns)
+        }
+    })
+}
+
+/// Create an `Ebb` with the given Wasm parameters.
+pub fn ebb_with_params(
+    builder: &mut FunctionBuilder,
+    params: &[wasmparser::Type],
+) -> WasmResult<ir::Ebb> {
+    let ebb = builder.create_ebb();
+    for ty in params.iter() {
+        match ty {
+            wasmparser::Type::I32 => {
+                builder.append_ebb_param(ebb, ir::types::I32);
+            }
+            wasmparser::Type::I64 => {
+                builder.append_ebb_param(ebb, ir::types::I64);
+            }
+            wasmparser::Type::F32 => {
+                builder.append_ebb_param(ebb, ir::types::F32);
+            }
+            wasmparser::Type::F64 => {
+                builder.append_ebb_param(ebb, ir::types::F64);
+            }
+            wasmparser::Type::V128 => {
+                builder.append_ebb_param(ebb, ir::types::I8X16);
+            }
+            ty => {
+                return Err(wasm_unsupported!(
+                    "ebb_with_params: type {:?} in multi-value block's signature",
+                    ty
+                ))
+            }
+        }
     }
+    Ok(ebb)
 }
 
 /// Turns a `wasmparser` `f32` into a `Cranelift` one.
@@ -172,24 +211,6 @@ pub fn f32_translation(x: wasmparser::Ieee32) -> ir::immediates::Ieee32 {
 /// Turns a `wasmparser` `f64` into a `Cranelift` one.
 pub fn f64_translation(x: wasmparser::Ieee64) -> ir::immediates::Ieee64 {
     ir::immediates::Ieee64::with_bits(x.bits())
-}
-
-/// Translate a `wasmparser` type into its `Cranelift` equivalent, when possible
-pub fn num_return_values(ty: wasmparser::TypeOrFuncType) -> WasmResult<usize> {
-    match ty {
-        wasmparser::TypeOrFuncType::Type(ty) => match ty {
-            wasmparser::Type::EmptyBlockType => Ok(0),
-            wasmparser::Type::I32
-            | wasmparser::Type::F32
-            | wasmparser::Type::I64
-            | wasmparser::Type::F64
-            | wasmparser::Type::V128 => Ok(1),
-            ty => Err(wasm_unsupported!("unsupported return value type {:?}", ty)),
-        },
-        wasmparser::TypeOrFuncType::FuncType(_) => {
-            Err(wasm_unsupported!("multi-value block signature {:?}", ty))
-        }
-    }
 }
 
 /// Special VMContext value label. It is tracked as 0xffff_fffe label.

@@ -50,6 +50,7 @@ pub fn run(
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
     flag_enable_simd: bool,
+    flag_enable_multi_value: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
 
@@ -66,6 +67,7 @@ pub fn run(
             flag_report_times,
             flag_calc_value_ranges,
             flag_enable_simd,
+            flag_enable_multi_value,
             &path.to_path_buf(),
             &name,
             parsed.as_fisa(),
@@ -84,6 +86,7 @@ fn handle_module(
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
     flag_enable_simd: bool,
+    flag_enable_multi_value: bool,
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
@@ -104,6 +107,10 @@ fn handle_module(
         if flag_enable_simd {
             features.enable_simd();
         }
+        if flag_enable_multi_value {
+            features.enable_multi_value();
+        }
+
         module_binary = match wat2wasm_with_features(&module_binary, features) {
             Ok(data) => data,
             Err(e) => return Err(e.to_string()),

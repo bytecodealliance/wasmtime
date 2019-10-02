@@ -59,7 +59,7 @@ mod translation_utils;
 
 pub use crate::environ::{
     DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmError,
-    WasmResult,
+    WasmResult, WasmTypesMap,
 };
 pub use crate::func_translator::FuncTranslator;
 pub use crate::module_translator::translate_module;

@@ -1,0 +1,10 @@
+(module
+  (func (export "as-if-then") (param i32 i32) (result i32)
+    (block (result i32)
+      (if (result i32) (local.get 0)
+        (then (br 1 (i32.const 3)))
+        (else (local.get 1))
+      )
+    )
+  )
+)
