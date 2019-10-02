@@ -1,0 +1,34 @@
+[package]
+name = "lightbeam"
+version = "0.0.0"
+authors = ["The Lightbeam Project Developers"]
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm", "compile", "compiler", "jit"]
+publish = false
+edition = "2018"
+
+[dependencies]
+smallvec = "0.6"
+dynasm = "0.3"
+dynasmrt = "0.3"
+wasmparser = "0.32"
+memoffset = "0.2"
+itertools = "0.8"
+capstone = "0.5.0"
+failure = "0.1.3"
+failure_derive = "0.1.3"
+cranelift-codegen = "0.44"
+multi_mut = "0.1"
+either = "1.5"
+wabt = "0.7"
+lazy_static = "1.2"
+quickcheck = "0.7"
+typemap = "0.3"
+
+[badges]
+maintenance = { status = "experimental" }
+
+[features]
+bench = []
