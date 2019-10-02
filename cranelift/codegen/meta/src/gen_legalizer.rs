@@ -43,7 +43,7 @@ fn unwrap_inst(
         .args
         .iter()
         .map(|arg| match arg.maybe_var() {
-            Some(var_index) => var_pool.get(var_index).name,
+            Some(var_index) => var_pool.get(var_index).name.as_ref(),
             None => "_",
         })
         .collect::<Vec<_>>()
@@ -114,7 +114,7 @@ fn unwrap_inst(
     assert_eq!(inst.operands_in.len(), apply.args.len());
     for (i, op) in inst.operands_in.iter().enumerate() {
         if op.is_varargs() {
-            let name = var_pool
+            let name = &var_pool
                 .get(apply.args[i].maybe_var().expect("vararg without name"))
                 .name;
 
@@ -283,8 +283,8 @@ fn emit_dst_inst(def: &Def, def_pool: &DefPool, var_pool: &VarPool, fmt: &mut Fo
         let vars = def
             .defined_vars
             .iter()
-            .map(|&var_index| var_pool.get(var_index).name)
-            .collect::<Vec<_>>();
+            .map(|&var_index| var_pool.get(var_index).name.as_ref())
+            .collect::<Vec<&str>>();
         if vars.len() == 1 {
             vars[0].to_string()
         } else {
@@ -401,6 +401,16 @@ fn gen_transform<'a>(
     // Guard the actual expansion by `predicate`.
     fmt.line("if predicate {");
     fmt.indent(|fmt| {
+        // Emit any constants that must be created before use.
+        for (name, value) in transform.const_pool.iter() {
+            fmtln!(
+                fmt,
+                "let {} = pos.func.dfg.constants.insert(vec!{:?});",
+                name,
+                value
+            );
+        }
+
         // If we are adding some blocks, we need to recall the original block, such that we can
         // recompute it.
         if !transform.block_pool.is_empty() {
