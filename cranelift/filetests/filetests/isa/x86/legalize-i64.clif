@@ -26,6 +26,21 @@ ebb0(v1: i64, v2: i64):
     return v10
 }
 
+function %imul(i64, i64) -> i64 {
+ebb0(v1: i64, v2: i64):
+    v10 = imul v1, v2
+    ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
+    ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
+    ; nextln: $(v11=$V) = imul $v1_msb, $v2_lsb
+    ; nextln: $(v12=$V) = imul $v1_lsb, $v2_msb
+    ; nextln: $(v13=$V) = iadd $v11, $v12
+    ; nextln: $(v99=$V), $(v14=$V) = x86_umulx $v1_lsb, $v2_lsb
+    ; nextln: $(v10_msb=$V) = iadd $v13, $v14
+    ; nextln: $(v10_lsb=$V) = imul $v1_lsb, $v2_lsb
+    ; nextln: v10 = iconcat $v10_lsb, $v10_msb
+    return v10
+}
+
 function %icmp_eq(i64, i64) -> b1 {
 ebb0(v1: i64, v2: i64):
     v10 = icmp eq v1, v2
