@@ -3,7 +3,7 @@ use crate::cdsl::instructions::{vector, Bindable, InstructionGroup};
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::xform::TransformGroupBuilder;
 use crate::shared::types::Float::F64;
-use crate::shared::types::Int::{I32, I64};
+use crate::shared::types::Int::{I16, I32, I64};
 use crate::shared::Definitions as SharedDefinitions;
 
 pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGroup) {
@@ -20,6 +20,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // List of instructions.
     let insts = &shared.instructions;
     let band = insts.by_name("band");
+    let bitcast = insts.by_name("bitcast");
     let bor = insts.by_name("bor");
     let bnot = insts.by_name("bnot");
     let bxor = insts.by_name("bxor");
@@ -40,6 +41,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let imul = insts.by_name("imul");
     let ineg = insts.by_name("ineg");
     let insertlane = insts.by_name("insertlane");
+    let ishl = insts.by_name("ishl");
     let isub = insts.by_name("isub");
     let popcnt = insts.by_name("popcnt");
     let raw_bitcast = insts.by_name("raw_bitcast");
@@ -60,6 +62,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let x86_bsr = x86_instructions.by_name("x86_bsr");
     let x86_pshufb = x86_instructions.by_name("x86_pshufb");
     let x86_pshufd = x86_instructions.by_name("x86_pshufd");
+    let x86_psll = x86_instructions.by_name("x86_psll");
     let x86_umulx = x86_instructions.by_name("x86_umulx");
     let x86_smulx = x86_instructions.by_name("x86_smulx");
 
@@ -391,6 +394,16 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(y = bnot(x)),
             vec![def!(a = vconst(ones)), def!(y = bxor(a, x))],
+        );
+    }
+
+    // SIMD shift left
+    for ty in &[I16, I32, I64] {
+        let ishl = ishl.bind(vector(*ty, sse_vector_size));
+        let bitcast = bitcast.bind(vector(I64, sse_vector_size));
+        narrow.legalize(
+            def!(a = ishl(x, y)),
+            vec![def!(b = bitcast(y)), def!(a = x86_psll(x, b))],
         );
     }
 

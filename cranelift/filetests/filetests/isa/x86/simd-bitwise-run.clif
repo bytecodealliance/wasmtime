@@ -1,0 +1,39 @@
+test run
+set enable_simd
+target x86_64 skylake
+
+; TODO: once available, replace all lane extraction with `icmp + all_ones`
+
+function %ishl_i32x4() -> b1 {
+ebb0:
+    v0 = iconst.i32 1
+    v1 = vconst.i32x4 [1 2 4 8]
+    v2 = ishl v1, v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 2
+
+    v5 = extractlane v2, 3
+    v6 = icmp_imm eq v5, 16
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+function %ishl_too_large_i16x8() -> b1 {
+ebb0:
+    v0 = iconst.i32 17 ; note that this will shift off the end of each lane
+    v1 = vconst.i16x8 [1 2 4 8 16 32 64 128]
+    v2 = ishl v1, v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0
+
+    v5 = extractlane v2, 3
+    v6 = icmp_imm eq v5, 0
+
+    v7 = band v4, v6
+    return v7
+}
+; run

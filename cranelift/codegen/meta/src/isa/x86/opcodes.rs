@@ -320,6 +320,15 @@ pub static PSHUFB: [u8; 4] = [0x66, 0x0f, 0x38, 0x00];
 /// store the result in xmm1 (SSE2).
 pub static PSHUFD: [u8; 3] = [0x66, 0x0f, 0x70];
 
+/// Shift words in xmm1 left by xmm2/m128 while shifting in 0s (SSE2).
+pub static PSLLW: [u8; 3] = [0x66, 0x0f, 0xf1];
+
+/// Shift doublewords in xmm1 left by xmm2/m128 while shifting in 0s (SSE2).
+pub static PSLLD: [u8; 3] = [0x66, 0x0f, 0xf2];
+
+/// Shift quadwords in xmm1 left by xmm2/m128 while shifting in 0s (SSE2).
+pub static PSLLQ: [u8; 3] = [0x66, 0x0f, 0xf3];
+
 /// Subtract packed byte integers in xmm2/m128 from packed byte integers in xmm1 (SSE2).
 pub static PSUBB: [u8; 3] = [0x66, 0x0f, 0xf8];
 

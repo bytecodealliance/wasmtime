@@ -1,0 +1,13 @@
+test legalizer
+set enable_simd
+target x86_64 skylake
+
+function %ishl_i32x4() -> i32x4 {
+ebb0:
+    v0 = iconst.i32 1
+    v1 = vconst.i32x4 [1 2 4 8]
+    v2 = ishl v1, v0
+    ; check: v3 = bitcast.i64x2 v0
+    ; nextln: v2 = x86_psll v1, v3
+    return v2
+}

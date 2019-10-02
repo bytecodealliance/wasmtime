@@ -1,0 +1,21 @@
+test binemit
+set enable_simd
+target x86_64 skylake
+
+function %ishl_i16x8(i16x8, i64x2) -> i16x8 {
+ebb0(v0: i16x8 [%xmm2], v1: i64x2 [%xmm1]):
+[-, %xmm2]  v2 = x86_psll v0, v1     ; bin: 66 0f f1 d1
+            return v2
+}
+
+function %ishl_i32x4(i32x4, i64x2) -> i32x4 {
+ebb0(v0: i32x4 [%xmm4], v1: i64x2 [%xmm0]):
+[-, %xmm4]  v2 = x86_psll v0, v1      ; bin: 66 0f f2 e0
+            return v2
+}
+
+function %ishl_i64x2(i64x2, i64x2) -> i64x2 {
+ebb0(v0: i64x2 [%xmm6], v1: i64x2 [%xmm3]):
+[-, %xmm6]  v2 = x86_psll v0, v1      ; bin: 66 0f f3 f3
+            return v2
+}

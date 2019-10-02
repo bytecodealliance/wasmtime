@@ -387,5 +387,40 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let IxN = &TypeVar::new(
+        "IxN",
+        "A SIMD vector type containing integers",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .includes_scalars(false)
+            .build(),
+    );
+    let I64x2 = &TypeVar::new(
+        "I64x2",
+        "A SIMD vector type containing one large integer (the upper lane is concatenated with \
+         the lower lane to form the integer)",
+        TypeSetBuilder::new()
+            .ints(64..64)
+            .simd_lanes(2..2)
+            .includes_scalars(false)
+            .build(),
+    );
+    let x = &operand_doc("x", IxN, "Vector value to shift");
+    let y = &operand_doc("y", I64x2, "Number of bits to shift");
+    let a = &operand("a", IxN);
+    ig.push(
+        Inst::new(
+            "x86_psll",
+            r#"
+        Shift Packed Data Left Logical -- This implements the behavior of the shared instruction 
+        ``ishl`` but alters the shift operand to live in an XMM register as expected by the PSSL*
+        family of instructions.
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     ig.build()
 }

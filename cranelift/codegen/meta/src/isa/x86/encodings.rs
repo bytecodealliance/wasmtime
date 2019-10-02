@@ -521,6 +521,7 @@ pub(crate) fn define<'defs>(
     let x86_pinsr = x86.by_name("x86_pinsr");
     let x86_pshufd = x86.by_name("x86_pshufd");
     let x86_pshufb = x86.by_name("x86_pshufb");
+    let x86_psll = x86.by_name("x86_psll");
     let x86_push = x86.by_name("x86_push");
     let x86_sdivmodx = x86.by_name("x86_sdivmodx");
     let x86_smulx = x86.by_name("x86_smulx");
@@ -1986,6 +1987,26 @@ pub(crate) fn define<'defs>(
         // xor
         let bxor = bxor.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bxor, rec_fa.opcodes(&PXOR));
+    }
+
+    // SIMD bitcast from I32/I64 to the low bits of a vector (e.g. I64x2); this register movement
+    // allows SIMD shifts to be legalized more easily. TODO ideally this would be typed as an
+    // I128x1 but restrictions on the type builder prevent this; the general idea here is that
+    // the upper bits are all zeroed and do not form parts of any separate lane. See
+    // https://github.com/CraneStation/cranelift/issues/1146.
+    e.enc_both(
+        bitcast.bind(vector(I64, sse_vector_size)).bind(I32),
+        rec_frurm.opcodes(&MOVD_LOAD_XMM),
+    );
+    e.enc64(
+        bitcast.bind(vector(I64, sse_vector_size)).bind(I64),
+        rec_frurm.opcodes(&MOVD_LOAD_XMM).rex().w(),
+    );
+
+    // SIMD shift left
+    for (ty, opcodes) in &[(I16, &PSLLW), (I32, &PSLLD), (I64, &PSLLQ)] {
+        let x86_psll = x86_psll.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64(x86_psll, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD icmp using PCMPEQ*
