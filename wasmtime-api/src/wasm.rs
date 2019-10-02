@@ -343,6 +343,7 @@ pub struct wasm_shared_module_t {
 #[derive(Clone)]
 pub struct wasm_func_t {
     func: HostRef<Func>,
+    ext: Option<Box<wasm_extern_t>>,
 }
 pub type wasm_func_callback_t = ::std::option::Option<
     unsafe extern "C" fn(args: *const wasm_val_t, results: *mut wasm_val_t) -> *mut wasm_trap_t,
@@ -358,23 +359,36 @@ pub type wasm_func_callback_with_env_t = ::std::option::Option<
 #[derive(Clone)]
 pub struct wasm_global_t {
     global: HostRef<Global>,
+    ext: Option<Box<wasm_extern_t>>,
 }
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_table_t {
     table: HostRef<Table>,
+    ext: Option<Box<wasm_extern_t>>,
 }
 pub type wasm_table_size_t = u32;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_memory_t {
     memory: HostRef<Memory>,
+    ext: Option<Box<wasm_extern_t>>,
 }
 pub type wasm_memory_pages_t = u32;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_extern_t {
     ext: Extern,
+    cache: wasm_extern_t_type_cache,
+}
+
+#[derive(Clone)]
+enum wasm_extern_t_type_cache {
+    Empty,
+    Func(wasm_func_t),
+    Global(wasm_global_t),
+    Memory(wasm_memory_t),
+    Table(wasm_table_t),
 }
 
 declare_vec!(wasm_extern_vec_t, *mut wasm_extern_t);
@@ -404,13 +418,17 @@ pub unsafe extern "C" fn wasm_engine_new() -> *mut wasm_engine_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_as_func(e: *mut wasm_extern_t) -> *mut wasm_func_t {
-    let func = if let Some(f) = (*e).ext.func() {
-        f.clone()
-    } else {
-        return ptr::null_mut();
-    };
-    let func = Box::new(wasm_func_t { func });
-    Box::into_raw(func)
+    if let wasm_extern_t_type_cache::Empty = (*e).cache {
+        (*e).cache = wasm_extern_t_type_cache::Func(wasm_func_t {
+            func: (*e).ext.func().unwrap().clone(),
+            ext: None,
+        });
+    }
+
+    match &mut (*e).cache {
+        wasm_extern_t_type_cache::Func(f) => f,
+        _ => panic!("wasm_extern_as_func"),
+    }
 }
 
 #[no_mangle]
@@ -420,9 +438,17 @@ pub unsafe extern "C" fn wasm_extern_vec_delete(v: *mut wasm_extern_vec_t) {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_func_as_extern(f: *mut wasm_func_t) -> *mut wasm_extern_t {
-    let ext = Extern::Func((*f).func.clone());
-    let ext = Box::new(wasm_extern_t { ext });
-    Box::into_raw(ext)
+    if (*f).ext.is_none() {
+        (*f).ext = Some(Box::new(wasm_extern_t {
+            ext: Extern::Func((*f).func.clone()),
+            cache: wasm_extern_t_type_cache::Empty,
+        }));
+    }
+
+    match &mut (*f).ext {
+        Some(e) => e.as_mut(),
+        _ => panic!("wasm_func_as_extern"),
+    }
 }
 
 #[no_mangle]
@@ -588,6 +614,7 @@ pub unsafe extern "C" fn wasm_func_new(
     let callback = Rc::new(callback);
     let func = Box::new(wasm_func_t {
         func: HostRef::new(Func::new(store, ty, callback)),
+        ext: None,
     });
     Box::into_raw(func)
 }
@@ -675,7 +702,10 @@ pub unsafe extern "C" fn wasm_instance_exports(
     let exports = instance.exports();
     let mut buffer = Vec::with_capacity(exports.len());
     for e in exports.iter() {
-        let ext = Box::new(wasm_extern_t { ext: e.clone() });
+        let ext = Box::new(wasm_extern_t {
+            ext: e.clone(),
+            cache: wasm_extern_t_type_cache::Empty,
+        });
         buffer.push(Box::into_raw(ext));
     }
     (*out).set_buffer(buffer);
@@ -783,6 +813,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
     });
     let func = Box::new(wasm_func_t {
         func: HostRef::new(Func::new(store, ty, callback)),
+        ext: None,
     });
     Box::into_raw(func)
 }
@@ -1238,20 +1269,32 @@ pub unsafe extern "C" fn wasm_valtype_kind(vt: *const wasm_valtype_t) -> wasm_va
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_as_global(e: *mut wasm_extern_t) -> *mut wasm_global_t {
-    let global = if let Some(g) = (*e).ext.global() {
-        g.clone()
-    } else {
-        return ptr::null_mut();
-    };
-    let g = Box::new(wasm_global_t { global });
-    Box::into_raw(g)
+    if let wasm_extern_t_type_cache::Empty = (*e).cache {
+        (*e).cache = wasm_extern_t_type_cache::Global(wasm_global_t {
+            global: (*e).ext.global().unwrap().clone(),
+            ext: None,
+        });
+    }
+
+    match &mut (*e).cache {
+        wasm_extern_t_type_cache::Global(g) => g,
+        _ => panic!("wasm_extern_as_global"),
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_global_as_extern(g: *mut wasm_global_t) -> *mut wasm_extern_t {
-    let ext = (*g).global.clone().into();
-    let ext = Box::new(wasm_extern_t { ext });
-    Box::into_raw(ext)
+    if (*g).ext.is_none() {
+        (*g).ext = Some(Box::new(wasm_extern_t {
+            ext: Extern::Global((*g).global.clone()),
+            cache: wasm_extern_t_type_cache::Empty,
+        }));
+    }
+
+    match &mut (*g).ext {
+        Some(e) => e.as_mut(),
+        _ => panic!("wasm_global_as_extern"),
+    }
 }
 
 #[no_mangle]
@@ -1283,7 +1326,7 @@ pub unsafe extern "C" fn wasm_global_new(
         (*gt).globaltype.clone(),
         (*val).val(),
     ));
-    let g = Box::new(wasm_global_t { global });
+    let g = Box::new(wasm_global_t { global, ext: None });
     Box::into_raw(g)
 }
 
@@ -1324,13 +1367,32 @@ pub unsafe extern "C" fn wasm_globaltype_new(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_as_memory(e: *mut wasm_extern_t) -> *mut wasm_memory_t {
-    let memory = if let Some(m) = (*e).ext.memory() {
-        m.clone()
-    } else {
-        return ptr::null_mut();
-    };
-    let g = Box::new(wasm_memory_t { memory });
-    Box::into_raw(g)
+    if let wasm_extern_t_type_cache::Empty = (*e).cache {
+        (*e).cache = wasm_extern_t_type_cache::Memory(wasm_memory_t {
+            memory: (*e).ext.memory().unwrap().clone(),
+            ext: None,
+        });
+    }
+
+    match &mut (*e).cache {
+        wasm_extern_t_type_cache::Memory(m) => m,
+        _ => panic!("wasm_extern_as_memory"),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_memory_as_extern(m: *mut wasm_memory_t) -> *mut wasm_extern_t {
+    if (*m).ext.is_none() {
+        (*m).ext = Some(Box::new(wasm_extern_t {
+            ext: Extern::Memory((*m).memory.clone()),
+            cache: wasm_extern_t_type_cache::Empty,
+        }));
+    }
+
+    match &mut (*m).ext {
+        Some(e) => e.as_mut(),
+        _ => panic!("wasm_global_as_extern"),
+    }
 }
 
 #[no_mangle]
@@ -1383,7 +1445,7 @@ pub unsafe extern "C" fn wasm_memory_new(
         (*store).store.clone(),
         (*mt).memorytype.clone(),
     ));
-    let m = Box::new(wasm_memory_t { memory });
+    let m = Box::new(wasm_memory_t { memory, ext: None });
     Box::into_raw(m)
 }
 
@@ -1406,13 +1468,32 @@ pub unsafe extern "C" fn wasm_memorytype_new(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_extern_as_table(e: *mut wasm_extern_t) -> *mut wasm_table_t {
-    let table = if let Some(t) = (*e).ext.table() {
-        t.clone()
-    } else {
-        return ptr::null_mut();
-    };
-    let t = Box::new(wasm_table_t { table });
-    Box::into_raw(t)
+    if let wasm_extern_t_type_cache::Empty = (*e).cache {
+        (*e).cache = wasm_extern_t_type_cache::Table(wasm_table_t {
+            table: (*e).ext.table().unwrap().clone(),
+            ext: None,
+        });
+    }
+
+    match &mut (*e).cache {
+        wasm_extern_t_type_cache::Table(t) => t,
+        _ => panic!("wasm_extern_as_table"),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_as_extern(t: *mut wasm_table_t) -> *mut wasm_extern_t {
+    if (*t).ext.is_none() {
+        (*t).ext = Some(Box::new(wasm_extern_t {
+            ext: Extern::Table((*t).table.clone()),
+            cache: wasm_extern_t_type_cache::Empty,
+        }));
+    }
+
+    match &mut (*t).ext {
+        Some(e) => e.as_mut(),
+        _ => panic!("wasm_table_as_extern"),
+    }
 }
 
 #[no_mangle]
@@ -1456,6 +1537,7 @@ pub unsafe extern "C" fn wasm_table_new(
             (*tt).tabletype.clone(),
             init,
         )),
+        ext: None,
     });
     Box::into_raw(t)
 }
