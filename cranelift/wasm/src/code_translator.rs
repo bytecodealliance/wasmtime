@@ -203,6 +203,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     else_data: ElseData::NoElse { branch_inst },
                     ref mut reachable_from_top,
                     blocktype,
+                    destination,
                     ..
                 } => {
                     // We take the control frame pushed by the if, use its ebb
@@ -215,7 +216,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
                     let (params, _results) = blocktype_params_results(wasm_types, blocktype)?;
                     let else_ebb = ebb_with_params(builder, params)?;
-                    builder.ins().jump(else_ebb, state.peekn(params.len()));
+                    builder.ins().jump(destination, state.peekn(params.len()));
                     state.popn(params.len());
 
                     // You might be expecting that we push the parameters for this
