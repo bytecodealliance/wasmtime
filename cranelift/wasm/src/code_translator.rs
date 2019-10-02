@@ -1111,6 +1111,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = state.pop2();
             state.push1(builder.ins().bxor(a, b));
         }
+        Operator::I16x8Shl | Operator::I32x4Shl | Operator::I64x2Shl => {
+            let (a, b) = state.pop2();
+            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
+            let bitwidth = i64::from(builder.func.dfg.value_type(a).bits());
+            // The spec expects to shift with `b mod lanewidth`; so, e.g., for 16 bit lane-width
+            // we do `b AND 15`; this means fewer instructions than `iconst + urem`.
+            let b_mod_bitwidth = builder.ins().band_imm(b, bitwidth - 1);
+            state.push1(builder.ins().ishl(bitcast_a, b_mod_bitwidth))
+        }
         Operator::I8x16Eq
         | Operator::I8x16Ne
         | Operator::I8x16LtS
@@ -1162,17 +1171,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I8x16Mul
         | Operator::I16x8AnyTrue
         | Operator::I16x8AllTrue
-        | Operator::I16x8Shl
         | Operator::I16x8ShrS
         | Operator::I16x8ShrU
         | Operator::I32x4AnyTrue
         | Operator::I32x4AllTrue
-        | Operator::I32x4Shl
         | Operator::I32x4ShrS
         | Operator::I32x4ShrU
         | Operator::I64x2AnyTrue
         | Operator::I64x2AllTrue
-        | Operator::I64x2Shl
         | Operator::I64x2ShrS
         | Operator::I64x2ShrU
         | Operator::F32x4Abs
