@@ -1,6 +1,6 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
+use crate::environ::{ModuleEnvironment, WasmError, WasmResult, WasmTypesMap};
 use crate::sections_translator::{
     parse_code_section, parse_data_section, parse_element_section, parse_export_section,
     parse_function_section, parse_global_section, parse_import_section, parse_memory_section,
@@ -17,12 +17,13 @@ pub fn translate_module<'data>(
 ) -> WasmResult<()> {
     let _tt = timing::wasm_translate_module();
     let mut reader = ModuleReader::new(data)?;
+    let mut wasm_types = WasmTypesMap::new();
 
     while !reader.eof() {
         let section = reader.read()?;
         match section.content()? {
             SectionContent::Type(types) => {
-                parse_type_section(types, environ)?;
+                parse_type_section(types, &mut wasm_types, environ)?;
             }
 
             SectionContent::Import(imports) => {
@@ -58,7 +59,7 @@ pub fn translate_module<'data>(
             }
 
             SectionContent::Code(code) => {
-                parse_code_section(code, environ)?;
+                parse_code_section(code, &wasm_types, environ)?;
             }
 
             SectionContent::Data(data) => {

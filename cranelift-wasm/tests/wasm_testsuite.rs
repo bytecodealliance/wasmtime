@@ -31,6 +31,7 @@ fn testsuite() {
     let flags = Flags::new(settings::builder());
     for path in paths {
         let path = path.path();
+        println!("=== {} ===", path.display());
         let data = read_module(&path);
         handle_module(data, &flags, ReturnMode::NormalReturns);
     }

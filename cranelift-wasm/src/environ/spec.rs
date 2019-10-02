@@ -15,6 +15,7 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
 use failure_derive::Fail;
 use std::boxed::Box;
@@ -101,6 +102,24 @@ pub enum ReturnMode {
     NormalReturns,
     /// Use a single fallthrough return at the end of the function.
     FallthroughReturn,
+}
+
+/// A map containing a Wasm module's original, raw signatures.
+///
+/// This is used for translating multi-value Wasm blocks inside functions, which
+/// are encoded to refer to their type signature via index.
+#[derive(Debug)]
+pub struct WasmTypesMap {
+    pub(crate) inner:
+        PrimaryMap<SignatureIndex, (Box<[wasmparser::Type]>, Box<[wasmparser::Type]>)>,
+}
+
+impl WasmTypesMap {
+    pub(crate) fn new() -> Self {
+        WasmTypesMap {
+            inner: PrimaryMap::new(),
+        }
+    }
 }
 
 /// Environment affecting the translation of a single WebAssembly function.
@@ -449,6 +468,7 @@ pub trait ModuleEnvironment<'data> {
     /// functions is already provided by `reserve_func_types`.
     fn define_function_body(
         &mut self,
+        wasm_types: &WasmTypesMap,
         body_bytes: &'data [u8],
         body_offset: usize,
     ) -> WasmResult<()>;
