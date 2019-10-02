@@ -94,6 +94,10 @@ impl binemit::RelocSink for UnimplementedRelocSink {
         unimplemented!()
     }
 
+    fn reloc_constant(&mut self, _: binemit::CodeOffset, _: binemit::Reloc, _: ir::ConstantOffset) {
+        unimplemented!()
+    }
+
     fn reloc_jt(&mut self, _: binemit::CodeOffset, _: binemit::Reloc, _: ir::JumpTable) {
         unimplemented!()
     }
