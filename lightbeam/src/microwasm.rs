@@ -290,6 +290,13 @@ impl SignlessType {
     }
 }
 
+fn create_returns_from_wasm_type(ty: wasmparser::TypeOrFuncType) -> Vec<SignlessType> {
+    match ty {
+        wasmparser::TypeOrFuncType::Type(ty) => Vec::from_iter(Type::from_wasm(ty)),
+        wasmparser::TypeOrFuncType::FuncType(_) => panic!("unsupported func type"),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BrTable<L> {
     pub targets: Vec<BrTargetDrop<L>>,
@@ -1407,9 +1414,9 @@ where
         self.stack.clone()
     }
 
-    fn block_params_with_wasm_type(&self, ty: wasmparser::Type) -> Vec<SignlessType> {
+    fn block_params_with_wasm_type(&self, ty: wasmparser::TypeOrFuncType) -> Vec<SignlessType> {
         let mut out = self.block_params();
-        out.extend(Type::from_wasm(ty));
+        out.extend(create_returns_from_wasm_type(ty));
         out
     }
 }
@@ -1538,7 +1545,7 @@ where
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: Vec::from_iter(Type::from_wasm(ty)),
+                    returns: create_returns_from_wasm_type(ty),
                     kind: ControlFrameKind::Block {
                         needs_end_label: false,
                     },
@@ -1553,7 +1560,7 @@ where
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: Vec::from_iter(Type::from_wasm(ty)),
+                    returns: create_returns_from_wasm_type(ty),
                     kind: ControlFrameKind::Loop,
                 });
                 let label = (id, NameTag::Header);
@@ -1571,7 +1578,7 @@ where
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: Vec::from_iter(Type::from_wasm(ty)),
+                    returns: create_returns_from_wasm_type(ty),
                     kind: ControlFrameKind::If { has_else: false },
                 });
                 let (then, else_, end) = (
