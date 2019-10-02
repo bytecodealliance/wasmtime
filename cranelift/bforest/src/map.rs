@@ -3,10 +3,10 @@
 use super::{Comparator, Forest, Node, NodeData, NodePool, Path, INNER_SIZE};
 use crate::packed_option::PackedOption;
 #[cfg(test)]
+use alloc::string::String;
+#[cfg(test)]
 use core::fmt;
 use core::marker::PhantomData;
-#[cfg(test)]
-use alloc::string::String;
 
 /// Tag type defining forest types for a map.
 struct MapTypes<K, V>(PhantomData<(K, V)>);
