@@ -1,6 +1,6 @@
-use crate::cdsl::ast::{var, ExprBuilder, Literal};
+use crate::cdsl::ast::{constant, var, ExprBuilder, Literal};
 use crate::cdsl::instructions::{vector, Bindable, InstructionGroup};
-use crate::cdsl::types::ValueType;
+use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::xform::TransformGroupBuilder;
 use crate::shared::types::Float::F64;
 use crate::shared::types::Int::{I32, I64};
@@ -21,6 +21,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let insts = &shared.instructions;
     let band = insts.by_name("band");
     let bor = insts.by_name("bor");
+    let bnot = insts.by_name("bnot");
+    let bxor = insts.by_name("bxor");
     let clz = insts.by_name("clz");
     let ctz = insts.by_name("ctz");
     let extractlane = insts.by_name("extractlane");
@@ -52,6 +54,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let umulhi = insts.by_name("umulhi");
     let ushr_imm = insts.by_name("ushr_imm");
     let urem = insts.by_name("urem");
+    let vconst = insts.by_name("vconst");
 
     let x86_bsf = x86_instructions.by_name("x86_bsf");
     let x86_bsr = x86_instructions.by_name("x86_bsr");
@@ -319,6 +322,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     // SIMD vector size: eventually multiple vector sizes may be supported but for now only SSE-sized vectors are available
     let sse_vector_size: u64 = 128;
+    let allowed_simd_type = |t: &LaneType| t.lane_bits() >= 8 && t.lane_bits() < 128;
 
     // SIMD splat: 8-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
@@ -378,6 +382,16 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
                 def!(a = scalar_to_vector(x)), // move into the lowest 64 bits of an XMM register
                 def!(y = insertlane(a, uimm8_one, x)), // move into the highest 64 bits of the same XMM register
             ],
+        );
+    }
+
+    // SIMD bnot
+    let ones = constant(vec![0xff; 16]);
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let bnot = bnot.bind(vector(ty, sse_vector_size));
+        narrow.legalize(
+            def!(y = bnot(x)),
+            vec![def!(a = vconst(ones)), def!(y = bxor(a, x))],
         );
     }
 

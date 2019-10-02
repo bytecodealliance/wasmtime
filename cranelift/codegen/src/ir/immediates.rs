@@ -302,17 +302,17 @@ impl FromStr for Uimm32 {
 pub struct V128Imm(pub [u8; 16]);
 
 impl V128Imm {
-    /// Iterate over the bytes in the constant
+    /// Iterate over the bytes in the constant.
     pub fn bytes(&self) -> impl Iterator<Item = &u8> {
         self.0.iter()
     }
 
-    /// Convert the immediate into a vector
+    /// Convert the immediate into a vector.
     pub fn to_vec(self) -> Vec<u8> {
         self.0.to_vec()
     }
 
-    /// Convert the immediate into a slice
+    /// Convert the immediate into a slice.
     pub fn as_slice(&self) -> &[u8] {
         &self.0[..]
     }
