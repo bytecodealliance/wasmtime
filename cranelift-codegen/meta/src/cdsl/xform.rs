@@ -1,6 +1,6 @@
 use crate::cdsl::ast::{
-    Apply, BlockPool, DefIndex, DefPool, DummyDef, DummyExpr, Expr, PatternPosition, VarIndex,
-    VarPool,
+    Apply, BlockPool, ConstPool, DefIndex, DefPool, DummyDef, DummyExpr, Expr, PatternPosition,
+    VarIndex, VarPool,
 };
 use crate::cdsl::instructions::Instruction;
 use crate::cdsl::type_inference::{infer_transform, TypeEnvironment};
@@ -24,16 +24,18 @@ pub(crate) struct Transform {
     pub var_pool: VarPool,
     pub def_pool: DefPool,
     pub block_pool: BlockPool,
+    pub const_pool: ConstPool,
     pub type_env: TypeEnvironment,
 }
 
-type SymbolTable = HashMap<&'static str, VarIndex>;
+type SymbolTable = HashMap<String, VarIndex>;
 
 impl Transform {
     fn new(src: DummyDef, dst: Vec<DummyDef>) -> Self {
         let mut var_pool = VarPool::new();
         let mut def_pool = DefPool::new();
         let mut block_pool = BlockPool::new();
+        let mut const_pool = ConstPool::new();
 
         let mut input_vars: Vec<VarIndex> = Vec::new();
         let mut defined_vars: Vec<VarIndex> = Vec::new();
@@ -51,6 +53,7 @@ impl Transform {
             &mut var_pool,
             &mut def_pool,
             &mut block_pool,
+            &mut const_pool,
         )[0];
 
         let num_src_inputs = input_vars.len();
@@ -64,6 +67,7 @@ impl Transform {
             &mut var_pool,
             &mut def_pool,
             &mut block_pool,
+            &mut const_pool,
         );
 
         // Sanity checks.
@@ -128,6 +132,7 @@ impl Transform {
             var_pool,
             def_pool,
             block_pool,
+            const_pool,
             type_env,
         }
     }
@@ -148,16 +153,17 @@ impl Transform {
 /// pool `var_pool`. If the variable was not present in the symbol table, then add it to the list of
 /// `defined_vars`.
 fn var_index(
-    name: &'static str,
+    name: &str,
     symbol_table: &mut SymbolTable,
     defined_vars: &mut Vec<VarIndex>,
     var_pool: &mut VarPool,
 ) -> VarIndex {
-    match symbol_table.get(name) {
+    let name = name.to_string();
+    match symbol_table.get(&name) {
         Some(&existing_var) => existing_var,
         None => {
             // Materialize the variable.
-            let new_var = var_pool.create(name);
+            let new_var = var_pool.create(name.clone());
             symbol_table.insert(name, new_var);
             defined_vars.push(new_var);
             new_var
@@ -176,7 +182,7 @@ fn rewrite_defined_vars(
 ) -> Vec<VarIndex> {
     let mut new_defined_vars = Vec::new();
     for var in &dummy_def.defined_vars {
-        let own_var = var_index(var.name, symbol_table, defined_vars, var_pool);
+        let own_var = var_index(&var.name, symbol_table, defined_vars, var_pool);
         var_pool.get_mut(own_var).set_def(position, def_index);
         new_defined_vars.push(own_var);
     }
@@ -190,6 +196,7 @@ fn rewrite_expr(
     symbol_table: &mut SymbolTable,
     input_vars: &mut Vec<VarIndex>,
     var_pool: &mut VarPool,
+    const_pool: &mut ConstPool,
 ) -> Apply {
     let (apply_target, dummy_args) = if let DummyExpr::Apply(apply_target, dummy_args) = dummy_expr
     {
@@ -215,7 +222,7 @@ fn rewrite_expr(
     for (i, arg) in dummy_args.into_iter().enumerate() {
         match arg {
             DummyExpr::Var(var) => {
-                let own_var = var_index(var.name, symbol_table, input_vars, var_pool);
+                let own_var = var_index(&var.name, symbol_table, input_vars, var_pool);
                 let var = var_pool.get(own_var);
                 assert!(
                     var.is_input() || var.get_def(position).is_some(),
@@ -226,6 +233,15 @@ fn rewrite_expr(
             DummyExpr::Literal(literal) => {
                 assert!(!apply_target.inst().operands_in[i].is_value());
                 args.push(Expr::Literal(literal));
+            }
+            DummyExpr::Constant(constant) => {
+                let const_name = const_pool.insert(constant.0);
+                // Here we abuse var_index by passing an empty, immediately-dropped vector to
+                // `defined_vars`; the reason for this is that unlike the `Var` case above,
+                // constants will create a variable that is not an input variable (it is tracked
+                // instead by ConstPool).
+                let const_var = var_index(&const_name, symbol_table, &mut vec![], var_pool);
+                args.push(Expr::Var(const_var));
             }
             DummyExpr::Apply(..) => {
                 panic!("Recursive apply is not allowed.");
@@ -248,13 +264,14 @@ fn rewrite_def_list(
     var_pool: &mut VarPool,
     def_pool: &mut DefPool,
     block_pool: &mut BlockPool,
+    const_pool: &mut ConstPool,
 ) -> Vec<DefIndex> {
     let mut new_defs = Vec::new();
     // Register variable names of new blocks first as a block name can be used to jump forward. Thus
     // the name has to be registered first to avoid misinterpreting it as an input-var.
     for dummy_def in dummy_defs.iter() {
         if let DummyExpr::Block(ref var) = dummy_def.expr {
-            var_index(var.name, symbol_table, defined_vars, var_pool);
+            var_index(&var.name, symbol_table, defined_vars, var_pool);
         }
     }
 
@@ -272,7 +289,7 @@ fn rewrite_def_list(
         );
         if let DummyExpr::Block(var) = dummy_def.expr {
             let var_index = *symbol_table
-                .get(var.name)
+                .get(&var.name)
                 .or_else(|| {
                     panic!(
                         "Block {} was not registered during the first visit",
@@ -283,8 +300,14 @@ fn rewrite_def_list(
             var_pool.get_mut(var_index).set_def(position, def_index);
             block_pool.create_block(var_index, def_index);
         } else {
-            let new_apply =
-                rewrite_expr(position, dummy_def.expr, symbol_table, input_vars, var_pool);
+            let new_apply = rewrite_expr(
+                position,
+                dummy_def.expr,
+                symbol_table,
+                input_vars,
+                var_pool,
+                const_pool,
+            );
 
             assert!(
                 def_pool.next_index() == def_index,

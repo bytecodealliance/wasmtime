@@ -54,7 +54,7 @@ impl Def {
         let results = self
             .defined_vars
             .iter()
-            .map(|&x| var_pool.get(x).name)
+            .map(|&x| var_pool.get(x).name.as_str())
             .collect::<Vec<_>>();
 
         let results = if results.len() == 1 {
@@ -238,7 +238,7 @@ pub(crate) enum PatternPosition {
 ///
 /// Temporary values are defined only in the destination pattern.
 pub(crate) struct Var {
-    pub name: &'static str,
+    pub name: String,
 
     /// The `Def` defining this variable in a source pattern.
     pub src_def: Option<DefIndex>,
@@ -254,7 +254,7 @@ pub(crate) struct Var {
 }
 
 impl Var {
-    fn new(name: &'static str) -> Self {
+    fn new(name: String) -> Self {
         Self {
             name,
             src_def: None,
@@ -346,7 +346,7 @@ impl Var {
     }
 
     pub fn to_rust_code(&self) -> String {
-        self.name.into()
+        self.name.clone()
     }
     fn rust_type(&self) -> String {
         self.type_var.as_ref().unwrap().to_rust_code()
@@ -384,8 +384,51 @@ impl VarPool {
     pub fn get_mut(&mut self, index: VarIndex) -> &mut Var {
         self.pool.get_mut(index).unwrap()
     }
-    pub fn create(&mut self, name: &'static str) -> VarIndex {
-        self.pool.push(Var::new(name))
+    pub fn create(&mut self, name: impl Into<String>) -> VarIndex {
+        self.pool.push(Var::new(name.into()))
+    }
+}
+
+/// Contains constants created in the AST that must be inserted into the true [ConstantPool]
+/// (cranelift_codegen::ir::ConstantPool) when the legalizer code is generated. The constant data
+/// is named in the order it is inserted; inserting data using [insert]
+/// (cranelift_codegen_meta::cdsl::ast::insert) will avoid duplicates.
+pub(crate) struct ConstPool {
+    pool: Vec<Vec<u8>>,
+}
+
+impl ConstPool {
+    /// Create an empty constant pool.
+    pub fn new() -> Self {
+        Self { pool: vec![] }
+    }
+
+    /// Create a name for a constant from its position in the pool.
+    fn create_name(position: usize) -> String {
+        format!("const{}", position)
+    }
+
+    /// Insert constant data into the pool, returning the name of the variable used to reference it.
+    /// This method will search for data that matches the new data and return the existing constant
+    /// name to avoid duplicates.
+    pub fn insert(&mut self, data: Vec<u8>) -> String {
+        let possible_position = self.pool.iter().position(|d| d == &data);
+        let position = if let Some(found_position) = possible_position {
+            found_position
+        } else {
+            let new_position = self.pool.len();
+            self.pool.push(data);
+            new_position
+        };
+        ConstPool::create_name(position)
+    }
+
+    /// Iterate over the name/value pairs in the pool.
+    pub fn iter(&self) -> impl Iterator<Item = (String, &Vec<u8>)> {
+        self.pool
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (ConstPool::create_name(i), v))
     }
 }
 
@@ -567,13 +610,14 @@ impl Apply {
 pub(crate) enum DummyExpr {
     Var(DummyVar),
     Literal(Literal),
+    Constant(DummyConstant),
     Apply(InstSpec, Vec<DummyExpr>),
     Block(DummyVar),
 }
 
 #[derive(Clone)]
 pub(crate) struct DummyVar {
-    pub name: &'static str,
+    pub name: String,
 }
 
 impl Into<DummyExpr> for DummyVar {
@@ -587,8 +631,23 @@ impl Into<DummyExpr> for Literal {
     }
 }
 
-pub(crate) fn var(name: &'static str) -> DummyVar {
-    DummyVar { name }
+#[derive(Clone)]
+pub(crate) struct DummyConstant(pub(crate) Vec<u8>);
+
+pub(crate) fn constant(data: Vec<u8>) -> DummyConstant {
+    DummyConstant(data)
+}
+
+impl Into<DummyExpr> for DummyConstant {
+    fn into(self) -> DummyExpr {
+        DummyExpr::Constant(self)
+    }
+}
+
+pub(crate) fn var(name: &str) -> DummyVar {
+    DummyVar {
+        name: name.to_owned(),
+    }
 }
 
 pub(crate) struct DummyDef {
@@ -655,4 +714,41 @@ macro_rules! ebb {
     ($block: ident) => {
         ExprBuilder::block($block).assign_to(Vec::new())
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cdsl::ast::ConstPool;
+
+    #[test]
+    fn const_pool_returns_var_names() {
+        let mut c = ConstPool::new();
+        assert_eq!(c.insert([0, 1, 2].to_vec()), "const0");
+        assert_eq!(c.insert([1, 2, 3].to_vec()), "const1");
+    }
+
+    #[test]
+    fn const_pool_avoids_duplicates() {
+        let data = [0, 1, 2].to_vec();
+        let mut c = ConstPool::new();
+        assert_eq!(c.pool.len(), 0);
+
+        assert_eq!(c.insert(data.clone()), "const0");
+        assert_eq!(c.pool.len(), 1);
+
+        assert_eq!(c.insert(data), "const0");
+        assert_eq!(c.pool.len(), 1);
+    }
+
+    #[test]
+    fn const_pool_iterates() {
+        let mut c = ConstPool::new();
+        c.insert([0, 1, 2].to_vec());
+        c.insert([3, 4, 5].to_vec());
+
+        let mut iter = c.iter();
+        assert_eq!(iter.next(), Some(("const0".to_owned(), &vec![0, 1, 2])));
+        assert_eq!(iter.next(), Some(("const1".to_owned(), &vec![3, 4, 5])));
+        assert_eq!(iter.next(), None);
+    }
 }
