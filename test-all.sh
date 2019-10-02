@@ -90,7 +90,8 @@ if rustup toolchain list | grep -q nightly; then
 
     # Nightly is available, so also run lightbeam's tests, which we
     # skipped earlier.
-    cargo +nightly test --package lightbeam
+    cargo +nightly test --features lightbeam --package lightbeam
+    cargo +nightly test --features lightbeam
 
     # Also run wasmtime-py and wasmtime-rust's tests.
     RUST_BACKTRACE=1 cargo +nightly test \
