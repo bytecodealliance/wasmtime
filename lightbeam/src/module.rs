@@ -217,19 +217,21 @@ impl<T> Drop for BoxSlice<T> {
     }
 }
 
+type BoxByteSlice = BoxSlice<u8>;
+
 pub struct VmCtx {
-    mem: BoxSlice<u8>,
+    mem: BoxByteSlice,
 }
 
 impl VmCtx {
     pub fn offset_of_memory_ptr() -> u32 {
-        offset_of!(VmCtx, mem.ptr)
+        (offset_of!(VmCtx, mem) + offset_of!(BoxByteSlice, ptr))
             .try_into()
             .expect("Offset exceeded size of u32")
     }
 
     pub fn offset_of_memory_len() -> u32 {
-        offset_of!(VmCtx, mem.len)
+        (offset_of!(VmCtx, mem) + offset_of!(BoxByteSlice, len))
             .try_into()
             .expect("Offset exceeded size of u32")
     }
