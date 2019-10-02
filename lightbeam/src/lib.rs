@@ -20,6 +20,7 @@ extern crate lazy_static;
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
+#[cfg(test)]
 extern crate wabt;
 // Just so we can implement `Signature` for `cranelift_codegen::ir::Signature`
 extern crate cranelift_codegen;

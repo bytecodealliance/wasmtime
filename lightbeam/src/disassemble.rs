@@ -7,7 +7,7 @@ pub fn disassemble(
     mem: &[u8],
     mut ops: &[(AssemblyOffset, impl Display)],
 ) -> Result<(), Box<dyn Error>> {
-    let mut cs = Capstone::new()
+    let cs = Capstone::new()
         .x86()
         .mode(arch::x86::ArchMode::Mode64)
         .build()?;
