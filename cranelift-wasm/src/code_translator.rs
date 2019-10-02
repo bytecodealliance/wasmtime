@@ -1083,6 +1083,22 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = state.pop2();
             state.push1(builder.ins().imul(a, b))
         }
+        Operator::V128Not => {
+            let a = state.pop1();
+            state.push1(builder.ins().bnot(a));
+        }
+        Operator::V128And => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().band(a, b));
+        }
+        Operator::V128Or => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().bor(a, b));
+        }
+        Operator::V128Xor => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().bxor(a, b));
+        }
         Operator::I8x16Eq
         | Operator::I8x16Ne
         | Operator::I8x16LtS
@@ -1125,10 +1141,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2Gt
         | Operator::F64x2Le
         | Operator::F64x2Ge
-        | Operator::V128Not
-        | Operator::V128And
-        | Operator::V128Or
-        | Operator::V128Xor
         | Operator::V128Bitselect
         | Operator::I8x16AnyTrue
         | Operator::I8x16AllTrue
