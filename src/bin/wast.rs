@@ -154,7 +154,10 @@ fn main() {
 
     // Decide how to compile.
     let strategy = match (args.flag_always_lightbeam, args.flag_always_cranelift) {
+        #[cfg(feature = "lightbeam")]
         (true, false) => CompilationStrategy::AlwaysLightbeam,
+        #[cfg(not(feature = "lightbeam"))]
+        (true, false) => panic!("--always-lightbeam given, but Lightbeam support is not enabled"),
         (false, true) => CompilationStrategy::AlwaysCranelift,
         (false, false) => CompilationStrategy::Auto,
         (true, true) => {

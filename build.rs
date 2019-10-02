@@ -14,7 +14,11 @@ fn main() {
     let mut out = File::create(out_dir.join("wast_testsuite_tests.rs"))
         .expect("error generating test source file");
 
-    for strategy in &["AlwaysCranelift", "AlwaysLightbeam"] {
+    for strategy in &[
+        "AlwaysCranelift",
+        #[cfg(feature = "lightbeam")]
+        "AlwaysLightbeam",
+    ] {
         writeln!(out, "#[allow(non_snake_case)]").expect("generating tests");
         writeln!(out, "mod {} {{", strategy).expect("generating tests");
 
