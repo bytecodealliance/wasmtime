@@ -33,8 +33,9 @@ use pretty_env_logger;
 use serde::Deserialize;
 use std::path::Path;
 use std::process;
+use wasmtime::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
-use wasmtime_jit::{CompilationStrategy, Compiler, Features};
+use wasmtime_jit::{Compiler, Features};
 use wasmtime_wast::WastContext;
 
 const USAGE: &str = "
@@ -153,17 +154,8 @@ fn main() {
     }
 
     // Decide how to compile.
-    let strategy = match (args.flag_always_lightbeam, args.flag_always_cranelift) {
-        #[cfg(feature = "lightbeam")]
-        (true, false) => CompilationStrategy::AlwaysLightbeam,
-        #[cfg(not(feature = "lightbeam"))]
-        (true, false) => panic!("--always-lightbeam given, but Lightbeam support is not enabled"),
-        (false, true) => CompilationStrategy::AlwaysCranelift,
-        (false, false) => CompilationStrategy::Auto,
-        (true, true) => {
-            panic!("Can't enable --always-cranelift and --always-lightbeam at the same time")
-        }
-    };
+    let strategy =
+        pick_compilation_strategy(args.flag_always_cranelift, args.flag_always_lightbeam);
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     let engine = Compiler::new(isa, strategy);

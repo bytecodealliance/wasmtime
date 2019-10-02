@@ -63,7 +63,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] [--enable-simd] <file> -o <output>
+    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] [--enable-simd] [--always-lightbeam | --always-cranelift] <file> -o <output>
     wasm2obj --create-cache-config [--cache-config=<cache_config_file>]
     wasm2obj --help | --version
 
@@ -80,6 +80,8 @@ Options:
                         creates default configuration and writes it to the disk,
                         use with --cache-config to specify custom config file
                         instead of default one
+    --always-lightbeam  use Lightbeam for all compilation
+    --always-cranelift  use Cranelift for all compilation
     --enable-simd       enable proposed SIMD instructions
     -O, --optimize      runs optimization passes on the translated functions
     --version           print the Cranelift version
@@ -97,6 +99,8 @@ struct Args {
     flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
+    flag_always_lightbeam: bool,
+    flag_always_cranelift: bool,
     flag_optimize: bool,
 }
 

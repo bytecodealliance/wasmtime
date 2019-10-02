@@ -6,7 +6,7 @@ use crate::context::{create_compiler, Context};
 use crate::r#ref::HostRef;
 
 use cranelift_codegen::{ir, settings};
-use wasmtime_jit::Features;
+use wasmtime_jit::{CompilationStrategy, Features};
 
 // Runtime Environment
 
@@ -21,6 +21,7 @@ pub struct Config {
     flags: settings::Flags,
     features: Features,
     debug_info: bool,
+    strategy: CompilationStrategy,
 }
 
 impl Config {
@@ -29,14 +30,21 @@ impl Config {
             debug_info: false,
             features: Default::default(),
             flags: default_flags(),
+            strategy: CompilationStrategy::Auto,
         }
     }
 
-    pub fn new(flags: settings::Flags, features: Features, debug_info: bool) -> Config {
+    pub fn new(
+        flags: settings::Flags,
+        features: Features,
+        debug_info: bool,
+        strategy: CompilationStrategy,
+    ) -> Config {
         Config {
             flags,
             features,
             debug_info,
+            strategy,
         }
     }
 
@@ -50,6 +58,10 @@ impl Config {
 
     pub(crate) fn features(&self) -> &Features {
         &self.features
+    }
+
+    pub(crate) fn strategy(&self) -> CompilationStrategy {
+        self.strategy
     }
 }
 
@@ -74,7 +86,7 @@ impl Engine {
 
     pub fn create_wasmtime_context(&self) -> wasmtime_jit::Context {
         let flags = self.config.flags().clone();
-        wasmtime_jit::Context::new(Box::new(create_compiler(flags)))
+        wasmtime_jit::Context::new(Box::new(create_compiler(flags, self.config.strategy())))
     }
 }
 
@@ -92,9 +104,10 @@ impl Store {
         let flags = engine.borrow().config().flags().clone();
         let features = engine.borrow().config().features().clone();
         let debug_info = engine.borrow().config().debug_info();
+        let strategy = engine.borrow().config().strategy();
         Store {
             engine,
-            context: Context::create(flags, features, debug_info),
+            context: Context::create(flags, features, debug_info, strategy),
             global_exports: Rc::new(RefCell::new(HashMap::new())),
             signature_cache: HashMap::new(),
         }

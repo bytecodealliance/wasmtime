@@ -1,3 +1,23 @@
+use wasmtime_jit::CompilationStrategy;
+
+pub fn pick_compilation_strategy(
+    always_cranelift: bool,
+    always_lightbeam: bool,
+) -> CompilationStrategy {
+    // Decide how to compile.
+    match (always_lightbeam, always_cranelift) {
+        #[cfg(feature = "lightbeam")]
+        (true, false) => CompilationStrategy::AlwaysLightbeam,
+        #[cfg(not(feature = "lightbeam"))]
+        (true, false) => panic!("--always-lightbeam given, but Lightbeam support is not enabled"),
+        (false, true) => CompilationStrategy::AlwaysCranelift,
+        (false, false) => CompilationStrategy::Auto,
+        (true, true) => {
+            panic!("Can't enable --always-cranelift and --always-lightbeam at the same time")
+        }
+    }
+}
+
 pub fn init_file_per_thread_logger(prefix: &'static str) {
     file_per_thread_logger::initialize(prefix);
 
