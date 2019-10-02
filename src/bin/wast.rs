@@ -41,7 +41,7 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    wast [-do] [--enable-simd] [--disable-cache | --cache-config=<cache_config_file>] [--always-lightmean | --always-cranelift] <file>...
+    wast [-do] [--enable-simd] [--disable-cache | --cache-config=<cache_config_file>] [--always-lightbeam | --always-cranelift] <file>...
     wast --create-cache-config [--cache-config=<cache_config_file>]
     wast --help | --version
 

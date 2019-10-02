@@ -52,5 +52,5 @@ members = [
 [features]
 # Enable all supported architectures by default.
 default = ["cranelift-codegen/all-arch"]
-lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam"]
+lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam", "wasmtime-wast/lightbeam"]
 wasi-c = ["wasmtime-wasi-c"]

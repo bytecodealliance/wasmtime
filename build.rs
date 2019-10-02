@@ -152,29 +152,7 @@ fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
     match strategy {
         #[cfg(feature = "lightbeam")]
         "AlwaysLightbeam" => match (testsuite, name) {
-            ("misc_testsuite", "memory_grow")
-            | ("misc_testsuite", "misc_traps")
-            | ("single_file_spec_test", "simd_const")
-            | ("spec_testsuite", "address")
-            | ("spec_testsuite", "align")
-            | ("spec_testsuite", "call")
-            | ("spec_testsuite", "call_indirect")
-            | ("spec_testsuite", "conversions")
-            | ("spec_testsuite", "elem")
-            | ("spec_testsuite", "func_ptrs")
-            | ("spec_testsuite", "globals")
-            | ("spec_testsuite", "i32")
-            | ("spec_testsuite", "i64")
-            | ("spec_testsuite", "if")
-            | ("spec_testsuite", "imports")
-            | ("spec_testsuite", "int_exprs")
-            | ("spec_testsuite", "linking")
-            | ("spec_testsuite", "memory_grow")
-            | ("spec_testsuite", "memory_trap")
-            | ("spec_testsuite", "select")
-            | ("spec_testsuite", "traps")
-            | ("spec_testsuite", "unreachable")
-            | ("spec_testsuite", "unwind") => return true,
+            ("single_file_spec_test", "simd_const") => return true,
             _ => (),
         },
         "AlwaysCranelift" => {}
