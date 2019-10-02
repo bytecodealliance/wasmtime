@@ -5,9 +5,8 @@ use crate::bitset::BitSet;
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::{FloatCC, IntCC};
-use crate::ir::immediates::V128Imm;
 use crate::ir::types::*;
-use crate::ir::{self, Function, Inst, InstBuilder};
+use crate::ir::{self, ConstantData, Function, Inst, InstBuilder};
 use crate::isa::constraints::*;
 use crate::isa::enc_tables::*;
 use crate::isa::encoding::base_size;
@@ -1111,7 +1110,11 @@ fn convert_ineg(
     {
         let value_type = pos.func.dfg.value_type(arg);
         if value_type.is_vector() && value_type.lane_type().is_int() {
-            let zero_immediate = pos.func.dfg.constants.insert(V128Imm::from(0).to_vec());
+            let zero_immediate = pos
+                .func
+                .dfg
+                .constants
+                .insert(ConstantData::from(vec![0; 16]));
             let zero_value = pos.ins().vconst(value_type, zero_immediate); // this should be legalized to a PXOR
             pos.func.dfg.replace(inst).isub(zero_value, arg);
         }

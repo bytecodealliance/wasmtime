@@ -6,13 +6,13 @@
 
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
-use core::iter::FromIterator;
-use core::str::{from_utf8, FromStr};
+use core::str::FromStr;
 use core::{i32, u32};
 
 /// Convert a type into a vector of bytes; all implementors in this file must use little-endian
 /// orderings of bytes to match WebAssembly's little-endianness.
-trait IntoBytes {
+pub trait IntoBytes {
+    /// Return the little-endian byte representation of the implementing type.
     fn into_bytes(self) -> Vec<u8>;
 }
 
@@ -31,6 +31,12 @@ impl IntoBytes for i16 {
 impl IntoBytes for i32 {
     fn into_bytes(self) -> Vec<u8> {
         self.to_le_bytes().to_vec()
+    }
+}
+
+impl IntoBytes for Vec<u8> {
+    fn into_bytes(self) -> Vec<u8> {
+        self
     }
 }
 
@@ -318,34 +324,6 @@ impl V128Imm {
     }
 }
 
-impl Display for V128Imm {
-    // Print a 128-bit vector in hexadecimal, e.g. 0x000102030405060708090a0b0c0d0e0f.
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "0x")?;
-        let mut anything_written = false;
-        for &b in self.0.iter().rev() {
-            if b == 0 && !anything_written {
-                continue;
-            } else {
-                anything_written = true;
-                write!(f, "{:02x}", b)?;
-            }
-        }
-        if !anything_written {
-            write!(f, "00")?;
-        }
-        Ok(())
-    }
-}
-
-impl From<u64> for V128Imm {
-    fn from(x: u64) -> Self {
-        let mut buffer: [u8; 16] = [0; 16]; // zero-fill
-        (0..8).for_each(|byte| buffer[byte] = (x >> (byte as u64 * 8) & 0xff) as u8); // insert each byte from the u64 into v in little-endian order
-        V128Imm(buffer)
-    }
-}
-
 impl From<&[u8]> for V128Imm {
     fn from(slice: &[u8]) -> Self {
         assert_eq!(slice.len(), 16);
@@ -354,92 +332,6 @@ impl From<&[u8]> for V128Imm {
         V128Imm(buffer)
     }
 }
-
-impl FromStr for V128Imm {
-    type Err = &'static str;
-
-    // parse a 128-bit vector from a hexadecimal string, formatted as above
-    fn from_str(s: &str) -> Result<Self, &'static str> {
-        if s.len() <= 2 || &s[0..2] != "0x" {
-            Err("Expected a hexadecimal string, e.g. 0x1234")
-        } else {
-            // clean and check the string
-            let cleaned: Vec<u8> = s[2..]
-                .as_bytes()
-                .iter()
-                .filter(|&&b| b as char != '_')
-                .cloned()
-                .collect(); // remove 0x prefix and any intervening _ characters
-
-            if cleaned.len() == 0 {
-                Err("Hexadecimal string must have some digits")
-            } else if cleaned.len() % 2 != 0 {
-                Err("Hexadecimal string must have an even number of digits")
-            } else if cleaned.len() > 32 {
-                Err("Hexadecimal string has too many digits to fit in a 128-bit vector")
-            } else {
-                let mut buffer = [0; 16]; // zero-fill the buffer
-                let mut position = cleaned.len() / 2 - 1; // since Uimm128 is little-endian but the string is not, we write from back to front but must start at the highest position required by the string
-                for i in (0..cleaned.len()).step_by(2) {
-                    let pair = from_utf8(&cleaned[i..i + 2])
-                        .or_else(|_| Err("Unable to parse hexadecimal pair as UTF-8"))?;
-                    let byte = u8::from_str_radix(pair, 16)
-                        .or_else(|_| Err("Unable to parse as hexadecimal"))?;
-                    buffer[position] = byte;
-                    position = position.wrapping_sub(1); // should only wrap on the last iteration
-                }
-
-                Ok(V128Imm(buffer))
-            }
-        }
-    }
-}
-
-/// Implement a way to convert an iterator of immediates to a Uimm128:
-///  - this expects the items in reverse order (e.g. last lane first) which is the natural output of pushing items into a vector
-///  - this may not fully consume the iterator or may fail if it cannot take the expected number of items
-///  - this requires the input type (i.e. $ty) to implement ToBytes
-macro_rules! construct_uimm128_from_iterator_of {
-    ( $ty:ident, $lanes:expr ) => {
-        impl FromIterator<$ty> for V128Imm {
-            fn from_iter<T: IntoIterator<Item = $ty>>(iter: T) -> Self {
-                let mut buffer: [u8; 16] = [0; 16];
-                iter.into_iter()
-                    .take($lanes)
-                    .map(|f| f.into_bytes())
-                    .flat_map(|b| b)
-                    .enumerate()
-                    .for_each(|(i, b)| buffer[i] = b);
-                V128Imm(buffer)
-            }
-        }
-    };
-}
-
-/// Special case for booleans since we have to decide the bit-width based on the number of items
-impl FromIterator<bool> for V128Imm {
-    fn from_iter<T: IntoIterator<Item = bool>>(iter: T) -> Self {
-        let bools = Vec::from_iter(iter);
-        let count = bools.len();
-        assert!(count > 0 && count <= 16); // ensure we don't have too many booleans
-        assert_eq!(count & (count - 1), 0); // ensure count is a power of two, see https://stackoverflow.com/questions/600293
-        let mut buffer: [u8; 16] = [0; 16];
-        let step = 16 / count;
-        bools
-            .iter()
-            .enumerate()
-            .map(|(i, &b)| (i * step, if b { 1 } else { 0 }))
-            .for_each(|(i, b)| buffer[i] = b);
-        V128Imm(buffer)
-    }
-}
-
-construct_uimm128_from_iterator_of!(u8, 16);
-construct_uimm128_from_iterator_of!(i16, 8);
-construct_uimm128_from_iterator_of!(i32, 4);
-construct_uimm128_from_iterator_of!(Ieee32, 4);
-construct_uimm128_from_iterator_of!(Imm64, 2);
-construct_uimm128_from_iterator_of!(Ieee64, 2);
 
 /// 32-bit signed immediate offset.
 ///
@@ -1072,117 +964,6 @@ mod tests {
 
         // Hex count overflow.
         parse_err::<Uimm64>("0x0_0000_0000_0000_0000", "Too many hexadecimal digits");
-    }
-
-    #[test]
-    fn format_uimm128() {
-        assert_eq!(V128Imm::from(0).to_string(), "0x00");
-        assert_eq!(V128Imm::from(42).to_string(), "0x2a");
-        assert_eq!(V128Imm::from(3735928559).to_string(), "0xdeadbeef");
-        assert_eq!(
-            V128Imm::from(0x0102030405060708).to_string(),
-            "0x0102030405060708"
-        );
-    }
-
-    #[test]
-    fn parse_uimm128() {
-        parse_ok::<V128Imm>("0x00", "0x00");
-        parse_ok::<V128Imm>("0x00000042", "0x42");
-        parse_ok::<V128Imm>(
-            "0x0102030405060708090a0b0c0d0e0f00",
-            "0x0102030405060708090a0b0c0d0e0f00",
-        );
-        parse_ok::<V128Imm>("0x_0000_0043_21", "0x4321");
-
-        parse_err::<V128Imm>("", "Expected a hexadecimal string, e.g. 0x1234");
-        parse_err::<V128Imm>("0x", "Expected a hexadecimal string, e.g. 0x1234");
-        parse_err::<V128Imm>(
-            "0x042",
-            "Hexadecimal string must have an even number of digits",
-        );
-        parse_err::<V128Imm>(
-            "0x00000000000000000000000000000000000000000000000000",
-            "Hexadecimal string has too many digits to fit in a 128-bit vector",
-        );
-        parse_err::<V128Imm>("0xrstu", "Unable to parse as hexadecimal");
-        parse_err::<V128Imm>("0x__", "Hexadecimal string must have some digits");
-    }
-
-    #[test]
-    fn uimm128_equivalence() {
-        assert_eq!(
-            "0x01".parse::<V128Imm>().unwrap().0,
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            V128Imm::from_iter(vec![1, 0, 0, 0]).0,
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            V128Imm::from(1).0,
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-    }
-
-    #[test]
-    fn uimm128_endianness() {
-        assert_eq!(
-            "0x42".parse::<V128Imm>().unwrap().0,
-            [0x42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            "0x00".parse::<V128Imm>().unwrap().0,
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            "0x12345678".parse::<V128Imm>().unwrap().0,
-            [0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            "0x1234_5678".parse::<V128Imm>().unwrap().0,
-            [0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-    }
-
-    #[test]
-    fn uimm128_from_iter() {
-        assert_eq!(
-            V128Imm::from_iter(vec![4, 3, 2, 1]).0,
-            [4, 0, 0, 0, 3, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0]
-        );
-
-        assert_eq!(
-            V128Imm::from_iter(vec![false, true]).0,
-            [/* false */ 0, 0, 0, 0, 0, 0, 0, 0, /* true */ 1, 0, 0, 0, 0, 0, 0, 0]
-        );
-
-        assert_eq!(
-            V128Imm::from_iter(vec![false, true, false, true, false, true, false, true]).0,
-            [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0]
-        );
-
-        #[allow(trivial_numeric_casts)]
-        let u8s = vec![
-            1 as u8, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0,
-        ];
-        assert_eq!(
-            V128Imm::from_iter(u8s).0,
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0]
-        );
-
-        #[allow(trivial_numeric_casts)]
-        let ieee32s: Vec<Ieee32> = vec![32.4 as f32, 0.0, 1.0, 6.6666]
-            .iter()
-            .map(|&f| Ieee32::from(f))
-            .collect();
-        assert_eq!(
-            V128Imm::from_iter(ieee32s).0,
-            [
-                /* 32.4 == */ 0x9a, 0x99, 0x01, 0x42, /* 0 == */ 0, 0, 0, 0,
-                /* 1 == */ 0, 0, 0x80, 0x3f, /* 6.6666 == */ 0xca, 0x54, 0xd5, 0x40,
-            ]
-        )
     }
 
     #[test]

@@ -5,7 +5,7 @@ use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::extfunc::ExtFuncData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
-use crate::ir::{types, ConstantPool, Immediate};
+use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
     Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList,
     ValueListPool,
@@ -14,7 +14,6 @@ use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
 use crate::HashMap;
-use alloc::vec::Vec;
 use core::fmt;
 use core::iter;
 use core::mem;
@@ -73,7 +72,7 @@ pub struct DataFlowGraph {
     pub constants: ConstantPool,
 
     /// Stores large immediates that otherwise will not fit on InstructionData
-    pub immediates: PrimaryMap<Immediate, Vec<u8>>,
+    pub immediates: PrimaryMap<Immediate, ConstantData>,
 }
 
 impl DataFlowGraph {

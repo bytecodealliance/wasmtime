@@ -9,20 +9,19 @@ use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, V128Imm};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData, ExternalName, FuncRef, Function,
-    GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
-    Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
-    Value, ValueLoc,
+    AbiParam, ArgumentExtension, ArgumentLoc, ConstantData, Ebb, ExtFuncData, ExternalName,
+    FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable,
+    JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
+    Table, TableData, Type, Value, ValueLoc,
 };
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, timing};
-use std::iter::FromIterator;
 use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
@@ -595,16 +594,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a Uimm128 immediate; due to size restrictions on InstructionData, Uimm128
-    // is boxed in cranelift-codegen/meta/src/shared/immediates.rs
-    fn match_uimm128(&mut self, err_msg: &str) -> ParseResult<V128Imm> {
+    // Match and consume a hexadeximal immediate
+    fn match_hexadecimal_constant(&mut self, err_msg: &str) -> ParseResult<ConstantData> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
-            // Lexer just gives us raw text that looks like hex code.
-            // Parse it as an Uimm128 to check for overflow and other issues.
             text.parse().map_err(|e| {
                 self.error(&format!(
-                    "expected u128 hexadecimal immediate, failed to parse: {}",
+                    "expected hexadecimal immediate, failed to parse: {}",
                     e
                 ))
             })
@@ -614,15 +610,27 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal list form (e.g. [0 1 2...])
-    fn match_uimm128_or_literals(&mut self, controlling_type: Type) -> ParseResult<V128Imm> {
-        if self.optional(Token::LBracket) {
+    fn match_constant_data(&mut self, controlling_type: Type) -> ParseResult<ConstantData> {
+        let expected_size = controlling_type.bytes() as usize;
+        let constant_data = if self.optional(Token::LBracket) {
             // parse using a list of values, e.g. vconst.i32x4 [0 1 2 3]
             let uimm128 = self.parse_literals_to_uimm128(controlling_type)?;
             self.match_token(Token::RBracket, "expected a terminating right bracket")?;
-            Ok(uimm128)
+            uimm128
         } else {
-            // parse using a hexadecimal value
-            self.match_uimm128("expected an immediate hexadecimal operand")
+            // parse using a hexadecimal value, e.g. 0x000102...
+            let uimm128 =
+                self.match_hexadecimal_constant("expected an immediate hexadecimal operand")?;
+            uimm128.expand_to(expected_size)
+        };
+
+        if constant_data.len() == expected_size {
+            Ok(constant_data)
+        } else {
+            Err(self.error(&format!(
+                "expected parsed constant to have {} bytes",
+                expected_size
+            )))
         }
     }
 
@@ -851,29 +859,42 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a list of literals (i.e. integers, floats, booleans); e.g.
-    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<V128Imm> {
+    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<ConstantData> {
         macro_rules! consume {
             ( $ty:ident, $match_fn:expr ) => {{
                 assert!($ty.is_vector());
-                let mut v = Vec::with_capacity($ty.lane_count() as usize);
+                let mut data = ConstantData::default();
                 for _ in 0..$ty.lane_count() {
-                    v.push($match_fn?);
+                    data = data.append($match_fn);
                 }
-                V128Imm::from_iter(v)
+                data
             }};
+        }
+
+        fn boolean_to_vec(value: bool, ty: Type) -> Vec<u8> {
+            let lane_size = ty.bytes() / u32::from(ty.lane_count());
+            if lane_size < 1 {
+                panic!("The boolean lane must have a byte size greater than zero.");
+            }
+            let mut buffer = vec![0; lane_size as usize];
+            buffer[0] = if value { 1 } else { 0 };
+            buffer
         }
 
         if !ty.is_vector() {
             err!(self.loc, "Expected a controlling vector type, not {}", ty)
         } else {
             let uimm128 = match ty.lane_type() {
-                I8 => consume!(ty, self.match_uimm8("Expected an 8-bit unsigned integer")),
-                I16 => consume!(ty, self.match_imm16("Expected a 16-bit integer")),
-                I32 => consume!(ty, self.match_imm32("Expected a 32-bit integer")),
-                I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")),
-                F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float...")),
-                F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")),
-                b if b.is_bool() => consume!(ty, self.match_bool("Expected a boolean")),
+                I8 => consume!(ty, self.match_uimm8("Expected an 8-bit unsigned integer")?),
+                I16 => consume!(ty, self.match_imm16("Expected a 16-bit integer")?),
+                I32 => consume!(ty, self.match_imm32("Expected a 32-bit integer")?),
+                I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")?),
+                F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float...")?),
+                F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")?),
+                b if b.is_bool() => consume!(
+                    ty,
+                    boolean_to_vec(self.match_bool("Expected a boolean")?, ty)
+                ),
                 _ => return err!(self.loc, "Expected a type of: float, int, bool"),
             };
             Ok(uimm128)
@@ -2447,8 +2468,8 @@ impl<'a> Parser<'a> {
                     )
                 }
                 Some(controlling_type) => {
-                    let uimm128 = self.match_uimm128_or_literals(controlling_type)?;
-                    let constant_handle = ctx.function.dfg.constants.insert(uimm128.to_vec());
+                    let uimm128 = self.match_constant_data(controlling_type)?;
+                    let constant_handle = ctx.function.dfg.constants.insert(uimm128);
                     InstructionData::UnaryConst {
                         opcode,
                         constant_handle,
@@ -2460,8 +2481,8 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let b = self.match_value("expected SSA value second operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let uimm128 = self.match_uimm128_or_literals(I8X16)?;
-                let mask = ctx.function.dfg.immediates.push(uimm128.to_vec());
+                let uimm128 = self.match_constant_data(I8X16)?;
+                let mask = ctx.function.dfg.immediates.push(uimm128);
                 InstructionData::Shuffle {
                     opcode,
                     mask,
@@ -3262,5 +3283,13 @@ mod tests {
         cannot_parse_as_uimm128!("0x0 0x1 0x2 0x3", I32X4);
         cannot_parse_as_uimm128!("1 2 3", I32X4);
         cannot_parse_as_uimm128!(" ", F32X4);
+    }
+
+    #[test]
+    fn parse_constant_from_booleans() {
+        let c = Parser::new("true false true false")
+            .parse_literals_to_uimm128(B32X4)
+            .unwrap();
+        assert_eq!(c.to_vec(), [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
     }
 }

@@ -8,19 +8,21 @@
 //! - ensuring alignment of constants within the pool,
 //! - bucketing constants by size.
 
+use crate::ir::immediates::{IntoBytes, V128Imm};
 use crate::ir::Constant;
 use crate::HashMap;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::fmt;
 use core::slice::Iter;
+use core::str::{from_utf8, FromStr};
 use cranelift_entity::EntityRef;
 
 /// This type describes the actual constant data. Note that the bytes stored in this structure are
 /// expected to be in little-endian order; this is due to ease-of-use when interacting with
 /// WebAssembly values, which are [little-endian by design]
 /// (https://github.com/WebAssembly/design/blob/master/Portability.md).
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug, Default)]
 pub struct ConstantData(Vec<u8>);
 
 impl From<Vec<u8>> for ConstantData {
@@ -35,15 +37,46 @@ impl From<&[u8]> for ConstantData {
     }
 }
 
+impl From<V128Imm> for ConstantData {
+    fn from(v: V128Imm) -> Self {
+        Self(v.to_vec())
+    }
+}
+
 impl ConstantData {
     /// Return the number of bytes in the constant.
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Convert the data to a vector.
+    pub fn to_vec(self) -> Vec<u8> {
+        self.0
+    }
+
     /// Iterate over the constant's bytes.
     pub fn iter(&self) -> Iter<u8> {
         self.0.iter()
+    }
+
+    /// Add new bytes to the constant data.
+    pub fn append(mut self, bytes: impl IntoBytes) -> Self {
+        let mut to_add = bytes.into_bytes();
+        self.0.append(&mut to_add);
+        self
+    }
+
+    /// Expand the size of the constant data to `expected_size` number of bytes by adding zeroes
+    /// in the high-order byte slots.
+    pub fn expand_to(mut self, expected_size: usize) -> Self {
+        if self.len() > expected_size {
+            panic!(
+                "The constant data is already expanded beyond {} bytes",
+                expected_size
+            )
+        }
+        self.0.resize(expected_size, 0);
+        self
     }
 }
 
@@ -69,6 +102,50 @@ impl fmt::Display for ConstantData {
             write!(f, "00")?;
         }
         Ok(())
+    }
+}
+
+impl FromStr for ConstantData {
+    type Err = &'static str;
+
+    /// Parse a hexadecimal string to `ConstantData`. This is the inverse of [ConstantData::fmt]
+    /// (cranelift_codegen::ir::ConstantData::fmt).
+    ///
+    /// ```
+    /// use cranelift_codegen::ir::ConstantData;
+    /// let c: ConstantData = "0x000102".parse().unwrap();
+    /// assert_eq!(c.to_vec(), [2, 1, 0]);
+    /// ```
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        if s.len() <= 2 || &s[0..2] != "0x" {
+            return Err("Expected a hexadecimal string, e.g. 0x1234");
+        }
+
+        // clean and check the string
+        let cleaned: Vec<u8> = s[2..]
+            .as_bytes()
+            .iter()
+            .filter(|&&b| b as char != '_')
+            .cloned()
+            .collect(); // remove 0x prefix and any intervening _ characters
+
+        if cleaned.len() == 0 {
+            Err("Hexadecimal string must have some digits")
+        } else if cleaned.len() % 2 != 0 {
+            Err("Hexadecimal string must have an even number of digits")
+        } else if cleaned.len() > 32 {
+            Err("Hexadecimal string has too many digits to fit in a 128-bit vector")
+        } else {
+            let mut buffer = Vec::with_capacity((s.len() - 2) / 2);
+            for i in (0..cleaned.len()).step_by(2) {
+                let pair = from_utf8(&cleaned[i..i + 2])
+                    .or_else(|_| Err("Unable to parse hexadecimal pair as UTF-8"))?;
+                let byte = u8::from_str_radix(pair, 16)
+                    .or_else(|_| Err("Unable to parse as hexadecimal"))?;
+                buffer.insert(0, byte);
+            }
+            Ok(ConstantData(buffer))
+        }
     }
 }
 
@@ -301,6 +378,107 @@ mod tests {
         assert_eq!(
             ConstantData::from(0x0102030405060708u64.to_le_bytes().as_ref()).to_string(),
             "0x0102030405060708"
+        );
+    }
+
+    #[test]
+    fn iterate_over_constant_data() {
+        let c = ConstantData::from([1, 2, 3].as_ref());
+        let mut iter = c.iter();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn add_to_constant_data() {
+        let d = ConstantData::from([1, 2].as_ref());
+        let e = d.append(i16::from(3u8));
+        assert_eq!(e.to_vec(), vec![1, 2, 3, 0])
+    }
+
+    #[test]
+    fn extend_constant_data() {
+        let d = ConstantData::from([1, 2].as_ref());
+        assert_eq!(d.expand_to(4).to_vec(), vec![1, 2, 0, 0])
+    }
+
+    #[test]
+    #[should_panic]
+    fn extend_constant_data_to_invalid_length() {
+        ConstantData::from([1, 2].as_ref()).expand_to(1);
+    }
+
+    #[test]
+    fn parse_constant_data_and_restringify() {
+        // Verify that parsing of `from` succeeds and stringifies to `to`.
+        fn parse_ok(from: &str, to: &str) {
+            let parsed = from.parse::<ConstantData>().unwrap();
+            assert_eq!(parsed.to_string(), to);
+        }
+
+        // Verify that parsing of `from` fails with `error_msg`.
+        fn parse_err(from: &str, error_msg: &str) {
+            let parsed = from.parse::<ConstantData>();
+            assert!(
+                parsed.is_err(),
+                "Expected a parse error but parsing succeeded: {}",
+                from
+            );
+            assert_eq!(parsed.err().unwrap(), error_msg);
+        }
+
+        parse_ok("0x00", "0x00");
+        parse_ok("0x00000042", "0x42");
+        parse_ok(
+            "0x0102030405060708090a0b0c0d0e0f00",
+            "0x0102030405060708090a0b0c0d0e0f00",
+        );
+        parse_ok("0x_0000_0043_21", "0x4321");
+
+        parse_err("", "Expected a hexadecimal string, e.g. 0x1234");
+        parse_err("0x", "Expected a hexadecimal string, e.g. 0x1234");
+        parse_err(
+            "0x042",
+            "Hexadecimal string must have an even number of digits",
+        );
+        parse_err(
+            "0x00000000000000000000000000000000000000000000000000",
+            "Hexadecimal string has too many digits to fit in a 128-bit vector",
+        );
+        parse_err("0xrstu", "Unable to parse as hexadecimal");
+        parse_err("0x__", "Hexadecimal string must have some digits");
+    }
+
+    #[test]
+    fn verify_stored_bytes_in_constant_data() {
+        assert_eq!("0x01".parse::<ConstantData>().unwrap().to_vec(), [1]);
+        assert_eq!(ConstantData::from([1, 0].as_ref()).0, [1, 0]);
+        assert_eq!(ConstantData::from(vec![1, 0, 0, 0]).0, [1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn check_constant_data_endianness_as_uimm128() {
+        fn parse_to_uimm128(from: &str) -> Vec<u8> {
+            from.parse::<ConstantData>().unwrap().expand_to(16).to_vec()
+        }
+
+        assert_eq!(
+            parse_to_uimm128("0x42"),
+            [0x42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            parse_to_uimm128("0x00"),
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            parse_to_uimm128("0x12345678"),
+            [0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            parse_to_uimm128("0x1234_5678"),
+            [0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
     }
 }

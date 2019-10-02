@@ -33,7 +33,9 @@ use crate::wasm_unsupported;
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel};
+use cranelift_codegen::ir::{
+    self, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use wasmparser::{MemoryImmediate, Operator};
@@ -1051,7 +1053,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (vector_a, vector_b) = state.pop2();
             let a = optionally_bitcast_vector(vector_a, I8X16, builder);
             let b = optionally_bitcast_vector(vector_b, I8X16, builder);
-            let mask = builder.func.dfg.immediates.push(lanes.to_vec());
+            let lanes = ConstantData::from(lanes.as_ref());
+            let mask = builder.func.dfg.immediates.push(lanes);
             let shuffled = builder.ins().shuffle(a, b, mask);
             state.push1(shuffled)
             // At this point the original types of a and b are lost; users of this value (i.e. this
