@@ -115,6 +115,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let uextend = insts.by_name("uextend");
     let uload8 = insts.by_name("uload8");
     let uload16 = insts.by_name("uload16");
+    let umulhi = insts.by_name("umulhi");
     let ushr = insts.by_name("ushr");
     let ushr_imm = insts.by_name("ushr_imm");
     let urem = insts.by_name("urem");
@@ -334,6 +335,25 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
                 ],
             );
         }
+    }
+
+    // TODO(ryzokuken): explore the perf diff w/ x86_umulx and consider have a
+    // separate legalization for x86.
+    for &ty in &[I64, I128] {
+        narrow.legalize(
+            def!(a = imul.ty(x, y)),
+            vec![
+                def!((xl, xh) = isplit(x)),
+                def!((yl, yh) = isplit(y)),
+                def!(a1 = imul(xh, yl)),
+                def!(a2 = imul(xl, yh)),
+                def!(a3 = iadd(a1, a2)),
+                def!(a4 = umulhi(xl, yl)),
+                def!(ah = iadd(a3, a4)),
+                def!(al = imul(xl, yl)),
+                def!(a = iconcat(al, ah)),
+            ],
+        );
     }
 
     // Widen instructions with one input operand.
