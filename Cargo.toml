@@ -14,7 +14,7 @@ description = "WASI implementation in Rust"
 wasi-common-cbindgen = { path = "wasi-common-cbindgen" }
 failure = "0.1"
 libc = "0.2"
-rand = "0.6"
+rand = "0.7"
 cfg-if = "0.1.9"
 log = "0.4"
 filetime = "0.2.7"
