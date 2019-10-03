@@ -35,7 +35,7 @@ cranelift-codegen = "0.41.0"
 cranelift-entity = "0.44.0"
 cranelift-wasm = "0.44.0"
 cranelift-native = "0.44.0"
-target-lexicon = "0.4.0"
+target-lexicon = "0.8.1"
 pretty_env_logger = "0.3.0"
 tempfile = "3.1.0"
 
