@@ -357,9 +357,8 @@ pub trait ModuleContext {
     fn func_index(&self, defined_func_index: u32) -> u32;
     fn defined_func_index(&self, func_index: u32) -> Option<u32>;
 
-    fn defined_func_type(&self, func_idx: u32) -> &Self::Signature {
-        // TODO: This assumes that there are no imported functions.
-        self.func_type(self.func_index(func_idx))
+    fn defined_func_type(&self, defined_func_idx: u32) -> &Self::Signature {
+        self.func_type(self.func_index(defined_func_idx))
     }
 
     fn func_type(&self, func_idx: u32) -> &Self::Signature {
