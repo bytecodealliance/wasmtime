@@ -1,3 +1,5 @@
+#![cfg(feature = "wasm_tests")]
+
 mod runtime;
 mod utils;
 

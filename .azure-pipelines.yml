@@ -58,7 +58,7 @@ jobs:
       displayName: Cargo build release
     - script: cargo build
       displayName: Cargo build
-    - bash: RUST_BACKTRACE=1 cargo test --all
+    - bash: RUST_BACKTRACE=1 cargo test --features wasm_tests --all
       displayName: Cargo test
     - script: cargo doc
       condition: eq(variables['Agent.OS'], 'Darwin')

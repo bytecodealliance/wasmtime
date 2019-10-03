@@ -39,6 +39,28 @@ In our Windows implementation, we currently support the minimal subset of [WASI 
 which allows for running the very basic "Hello world!" style WASM apps. More coming shortly,
 so stay tuned!
 
+## Development hints
+When testing the crate, you may want to enable and run full wasm32 integration testsuite. This
+requires `wasm32-wasi` target installed which can be done as follows using [rustup]
+
+```
+rustup target add wasm32-wasi
+```
+
+[rustup]: https://rustup.rs
+
+Next initiate submodules containing the integration testsuite
+
+```
+git submodule update --init
+```
+
+Now, you should be able to run the integration testsuite by enabling the `wasm_tests` feature
+
+```
+cargo test --features wasm_tests
+```
+
 ## Third-Party Code
 Significant parts of our hostcall implementations are derived from the C implementations in
 `cloudabi-utils`. See [LICENSE.cloudabi-utils](LICENSE.cloudabi-utils) for license information.

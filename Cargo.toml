@@ -10,6 +10,11 @@ edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 description = "WASI implementation in Rust"
 
+[features]
+# this feature requires wasm32-wasi target installed, and it enables wasm32
+# integration tests when run with `cargo test --features wasm_tests`
+wasm_tests = []
+
 [dependencies]
 wasi-common-cbindgen = { path = "wasi-common-cbindgen" }
 failure = "0.1"
