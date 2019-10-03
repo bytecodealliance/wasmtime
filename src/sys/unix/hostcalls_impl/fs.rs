@@ -2,7 +2,7 @@
 #![allow(unused_unsafe)]
 use super::fs_helpers::*;
 use crate::helpers::systemtime_to_timestamp;
-use crate::hostcalls_impl::PathGet;
+use crate::hostcalls_impl::{FileType, PathGet};
 use crate::sys::host_impl;
 use crate::{host, Error, Result};
 use nix::libc;
@@ -219,35 +219,35 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_
         st_atim: systemtime_to_timestamp(metadata.accessed()?)?,
         st_ctim: metadata.ctime().try_into()?, // i64 doesn't fit into u64
         st_mtim: systemtime_to_timestamp(metadata.modified()?)?,
-        st_filetype: filetype(file, &metadata)?,
+        st_filetype: filetype(file, &metadata)?.to_wasi(),
     })
 }
 
-fn filetype(file: &File, metadata: &Metadata) -> Result<host::__wasi_filetype_t> {
+fn filetype(file: &File, metadata: &Metadata) -> Result<FileType> {
     use nix::sys::socket::{self, SockType};
     use std::os::unix::fs::FileTypeExt;
     let ftype = metadata.file_type();
     if ftype.is_file() {
-        Ok(host::__WASI_FILETYPE_REGULAR_FILE)
+        Ok(FileType::RegularFile)
     } else if ftype.is_dir() {
-        Ok(host::__WASI_FILETYPE_DIRECTORY)
+        Ok(FileType::Directory)
     } else if ftype.is_symlink() {
-        Ok(host::__WASI_FILETYPE_SYMBOLIC_LINK)
+        Ok(FileType::Symlink)
     } else if ftype.is_char_device() {
-        Ok(host::__WASI_FILETYPE_CHARACTER_DEVICE)
+        Ok(FileType::CharacterDevice)
     } else if ftype.is_block_device() {
-        Ok(host::__WASI_FILETYPE_BLOCK_DEVICE)
+        Ok(FileType::BlockDevice)
     } else if ftype.is_socket() {
         match socket::getsockopt(file.as_raw_fd(), socket::sockopt::SockType)
             .map_err(|err| err.as_errno().unwrap())
             .map_err(host_impl::errno_from_nix)?
         {
-            SockType::Datagram => Ok(host::__WASI_FILETYPE_SOCKET_DGRAM),
-            SockType::Stream => Ok(host::__WASI_FILETYPE_SOCKET_STREAM),
-            _ => Ok(host::__WASI_FILETYPE_UNKNOWN),
+            SockType::Datagram => Ok(FileType::SocketDgram),
+            SockType::Stream => Ok(FileType::SocketStream),
+            _ => Ok(FileType::Unknown),
         }
     } else {
-        Ok(host::__WASI_FILETYPE_UNKNOWN)
+        Ok(FileType::Unknown)
     }
 }
 

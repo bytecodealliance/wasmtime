@@ -1062,3 +1062,23 @@ pub(crate) unsafe fn fd_prestat_dir_name(
             enc_slice_of(memory, path.as_bytes(), path_ptr)
         })
 }
+
+#[allow(dead_code)] // trouble with sockets
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+pub(crate) enum FileType {
+    Unknown = host::__WASI_FILETYPE_UNKNOWN,
+    BlockDevice = host::__WASI_FILETYPE_BLOCK_DEVICE,
+    CharacterDevice = host::__WASI_FILETYPE_CHARACTER_DEVICE,
+    Directory = host::__WASI_FILETYPE_DIRECTORY,
+    RegularFile = host::__WASI_FILETYPE_REGULAR_FILE,
+    SocketDgram = host::__WASI_FILETYPE_SOCKET_DGRAM,
+    SocketStream = host::__WASI_FILETYPE_SOCKET_STREAM,
+    Symlink = host::__WASI_FILETYPE_SYMBOLIC_LINK,
+}
+
+impl FileType {
+    pub(crate) fn to_wasi(&self) -> host::__wasi_filetype_t {
+        *self as host::__wasi_filetype_t
+    }
+}

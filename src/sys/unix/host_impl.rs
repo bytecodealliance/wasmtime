@@ -2,6 +2,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
+use crate::hostcalls_impl::FileType;
 use crate::{host, memory, Error, Result};
 use log::warn;
 use std::ffi::OsStr;
@@ -156,22 +157,22 @@ pub(crate) fn nix_from_oflags(oflags: host::__wasi_oflags_t) -> nix::fcntl::OFla
     nix_flags
 }
 
-pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> host::__wasi_filetype_t {
+pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> FileType {
     use nix::sys::stat::SFlag;
     if sflags.contains(SFlag::S_IFCHR) {
-        host::__WASI_FILETYPE_CHARACTER_DEVICE
+        FileType::CharacterDevice
     } else if sflags.contains(SFlag::S_IFBLK) {
-        host::__WASI_FILETYPE_BLOCK_DEVICE
+        FileType::BlockDevice
     } else if sflags.contains(SFlag::S_IFSOCK) {
-        host::__WASI_FILETYPE_SOCKET_STREAM
+        FileType::SocketStream
     } else if sflags.contains(SFlag::S_IFDIR) {
-        host::__WASI_FILETYPE_DIRECTORY
+        FileType::Directory
     } else if sflags.contains(SFlag::S_IFREG) {
-        host::__WASI_FILETYPE_REGULAR_FILE
+        FileType::RegularFile
     } else if sflags.contains(SFlag::S_IFLNK) {
-        host::__WASI_FILETYPE_SYMBOLIC_LINK
+        FileType::Symlink
     } else {
-        host::__WASI_FILETYPE_UNKNOWN
+        FileType::Unknown
     }
 }
 
@@ -200,7 +201,7 @@ pub(crate) fn filestat_from_nix(
         st_atim,
         st_ctim,
         st_mtim,
-        st_filetype: filetype_from_nix(filetype),
+        st_filetype: filetype_from_nix(filetype).to_wasi(),
     })
 }
 

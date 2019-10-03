@@ -4,7 +4,7 @@ use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
 use crate::helpers::systemtime_to_timestamp;
-use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
+use crate::hostcalls_impl::{fd_filestat_set_times_impl, FileType, PathGet};
 use crate::sys::fdentry_impl::{determine_type_rights, OsFile};
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
@@ -286,20 +286,20 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_
         st_atim: systemtime_to_timestamp(metadata.accessed()?)?,
         st_ctim: change_time(file, &metadata)?.try_into()?, // i64 doesn't fit into u64
         st_mtim: systemtime_to_timestamp(metadata.modified()?)?,
-        st_filetype: filetype(file, &metadata)?,
+        st_filetype: filetype(file, &metadata)?.to_wasi(),
     })
 }
 
-fn filetype(_file: &File, metadata: &Metadata) -> Result<host::__wasi_filetype_t> {
+fn filetype(_file: &File, metadata: &Metadata) -> Result<FileType> {
     let ftype = metadata.file_type();
     let ret = if ftype.is_file() {
-        host::__WASI_FILETYPE_REGULAR_FILE
+        FileType::RegularFile
     } else if ftype.is_dir() {
-        host::__WASI_FILETYPE_DIRECTORY
+        FileType::Directory
     } else if ftype.is_symlink() {
-        host::__WASI_FILETYPE_SYMBOLIC_LINK
+        FileType::Symlink
     } else {
-        host::__WASI_FILETYPE_UNKNOWN
+        FileType::Unknown
     };
 
     Ok(ret)
