@@ -114,26 +114,12 @@ impl ModuleData {
         let incoming = binding.param_bindings()?;
         let outgoing = binding.result_bindings()?;
 
-        // We have a magical dummy binding which indicates that this wasm
-        // function is using a return pointer. This is a total hack around
-        // multi-value, and we really should just implement multi-value in
-        // wasm-bindgen. In the meantime though this synthesizes a return
-        // pointer going as the first argument and translating outgoing
-        // arguments reads from the return pointer.
-        let (base, incoming, outgoing) = if uses_retptr(&outgoing) {
-            (Some(8), &incoming[1..], &outgoing[1..])
-        } else {
-            (None, incoming.as_slice(), outgoing.as_slice())
-        };
-        let mut wasm_args = translate_incoming(cx, handle, &incoming, base.is_some() as u32, args)?;
-        if let Some(n) = base {
-            wasm_args.insert(0, RuntimeValue::I32(n as i32));
-        }
+        let wasm_args = translate_incoming(cx, handle, &incoming, args)?;
         let wasm_results = match cx.invoke(handle, export, &wasm_args)? {
             ActionOutcome::Returned { values } => values,
             ActionOutcome::Trapped { message } => bail!("trapped: {}", message),
         };
-        translate_outgoing(cx, handle, &outgoing, base, &wasm_results)
+        translate_outgoing(cx, handle, &outgoing, &wasm_results)
     }
 
     /// Returns an appropriate binding for the `name` export in this module
@@ -217,14 +203,8 @@ impl ExportBinding<'_> {
                     ast::WebidlCompoundType::Function(f) => f,
                     _ => bail!("webidl type for function must be of function type"),
                 };
-                let skip = if uses_retptr(&binding.result.bindings) {
-                    1
-                } else {
-                    0
-                };
                 func.params
                     .iter()
-                    .skip(skip)
                     .map(|param| match param {
                         ast::WebidlTypeRef::Id(_) => bail!("function arguments cannot be compound"),
                         ast::WebidlTypeRef::Scalar(s) => Ok(*s),
@@ -303,12 +283,11 @@ fn translate_incoming(
     cx: &mut Context,
     handle: &mut InstanceHandle,
     bindings: &[ast::IncomingBindingExpression],
-    offset: u32,
     args: &[Value],
 ) -> Result<Vec<RuntimeValue>, Error> {
     let get = |expr: &ast::IncomingBindingExpression| match expr {
         ast::IncomingBindingExpression::Get(g) => args
-            .get((g.idx - offset) as usize)
+            .get(g.idx as usize)
             .ok_or_else(|| format_err!("argument index out of bounds: {}", g.idx)),
         _ => bail!("unsupported incoming binding expr {:?}", expr),
     };
@@ -395,7 +374,6 @@ fn translate_outgoing(
     cx: &mut Context,
     handle: &mut InstanceHandle,
     bindings: &[ast::OutgoingBindingExpression],
-    retptr: Option<u32>,
     args: &[RuntimeValue],
 ) -> Result<Vec<Value>, Error> {
     let mut values = Vec::new();
@@ -414,25 +392,10 @@ fn translate_outgoing(
         ))
     };
 
-    if retptr.is_some() {
-        assert!(args.is_empty());
-    }
-
-    let get = |idx: u32| match retptr {
-        Some(i) => {
-            let bytes = raw_memory()?;
-            let base = &bytes[(i + idx * 4) as usize..][..4];
-            Ok(RuntimeValue::I32(
-                ((base[0] as i32) << 0)
-                    | ((base[1] as i32) << 8)
-                    | ((base[2] as i32) << 16)
-                    | ((base[3] as i32) << 24),
-            ))
-        }
-        None => args
-            .get(idx as usize)
+    let get = |idx: u32| {
+        args.get(idx as usize)
             .cloned()
-            .ok_or_else(|| format_err!("argument index out of bounds: {}", idx)),
+            .ok_or_else(|| format_err!("argument index out of bounds: {}", idx))
     };
 
     for expr in bindings {
@@ -495,11 +458,4 @@ fn translate_outgoing(
     }
 
     Ok(values)
-}
-
-fn uses_retptr(outgoing: &[ast::OutgoingBindingExpression]) -> bool {
-    match outgoing.get(0) {
-        Some(ast::OutgoingBindingExpression::As(e)) => e.idx == u32::max_value(),
-        _ => false,
-    }
 }
