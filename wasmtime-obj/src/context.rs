@@ -1,3 +1,5 @@
+#![allow(clippy::cast_ptr_alignment)]
+
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr;
@@ -19,8 +21,7 @@ pub fn layout_vmcontext(
 ) -> (Box<[u8]>, Box<[TableRelocation]>) {
     let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
     let out_len = ofs.size_of_vmctx() as usize;
-    let mut out = Vec::with_capacity(out_len);
-    out.resize(out_len, 0);
+    let mut out = vec![0; out_len];
 
     // Assign unique indicies to unique signatures.
     let mut signature_registry = HashMap::new();

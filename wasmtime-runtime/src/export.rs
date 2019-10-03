@@ -56,7 +56,7 @@ impl Export {
         vmctx: *mut VMContext,
         signature: ir::Signature,
     ) -> Self {
-        Export::Function {
+        Self::Function {
             address,
             vmctx,
             signature,
@@ -69,7 +69,7 @@ impl Export {
         vmctx: *mut VMContext,
         table: TablePlan,
     ) -> Self {
-        Export::Table {
+        Self::Table {
             definition,
             vmctx,
             table,
@@ -82,7 +82,7 @@ impl Export {
         vmctx: *mut VMContext,
         memory: MemoryPlan,
     ) -> Self {
-        Export::Memory {
+        Self::Memory {
             definition,
             vmctx,
             memory,
@@ -95,7 +95,7 @@ impl Export {
         vmctx: *mut VMContext,
         global: Global,
     ) -> Self {
-        Export::Global {
+        Self::Global {
             definition,
             vmctx,
             global,

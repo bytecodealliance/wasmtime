@@ -24,7 +24,7 @@ impl RangeInfoBuilder {
     pub(crate) fn from<R>(
         entry: &DebuggingInformationEntry<R>,
         context: &DebugInputContext<R>,
-        unit_encoding: &gimli::Encoding,
+        unit_encoding: gimli::Encoding,
         cu_low_pc: u64,
     ) -> Result<Self, Error>
     where
@@ -53,7 +53,7 @@ impl RangeInfoBuilder {
     pub(crate) fn from_ranges_ref<R>(
         ranges: RangeListsOffset,
         context: &DebugInputContext<R>,
-        unit_encoding: &gimli::Encoding,
+        unit_encoding: gimli::Encoding,
         cu_low_pc: u64,
     ) -> Result<Self, Error>
     where
@@ -61,7 +61,7 @@ impl RangeInfoBuilder {
     {
         let mut ranges = context.rnglists.ranges(
             ranges,
-            *unit_encoding,
+            unit_encoding,
             cu_low_pc,
             &context.debug_addr,
             context.debug_addr_base,
@@ -74,17 +74,17 @@ impl RangeInfoBuilder {
             result.push((range.begin, range.end));
         }
 
-        return Ok(if result.len() > 0 {
+        Ok(if result.len() > 0 {
             RangeInfoBuilder::Ranges(result)
         } else {
             RangeInfoBuilder::Undefined
-        });
+        })
     }
 
     pub(crate) fn from_subprogram_die<R>(
         entry: &DebuggingInformationEntry<R>,
         context: &DebugInputContext<R>,
-        unit_encoding: &gimli::Encoding,
+        unit_encoding: gimli::Encoding,
         addr_tr: &AddressTransform,
         cu_low_pc: u64,
     ) -> Result<Self, Error>
@@ -99,7 +99,7 @@ impl RangeInfoBuilder {
             {
                 let mut ranges = context.rnglists.ranges(
                     r,
-                    *unit_encoding,
+                    unit_encoding,
                     cu_low_pc,
                     &context.debug_addr,
                     context.debug_addr_base,

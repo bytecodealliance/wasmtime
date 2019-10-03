@@ -239,13 +239,13 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     fn defined_func_index(&self, func_index: u32) -> Option<u32> {
         self.module
             .defined_func_index(FuncIndex::from_u32(func_index))
-            .map(|i| i.as_u32())
+            .map(DefinedFuncIndex::as_u32)
     }
 
     fn defined_global_index(&self, global_index: u32) -> Option<u32> {
         self.module
             .defined_global_index(GlobalIndex::from_u32(global_index))
-            .map(|i| i.as_u32())
+            .map(DefinedGlobalIndex::as_u32)
     }
 
     fn global_type(&self, global_index: u32) -> &Self::GlobalType {
@@ -263,13 +263,13 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     fn defined_table_index(&self, table_index: u32) -> Option<u32> {
         self.module
             .defined_table_index(TableIndex::from_u32(table_index))
-            .map(|i| i.as_u32())
+            .map(DefinedTableIndex::as_u32)
     }
 
     fn defined_memory_index(&self, memory_index: u32) -> Option<u32> {
         self.module
             .defined_memory_index(MemoryIndex::from_u32(memory_index))
-            .map(|i| i.as_u32())
+            .map(DefinedMemoryIndex::as_u32)
     }
 
     fn vmctx_vmfunction_import_body(&self, func_index: u32) -> u32 {

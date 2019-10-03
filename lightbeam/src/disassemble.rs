@@ -19,14 +19,10 @@ pub fn disassemble(
 
         let address = i.address();
 
-        loop {
-            if let Some((offset, op)) = ops.first() {
-                if offset.0 as u64 <= address {
-                    ops = &ops[1..];
-                    println!("{}", op);
-                } else {
-                    break;
-                }
+        while let Some((offset, op)) = ops.first() {
+            if offset.0 as u64 <= address {
+                ops = &ops[1..];
+                println!("{}", op);
             } else {
                 break;
             }

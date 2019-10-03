@@ -1,3 +1,5 @@
+#![allow(clippy::float_cmp)]
+
 use crate::error::Error;
 use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::ModuleContext;
@@ -259,7 +261,7 @@ impl GPRs {
         self.bits |= 1 << gpr;
     }
 
-    fn is_free(&self, gpr: RegId) -> bool {
+    fn is_free(self, gpr: RegId) -> bool {
         (self.bits & (1 << gpr)) != 0
     }
 }
@@ -629,7 +631,7 @@ impl TranslatedCodeSection {
             .func_starts
             .get(idx + 1)
             .map(|i| i.0)
-            .unwrap_or(self.exec_buf.len());
+            .unwrap_or_else(|| self.exec_buf.len());
 
         self.func_starts[idx].0..end
     }
@@ -2299,7 +2301,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let label = target
             .into()
             .label()
-            .map(|c| *c)
+            .copied()
             .unwrap_or_else(|| self.ret_label());
 
         let cond = match val {
@@ -2332,7 +2334,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let label = target
             .into()
             .label()
-            .map(|c| *c)
+            .copied()
             .unwrap_or_else(|| self.ret_label());
 
         let cond = match val {
@@ -2834,22 +2836,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     dynasm!(self.asm
                         ; mov DWORD [rsp + out_offset], i as i32
                     );
-                } else {
-                    if let Some(scratch) = self.take_reg(I64) {
-                        dynasm!(self.asm
-                            ; mov Rq(scratch.rq().unwrap()), QWORD i
-                            ; mov [rsp + out_offset], Rq(scratch.rq().unwrap())
-                        );
+                } else if let Some(scratch) = self.take_reg(I64) {
+                    dynasm!(self.asm
+                        ; mov Rq(scratch.rq().unwrap()), QWORD i
+                        ; mov [rsp + out_offset], Rq(scratch.rq().unwrap())
+                    );
 
-                        self.block_state.regs.release(scratch);
-                    } else {
-                        dynasm!(self.asm
-                            ; push rax
-                            ; mov rax, QWORD i
-                            ; mov [rsp + out_offset + WORD_SIZE as i32], rax
-                            ; pop rax
-                        );
-                    }
+                    self.block_state.regs.release(scratch);
+                } else {
+                    dynasm!(self.asm
+                        ; push rax
+                        ; mov rax, QWORD i
+                        ; mov [rsp + out_offset + WORD_SIZE as i32], rax
+                        ; pop rax
+                    );
                 }
             }
             (ValueLocation::Stack(in_offset), CCLoc::Reg(out_reg)) => {
@@ -4970,7 +4970,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             self.block_state.depth.reserve(1);
         }
 
-        let depth = self.block_state.depth.clone();
+        let depth = self.block_state.depth;
 
         self.pass_outgoing_args(&locs);
         // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
@@ -5083,25 +5083,21 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let mut slice = &mut stack[start..end];
 
-        loop {
-            if let Some((first, rest)) = slice.split_first_mut() {
-                if let ValueLocation::Reg(vreg) = *first {
-                    if regs.into_iter().any(|r| *r == vreg) {
-                        let old = *first;
-                        *first = self.push_physical(old);
-                        for val in &mut *rest {
-                            if *val == old {
-                                self.free_value(*val);
-                                *val = *first;
-                            }
+        while let Some((first, rest)) = slice.split_first_mut() {
+            if let ValueLocation::Reg(vreg) = *first {
+                if regs.into_iter().any(|r| *r == vreg) {
+                    let old = *first;
+                    *first = self.push_physical(old);
+                    for val in &mut *rest {
+                        if *val == old {
+                            self.free_value(*val);
+                            *val = *first;
                         }
                     }
                 }
-
-                slice = rest;
-            } else {
-                break;
             }
+
+            slice = rest;
         }
 
         mem::replace(&mut self.block_state.stack, stack);
@@ -5226,7 +5222,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; push Rq(VMCTX)
         );
         self.block_state.depth.reserve(1);
-        let depth = self.block_state.depth.clone();
+        let depth = self.block_state.depth;
 
         self.pass_outgoing_args(&locs);
 
@@ -5380,7 +5376,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; push Rq(VMCTX)
         );
         self.block_state.depth.reserve(1);
-        let depth = self.block_state.depth.clone();
+        let depth = self.block_state.depth;
 
         self.save_volatile(..locs.len());
         self.pass_outgoing_args(&locs);

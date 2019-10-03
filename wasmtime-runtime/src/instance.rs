@@ -475,8 +475,8 @@ impl Instance {
         } else if let Some(start_export) = self.module.exports.get("_start") {
             // As a compatibility measure, if the module doesn't have a start
             // function but does have a _start function exported, call that.
-            match start_export {
-                &wasmtime_environ::Export::Function(func_index) => {
+            match *start_export {
+                wasmtime_environ::Export::Function(func_index) => {
                     let sig = &self.module.signatures[self.module.functions[func_index]];
                     // No wasm params or returns; just the vmctx param.
                     if sig.params.len() == 1 && sig.returns.is_empty() {
@@ -491,8 +491,8 @@ impl Instance {
             // As a further compatibility measure, if the module doesn't have a
             // start function or a _start function exported, but does have a main
             // function exported, call that.
-            match main_export {
-                &wasmtime_environ::Export::Function(func_index) => {
+            match *main_export {
+                wasmtime_environ::Export::Function(func_index) => {
                     let sig = &self.module.signatures[self.module.functions[func_index]];
                     // No wasm params or returns; just the vmctx param.
                     if sig.params.len() == 1 && sig.returns.is_empty() {

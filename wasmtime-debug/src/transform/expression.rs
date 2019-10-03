@@ -176,7 +176,7 @@ impl CompiledExpression {
         if let [CompiledExpressionPart::Code(_)] = self.parts.as_slice() {
             true
         } else {
-            self.parts.len() == 0
+            self.parts.is_empty()
         }
     }
 
@@ -195,7 +195,7 @@ impl CompiledExpression {
         frame_info: Option<&FunctionFrameInfo>,
         endian: gimli::RunTimeEndian,
     ) -> alloc::vec::Vec<(write::Address, u64, write::Expression)> {
-        if scope.len() == 0 {
+        if scope.is_empty() {
             return vec![];
         }
 
@@ -286,13 +286,13 @@ impl CompiledExpression {
             ));
         }
 
-        return result;
+        result
     }
 }
 
 pub fn compile_expression<R>(
     expr: &Expression<R>,
-    encoding: &gimli::Encoding,
+    encoding: gimli::Encoding,
     frame_base: Option<&CompiledExpression>,
 ) -> Result<Option<CompiledExpression>, Error>
 where
@@ -326,7 +326,7 @@ where
             parts.push(CompiledExpressionPart::Local(label));
         } else {
             let pos = pc.offset_from(&expr.0).into_u64() as usize;
-            let op = Operation::parse(&mut pc, &expr.0, *encoding)?;
+            let op = Operation::parse(&mut pc, &expr.0, encoding)?;
             match op {
                 Operation::Literal { .. } | Operation::PlusConstant { .. } => (),
                 Operation::StackValue => {

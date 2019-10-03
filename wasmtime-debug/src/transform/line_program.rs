@@ -43,7 +43,7 @@ pub(crate) fn clone_line_program<R>(
     unit: &Unit<R, R::Offset>,
     root: &DebuggingInformationEntry<R>,
     addr_tr: &AddressTransform,
-    out_encoding: &gimli::Encoding,
+    out_encoding: gimli::Encoding,
     debug_str: &DebugStr<R>,
     debug_line: &DebugLine<R>,
     out_strings: &mut write::StringTable,
@@ -89,7 +89,7 @@ where
             line_range: header.line_range(),
         };
         let mut out_program = write::LineProgram::new(
-            *out_encoding,
+            out_encoding,
             line_encoding,
             out_comp_dir,
             out_comp_name,

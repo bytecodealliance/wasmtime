@@ -90,7 +90,7 @@ pub fn transform_dwarf(
             &context,
             &addr_tr,
             &ranges,
-            &out_encoding,
+            out_encoding,
             &vmctx_info,
             &mut out_units,
             &mut out_strings,
@@ -104,7 +104,7 @@ pub fn transform_dwarf(
         &vmctx_info,
         &ranges,
         &translated,
-        &out_encoding,
+        out_encoding,
         &mut out_units,
         &mut out_strings,
     )?;

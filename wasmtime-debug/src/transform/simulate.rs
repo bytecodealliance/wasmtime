@@ -21,7 +21,7 @@ const PRODUCER_NAME: &str = "wasmtime";
 fn generate_line_info(
     addr_tr: &AddressTransform,
     translated: &HashSet<u32>,
-    out_encoding: &gimli::Encoding,
+    out_encoding: gimli::Encoding,
     w: &WasmFileInfo,
     comp_dir_id: write::StringId,
     name_id: write::StringId,
@@ -33,7 +33,7 @@ fn generate_line_info(
     let line_encoding = LineEncoding::default();
 
     let mut out_program = write::LineProgram::new(
-        *out_encoding,
+        out_encoding,
         line_encoding,
         out_comp_dir,
         out_comp_name,
@@ -181,7 +181,7 @@ fn generate_vars(
 ) {
     let vmctx_label = get_vmctx_value_label();
 
-    for (label, _range) in frame_info.value_ranges {
+    for label in frame_info.value_ranges.keys() {
         if label.index() == vmctx_label.index() {
             append_vmctx_info(
                 unit,
@@ -206,7 +206,7 @@ fn generate_vars(
             let loc_list_id = {
                 let endian = gimli::RunTimeEndian::Little;
 
-                let expr = CompiledExpression::from_label(label.clone());
+                let expr = CompiledExpression::from_label(*label);
                 let mut locs = Vec::new();
                 for (begin, length, data) in
                     expr.build_with_locals(scope_ranges, addr_tr, Some(frame_info), endian)
@@ -254,7 +254,7 @@ pub fn generate_simulated_dwarf(
     vmctx_info: &ModuleVmctxInfo,
     ranges: &ValueLabelsRanges,
     translated: &HashSet<u32>,
-    out_encoding: &gimli::Encoding,
+    out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
 ) -> Result<(), Error> {
@@ -288,7 +288,7 @@ pub fn generate_simulated_dwarf(
             name,
         )?;
 
-        let unit_id = out_units.add(write::Unit::new(*out_encoding, out_program));
+        let unit_id = out_units.add(write::Unit::new(out_encoding, out_program));
         let unit = out_units.get_mut(unit_id);
 
         let root_id = unit.root();
