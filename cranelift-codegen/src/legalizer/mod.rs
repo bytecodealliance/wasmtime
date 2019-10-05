@@ -146,6 +146,15 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     func.encodings.resize(func.dfg.num_insts());
 
     let mut pos = FuncCursor::new(func);
+    let func_begin = pos.position();
+
+    // Split ebb params before trying to legalize instructions, so that the newly introduced
+    // isplit instructions get legalized.
+    while let Some(ebb) = pos.next_ebb() {
+        split::split_ebb_params(pos.func, cfg, ebb);
+    }
+
+    pos.set_position(func_begin);
 
     // This must be a set to prevent trying to legalize `isplit` and `vsplit` twice in certain cases.
     let mut pending_splits = BTreeSet::new();
@@ -153,8 +162,6 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     // Process EBBs in layout order. Some legalization actions may split the current EBB or append
     // new ones to the end. We need to make sure we visit those new EBBs too.
     while let Some(ebb) = pos.next_ebb() {
-        split::split_ebb_params(pos.func, cfg, ebb);
-
         // Keep track of the cursor position before the instruction being processed, so we can
         // double back when replacing instructions.
         let mut prev_pos = pos.position();
