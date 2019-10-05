@@ -63,8 +63,8 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] [--always-lightbeam | --always-cranelift] <file> [<arg>...]
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> [--always-lightbeam | --always-cranelift] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] [--lightbeam | --cranelift] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> [--lightbeam | --cranelift] <file> [<arg>...]
     wasmtime --create-cache-config [--cache-config=<cache_config_file>]
     wasmtime --help | --version
 
@@ -81,8 +81,8 @@ Options:
                         instead of default one
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
-    --always-lightbeam  use Lightbeam for all compilation
-    --always-cranelift  use Cranelift for all compilation
+    --lightbeam         use Lightbeam for all compilation
+    --cranelift         use Cranelift for all compilation
     --enable-simd       enable proposed SIMD instructions
     --wasi-c            enable the wasi-c implementation of WASI
     --preload=<wasm>    load an additional wasm module before loading the main module
@@ -105,8 +105,8 @@ struct Args {
     flag_debug: bool,
     flag_g: bool,
     flag_enable_simd: bool,
-    flag_always_lightbeam: bool,
-    flag_always_cranelift: bool,
+    flag_lightbeam: bool,
+    flag_cranelift: bool,
     flag_invoke: Option<String>,
     flag_preload: Vec<String>,
     flag_env: Vec<String>,
@@ -287,8 +287,7 @@ fn rmain() -> Result<(), Error> {
     }
 
     // Decide how to compile.
-    let strategy =
-        pick_compilation_strategy(args.flag_always_cranelift, args.flag_always_lightbeam);
+    let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
 
     let config = Config::new(
         settings::Flags::new(flag_builder),

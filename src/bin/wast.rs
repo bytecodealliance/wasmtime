@@ -42,7 +42,7 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    wast [-do] [--enable-simd] [--disable-cache | --cache-config=<cache_config_file>] [--always-lightbeam | --always-cranelift] <file>...
+    wast [-do] [--enable-simd] [--disable-cache | --cache-config=<cache_config_file>] [--lightbeam | --cranelift] <file>...
     wast --create-cache-config [--cache-config=<cache_config_file>]
     wast --help | --version
 
@@ -58,8 +58,8 @@ Options:
                         creates default configuration and writes it to the disk,
                         use with --cache-config to specify custom config file
                         instead of default one
-    --always-lightbeam  use Lightbeam for all compilation
-    --always-cranelift  use Cranelift for all compilation
+    --lightbeam         use Lightbeam for all compilation
+    --cranelift         use Cranelift for all compilation
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
 ";

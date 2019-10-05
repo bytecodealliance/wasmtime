@@ -15,9 +15,9 @@ fn main() {
         .expect("error generating test source file");
 
     for strategy in &[
-        "AlwaysCranelift",
+        "Cranelift",
         #[cfg(feature = "lightbeam")]
-        "AlwaysLightbeam",
+        "Lightbeam",
     ] {
         writeln!(out, "#[allow(non_snake_case)]").expect("generating tests");
         writeln!(out, "mod {} {{", strategy).expect("generating tests");
@@ -151,11 +151,11 @@ fn write_testsuite_tests(
 fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
     match strategy {
         #[cfg(feature = "lightbeam")]
-        "AlwaysLightbeam" => match (testsuite, name) {
+        "Lightbeam" => match (testsuite, name) {
             ("single_file_spec_test", "simd_const") => return true,
             _ => (),
         },
-        "AlwaysCranelift" => {}
+        "Cranelift" => {}
         _ => panic!("unrecognized strategy"),
     }
 

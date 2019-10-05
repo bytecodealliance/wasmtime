@@ -32,11 +32,11 @@ pub enum CompilationStrategy {
     Auto,
 
     /// Compile all functions with Cranelift.
-    AlwaysCranelift,
+    Cranelift,
 
     /// Compile all functions with Lightbeam.
     #[cfg(feature = "lightbeam")]
-    AlwaysLightbeam,
+    Lightbeam,
 }
 
 /// A WebAssembly code JIT compiler.
@@ -117,9 +117,9 @@ impl Compiler {
     > {
         let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
             match self.strategy {
-                // For now, interpret `Auto` as `AlwaysCranelift` since that's the most stable
+                // For now, interpret `Auto` as `Cranelift` since that's the most stable
                 // implementation.
-                CompilationStrategy::Auto | CompilationStrategy::AlwaysCranelift => {
+                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
                     wasmtime_environ::cranelift::Cranelift::compile_module(
                         module,
                         function_body_inputs,
@@ -128,7 +128,7 @@ impl Compiler {
                     )
                 }
                 #[cfg(feature = "lightbeam")]
-                CompilationStrategy::AlwaysLightbeam => {
+                CompilationStrategy::Lightbeam => {
                     wasmtime_environ::lightbeam::Lightbeam::compile_module(
                         module,
                         function_body_inputs,

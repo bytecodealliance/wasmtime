@@ -7,14 +7,12 @@ pub fn pick_compilation_strategy(
     // Decide how to compile.
     match (always_lightbeam, always_cranelift) {
         #[cfg(feature = "lightbeam")]
-        (true, false) => CompilationStrategy::AlwaysLightbeam,
+        (true, false) => CompilationStrategy::Lightbeam,
         #[cfg(not(feature = "lightbeam"))]
-        (true, false) => panic!("--always-lightbeam given, but Lightbeam support is not enabled"),
-        (false, true) => CompilationStrategy::AlwaysCranelift,
+        (true, false) => panic!("--lightbeam given, but Lightbeam support is not enabled"),
+        (false, true) => CompilationStrategy::Cranelift,
         (false, false) => CompilationStrategy::Auto,
-        (true, true) => {
-            panic!("Can't enable --always-cranelift and --always-lightbeam at the same time")
-        }
+        (true, true) => panic!("Can't enable --cranelift and --lightbeam at the same time"),
     }
 }
 

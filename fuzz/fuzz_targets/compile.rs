@@ -24,7 +24,7 @@ fuzz_target!(|data: &[u8]| {
         panic!("host machine is not a supported target");
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut compiler = Compiler::new(isa, CompilationStrategy::AlwaysCranelift);
+    let mut compiler = Compiler::new(isa, CompilationStrategy::Cranelift);
     let mut resolver = NullResolver {};
     let global_exports = Rc::new(RefCell::new(HashMap::new()));
     let _compiled =
@@ -44,7 +44,7 @@ fuzz_target!(|data: &[u8]| {
         panic!("host machine is not a supported target");
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut compiler = Compiler::new(isa, CompilationStrategy::AlwaysLightbeam);
+    let mut compiler = Compiler::new(isa, CompilationStrategy::Lightbeam);
     let mut resolver = NullResolver {};
     let global_exports = Rc::new(RefCell::new(HashMap::new()));
     let _compiled =
