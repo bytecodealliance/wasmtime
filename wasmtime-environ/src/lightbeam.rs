@@ -1,12 +1,13 @@
 //! Support for compiling with Lightbeam.
 
-use crate::compilation::{AddressTransforms, Compilation, CompileError, Relocations};
+use crate::compilation::{Compilation, CompileError, Relocations, Traps};
 use crate::func_environ::FuncEnvironment;
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
 // TODO: Put this in `compilation`
+use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::cranelift::RelocSink;
-use cranelift_codegen::isa;
+use cranelift_codegen::{ir, isa};
 use cranelift_entity::{PrimaryMap, SecondaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use lightbeam;
@@ -22,8 +23,22 @@ impl crate::compilation::Compiler for Lightbeam {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         // TODO
-        _generate_debug_info: bool,
-    ) -> Result<(Compilation, Relocations, AddressTransforms), CompileError> {
+        generate_debug_info: bool,
+    ) -> Result<
+        (
+            Compilation,
+            Relocations,
+            ModuleAddressMap,
+            ValueLabelsRanges,
+            PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+            Traps,
+        ),
+        CompileError,
+    > {
+        if generate_debug_info {
+            return Err(CompileError::DebugInfoNotSupported);
+        }
+
         let env = FuncEnvironment::new(isa.frontend_config(), module);
         let mut relocations = PrimaryMap::new();
         let mut codegen_session: lightbeam::CodeGenSession<_> =
@@ -57,7 +72,10 @@ impl crate::compilation::Compiler for Lightbeam {
         Ok((
             Compilation::from_buffer(code_section.buffer().to_vec(), code_section_ranges_and_jt),
             relocations,
-            AddressTransforms::new(),
+            ModuleAddressMap::new(),
+            ValueLabelsRanges::new(),
+            PrimaryMap::new(),
+            Traps::new(),
         ))
     }
 }

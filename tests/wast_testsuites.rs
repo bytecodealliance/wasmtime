@@ -4,7 +4,7 @@ use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use std::path::Path;
-use wasmtime_jit::{Compiler, Features};
+use wasmtime_jit::{CompilationStrategy, Compiler, Features};
 use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));

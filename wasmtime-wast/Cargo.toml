@@ -25,3 +25,6 @@ failure_derive = { version = "0.1.3", default-features = false }
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/wasmtime" }
+
+[features]
+lightbeam = []

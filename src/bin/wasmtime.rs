@@ -44,6 +44,7 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use wabt;
 use wasi_common::preopen_dir;
+use wasmtime::pick_compilation_strategy;
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_interface_types::ModuleData;
@@ -62,8 +63,8 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] <file> [<arg>...]
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] [--lightbeam | --cranelift] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> [--lightbeam | --cranelift] <file> [<arg>...]
     wasmtime --create-cache-config [--cache-config=<cache_config_file>]
     wasmtime --help | --version
 
@@ -80,6 +81,8 @@ Options:
                         instead of default one
     -g                  generate debug information
     -d, --debug         enable debug output on stderr/stdout
+    --lightbeam         use Lightbeam for all compilation
+    --cranelift         use Cranelift for all compilation
     --enable-simd       enable proposed SIMD instructions
     --wasi-c            enable the wasi-c implementation of WASI
     --preload=<wasm>    load an additional wasm module before loading the main module
@@ -102,6 +105,8 @@ struct Args {
     flag_debug: bool,
     flag_g: bool,
     flag_enable_simd: bool,
+    flag_lightbeam: bool,
+    flag_cranelift: bool,
     flag_invoke: Option<String>,
     flag_preload: Vec<String>,
     flag_env: Vec<String>,
@@ -281,7 +286,15 @@ fn rmain() -> Result<(), Error> {
         flag_builder.set("opt_level", "speed")?;
     }
 
-    let config = Config::new(settings::Flags::new(flag_builder), features, debug_info);
+    // Decide how to compile.
+    let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
+
+    let config = Config::new(
+        settings::Flags::new(flag_builder),
+        features,
+        debug_info,
+        strategy,
+    );
     let engine = HostRef::new(Engine::new(config));
     let store = HostRef::new(Store::new(engine));
 

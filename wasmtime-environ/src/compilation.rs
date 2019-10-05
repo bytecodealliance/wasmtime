@@ -153,6 +153,10 @@ pub enum CompileError {
     /// A compilation error occured.
     #[fail(display = "Compilation error: {}", _0)]
     Codegen(CodegenError),
+
+    /// A compilation error occured.
+    #[fail(display = "Debug info is not supported with this configuration")]
+    DebugInfoNotSupported,
 }
 
 /// An implementation of a compiler from parsed WebAssembly module to native code.

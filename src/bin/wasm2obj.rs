@@ -49,11 +49,15 @@ use std::process;
 use std::str;
 use std::str::FromStr;
 use target_lexicon::Triple;
+use wasmtime::pick_compilation_strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
+#[cfg(feature = "lightbeam")]
+use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_environ::{
     Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo, Tunables, VMOffsets,
 };
+use wasmtime_jit::CompilationStrategy;
 use wasmtime_obj::emit_module;
 
 const USAGE: &str = "
@@ -63,7 +67,7 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] [--enable-simd] <file> -o <output>
+    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] [--enable-simd] [--lightbeam | --cranelift] <file> -o <output>
     wasm2obj --create-cache-config [--cache-config=<cache_config_file>]
     wasm2obj --help | --version
 
@@ -80,6 +84,8 @@ Options:
                         creates default configuration and writes it to the disk,
                         use with --cache-config to specify custom config file
                         instead of default one
+    --lightbeam         use Lightbeam for all compilation
+    --cranelift         use Cranelift for all compilation
     --enable-simd       enable proposed SIMD instructions
     -O, --optimize      runs optimization passes on the translated functions
     --version           print the Cranelift version
@@ -97,6 +103,8 @@ struct Args {
     flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
+    flag_lightbeam: bool,
+    flag_cranelift: bool,
     flag_optimize: bool,
 }
 
@@ -164,6 +172,8 @@ fn main() {
         args.flag_g,
         args.flag_enable_simd,
         args.flag_optimize,
+        args.flag_cranelift,
+        args.flag_lightbeam,
     ) {
         Ok(()) => {}
         Err(message) => {
@@ -180,6 +190,8 @@ fn handle_module(
     generate_debug_info: bool,
     enable_simd: bool,
     enable_optimize: bool,
+    cranelift: bool,
+    lightbeam: bool,
 ) -> Result<(), String> {
     let data = match read_wasm_file(path) {
         Ok(data) => data,
@@ -223,6 +235,9 @@ fn handle_module(
     // TODO: Expose the tunables as command-line flags.
     let tunables = Tunables::default();
 
+    // Decide how to compile.
+    let strategy = pick_compilation_strategy(cranelift, lightbeam);
+
     let (module, lazy_function_body_inputs, lazy_data_initializers, target_config) = {
         let environ = ModuleEnvironment::new(isa.frontend_config(), tunables);
 
@@ -240,13 +255,25 @@ fn handle_module(
 
     // TODO: use the traps information
     let (compilation, relocations, address_transform, value_ranges, stack_slots, _traps) =
-        Cranelift::compile_module(
-            &module,
-            lazy_function_body_inputs,
-            &*isa,
-            generate_debug_info,
-        )
-        .map_err(|e| e.to_string())?;
+        match strategy {
+            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                Cranelift::compile_module(
+                    &module,
+                    lazy_function_body_inputs,
+                    &*isa,
+                    generate_debug_info,
+                )
+                .map_err(|e| e.to_string())?
+            }
+            #[cfg(feature = "lightbeam")]
+            CompilationStrategy::Lightbeam => Lightbeam::compile_module(
+                &module,
+                lazy_function_body_inputs,
+                &*isa,
+                generate_debug_info,
+            )
+            .map_err(|e| e.to_string())?,
+        };
 
     let module_vmctx_info = {
         let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);

@@ -2,7 +2,7 @@ use std::cell::{RefCell, RefMut};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use wasmtime_jit::{Compiler, Features};
+use wasmtime_jit::{CompilationStrategy, Compiler, Features};
 
 use cranelift_codegen::settings;
 
@@ -22,8 +22,13 @@ impl Context {
         }
     }
 
-    pub fn create(flags: settings::Flags, features: Features, debug_info: bool) -> Context {
-        Context::new(create_compiler(flags), features, debug_info)
+    pub fn create(
+        flags: settings::Flags,
+        features: Features,
+        debug_info: bool,
+        strategy: CompilationStrategy,
+    ) -> Context {
+        Context::new(create_compiler(flags, strategy), features, debug_info)
     }
 
     pub(crate) fn debug_info(&self) -> bool {
@@ -52,12 +57,12 @@ impl PartialEq for Context {
     }
 }
 
-pub(crate) fn create_compiler(flags: settings::Flags) -> Compiler {
+pub(crate) fn create_compiler(flags: settings::Flags, strategy: CompilationStrategy) -> Compiler {
     let isa = {
         let isa_builder =
             cranelift_native::builder().expect("host machine is not a supported target");
         isa_builder.finish(flags)
     };
 
-    Compiler::new(isa)
+    Compiler::new(isa, strategy)
 }

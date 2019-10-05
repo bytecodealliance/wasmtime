@@ -33,6 +33,7 @@ use pretty_env_logger;
 use serde::Deserialize;
 use std::path::Path;
 use std::process;
+use wasmtime::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_jit::{Compiler, Features};
 use wasmtime_wast::WastContext;
@@ -41,7 +42,7 @@ const USAGE: &str = "
 Wast test runner.
 
 Usage:
-    wast [-do] [--enable-simd] [--disable-cache | --cache-config=<cache_config_file>] <file>...
+    wast [-do] [--enable-simd] [--disable-cache | --cache-config=<cache_config_file>] [--lightbeam | --cranelift] <file>...
     wast --create-cache-config [--cache-config=<cache_config_file>]
     wast --help | --version
 
@@ -57,6 +58,8 @@ Options:
                         creates default configuration and writes it to the disk,
                         use with --cache-config to specify custom config file
                         instead of default one
+    --lightbeam         use Lightbeam for all compilation
+    --cranelift         use Cranelift for all compilation
     -d, --debug         enable debug output on stderr/stdout
     --enable-simd       enable proposed SIMD instructions
 ";
@@ -71,6 +74,8 @@ struct Args {
     flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
+    flag_always_lightbeam: bool,
+    flag_always_cranelift: bool,
 }
 
 fn main() {
@@ -148,8 +153,12 @@ fn main() {
         features.simd = true;
     }
 
+    // Decide how to compile.
+    let strategy =
+        pick_compilation_strategy(args.flag_always_cranelift, args.flag_always_lightbeam);
+
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let engine = Compiler::new(isa);
+    let engine = Compiler::new(isa, strategy);
     let mut wast_context = WastContext::new(Box::new(engine)).with_features(features);
 
     wast_context

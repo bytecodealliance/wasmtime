@@ -56,7 +56,10 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
                 isa_builder.finish(#root::cranelift_codegen::settings::Flags::new(flag_builder))
             };
 
-            let mut cx = #root::wasmtime_jit::Context::with_isa(isa);
+            let mut cx = #root::wasmtime_jit::Context::with_isa(
+                isa,
+                #root::wasmtime_jit::CompilationStrategy::Auto
+            );
             let data = #root::wasmtime_interface_types::ModuleData::new(&bytes)?;
             let handle = cx.instantiate_module(None, &bytes)?;
 

@@ -8,7 +8,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::rc::Rc;
 use wabt;
-use wasmtime_jit::{instantiate, Compiler, NullResolver};
+use wasmtime_jit::{instantiate, CompilationStrategy, Compiler, NullResolver};
 
 #[cfg(test)]
 const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
@@ -40,7 +40,7 @@ fn test_environ_translate() {
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut resolver = NullResolver {};
-    let mut compiler = Compiler::new(isa);
+    let mut compiler = Compiler::new(isa, CompilationStrategy::Auto);
     let global_exports = Rc::new(RefCell::new(HashMap::new()));
     let instance = instantiate(&mut compiler, &data, &mut resolver, global_exports, false);
     assert!(instance.is_ok());
