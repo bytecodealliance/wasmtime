@@ -1,3 +1,5 @@
+// Due to https://github.com/rust-lang/rust/issues/64247
+#![allow(clippy::use_self)]
 use crate::host;
 use failure::Fail;
 use std::convert::Infallible;

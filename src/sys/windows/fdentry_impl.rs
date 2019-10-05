@@ -37,10 +37,10 @@ impl DerefMut for OsFile {
 impl AsRawHandle for Descriptor {
     fn as_raw_handle(&self) -> RawHandle {
         match self {
-            Descriptor::OsFile(file) => file.as_raw_handle(),
-            Descriptor::Stdin => io::stdin().as_raw_handle(),
-            Descriptor::Stdout => io::stdout().as_raw_handle(),
-            Descriptor::Stderr => io::stderr().as_raw_handle(),
+            Self::OsFile(file) => file.as_raw_handle(),
+            Self::Stdin => io::stdin().as_raw_handle(),
+            Self::Stdout => io::stdout().as_raw_handle(),
+            Self::Stderr => io::stderr().as_raw_handle(),
         }
     }
 }
@@ -96,9 +96,7 @@ pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
             )
         } else if file_type.is_disk() {
             // disk file: file, dir or disk device
-            let file = std::mem::ManuallyDrop::new(unsafe {
-                File::from_raw_handle(handle.as_raw_handle())
-            });
+            let file = std::mem::ManuallyDrop::new(File::from_raw_handle(handle.as_raw_handle()));
             let meta = file.metadata().map_err(|_| Error::EINVAL)?;
             if meta.is_dir() {
                 (

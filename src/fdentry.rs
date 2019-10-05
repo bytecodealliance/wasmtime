@@ -15,21 +15,21 @@ pub(crate) enum Descriptor {
 impl Descriptor {
     pub(crate) fn as_file(&self) -> Result<&OsFile> {
         match self {
-            Descriptor::OsFile(file) => Ok(file),
+            Self::OsFile(file) => Ok(file),
             _ => Err(Error::EBADF),
         }
     }
 
     pub(crate) fn as_file_mut(&mut self) -> Result<&mut OsFile> {
         match self {
-            Descriptor::OsFile(file) => Ok(file),
+            Self::OsFile(file) => Ok(file),
             _ => Err(Error::EBADF),
         }
     }
 
     pub(crate) fn is_file(&self) -> bool {
         match self {
-            Descriptor::OsFile(_) => true,
+            Self::OsFile(_) => true,
             _ => false,
         }
     }
@@ -37,7 +37,7 @@ impl Descriptor {
     #[allow(unused)]
     pub(crate) fn is_stdin(&self) -> bool {
         match self {
-            Descriptor::Stdin => true,
+            Self::Stdin => true,
             _ => false,
         }
     }
@@ -45,7 +45,7 @@ impl Descriptor {
     #[allow(unused)]
     pub(crate) fn is_stdout(&self) -> bool {
         match self {
-            Descriptor::Stdout => true,
+            Self::Stdout => true,
             _ => false,
         }
     }
@@ -53,7 +53,7 @@ impl Descriptor {
     #[allow(unused)]
     pub(crate) fn is_stderr(&self) -> bool {
         match self {
-            Descriptor::Stderr => true,
+            Self::Stderr => true,
             _ => false,
         }
     }

@@ -4,7 +4,6 @@ use crate::{host, Error, Result};
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
-use std::os::windows::prelude::AsRawHandle;
 use std::path::{Path, PathBuf};
 
 pub(crate) trait PathGetExt {
