@@ -51,6 +51,7 @@ use std::str::FromStr;
 use target_lexicon::Triple;
 use wasmtime::pick_compilation_strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
+#[cfg(feature = "lightbeam")]
 use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_environ::{
