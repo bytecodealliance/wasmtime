@@ -198,7 +198,15 @@ impl WastContext {
     /// Run a wast script from a byte buffer.
     pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<(), WastFileError> {
         let features: WabtFeatures = convert_features(self.context.features());
-        let test_filename = "test.wast"; // TODO apparently we can't use filename because this breaks the execution
+
+        // Work around https://github.com/pepyakin/wabt-rs/issues/59
+        let test_filename = Path::new(filename)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+
         let mut parser = ScriptParser::from_source_and_name_with_features(
             str::from_utf8(wast)
                 .map_err(|error| WastFileError {
@@ -207,7 +215,7 @@ impl WastContext {
                     error: WastError::Utf8(error),
                 })?
                 .as_bytes(),
-            test_filename,
+            &test_filename,
             features,
         )
         .map_err(|error| WastFileError {
