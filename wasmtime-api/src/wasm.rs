@@ -570,7 +570,7 @@ impl Into<HostRef<Trap>> for wasm_trap_t {
 struct CallbackWithEnv {
     callback: wasm_func_callback_with_env_t,
     env: *mut ::core::ffi::c_void,
-    finalizer: ::core::option::Option<unsafe extern "C" fn(env: *mut ::core::ffi::c_void,
+    finalizer: ::core::option::Option<unsafe extern "C" fn(env: *mut ::core::ffi::c_void)>,
 }
 
 impl Callable for CallbackWithEnv {
@@ -802,7 +802,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
     ty: *const wasm_functype_t,
     callback: wasm_func_callback_with_env_t,
     env: *mut ::core::ffi::c_void,
-    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void,
+    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
 ) -> *mut wasm_func_t {
     let store = (*store).store.clone();
     let ty = (*ty).functype.clone();
@@ -1619,7 +1619,7 @@ pub unsafe extern "C" fn wasm_tabletype_new(
 
 struct HostInfoState {
     info: *mut ::core::ffi::c_void,
-    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void,
+    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
 }
 
 impl HostInfo for HostInfoState {
@@ -1636,7 +1636,7 @@ impl HostInfo for HostInfoState {
 pub unsafe extern "C" fn wasm_instance_set_host_info_with_finalizer(
     instance: *mut wasm_instance_t,
     info: *mut ::core::ffi::c_void,
-    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void,
+    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
 ) {
     let info = if info.is_null() && finalizer.is_none() {
         None
