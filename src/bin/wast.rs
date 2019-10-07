@@ -74,8 +74,8 @@ struct Args {
     flag_cache_config: Option<String>,
     flag_create_cache_config: bool,
     flag_enable_simd: bool,
-    flag_always_lightbeam: bool,
-    flag_always_cranelift: bool,
+    flag_lightbeam: bool,
+    flag_cranelift: bool,
 }
 
 fn main() {
@@ -154,8 +154,7 @@ fn main() {
     }
 
     // Decide how to compile.
-    let strategy =
-        pick_compilation_strategy(args.flag_always_cranelift, args.flag_always_lightbeam);
+    let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     let engine = Compiler::new(isa, strategy);
