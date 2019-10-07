@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types)]
 use crate::{winerror, Result};
+use cvt::cvt;
 use std::ffi::{c_void, OsString};
 use std::fs::File;
 use std::io;
@@ -378,15 +379,6 @@ pub fn get_file_path(file: &File) -> Result<OsString> {
         .ok_or(winerror::WinError::ERROR_BUFFER_OVERFLOW)?;
 
     Ok(OsString::from_wide(written_bytes))
-}
-
-// Taken from Rust libstd, file libstd/sys/windows/fs.rs
-fn cvt(i: winapi::shared::minwindef::BOOL) -> io::Result<()> {
-    if i == 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
 }
 
 pub fn get_fileinfo(file: &File) -> io::Result<fileapi::BY_HANDLE_FILE_INFORMATION> {

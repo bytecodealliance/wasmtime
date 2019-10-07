@@ -9,3 +9,4 @@ description = "Windows API helper library"
 [dependencies]
 winapi = { version = "0.3", features = ["std", "errhandlingapi", "handleapi", "processthreadsapi", "securitybaseapi", "winbase", "winerror", "ws2def", "fileapi", "aclapi" ] }
 bitflags = "1.0"
+cvt = "0.1"
