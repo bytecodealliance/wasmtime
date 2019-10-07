@@ -329,6 +329,21 @@ pub static PSLLD: [u8; 3] = [0x66, 0x0f, 0xf2];
 /// Shift quadwords in xmm1 left by xmm2/m128 while shifting in 0s (SSE2).
 pub static PSLLQ: [u8; 3] = [0x66, 0x0f, 0xf3];
 
+/// Shift words in xmm1 right by xmm2/m128 while shifting in 0s (SSE2).
+pub static PSRLW: [u8; 3] = [0x66, 0x0f, 0xd1];
+
+/// Shift doublewords in xmm1 right by xmm2/m128 while shifting in 0s (SSE2).
+pub static PSRLD: [u8; 3] = [0x66, 0x0f, 0xd2];
+
+/// Shift quadwords in xmm1 right by xmm2/m128 while shifting in 0s (SSE2).
+pub static PSRLQ: [u8; 3] = [0x66, 0x0f, 0xd3];
+
+/// Shift words in xmm1 right by xmm2/m128 while shifting in sign bits (SSE2).
+pub static PSRAW: [u8; 3] = [0x66, 0x0f, 0xe1];
+
+/// Shift doublewords in xmm1 right by xmm2/m128 while shifting in sign bits (SSE2).
+pub static PSRAD: [u8; 3] = [0x66, 0x0f, 0xe2];
+
 /// Subtract packed byte integers in xmm2/m128 from packed byte integers in xmm1 (SSE2).
 pub static PSUBB: [u8; 3] = [0x66, 0x0f, 0xf8];
 

@@ -414,8 +414,32 @@ pub(crate) fn define(
             "x86_psll",
             r#"
         Shift Packed Data Left Logical -- This implements the behavior of the shared instruction 
-        ``ishl`` but alters the shift operand to live in an XMM register as expected by the PSSL*
+        ``ishl`` but alters the shift operand to live in an XMM register as expected by the PSLL*
         family of instructions.
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+    ig.push(
+        Inst::new(
+            "x86_psrl",
+            r#"
+        Shift Packed Data Right Logical -- This implements the behavior of the shared instruction 
+        ``ushr`` but alters the shift operand to live in an XMM register as expected by the PSRL*
+        family of instructions.
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+    ig.push(
+        Inst::new(
+            "x86_psra",
+            r#"
+        Shift Packed Data Right Arithmetic -- This implements the behavior of the shared 
+        instruction ``sshr`` but alters the shift operand to live in an XMM register as expected by 
+        the PSRA* family of instructions.
         "#,
         )
         .operands_in(vec![x, y])

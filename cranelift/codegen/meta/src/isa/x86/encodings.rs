@@ -522,6 +522,8 @@ pub(crate) fn define<'defs>(
     let x86_pshufd = x86.by_name("x86_pshufd");
     let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_psll = x86.by_name("x86_psll");
+    let x86_psra = x86.by_name("x86_psra");
+    let x86_psrl = x86.by_name("x86_psrl");
     let x86_push = x86.by_name("x86_push");
     let x86_sdivmodx = x86.by_name("x86_sdivmodx");
     let x86_smulx = x86.by_name("x86_smulx");
@@ -2007,6 +2009,18 @@ pub(crate) fn define<'defs>(
     for (ty, opcodes) in &[(I16, &PSLLW), (I32, &PSLLD), (I64, &PSLLQ)] {
         let x86_psll = x86_psll.bind(vector(*ty, sse_vector_size));
         e.enc_32_64(x86_psll, rec_fa.opcodes(*opcodes));
+    }
+
+    // SIMD shift right (logical)
+    for (ty, opcodes) in &[(I16, &PSRLW), (I32, &PSRLD), (I64, &PSRLQ)] {
+        let x86_psrl = x86_psrl.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64(x86_psrl, rec_fa.opcodes(*opcodes));
+    }
+
+    // SIMD shift right (arithmetic)
+    for (ty, opcodes) in &[(I16, &PSRAW), (I32, &PSRAD)] {
+        let x86_psra = x86_psra.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64(x86_psra, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD icmp using PCMPEQ*
