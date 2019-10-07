@@ -1,3 +1,5 @@
+extern crate alloc;
+
 use alloc::rc::Rc;
 use core::cell::{Ref, RefCell};
 use std::fs::read;
