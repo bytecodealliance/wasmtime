@@ -1,3 +1,5 @@
+extern crate alloc;
+
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use cranelift_codegen::settings;
