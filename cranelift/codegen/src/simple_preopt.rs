@@ -508,7 +508,7 @@ fn try_fold_extended_move(
             }
 
             let imm_bits: i64 = imm.into();
-            let ireduce_ty = match dest_ty.lane_bits() as i64 - imm_bits {
+            let ireduce_ty = match (dest_ty.lane_bits() as i64).wrapping_sub(imm_bits) {
                 8 => I8,
                 16 => I16,
                 32 => I32,
