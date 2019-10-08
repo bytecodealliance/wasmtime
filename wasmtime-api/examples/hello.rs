@@ -1,5 +1,7 @@
 //! Translation of hello example
 
+extern crate alloc;
+
 use alloc::rc::Rc;
 use core::cell::Ref;
 use failure::{bail, format_err, Error};
