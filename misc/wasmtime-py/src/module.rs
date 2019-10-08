@@ -1,5 +1,7 @@
 //! WebAssembly Module API object.
 
+extern crate alloc;
+
 use pyo3::prelude::*;
 
 use alloc::rc::Rc;

@@ -1,5 +1,7 @@
 //! WebAssembly Memory API object.
 
+extern crate alloc;
+
 use pyo3::class::PyBufferProtocol;
 use pyo3::exceptions::BufferError;
 use pyo3::ffi;
