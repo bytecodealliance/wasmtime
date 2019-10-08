@@ -5,10 +5,10 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::ptr;
 use core::slice;
-use errno;
 #[cfg(not(target_os = "windows"))]
 use libc;
 use region;
+use std::io;
 
 /// Round `size` up to the nearest multiple of `page_size`.
 fn round_up_to_page_size(size: usize, page_size: usize) -> usize {
@@ -74,7 +74,7 @@ impl Mmap {
                 )
             };
             if ptr as isize == -1_isize {
-                return Err(errno::errno().to_string());
+                return Err(io::Error::last_os_error().to_string());
             }
 
             Self {
@@ -94,7 +94,7 @@ impl Mmap {
                 )
             };
             if ptr as isize == -1_isize {
-                return Err(errno::errno().to_string());
+                return Err(io::Error::last_os_error().to_string());
             }
 
             let mut result = Self {
@@ -138,7 +138,7 @@ impl Mmap {
                 )
             };
             if ptr.is_null() {
-                return Err(errno::errno().to_string());
+                return Err(io::Error::last_os_error().to_string());
             }
 
             Self {
@@ -150,7 +150,7 @@ impl Mmap {
             let ptr =
                 unsafe { VirtualAlloc(ptr::null_mut(), mapping_size, MEM_RESERVE, PAGE_NOACCESS) };
             if ptr.is_null() {
-                return Err(errno::errno().to_string());
+                return Err(io::Error::last_os_error().to_string());
             }
 
             let mut result = Self {
@@ -208,7 +208,7 @@ impl Mmap {
         }
         .is_null()
         {
-            return Err(errno::errno().to_string());
+            return Err(io::Error::last_os_error().to_string());
         }
 
         Ok(())
@@ -245,7 +245,7 @@ impl Drop for Mmap {
     fn drop(&mut self) {
         if self.len != 0 {
             let r = unsafe { libc::munmap(self.ptr as *mut libc::c_void, self.len) };
-            assert_eq!(r, 0, "munmap failed: {}", errno::errno());
+            assert_eq!(r, 0, "munmap failed: {}", io::Error::last_os_error());
         }
     }
 
