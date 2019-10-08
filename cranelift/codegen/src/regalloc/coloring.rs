@@ -588,8 +588,8 @@ impl<'a> Context<'a> {
         // Copy register assignments from tied inputs to tied outputs.
         if let Some(constraints) = constraints {
             if constraints.tied_ops {
-                for (op, lv) in constraints.outs.iter().zip(defs) {
-                    if let ConstraintKind::Tied(num) = op.kind {
+                for (constraint, lv) in constraints.outs.iter().zip(defs) {
+                    if let ConstraintKind::Tied(num) = constraint.kind {
                         let arg = self.cur.func.dfg.inst_args(inst)[num as usize];
                         let reg = self.divert.reg(arg, &self.cur.func.locations);
                         self.cur.func.locations[lv.value] = ValueLoc::Reg(reg);
@@ -650,46 +650,46 @@ impl<'a> Context<'a> {
 
     /// Program the input-side constraints for `inst` into the constraint solver.
     fn program_input_constraints(&mut self, inst: Inst, constraints: &[OperandConstraint]) {
-        for (op, &value) in constraints
+        for (constraint, &arg_val) in constraints
             .iter()
             .zip(self.cur.func.dfg.inst_args(inst))
-            .filter(|&(op, _)| op.kind != ConstraintKind::Stack)
+            .filter(|&(constraint, _)| constraint.kind != ConstraintKind::Stack)
         {
             // Reload pass is supposed to ensure that all arguments to register operands are
             // already in a register.
-            let cur_reg = self.divert.reg(value, &self.cur.func.locations);
-            match op.kind {
+            let cur_reg = self.divert.reg(arg_val, &self.cur.func.locations);
+            match constraint.kind {
                 ConstraintKind::FixedReg(regunit) => {
                     // Add the fixed constraint even if `cur_reg == regunit`.
                     // It is possible that we will want to convert the value to a variable later,
                     // and this identity assignment prevents that from happening.
                     self.solver
-                        .reassign_in(value, op.regclass, cur_reg, regunit);
+                        .reassign_in(arg_val, constraint.regclass, cur_reg, regunit);
                 }
                 ConstraintKind::FixedTied(regunit) => {
                     // The pinned register may not be part of a fixed tied requirement. If this
                     // becomes the case, then it must be changed to a different register.
                     debug_assert!(
-                        !self.is_pinned_reg(op.regclass, regunit),
+                        !self.is_pinned_reg(constraint.regclass, regunit),
                         "see comment above"
                     );
                     // See comment right above.
                     self.solver
-                        .reassign_in(value, op.regclass, cur_reg, regunit);
+                        .reassign_in(arg_val, constraint.regclass, cur_reg, regunit);
                 }
                 ConstraintKind::Tied(_) => {
-                    if self.is_pinned_reg(op.regclass, cur_reg) {
+                    if self.is_pinned_reg(constraint.regclass, cur_reg) {
                         // Divert the pinned register; it shouldn't be reused for a tied input.
-                        if self.solver.can_add_var(op.regclass, cur_reg) {
-                            self.solver.add_var(value, op.regclass, cur_reg);
+                        if self.solver.can_add_var(constraint.regclass, cur_reg) {
+                            self.solver.add_var(arg_val, constraint.regclass, cur_reg);
                         }
-                    } else if !op.regclass.contains(cur_reg) {
-                        self.solver.add_var(value, op.regclass, cur_reg);
+                    } else if !constraint.regclass.contains(cur_reg) {
+                        self.solver.add_var(arg_val, constraint.regclass, cur_reg);
                     }
                 }
                 ConstraintKind::Reg => {
-                    if !op.regclass.contains(cur_reg) {
-                        self.solver.add_var(value, op.regclass, cur_reg);
+                    if !constraint.regclass.contains(cur_reg) {
+                        self.solver.add_var(arg_val, constraint.regclass, cur_reg);
                     }
                 }
                 ConstraintKind::Stack => unreachable!(),
@@ -714,22 +714,25 @@ impl<'a> Context<'a> {
             .expect("Current instruction not encoded")
             .ins;
 
-        for (op, &value) in constraints.iter().zip(self.cur.func.dfg.inst_args(inst)) {
-            match op.kind {
+        for (constraint, &arg_val) in constraints.iter().zip(self.cur.func.dfg.inst_args(inst)) {
+            match constraint.kind {
                 ConstraintKind::Reg | ConstraintKind::Tied(_) => {
-                    let cur_reg = self.divert.reg(value, &self.cur.func.locations);
+                    let cur_reg = self.divert.reg(arg_val, &self.cur.func.locations);
 
                     // This is the opposite condition of `program_input_constraints()`. The pinned
                     // register mustn't be added back as a variable.
-                    if op.regclass.contains(cur_reg) && !self.is_pinned_reg(op.regclass, cur_reg) {
+                    if constraint.regclass.contains(cur_reg)
+                        && !self.is_pinned_reg(constraint.regclass, cur_reg)
+                    {
                         // This code runs after calling `solver.inputs_done()` so we must identify
-                        // the new variable as killed or live-through. Always special-case the
-                        // pinned register as a through variable.
+                        // the new variable as killed or live-through.
                         let layout = &self.cur.func.layout;
-                        if self.liveness[value].killed_at(inst, layout.pp_ebb(inst), layout) {
-                            self.solver.add_killed_var(value, op.regclass, cur_reg);
+                        if self.liveness[arg_val].killed_at(inst, layout.pp_ebb(inst), layout) {
+                            self.solver
+                                .add_killed_var(arg_val, constraint.regclass, cur_reg);
                         } else {
-                            self.solver.add_through_var(value, op.regclass, cur_reg);
+                            self.solver
+                                .add_through_var(arg_val, constraint.regclass, cur_reg);
                         }
                     }
                 }
@@ -862,6 +865,10 @@ impl<'a> Context<'a> {
                 let toprc = self.reginfo.toprc(rci);
                 let reg = self.divert.reg(lv.value, &self.cur.func.locations);
                 if self.solver.is_fixed_input_conflict(toprc, reg) {
+                    debug!(
+                        "adding var to divert fixed input conflict for {}",
+                        toprc.info.display_regunit(reg)
+                    );
                     self.solver.add_var(lv.value, toprc, reg);
                 }
             }
@@ -879,15 +886,15 @@ impl<'a> Context<'a> {
         replace_global_defines: &mut bool,
         global_regs: &RegisterSet,
     ) {
-        for (op, lv) in constraints.iter().zip(defs) {
-            match op.kind {
+        for (constraint, lv) in constraints.iter().zip(defs) {
+            match constraint.kind {
                 ConstraintKind::FixedReg(reg) | ConstraintKind::FixedTied(reg) => {
-                    self.add_fixed_output(lv.value, op.regclass, reg, throughs);
-                    if !lv.is_local && !global_regs.is_avail(op.regclass, reg) {
+                    self.add_fixed_output(lv.value, constraint.regclass, reg, throughs);
+                    if !lv.is_local && !global_regs.is_avail(constraint.regclass, reg) {
                         debug!(
                             "Fixed output {} in {}:{} is not available in global regs",
                             lv.value,
-                            op.regclass,
+                            constraint.regclass,
                             self.reginfo.display_regunit(reg)
                         );
                         *replace_global_defines = true;
@@ -976,13 +983,14 @@ impl<'a> Context<'a> {
         replace_global_defines: &mut bool,
         global_regs: &RegisterSet,
     ) {
-        for (op, lv) in constraints.iter().zip(defs) {
-            match op.kind {
+        for (constraint, lv) in constraints.iter().zip(defs) {
+            match constraint.kind {
                 ConstraintKind::FixedReg(_)
                 | ConstraintKind::FixedTied(_)
                 | ConstraintKind::Stack => continue,
                 ConstraintKind::Reg => {
-                    self.solver.add_def(lv.value, op.regclass, !lv.is_local);
+                    self.solver
+                        .add_def(lv.value, constraint.regclass, !lv.is_local);
                 }
                 ConstraintKind::Tied(num) => {
                     // Find the input operand we're tied to.
@@ -992,16 +1000,16 @@ impl<'a> Context<'a> {
 
                     if let Some(reg) =
                         self.solver
-                            .add_tied_input(arg, op.regclass, reg, !lv.is_local)
+                            .add_tied_input(arg, constraint.regclass, reg, !lv.is_local)
                     {
                         // The value we're tied to has been assigned to a fixed register.
                         // We need to make sure that fixed output register is compatible with the
                         // global register set.
-                        if !lv.is_local && !global_regs.is_avail(op.regclass, reg) {
+                        if !lv.is_local && !global_regs.is_avail(constraint.regclass, reg) {
                             debug!(
                                 "Tied output {} in {}:{} is not available in global regs",
                                 lv.value,
-                                op.regclass,
+                                constraint.regclass,
                                 self.reginfo.display_regunit(reg)
                             );
                             *replace_global_defines = true;

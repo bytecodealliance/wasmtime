@@ -265,6 +265,7 @@ pub enum Move {
         from: RegUnit,
         to: RegUnit,
     },
+    #[allow(dead_code)] // rustc doesn't see it isn't dead.
     Spill {
         value: Value,
         rc: RegClass,
@@ -283,7 +284,7 @@ impl Move {
     /// Create a register move from an assignment, but not for identity assignments.
     fn with_assignment(a: &Assignment) -> Option<Self> {
         if a.from != a.to {
-            Some(Move::Reg {
+            Some(Self::Reg {
                 value: a.value,
                 from: a.from,
                 to: a.to,
@@ -298,16 +299,16 @@ impl Move {
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::wrong_self_convention))]
     fn from_reg(&self) -> Option<(RegClass, RegUnit)> {
         match *self {
-            Move::Reg { rc, from, .. } | Move::Spill { rc, from, .. } => Some((rc, from)),
-            Move::Fill { .. } => None,
+            Self::Reg { rc, from, .. } | Self::Spill { rc, from, .. } => Some((rc, from)),
+            Self::Fill { .. } => None,
         }
     }
 
     /// Get the "to" register and register class, if possible.
     fn to_reg(&self) -> Option<(RegClass, RegUnit)> {
         match *self {
-            Move::Reg { rc, to, .. } | Move::Fill { rc, to, .. } => Some((rc, to)),
-            Move::Spill { .. } => None,
+            Self::Reg { rc, to, .. } | Self::Fill { rc, to, .. } => Some((rc, to)),
+            Self::Spill { .. } => None,
         }
     }
 
@@ -315,8 +316,8 @@ impl Move {
     fn replace_to_reg(&mut self, new: RegUnit) -> RegUnit {
         mem::replace(
             match *self {
-                Move::Reg { ref mut to, .. } | Move::Fill { ref mut to, .. } => to,
-                Move::Spill { .. } => panic!("No to register in a spill {}", self),
+                Self::Reg { ref mut to, .. } | Self::Fill { ref mut to, .. } => to,
+                Self::Spill { .. } => panic!("No to register in a spill {}", self),
             },
             new,
         )
@@ -325,13 +326,13 @@ impl Move {
     /// Convert this `Reg` move to a spill to `slot` and return the old "to" register.
     fn change_to_spill(&mut self, slot: usize) -> RegUnit {
         match self.clone() {
-            Move::Reg {
+            Self::Reg {
                 value,
                 rc,
                 from,
                 to,
             } => {
-                *self = Move::Spill {
+                *self = Self::Spill {
                     value,
                     rc,
                     from,
@@ -346,14 +347,14 @@ impl Move {
     /// Get the value being moved.
     fn value(&self) -> Value {
         match *self {
-            Move::Reg { value, .. } | Move::Fill { value, .. } | Move::Spill { value, .. } => value,
+            Self::Reg { value, .. } | Self::Fill { value, .. } | Self::Spill { value, .. } => value,
         }
     }
 
     /// Get the associated register class.
     fn rc(&self) -> RegClass {
         match *self {
-            Move::Reg { rc, .. } | Move::Fill { rc, .. } | Move::Spill { rc, .. } => rc,
+            Self::Reg { rc, .. } | Self::Fill { rc, .. } | Self::Spill { rc, .. } => rc,
         }
     }
 }
@@ -361,7 +362,7 @@ impl Move {
 impl fmt::Display for Move {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Move::Reg {
+            Self::Reg {
                 value,
                 from,
                 to,
@@ -374,7 +375,7 @@ impl fmt::Display for Move {
                 rc.info.display_regunit(from),
                 rc.info.display_regunit(to)
             ),
-            Move::Spill {
+            Self::Spill {
                 value,
                 from,
                 to_slot,
@@ -387,7 +388,7 @@ impl fmt::Display for Move {
                 rc.info.display_regunit(from),
                 to_slot
             ),
-            Move::Fill {
+            Self::Fill {
                 value,
                 from_slot,
                 to,
@@ -593,67 +594,57 @@ impl Solver {
     /// instruction.
     ///
     /// This function should be called after `inputs_done()` only. Use `add_var()` before.
-    pub fn add_killed_var(&mut self, value: Value, constraint: RegClass, from: RegUnit) {
+    pub fn add_killed_var(&mut self, value: Value, rc: RegClass, from: RegUnit) {
         debug!(
             "add_killed_var({}:{}, from={})",
             value,
-            constraint,
-            constraint.info.display_regunit(from)
+            rc,
+            rc.info.display_regunit(from)
         );
         debug_assert!(self.inputs_done);
-        self.add_live_var(value, constraint, from, false);
+        self.add_live_var(value, rc, from, false);
     }
 
     /// Add an extra input-side variable representing a value that is live through the current
     /// instruction.
     ///
     /// This function should be called after `inputs_done()` only. Use `add_var()` before.
-    pub fn add_through_var(&mut self, value: Value, constraint: RegClass, from: RegUnit) {
+    pub fn add_through_var(&mut self, value: Value, rc: RegClass, from: RegUnit) {
         debug!(
             "add_through_var({}:{}, from={})",
             value,
-            constraint,
-            constraint.info.display_regunit(from)
+            rc,
+            rc.info.display_regunit(from)
         );
         debug_assert!(self.inputs_done);
-        self.add_live_var(value, constraint, from, true);
+        self.add_live_var(value, rc, from, true);
     }
 
     /// Shared code for `add_var`, `add_killed_var`, and `add_through_var`.
     ///
     /// Add a variable that is live before the instruction, and possibly live through. Merge
     /// constraints if the value has already been added as a variable or fixed assignment.
-    fn add_live_var(
-        &mut self,
-        value: Value,
-        constraint: RegClass,
-        from: RegUnit,
-        live_through: bool,
-    ) {
+    fn add_live_var(&mut self, value: Value, rc: RegClass, from: RegUnit, live_through: bool) {
         // Check for existing entries for this value.
-        if self.regs_in.is_avail(constraint, from) {
+        if self.regs_in.is_avail(rc, from) {
             // There could be an existing variable entry.
             if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
                 // We have an existing variable entry for `value`. Combine the constraints.
-                if let Some(rc) = v.constraint.intersect(constraint) {
+                if let Some(rc) = v.constraint.intersect(rc) {
                     debug!("-> combining constraint with {} yields {}", v, rc);
                     v.constraint = rc;
                     return;
                 } else {
                     // The spiller should have made sure the same value is not used with disjoint
                     // constraints.
-                    panic!("Incompatible constraints: {} + {}", constraint, v)
+                    panic!("Incompatible constraints: {} + {}", rc, v)
                 }
             }
 
             // No variable, then it must be a fixed reassignment.
             if let Some(a) = self.assignments.get(value) {
                 debug!("-> already fixed assignment {}", a);
-                debug_assert!(
-                    constraint.contains(a.to),
-                    "Incompatible constraints for {}",
-                    value
-                );
+                debug_assert!(rc.contains(a.to), "Incompatible constraints for {}", value);
                 return;
             }
 
@@ -661,12 +652,12 @@ impl Solver {
             panic!("Wrong from register for {}", value);
         }
 
-        let new_var = Variable::new_live(value, constraint, from, live_through);
+        let new_var = Variable::new_live(value, rc, from, live_through);
         debug!("-> new var: {}", new_var);
 
-        self.regs_in.free(constraint, from);
+        self.regs_in.free(rc, from);
         if self.inputs_done && live_through {
-            self.regs_out.free(constraint, from);
+            self.regs_out.free(rc, from);
         }
         self.vars.push(new_var);
     }
@@ -1007,7 +998,7 @@ impl Solver {
         self.moves
             .extend(self.assignments.values().filter_map(Move::with_assignment));
 
-        if !(self.moves.is_empty()) {
+        if !self.moves.is_empty() {
             debug!("collect_moves: {}", DisplayList(&self.moves));
         }
     }

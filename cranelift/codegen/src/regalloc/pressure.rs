@@ -48,20 +48,20 @@ use cranelift_codegen_shared::constants::MAX_TRACKED_TOP_RCS;
 /// Everything but the counts is static information computed from the constructor arguments.
 #[derive(Default)]
 struct TopRC {
-    // Number of registers currently used from this register class.
+    /// Number of registers currently used from this register class.
     base_count: u32,
     transient_count: u32,
 
-    // Max number of registers that can be allocated.
+    /// Max number of registers that can be allocated.
     limit: u32,
 
-    // Register units per register.
+    /// Register units per register.
     width: u8,
 
-    // The first aliasing top-level RC.
+    /// The first aliasing top-level RC.
     first_toprc: u8,
 
-    // The number of aliasing top-level RCs.
+    /// The number of aliasing top-level RCs.
     num_toprcs: u8,
 }
 
@@ -72,11 +72,11 @@ impl TopRC {
 }
 
 pub struct Pressure {
-    // Bit mask of top-level register classes that are aliased by other top-level register classes.
-    // Unaliased register classes can use a simpler interference algorithm.
+    /// Bit mask of top-level register classes that are aliased by other top-level register classes.
+    /// Unaliased register classes can use a simpler interference algorithm.
     aliased: RegClassMask,
 
-    // Current register counts per top-level register class.
+    /// Current register counts per top-level register class.
     toprc: [TopRC; MAX_TRACKED_TOP_RCS],
 }
 
