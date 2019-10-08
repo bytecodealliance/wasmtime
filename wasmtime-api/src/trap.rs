@@ -1,3 +1,5 @@
+use alloc::string::{String, ToString};
+
 #[derive(Fail, Debug)]
 #[fail(display = "Wasm trap")]
 pub struct Trap {

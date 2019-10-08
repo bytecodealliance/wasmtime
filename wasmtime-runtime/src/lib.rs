@@ -21,6 +21,7 @@
         clippy::use_self
     )
 )]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -28,6 +29,7 @@ extern crate lazy_static;
 extern crate memoffset;
 #[macro_use]
 extern crate failure_derive;
+extern crate alloc;
 
 mod export;
 mod imports;
@@ -58,6 +60,16 @@ pub use crate::vmcontext::{
     VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{hash_map, HashMap, HashSet};
+#[cfg(feature = "std")]
+use std::collections::{hash_map, HashMap, HashSet};
+
+#[cfg(not(feature = "std"))]
+use spin::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+#[cfg(feature = "std")]
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

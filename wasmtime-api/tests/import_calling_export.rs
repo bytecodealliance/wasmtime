@@ -1,6 +1,8 @@
-use std::cell::{Ref, RefCell};
+extern crate alloc;
+
+use alloc::rc::Rc;
+use core::cell::{Ref, RefCell};
 use std::fs::read;
-use std::rc::Rc;
 use wasmtime_api::*;
 
 #[test]

@@ -7,14 +7,15 @@ use super::HashMap;
 use crate::compiler::Compiler;
 use crate::link::link_module;
 use crate::resolver::Resolver;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{DefinedFuncIndex, SignatureIndex};
-use std::boxed::Box;
+#[cfg(feature = "std")]
 use std::io::Write;
-use std::rc::Rc;
-use std::string::String;
-use std::vec::Vec;
 use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
@@ -117,6 +118,7 @@ impl<'data> RawCompiledModule<'data> {
         // Make all code compiled thus far executable.
         compiler.publish_compiled_code();
 
+        #[cfg(feature = "std")]
         let dbg_jit_registration = if let Some(img) = dbg_image {
             let mut bytes = Vec::new();
             bytes.write_all(&img).expect("all written");

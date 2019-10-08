@@ -4,12 +4,12 @@
 use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::module;
 use crate::module_environ::FunctionBodyData;
+use alloc::vec::Vec;
 use cranelift_codegen::{binemit, ir, isa, CodegenError};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
-use std::vec::Vec;
 
 /// Compiled machine code: body and jump table offsets.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

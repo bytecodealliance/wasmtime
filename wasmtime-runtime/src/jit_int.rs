@@ -2,8 +2,9 @@
 //! the __jit_debug_register_code() and __jit_debug_descriptor to register
 //! or unregister generated object images with debuggers.
 
-use std::boxed::Box;
-use std::ptr;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::ptr;
 
 #[repr(C)]
 struct JITCodeEntry {
@@ -40,7 +41,7 @@ extern "C" fn __jit_debug_register_code() {
     // Hack to not allow inlining even when Rust wants to do it in release mode.
     let x = 3;
     unsafe {
-        std::ptr::read_volatile(&x);
+        core::ptr::read_volatile(&x);
     }
 }
 

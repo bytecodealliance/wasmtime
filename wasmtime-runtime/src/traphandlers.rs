@@ -4,10 +4,10 @@
 use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
+use alloc::string::{String, ToString};
 use core::cell::Cell;
 use core::ptr;
 use cranelift_codegen::ir;
-use std::string::String;
 
 extern "C" {
     fn WasmtimeCallTrampoline(

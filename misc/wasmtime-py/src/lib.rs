@@ -7,7 +7,7 @@ use crate::import::into_instance_from_obj;
 use crate::instance::Instance;
 use crate::memory::Memory;
 use crate::module::Module;
-use std::cell::RefCell;
+use core::cell::RefCell;
 use std::rc::Rc;
 use wasmtime_interface_types::ModuleData;
 

@@ -3,7 +3,8 @@ use crate::runtime::Store;
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
-use std::rc::Rc;
+use alloc::rc::Rc;
+use alloc::vec::Vec;
 
 use crate::trampoline::generate_func_export;
 use cranelift_codegen::ir;

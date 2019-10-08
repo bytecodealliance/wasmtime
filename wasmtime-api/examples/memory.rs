@@ -1,7 +1,7 @@
 //! Translation of the memory example
 
+use core::cell::Ref;
 use failure::{bail, format_err, Error};
-use std::cell::Ref;
 use std::fs::read;
 use wasmtime_api::*;
 

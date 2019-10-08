@@ -1,12 +1,14 @@
+extern crate alloc;
+
+use alloc::rc::Rc;
+use core::cell::RefCell;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::path::PathBuf;
-use std::rc::Rc;
 use wabt;
 use wasmtime_jit::{instantiate, CompilationStrategy, Compiler, NullResolver};
 

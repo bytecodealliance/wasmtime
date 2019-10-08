@@ -5,9 +5,9 @@
 #![allow(non_snake_case)]
 
 use crate::vmcontext::VMContext;
+use crate::RwLock;
 use core::borrow::{Borrow, BorrowMut};
 use core::cell::Cell;
-use std::sync::RwLock;
 
 #[derive(Default)]
 struct TrapContext {

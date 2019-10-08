@@ -2,17 +2,17 @@ use crate::host::{
     argv_environ_init, argv_environ_values, fd_prestats, fd_prestats_init, fd_prestats_insert,
     fd_table, fd_table_init, fd_table_insert_existing,
 };
+use alloc::rc::Rc;
+use core::cell::RefCell;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs::File;
 use std::mem;
 use std::os::unix::io::AsRawFd;
-use std::rc::Rc;
 use syscalls;
 use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, Export, Module};

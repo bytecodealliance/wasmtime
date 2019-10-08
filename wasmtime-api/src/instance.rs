@@ -3,10 +3,14 @@ use crate::externals::Extern;
 use crate::module::Module;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
+use crate::{HashMap, HashSet};
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use core::cell::RefCell;
 use failure::Error;
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 
 use wasmtime_jit::{instantiate, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle};

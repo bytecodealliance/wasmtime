@@ -1,3 +1,5 @@
+use alloc::boxed::Box;
+use alloc::string::ToString;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::TableElementType;
 use failure::Error;
@@ -12,7 +14,7 @@ pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle, Err
 
     let table = cranelift_wasm::Table {
         minimum: table.limits().min(),
-        maximum: if table.limits().max() == std::u32::MAX {
+        maximum: if table.limits().max() == core::u32::MAX {
             None
         } else {
             Some(table.limits().max())

@@ -1,11 +1,13 @@
 //! Support for a calling of a bounds (exported) function.
 
+extern crate alloc;
+
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
 use crate::value::{pyobj_to_value, value_to_pyobj};
-use std::cell::RefCell;
-use std::rc::Rc;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 use cranelift_codegen::ir;
 use wasmtime_interface_types::ModuleData;

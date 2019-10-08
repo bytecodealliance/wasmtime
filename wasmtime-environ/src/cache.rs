@@ -2,6 +2,7 @@ use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::compilation::{Compilation, Relocations, Traps};
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
+use alloc::string::{String, ToString};
 use core::hash::Hasher;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
@@ -13,7 +14,6 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::string::{String, ToString};
 
 #[macro_use] // for tests
 mod config;

@@ -1,6 +1,8 @@
+use crate::{HashMap, HashSet};
+use alloc::string::String;
+use alloc::vec::Vec;
 use cranelift_entity::EntityRef;
 use failure::Error;
-use std::collections::{HashMap, HashSet};
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 use gimli;

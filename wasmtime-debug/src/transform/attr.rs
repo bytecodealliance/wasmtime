@@ -1,5 +1,6 @@
+use crate::HashMap;
+use alloc::vec::Vec;
 use failure::Error;
-use std::collections::HashMap;
 
 use gimli;
 

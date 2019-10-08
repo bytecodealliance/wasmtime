@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::DefinedFuncIndex;
 use failure::Error;

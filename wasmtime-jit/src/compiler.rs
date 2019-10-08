@@ -4,6 +4,9 @@ use super::HashMap;
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
 use crate::target_tunables::target_tunables;
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
@@ -12,9 +15,6 @@ use cranelift_codegen::{binemit, ir};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, DefinedMemoryIndex};
-use std::boxed::Box;
-use std::string::String;
-use std::vec::Vec;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::{
     Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, ModuleVmctxInfo,

@@ -10,11 +10,11 @@ use super::{
     HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Name, Store,
     Table, TableType, Trap, Val, ValType,
 };
-use std::boxed::Box;
-use std::mem;
-use std::ptr;
-use std::rc::Rc;
-use std::slice;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use core::mem;
+use core::ptr;
+use core::slice;
 
 macro_rules! declare_vec {
     ($name:ident, $elem_ty:path) => {
@@ -345,12 +345,12 @@ pub struct wasm_func_t {
     func: HostRef<Func>,
     ext: Option<Box<wasm_extern_t>>,
 }
-pub type wasm_func_callback_t = ::std::option::Option<
+pub type wasm_func_callback_t = ::core::option::Option<
     unsafe extern "C" fn(args: *const wasm_val_t, results: *mut wasm_val_t) -> *mut wasm_trap_t,
 >;
-pub type wasm_func_callback_with_env_t = ::std::option::Option<
+pub type wasm_func_callback_with_env_t = ::core::option::Option<
     unsafe extern "C" fn(
-        env: *mut ::std::os::raw::c_void,
+        env: *mut ::core::ffi::c_void,
         args: *const wasm_val_t,
         results: *mut wasm_val_t,
     ) -> *mut wasm_trap_t,
@@ -569,8 +569,8 @@ impl Into<HostRef<Trap>> for wasm_trap_t {
 
 struct CallbackWithEnv {
     callback: wasm_func_callback_with_env_t,
-    env: *mut ::std::os::raw::c_void,
-    finalizer: ::std::option::Option<unsafe extern "C" fn(env: *mut ::std::os::raw::c_void)>,
+    env: *mut ::core::ffi::c_void,
+    finalizer: ::core::option::Option<unsafe extern "C" fn(env: *mut ::core::ffi::c_void)>,
 }
 
 impl Callable for CallbackWithEnv {
@@ -801,8 +801,8 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
     store: *mut wasm_store_t,
     ty: *const wasm_functype_t,
     callback: wasm_func_callback_with_env_t,
-    env: *mut ::std::os::raw::c_void,
-    finalizer: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+    env: *mut ::core::ffi::c_void,
+    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
 ) -> *mut wasm_func_t {
     let store = (*store).store.clone();
     let ty = (*ty).functype.clone();
@@ -1618,8 +1618,8 @@ pub unsafe extern "C" fn wasm_tabletype_new(
 }
 
 struct HostInfoState {
-    info: *mut ::std::os::raw::c_void,
-    finalizer: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+    info: *mut ::core::ffi::c_void,
+    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
 }
 
 impl HostInfo for HostInfoState {
@@ -1635,8 +1635,8 @@ impl HostInfo for HostInfoState {
 #[no_mangle]
 pub unsafe extern "C" fn wasm_instance_set_host_info_with_finalizer(
     instance: *mut wasm_instance_t,
-    info: *mut ::std::os::raw::c_void,
-    finalizer: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+    info: *mut ::core::ffi::c_void,
+    finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
 ) {
     let info = if info.is_null() && finalizer.is_none() {
         None

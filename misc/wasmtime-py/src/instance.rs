@@ -1,12 +1,14 @@
 //! WebAssembly Instance API object.
 
+extern crate alloc;
+
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::function::Function;
 use crate::memory::Memory;
-use std::cell::RefCell;
-use std::rc::Rc;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::types;

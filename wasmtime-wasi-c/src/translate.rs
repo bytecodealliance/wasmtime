@@ -1,5 +1,5 @@
+use core::convert::TryFrom;
 use host;
-use std::convert::TryFrom;
 use std::mem::{align_of, size_of, zeroed};
 use std::slice;
 use wasm32;

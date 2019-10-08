@@ -1,8 +1,10 @@
 //! WebAssembly Module API object.
 
+extern crate alloc;
+
 use pyo3::prelude::*;
 
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 #[pyclass]
 pub struct Module {

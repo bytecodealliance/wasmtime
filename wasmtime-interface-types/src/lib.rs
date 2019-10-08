@@ -7,11 +7,17 @@
 
 #![deny(missing_docs)]
 
+#[macro_use]
+extern crate alloc;
+
+use alloc::boxed::Box;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
+use core::slice;
+use core::str;
 use cranelift_codegen::ir;
 use failure::{bail, format_err, Error};
-use std::convert::TryFrom;
-use std::slice;
-use std::str;
 use wasm_webidl_bindings::ast;
 use wasmtime_jit::{ActionOutcome, Context, RuntimeValue};
 use wasmtime_runtime::{Export, InstanceHandle};
