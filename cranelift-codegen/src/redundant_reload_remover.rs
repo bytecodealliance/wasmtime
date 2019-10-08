@@ -887,7 +887,7 @@ impl RedundantReloadRemover {
             cur: EncCursor::new(func, isa),
             reginfo: isa.register_info(),
             cfg: cfg,
-            state: &mut RedundantReloadRemover::new(),
+            state: self,
         };
         let mut total_regunits = 0;
         for rb in isa.register_info().banks {
