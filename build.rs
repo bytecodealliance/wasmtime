@@ -24,12 +24,19 @@ fn main() {
 
         test_directory(&mut out, "misc_testsuite", strategy).expect("generating tests");
         test_directory(&mut out, "spec_testsuite", strategy).expect("generating tests");
-        test_file(
-            &mut out,
-            "spec_testsuite/proposals/simd/simd_const.wast",
-            strategy,
-        )
-        .expect("generating tests");
+        // Skip running spec_testsuite tests if the submodule isn't checked out.
+        if read_dir("spec_testsuite")
+            .expect("reading testsuite directory")
+            .next()
+            .is_some()
+        {
+            test_file(
+                &mut out,
+                "spec_testsuite/proposals/simd/simd_const.wast",
+                strategy,
+            )
+            .expect("generating tests");
+        }
 
         writeln!(out, "}}").expect("generating tests");
     }
@@ -86,6 +93,7 @@ fn start_test_module(out: &mut File, testsuite: &str) -> io::Result<()> {
             .expect("testsuite filename should be representable as a string")
             .replace("-", "_"),
     )?;
+    writeln!(out, "        #[cfg(test)]")?;
     writeln!(
         out,
         "        use super::super::{{native_isa, Path, WastContext, Compiler, Features, CompilationStrategy}};"
