@@ -19,3 +19,9 @@ ebb0(v0: b32x4 [%xmm4], v1: b32x4 [%xmm0]):
 [-, %xmm4]  v2 = bxor v0, v1      ; bin: 66 0f ef e0
             return v2
 }
+
+function %band_not_b64x2(b64x2, b64x2) -> b64x2 {
+ebb0(v0: b64x2 [%xmm6], v1: b64x2 [%xmm3]):
+[-, %xmm3]  v2 = band_not v0, v1      ; bin: 66 0f df de
+            return v2
+}

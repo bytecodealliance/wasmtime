@@ -1982,6 +1982,10 @@ pub(crate) fn define<'defs>(
         let band = band.bind(vector(ty, sse_vector_size));
         e.enc_32_64(band, rec_fa.opcodes(&PAND));
 
+        // and not (note flipped recipe operands to match band_not order)
+        let band_not = band_not.bind(vector(ty, sse_vector_size));
+        e.enc_32_64(band_not, rec_fax.opcodes(&PANDN));
+
         // or
         let bor = bor.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bor, rec_fa.opcodes(&POR));
