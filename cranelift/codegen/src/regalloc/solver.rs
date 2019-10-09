@@ -626,7 +626,7 @@ impl Solver {
     /// constraints if the value has already been added as a variable or fixed assignment.
     fn add_live_var(&mut self, value: Value, rc: RegClass, from: RegUnit, live_through: bool) {
         // Check for existing entries for this value.
-        if self.regs_in.is_avail(rc, from) {
+        if !self.can_add_var(rc, from) {
             // There could be an existing variable entry.
             if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
                 // We have an existing variable entry for `value`. Combine the constraints.
@@ -969,6 +969,7 @@ impl Solver {
     /// Check if `value` can be added as a variable to help find a solution.
     pub fn can_add_var(&mut self, constraint: RegClass, from: RegUnit) -> bool {
         !self.regs_in.is_avail(constraint, from)
+            && !self.vars.iter().any(|var| var.from == Some(from))
     }
 }
 
