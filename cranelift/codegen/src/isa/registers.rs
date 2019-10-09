@@ -12,25 +12,16 @@ use core::fmt;
 /// The register allocator will enforce that each register unit only gets used for one thing.
 pub type RegUnit = u16;
 
+/// A bit mask indexed by register classes.
+///
+/// The size of this type is determined by the ISA with the most register classes.
+pub type RegClassMask = u32;
+
 /// A bit mask indexed by register units.
 ///
 /// The size of this type is determined by the target ISA that has the most register units defined.
 /// Currently that is arm32 which has 64+16 units.
-///
-/// This type should be coordinated with meta/src/cdsl/regs.rs.
-pub type RegUnitMask = [u32; 3];
-
-/// A bit mask indexed by register classes.
-///
-/// The size of this type is determined by the ISA with the most register classes.
-///
-/// This type should be coordinated with meta/src/cdsl/regs.rs.
-pub type RegClassMask = u32;
-
-/// Guaranteed maximum number of top-level register classes with pressure tracking in any ISA.
-///
-/// This can be increased, but should be coordinated with meta/src/cdsl/regs.rs.
-pub const MAX_TRACKED_TOPRCS: usize = 4;
+pub type RegUnitMask = [RegClassMask; 3];
 
 /// The register units in a target ISA are divided into disjoint register banks. Each bank covers a
 /// contiguous range of register units.
@@ -337,4 +328,22 @@ impl<'a> fmt::Display for DisplayRegUnit<'a> {
             None => write!(f, "%INVALID{}", self.regunit),
         }
     }
+}
+
+#[test]
+fn assert_sizes() {
+    use cranelift_codegen_shared::constants;
+    use std::mem::size_of;
+
+    // In these tests, size_of returns number of bytes: we actually want the number of bits, so
+    // multiply these by 8.
+    assert!(
+        (size_of::<RegClassMask>() * 8) <= constants::MAX_NUM_REG_CLASSES,
+        "need to bump MAX_NUM_REG_CLASSES or change RegClassMask type"
+    );
+
+    assert!(
+        constants::MAX_NUM_REG_CLASSES < (1 << (size_of::<RegClassIndex>() * 8)),
+        "need to change RegClassIndex's type to a wider type"
+    );
 }
