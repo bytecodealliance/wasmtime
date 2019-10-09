@@ -144,7 +144,7 @@ fn main() {
 
     // Enable optimization if requested.
     if args.flag_optimize {
-        flag_builder.set("opt_level", "best").unwrap();
+        flag_builder.set("opt_level", "speed").unwrap();
     }
 
     // Enable SIMD if requested
