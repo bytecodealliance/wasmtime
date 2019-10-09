@@ -1,12 +1,17 @@
 //! Runtime support for precomputed constant hash tables.
 //!
-//! The `cranelift-codegen/meta/src/constant_hash.rs` Rust crate can generate constant hash tables
-//! using open addressing and quadratic probing. The hash tables are arrays that are guaranteed to:
+//! The shared module with the same name can generate constant hash tables using open addressing
+//! and quadratic probing.
+//!
+//! The hash tables are arrays that are guaranteed to:
 //!
 //! - Have a power-of-two size.
 //! - Contain at least one empty slot.
 //!
 //! This module provides runtime support for lookups in these tables.
+
+// Re-export entities from constant_hash for simplicity of use.
+pub use cranelift_codegen_shared::constant_hash::*;
 
 /// Trait that must be implemented by the entries in a constant hash table.
 pub trait Table<K: Copy + Eq> {
@@ -47,32 +52,11 @@ pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(
 
         // Quadratic probing.
         step += 1;
+
         // When `table.len()` is a power of two, it can be proven that `idx` will visit all
         // entries. This means that this loop will always terminate if the hash table has even
         // one unused entry.
         debug_assert!(step < table.len());
         idx += step;
-    }
-}
-
-/// A primitive hash function for matching opcodes.
-/// Must match `cranelift-codegen/meta/src/constant_hash.rs`.
-pub fn simple_hash(s: &str) -> usize {
-    let mut h: u32 = 5381;
-    for c in s.chars() {
-        h = (h ^ c as u32).wrapping_add(h.rotate_right(6));
-    }
-    h as usize
-}
-
-#[cfg(test)]
-mod tests {
-    use super::simple_hash;
-
-    #[test]
-    fn basic() {
-        // c.f. `meta/src/constant_hash.rs` tests.
-        assert_eq!(simple_hash("Hello"), 0x2fa70c01);
-        assert_eq!(simple_hash("world"), 0x5b0c31d5);
     }
 }

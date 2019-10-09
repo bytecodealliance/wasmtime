@@ -49,6 +49,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::iter::FromIterator;
 
+use cranelift_codegen_shared::constant_hash::generate_table;
 use cranelift_entity::EntityRef;
 
 use crate::error;
@@ -66,7 +67,6 @@ use crate::cdsl::xform::TransformGroupIndex;
 
 use crate::shared::Definitions as SharedDefinitions;
 
-use crate::constant_hash::generate_table;
 use crate::default_map::MapWithDefault;
 use crate::unique_table::UniqueSeqTable;
 
