@@ -614,7 +614,7 @@ impl<'a> Parser<'a> {
         let expected_size = controlling_type.bytes() as usize;
         let constant_data = if self.optional(Token::LBracket) {
             // parse using a list of values, e.g. vconst.i32x4 [0 1 2 3]
-            let uimm128 = self.parse_literals_to_uimm128(controlling_type)?;
+            let uimm128 = self.parse_literals_to_constant_data(controlling_type)?;
             self.match_token(Token::RBracket, "expected a terminating right bracket")?;
             uimm128
         } else {
@@ -858,8 +858,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a list of literals (i.e. integers, floats, booleans); e.g.
-    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<ConstantData> {
+    /// Parse a list of literals (i.e. integers, floats, booleans); e.g. `0 1 2 3`, usually as
+    /// part of something like `vconst.i32x4 [0 1 2 3]`.
+    fn parse_literals_to_constant_data(&mut self, ty: Type) -> ParseResult<ConstantData> {
         macro_rules! consume {
             ( $ty:ident, $match_fn:expr ) => {{
                 assert!($ty.is_vector());
@@ -884,7 +885,7 @@ impl<'a> Parser<'a> {
         if !ty.is_vector() {
             err!(self.loc, "Expected a controlling vector type, not {}", ty)
         } else {
-            let uimm128 = match ty.lane_type() {
+            let constant_data = match ty.lane_type() {
                 I8 => consume!(ty, self.match_uimm8("Expected an 8-bit unsigned integer")?),
                 I16 => consume!(ty, self.match_imm16("Expected a 16-bit integer")?),
                 I32 => consume!(ty, self.match_imm32("Expected a 32-bit integer")?),
@@ -897,7 +898,7 @@ impl<'a> Parser<'a> {
                 ),
                 _ => return err!(self.loc, "Expected a type of: float, int, bool"),
             };
-            Ok(uimm128)
+            Ok(constant_data)
         }
     }
 
@@ -3256,39 +3257,39 @@ mod tests {
 
     #[test]
     fn uimm128() {
-        macro_rules! parse_as_uimm128 {
+        macro_rules! parse_as_constant_data {
             ($text:expr, $type:expr) => {{
-                Parser::new($text).parse_literals_to_uimm128($type)
+                Parser::new($text).parse_literals_to_constant_data($type)
             }};
         }
-        macro_rules! can_parse_as_uimm128 {
+        macro_rules! can_parse_as_constant_data {
             ($text:expr, $type:expr) => {{
-                assert!(parse_as_uimm128!($text, $type).is_ok())
+                assert!(parse_as_constant_data!($text, $type).is_ok())
             }};
         }
-        macro_rules! cannot_parse_as_uimm128 {
+        macro_rules! cannot_parse_as_constant_data {
             ($text:expr, $type:expr) => {{
-                assert!(parse_as_uimm128!($text, $type).is_err())
+                assert!(parse_as_constant_data!($text, $type).is_err())
             }};
         }
 
-        can_parse_as_uimm128!("1 2 3 4", I32X4);
-        can_parse_as_uimm128!("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16", I8X16);
-        can_parse_as_uimm128!("0x1.1 0x2.2 0x3.3 0x4.4", F32X4);
-        can_parse_as_uimm128!("true false true false true false true false", B16X8);
-        can_parse_as_uimm128!("0 -1", I64X2);
-        can_parse_as_uimm128!("true false", B64X2);
-        can_parse_as_uimm128!("true true true true true", B32X4); // note that parse_literals_to_uimm128 will leave extra tokens unconsumed
+        can_parse_as_constant_data!("1 2 3 4", I32X4);
+        can_parse_as_constant_data!("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16", I8X16);
+        can_parse_as_constant_data!("0x1.1 0x2.2 0x3.3 0x4.4", F32X4);
+        can_parse_as_constant_data!("true false true false true false true false", B16X8);
+        can_parse_as_constant_data!("0 -1", I64X2);
+        can_parse_as_constant_data!("true false", B64X2);
+        can_parse_as_constant_data!("true true true true true", B32X4); // note that parse_literals_to_constant_data will leave extra tokens unconsumed
 
-        cannot_parse_as_uimm128!("0x0 0x1 0x2 0x3", I32X4);
-        cannot_parse_as_uimm128!("1 2 3", I32X4);
-        cannot_parse_as_uimm128!(" ", F32X4);
+        cannot_parse_as_constant_data!("0x0 0x1 0x2 0x3", I32X4);
+        cannot_parse_as_constant_data!("1 2 3", I32X4);
+        cannot_parse_as_constant_data!(" ", F32X4);
     }
 
     #[test]
     fn parse_constant_from_booleans() {
         let c = Parser::new("true false true false")
-            .parse_literals_to_uimm128(B32X4)
+            .parse_literals_to_constant_data(B32X4)
             .unwrap();
         assert_eq!(c.to_vec(), [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
     }
