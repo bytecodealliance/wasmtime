@@ -450,13 +450,13 @@ mod test_vmshared_signature_index {
 impl VMSharedSignatureIndex {
     /// Create a new `VMSharedSignatureIndex`.
     pub fn new(value: u32) -> Self {
-        VMSharedSignatureIndex(value)
+        Self(value)
     }
 }
 
 impl Default for VMSharedSignatureIndex {
     fn default() -> Self {
-        VMSharedSignatureIndex::new(u32::MAX)
+        Self::new(u32::MAX)
     }
 }
 
@@ -573,7 +573,7 @@ mod test_vm_invoke_argument {
 impl VMInvokeArgument {
     /// Create a new invocation argument filled with zeroes
     pub fn new() -> Self {
-        VMInvokeArgument([0; 16])
+        Self([0; 16])
     }
 }
 

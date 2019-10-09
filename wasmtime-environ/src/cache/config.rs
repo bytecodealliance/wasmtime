@@ -103,7 +103,7 @@ static INIT_CALLED: AtomicBool = AtomicBool::new(false);
 /// If system has not been initialized, it disables it.
 /// You mustn't call init() after it.
 pub fn cache_config() -> &'static CacheConfig {
-    CONFIG.call_once(|| CacheConfig::new_cache_disabled())
+    CONFIG.call_once(CacheConfig::new_cache_disabled)
 }
 
 /// Initializes the cache system. Should be called exactly once,
@@ -196,7 +196,7 @@ lazy_static! {
     static ref DEFAULT_CONFIG_PATH: Result<PathBuf, String> = PROJECT_DIRS
         .as_ref()
         .map(|proj_dirs| proj_dirs.config_dir().join("wasmtime-cache-config.toml"))
-        .ok_or("Config file not specified and failed to get the default".to_string());
+        .ok_or_else(|| "Config file not specified and failed to get the default".to_string());
 }
 
 // Default settings, you're welcome to tune them!
@@ -312,7 +312,7 @@ generate_deserializer!(deserialize_percent(num: u8, unit: &str) -> Option<u8> {
     }
 });
 
-static CACHE_IMPROPER_CONFIG_ERROR_MSG: &'static str =
+static CACHE_IMPROPER_CONFIG_ERROR_MSG: &str =
     "Cache system should be enabled and all settings must be validated or defaulted";
 
 macro_rules! generate_setting_getter {

@@ -157,7 +157,7 @@ pub(crate) fn clone_unit<'a, R>(
     context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
     value_ranges: &'a ValueLabelsRanges,
-    out_encoding: &gimli::Encoding,
+    out_encoding: gimli::Encoding,
     module_info: &ModuleVmctxInfo,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
@@ -186,7 +186,7 @@ where
             )?;
 
             if entry.tag() == gimli::DW_TAG_compile_unit {
-                let unit_id = out_units.add(write::Unit::new(*out_encoding, out_line_program));
+                let unit_id = out_units.add(write::Unit::new(out_encoding, out_line_program));
                 let comp_unit = out_units.get_mut(unit_id);
 
                 let root_id = comp_unit.root();
@@ -206,7 +206,7 @@ where
                     context,
                     addr_tr,
                     None,
-                    &unit.encoding(),
+                    unit.encoding(),
                     comp_unit,
                     root_id,
                     None,
@@ -263,7 +263,7 @@ where
             let range_builder = RangeInfoBuilder::from_subprogram_die(
                 entry,
                 context,
-                &unit.encoding(),
+                unit.encoding(),
                 addr_tr,
                 cu_low_pc,
             )?;
@@ -285,7 +285,7 @@ where
             let ranges = entry.attr_value(gimli::DW_AT_ranges)?;
             if high_pc.is_some() || ranges.is_some() {
                 let range_builder =
-                    RangeInfoBuilder::from(entry, context, &unit.encoding(), cu_low_pc)?;
+                    RangeInfoBuilder::from(entry, context, unit.encoding(), cu_low_pc)?;
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {
@@ -302,7 +302,7 @@ where
         }
 
         if let Some(AttributeValue::Exprloc(expr)) = entry.attr_value(gimli::DW_AT_frame_base)? {
-            if let Some(expr) = compile_expression(&expr, &unit.encoding(), None)? {
+            if let Some(expr) = compile_expression(&expr, unit.encoding(), None)? {
                 current_frame_base.push(new_stack_len, expr);
             }
         }
@@ -339,7 +339,7 @@ where
             context,
             addr_tr,
             current_value_range.top(),
-            &unit.encoding(),
+            unit.encoding(),
             &mut comp_unit,
             die_id,
             range_builder,

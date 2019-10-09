@@ -39,13 +39,11 @@ lazy_static! {
                     .map_err(|_| warn!("Failed to get metadata of current executable"))
                     .ok()
             })
-            .and_then(|mtime| {
-                Some(match mtime.duration_since(std::time::UNIX_EPOCH) {
-                    Ok(duration) => format!("{}", duration.as_millis()),
-                    Err(err) => format!("m{}", err.duration().as_millis()),
-                })
+            .map(|mtime| match mtime.duration_since(std::time::UNIX_EPOCH) {
+                Ok(duration) => format!("{}", duration.as_millis()),
+                Err(err) => format!("m{}", err.duration().as_millis()),
             })
-            .unwrap_or("no-mtime".to_string())
+            .unwrap_or_else(|| "no-mtime".to_string())
     };
 }
 

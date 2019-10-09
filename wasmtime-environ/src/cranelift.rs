@@ -298,7 +298,7 @@ impl crate::compilation::Compiler for Cranelift {
                             if let Some(address_transform) = address_transform {
                                 address_transforms.push(address_transform);
                             }
-                            value_ranges.push(ranges.unwrap_or(std::collections::HashMap::new()));
+                            value_ranges.push(ranges.unwrap_or_default());
                             stack_slots.push(sss);
                             traps.push(function_traps);
                         },

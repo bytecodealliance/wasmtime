@@ -53,8 +53,8 @@ pub struct GdbJitImageRegistration {
 
 impl GdbJitImageRegistration {
     /// Registers JIT image using __jit_debug_register_code
-    pub fn register(file: Vec<u8>) -> GdbJitImageRegistration {
-        GdbJitImageRegistration {
+    pub fn register(file: Vec<u8>) -> Self {
+        Self {
             entry: unsafe { register_gdb_jit_image(&file) },
             file,
         }
@@ -83,7 +83,7 @@ unsafe fn register_gdb_jit_image(file: &[u8]) -> *mut JITCodeEntry {
         symfile_size: file.len() as u64,
     }));
     // Add it to the linked list in the JIT descriptor.
-    if __jit_debug_descriptor.first_entry != ptr::null_mut() {
+    if !__jit_debug_descriptor.first_entry.is_null() {
         (*__jit_debug_descriptor.first_entry).prev_entry = entry;
     }
     __jit_debug_descriptor.first_entry = entry;
@@ -100,12 +100,12 @@ unsafe fn register_gdb_jit_image(file: &[u8]) -> *mut JITCodeEntry {
 
 unsafe fn unregister_gdb_jit_image(entry: *mut JITCodeEntry) {
     // Remove the code entry corresponding to the code from the linked list.
-    if (*entry).prev_entry != ptr::null_mut() {
+    if !(*entry).prev_entry.is_null() {
         (*(*entry).prev_entry).next_entry = (*entry).next_entry;
     } else {
         __jit_debug_descriptor.first_entry = (*entry).next_entry;
     }
-    if (*entry).next_entry != ptr::null_mut() {
+    if !(*entry).next_entry.is_null() {
         (*(*entry).next_entry).prev_entry = (*entry).prev_entry;
     }
     // Point the relevant_entry field of the descriptor at the code entry.

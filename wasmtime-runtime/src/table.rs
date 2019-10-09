@@ -24,13 +24,12 @@ impl Table {
                 unimplemented!("tables of types other than anyfunc ({})", ty)
             }
         };
-        assert!(
-            plan.table.minimum <= core::u32::MAX,
-            "Invariant check: vec.len() <= u32::MAX"
-        );
         match plan.style {
             TableStyle::CallerChecksSignature => Self {
-                vec: vec![VMCallerCheckedAnyfunc::default(); plan.table.minimum as usize],
+                vec: vec![
+                    VMCallerCheckedAnyfunc::default();
+                    usize::try_from(plan.table.minimum).unwrap()
+                ],
                 maximum: plan.table.maximum,
             },
         }
@@ -59,10 +58,6 @@ impl Table {
                 return None;
             }
         };
-        assert!(
-            new_len <= core::u32::MAX,
-            "Invariant check: vec.len() <= u32::MAX"
-        );
         self.vec.resize(
             usize::try_from(new_len).unwrap(),
             VMCallerCheckedAnyfunc::default(),

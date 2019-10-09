@@ -24,9 +24,7 @@ where
 
     let p = "      ";
     for op in microwasm {
-        if op.is_label() {
-            writeln!(out, "{}", op)?;
-        } else if op.is_block() {
+        if op.is_label() || op.is_block() {
             writeln!(out, "{}", op)?;
         } else {
             writeln!(out, "{}{}", p, op)?;

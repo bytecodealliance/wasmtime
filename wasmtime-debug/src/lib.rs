@@ -1,5 +1,7 @@
 //! Debug utils for WebAssembly using Cranelift.
 
+#![allow(clippy::cast_ptr_alignment)]
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use cranelift_codegen::isa::TargetFrontendConfig;
@@ -66,9 +68,9 @@ pub fn emit_debugsections_image(
     vmctx_info: &ModuleVmctxInfo,
     at: &ModuleAddressMap,
     ranges: &ValueLabelsRanges,
-    funcs: &Vec<(*const u8, usize)>,
+    funcs: &[(*const u8, usize)],
 ) -> Result<Vec<u8>, Error> {
-    let ref func_offsets = funcs
+    let func_offsets = &funcs
         .iter()
         .map(|(ptr, _)| *ptr as u64)
         .collect::<Vec<u64>>();
@@ -79,7 +81,7 @@ pub fn emit_debugsections_image(
     // Assuming all functions in the same code block, looking min/max of its range.
     assert!(funcs.len() > 0);
     let mut segment_body: (usize, usize) = (!0, 0);
-    for (body_ptr, body_len) in funcs.iter() {
+    for (body_ptr, body_len) in funcs {
         segment_body.0 = ::core::cmp::min(segment_body.0, *body_ptr as usize);
         segment_body.1 = ::core::cmp::max(segment_body.1, *body_ptr as usize + body_len);
     }
@@ -168,8 +170,7 @@ fn convert_faerie_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8)
     // LLDB wants segment with virtual address set, placing them at the end of ELF.
     let ph_off = bytes.len();
     if let Some((sh_offset, v_offset, sh_size)) = segment {
-        let mut segment = Vec::with_capacity(0x38);
-        segment.resize(0x38, 0);
+        let segment = vec![0; 0x38];
         unsafe {
             *(segment.as_ptr() as *mut u32) = /* PT_LOAD */ 0x1;
             *(segment.as_ptr().offset(0x8) as *mut u64) = sh_offset;

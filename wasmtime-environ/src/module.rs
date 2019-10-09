@@ -61,7 +61,7 @@ impl MemoryStyle {
                 // it static.
                 assert!(tunables.static_memory_bound >= memory.minimum);
                 return (
-                    MemoryStyle::Static {
+                    Self::Static {
                         bound: tunables.static_memory_bound,
                     },
                     tunables.static_memory_offset_guard_size,
@@ -70,10 +70,7 @@ impl MemoryStyle {
         }
 
         // Otherwise, make it dynamic.
-        (
-            MemoryStyle::Dynamic,
-            tunables.dynamic_memory_offset_guard_size,
-        )
+        (Self::Dynamic, tunables.dynamic_memory_offset_guard_size)
     }
 }
 
@@ -111,7 +108,7 @@ pub enum TableStyle {
 impl TableStyle {
     /// Decide on an implementation style for the given `Table`.
     pub fn for_table(_table: Table, _tunables: &Tunables) -> Self {
-        TableStyle::CallerChecksSignature
+        Self::CallerChecksSignature
     }
 }
 

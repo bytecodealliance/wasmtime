@@ -39,7 +39,7 @@ pub(crate) fn clone_die_attributes<'a, R>(
     context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
     frame_info: Option<&FunctionFrameInfo>,
-    unit_encoding: &gimli::Encoding,
+    unit_encoding: gimli::Encoding,
     out_unit: &mut write::Unit,
     current_scope_id: write::UnitEntryId,
     subprogram_range_builder: Option<RangeInfoBuilder>,
@@ -58,15 +58,13 @@ where
 
     let range_info = if let Some(subprogram_range_builder) = subprogram_range_builder {
         subprogram_range_builder
+    } else if entry.tag() == gimli::DW_TAG_compile_unit {
+        // FIXME currently address_transform operate on a single func range,
+        // once it is fixed we can properly set DW_AT_ranges attribute.
+        // Using for now DW_AT_low_pc = 0.
+        RangeInfoBuilder::Position(0)
     } else {
-        if entry.tag() == gimli::DW_TAG_compile_unit {
-            // FIXME currently address_transform operate on a single func range,
-            // once it is fixed we can properly set DW_AT_ranges attribute.
-            // Using for now DW_AT_low_pc = 0.
-            RangeInfoBuilder::Position(0)
-        } else {
-            RangeInfoBuilder::from(entry, context, unit_encoding, cu_low_pc)?
-        }
+        RangeInfoBuilder::from(entry, context, unit_encoding, cu_low_pc)?
     };
     range_info.build(addr_tr, out_unit, current_scope_id);
 
@@ -127,7 +125,7 @@ where
                 let low_pc = 0;
                 let mut locs = context.loclists.locations(
                     r,
-                    *unit_encoding,
+                    unit_encoding,
                     low_pc,
                     &context.debug_addr,
                     context.debug_addr_base,
@@ -190,7 +188,7 @@ where
                         if let Some(scope_ranges) = scope_ranges {
                             let exprs =
                                 expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian);
-                            if exprs.len() == 0 {
+                            if exprs.is_empty() {
                                 continue;
                             }
                             let found_single_expr = {

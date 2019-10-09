@@ -105,7 +105,7 @@ impl Worker {
         Self {
             sender: tx,
             #[cfg(test)]
-            stats: stats,
+            stats,
         }
     }
 
@@ -610,7 +610,7 @@ impl WorkerThread {
                     (0..=1, true) => enter_dir(vec, &path, level + 1, cache_config),
                     (0..=1, false) => {
                         if level == 0 && path.file_stem() == Some(OsStr::new(".cleanup")) {
-                            if let Some(_) = path.extension() {
+                            if path.extension().is_some() {
                                 // assume it's cleanup lock
                                 if !is_fs_lock_expired(
                                     Some(&entry),
@@ -699,9 +699,11 @@ impl WorkerThread {
                             "Failed to get metadata/mtime, deleting the file",
                             stats_path
                         );
+                        // .into() called for the SystemTimeStub if cfg(test)
+                        #[allow(clippy::identity_conversion)]
                         vec.push(CacheEntry::Recognized {
                             path: mod_path.to_path_buf(),
-                            mtime: stats_mtime.into(), // .into() called for the SystemTimeStub if cfg(test)
+                            mtime: stats_mtime.into(),
                             size: mod_metadata.len(),
                         })
                     }
@@ -715,9 +717,11 @@ impl WorkerThread {
                             "Failed to get metadata/mtime, deleting the file",
                             mod_path
                         );
+                        // .into() called for the SystemTimeStub if cfg(test)
+                        #[allow(clippy::identity_conversion)]
                         vec.push(CacheEntry::Recognized {
                             path: mod_path.to_path_buf(),
-                            mtime: mod_mtime.into(), // .into() called for the SystemTimeStub if cfg(test)
+                            mtime: mod_mtime.into(),
                             size: mod_metadata.len(),
                         })
                     }
