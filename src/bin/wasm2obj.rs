@@ -29,15 +29,15 @@
     )
 )]
 
+use clap::clap_app;
 use cranelift_codegen::isa;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_entity::EntityRef;
 use cranelift_native;
 use cranelift_wasm::DefinedMemoryIndex;
-use docopt::Docopt;
 use faerie::Artifact;
-use serde::Deserialize;
+use std::env::args_os;
 use std::error::Error;
 use std::fmt::format;
 use std::fs::File;
@@ -60,54 +60,6 @@ use wasmtime_environ::{
 use wasmtime_jit::CompilationStrategy;
 use wasmtime_obj::emit_module;
 
-const USAGE: &str = "
-Wasm to native object translation utility.
-Takes a binary WebAssembly module into a native object file.
-The translation is dependent on the environment chosen.
-The default is a dummy environment that produces placeholder values.
-
-Usage:
-    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] [--enable-simd] [--lightbeam | --cranelift] <file> -o <output>
-    wasm2obj --create-cache-config [--cache-config=<cache_config_file>]
-    wasm2obj --help | --version
-
-Options:
-    -v, --verbose       displays the module and translated functions
-    -h, --help          print this help message
-    --target <TARGET>   build for the target triple; default is the host machine
-    -g                  generate debug information
-    --disable-cache     disables cache system
-    --cache-config=<cache_config_file>
-                        use specified cache configuration;
-                        can be used with --create-cache-config to specify custom file
-    --create-cache-config
-                        creates default configuration and writes it to the disk,
-                        use with --cache-config to specify custom config file
-                        instead of default one
-    --lightbeam         use Lightbeam for all compilation
-    --cranelift         use Cranelift for all compilation
-    --enable-simd       enable proposed SIMD instructions
-    -O, --optimize      runs optimization passes on the translated functions
-    --version           print the Cranelift version
-    -d, --debug         enable debug output on stderr/stdout
-";
-
-#[derive(Deserialize, Debug, Clone)]
-struct Args {
-    arg_file: String,
-    arg_output: String,
-    arg_target: Option<String>,
-    flag_g: bool,
-    flag_debug: bool,
-    flag_disable_cache: bool,
-    flag_cache_config: Option<String>,
-    flag_create_cache_config: bool,
-    flag_enable_simd: bool,
-    flag_lightbeam: bool,
-    flag_cranelift: bool,
-    flag_optimize: bool,
-}
-
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     let mut buf: Vec<u8> = Vec::new();
     let mut file = File::open(path)?;
@@ -117,15 +69,48 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
 
 fn main() {
     let version = env!("CARGO_PKG_VERSION");
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(String::from(version)))
-                .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
+    let create_cache_config = args_os().any(|arg| arg == "--create-cache-config");
+    let matches = if !create_cache_config {
+        clap_app!(wasm2obj =>
+            (version: version)
+            (about: "Wasm to native object translation utility. \
+                     Takes a binary WebAssembly module into a native object file. \
+                     The translation is dependent on the environment chosen. \
+                     The default is a dummy environment that produces placeholder values.")
+            (@arg verbose: -v --verbose "displays the module and translated functions")
+            (@arg debug: -d --debug "enable debug output on stderr/stdout")
+            (@arg debug_info: -g "generate debug information")
+            (@arg optimize: -O --optimize "runs optimization passes on the translated functions")
+            (@arg enable_simd: --("enable-simd") "enable proposed SIMD instructions")
+            (@arg target: --target +takes_value
+             "build for the target triple; default is the host machine")
+            (@group cache =>
+                (@arg disable_cache: --("disable-cache") "disables cache system")
+                (@arg cache_config: --("cache-config") +takes_value
+                 "use specified cache configuration; can be used with --create-cache-config \
+                  to specify custom file")
+            )
+            (@arg config_path: --("create-cache-config") #{0,1}
+             "creates config file; uses default location if none specified")
+            (@arg compiler: -C --compiler +takes_value possible_values(&["cranelift", "lightbeam"])
+             "choose compiler for all compilation")
+            (@arg file: +required +takes_value "input file")
+            (@arg output: -o +required +takes_value "output file")
+        )
+        .get_matches()
+    } else {
+        clap_app!(wasm2obj =>
+            (version: version)
+            (about: "Wasm to native object translation utility.\n\n\
+                     Below you can find options compatible with --create-cache-config.")
+            (@arg debug: -d --debug "enable debug output on stderr/stdout")
+            (@arg config_path: --("create-cache-config") #{0,1}
+             "creates config file; uses default location if none specified")
+        )
+        .get_matches()
+    };
 
-    let log_config = if args.flag_debug {
+    let log_config = if matches.is_present("debug") {
         pretty_env_logger::init();
         None
     } else {
@@ -134,8 +119,8 @@ fn main() {
         Some(prefix)
     };
 
-    if args.flag_create_cache_config {
-        match cache_create_new_config(args.flag_cache_config) {
+    if matches.is_present("config_path") {
+        match cache_create_new_config(matches.value_of("config_path")) {
             Ok(path) => {
                 println!(
                     "Successfully created new configuation file at {}",
@@ -151,8 +136,8 @@ fn main() {
     }
 
     let errors = cache_init(
-        !args.flag_disable_cache,
-        args.flag_cache_config.as_ref(),
+        !matches.is_present("disable_cache"),
+        matches.value_of("cache_config"),
         log_config,
     );
 
@@ -164,16 +149,16 @@ fn main() {
         process::exit(1);
     }
 
-    let path = Path::new(&args.arg_file);
+    let file = matches.value_of_os("file").expect("required argument");
+    let path = Path::new(&file);
     match handle_module(
         path.to_path_buf(),
-        &args.arg_target,
-        &args.arg_output,
-        args.flag_g,
-        args.flag_enable_simd,
-        args.flag_optimize,
-        args.flag_cranelift,
-        args.flag_lightbeam,
+        matches.value_of("target"),
+        matches.value_of("output").expect("required argument"),
+        matches.is_present("debug_info"),
+        matches.is_present("enable_simd"),
+        matches.is_present("optimize"),
+        matches.value_of("compiler"),
     ) {
         Ok(()) => {}
         Err(message) => {
@@ -185,13 +170,12 @@ fn main() {
 
 fn handle_module(
     path: PathBuf,
-    target: &Option<String>,
+    target: Option<&str>,
     output: &str,
     generate_debug_info: bool,
     enable_simd: bool,
     enable_optimize: bool,
-    cranelift: bool,
-    lightbeam: bool,
+    compiler: Option<&str>,
 ) -> Result<(), String> {
     let data = match read_wasm_file(path) {
         Ok(data) => data,
@@ -200,8 +184,8 @@ fn handle_module(
         }
     };
 
-    let isa_builder = match *target {
-        Some(ref target) => {
+    let isa_builder = match target {
+        Some(target) => {
             let target = Triple::from_str(&target).map_err(|_| "could not parse --target")?;
             isa::lookup(target).map_err(|err| match err {
                 isa::LookupError::SupportDisabled => {
@@ -236,7 +220,7 @@ fn handle_module(
     let tunables = Tunables::default();
 
     // Decide how to compile.
-    let strategy = pick_compilation_strategy(cranelift, lightbeam);
+    let strategy = pick_compilation_strategy(compiler);
 
     let (
         module,

@@ -1,15 +1,15 @@
 use wasmtime_jit::CompilationStrategy;
 
-pub fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> CompilationStrategy {
+pub fn pick_compilation_strategy(compiler: Option<&str>) -> CompilationStrategy {
     // Decide how to compile.
-    match (lightbeam, cranelift) {
+    match compiler {
         #[cfg(feature = "lightbeam")]
-        (true, false) => CompilationStrategy::Lightbeam,
+        Some("lightbeam") => CompilationStrategy::Lightbeam,
         #[cfg(not(feature = "lightbeam"))]
-        (true, false) => panic!("--lightbeam given, but Lightbeam support is not enabled"),
-        (false, true) => CompilationStrategy::Cranelift,
-        (false, false) => CompilationStrategy::Auto,
-        (true, true) => panic!("Can't enable --cranelift and --lightbeam at the same time"),
+        Some("lightbeam") => panic!("--lightbeam given, but Lightbeam support is not enabled"),
+        Some("cranelift") => CompilationStrategy::Cranelift,
+        Some(name) => panic!("Unknown compiler: {}", name),
+        None => CompilationStrategy::Auto,
     }
 }
 

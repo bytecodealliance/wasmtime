@@ -30,15 +30,16 @@
     )
 )]
 
+use clap::{clap_app, ArgMatches, Values};
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
-use docopt::Docopt;
 use failure::{bail, Error, ResultExt};
 use pretty_env_logger;
-use serde::Deserialize;
 use std::collections::HashMap;
+use std::env::args_os;
 use std::ffi::OsStr;
 use std::fs::File;
+use std::iter::Iterator;
 use std::path::Component;
 use std::path::Path;
 use std::process::exit;
@@ -54,67 +55,10 @@ use wasmtime_wast::instantiate_spectest;
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
 
-const USAGE: &str = "
-Wasm runner.
-
-Takes a binary (wasm) or text (wat) WebAssembly module and instantiates it,
-including calling the start function if one is present. Additional functions
-given with --invoke are then called.
-
-Usage:
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] [--lightbeam | --cranelift] <file> [<arg>...]
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> [--lightbeam | --cranelift] <file> [<arg>...]
-    wasmtime --create-cache-config [--cache-config=<cache_config_file>]
-    wasmtime --help | --version
-
-Options:
-    --invoke=<fn>       name of function to run
-    -o, --optimize      runs optimization passes on the translated functions
-    --disable-cache     disables cache system
-    --cache-config=<cache_config_file>
-                        use specified cache configuration;
-                        can be used with --create-cache-config to specify custom file
-    --create-cache-config
-                        creates default configuration and writes it to the disk,
-                        use with --cache-config to specify custom config file
-                        instead of default one
-    -g                  generate debug information
-    -d, --debug         enable debug output on stderr/stdout
-    --lightbeam         use Lightbeam for all compilation
-    --cranelift         use Cranelift for all compilation
-    --enable-simd       enable proposed SIMD instructions
-    --wasi-c            enable the wasi-c implementation of WASI
-    --preload=<wasm>    load an additional wasm module before loading the main module
-    --env=<env>         pass an environment variable (\"key=value\") to the program
-    --dir=<dir>         grant access to the given host directory
-    --mapdir=<mapping>  where <mapping> has the form <wasmdir>::<hostdir>, grant access to
-                        the given host directory with the given wasm directory name
-    -h, --help          print this help message
-    --version           print the Cranelift version
-";
-
-#[derive(Deserialize, Debug, Clone)]
-struct Args {
-    arg_file: String,
-    arg_arg: Vec<String>,
-    flag_optimize: bool,
-    flag_disable_cache: bool,
-    flag_cache_config: Option<String>,
-    flag_create_cache_config: bool,
-    flag_debug: bool,
-    flag_g: bool,
-    flag_enable_simd: bool,
-    flag_lightbeam: bool,
-    flag_cranelift: bool,
-    flag_invoke: Option<String>,
-    flag_preload: Vec<String>,
-    flag_env: Vec<String>,
-    flag_dir: Vec<String>,
-    flag_mapdir: Vec<String>,
-    flag_wasi_c: bool,
-}
-
-fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(String, File)> {
+fn compute_preopen_dirs<'a>(
+    flag_dir: impl Iterator<Item = &'a str>,
+    flag_mapdir: impl Iterator<Item = &'a str>,
+) -> Vec<(String, File)> {
     let mut preopen_dirs = Vec::new();
 
     for dir in flag_dir {
@@ -122,7 +66,7 @@ fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(Str
             println!("error while pre-opening directory {}: {}", dir, err);
             exit(1);
         });
-        preopen_dirs.push((dir.clone(), preopen_dir));
+        preopen_dirs.push((dir.to_string(), preopen_dir));
     }
 
     for mapdir in flag_mapdir {
@@ -143,7 +87,7 @@ fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(Str
 }
 
 /// Compute the argv array values.
-fn compute_argv(argv0: &str, arg_arg: &[String]) -> Vec<String> {
+fn compute_argv<'a>(argv0: &str, arg_arg: impl Iterator<Item = &'a str>) -> Vec<String> {
     let mut result = Vec::new();
 
     // Add argv[0], which is the program name. Only include the base name of the
@@ -167,7 +111,7 @@ fn compute_argv(argv0: &str, arg_arg: &[String]) -> Vec<String> {
 }
 
 /// Compute the environ array values.
-fn compute_environ(flag_env: &[String]) -> Vec<(String, String)> {
+fn compute_environ<'a>(flag_env: impl Iterator<Item = &'a str>) -> Vec<(String, String)> {
     let mut result = Vec::new();
 
     // Add the environment variables, which must be of the form "key=value".
@@ -199,15 +143,57 @@ fn main() {
 
 fn rmain() -> Result<(), Error> {
     let version = env!("CARGO_PKG_VERSION");
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(String::from(version)))
-                .deserialize()
-        })
-        .unwrap_or_else(|e| e.exit());
+    let create_cache_config = args_os().any(|arg| arg == "--create-cache-config");
+    let matches = if !create_cache_config {
+        clap_app!(wasmtime =>
+            (version: version)
+            (about: "Wasm runner.\n\n\
+                     Takes a binary (wasm) or text (wat) WebAssembly module and instantiates it, \
+                     including calling the start function if one is present. Additional functions \
+                     given with --invoke are then called.")
+            (@arg debug: -d --debug "enable debug output on stderr/stdout")
+            (@arg debug_info: -g "generate debug information")
+            (@arg optimize: -O --optimize "runs optimization passes on the translated functions")
+            (@arg enable_simd: --("enable-simd") "enable proposed SIMD instructions")
+            (@arg wasi_c: --("wasi-c") "enable the wasi-c implementation of WASI")
+            (@group cache =>
+                (@arg disable_cache: --("disable-cache") "disables cache system")
+                (@arg cache_config: --("cache-config") +takes_value
+                 "use specified cache configuration; can be used with --create-cache-config \
+                  to specify custom file")
+            )
+            (@arg config_path: --("create-cache-config") #{0,1}
+             "creates config file; uses default location if none specified")
+            (@arg env: --env ... number_of_values(1)
+             "pass an environment variable (\"key=value\") to the program")
+            (@arg dir: --dir ... number_of_values(1) "grant access to the given host directory")
+            (@arg mapdir: --mapdir ... number_of_values(1)
+             "where <mapping> has the form <wasmdir>::<hostdir>, grant access to the given host \
+              directory with the given wasm directory name")
+            (@arg compiler: -C --compiler +takes_value possible_values(&["cranelift", "lightbeam"])
+             "choose compiler for all compilation")
+            (@group action =>
+                (@arg fn: --invoke +takes_value "name of function to run")
+                (@arg wasm: --preload ... number_of_values(1)
+                 "load an additional wasm module before loading the main module")
+            )
+            (@arg file: +required +takes_value "input file")
+            (@arg arg: ... "argument")
+        )
+        .get_matches()
+    } else {
+        clap_app!(wasmtime =>
+            (version: version)
+            (about: "Wasm runner.\n\n\
+                     Below you can find options compatible with --create-cache-config.")
+            (@arg debug: -d --debug "enable debug output on stderr/stdout")
+            (@arg config_path: --("create-cache-config") #{0,1}
+             "creates config file; uses default location if none specified")
+        )
+        .get_matches()
+    };
 
-    let log_config = if args.flag_debug {
+    let log_config = if matches.is_present("debug") {
         pretty_env_logger::init();
         None
     } else {
@@ -216,8 +202,8 @@ fn rmain() -> Result<(), Error> {
         Some(prefix)
     };
 
-    if args.flag_create_cache_config {
-        match cache_create_new_config(args.flag_cache_config) {
+    if matches.is_present("config_path") {
+        match cache_create_new_config(matches.value_of("config_path")) {
             Ok(path) => {
                 println!(
                     "Successfully created new configuation file at {}",
@@ -225,6 +211,7 @@ fn rmain() -> Result<(), Error> {
                 );
                 return Ok(());
             }
+            // String doesn't implement Error
             Err(err) => {
                 eprintln!("Error: {}", err);
                 exit(1);
@@ -233,8 +220,8 @@ fn rmain() -> Result<(), Error> {
     }
 
     let errors = cache_init(
-        !args.flag_disable_cache,
-        args.flag_cache_config.as_ref(),
+        !matches.is_present("disable_cache"),
+        matches.value_of("cache_config"),
         log_config,
     );
 
@@ -254,7 +241,7 @@ fn rmain() -> Result<(), Error> {
     flag_builder.enable("avoid_div_traps")?;
 
     // Enable/disable producing of debug info.
-    let debug_info = args.flag_g;
+    let debug_info = matches.is_present("debug_info");
 
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
@@ -262,18 +249,18 @@ fn rmain() -> Result<(), Error> {
     }
 
     // Enable SIMD if requested
-    if args.flag_enable_simd {
+    if matches.is_present("enable_simd") {
         flag_builder.enable("enable_simd")?;
         features.simd = true;
     }
 
     // Enable optimization if requested.
-    if args.flag_optimize {
+    if matches.is_present("optimize") {
         flag_builder.set("opt_level", "speed")?;
     }
 
     // Decide how to compile.
-    let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
+    let strategy = pick_compilation_strategy(matches.value_of("compiler"));
 
     let config = Config::new(
         settings::Flags::new(flag_builder),
@@ -293,12 +280,19 @@ fn rmain() -> Result<(), Error> {
     );
 
     // Make wasi available by default.
+    let file = &matches.value_of("file").expect("required argument");
     let global_exports = store.borrow().global_exports().clone();
-    let preopen_dirs = compute_preopen_dirs(&args.flag_dir, &args.flag_mapdir);
-    let argv = compute_argv(&args.arg_file, &args.arg_arg);
-    let environ = compute_environ(&args.flag_env);
+    let preopen_dirs = compute_preopen_dirs(
+        matches.values_of("dir").unwrap_or_else(Values::default),
+        matches.values_of("mapdir").unwrap_or_else(Values::default),
+    );
+    let argv = compute_argv(
+        file,
+        matches.values_of("arg").unwrap_or_else(Values::default),
+    );
+    let environ = compute_environ(matches.values_of("env").unwrap_or_else(Values::default));
 
-    let wasi = if args.flag_wasi_c {
+    let wasi = if matches.is_present("wasi_c") {
         #[cfg(feature = "wasi-c")]
         {
             instantiate_wasi_c("", global_exports.clone(), &preopen_dirs, &argv, &environ)?
@@ -321,15 +315,15 @@ fn rmain() -> Result<(), Error> {
     );
 
     // Load the preload wasm modules.
-    for filename in &args.flag_preload {
+    for filename in matches.values_of("wasm").unwrap_or_else(Values::default) {
         let path = Path::new(&filename);
         instantiate_module(store.clone(), &module_registry, path)
             .with_context(|_| format!("failed to process preload at `{}`", path.display()))?;
     }
 
     // Load the main wasm module.
-    let path = Path::new(&args.arg_file);
-    handle_module(store, &module_registry, &args, path)
+    let path = Path::new(&file);
+    handle_module(store, &module_registry, &matches, path)
         .with_context(|_| format!("failed to process main module `{}`", path.display()))?;
     Ok(())
 }
@@ -376,15 +370,15 @@ fn instantiate_module(
 fn handle_module(
     store: HostRef<Store>,
     module_registry: &HashMap<String, (Instance, HashMap<String, usize>)>,
-    args: &Args,
+    matches: &ArgMatches,
     path: &Path,
 ) -> Result<(), Error> {
     let (instance, _module, data) = instantiate_module(store.clone(), module_registry, path)?;
 
     // If a function to invoke was given, invoke it.
-    if let Some(f) = &args.flag_invoke {
+    if let Some(f) = &matches.value_of("fn") {
         let data = ModuleData::new(&data)?;
-        invoke_export(store, instance, &data, f, args)?;
+        invoke_export(store, instance, &data, f, matches)?;
     }
 
     Ok(())
@@ -395,7 +389,7 @@ fn invoke_export(
     instance: HostRef<Instance>,
     data: &ModuleData,
     name: &str,
-    args: &Args,
+    matches: &ArgMatches,
 ) -> Result<(), Error> {
     use wasm_webidl_bindings::ast;
     use wasmtime_interface_types::Value;
@@ -414,7 +408,7 @@ fn invoke_export(
         );
     }
     let mut values = Vec::new();
-    let mut args = args.arg_arg.iter();
+    let mut args = matches.values_of("arg").unwrap_or_else(Values::default);
     for ty in binding.param_types()? {
         let val = match args.next() {
             Some(s) => s,
