@@ -19,17 +19,27 @@ fn main() {
         #[cfg(feature = "lightbeam")]
         "Lightbeam",
     ] {
+        writeln!(out, "#[cfg(test)]").expect("generating tests");
         writeln!(out, "#[allow(non_snake_case)]").expect("generating tests");
         writeln!(out, "mod {} {{", strategy).expect("generating tests");
 
         test_directory(&mut out, "misc_testsuite", strategy).expect("generating tests");
         test_directory(&mut out, "spec_testsuite", strategy).expect("generating tests");
-        test_file(
-            &mut out,
-            "spec_testsuite/proposals/simd/simd_const.wast",
-            strategy,
-        )
-        .expect("generating tests");
+        // Skip running spec_testsuite tests if the submodule isn't checked out.
+        if read_dir("spec_testsuite")
+            .expect("reading testsuite directory")
+            .next()
+            .is_some()
+        {
+            test_file(
+                &mut out,
+                "spec_testsuite/proposals/simd/simd_const.wast",
+                strategy,
+            )
+            .expect("generating tests");
+        } else {
+            println!("cargo:warning=The spec testsuite is disabled. To enable, run `git submodule update --remote`.");
+        }
 
         writeln!(out, "}}").expect("generating tests");
     }
