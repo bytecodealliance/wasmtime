@@ -36,6 +36,8 @@ fn main() {
                 strategy,
             )
             .expect("generating tests");
+        } else {
+            println!("cargo:warning=The spec testsuite is disabled. To enable, run `git submodule update --remote`.");
         }
 
         writeln!(out, "}}").expect("generating tests");
