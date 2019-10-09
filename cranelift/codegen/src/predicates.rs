@@ -32,13 +32,13 @@ pub fn is_zero_32_bit_float<T: Into<ir::immediates::Ieee32>>(x: T) -> bool {
     x32.bits() == 0
 }
 
-/// Check that a 128-bit vector contains all zeroes.
+/// Check that a constant contains all zeroes.
 #[allow(dead_code)]
 pub fn is_all_zeroes(x: &ConstantData) -> bool {
     x.iter().all(|&f| f == 0)
 }
 
-/// Check that a 128-bit vector contains all ones.
+/// Check that a constant contains all ones.
 #[allow(dead_code)]
 pub fn is_all_ones(x: &ConstantData) -> bool {
     x.iter().all(|&f| f == 0xff)
