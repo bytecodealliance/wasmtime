@@ -1,24 +1,9 @@
 //! Cranelift ValueType hierarchy
 
-// Temporary disabled: Unused at the moment.
-// use std::collections::HashMap;
-
 use std::fmt;
 
 use crate::shared::types as shared_types;
-
-// Numbering scheme for value types:
-//
-// 0: Void
-// 0x01-0x6f: Special types
-// 0x70-0x7d: Lane types
-// 0x7e-0x7f: Reference types
-// 0x80-0xff: Vector types
-//
-// Vector types are encoded with the lane type in the low 4 bits and log2(lanes)
-// in the high 4 bits, giving a range of 2-256 lanes.
-static LANE_BASE: u8 = 0x70;
-static REFERENCE_BASE: u8 = 0x7E;
+use cranelift_codegen_shared::constants;
 
 // Rust name prefix used for the `rust_name` method.
 static _RUST_NAME_PREFIX: &'static str = "ir::types::";
@@ -208,7 +193,7 @@ impl LaneType {
 
     /// Find the unique number associated with this lane type.
     pub fn number(self) -> u8 {
-        LANE_BASE
+        constants::LANE_BASE
             + match self {
                 LaneType::BoolType(shared_types::Bool::B1) => 0,
                 LaneType::BoolType(shared_types::Bool::B8) => 1,
@@ -579,7 +564,7 @@ impl ReferenceType {
 
     /// Find the unique number associated with this reference type.
     pub fn number(self) -> u8 {
-        REFERENCE_BASE
+        constants::REFERENCE_BASE
             + match self {
                 ReferenceType(shared_types::Reference::R32) => 0,
                 ReferenceType(shared_types::Reference::R64) => 1,

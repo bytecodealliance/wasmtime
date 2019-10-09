@@ -36,11 +36,12 @@
 // Remove once we're using the pressure tracker.
 #![allow(dead_code)]
 
-use crate::isa::registers::{RegClass, RegClassMask, RegInfo, MAX_TRACKED_TOPRCS};
+use crate::isa::registers::{RegClass, RegClassMask, RegInfo};
 use crate::regalloc::RegisterSet;
 use core::cmp::min;
 use core::fmt;
 use core::iter::ExactSizeIterator;
+use cranelift_codegen_shared::constants::MAX_TRACKED_TOP_RCS;
 
 /// Information per top-level register class.
 ///
@@ -76,7 +77,7 @@ pub struct Pressure {
     aliased: RegClassMask,
 
     // Current register counts per top-level register class.
-    toprc: [TopRC; MAX_TRACKED_TOPRCS],
+    toprc: [TopRC; MAX_TRACKED_TOP_RCS],
 }
 
 impl Pressure {
@@ -105,7 +106,7 @@ impl Pressure {
             } else {
                 // This bank has no pressure tracking, so its top-level register classes may exceed
                 // `MAX_TRACKED_TOPRCS`. Fill in dummy entries.
-                for rc in &mut p.toprc[first..min(first + num, MAX_TRACKED_TOPRCS)] {
+                for rc in &mut p.toprc[first..min(first + num, MAX_TRACKED_TOP_RCS)] {
                     // These aren't used if we don't set the `aliased` bit.
                     rc.first_toprc = !0;
                     rc.limit = !0;
