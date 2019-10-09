@@ -1,5 +1,6 @@
 use std::fmt;
 
+use cranelift_codegen_shared::constant_hash;
 use cranelift_entity::EntityRef;
 
 use crate::cdsl::camel_case;
@@ -10,7 +11,6 @@ use crate::cdsl::typevar::{TypeSet, TypeVar};
 
 use crate::shared::Definitions as SharedDefinitions;
 
-use crate::constant_hash;
 use crate::error;
 use crate::srcgen::{Formatter, Match};
 use crate::unique_table::{UniqueSeqTable, UniqueTable};

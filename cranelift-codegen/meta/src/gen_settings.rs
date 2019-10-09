@@ -1,12 +1,14 @@
+use std::collections::HashMap;
+
+use cranelift_codegen_shared::constant_hash::{generate_table, simple_hash};
+
 use crate::cdsl::camel_case;
 use crate::cdsl::settings::{
     BoolSetting, Predicate, Preset, Setting, SettingGroup, SpecificSetting,
 };
-use crate::constant_hash::{generate_table, simple_hash};
 use crate::error;
 use crate::srcgen::{Formatter, Match};
 use crate::unique_table::UniqueSeqTable;
-use std::collections::HashMap;
 
 pub enum ParentGroup {
     None,
