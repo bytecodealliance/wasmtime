@@ -19,6 +19,7 @@ fn main() {
         #[cfg(feature = "lightbeam")]
         "Lightbeam",
     ] {
+        writeln!(out, "#[cfg(test)]").expect("generating tests");
         writeln!(out, "#[allow(non_snake_case)]").expect("generating tests");
         writeln!(out, "mod {} {{", strategy).expect("generating tests");
 
@@ -95,7 +96,6 @@ fn start_test_module(out: &mut File, testsuite: &str) -> io::Result<()> {
             .expect("testsuite filename should be representable as a string")
             .replace("-", "_"),
     )?;
-    writeln!(out, "        #[cfg(test)]")?;
     writeln!(
         out,
         "        use super::super::{{native_isa, Path, WastContext, Compiler, Features, CompilationStrategy}};"
