@@ -30,7 +30,8 @@ pub fn generate_table<'cont, T, I: iter::Iterator<Item = &'cont T>, H: Fn(&T) ->
     hash_function: H,
 ) -> Vec<Option<&'cont T>> {
     let size = (1.20 * num_items as f64) as usize;
-    // TODO do we really need the multiply by two here?
+
+    // Probing code's stop condition relies on the table having one vacant entry at least.
     let size = if size.is_power_of_two() {
         size * 2
     } else {
