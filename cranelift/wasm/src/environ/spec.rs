@@ -115,8 +115,9 @@ pub struct WasmTypesMap {
 }
 
 impl WasmTypesMap {
-    pub(crate) fn new() -> Self {
-        WasmTypesMap {
+    /// Creates a new type map.
+    pub fn new() -> Self {
+        Self {
             inner: PrimaryMap::new(),
         }
     }
