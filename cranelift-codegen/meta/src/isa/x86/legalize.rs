@@ -1,5 +1,5 @@
 use crate::cdsl::ast::{var, ExprBuilder, Literal};
-use crate::cdsl::instructions::InstructionGroup;
+use crate::cdsl::instructions::{vector, Bindable, InstructionGroup};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::xform::TransformGroupBuilder;
 use crate::shared::types::Float::F64;
@@ -322,10 +322,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     // SIMD splat: 8-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
-        let splat_any8x16 = splat.bind_vector_from_lane(ty, sse_vector_size);
-        let bitcast_f64_to_any8x16 = raw_bitcast
-            .bind_vector_from_lane(ty, sse_vector_size)
-            .bind(F64);
+        let splat_any8x16 = splat.bind(vector(ty, sse_vector_size));
+        let bitcast_f64_to_any8x16 = raw_bitcast.bind(vector(ty, sse_vector_size)).bind(F64);
         narrow.legalize(
             def!(y = splat_any8x16(x)),
             vec![
@@ -340,13 +338,13 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     // SIMD splat: 16-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 16) {
-        let splat_x16x8 = splat.bind_vector_from_lane(ty, sse_vector_size);
+        let splat_x16x8 = splat.bind(vector(ty, sse_vector_size));
         let raw_bitcast_any16x8_to_i32x4 = raw_bitcast
-            .bind_vector_from_lane(I32, sse_vector_size)
-            .bind_vector_from_lane(ty, sse_vector_size);
+            .bind(vector(I32, sse_vector_size))
+            .bind(vector(ty, sse_vector_size));
         let raw_bitcast_i32x4_to_any16x8 = raw_bitcast
-            .bind_vector_from_lane(ty, sse_vector_size)
-            .bind_vector_from_lane(I32, sse_vector_size);
+            .bind(vector(ty, sse_vector_size))
+            .bind(vector(I32, sse_vector_size));
         narrow.legalize(
             def!(y = splat_x16x8(x)),
             vec![
@@ -361,7 +359,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     // SIMD splat: 32-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 32) {
-        let splat_any32x4 = splat.bind_vector_from_lane(ty, sse_vector_size);
+        let splat_any32x4 = splat.bind(vector(ty, sse_vector_size));
         narrow.legalize(
             def!(y = splat_any32x4(x)),
             vec![
@@ -373,7 +371,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     // SIMD splat: 64-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 64) {
-        let splat_any64x2 = splat.bind_vector_from_lane(ty, sse_vector_size);
+        let splat_any64x2 = splat.bind(vector(ty, sse_vector_size));
         narrow.legalize(
             def!(y = splat_any64x2(x)),
             vec![

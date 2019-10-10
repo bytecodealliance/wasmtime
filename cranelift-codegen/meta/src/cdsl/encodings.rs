@@ -1,5 +1,4 @@
-use std::rc::Rc;
-
+use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::{
     InstSpec, Instruction, InstructionPredicate, InstructionPredicateNode,
     InstructionPredicateNumber, InstructionPredicateRegistry, ValueTypeOrAny,
@@ -7,6 +6,8 @@ use crate::cdsl::instructions::{
 use crate::cdsl::recipes::{EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::SettingPredicateNumber;
 use crate::cdsl::types::ValueType;
+use std::rc::Rc;
+use std::string::ToString;
 
 /// Encoding for a concrete instruction.
 ///
@@ -61,19 +62,25 @@ pub(crate) struct EncodingBuilder {
 }
 
 impl EncodingBuilder {
-    pub fn new(inst: InstSpec, recipe: EncodingRecipeNumber, encbits: u16) -> Self {
+    pub fn new(
+        inst: InstSpec,
+        recipe: EncodingRecipeNumber,
+        encbits: u16,
+        formats: &FormatRegistry,
+    ) -> Self {
         let (inst_predicate, bound_type) = match &inst {
             InstSpec::Bound(inst) => {
                 let other_typevars = &inst.inst.polymorphic_info.as_ref().unwrap().other_typevars;
 
-                assert!(
-                    inst.value_types.len() == other_typevars.len() + 1,
+                assert_eq!(
+                    inst.value_types.len(),
+                    other_typevars.len() + 1,
                     "partially bound polymorphic instruction"
                 );
 
                 // Add secondary type variables to the instruction predicate.
                 let value_types = &inst.value_types;
-                let mut inst_predicate = None;
+                let mut inst_predicate: Option<InstructionPredicate> = None;
                 for (typevar, value_type) in other_typevars.iter().zip(value_types.iter().skip(1)) {
                     let value_type = match value_type {
                         ValueTypeOrAny::Any => continue,
@@ -82,6 +89,24 @@ impl EncodingBuilder {
                     let type_predicate =
                         InstructionPredicate::new_typevar_check(&inst.inst, typevar, value_type);
                     inst_predicate = Some(type_predicate.into());
+                }
+
+                // Add immediate value predicates
+                for (immediate_value, immediate_operand) in inst
+                    .immediate_values
+                    .iter()
+                    .zip(inst.inst.operands_in.iter().filter(|o| o.is_immediate()))
+                {
+                    let immediate_predicate = InstructionPredicate::new_is_field_equal(
+                        formats.get(inst.inst.format),
+                        immediate_operand.name,
+                        immediate_value.to_string(),
+                    );
+                    inst_predicate = if let Some(type_predicate) = inst_predicate {
+                        Some(type_predicate.and(immediate_predicate))
+                    } else {
+                        Some(immediate_predicate.into())
+                    }
                 }
 
                 let ctrl_type = value_types[0]
