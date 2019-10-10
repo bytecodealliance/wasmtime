@@ -238,7 +238,13 @@ fn handle_module(
     // Decide how to compile.
     let strategy = pick_compilation_strategy(cranelift, lightbeam);
 
-    let (module, lazy_function_body_inputs, lazy_data_initializers, target_config) = {
+    let (
+        module,
+        module_translation_state,
+        lazy_function_body_inputs,
+        lazy_data_initializers,
+        target_config,
+    ) = {
         let environ = ModuleEnvironment::new(isa.frontend_config(), tunables);
 
         let translation = environ
@@ -247,6 +253,7 @@ fn handle_module(
 
         (
             translation.module,
+            translation.translation_state,
             translation.function_body_inputs,
             translation.data_initializers,
             translation.target_config,
@@ -259,6 +266,7 @@ fn handle_module(
             CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
                 Cranelift::compile_module(
                     &module,
+                    module_translation_state,
                     lazy_function_body_inputs,
                     &*isa,
                     generate_debug_info,

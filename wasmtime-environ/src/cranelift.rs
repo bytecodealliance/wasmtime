@@ -21,7 +21,7 @@ use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::isa;
 use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 /// Implementation of a relocation sink that just saves all the information for later
@@ -177,6 +177,7 @@ impl crate::compilation::Compiler for Cranelift {
     /// associated relocations.
     fn compile_module<'data, 'module>(
         module: &'module Module,
+        module_translation_state: &ModuleTranslationState,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
@@ -226,6 +227,7 @@ impl crate::compilation::Compiler for Cranelift {
                         let mut trans = FuncTranslator::new();
                         trans
                             .translate(
+                                module_translation_state,
                                 input.data,
                                 input.module_offset,
                                 &mut context.func,
