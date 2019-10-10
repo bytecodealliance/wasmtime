@@ -2,6 +2,7 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::{Display, Error, Formatter};
 use std::ops;
 use std::rc::Rc;
 
@@ -13,6 +14,7 @@ use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::types::{LaneType, ReferenceType, ValueType, VectorType};
 use crate::cdsl::typevar::TypeVar;
+use crate::shared::types::{Bool, Float, Int, Reference};
 use cranelift_codegen_shared::condcodes::IntCC;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -78,6 +80,14 @@ impl InstructionGroup {
             .find(|inst| &inst.name == name)
             .expect(&format!("unexisting instruction with name {}", name))
     }
+}
+
+/// Instructions can have parameters bound to them to specialize them for more specific encodings
+/// (e.g. the encoding for adding two float types may be different than that of adding two
+/// integer types)
+pub trait Bindable {
+    /// Bind a parameter to an instruction
+    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction;
 }
 
 #[derive(Debug)]
@@ -173,30 +183,11 @@ impl Instruction {
             None => Vec::new(),
         }
     }
+}
 
-    pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
-        bind(self.clone(), Some(lane_type.into()), Vec::new())
-    }
-
-    pub fn bind_ref(&self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
-        bind_ref(self.clone(), Some(reference_type.into()), Vec::new())
-    }
-
-    pub fn bind_vector_from_lane(
-        &self,
-        lane_type: impl Into<LaneType>,
-        vector_size_in_bits: u64,
-    ) -> BoundInstruction {
-        bind_vector(
-            self.clone(),
-            lane_type.into(),
-            vector_size_in_bits,
-            Vec::new(),
-        )
-    }
-
-    pub fn bind_any(&self) -> BoundInstruction {
-        bind(self.clone(), None, Vec::new())
+impl Bindable for Instruction {
+    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
+        BoundInstruction::new(self).bind(parameter)
     }
 }
 
@@ -407,36 +398,163 @@ impl ValueTypeOrAny {
     }
 }
 
+/// The number of bits in the vector
+type VectorBitWidth = u64;
+
+/// An parameter used for binding instructions to specific types or values
+pub enum BindParameter {
+    Any,
+    Lane(LaneType),
+    Vector(LaneType, VectorBitWidth),
+    Reference(ReferenceType),
+    Immediate(Immediate),
+}
+
+/// Constructor for more easily building vector parameters from any lane type
+pub fn vector(parameter: impl Into<LaneType>, vector_size: VectorBitWidth) -> BindParameter {
+    BindParameter::Vector(parameter.into(), vector_size)
+}
+
+impl From<Int> for BindParameter {
+    fn from(ty: Int) -> Self {
+        BindParameter::Lane(ty.into())
+    }
+}
+
+impl From<Bool> for BindParameter {
+    fn from(ty: Bool) -> Self {
+        BindParameter::Lane(ty.into())
+    }
+}
+
+impl From<Float> for BindParameter {
+    fn from(ty: Float) -> Self {
+        BindParameter::Lane(ty.into())
+    }
+}
+
+impl From<LaneType> for BindParameter {
+    fn from(ty: LaneType) -> Self {
+        BindParameter::Lane(ty)
+    }
+}
+
+impl From<Reference> for BindParameter {
+    fn from(ty: Reference) -> Self {
+        BindParameter::Reference(ty.into())
+    }
+}
+
+impl From<Immediate> for BindParameter {
+    fn from(imm: Immediate) -> Self {
+        BindParameter::Immediate(imm)
+    }
+}
+
+#[derive(Clone)]
+pub enum Immediate {
+    UInt8(u8),
+    UInt128(u128),
+}
+
+impl Display for Immediate {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            Immediate::UInt8(x) => write!(f, "{}", x),
+            Immediate::UInt128(x) => write!(f, "{}", x),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct BoundInstruction {
     pub inst: Instruction,
     pub value_types: Vec<ValueTypeOrAny>,
+    pub immediate_values: Vec<Immediate>,
 }
 
 impl BoundInstruction {
-    pub fn bind(self, lane_type: impl Into<LaneType>) -> BoundInstruction {
-        bind(self.inst, Some(lane_type.into()), self.value_types)
+    /// Construct a new bound instruction (with nothing bound yet) from an instruction
+    fn new(inst: &Instruction) -> Self {
+        BoundInstruction {
+            inst: inst.clone(),
+            value_types: vec![],
+            immediate_values: vec![],
+        }
     }
 
-    pub fn bind_ref(self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
-        bind_ref(self.inst, Some(reference_type.into()), self.value_types)
-    }
+    /// Verify that the bindings for a BoundInstruction are correct.
+    fn verify_bindings(&self) -> Result<(), String> {
+        // Verify that binding types to the instruction does not violate the polymorphic rules.
+        if !self.value_types.is_empty() {
+            match &self.inst.polymorphic_info {
+                Some(poly) => {
+                    if self.value_types.len() > 1 + poly.other_typevars.len() {
+                        return Err(format!(
+                            "trying to bind too many types for {}",
+                            self.inst.name
+                        ));
+                    }
+                }
+                None => {
+                    return Err(format!(
+                        "trying to bind a type for {} which is not a polymorphic instruction",
+                        self.inst.name
+                    ));
+                }
+            }
+        }
 
-    pub fn bind_vector_from_lane(
-        self,
-        lane_type: impl Into<LaneType>,
-        vector_size_in_bits: u64,
-    ) -> BoundInstruction {
-        bind_vector(
-            self.inst,
-            lane_type.into(),
-            vector_size_in_bits,
-            self.value_types,
-        )
-    }
+        // Verify that only the right number of immediates are bound.
+        let immediate_count = self
+            .inst
+            .operands_in
+            .iter()
+            .filter(|o| o.is_immediate())
+            .count();
+        if self.immediate_values.len() > immediate_count {
+            return Err(format!(
+                "trying to bind too many immediates ({}) to instruction {} which only expects {} \
+                 immediates",
+                self.immediate_values.len(),
+                self.inst.name,
+                immediate_count
+            ));
+        }
 
-    pub fn bind_any(self) -> BoundInstruction {
-        bind(self.inst, None, self.value_types)
+        Ok(())
+    }
+}
+
+impl Bindable for BoundInstruction {
+    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
+        let mut modified = self.clone();
+        match parameter.into() {
+            BindParameter::Any => modified.value_types.push(ValueTypeOrAny::Any),
+            BindParameter::Lane(lane_type) => modified
+                .value_types
+                .push(ValueTypeOrAny::ValueType(lane_type.into())),
+            BindParameter::Vector(lane_type, vector_size_in_bits) => {
+                let num_lanes = vector_size_in_bits / lane_type.lane_bits();
+                assert!(
+                    num_lanes >= 2,
+                    "Minimum lane number for bind_vector is 2, found {}.",
+                    num_lanes,
+                );
+                let vector_type = ValueType::Vector(VectorType::new(lane_type, num_lanes));
+                modified
+                    .value_types
+                    .push(ValueTypeOrAny::ValueType(vector_type));
+            }
+            BindParameter::Reference(reference_type) => {
+                modified
+                    .value_types
+                    .push(ValueTypeOrAny::ValueType(reference_type.into()));
+            }
+            BindParameter::Immediate(immediate) => modified.immediate_values.push(immediate),
+        }
+        modified.verify_bindings().unwrap();
+        modified
     }
 }
 
@@ -1124,17 +1242,13 @@ impl InstSpec {
             InstSpec::Bound(bound_inst) => &bound_inst.inst,
         }
     }
-    pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
-        match self {
-            InstSpec::Inst(inst) => inst.bind(lane_type),
-            InstSpec::Bound(inst) => inst.clone().bind(lane_type),
-        }
-    }
+}
 
-    pub fn bind_ref(&self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
+impl Bindable for InstSpec {
+    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
         match self {
-            InstSpec::Inst(inst) => inst.bind_ref(reference_type),
-            InstSpec::Bound(inst) => inst.clone().bind_ref(reference_type),
+            InstSpec::Inst(inst) => inst.bind(parameter.into()),
+            InstSpec::Bound(inst) => inst.bind(parameter.into()),
         }
     }
 }
@@ -1151,79 +1265,94 @@ impl Into<InstSpec> for BoundInstruction {
     }
 }
 
-/// Helper bind reused by {Bound,}Instruction::bind.
-fn bind(
-    inst: Instruction,
-    lane_type: Option<LaneType>,
-    mut value_types: Vec<ValueTypeOrAny>,
-) -> BoundInstruction {
-    match lane_type {
-        Some(lane_type) => {
-            value_types.push(ValueTypeOrAny::ValueType(lane_type.into()));
-        }
-        None => {
-            value_types.push(ValueTypeOrAny::Any);
-        }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::cdsl::formats::InstructionFormatBuilder;
+    use crate::cdsl::operands::{OperandBuilder, OperandKindBuilder, OperandKindFields};
+    use crate::cdsl::typevar::TypeSetBuilder;
+    use crate::shared::types::Int::{I32, I64};
+
+    fn field_to_operand(index: usize, field: OperandKindFields) -> Operand {
+        // pretend the index string is &'static
+        let name = Box::leak(index.to_string().into_boxed_str());
+        let kind = OperandKindBuilder::new(name, field).build();
+        let operand = OperandBuilder::new(name, kind).build();
+        operand
     }
 
-    verify_polymorphic_binding(&inst, &value_types);
-
-    BoundInstruction { inst, value_types }
-}
-
-/// Helper bind for reference types reused by {Bound,}Instruction::bind_ref.
-fn bind_ref(
-    inst: Instruction,
-    reference_type: Option<ReferenceType>,
-    mut value_types: Vec<ValueTypeOrAny>,
-) -> BoundInstruction {
-    match reference_type {
-        Some(reference_type) => {
-            value_types.push(ValueTypeOrAny::ValueType(reference_type.into()));
-        }
-        None => {
-            value_types.push(ValueTypeOrAny::Any);
-        }
+    fn field_to_operands(types: Vec<OperandKindFields>) -> Vec<Operand> {
+        types
+            .iter()
+            .enumerate()
+            .map(|(i, f)| field_to_operand(i, f.clone()))
+            .collect()
     }
 
-    verify_polymorphic_binding(&inst, &value_types);
-
-    BoundInstruction { inst, value_types }
-}
-
-/// Helper bind for vector types reused by {Bound,}Instruction::bind.
-fn bind_vector(
-    inst: Instruction,
-    lane_type: LaneType,
-    vector_size_in_bits: u64,
-    mut value_types: Vec<ValueTypeOrAny>,
-) -> BoundInstruction {
-    let num_lanes = vector_size_in_bits / lane_type.lane_bits();
-    assert!(
-        num_lanes >= 2,
-        "Minimum lane number for bind_vector is 2, found {}.",
-        num_lanes,
-    );
-    let vector_type = ValueType::Vector(VectorType::new(lane_type, num_lanes));
-    value_types.push(ValueTypeOrAny::ValueType(vector_type));
-    verify_polymorphic_binding(&inst, &value_types);
-    BoundInstruction { inst, value_types }
-}
-
-/// Helper to verify that binding types to the instruction does not violate polymorphic rules
-fn verify_polymorphic_binding(inst: &Instruction, value_types: &Vec<ValueTypeOrAny>) {
-    match &inst.polymorphic_info {
-        Some(poly) => {
-            assert!(
-                value_types.len() <= 1 + poly.other_typevars.len(),
-                format!("trying to bind too many types for {}", inst.name)
-            );
+    fn build_fake_instruction(
+        inputs: Vec<OperandKindFields>,
+        outputs: Vec<OperandKindFields>,
+    ) -> Instruction {
+        // setup a format from the input operands
+        let mut formats = FormatRegistry::new();
+        let mut format = InstructionFormatBuilder::new("fake");
+        for (i, f) in inputs.iter().enumerate() {
+            match f {
+                OperandKindFields::TypeVar(_) => format = format.value(),
+                OperandKindFields::ImmValue => {
+                    format = format.imm(&field_to_operand(i, f.clone()).kind)
+                }
+                _ => {}
+            };
         }
-        None => {
-            panic!(format!(
-                "trying to bind a type for {} which is not a polymorphic instruction",
-                inst.name
-            ));
-        }
+        formats.insert(format);
+
+        // create the fake instruction
+        InstructionBuilder::new("fake", "A fake instruction for testing.")
+            .operands_in(field_to_operands(inputs).iter().collect())
+            .operands_out(field_to_operands(outputs).iter().collect())
+            .build(&formats, OpcodeNumber(42))
+    }
+
+    #[test]
+    fn ensure_bound_instructions_can_bind_lane_types() {
+        let type1 = TypeSetBuilder::new().ints(8..64).build();
+        let in1 = OperandKindFields::TypeVar(TypeVar::new("a", "...", type1));
+        let inst = build_fake_instruction(vec![in1], vec![]);
+        inst.bind(LaneType::IntType(I32));
+    }
+
+    #[test]
+    fn ensure_bound_instructions_can_bind_immediates() {
+        let inst = build_fake_instruction(vec![OperandKindFields::ImmValue], vec![]);
+        let bound_inst = inst.bind(Immediate::UInt8(42));
+        assert!(bound_inst.verify_bindings().is_ok());
+    }
+
+    #[test]
+    #[should_panic]
+    fn ensure_instructions_fail_to_bind() {
+        let inst = build_fake_instruction(vec![], vec![]);
+        inst.bind(BindParameter::Lane(LaneType::IntType(I32)));
+        // trying to bind to an instruction with no inputs should fail
+    }
+
+    #[test]
+    #[should_panic]
+    fn ensure_bound_instructions_fail_to_bind_too_many_types() {
+        let type1 = TypeSetBuilder::new().ints(8..64).build();
+        let in1 = OperandKindFields::TypeVar(TypeVar::new("a", "...", type1));
+        let inst = build_fake_instruction(vec![in1], vec![]);
+        inst.bind(LaneType::IntType(I32))
+            .bind(LaneType::IntType(I64));
+    }
+
+    #[test]
+    #[should_panic]
+    fn ensure_instructions_fail_to_bind_too_many_immediates() {
+        let inst = build_fake_instruction(vec![OperandKindFields::ImmValue], vec![]);
+        inst.bind(BindParameter::Immediate(Immediate::UInt8(0)))
+            .bind(BindParameter::Immediate(Immediate::UInt8(1)));
+        // trying to bind too many immediates to an instruction  should fail
     }
 }

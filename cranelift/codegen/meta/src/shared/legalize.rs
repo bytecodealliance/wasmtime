@@ -1,5 +1,5 @@
 use crate::cdsl::ast::{var, ExprBuilder, Literal};
-use crate::cdsl::instructions::{Instruction, InstructionGroup};
+use crate::cdsl::instructions::{Bindable, Instruction, InstructionGroup};
 use crate::cdsl::xform::{TransformGroupBuilder, TransformGroups};
 
 use crate::shared::immediates::Immediates;
