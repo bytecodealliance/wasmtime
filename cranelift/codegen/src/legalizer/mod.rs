@@ -161,7 +161,7 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 
     // Process EBBs in layout order. Some legalization actions may split the current EBB or append
     // new ones to the end. We need to make sure we visit those new EBBs too.
-    while let Some(ebb) = pos.next_ebb() {
+    while let Some(_ebb) = pos.next_ebb() {
         // Keep track of the cursor position before the instruction being processed, so we can
         // double back when replacing instructions.
         let mut prev_pos = pos.position();
