@@ -1,5 +1,6 @@
 //! Helper functions and structures for the translation.
-use crate::environ::{WasmResult, WasmTypesMap};
+use crate::environ::WasmResult;
+use crate::state::ModuleTranslationState;
 use crate::wasm_unsupported;
 use core::u32;
 use cranelift_codegen::entity::entity_impl;
@@ -148,7 +149,7 @@ pub fn tabletype_to_type(ty: wasmparser::Type) -> WasmResult<Option<ir::Type>> {
 
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results(
-    wasm_types: &WasmTypesMap,
+    module_translation_state: &ModuleTranslationState,
     ty_or_ft: wasmparser::TypeOrFuncType,
 ) -> WasmResult<(&[wasmparser::Type], &[wasmparser::Type])> {
     Ok(match ty_or_ft {
@@ -163,7 +164,7 @@ pub fn blocktype_params_results(
         },
         wasmparser::TypeOrFuncType::FuncType(ty_index) => {
             let sig_idx = SignatureIndex::from_u32(ty_index);
-            let (ref params, ref returns) = wasm_types.inner[sig_idx];
+            let (ref params, ref returns) = module_translation_state.wasm_types[sig_idx];
             (&*params, &*returns)
         }
     })

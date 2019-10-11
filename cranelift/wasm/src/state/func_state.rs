@@ -1,11 +1,14 @@
-//! WebAssembly function translation state.
+//! WebAssembly module and function translation state.
 //!
-//! The `TranslationState` struct defined in this module is used to keep track of the WebAssembly
+//! The `ModuleTranslationState` struct defined in this module is used to keep track of data about
+//! the whole WebAssembly module, such as the decoded type signatures.
+//!
+//! The `FuncTranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
 
-use super::{HashMap, Occupied, Vacant};
 use crate::environ::{FuncEnvironment, GlobalVariable, WasmResult};
 use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
+use crate::{HashMap, Occupied, Vacant};
 use cranelift_codegen::ir::{self, Ebb, Inst, Value};
 use std::vec::Vec;
 
@@ -159,12 +162,12 @@ impl ControlStackFrame {
     }
 }
 
-/// Contains information passed along during the translation and that records:
+/// Contains information passed along during a function's translation and that records:
 ///
 /// - The current value and control stacks.
 /// - The depth of the two unreachable control blocks stacks, that are manipulated when translating
 ///   unreachable code;
-pub struct TranslationState {
+pub struct FuncTranslationState {
     /// A stack of values corresponding to the active values in the input wasm function at this
     /// point.
     pub(crate) stack: Vec<Value>,
@@ -195,7 +198,7 @@ pub struct TranslationState {
 }
 
 // Public methods that are exposed to non-`cranelift_wasm` API consumers.
-impl TranslationState {
+impl FuncTranslationState {
     /// True if the current translation state expresses reachable code, false if it is unreachable.
     #[inline]
     pub fn reachable(&self) -> bool {
@@ -203,8 +206,8 @@ impl TranslationState {
     }
 }
 
-impl TranslationState {
-    /// Construct a new, empty, `TranslationState`
+impl FuncTranslationState {
+    /// Construct a new, empty, `FuncTranslationState`
     pub(crate) fn new() -> Self {
         Self {
             stack: Vec::new(),
@@ -386,7 +389,7 @@ impl TranslationState {
 }
 
 /// Methods for handling entity references.
-impl TranslationState {
+impl FuncTranslationState {
     /// Get the `GlobalVariable` reference that should be used to access the global variable
     /// `index`. Create the reference if necessary.
     /// Also return the WebAssembly type of the global.

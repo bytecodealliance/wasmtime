@@ -1,11 +1,12 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use crate::environ::{ModuleEnvironment, WasmError, WasmResult, WasmTypesMap};
+use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::sections_translator::{
     parse_code_section, parse_data_section, parse_element_section, parse_export_section,
     parse_function_section, parse_global_section, parse_import_section, parse_memory_section,
     parse_name_section, parse_start_section, parse_table_section, parse_type_section,
 };
+use crate::state::ModuleTranslationState;
 use cranelift_codegen::timing;
 use wasmparser::{CustomSectionContent, ModuleReader, SectionContent};
 
@@ -14,16 +15,16 @@ use wasmparser::{CustomSectionContent, ModuleReader, SectionContent};
 pub fn translate_module<'data>(
     data: &'data [u8],
     environ: &mut dyn ModuleEnvironment<'data>,
-) -> WasmResult<()> {
+) -> WasmResult<ModuleTranslationState> {
     let _tt = timing::wasm_translate_module();
     let mut reader = ModuleReader::new(data)?;
-    let mut wasm_types = WasmTypesMap::new();
+    let mut module_translation_state = ModuleTranslationState::new();
 
     while !reader.eof() {
         let section = reader.read()?;
         match section.content()? {
             SectionContent::Type(types) => {
-                parse_type_section(types, &mut wasm_types, environ)?;
+                parse_type_section(types, &mut module_translation_state, environ)?;
             }
 
             SectionContent::Import(imports) => {
@@ -59,7 +60,7 @@ pub fn translate_module<'data>(
             }
 
             SectionContent::Code(code) => {
-                parse_code_section(code, &wasm_types, environ)?;
+                parse_code_section(code, &module_translation_state, environ)?;
             }
 
             SectionContent::Data(data) => {
@@ -91,5 +92,5 @@ pub fn translate_module<'data>(
         }
     }
 
-    Ok(())
+    Ok(module_translation_state)
 }
