@@ -2,8 +2,10 @@
 
 use crate::disasm::{PrintRelocs, PrintStackmaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
+use cranelift_codegen::cursor::{Cursor, FuncCursor};
+use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{
-    Ebb, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots,
+    self, Ebb, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots,
     TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
@@ -65,8 +67,8 @@ pub fn run(
 }
 
 enum MutationKind {
-    /// The mutation reduced the amount of instructions or ebbs.
-    Shrinked,
+    /// The mutation raised or reduced the amount of instructions or ebbs.
+    ExpandedOrShrinked,
 
     /// The mutation only changed an instruction. Performing another round of mutations may only
     /// reduce the test case if another mutation shrank the test case.
@@ -118,18 +120,15 @@ trait Mutator {
                 CheckResult::Crash(_) => {
                     // Panic remained while shrinking, make changes definitive.
                     func = mutated_func;
-                    match mutation_kind {
-                        MutationKind::Shrinked => {
+                    let verb = match mutation_kind {
+                        MutationKind::ExpandedOrShrinked => {
                             *should_keep_reducing = true;
-                            if verbose {
-                                progress.println(format!("{}: shrink", msg));
-                            }
+                            "shrink"
                         }
-                        MutationKind::Changed => {
-                            if verbose {
-                                progress.println(format!("{}: changed", msg));
-                            }
-                        }
+                        MutationKind::Changed => "changed",
+                    };
+                    if verbose {
+                        progress.println(format!("{}: {}", msg, verb));
                     }
                 }
             }
@@ -178,18 +177,18 @@ impl Mutator for RemoveInst {
             } else {
                 format!("Remove inst {}", prev_inst)
             };
-            (func, msg, MutationKind::Shrinked)
+            (func, msg, MutationKind::ExpandedOrShrinked)
         })
     }
 }
 
-/// Try to replace instructions with `iconst`.
-struct ReplaceInstWithIconst {
+/// Try to replace instructions with `iconst` or `fconst`.
+struct ReplaceInstWithConst {
     ebb: Ebb,
     inst: Inst,
 }
 
-impl ReplaceInstWithIconst {
+impl ReplaceInstWithConst {
     fn new(func: &Function) -> Self {
         let first_ebb = func.layout.entry_block().unwrap();
         let first_inst = func.layout.first_inst(first_ebb).unwrap();
@@ -198,11 +197,27 @@ impl ReplaceInstWithIconst {
             inst: first_inst,
         }
     }
+
+    fn const_for_type<'f, T: InstBuilder<'f>>(builder: T, ty: ir::Type) -> &'static str {
+        // Try to keep the result type consistent, and default to an integer type
+        // otherwise: this will cover all the cases for f32/f64 and integer types, or
+        // create verifier errors otherwise.
+        if ty == F32 {
+            builder.f32const(0.0);
+            "f32const"
+        } else if ty == F64 {
+            builder.f64const(0.0);
+            "f64const"
+        } else {
+            builder.iconst(ty, 0);
+            "iconst"
+        }
+    }
 }
 
-impl Mutator for ReplaceInstWithIconst {
+impl Mutator for ReplaceInstWithConst {
     fn name(&self) -> &'static str {
-        "replace inst with iconst"
+        "replace inst with const"
     }
 
     fn mutation_count(&self, func: &Function) -> Option<usize> {
@@ -211,16 +226,57 @@ impl Mutator for ReplaceInstWithIconst {
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
         next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(_prev_ebb, prev_inst)| {
-            let results = func.dfg.inst_results(prev_inst);
-            let msg = if results.len() == 1 {
-                let ty = func.dfg.value_type(results[0]);
-                func.dfg.replace(prev_inst).iconst(ty, 0);
-                format!("Replace inst {} with iconst.{}", prev_inst, ty)
-            } else {
-                // Returns something so the harness tries replacement on following instructions.
-                format!("")
-            };
-            (func, msg, MutationKind::Changed)
+            let num_results = func.dfg.inst_results(prev_inst).len();
+
+            if num_results == 0 {
+                // Short-circuit: lie and say we've changed something so subsequent instructions
+                // still get replaced.
+                return (func, format!(""), MutationKind::Changed);
+            }
+
+            if num_results == 1 {
+                let ty = func.dfg.value_type(func.dfg.first_result(prev_inst));
+                let new_inst_name = Self::const_for_type(func.dfg.replace(prev_inst), ty);
+                return (
+                    func,
+                    format!("Replace inst {} with {}.", prev_inst, new_inst_name),
+                    MutationKind::Changed,
+                );
+            }
+
+            // At least 2 results. Replace each instruction with as many const instructions as
+            // there are results.
+            let mut pos = FuncCursor::new(&mut func).at_inst(prev_inst);
+
+            // Copy result SSA names into our own vector; otherwise we couldn't mutably borrow pos
+            // in the loop below.
+            let results = pos
+                .func
+                .dfg
+                .inst_results(prev_inst)
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>();
+
+            // Detach results from the previous instruction, since we're going to reuse them.
+            pos.func.dfg.clear_results(prev_inst);
+
+            let mut inst_names = Vec::new();
+            for r in results {
+                let ty = pos.func.dfg.value_type(r);
+                let builder = pos.ins().with_results([Some(r)]);
+                let new_inst_name = Self::const_for_type(builder, ty);
+                inst_names.push(new_inst_name);
+            }
+
+            // Remove the instruction.
+            assert_eq!(pos.remove_inst(), prev_inst);
+
+            (
+                func,
+                format!("Replace inst {} with {}", prev_inst, inst_names.join(" / ")),
+                MutationKind::ExpandedOrShrinked,
+            )
         })
     }
 }
@@ -295,7 +351,7 @@ impl Mutator for RemoveEbb {
             (
                 func,
                 format!("Remove ebb {}", next_ebb),
-                MutationKind::Shrinked,
+                MutationKind::ExpandedOrShrinked,
             )
         })
     }
@@ -597,7 +653,7 @@ fn reduce(
         loop {
             let mut mutator: Box<dyn Mutator> = match phase {
                 0 => Box::new(RemoveInst::new(&func)),
-                1 => Box::new(ReplaceInstWithIconst::new(&func)),
+                1 => Box::new(ReplaceInstWithConst::new(&func)),
                 2 => Box::new(ReplaceInstWithTrap::new(&func)),
                 3 => Box::new(RemoveEbb::new(&func)),
                 4 => Box::new(RemoveUnusedEntities::new()),
