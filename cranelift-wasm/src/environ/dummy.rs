@@ -5,10 +5,9 @@
 //! [wasmtime-environ]: https://crates.io/crates/wasmtime-environ
 //! [Wasmtime]: https://github.com/CraneStation/wasmtime
 
-use crate::environ::{
-    FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult, WasmTypesMap,
-};
+use crate::environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
 use crate::func_translator::FuncTranslator;
+use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
     DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex,
@@ -531,7 +530,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
 
     fn define_function_body(
         &mut self,
-        wasm_types: &WasmTypesMap,
+        module_translation_state: &ModuleTranslationState,
         body_bytes: &'data [u8],
         body_offset: usize,
     ) -> WasmResult<()> {
@@ -546,7 +545,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 func.collect_debug_info();
             }
             self.trans.translate(
-                wasm_types,
+                module_translation_state,
                 body_bytes,
                 body_offset,
                 &mut func,

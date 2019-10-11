@@ -59,11 +59,12 @@ mod translation_utils;
 
 pub use crate::environ::{
     DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmError,
-    WasmResult, WasmTypesMap,
+    WasmResult,
 };
 pub use crate::func_translator::FuncTranslator;
 pub use crate::module_translator::translate_module;
-pub use crate::state::TranslationState;
+pub use crate::state::func_state::FuncTranslationState;
+pub use crate::state::module_state::ModuleTranslationState;
 pub use crate::translation_utils::{
     get_vmctx_value_label, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,

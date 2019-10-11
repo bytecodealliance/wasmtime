@@ -23,8 +23,8 @@
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
 use super::{hash_map, HashMap};
-use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmResult, WasmTypesMap};
-use crate::state::{ControlStackFrame, ElseData, TranslationState};
+use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmResult};
+use crate::state::{ControlStackFrame, ElseData, FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::{
     blocktype_params_results, ebb_with_params, f32_translation, f64_translation,
 };
@@ -43,14 +43,14 @@ use wasmparser::{MemoryImmediate, Operator};
 /// Translates wasm operators into Cranelift IR instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
-    wasm_types: &WasmTypesMap,
+    module_translation_state: &ModuleTranslationState,
     op: &Operator,
     builder: &mut FunctionBuilder,
-    state: &mut TranslationState,
+    state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
     if !state.reachable {
-        translate_unreachable_operator(wasm_types, &op, builder, state)?;
+        translate_unreachable_operator(module_translation_state, &op, builder, state)?;
         return Ok(());
     }
 
@@ -133,12 +133,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *  possible `Ebb`'s arguments values.
          ***********************************************************************************/
         Operator::Block { ty } => {
-            let (params, results) = blocktype_params_results(wasm_types, *ty)?;
+            let (params, results) = blocktype_params_results(module_translation_state, *ty)?;
             let next = ebb_with_params(builder, results)?;
             state.push_block(next, params.len(), results.len());
         }
         Operator::Loop { ty } => {
-            let (params, results) = blocktype_params_results(wasm_types, *ty)?;
+            let (params, results) = blocktype_params_results(module_translation_state, *ty)?;
             let loop_body = ebb_with_params(builder, params)?;
             let next = ebb_with_params(builder, results)?;
             builder.ins().jump(loop_body, state.peekn(params.len()));
@@ -155,7 +155,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::If { ty } => {
             let val = state.pop1();
 
-            let (params, results) = blocktype_params_results(wasm_types, *ty)?;
+            let (params, results) = blocktype_params_results(module_translation_state, *ty)?;
             let (destination, else_data) = if params == results {
                 // It is possible there is no `else` block, so we will only
                 // allocate an ebb for it if/when we find the `else`. For now,
@@ -214,7 +214,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     // The `if` has an `else`, so there's no branch to the end from the top.
                     *reachable_from_top = false;
 
-                    let (params, _results) = blocktype_params_results(wasm_types, blocktype)?;
+                    let (params, _results) =
+                        blocktype_params_results(module_translation_state, blocktype)?;
                     let else_ebb = ebb_with_params(builder, params)?;
                     builder.ins().jump(destination, state.peekn(params.len()));
                     state.popn(params.len());
@@ -1206,10 +1207,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state must be updated accordingly.
 fn translate_unreachable_operator(
-    wasm_types: &WasmTypesMap,
+    module_translation_state: &ModuleTranslationState,
     op: &Operator,
     builder: &mut FunctionBuilder,
-    state: &mut TranslationState,
+    state: &mut FuncTranslationState,
 ) -> WasmResult<()> {
     match *op {
         Operator::If { ty } => {
@@ -1244,7 +1245,8 @@ fn translate_unreachable_operator(
                         // branch from the top directly to the end.
                         *reachable_from_top = false;
 
-                        let (params, _results) = blocktype_params_results(wasm_types, blocktype)?;
+                        let (params, _results) =
+                            blocktype_params_results(module_translation_state, blocktype)?;
                         let else_ebb = ebb_with_params(builder, params)?;
 
                         // We change the target of the branch instruction.
@@ -1371,7 +1373,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     opcode: ir::Opcode,
     result_ty: Type,
     builder: &mut FunctionBuilder,
-    state: &mut TranslationState,
+    state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
     let addr32 = state.pop1();
@@ -1394,7 +1396,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
     builder: &mut FunctionBuilder,
-    state: &mut TranslationState,
+    state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
     let (addr32, val) = state.pop2();
@@ -1411,13 +1413,13 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     Ok(())
 }
 
-fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut TranslationState) {
+fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut FuncTranslationState) {
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().icmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
 }
 
-fn translate_fcmp(cc: FloatCC, builder: &mut FunctionBuilder, state: &mut TranslationState) {
+fn translate_fcmp(cc: FloatCC, builder: &mut FunctionBuilder, state: &mut FuncTranslationState) {
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().fcmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
@@ -1426,7 +1428,7 @@ fn translate_fcmp(cc: FloatCC, builder: &mut FunctionBuilder, state: &mut Transl
 fn translate_br_if(
     relative_depth: u32,
     builder: &mut FunctionBuilder,
-    state: &mut TranslationState,
+    state: &mut FuncTranslationState,
 ) {
     let val = state.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, state);
@@ -1443,7 +1445,7 @@ fn translate_br_if(
 
 fn translate_br_if_args(
     relative_depth: u32,
-    state: &mut TranslationState,
+    state: &mut FuncTranslationState,
 ) -> (ir::Ebb, &[ir::Value]) {
     let i = state.control_stack.len() - 1 - (relative_depth as usize);
     let (return_count, br_destination) = {
