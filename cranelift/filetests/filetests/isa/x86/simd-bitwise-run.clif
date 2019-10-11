@@ -105,3 +105,25 @@ ebb0:
     return v7
 }
 ; run
+
+function %bitselect_i8x16() -> b1 {
+ebb0:
+    v0 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255]  ; the selector vector
+    v1 = vconst.i8x16 [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42] ; for each 1-bit in v0 the bit of v1 is selected
+    v2 = vconst.i8x16 [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127] ; for each 0-bit in v0 the bit of v2 is selected
+    v3 = bitselect v0, v1, v2
+
+    v4 = extractlane v3, 0
+    v5 = icmp_imm eq v4, 42
+
+    v6 = extractlane v3, 1
+    v7 = icmp_imm eq v6, 0
+
+    v8 = extractlane v3, 15
+    v9 = icmp_imm eq v8, 42
+
+    v10 = band v5, v7
+    v11 = band v10, v9
+    return v11
+}
+; run

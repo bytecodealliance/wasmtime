@@ -20,7 +20,9 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // List of instructions.
     let insts = &shared.instructions;
     let band = insts.by_name("band");
+    let band_not = insts.by_name("band_not");
     let bitcast = insts.by_name("bitcast");
+    let bitselect = insts.by_name("bitselect");
     let bor = insts.by_name("bor");
     let bnot = insts.by_name("bnot");
     let bxor = insts.by_name("bxor");
@@ -428,6 +430,19 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(a = sshr(x, y)),
             vec![def!(b = bitcast(y)), def!(a = x86_psra(x, b))],
+        );
+    }
+
+    // SIMD select
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let bitselect = bitselect.bind(vector(ty, sse_vector_size)); // must bind both x/y and c
+        narrow.legalize(
+            def!(d = bitselect(c, x, y)),
+            vec![
+                def!(a = band(x, c)),
+                def!(b = band_not(y, c)),
+                def!(d = bor(a, b)),
+            ],
         );
     }
 

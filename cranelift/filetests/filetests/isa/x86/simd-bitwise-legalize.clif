@@ -31,3 +31,15 @@ ebb0:
     ; nextln: v2 = x86_psra v1, v3
     return v2
 }
+
+function %bitselect_i16x8() -> i16x8 {
+ebb0:
+    v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v2 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v3 = bitselect v0, v1, v2
+    ; check: v4 = band v1, v0
+    ; nextln: v5 = band_not v2, v0
+    ; nextln: v3 = bor v4, v5
+    return v3
+}

@@ -1199,6 +1199,22 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let c = &operand_doc("c", Any, "Controlling value to test");
+    ig.push(
+        Inst::new(
+            "bitselect",
+            r#"
+        Conditional select of bits.
+
+        For each bit in `c`, this instruction selects the corresponding bit from `x` if the bit 
+        in `c` is 1 and the corresponding bit from `y` if the bit in `c` is 0. See also: 
+        `select`, `vselect`.
+        "#,
+        )
+        .operands_in(vec![c, x, y])
+        .operands_out(vec![a]),
+    );
+
     let x = &operand("x", Any);
 
     ig.push(
