@@ -1138,6 +1138,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let b_mod_bitwidth = builder.ins().band_imm(b, bitwidth - 1);
             state.push1(builder.ins().sshr(bitcast_a, b_mod_bitwidth))
         }
+        Operator::V128Bitselect => {
+            let (a, b, c) = state.pop3();
+            let bitcast_a = optionally_bitcast_vector(a, I8X16, builder);
+            let bitcast_b = optionally_bitcast_vector(b, I8X16, builder);
+            let bitcast_c = optionally_bitcast_vector(c, I8X16, builder);
+            // The CLIF operand ordering is slightly different and the types of all three
+            // operands must match (hence the bitcast).
+            state.push1(builder.ins().bitselect(bitcast_c, bitcast_a, bitcast_b))
+        }
         Operator::I8x16Eq
         | Operator::I8x16Ne
         | Operator::I8x16LtS
@@ -1180,7 +1189,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2Gt
         | Operator::F64x2Le
         | Operator::F64x2Ge
-        | Operator::V128Bitselect
         | Operator::I8x16AnyTrue
         | Operator::I8x16AllTrue
         | Operator::I8x16Shl
