@@ -9,7 +9,7 @@ pub struct PrintRelocs {
 }
 
 impl PrintRelocs {
-    pub fn new(flag_print: bool) -> PrintRelocs {
+    pub fn new(flag_print: bool) -> Self {
         Self {
             flag_print,
             text: String::new(),
@@ -80,7 +80,7 @@ pub struct PrintTraps {
 }
 
 impl PrintTraps {
-    pub fn new(flag_print: bool) -> PrintTraps {
+    pub fn new(flag_print: bool) -> Self {
         Self {
             flag_print,
             text: String::new(),
@@ -102,7 +102,7 @@ pub struct PrintStackmaps {
 }
 
 impl PrintStackmaps {
-    pub fn new(flag_print: bool) -> PrintStackmaps {
+    pub fn new(flag_print: bool) -> Self {
         Self {
             flag_print,
             text: String::new(),

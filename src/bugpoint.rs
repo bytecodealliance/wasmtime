@@ -48,9 +48,7 @@ pub fn run(
         match reduce(isa, func, verbose) {
             Ok((func, crash_msg)) => {
                 println!("Crash message: {}", crash_msg);
-
                 println!("\n{}", func);
-
                 println!(
                     "{} ebbs {} insts -> {} ebbs {} insts",
                     orig_ebb_count,
@@ -69,6 +67,7 @@ pub fn run(
 enum MutationKind {
     /// The mutation reduced the amount of instructions or ebbs.
     Shrinked,
+
     /// The mutation only changed an instruction. Performing another round of mutations may only
     /// reduce the test case if another mutation shrank the test case.
     Changed,
@@ -83,7 +82,7 @@ trait Mutator {
 
     fn reduce(
         &mut self,
-        ccc: &mut CrashCheckContext,
+        context: &mut CrashCheckContext,
         mut func: Function,
         progress_bar_prefix: String,
         verbose: bool,
@@ -111,7 +110,7 @@ trait Mutator {
 
             progress.set_message(&msg);
 
-            match ccc.check_for_crash(&mutated_func) {
+            match context.check_for_crash(&mutated_func) {
                 CheckResult::Succeed => {
                     // Shrinking didn't hit the problem anymore, discard changes.
                     continue;
@@ -170,28 +169,17 @@ impl Mutator for RemoveInst {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
-        if let Some((prev_ebb, prev_inst)) =
-            next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst)
-        {
+        next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(prev_ebb, prev_inst)| {
             func.layout.remove_inst(prev_inst);
-            if func.layout.ebb_insts(prev_ebb).next().is_none() {
+            let msg = if func.layout.ebb_insts(prev_ebb).next().is_none() {
                 // Make sure empty ebbs are removed, as `next_inst_ret_prev` depends on non empty ebbs
                 func.layout.remove_ebb(prev_ebb);
-                Some((
-                    func,
-                    format!("Remove inst {} and empty ebb {}", prev_inst, prev_ebb),
-                    MutationKind::Shrinked,
-                ))
+                format!("Remove inst {} and empty ebb {}", prev_inst, prev_ebb)
             } else {
-                Some((
-                    func,
-                    format!("Remove inst {}", prev_inst),
-                    MutationKind::Shrinked,
-                ))
-            }
-        } else {
-            None
-        }
+                format!("Remove inst {}", prev_inst)
+            };
+            (func, msg, MutationKind::Shrinked)
+        })
     }
 }
 
@@ -222,24 +210,18 @@ impl Mutator for ReplaceInstWithIconst {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
-        if let Some((_prev_ebb, prev_inst)) =
-            next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst)
-        {
+        next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(_prev_ebb, prev_inst)| {
             let results = func.dfg.inst_results(prev_inst);
-            if results.len() == 1 {
+            let msg = if results.len() == 1 {
                 let ty = func.dfg.value_type(results[0]);
                 func.dfg.replace(prev_inst).iconst(ty, 0);
-                Some((
-                    func,
-                    format!("Replace inst {} with iconst.{}", prev_inst, ty),
-                    MutationKind::Changed,
-                ))
+                format!("Replace inst {} with iconst.{}", prev_inst, ty)
             } else {
-                Some((func, format!(""), MutationKind::Changed))
-            }
-        } else {
-            None
-        }
+                // Returns something so the harness tries replacement on following instructions.
+                format!("")
+            };
+            (func, msg, MutationKind::Changed)
+        })
     }
 }
 
@@ -270,18 +252,14 @@ impl Mutator for ReplaceInstWithTrap {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
-        if let Some((_prev_ebb, prev_inst)) =
-            next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst)
-        {
+        next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(_prev_ebb, prev_inst)| {
             func.dfg.replace(prev_inst).trap(TrapCode::User(0));
-            Some((
+            (
                 func,
                 format!("Replace inst {} with trap", prev_inst),
                 MutationKind::Changed,
-            ))
-        } else {
-            None
-        }
+            )
+        })
     }
 }
 
@@ -308,20 +286,18 @@ impl Mutator for RemoveEbb {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
-        if let Some(next_ebb) = func.layout.next_ebb(self.ebb) {
+        func.layout.next_ebb(self.ebb).map(|next_ebb| {
             self.ebb = next_ebb;
             while let Some(inst) = func.layout.last_inst(self.ebb) {
                 func.layout.remove_inst(inst);
             }
             func.layout.remove_ebb(self.ebb);
-            Some((
+            (
                 func,
                 format!("Remove ebb {}", next_ebb),
                 MutationKind::Shrinked,
-            ))
-        } else {
-            None
-        }
+            )
+        })
     }
 }
 
@@ -568,13 +544,13 @@ fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option
     if let Some(next_inst) = func.layout.next_inst(*inst) {
         *inst = next_inst;
         return Some(prev);
-    } else if let Some(next_ebb) = func.layout.next_ebb(*ebb) {
+    }
+    if let Some(next_ebb) = func.layout.next_ebb(*ebb) {
         *ebb = next_ebb;
         *inst = func.layout.first_inst(*ebb).expect("no inst");
         return Some(prev);
-    } else {
-        return None;
     }
+    None
 }
 
 fn ebb_count(func: &Function) -> usize {
@@ -601,12 +577,12 @@ fn reduce(
     mut func: Function,
     verbose: bool,
 ) -> Result<(Function, String), String> {
-    let mut ccc = CrashCheckContext::new(isa);
+    let mut context = CrashCheckContext::new(isa);
 
-    match ccc.check_for_crash(&func) {
+    match context.check_for_crash(&func) {
         CheckResult::Succeed => {
             return Err(format!(
-                "Given function compiled successfully or gave an verifier error."
+                "Given function compiled successfully or gave a verifier error."
             ));
         }
         CheckResult::Crash(_) => {}
@@ -619,17 +595,17 @@ fn reduce(
         let mut phase = 0;
 
         loop {
-            let mut mutator = match phase {
-                0 => Box::new(RemoveInst::new(&func)) as Box<dyn Mutator>,
-                1 => Box::new(ReplaceInstWithIconst::new(&func)) as Box<dyn Mutator>,
-                2 => Box::new(ReplaceInstWithTrap::new(&func)) as Box<dyn Mutator>,
-                3 => Box::new(RemoveEbb::new(&func)) as Box<dyn Mutator>,
-                4 => Box::new(RemoveUnusedEntities::new()) as Box<dyn Mutator>,
+            let mut mutator: Box<dyn Mutator> = match phase {
+                0 => Box::new(RemoveInst::new(&func)),
+                1 => Box::new(ReplaceInstWithIconst::new(&func)),
+                2 => Box::new(ReplaceInstWithTrap::new(&func)),
+                3 => Box::new(RemoveEbb::new(&func)),
+                4 => Box::new(RemoveUnusedEntities::new()),
                 _ => break,
             };
 
             func = mutator.reduce(
-                &mut ccc,
+                &mut context,
                 func,
                 format!("pass {}", pass_idx),
                 verbose,
@@ -646,7 +622,7 @@ fn reduce(
         }
     }
 
-    let crash_msg = match ccc.check_for_crash(&func) {
+    let crash_msg = match context.check_for_crash(&func) {
         CheckResult::Succeed => unreachable!("Used to crash, but doesn't anymore???"),
         CheckResult::Crash(crash_msg) => crash_msg,
     };
@@ -658,18 +634,23 @@ struct CrashCheckContext<'a> {
     /// Cached `Context`, to prevent repeated allocation.
     context: Context,
 
+    /// Cached code memory, to prevent repeated allocation.
+    code_memory: Vec<u8>,
+
     /// The target isa to compile for.
     isa: &'a dyn TargetIsa,
 }
 
 fn get_panic_string(panic: Box<dyn std::any::Any>) -> String {
     let panic = match panic.downcast::<&'static str>() {
-        Ok(panic_msg) => panic_msg.to_owned(),
+        Ok(panic_msg) => {
+            return panic_msg.to_string();
+        }
         Err(panic) => panic,
     };
     match panic.downcast::<String>() {
         Ok(panic_msg) => *panic_msg,
-        Err(_) => "Box<Any>".to_owned(),
+        Err(_) => "Box<Any>".to_string(),
     }
 }
 
@@ -685,6 +666,7 @@ impl<'a> CrashCheckContext<'a> {
     fn new(isa: &'a dyn TargetIsa) -> Self {
         CrashCheckContext {
             context: Context::new(),
+            code_memory: Vec::new(),
             isa,
         }
     }
@@ -692,6 +674,8 @@ impl<'a> CrashCheckContext<'a> {
     #[cfg_attr(test, allow(unreachable_code))]
     fn check_for_crash(&mut self, func: &Function) -> CheckResult {
         self.context.clear();
+        self.code_memory.clear();
+
         self.context.func = func.clone();
 
         use std::io::Write;
@@ -702,9 +686,9 @@ impl<'a> CrashCheckContext<'a> {
         })) {
             Ok(Some(_)) => return CheckResult::Succeed,
             Ok(None) => {}
-            // The verifier panicked. compiling it will probably give the same panic.
+            // The verifier panicked. Compiling it will probably give the same panic.
             // We treat it as succeeding to make it possible to reduce for the actual error.
-            // FIXME prevent verifier panic on removing ebb1
+            // FIXME prevent verifier panic on removing ebb0.
             Err(_) => return CheckResult::Succeed,
         }
 
@@ -732,11 +716,10 @@ impl<'a> CrashCheckContext<'a> {
             let mut relocs = PrintRelocs::new(false);
             let mut traps = PrintTraps::new(false);
             let mut stackmaps = PrintStackmaps::new(false);
-            let mut mem = vec![];
 
             let _ = self.context.compile_and_emit(
                 self.isa,
-                &mut mem,
+                &mut self.code_memory,
                 &mut relocs,
                 &mut traps,
                 &mut stackmaps,
