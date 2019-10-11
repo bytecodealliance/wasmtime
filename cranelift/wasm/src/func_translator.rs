@@ -189,7 +189,7 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
         F32 => builder.ins().f32const(ir::immediates::Ieee32::with_bits(0)),
         F64 => builder.ins().f64const(ir::immediates::Ieee64::with_bits(0)),
         V128 => {
-            let constant_handle = builder.func.dfg.constants.insert([0; 16].to_vec());
+            let constant_handle = builder.func.dfg.constants.insert([0; 16].to_vec().into());
             builder.ins().vconst(ir::types::I8X16, constant_handle)
         }
         AnyRef => builder.ins().null(environ.reference_type()),

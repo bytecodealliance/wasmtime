@@ -14,6 +14,7 @@ use crate::HashMap;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::fmt;
+use core::iter::FromIterator;
 use core::slice::Iter;
 use core::str::{from_utf8, FromStr};
 use cranelift_entity::EntityRef;
@@ -24,6 +25,13 @@ use cranelift_entity::EntityRef;
 /// (https://github.com/WebAssembly/design/blob/master/Portability.md).
 #[derive(Clone, Hash, Eq, PartialEq, Debug, Default)]
 pub struct ConstantData(Vec<u8>);
+
+impl FromIterator<u8> for ConstantData {
+    fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
+        let v = iter.into_iter().collect();
+        ConstantData(v)
+    }
+}
 
 impl From<Vec<u8>> for ConstantData {
     fn from(v: Vec<u8>) -> Self {
@@ -211,8 +219,7 @@ impl ConstantPool {
     /// Insert constant data into the pool, returning a handle for later referencing; when constant
     /// data is inserted that is a duplicate of previous constant data, the existing handle will be
     /// returned.
-    pub fn insert(&mut self, constant_value: impl Into<ConstantData>) -> Constant {
-        let constant_value = constant_value.into();
+    pub fn insert(&mut self, constant_value: ConstantData) -> Constant {
         if self.values_to_handles.contains_key(&constant_value) {
             self.values_to_handles.get(&constant_value).unwrap().clone()
         } else {
@@ -297,24 +304,24 @@ mod tests {
     #[test]
     fn insert() {
         let mut sut = ConstantPool::new();
-        sut.insert(vec![1, 2, 3]);
-        sut.insert(vec![4, 5, 6]);
+        sut.insert(vec![1, 2, 3].into());
+        sut.insert(vec![4, 5, 6].into());
         assert_eq!(sut.len(), 2);
     }
 
     #[test]
     fn insert_duplicate() {
         let mut sut = ConstantPool::new();
-        let a = sut.insert(vec![1, 2, 3]);
-        sut.insert(vec![4, 5, 6]);
-        let b = sut.insert(vec![1, 2, 3]);
+        let a = sut.insert(vec![1, 2, 3].into());
+        sut.insert(vec![4, 5, 6].into());
+        let b = sut.insert(vec![1, 2, 3].into());
         assert_eq!(a, b);
     }
 
     #[test]
     fn clear() {
         let mut sut = ConstantPool::new();
-        sut.insert(vec![1, 2, 3]);
+        sut.insert(vec![1, 2, 3].into());
         assert_eq!(sut.len(), 1);
 
         sut.clear();
@@ -324,9 +331,9 @@ mod tests {
     #[test]
     fn iteration_order() {
         let mut sut = ConstantPool::new();
-        sut.insert(vec![1, 2, 3]);
-        sut.insert(vec![4, 5, 6]);
-        sut.insert(vec![1, 2, 3]);
+        sut.insert(vec![1, 2, 3].into());
+        sut.insert(vec![4, 5, 6].into());
+        sut.insert(vec![1, 2, 3].into());
         let data = sut.iter().map(|(_, v)| v).collect::<Vec<&ConstantData>>();
         assert_eq!(data, vec![&vec![1, 2, 3].into(), &vec![4, 5, 6].into()]);
     }
@@ -335,7 +342,7 @@ mod tests {
     fn get() {
         let mut sut = ConstantPool::new();
         let data = vec![1, 2, 3];
-        let handle = sut.insert(data.clone());
+        let handle = sut.insert(data.clone().into());
         assert_eq!(sut.get(handle), &data.into());
     }
 
@@ -350,7 +357,7 @@ mod tests {
     #[test]
     fn get_offset() {
         let mut sut = ConstantPool::new();
-        let a = sut.insert(vec![1]);
+        let a = sut.insert(vec![1].into());
         sut.set_offset(a, 42);
         assert_eq!(sut.get_offset(a), 42)
     }
@@ -359,7 +366,7 @@ mod tests {
     #[should_panic]
     fn get_nonexistent_offset() {
         let mut sut = ConstantPool::new();
-        let a = sut.insert(vec![1]);
+        let a = sut.insert(vec![1].into());
         sut.get_offset(a); // panics, set_offset should have been called
     }
 

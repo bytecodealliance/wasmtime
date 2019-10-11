@@ -470,7 +470,7 @@ fn gen_transform<'a>(
         for (name, value) in transform.const_pool.iter() {
             fmtln!(
                 fmt,
-                "let {} = pos.func.dfg.constants.insert(vec!{:?});",
+                "let {} = pos.func.dfg.constants.insert(vec!{:?}.into());",
                 name,
                 value
             );

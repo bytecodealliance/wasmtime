@@ -998,7 +998,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             return Err(wasm_unsupported!("proposed bulk memory operator {:?}", op));
         }
         Operator::V128Const { value } => {
-            let handle = builder.func.dfg.constants.insert(value.bytes().to_vec());
+            let data = value.bytes().to_vec().into();
+            let handle = builder.func.dfg.constants.insert(data);
             let value = builder.ins().vconst(I8X16, handle);
             // the v128.const is typed in CLIF as a I8x16 but raw_bitcast to a different type before use
             state.push1(value)
