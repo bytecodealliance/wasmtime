@@ -3,6 +3,7 @@
 use crate::disasm::{PrintRelocs, PrintStackmaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
+use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{
     self, Ebb, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots,
@@ -83,6 +84,10 @@ trait Mutator {
     fn name(&self) -> &'static str;
     fn mutation_count(&self, func: &Function) -> usize;
     fn mutate(&mut self, func: Function) -> Option<(Function, String, ProgressStatus)>;
+
+    /// Gets called when the returned mutated function kept on causing the crash. This can be used
+    /// to update position of the next item to look at. Does nothing by default.
+    fn did_crash(&mut self) {}
 }
 
 /// Try to remove instructions.
@@ -547,6 +552,113 @@ impl Mutator for RemoveUnusedEntities {
     }
 }
 
+struct MergeBlocks {
+    ebb: Ebb,
+    prev_ebb: Option<Ebb>,
+}
+
+impl MergeBlocks {
+    fn new(func: &Function) -> Self {
+        Self {
+            ebb: func.layout.entry_block().unwrap(),
+            prev_ebb: None,
+        }
+    }
+}
+
+impl Mutator for MergeBlocks {
+    fn name(&self) -> &'static str {
+        "merge blocks"
+    }
+
+    fn mutation_count(&self, func: &Function) -> usize {
+        // N ebbs may result in at most N-1 merges.
+        ebb_count(func) - 1
+    }
+
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
+        let ebb = match func.layout.next_ebb(self.ebb) {
+            Some(ebb) => ebb,
+            None => return None,
+        };
+
+        self.ebb = ebb;
+
+        let mut cfg = ControlFlowGraph::new();
+        cfg.compute(&func);
+
+        if cfg.pred_iter(ebb).count() != 1 {
+            return Some((
+                func,
+                format!("did nothing for {}", ebb),
+                ProgressStatus::Skip,
+            ));
+        }
+
+        let pred = cfg.pred_iter(ebb).next().unwrap();
+
+        #[cfg(feature = "basic-blocks")]
+        {
+            // If the branch instruction that lead us to this block is preceded by another branch
+            // instruction, then we have a conditional jump sequence that we should not break by
+            // replacing the second instruction by more of them.
+            if let Some(pred_pred_inst) = func.layout.prev_inst(pred.inst) {
+                if func.dfg[pred_pred_inst].opcode().is_branch() {
+                    return Some((
+                        func,
+                        format!("did nothing for {}", ebb),
+                        ProgressStatus::Skip,
+                    ));
+                }
+            }
+        }
+
+        assert!(func.dfg.ebb_params(ebb).len() == func.dfg.inst_variable_args(pred.inst).len());
+
+        // If there were any EBB parameters in ebb, then the last instruction in pred will
+        // fill these parameters. Make the EBB params aliases of the terminator arguments.
+        for (ebb_param, arg) in func
+            .dfg
+            .detach_ebb_params(ebb)
+            .as_slice(&func.dfg.value_lists)
+            .iter()
+            .cloned()
+            .zip(func.dfg.inst_variable_args(pred.inst).iter().cloned())
+            .collect::<Vec<_>>()
+        {
+            if ebb_param != arg {
+                func.dfg.change_to_alias(ebb_param, arg);
+            }
+        }
+
+        // Remove the terminator branch to the current EBB.
+        func.layout.remove_inst(pred.inst);
+
+        // Move all the instructions to the predecessor.
+        while let Some(inst) = func.layout.first_inst(ebb) {
+            func.layout.remove_inst(inst);
+            func.layout.append_inst(inst, pred.ebb);
+        }
+
+        // Remove the predecessor EBB.
+        func.layout.remove_ebb(ebb);
+
+        // Record the previous EBB: if we caused a crash (as signaled by a call to did_crash), then
+        // we'll start back to this EBB.
+        self.prev_ebb = Some(pred.ebb);
+
+        return Some((
+            func,
+            format!("merged {} and {}", pred.ebb, ebb),
+            ProgressStatus::ExpandedOrShrinked,
+        ));
+    }
+
+    fn did_crash(&mut self) {
+        self.ebb = self.prev_ebb.unwrap();
+    }
+}
+
 fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option<(Ebb, Inst)> {
     let prev = (*ebb, *inst);
     if let Some(next_inst) = func.layout.next_inst(*inst) {
@@ -614,6 +726,7 @@ fn reduce(
                 2 => Box::new(ReplaceInstWithTrap::new(&func)),
                 3 => Box::new(RemoveEbb::new(&func)),
                 4 => Box::new(RemoveUnusedEntities::new()),
+                5 => Box::new(MergeBlocks::new(&func)),
                 _ => break,
             };
 
@@ -644,12 +757,16 @@ fn reduce(
 
                 match context.check_for_crash(&mutated_func) {
                     CheckResult::Succeed => {
-                        // Shrinking didn't hit the problem anymore, discard changes.
+                        // Mutating didn't hit the problem anymore, discard changes.
                         continue;
                     }
                     CheckResult::Crash(_) => {
-                        // Panic remained while shrinking, make changes definitive.
+                        // Panic remained while mutating, make changes definitive.
                         func = mutated_func;
+
+                        // Notify the mutator that the mutation was successful.
+                        mutator.did_crash();
+
                         let verb = match mutation_kind {
                             ProgressStatus::ExpandedOrShrinked => {
                                 should_keep_reducing = true;
@@ -669,10 +786,15 @@ fn reduce(
         }
 
         progress_bar.println(format!(
-            "After pass {}, remaining insts/ebbs: {}/{}",
+            "After pass {}, remaining insts/ebbs: {}/{} ({})",
             pass_idx,
             inst_count(&func),
-            ebb_count(&func)
+            ebb_count(&func),
+            if should_keep_reducing {
+                "will keep reducing"
+            } else {
+                "stop reducing"
+            }
         ));
 
         if !should_keep_reducing {
@@ -814,9 +936,26 @@ mod tests {
         let isa = test_file.isa_spec.unique_isa().expect("Unknown isa");
 
         for (func, _) in test_file.functions {
-            let (func, crash_msg) = reduce(isa, func, false).expect("Couldn't reduce test case");
+            let (reduced_func, crash_msg) =
+                reduce(isa, func, false).expect("Couldn't reduce test case");
             assert_eq!(crash_msg, "test crash");
-            assert_eq!(format!("{}", func), EXPECTED.replace("\r\n", "\n"));
+
+            let (func_reduced_twice, crash_msg) =
+                reduce(isa, reduced_func.clone(), false).expect("Couldn't re-reduce test case");
+            assert_eq!(crash_msg, "test crash");
+
+            assert_eq!(
+                ebb_count(&func_reduced_twice),
+                ebb_count(&reduced_func),
+                "reduction wasn't maximal for ebbs"
+            );
+            assert_eq!(
+                inst_count(&func_reduced_twice),
+                inst_count(&reduced_func),
+                "reduction wasn't maximal for insts"
+            );
+
+            assert_eq!(format!("{}", reduced_func), EXPECTED.replace("\r\n", "\n"));
         }
     }
 }
