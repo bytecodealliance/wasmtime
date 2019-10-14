@@ -77,7 +77,7 @@ enum MutationKind {
 
 trait Mutator {
     fn name(&self) -> &'static str;
-    fn mutation_count(&self, func: &Function) -> Option<usize>;
+    fn mutation_count(&self, func: &Function) -> usize;
     fn mutate(&mut self, func: Function) -> Option<(Function, String, MutationKind)>;
 }
 
@@ -103,8 +103,8 @@ impl Mutator for RemoveInst {
         "remove inst"
     }
 
-    fn mutation_count(&self, func: &Function) -> Option<usize> {
-        Some(inst_count(func))
+    fn mutation_count(&self, func: &Function) -> usize {
+        inst_count(func)
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
@@ -160,8 +160,8 @@ impl Mutator for ReplaceInstWithConst {
         "replace inst with const"
     }
 
-    fn mutation_count(&self, func: &Function) -> Option<usize> {
-        Some(inst_count(func))
+    fn mutation_count(&self, func: &Function) -> usize {
+        inst_count(func)
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
@@ -243,8 +243,8 @@ impl Mutator for ReplaceInstWithTrap {
         "replace inst with trap"
     }
 
-    fn mutation_count(&self, func: &Function) -> Option<usize> {
-        Some(inst_count(func))
+    fn mutation_count(&self, func: &Function) -> usize {
+        inst_count(func)
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
@@ -277,8 +277,8 @@ impl Mutator for RemoveEbb {
         "remove ebb"
     }
 
-    fn mutation_count(&self, func: &Function) -> Option<usize> {
-        Some(ebb_count(func))
+    fn mutation_count(&self, func: &Function) -> usize {
+        ebb_count(func)
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
@@ -313,8 +313,8 @@ impl Mutator for RemoveUnusedEntities {
         "remove unused entities"
     }
 
-    fn mutation_count(&self, _func: &Function) -> Option<usize> {
-        Some(4)
+    fn mutation_count(&self, _func: &Function) -> usize {
+        4
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
@@ -606,7 +606,7 @@ fn reduce(
             };
 
             progress_bar.set_prefix(&format!("pass {} phase {}", pass_idx, mutator.name()));
-            progress_bar.set_length(mutator.mutation_count(&func).unwrap() as u64);
+            progress_bar.set_length(mutator.mutation_count(&func) as u64);
 
             // Reset progress bar.
             progress_bar.set_position(0);
