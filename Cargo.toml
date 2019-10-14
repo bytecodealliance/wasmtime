@@ -57,5 +57,6 @@ basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-bloc
 # necessary.
 [profile.release]
 debug = true
+# debug-assertions = true # uncomment to make bugpoint blazingly fast!
 [profile.bench]
 debug = true
