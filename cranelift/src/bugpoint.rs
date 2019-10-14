@@ -77,68 +77,8 @@ enum MutationKind {
 
 trait Mutator {
     fn name(&self) -> &'static str;
-
     fn mutation_count(&self, func: &Function) -> Option<usize>;
-
     fn mutate(&mut self, func: Function) -> Option<(Function, String, MutationKind)>;
-
-    fn reduce(
-        &mut self,
-        context: &mut CrashCheckContext,
-        mut func: Function,
-        progress_bar_prefix: String,
-        verbose: bool,
-        should_keep_reducing: &mut bool,
-    ) -> Function {
-        let progress = ProgressBar::with_draw_target(
-            self.mutation_count(&func).unwrap_or(0) as u64,
-            ProgressDrawTarget::stdout(),
-        );
-        progress.set_style(
-            ProgressStyle::default_bar().template("{bar:60} {prefix:40} {pos:>4}/{len:>4} {msg}"),
-        );
-
-        progress.set_prefix(&(progress_bar_prefix + &format!(" phase {}", self.name())));
-
-        for _ in 0..10000 {
-            progress.inc(1);
-
-            let (mutated_func, msg, mutation_kind) = match self.mutate(func.clone()) {
-                Some(res) => res,
-                None => {
-                    break;
-                }
-            };
-
-            progress.set_message(&msg);
-
-            match context.check_for_crash(&mutated_func) {
-                CheckResult::Succeed => {
-                    // Shrinking didn't hit the problem anymore, discard changes.
-                    continue;
-                }
-                CheckResult::Crash(_) => {
-                    // Panic remained while shrinking, make changes definitive.
-                    func = mutated_func;
-                    let verb = match mutation_kind {
-                        MutationKind::ExpandedOrShrinked => {
-                            *should_keep_reducing = true;
-                            "shrink"
-                        }
-                        MutationKind::Changed => "changed",
-                    };
-                    if verbose {
-                        progress.println(format!("{}: {}", msg, verb));
-                    }
-                }
-            }
-        }
-
-        progress.set_message("done");
-        progress.finish();
-
-        func
-    }
 }
 
 /// Try to remove instructions.
@@ -646,6 +586,11 @@ fn reduce(
 
     resolve_aliases(&mut func);
 
+    let progress_bar = ProgressBar::with_draw_target(0, ProgressDrawTarget::stdout());
+    progress_bar.set_style(
+        ProgressStyle::default_bar().template("{bar:60} {prefix:40} {pos:>4}/{len:>4} {msg}"),
+    );
+
     for pass_idx in 0..100 {
         let mut should_keep_reducing = false;
         let mut phase = 0;
@@ -660,16 +605,56 @@ fn reduce(
                 _ => break,
             };
 
-            func = mutator.reduce(
-                &mut context,
-                func,
-                format!("pass {}", pass_idx),
-                verbose,
-                &mut should_keep_reducing,
-            );
+            progress_bar.set_prefix(&format!("pass {} phase {}", pass_idx, mutator.name()));
+            progress_bar.set_length(mutator.mutation_count(&func).unwrap() as u64);
+
+            // Reset progress bar.
+            progress_bar.set_position(0);
+            progress_bar.set_draw_delta(0);
+
+            for _ in 0..10000 {
+                progress_bar.inc(1);
+
+                let (mutated_func, msg, mutation_kind) = match mutator.mutate(func.clone()) {
+                    Some(res) => res,
+                    None => {
+                        break;
+                    }
+                };
+
+                progress_bar.set_message(&msg);
+
+                match context.check_for_crash(&mutated_func) {
+                    CheckResult::Succeed => {
+                        // Shrinking didn't hit the problem anymore, discard changes.
+                        continue;
+                    }
+                    CheckResult::Crash(_) => {
+                        // Panic remained while shrinking, make changes definitive.
+                        func = mutated_func;
+                        let verb = match mutation_kind {
+                            MutationKind::ExpandedOrShrinked => {
+                                should_keep_reducing = true;
+                                "shrink"
+                            }
+                            MutationKind::Changed => "changed",
+                        };
+                        if verbose {
+                            progress_bar.println(format!("{}: {}", msg, verb));
+                        }
+                    }
+                }
+            }
 
             phase += 1;
         }
+
+        progress_bar.println(format!(
+            "After pass {}, remaining insts/ebbs: {}/{}",
+            pass_idx,
+            inst_count(&func),
+            ebb_count(&func)
+        ));
 
         if !should_keep_reducing {
             // No new shrinking opportunities have been found this pass. This means none will ever
@@ -677,6 +662,8 @@ fn reduce(
             break;
         }
     }
+
+    progress_bar.finish();
 
     let crash_msg = match context.check_for_crash(&func) {
         CheckResult::Succeed => unreachable!("Used to crash, but doesn't anymore???"),
