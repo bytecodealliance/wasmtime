@@ -66,19 +66,23 @@ pub fn run(
     Ok(())
 }
 
-enum MutationKind {
+enum ProgressStatus {
     /// The mutation raised or reduced the amount of instructions or ebbs.
     ExpandedOrShrinked,
 
     /// The mutation only changed an instruction. Performing another round of mutations may only
     /// reduce the test case if another mutation shrank the test case.
     Changed,
+
+    /// No need to re-test if the program crashes, because the mutation had no effect, but we want
+    /// to keep on iterating.
+    Skip,
 }
 
 trait Mutator {
     fn name(&self) -> &'static str;
     fn mutation_count(&self, func: &Function) -> usize;
-    fn mutate(&mut self, func: Function) -> Option<(Function, String, MutationKind)>;
+    fn mutate(&mut self, func: Function) -> Option<(Function, String, ProgressStatus)>;
 }
 
 /// Try to remove instructions.
@@ -107,7 +111,7 @@ impl Mutator for RemoveInst {
         inst_count(func)
     }
 
-    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
         next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(prev_ebb, prev_inst)| {
             func.layout.remove_inst(prev_inst);
             let msg = if func.layout.ebb_insts(prev_ebb).next().is_none() {
@@ -117,7 +121,7 @@ impl Mutator for RemoveInst {
             } else {
                 format!("Remove inst {}", prev_inst)
             };
-            (func, msg, MutationKind::ExpandedOrShrinked)
+            (func, msg, ProgressStatus::ExpandedOrShrinked)
         })
     }
 }
@@ -164,14 +168,17 @@ impl Mutator for ReplaceInstWithConst {
         inst_count(func)
     }
 
-    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
         next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(_prev_ebb, prev_inst)| {
             let num_results = func.dfg.inst_results(prev_inst).len();
 
-            if num_results == 0 {
-                // Short-circuit: lie and say we've changed something so subsequent instructions
-                // still get replaced.
-                return (func, format!(""), MutationKind::Changed);
+            let opcode = func.dfg[prev_inst].opcode();
+            if num_results == 0
+                || opcode == ir::Opcode::Iconst
+                || opcode == ir::Opcode::F32const
+                || opcode == ir::Opcode::F64const
+            {
+                return (func, format!(""), ProgressStatus::Skip);
             }
 
             if num_results == 1 {
@@ -180,7 +187,7 @@ impl Mutator for ReplaceInstWithConst {
                 return (
                     func,
                     format!("Replace inst {} with {}.", prev_inst, new_inst_name),
-                    MutationKind::Changed,
+                    ProgressStatus::Changed,
                 );
             }
 
@@ -215,7 +222,7 @@ impl Mutator for ReplaceInstWithConst {
             (
                 func,
                 format!("Replace inst {} with {}", prev_inst, inst_names.join(" / ")),
-                MutationKind::ExpandedOrShrinked,
+                ProgressStatus::ExpandedOrShrinked,
             )
         })
     }
@@ -247,13 +254,18 @@ impl Mutator for ReplaceInstWithTrap {
         inst_count(func)
     }
 
-    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
         next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(_prev_ebb, prev_inst)| {
-            func.dfg.replace(prev_inst).trap(TrapCode::User(0));
+            let status = if func.dfg[prev_inst].opcode() == ir::Opcode::Trap {
+                ProgressStatus::Skip
+            } else {
+                func.dfg.replace(prev_inst).trap(TrapCode::User(0));
+                ProgressStatus::Changed
+            };
             (
                 func,
                 format!("Replace inst {} with trap", prev_inst),
-                MutationKind::Changed,
+                status,
             )
         })
     }
@@ -281,7 +293,7 @@ impl Mutator for RemoveEbb {
         ebb_count(func)
     }
 
-    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
         func.layout.next_ebb(self.ebb).map(|next_ebb| {
             self.ebb = next_ebb;
             while let Some(inst) = func.layout.last_inst(self.ebb) {
@@ -291,7 +303,7 @@ impl Mutator for RemoveEbb {
             (
                 func,
                 format!("Remove ebb {}", next_ebb),
-                MutationKind::ExpandedOrShrinked,
+                ProgressStatus::ExpandedOrShrinked,
             )
         })
     }
@@ -317,7 +329,7 @@ impl Mutator for RemoveUnusedEntities {
         4
     }
 
-    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
         let name = match self.kind {
             0 => {
                 let mut ext_func_usage_map = HashMap::new();
@@ -531,7 +543,7 @@ impl Mutator for RemoveUnusedEntities {
             _ => return None,
         };
         self.kind += 1;
-        Some((func, name.to_owned(), MutationKind::Changed))
+        Some((func, name.to_owned(), ProgressStatus::Changed))
     }
 }
 
@@ -622,6 +634,12 @@ fn reduce(
                     }
                 };
 
+                if let ProgressStatus::Skip = mutation_kind {
+                    // The mutator didn't change anything, but we want to try more mutator
+                    // iterations.
+                    continue;
+                }
+
                 progress_bar.set_message(&msg);
 
                 match context.check_for_crash(&mutated_func) {
@@ -633,11 +651,12 @@ fn reduce(
                         // Panic remained while shrinking, make changes definitive.
                         func = mutated_func;
                         let verb = match mutation_kind {
-                            MutationKind::ExpandedOrShrinked => {
+                            ProgressStatus::ExpandedOrShrinked => {
                                 should_keep_reducing = true;
                                 "shrink"
                             }
-                            MutationKind::Changed => "changed",
+                            ProgressStatus::Changed => "changed",
+                            ProgressStatus::Skip => unreachable!(),
                         };
                         if verbose {
                             progress_bar.println(format!("{}: {}", msg, verb));
