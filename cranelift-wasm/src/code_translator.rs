@@ -200,62 +200,69 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let i = state.control_stack.len() - 1;
             match state.control_stack[i] {
                 ControlStackFrame::If {
-                    else_data: ElseData::NoElse { branch_inst },
-                    ref mut reachable_from_top,
+                    ref else_data,
+                    head_is_reachable,
+                    ref mut consequent_ends_reachable,
+                    num_return_values,
                     blocktype,
                     destination,
                     ..
                 } => {
-                    // We take the control frame pushed by the if, use its ebb
-                    // as the else body and push a new control frame with a new
-                    // ebb for the code after the if/then/else. At the end of the
-                    // then clause we jump to the destination.
+                    // We finished the consequent, so record its final
+                    // reachability state.
+                    debug_assert!(consequent_ends_reachable.is_none());
+                    *consequent_ends_reachable = Some(state.reachable);
 
-                    // The `if` has an `else`, so there's no branch to the end from the top.
-                    *reachable_from_top = false;
+                    if head_is_reachable {
+                        // We have a branch from the head of the `if` to the `else`.
+                        state.reachable = true;
 
-                    let (params, _results) =
-                        blocktype_params_results(module_translation_state, blocktype)?;
-                    let else_ebb = ebb_with_params(builder, params)?;
-                    builder.ins().jump(destination, state.peekn(params.len()));
-                    state.popn(params.len());
+                        // Ensure we have an ebb for the `else` block (it may have
+                        // already been pre-allocated, see `ElseData` for details).
+                        let else_ebb = match *else_data {
+                            ElseData::NoElse { branch_inst } => {
+                                let (params, _results) =
+                                    blocktype_params_results(module_translation_state, blocktype)?;
+                                debug_assert_eq!(params.len(), num_return_values);
+                                let else_ebb = ebb_with_params(builder, params)?;
+                                builder.ins().jump(destination, state.peekn(params.len()));
+                                state.popn(params.len());
 
-                    // You might be expecting that we push the parameters for this
-                    // `else` block here, something like this:
-                    //
-                    //     state.pushn(&control_stack_frame.params);
-                    //
-                    // We don't do that because they are already on the top of the stack
-                    // for us: we pushed the parameters twice when we saw the initial
-                    // `if` so that we wouldn't have to save the parameters in the
-                    // `ControlStackFrame` as another `Vec` allocation.
+                                builder.change_jump_destination(branch_inst, else_ebb);
+                                builder.seal_block(else_ebb);
+                                else_ebb
+                            }
+                            ElseData::WithElse { else_block } => {
+                                builder
+                                    .ins()
+                                    .jump(destination, state.peekn(num_return_values));
+                                state.popn(num_return_values);
+                                else_block
+                            }
+                        };
 
-                    builder.change_jump_destination(branch_inst, else_ebb);
-                    builder.seal_block(else_ebb);
-                    builder.switch_to_block(else_ebb);
+                        // You might be expecting that we push the parameters for this
+                        // `else` block here, something like this:
+                        //
+                        //     state.pushn(&control_stack_frame.params);
+                        //
+                        // We don't do that because they are already on the top of the stack
+                        // for us: we pushed the parameters twice when we saw the initial
+                        // `if` so that we wouldn't have to save the parameters in the
+                        // `ControlStackFrame` as another `Vec` allocation.
 
-                    // NB: we don't bother updating the control frame's
-                    // `ElseData` because nothing else will read it.
-                }
-                ControlStackFrame::If {
-                    destination,
-                    num_return_values,
-                    else_data: ElseData::WithElse { else_block, .. },
-                    reachable_from_top,
-                    ..
-                } => {
-                    debug_assert!(!reachable_from_top);
-                    builder
-                        .ins()
-                        .jump(destination, state.peekn(num_return_values));
-                    state.popn(num_return_values);
-                    builder.switch_to_block(else_block);
+                        builder.switch_to_block(else_ebb);
+
+                        // We don't bother updating the control frame's `ElseData`
+                        // to `WithElse` because nothing else will read it.
+                    }
                 }
                 _ => unreachable!(),
             }
         }
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
+
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let return_count = frame.num_return_values();
                 builder
@@ -1212,6 +1219,7 @@ fn translate_unreachable_operator(
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
 ) -> WasmResult<()> {
+    debug_assert!(!state.reachable);
     match *op {
         Operator::If { ty } => {
             // Push a placeholder control stack entry. The if isn't reachable,
@@ -1233,25 +1241,33 @@ fn translate_unreachable_operator(
             let i = state.control_stack.len() - 1;
             match state.control_stack[i] {
                 ControlStackFrame::If {
-                    else_data: ElseData::NoElse { branch_inst },
-                    ref mut reachable_from_top,
+                    ref else_data,
+                    head_is_reachable,
+                    ref mut consequent_ends_reachable,
                     blocktype,
                     ..
                 } => {
-                    if *reachable_from_top {
-                        // We have a branch from the top of the if to the else.
+                    debug_assert!(consequent_ends_reachable.is_none());
+                    *consequent_ends_reachable = Some(state.reachable);
+
+                    if head_is_reachable {
+                        // We have a branch from the head of the `if` to the `else`.
                         state.reachable = true;
-                        // And because there's an else, there can no longer be a
-                        // branch from the top directly to the end.
-                        *reachable_from_top = false;
 
-                        let (params, _results) =
-                            blocktype_params_results(module_translation_state, blocktype)?;
-                        let else_ebb = ebb_with_params(builder, params)?;
+                        let else_ebb = match *else_data {
+                            ElseData::NoElse { branch_inst } => {
+                                let (params, _results) =
+                                    blocktype_params_results(module_translation_state, blocktype)?;
+                                let else_ebb = ebb_with_params(builder, params)?;
 
-                        // We change the target of the branch instruction.
-                        builder.change_jump_destination(branch_inst, else_ebb);
-                        builder.seal_block(else_ebb);
+                                // We change the target of the branch instruction.
+                                builder.change_jump_destination(branch_inst, else_ebb);
+                                builder.seal_block(else_ebb);
+                                else_ebb
+                            }
+                            ElseData::WithElse { else_block } => else_block,
+                        };
+
                         builder.switch_to_block(else_ebb);
 
                         // Again, no need to push the parameters for the `else`,
@@ -1259,18 +1275,6 @@ fn translate_unreachable_operator(
                         // the comment for translating `Operator::Else` in
                         // `translate_operator` for details.
                     }
-                }
-                ControlStackFrame::If {
-                    else_data: ElseData::WithElse { else_block, .. },
-                    reachable_from_top,
-                    ..
-                } => {
-                    debug_assert!(
-                        !reachable_from_top,
-                        "should not be reachable from top if we have an else block"
-                    );
-                    builder.switch_to_block(else_block);
-                    state.reachable = true;
                 }
                 _ => unreachable!(),
             }
@@ -1291,23 +1295,24 @@ fn translate_unreachable_operator(
                     // And loops can't have branches to the end.
                     false
                 }
+                // If we never set `consequent_ends_reachable` then that means
+                // we are finishing the consequent now, and there was no
+                // `else`. Whether the following block is reachable depends only
+                // on if the head was reachable.
                 ControlStackFrame::If {
-                    else_data: ElseData::WithElse { .. },
-                    reachable_from_top,
+                    head_is_reachable,
+                    consequent_ends_reachable: None,
                     ..
-                } => {
-                    debug_assert!(!reachable_from_top);
-                    true
-                }
+                } => head_is_reachable,
+                // Since we are only in this function when in unreachable code,
+                // we know that the alternative just ended unreachable. Whether
+                // the following block is reachable depends on if the consequent
+                // ended reachable or not.
                 ControlStackFrame::If {
-                    else_data: ElseData::NoElse { .. },
-                    reachable_from_top,
+                    head_is_reachable,
+                    consequent_ends_reachable: Some(consequent_ends_reachable),
                     ..
-                } => {
-                    // A reachable if without an else has a branch from the top
-                    // directly to the bottom.
-                    reachable_from_top
-                }
+                } => head_is_reachable && consequent_ends_reachable,
                 // All other control constructs are already handled.
                 _ => false,
             };

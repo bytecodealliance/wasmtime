@@ -17,13 +17,22 @@ use std::vec::Vec;
 #[derive(Debug)]
 pub enum ElseData {
     /// The `if` does not already have an `else` block.
+    ///
+    /// This doesn't mean that it will never have an `else`, just that we
+    /// haven't seen it yet.
     NoElse {
         /// If we discover that we need an `else` block, this is the jump
         /// instruction that needs to be fixed up to point to the new `else`
         /// block rather than the destination block after the `if...end`.
         branch_inst: Inst,
     },
+
     /// We have already allocated an `else` block.
+    ///
+    /// Usually we don't know whether we will hit an `if .. end` or an `if
+    /// .. else .. end`, but sometimes we can tell based on the block's type
+    /// signature that the signature is not valid if there isn't an `else`. In
+    /// these cases, we pre-allocate the `else` block.
     WithElse {
         /// This is the `else` block.
         else_block: Ebb,
@@ -49,8 +58,18 @@ pub enum ControlStackFrame {
         num_return_values: usize,
         original_stack_size: usize,
         exit_is_branched_to: bool,
-        reachable_from_top: bool,
         blocktype: wasmparser::TypeOrFuncType,
+        /// Was the head of the `if` reachable?
+        head_is_reachable: bool,
+        /// What was the reachability at the end of the consequent?
+        ///
+        /// This is `None` until we're finished translating the consequent, and
+        /// is set to `Some` either by hitting an `else` when we will begin
+        /// translating the alternative, or by hitting an `end` in which case
+        /// there is no alternative.
+        consequent_ends_reachable: Option<bool>,
+        // Note: no need for `alternative_ends_reachable` because that is just
+        // `state.reachable` when we hit the `end` in the `if .. else .. end`.
     },
     Block {
         destination: Ebb,
@@ -370,11 +389,6 @@ impl FuncTranslationState {
             self.stack.push(val);
         }
 
-        let has_else = match else_data {
-            ElseData::NoElse { .. } => false,
-            ElseData::WithElse { .. } => true,
-        };
-
         self.control_stack.push(ControlStackFrame::If {
             destination,
             else_data,
@@ -382,7 +396,8 @@ impl FuncTranslationState {
             num_param_values: num_param_types,
             num_return_values: num_result_types,
             exit_is_branched_to: false,
-            reachable_from_top: self.reachable && !has_else,
+            head_is_reachable: self.reachable,
+            consequent_ends_reachable: None,
             blocktype,
         });
     }
