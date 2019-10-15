@@ -88,6 +88,7 @@ jobs:
     - bash: cargo install cargo-fuzz
       displayName: Install cargo-fuzz
       condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
+
     - bash: |
         fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
         cargo fuzz run fuzz_translate_module \
@@ -96,6 +97,7 @@ jobs:
       env:
         RUST_BACKTRACE: 1
       condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
+      continueOnError: true
 
 - job: Fuzz_regression
   displayName: Fuzz regression
