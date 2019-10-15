@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-codegen"
-version = "0.45.0"
+version = "0.46.0"
 description = "Low-level code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
@@ -13,9 +13,9 @@ build = "build.rs"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen-shared = { path = "./shared", version = "0.45.0" }
-cranelift-entity = { path = "../cranelift-entity", version = "0.45.0" }
-cranelift-bforest = { path = "../cranelift-bforest", version = "0.45.0" }
+cranelift-codegen-shared = { path = "./shared", version = "0.46.0" }
+cranelift-entity = { path = "../cranelift-entity", version = "0.46.0" }
+cranelift-bforest = { path = "../cranelift-bforest", version = "0.46.0" }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 hashbrown = { version = "0.6", optional = true }
@@ -29,7 +29,7 @@ smallvec = { version = "0.6.10" }
 # accomodated in `tests`.
 
 [build-dependencies]
-cranelift-codegen-meta = { path = "meta", version = "0.45.0" }
+cranelift-codegen-meta = { path = "meta", version = "0.46.0" }
 
 [features]
 default = ["std"]
