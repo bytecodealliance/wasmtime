@@ -19,7 +19,8 @@ pub struct ModuleTranslationState {
 }
 
 impl ModuleTranslationState {
-    pub(crate) fn new() -> Self {
+    /// Creates a new empty ModuleTranslationState.
+    pub fn new() -> Self {
         ModuleTranslationState {
             wasm_types: PrimaryMap::new(),
         }
