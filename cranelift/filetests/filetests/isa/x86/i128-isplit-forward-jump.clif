@@ -18,5 +18,8 @@ ebb5:
     v27 = bxor.i128 v2, v2
     v32 = iconst.i32 0
     brz v32, ebb2
+    jump ebb6
+
+ebb6:
     trap user0
 }
