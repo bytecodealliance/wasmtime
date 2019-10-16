@@ -2,8 +2,22 @@
 #![allow(unused_unsafe)]
 use crate::sys::host_impl;
 use crate::{host, Result};
-use nix::libc::{self, c_long};
 use std::fs::File;
+
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        pub(crate) use super::super::linux::fs_helpers::*;
+    } else if #[cfg(any(
+            target_os = "macos",
+            target_os = "netbsd",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "ios",
+            target_os = "dragonfly"
+    ))] {
+        pub(crate) use super::super::bsd::fs_helpers::*;
+    }
+}
 
 pub(crate) fn path_open_rights(
     rights_base: host::__wasi_rights_t,
@@ -62,24 +76,4 @@ pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
     fcntl::readlinkat(dirfd.as_raw_fd(), path, readlink_buf)
         .map_err(Into::into)
         .and_then(host_impl::path_from_host)
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn utime_now() -> c_long {
-    libc::UTIME_NOW
-}
-
-#[cfg(target_os = "macos")]
-pub(crate) fn utime_now() -> c_long {
-    -1
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn utime_omit() -> c_long {
-    libc::UTIME_OMIT
-}
-
-#[cfg(target_os = "macos")]
-pub(crate) fn utime_omit() -> c_long {
-    -2
 }

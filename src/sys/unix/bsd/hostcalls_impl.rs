@@ -8,6 +8,47 @@ use std::ffi::CString;
 use std::fs::File;
 use std::os::unix::prelude::AsRawFd;
 
+pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
+    use nix::errno;
+    use nix::libc::unlinkat;
+
+    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+
+    // nix doesn't expose unlinkat() yet
+    match unsafe { unlinkat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0) } {
+        0 => Ok(()),
+        _ => {
+            let mut e = errno::Errno::last();
+
+            // Non-Linux implementations may return EPERM when attempting to remove a
+            // directory without REMOVEDIR. While that's what POSIX specifies, it's
+            // less useful. Adjust this to EISDIR. It doesn't matter that this is not
+            // atomic with the unlinkat, because if the file is removed and a directory
+            // is created before fstatat sees it, we're racing with that change anyway
+            // and unlinkat could have legitimately seen the directory if the race had
+            // turned out differently.
+            use nix::fcntl::AtFlags;
+            use nix::sys::stat::{fstatat, SFlag};
+
+            if e == errno::Errno::EPERM {
+                if let Ok(stat) = fstatat(
+                    resolved.dirfd().as_raw_fd(),
+                    resolved.path(),
+                    AtFlags::AT_SYMLINK_NOFOLLOW,
+                ) {
+                    if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFDIR) {
+                        e = errno::Errno::EISDIR;
+                    }
+                } else {
+                    e = errno::Errno::last();
+                }
+            }
+
+            Err(host_impl::errno_from_nix(e))
+        }
+    }
+}
+
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::{errno::Errno, fcntl::AtFlags, libc::renameat, sys::stat::fstatat};
     let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;

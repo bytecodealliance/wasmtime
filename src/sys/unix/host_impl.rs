@@ -3,10 +3,25 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 use crate::hostcalls_impl::FileType;
-use crate::{host, memory, Error, Result};
+use crate::{host, Error, Result};
 use log::warn;
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
+
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        pub(crate) use super::linux::host_impl::*;
+    } else if #[cfg(any(
+            target_os = "macos",
+            target_os = "netbsd",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "ios",
+            target_os = "dragonfly"
+    ))] {
+        pub(crate) use super::bsd::host_impl::*;
+    }
+}
 
 pub(crate) fn errno_from_nix(errno: nix::errno::Errno) -> Error {
     match errno {
@@ -90,12 +105,6 @@ pub(crate) fn errno_from_nix(errno: nix::errno::Errno) -> Error {
         }
     }
 }
-
-#[cfg(target_os = "linux")]
-pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
-
-#[cfg(not(target_os = "linux"))]
-pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_SYNC;
 
 pub(crate) fn nix_from_fdflags(fdflags: host::__wasi_fdflags_t) -> nix::fcntl::OFlag {
     use nix::fcntl::OFlag;
@@ -226,34 +235,6 @@ pub(crate) fn dirent_filetype_from_host(
         libc::DT_UNKNOWN => Ok(host::__WASI_FILETYPE_UNKNOWN),
         _ => Err(Error::EINVAL),
     }
-}
-
-#[cfg(target_os = "linux")]
-pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<host::__wasi_dirent_t> {
-    let mut entry = unsafe { std::mem::zeroed::<host::__wasi_dirent_t>() };
-    let d_namlen = unsafe { std::ffi::CStr::from_ptr(host_entry.d_name.as_ptr()) }
-        .to_bytes()
-        .len();
-    if d_namlen > u32::max_value() as usize {
-        return Err(Error::EIO);
-    }
-    let d_type = dirent_filetype_from_host(host_entry)?;
-    entry.d_ino = memory::enc_inode(host_entry.d_ino);
-    entry.d_next = memory::enc_dircookie(host_entry.d_off as u64);
-    entry.d_namlen = memory::enc_u32(d_namlen as u32);
-    entry.d_type = memory::enc_filetype(d_type);
-    Ok(entry)
-}
-
-#[cfg(not(target_os = "linux"))]
-pub(crate) fn dirent_from_host(host_entry: &nix::libc::dirent) -> Result<host::__wasi_dirent_t> {
-    let mut entry = unsafe { std::mem::zeroed::<host::__wasi_dirent_t>() };
-    let d_type = dirent_filetype_from_host(host_entry)?;
-    entry.d_ino = memory::enc_inode(host_entry.d_ino);
-    entry.d_next = memory::enc_dircookie(host_entry.d_seekoff);
-    entry.d_namlen = memory::enc_u32(u32::from(host_entry.d_namlen));
-    entry.d_type = memory::enc_filetype(d_type);
-    Ok(entry)
 }
 
 /// Creates owned WASI path from OS string.

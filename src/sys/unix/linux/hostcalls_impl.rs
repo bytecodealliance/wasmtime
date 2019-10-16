@@ -9,6 +9,21 @@ use std::fs::File;
 use std::mem::MaybeUninit;
 use std::os::unix::prelude::AsRawFd;
 
+pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
+    use nix::errno;
+    use nix::libc::unlinkat;
+
+    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+
+    // nix doesn't expose unlinkat() yet
+    let res = unsafe { unlinkat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0) };
+    if res == 0 {
+        Ok(())
+    } else {
+        Err(host_impl::errno_from_nix(errno::Errno::last()))
+    }
+}
+
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::libc::renameat;
     let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
