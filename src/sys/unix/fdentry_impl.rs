@@ -6,6 +6,7 @@ use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
         pub(crate) use super::linux::osfile::*;
+        pub(crate) use super::linux::fdentry_impl::*;
     } else if #[cfg(any(
             target_os = "macos",
             target_os = "netbsd",
@@ -15,6 +16,7 @@ cfg_if::cfg_if! {
             target_os = "dragonfly"
     ))] {
         pub(crate) use super::bsd::osfile::*;
+        pub(crate) use super::bsd::fdentry_impl::*;
     }
 }
 
@@ -65,13 +67,15 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
         let file = std::mem::ManuallyDrop::new(std::fs::File::from_raw_fd(fd.as_raw_fd()));
         let ft = file.metadata()?.file_type();
         if ft.is_block_device() {
+            log::debug!("Fd {:?} is a block device", fd.as_raw_fd());
             (
                 host::__WASI_FILETYPE_BLOCK_DEVICE,
                 host::RIGHTS_BLOCK_DEVICE_BASE,
                 host::RIGHTS_BLOCK_DEVICE_INHERITING,
             )
         } else if ft.is_char_device() {
-            if nix::unistd::isatty(fd.as_raw_fd())? {
+            log::debug!("Fd {:?} is a char device", fd.as_raw_fd());
+            if isatty(fd)? {
                 (
                     host::__WASI_FILETYPE_CHARACTER_DEVICE,
                     host::RIGHTS_TTY_BASE,
@@ -85,18 +89,21 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
                 )
             }
         } else if ft.is_dir() {
+            log::debug!("Fd {:?} is a directory", fd.as_raw_fd());
             (
                 host::__WASI_FILETYPE_DIRECTORY,
                 host::RIGHTS_DIRECTORY_BASE,
                 host::RIGHTS_DIRECTORY_INHERITING,
             )
         } else if ft.is_file() {
+            log::debug!("Fd {:?} is a file", fd.as_raw_fd());
             (
                 host::__WASI_FILETYPE_REGULAR_FILE,
                 host::RIGHTS_REGULAR_FILE_BASE,
                 host::RIGHTS_REGULAR_FILE_INHERITING,
             )
         } else if ft.is_socket() {
+            log::debug!("Fd {:?} is a socket", fd.as_raw_fd());
             use nix::sys::socket;
             match socket::getsockopt(fd.as_raw_fd(), socket::sockopt::SockType)? {
                 socket::SockType::Datagram => (
@@ -112,12 +119,14 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
                 _ => return Err(Error::EINVAL),
             }
         } else if ft.is_fifo() {
+            log::debug!("Fd {:?} is a fifo", fd.as_raw_fd());
             (
                 host::__WASI_FILETYPE_UNKNOWN,
                 host::RIGHTS_REGULAR_FILE_BASE,
                 host::RIGHTS_REGULAR_FILE_INHERITING,
             )
         } else {
+            log::debug!("Fd {:?} is unknown", fd.as_raw_fd());
             return Err(Error::EINVAL);
         }
     };

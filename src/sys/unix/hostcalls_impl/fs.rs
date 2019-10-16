@@ -120,6 +120,10 @@ pub(crate) fn path_open(
     // Call openat. Use mode 0o666 so that we follow whatever the user's
     // umask is, but don't set the executable flag, because it isn't yet
     // meaningful for WASI programs to create executable files.
+
+    log::debug!("path_open resolved = {:?}", resolved);
+    log::debug!("path_open oflags = {:?}", nix_all_oflags);
+
     let new_fd = match openat(
         resolved.dirfd().as_raw_fd(),
         resolved.path(),
@@ -171,6 +175,8 @@ pub(crate) fn path_open(
             }
         }
     };
+
+    log::debug!("path_open new_fd = {:?}", new_fd);
 
     // Determine the type of the new file descriptor and which rights contradict with this type
     Ok(unsafe { File::from_raw_fd(new_fd) })
