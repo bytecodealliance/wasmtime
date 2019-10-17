@@ -1,7 +1,6 @@
 //! Support for a calling of an imported function.
 
 use crate::r#ref::HostRef;
-use crate::trampoline::code_memory::CodeMemory;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode};
 use cranelift_codegen::Context;
@@ -12,6 +11,7 @@ use cranelift_wasm::{DefinedFuncIndex, FuncIndex};
 //use target_lexicon::HOST;
 use failure::Error;
 use wasmtime_environ::{Export, Module};
+use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
 
 use alloc::boxed::Box;

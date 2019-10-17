@@ -8,7 +8,7 @@ use region;
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
 /// Memory manager for executable code.
-pub(crate) struct CodeMemory {
+pub struct CodeMemory {
     current: Mmap,
     mmaps: Vec<Mmap>,
     position: usize,
