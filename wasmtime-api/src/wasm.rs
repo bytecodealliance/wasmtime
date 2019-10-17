@@ -859,6 +859,11 @@ pub unsafe extern "C" fn wasm_valtype_new(kind: wasm_valkind_t) -> *mut wasm_val
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasm_valtype_delete(vt: *mut wasm_valtype_t) {
+    drop(Box::from_raw(vt));
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasm_byte_vec_new(
     out: *mut wasm_byte_vec_t,
     size: usize,
