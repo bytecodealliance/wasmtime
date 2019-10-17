@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 cranelift-codegen = "0.44.0"
 cranelift-native = "0.44.0"
 cranelift-entity = "0.44.0"
-cranelift-wasm = "0.44.0"
+cranelift-wasm = "0.46.1"
 cranelift-frontend = "0.44.0"
 wasmtime-environ = { path = "../../wasmtime-environ" }
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
