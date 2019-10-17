@@ -4,6 +4,8 @@
 //! Zwinkau A. (2013) Simple and Efficient Construction of Static Single Assignment Form.
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
+//!
+//! https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf
 
 use crate::Variable;
 use alloc::vec::Vec;
@@ -35,20 +37,24 @@ use smallvec::SmallVec;
 /// and it is said _sealed_ if all of its predecessors have been declared. Only filled predecessors
 /// can be declared.
 pub struct SSABuilder {
-    // Records for every variable and for every relevant block, the last definition of
-    // the variable in the block.
     // TODO: Consider a sparse representation rather than SecondaryMap-of-SecondaryMap.
+    /// Records for every variable and for every relevant block, the last definition of
+    /// the variable in the block.
     variables: SecondaryMap<Variable, SecondaryMap<Block, PackedOption<Value>>>,
-    // Records the position of the basic blocks and the list of values used but not defined in the
-    // block.
+
+    /// Records the position of the basic blocks and the list of values used but not defined in the
+    /// block.
     blocks: PrimaryMap<Block, BlockData>,
-    // Records the basic blocks at the beginning of the `Ebb`s.
+
+    /// Records the basic blocks at the beginning of the `Ebb`s.
     ebb_headers: SecondaryMap<Ebb, PackedOption<Block>>,
 
-    // Call and result stacks for use in the `use_var`/`predecessors_lookup` state machine.
+    /// Call stack for use in the `use_var`/`predecessors_lookup` state machine.
     calls: Vec<Call>,
+    /// Result stack for use in the `use_var`/`predecessors_lookup` state machine.
     results: Vec<Value>,
-    // Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
+
+    /// Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
     side_effects: SideEffects,
 }
 
@@ -200,6 +206,7 @@ enum ZeroOneOrMore<T> {
     More,
 }
 
+/// Cases used internally by `use_var_nonlocal()` for avoiding the borrow checker.
 #[derive(Debug)]
 enum UseVarCases {
     Unsealed(Value),
@@ -245,6 +252,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
         panic!("unimplemented type: {:?}", ty)
     }
 }
+
 /// The following methods are the API of the SSA builder. Here is how it should be used when
 /// translating to Cranelift IR:
 ///
@@ -288,36 +296,45 @@ impl SSABuilder {
         ty: Type,
         block: Block,
     ) -> (Value, SideEffects) {
-        // First we lookup for the current definition of the variable in this block
+        // First, try Local Value Numbering (Algorithm 1 in the paper).
+        // If the variable already has a known Value in this block, use that.
         if let Some(var_defs) = self.variables.get(var) {
             if let Some(val) = var_defs[block].expand() {
                 return (val, SideEffects::new());
             }
         }
 
-        // Otherwise, we have to do a non-local lookup.
+        // Otherwise, use Global Value Numbering (Algorithm 2 in the paper).
+        // This resolves the Value with respect to its predecessors.
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
         debug_assert!(self.side_effects.is_empty());
+
+        // Prepare the 'calls' and 'results' stacks for the state machine.
         self.use_var_nonlocal(func, var, ty, block);
-        (
-            self.run_state_machine(func, var, ty),
-            mem::replace(&mut self.side_effects, SideEffects::new()),
-        )
+
+        let value = self.run_state_machine(func, var, ty);
+        let side_effects = mem::replace(&mut self.side_effects, SideEffects::new());
+
+        (value, side_effects)
     }
 
-    /// Resolve a use of `var` in `block` in the case where there's no prior def
-    /// in `block`.
+    /// Resolve the minimal SSA Value of `var` in `block` by traversing predecessors.
+    ///
+    /// This function sets up state for `run_state_machine()` but does not execute it.
     fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, block: Block) {
+        // This function is split into two parts to appease the borrow checker.
+        // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
         let case = match self.blocks[block] {
             BlockData::EbbHeader(ref mut data) => {
                 // The block has multiple predecessors so we append an Ebb parameter that
                 // will serve as a value.
                 if data.sealed {
                     if data.predecessors.len() == 1 {
-                        // Only one predecessor, straightforward case
+                        // Optimize the common case of one predecessor: no param needed.
                         UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
                     } else {
+                        // Break potential cycles by eagerly adding an operandless param.
                         let val = func.dfg.append_ebb_param(data.ebb, ty);
                         UseVarCases::SealedMultiplePredecessors(val, data.ebb)
                     }
@@ -329,22 +346,26 @@ impl SSABuilder {
             }
             BlockData::EbbBody { predecessor: pred } => UseVarCases::SealedOnePredecessor(pred),
         };
+
+        // Part 2: Prepare SSABuilder state for run_state_machine().
         match case {
-            // The block has a single predecessor, we look into it.
             UseVarCases::SealedOnePredecessor(pred) => {
+                // Get the Value directly from the single predecessor.
                 self.calls.push(Call::FinishSealedOnePredecessor(block));
                 self.calls.push(Call::UseVar(pred));
             }
-            // The block has multiple predecessors, we register the EBB parameter as the current
-            // definition for the variable.
             UseVarCases::Unsealed(val) => {
+                // Define the operandless param added above to prevent lookup cycles.
                 self.def_var(var, val, block);
+
+                // Nothing more can be known at this point.
                 self.results.push(val);
             }
             UseVarCases::SealedMultiplePredecessors(val, ebb) => {
-                // If multiple predecessor we look up a use_var in each of them:
-                // if they all yield the same value no need for an EBB parameter
+                // Define the operandless param added above to prevent lookup cycles.
                 self.def_var(var, val, block);
+
+                // Look up a use_var for each precessor.
                 self.begin_predecessors_lookup(val, ebb);
             }
         }
@@ -487,30 +508,47 @@ impl SSABuilder {
         }
     }
 
-    /// Look up in the predecessors of an Ebb the def for a value an decides whether or not
-    /// to keep the eeb arg, and act accordingly. Returns the chosen value and optionally a
-    /// list of Ebb that are the middle of newly created critical edges splits.
+    /// Given the local SSA Value of a Variable in an Ebb, perform a recursive lookup on
+    /// predecessors to determine if it is redundant with another Value earlier in the CFG.
+    ///
+    /// If such a Value exists and is redundant, the local Value is replaced by the
+    /// corresponding non-local Value. If the original Value was an Ebb parameter,
+    /// the parameter may be removed if redundant. Parameters are placed eagerly by callers
+    /// to avoid infinite loops when looking up a Value for an Ebb that is in a CFG loop.
+    ///
+    /// Doing this lookup for each Value in each Ebb preserves SSA form during construction.
+    ///
+    /// Returns the chosen Value.
+    ///
+    /// ## Arguments
+    ///
+    /// `sentinel` is a dummy Ebb parameter inserted by `use_var_nonlocal()`.
+    /// Its purpose is to allow detection of CFG cycles while traversing predecessors.
+    ///
+    /// The `sentinel: Value` and the `ty: Type` are describing the `var: Variable`
+    /// that is being looked up.
     fn predecessors_lookup(
         &mut self,
         func: &mut Function,
-        temp_arg_val: Value,
-        temp_arg_var: Variable,
+        sentinel: Value,
+        var: Variable,
         ty: Type,
-        dest_ebb: Ebb,
+        ebb: Ebb,
     ) -> Value {
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
         // self.side_effects may be non-empty here so that callers can
         // accumulate side effects over multiple calls.
-        self.begin_predecessors_lookup(temp_arg_val, dest_ebb);
-        self.run_state_machine(func, temp_arg_var, ty)
+        self.begin_predecessors_lookup(sentinel, ebb);
+        self.run_state_machine(func, var, ty)
     }
 
-    /// Initiate use lookups in all predecessors of `dest_ebb`, and arrange for a call
-    /// to `finish_predecessors_lookup` once they complete.
-    fn begin_predecessors_lookup(&mut self, temp_arg_val: Value, dest_ebb: Ebb) {
+    /// Set up state for `run_state_machine()` to initiate non-local use lookups
+    /// in all predecessors of `dest_ebb`, and arrange for a call to
+    /// `finish_predecessors_lookup` once they complete.
+    fn begin_predecessors_lookup(&mut self, sentinel: Value, dest_ebb: Ebb) {
         self.calls
-            .push(Call::FinishPredecessorsLookup(temp_arg_val, dest_ebb));
+            .push(Call::FinishPredecessorsLookup(sentinel, dest_ebb));
         // Iterate over the predecessors.
         let mut calls = mem::replace(&mut self.calls, Vec::new());
         calls.extend(
@@ -527,31 +565,36 @@ impl SSABuilder {
     fn finish_predecessors_lookup(
         &mut self,
         func: &mut Function,
-        temp_arg_val: Value,
-        temp_arg_var: Variable,
+        sentinel: Value,
+        var: Variable,
         dest_ebb: Ebb,
     ) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero;
 
-        // Iterate over the predecessors.
-        for _ in 0..self.predecessors(dest_ebb).len() {
-            // For each predecessor, we query what is the local SSA value corresponding
-            // to var and we put it as an argument of the branch instruction.
-            let pred_val = self.results.pop().unwrap();
+        // Determine how many predecessors are yielding unique, non-temporary Values.
+        let num_predecessors = self.predecessors(dest_ebb).len();
+        for &pred_val in self.results.iter().rev().take(num_predecessors) {
             match pred_values {
                 ZeroOneOrMore::Zero => {
-                    if pred_val != temp_arg_val {
+                    if pred_val != sentinel {
                         pred_values = ZeroOneOrMore::One(pred_val);
                     }
                 }
                 ZeroOneOrMore::One(old_val) => {
-                    if pred_val != temp_arg_val && pred_val != old_val {
+                    if pred_val != sentinel && pred_val != old_val {
                         pred_values = ZeroOneOrMore::More;
+                        break;
                     }
                 }
-                ZeroOneOrMore::More => {}
+                ZeroOneOrMore::More => {
+                    break;
+                }
             }
         }
+
+        // Those predecessors' Values have been examined: pop all their results.
+        self.results.truncate(self.results.len() - num_predecessors);
+
         let result_val = match pred_values {
             ZeroOneOrMore::Zero => {
                 // The variable is used but never defined before. This is an irregularity in the
@@ -562,11 +605,11 @@ impl SSABuilder {
                 }
                 self.side_effects.instructions_added_to_ebbs.push(dest_ebb);
                 let zero = emit_zero(
-                    func.dfg.value_type(temp_arg_val),
+                    func.dfg.value_type(sentinel),
                     FuncCursor::new(func).at_first_insertion_point(dest_ebb),
                 );
-                func.dfg.remove_ebb_param(temp_arg_val);
-                func.dfg.change_to_alias(temp_arg_val, zero);
+                func.dfg.remove_ebb_param(sentinel);
+                func.dfg.change_to_alias(sentinel, zero);
                 zero
             }
             ZeroOneOrMore::One(pred_val) => {
@@ -577,15 +620,15 @@ impl SSABuilder {
                 // Resolve aliases eagerly so that we can check for cyclic aliasing,
                 // which can occur in unreachable code.
                 let mut resolved = func.dfg.resolve_aliases(pred_val);
-                if temp_arg_val == resolved {
+                if sentinel == resolved {
                     // Cycle detected. Break it by creating a zero value.
                     resolved = emit_zero(
-                        func.dfg.value_type(temp_arg_val),
+                        func.dfg.value_type(sentinel),
                         FuncCursor::new(func).at_first_insertion_point(dest_ebb),
                     );
                 }
-                func.dfg.remove_ebb_param(temp_arg_val);
-                func.dfg.change_to_alias(temp_arg_val, resolved);
+                func.dfg.remove_ebb_param(sentinel);
+                func.dfg.change_to_alias(sentinel, resolved);
                 resolved
             }
             ZeroOneOrMore::More => {
@@ -600,20 +643,15 @@ impl SSABuilder {
                 } in &mut preds
                 {
                     // We already did a full `use_var` above, so we can do just the fast path.
-                    let pred_val = self
-                        .variables
-                        .get(temp_arg_var)
-                        .unwrap()
-                        .get(*pred_block)
-                        .unwrap()
-                        .unwrap();
+                    let block_map = self.variables.get(var).unwrap();
+                    let pred_val = block_map.get(*pred_block).unwrap().unwrap();
                     let jump_arg = self.append_jump_argument(
                         func,
                         *last_inst,
                         *pred_block,
                         dest_ebb,
                         pred_val,
-                        temp_arg_var,
+                        var,
                     );
                     if let Some((middle_ebb, middle_block, middle_jump_inst)) = jump_arg {
                         *pred_block = middle_block;
@@ -625,7 +663,7 @@ impl SSABuilder {
                 debug_assert!(self.predecessors(dest_ebb).is_empty());
                 *self.predecessors_mut(dest_ebb) = preds;
 
-                temp_arg_val
+                sentinel
             }
         };
 
@@ -743,8 +781,8 @@ impl SSABuilder {
                 Call::FinishSealedOnePredecessor(block) => {
                     self.finish_sealed_one_predecessor(var, block);
                 }
-                Call::FinishPredecessorsLookup(temp_arg_val, dest_ebb) => {
-                    self.finish_predecessors_lookup(func, temp_arg_val, var, dest_ebb);
+                Call::FinishPredecessorsLookup(sentinel, dest_ebb) => {
+                    self.finish_predecessors_lookup(func, sentinel, var, dest_ebb);
                 }
             }
         }
