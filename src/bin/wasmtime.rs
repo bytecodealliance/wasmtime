@@ -42,7 +42,6 @@ use std::fs::File;
 use std::path::Component;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use wabt;
 use wasi_common::preopen_dir;
 use wasmtime::pick_compilation_strategy;
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
@@ -124,7 +123,7 @@ fn read_wasm(path: PathBuf) -> Result<Vec<u8>, Error> {
     Ok(if data.starts_with(&[b'\0', b'a', b's', b'm']) {
         data
     } else {
-        wabt::wat2wasm(data)?
+        wast::parse_file(&path)?
     })
 }
 
