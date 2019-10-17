@@ -2,6 +2,7 @@ test compile
 set opt_level=speed
 set enable_pinned_reg=true
 target x86_64 haswell
+feature !"basic-blocks"
 
 ;; Test for the issue #1123; https://github.com/CraneStation/cranelift/issues/1123
 

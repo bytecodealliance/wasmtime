@@ -2,6 +2,7 @@ test compile
 set opt_level=speed
 set enable_pinned_reg=true
 target x86_64 haswell
+feature !"basic-blocks"
 
 function u0:0(i32, i32, i32, i64 vmctx) -> i64 uext system_v {
 ebb0(v0: i32, v1: i32, v2: i32, v3: i64):
