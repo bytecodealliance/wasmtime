@@ -49,6 +49,48 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     }
 }
 
+pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
+    use nix::{errno::Errno, fcntl::AtFlags, libc::symlinkat, sys::stat::fstatat};
+
+    let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let new_path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+
+    log::debug!("path_symlink old_path = {:?}", old_path);
+    log::debug!("path_symlink resolved = {:?}", resolved);
+
+    let res = unsafe {
+        symlinkat(
+            old_path_cstr.as_ptr(),
+            resolved.dirfd().as_raw_fd(),
+            new_path_cstr.as_ptr(),
+        )
+    };
+    if res != 0 {
+        match Errno::last() {
+            Errno::ENOTDIR => {
+                // On BSD, symlinkat returns ENOTDIR when it should in fact
+                // return a EEXIST. It seems that it gets confused with by
+                // the trailing slash in the target path. Thus, we strip
+                // the trailing slash and check if the path exists, and
+                // adjust the error code appropriately.
+                let new_path = resolved.path().trim_end_matches('/');
+                if let Ok(_) = fstatat(
+                    resolved.dirfd().as_raw_fd(),
+                    new_path,
+                    AtFlags::AT_SYMLINK_NOFOLLOW,
+                ) {
+                    Err(Error::EEXIST)
+                } else {
+                    Err(Error::ENOTDIR)
+                }
+            }
+            x => Err(host_impl::errno_from_nix(x)),
+        }
+    } else {
+        Ok(())
+    }
+}
+
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::{errno::Errno, fcntl::AtFlags, libc::renameat, sys::stat::fstatat};
     let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;

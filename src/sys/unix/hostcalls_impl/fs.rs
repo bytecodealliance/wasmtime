@@ -337,26 +337,6 @@ pub(crate) fn path_filestat_set_times(
     utimensat(fd, resolved.path(), &atim, &mtim, atflags).map_err(Into::into)
 }
 
-pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
-    use nix::libc::symlinkat;
-
-    let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| Error::EILSEQ)?;
-    let new_path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
-
-    let res = unsafe {
-        symlinkat(
-            old_path_cstr.as_ptr(),
-            resolved.dirfd().as_raw_fd(),
-            new_path_cstr.as_ptr(),
-        )
-    };
-    if res != 0 {
-        Err(host_impl::errno_from_nix(nix::errno::Errno::last()))
-    } else {
-        Ok(())
-    }
-}
-
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
     use nix::errno;
     use nix::libc::{unlinkat, AT_REMOVEDIR};

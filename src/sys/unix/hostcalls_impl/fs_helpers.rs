@@ -57,6 +57,8 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
     use nix::sys::stat::Mode;
     use std::os::unix::prelude::{AsRawFd, FromRawFd};
 
+    log::debug!("path_get openat path = {:?}", path);
+
     fcntl::openat(
         dirfd.as_raw_fd(),
         path,
@@ -70,6 +72,8 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
 pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
     use nix::fcntl;
     use std::os::unix::prelude::AsRawFd;
+
+    log::debug!("path_get readlinkat path = {:?}", path);
 
     let readlink_buf = &mut [0u8; libc::PATH_MAX as usize + 1];
 

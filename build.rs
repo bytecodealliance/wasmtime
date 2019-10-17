@@ -170,15 +170,8 @@ mod wasm_tests {
     cfg_if::cfg_if! {
         if #[cfg(not(windows))] {
             /// Ignore tests that aren't supported yet.
-            fn ignore(testsuite: &str, name: &str) -> bool {
-                if testsuite == "misc_testsuite" {
-                    match name {
-                        "path_symlink_trailing_slashes" => true,
-                        _ => false,
-                    }
-                } else {
-                    unreachable!()
-                }
+            fn ignore(_testsuite: &str, _name: &str) -> bool {
+                false
             }
         } else {
             /// Ignore tests that aren't supported yet.

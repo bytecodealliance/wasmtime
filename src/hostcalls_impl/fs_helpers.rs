@@ -57,7 +57,7 @@ pub(crate) fn path_get(
     loop {
         match path_stack.pop() {
             Some(cur_path) => {
-                log::debug!("cur_path = {:?}", cur_path);
+                log::debug!("path_get cur_path = {:?}", cur_path);
 
                 let ends_with_slash = cur_path.ends_with('/');
                 let mut components = Path::new(&cur_path).components();
@@ -74,6 +74,8 @@ pub(crate) fn path_get(
                     }
                     path_stack.push(tail);
                 }
+
+                log::debug!("path_get path_stack = {:?}", path_stack);
 
                 match head {
                     Component::Prefix(_) | Component::RootDir => {
@@ -169,6 +171,10 @@ pub(crate) fn path_get(
                                 Err(e) => {
                                     if e.as_wasi_errno() != host::__WASI_EINVAL
                                         && e.as_wasi_errno() != host::__WASI_ENOENT
+                                        // this handles the cases when trying to link to
+                                        // a destination that already exists, and the target
+                                        // path contains a slash
+                                        && e.as_wasi_errno() != host::__WASI_ENOTDIR
                                     {
                                         return Err(e);
                                     }

@@ -927,7 +927,7 @@ pub(crate) unsafe fn path_symlink(
     let dirfd = wasi_ctx
         .get_fd_entry(dirfd, host::__WASI_RIGHT_PATH_SYMLINK, 0)
         .and_then(|fe| fe.fd_object.descriptor.as_file())?;
-    let resolved_new = path_get(dirfd, 0, new_path, false)?;
+    let resolved_new = path_get(dirfd, 0, new_path, true)?;
 
     hostcalls_impl::path_symlink(old_path, resolved_new)
 }
