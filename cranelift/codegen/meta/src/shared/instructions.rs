@@ -17,12 +17,7 @@ pub(crate) fn define(
     imm: &Immediates,
     entities: &EntityRefs,
 ) -> InstructionGroup {
-    let mut ig = InstructionGroupBuilder::new(
-        "base",
-        "Shared base instruction set",
-        all_instructions,
-        format_registry,
-    );
+    let mut ig = InstructionGroupBuilder::new(all_instructions, format_registry);
 
     // Operand kind shorthands.
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();

@@ -15,12 +15,7 @@ pub(crate) fn define(
     format_registry: &FormatRegistry,
     immediates: &Immediates,
 ) -> InstructionGroup {
-    let mut ig = InstructionGroupBuilder::new(
-        "x86",
-        "x86 specific instruction set",
-        &mut all_instructions,
-        format_registry,
-    );
+    let mut ig = InstructionGroupBuilder::new(&mut all_instructions, format_registry);
 
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
 

@@ -23,8 +23,6 @@ entity_impl!(OpcodeNumber);
 pub(crate) type AllInstructions = PrimaryMap<OpcodeNumber, Instruction>;
 
 pub(crate) struct InstructionGroupBuilder<'format_reg, 'all_inst> {
-    _name: &'static str,
-    _doc: &'static str,
     format_registry: &'format_reg FormatRegistry,
     all_instructions: &'all_inst mut AllInstructions,
     own_instructions: Vec<Instruction>,
@@ -32,14 +30,10 @@ pub(crate) struct InstructionGroupBuilder<'format_reg, 'all_inst> {
 
 impl<'format_reg, 'all_inst> InstructionGroupBuilder<'format_reg, 'all_inst> {
     pub fn new(
-        name: &'static str,
-        doc: &'static str,
         all_instructions: &'all_inst mut AllInstructions,
         format_registry: &'format_reg FormatRegistry,
     ) -> Self {
         Self {
-            _name: name,
-            _doc: doc,
             format_registry,
             all_instructions,
             own_instructions: Vec::new(),
@@ -56,8 +50,6 @@ impl<'format_reg, 'all_inst> InstructionGroupBuilder<'format_reg, 'all_inst> {
 
     pub fn build(self) -> InstructionGroup {
         InstructionGroup {
-            _name: self._name,
-            _doc: self._doc,
             instructions: self.own_instructions,
         }
     }
@@ -67,8 +59,6 @@ impl<'format_reg, 'all_inst> InstructionGroupBuilder<'format_reg, 'all_inst> {
 /// target architecture can support instructions from multiple groups, and it
 /// does not necessarily support all instructions in a group.
 pub(crate) struct InstructionGroup {
-    _name: &'static str,
-    _doc: &'static str,
     instructions: Vec<Instruction>,
 }
 

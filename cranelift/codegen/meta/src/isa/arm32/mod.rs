@@ -54,8 +54,6 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let regs = define_regs();
 
     let inst_group = InstructionGroupBuilder::new(
-        "arm32",
-        "arm32 specific instruction set",
         &mut shared_defs.all_instructions,
         &shared_defs.format_registry,
     )
