@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
     fds: HashMap<host::__wasi_fd_t, FdEntry>,
-    preopens: HashMap<PathBuf, File>,
+    preopens: Vec<(PathBuf, File)>,
     args: Vec<CString>,
     env: HashMap<CString, CString>,
 }
@@ -21,7 +21,7 @@ impl WasiCtxBuilder {
     pub fn new() -> Result<Self> {
         let mut builder = Self {
             fds: HashMap::new(),
-            preopens: HashMap::new(),
+            preopens: Vec::new(),
             args: vec![],
             env: HashMap::new(),
         };
@@ -98,7 +98,7 @@ impl WasiCtxBuilder {
 
     /// Add a preopened directory.
     pub fn preopened_dir<P: AsRef<Path>>(mut self, dir: File, guest_path: P) -> Self {
-        self.preopens.insert(guest_path.as_ref().to_owned(), dir);
+        self.preopens.push((guest_path.as_ref().to_owned(), dir));
         self
     }
 
