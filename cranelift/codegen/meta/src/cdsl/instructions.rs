@@ -3,7 +3,6 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Error, Formatter};
-use std::ops;
 use std::rc::Rc;
 
 use crate::cdsl::camel_case;
@@ -152,19 +151,7 @@ pub(crate) struct InstructionContent {
     pub writes_cpu_flags: bool,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct Instruction {
-    content: Rc<InstructionContent>,
-}
-
-impl ops::Deref for Instruction {
-    type Target = InstructionContent;
-    fn deref(&self) -> &Self::Target {
-        &*self.content
-    }
-}
-
-impl Instruction {
+impl InstructionContent {
     pub fn snake_name(&self) -> &str {
         if &self.name == "return" {
             "return_"
@@ -185,13 +172,15 @@ impl Instruction {
     }
 }
 
+pub(crate) type Instruction = Rc<InstructionContent>;
+
 impl Bindable for Instruction {
     fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
         BoundInstruction::new(self).bind(parameter)
     }
 }
 
-impl fmt::Display for Instruction {
+impl fmt::Display for InstructionContent {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         if self.operands_out.len() > 0 {
             let operands_out = self
@@ -352,33 +341,31 @@ impl InstructionBuilder {
 
         let camel_name = camel_case(&self.name);
 
-        Instruction {
-            content: Rc::new(InstructionContent {
-                name: self.name,
-                camel_name,
-                opcode_number,
-                doc: self.doc,
-                operands_in,
-                operands_out,
-                constraints: self.constraints.unwrap_or_else(Vec::new),
-                format: format_index,
-                polymorphic_info,
-                value_opnums,
-                value_results,
-                imm_opnums,
-                is_terminator: self.is_terminator,
-                is_branch: self.is_branch,
-                is_indirect_branch: self.is_indirect_branch,
-                is_call: self.is_call,
-                is_return: self.is_return,
-                is_ghost: self.is_ghost,
-                can_load: self.can_load,
-                can_store: self.can_store,
-                can_trap: self.can_trap,
-                other_side_effects: self.other_side_effects,
-                writes_cpu_flags,
-            }),
-        }
+        Rc::new(InstructionContent {
+            name: self.name,
+            camel_name,
+            opcode_number,
+            doc: self.doc,
+            operands_in,
+            operands_out,
+            constraints: self.constraints.unwrap_or_else(Vec::new),
+            format: format_index,
+            polymorphic_info,
+            value_opnums,
+            value_results,
+            imm_opnums,
+            is_terminator: self.is_terminator,
+            is_branch: self.is_branch,
+            is_indirect_branch: self.is_indirect_branch,
+            is_call: self.is_call,
+            is_return: self.is_return,
+            is_ghost: self.is_ghost,
+            can_load: self.can_load,
+            can_store: self.can_store,
+            can_trap: self.can_trap,
+            other_side_effects: self.other_side_effects,
+            writes_cpu_flags,
+        })
     }
 }
 
