@@ -9,3 +9,11 @@ ebb0(v0: b32x4):
     ; nextln: v1 = bxor v2, v0
     return v1
 }
+
+function %vany_true_b32x4(b32x4) -> b1 {
+ebb0(v0: b32x4):
+    v1 = vany_true v0
+    ; check: v2 = x86_ptest v0, v0
+    ; nextln: v1 = trueif ne v2
+    return v1
+}

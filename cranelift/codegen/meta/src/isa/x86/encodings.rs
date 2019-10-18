@@ -521,6 +521,7 @@ pub(crate) fn define(
     let x86_psll = x86.by_name("x86_psll");
     let x86_psra = x86.by_name("x86_psra");
     let x86_psrl = x86.by_name("x86_psrl");
+    let x86_ptest = x86.by_name("x86_ptest");
     let x86_push = x86.by_name("x86_push");
     let x86_sdivmodx = x86.by_name("x86_sdivmodx");
     let x86_smulx = x86.by_name("x86_smulx");
@@ -1988,6 +1989,10 @@ pub(crate) fn define(
         // xor
         let bxor = bxor.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bxor, rec_fa.opcodes(&PXOR));
+
+        // ptest
+        let x86_ptest = x86_ptest.bind(vector(ty, sse_vector_size));
+        e.enc_32_64_maybe_isap(x86_ptest, rec_fcmp.opcodes(&PTEST), Some(use_sse41_simd));
     }
 
     // SIMD bitcast from I32/I64 to the low bits of a vector (e.g. I64x2); this register movement

@@ -25,3 +25,9 @@ ebb0(v0: b64x2 [%xmm6], v1: b64x2 [%xmm3]):
 [-, %xmm3]  v2 = band_not v0, v1      ; bin: 66 0f df de
             return v2
 }
+
+function %x86_ptest_f64x2(f64x2, f64x2) {
+ebb0(v0: f64x2 [%xmm0], v1: f64x2 [%xmm2]):
+[-, %rflags]  v2 = x86_ptest v0, v1      ; bin: 66 0f 38 17 c2
+            return
+}

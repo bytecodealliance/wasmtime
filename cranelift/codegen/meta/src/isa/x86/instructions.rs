@@ -467,5 +467,24 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let x = &operand("x", TxN);
+    let y = &operand("y", TxN);
+    let f = &operand("f", iflags);
+    ig.push(
+        Inst::new(
+            "x86_ptest",
+            r#"
+        Logical Compare -- PTEST will set the ZF flag if all bits in the result are 0 of the 
+        bitwise AND of the first source operand (first operand) and the second source operand 
+        (second operand). PTEST sets the CF flag if all bits in the result are 0 of the bitwise  
+        AND of the second source operand (second operand) and the logical NOT of the destination
+        operand (first operand).
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![f]),
+    );
+
     ig.build()
 }

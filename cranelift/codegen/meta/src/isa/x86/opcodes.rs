@@ -375,6 +375,10 @@ pub static PSUBUSB: [u8; 3] = [0x66, 0x0f, 0xd8];
 /// and saturate results (SSE2).
 pub static PSUBUSW: [u8; 3] = [0x66, 0x0f, 0xd9];
 
+/// Set ZF if xmm2/m128 AND xmm1 result is all 0s; set CF if xmm2/m128 AND NOT xmm1 result is all
+/// 0s (SSE4.1).
+pub static PTEST: [u8; 4] = [0x66, 0x0f, 0x38, 0x17];
+
 /// Push r{16,32,64}.
 pub static PUSH_REG: [u8; 1] = [0x50];
 

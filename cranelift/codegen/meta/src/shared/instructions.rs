@@ -1623,6 +1623,22 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let s = &operand("s", b1);
+
+    ig.push(
+        Inst::new(
+            "vany_true",
+            r#"
+        Reduce a vector to a scalar boolean.
+
+        Return a scalar boolean true if any lane in ``a`` is non-zero, false otherwise.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![a])
+        .operands_out(vec![s]),
+    );
+
     let x = &operand("x", &TxN.lane_of());
 
     ig.push(

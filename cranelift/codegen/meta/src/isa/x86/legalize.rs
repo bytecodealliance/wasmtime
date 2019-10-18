@@ -55,12 +55,14 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let shuffle = insts.by_name("shuffle");
     let srem = insts.by_name("srem");
     let sshr = insts.by_name("sshr");
+    let trueif = insts.by_name("trueif");
     let udiv = insts.by_name("udiv");
     let umulhi = insts.by_name("umulhi");
     let ushr_imm = insts.by_name("ushr_imm");
     let urem = insts.by_name("urem");
     let ushr = insts.by_name("ushr");
     let vconst = insts.by_name("vconst");
+    let vany_true = insts.by_name("vany_true");
 
     let x86_bsf = x86_instructions.by_name("x86_bsf");
     let x86_bsr = x86_instructions.by_name("x86_bsr");
@@ -69,6 +71,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let x86_psll = x86_instructions.by_name("x86_psll");
     let x86_psra = x86_instructions.by_name("x86_psra");
     let x86_psrl = x86_instructions.by_name("x86_psrl");
+    let x86_ptest = x86_instructions.by_name("x86_ptest");
     let x86_umulx = x86_instructions.by_name("x86_umulx");
     let x86_smulx = x86_instructions.by_name("x86_smulx");
 
@@ -443,6 +446,16 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
                 def!(b = band_not(y, c)),
                 def!(d = bor(a, b)),
             ],
+        );
+    }
+
+    // SIMD vany_true
+    let ne = Literal::enumerator_for(&imm.intcc, "ne");
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let vany_true = vany_true.bind(vector(ty, sse_vector_size));
+        narrow.legalize(
+            def!(y = vany_true(x)),
+            vec![def!(a = x86_ptest(x, x)), def!(y = trueif(ne, a))],
         );
     }
 
