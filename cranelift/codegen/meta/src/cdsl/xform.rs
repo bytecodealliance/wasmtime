@@ -465,14 +465,15 @@ impl TransformGroups {
 #[test]
 #[should_panic]
 fn test_double_custom_legalization() {
-    use crate::cdsl::formats::{FormatRegistry, InstructionFormatBuilder};
+    use crate::cdsl::formats::InstructionFormatBuilder;
     use crate::cdsl::instructions::{AllInstructions, InstructionBuilder, InstructionGroupBuilder};
 
+    let nullary = InstructionFormatBuilder::new("nullary").build();
+
     let mut dummy_all = AllInstructions::new();
-    let mut format = FormatRegistry::new();
-    format.insert(InstructionFormatBuilder::new("nullary"));
-    let mut inst_group = InstructionGroupBuilder::new(&mut dummy_all, &format);
-    inst_group.push(InstructionBuilder::new("dummy", "doc"));
+    let mut inst_group = InstructionGroupBuilder::new(&mut dummy_all);
+    inst_group.push(InstructionBuilder::new("dummy", "doc", &nullary));
+
     let inst_group = inst_group.build();
     let dummy_inst = inst_group.by_name("dummy");
 

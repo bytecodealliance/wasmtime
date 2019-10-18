@@ -1,21 +1,22 @@
 #![allow(non_snake_case)]
 
-use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::{
     AllInstructions, InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
 };
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
+
+use crate::shared::formats::Formats;
 use crate::shared::immediates::Immediates;
 use crate::shared::types;
 
 pub(crate) fn define(
     mut all_instructions: &mut AllInstructions,
-    format_registry: &FormatRegistry,
+    formats: &Formats,
     immediates: &Immediates,
 ) -> InstructionGroup {
-    let mut ig = InstructionGroupBuilder::new(&mut all_instructions, format_registry);
+    let mut ig = InstructionGroupBuilder::new(&mut all_instructions);
 
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
 
@@ -43,6 +44,7 @@ pub(crate) fn define(
 
         Return both quotient and remainder.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![nlo, nhi, d])
         .operands_out(vec![q, r])
@@ -62,6 +64,7 @@ pub(crate) fn define(
 
         Return both quotient and remainder.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![nlo, nhi, d])
         .operands_out(vec![q, r])
@@ -82,6 +85,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![argL, argR])
         .operands_out(vec![resLo, resHi]),
@@ -96,6 +100,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![argL, argR])
         .operands_out(vec![resLo, resHi]),
@@ -132,6 +137,7 @@ pub(crate) fn define(
 
         This instruction does not trap.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -154,6 +160,7 @@ pub(crate) fn define(
         When the two operands don't compare as LT, `y` is returned unchanged,
         even if it is a signalling NaN.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -172,6 +179,7 @@ pub(crate) fn define(
         When the two operands don't compare as GT, `y` is returned unchanged,
         even if it is a signalling NaN.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -190,6 +198,7 @@ pub(crate) fn define(
     This is polymorphic in i32 and i64. However, it is only implemented for i64
     in 64-bit mode, and only for i32 in 32-bit mode.
     "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .other_side_effects(true)
@@ -208,6 +217,7 @@ pub(crate) fn define(
     This is polymorphic in i32 and i64. However, it is only implemented for i64
     in 64-bit mode, and only for i32 in 32-bit mode.
     "#,
+            &formats.nullary,
         )
         .operands_out(vec![x])
         .other_side_effects(true)
@@ -229,6 +239,7 @@ pub(crate) fn define(
     This is polymorphic in i32 and i64. It is implemented for both i64 and
     i32 in 64-bit mode, and only for i32 in 32-bit mode.
     "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![y, rflags]),
@@ -241,6 +252,7 @@ pub(crate) fn define(
     Bit Scan Forwards -- returns the bit-index of the least significant 1
     in the word. Is otherwise identical to 'bsr', just above.
     "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![y, rflags]),
@@ -269,6 +281,7 @@ pub(crate) fn define(
     Packed Shuffle Doublewords -- copies data from either memory or lanes in an extended
     register and re-orders the data according to the passed immediate byte.
     "#,
+            &formats.extract_lane,
         )
         .operands_in(vec![a, i]) // TODO allow copying from memory here (need more permissive type than TxN)
         .operands_out(vec![a]),
@@ -281,6 +294,7 @@ pub(crate) fn define(
     Packed Shuffle Bytes -- re-orders data in an extended register using a shuffle
     mask from either memory or another extended register
     "#,
+            &formats.binary,
         )
         .operands_in(vec![a, b]) // TODO allow re-ordering from memory here (need more permissive type than TxN)
         .operands_out(vec![a]),
@@ -298,6 +312,7 @@ pub(crate) fn define(
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``.
         "#,
+            &formats.extract_lane,
         )
         .operands_in(vec![x, Idx])
         .operands_out(vec![a]),
@@ -325,6 +340,7 @@ pub(crate) fn define(
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``.
         "#,
+            &formats.insert_lane,
         )
         .operands_in(vec![x, Idx, y])
         .operands_out(vec![a]),
@@ -347,10 +363,11 @@ pub(crate) fn define(
         Inst::new(
             "x86_insertps",
             r#"
-        Insert a lane of ``y`` into ``x`` at using ``Idx`` to encode both which lane the value is 
-        extracted from and which it is inserted to. This is similar to x86_pinsr but inserts 
+        Insert a lane of ``y`` into ``x`` at using ``Idx`` to encode both which lane the value is
+        extracted from and which it is inserted to. This is similar to x86_pinsr but inserts
         floats, which are already stored in an XMM register.
         "#,
+            &formats.insert_lane,
         )
         .operands_in(vec![x, Idx, y])
         .operands_out(vec![a]),
@@ -366,6 +383,7 @@ pub(crate) fn define(
             r#"
         Move the low 64 bits of the float vector ``y`` to the low 64 bits of float vector ``x``
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -377,6 +395,7 @@ pub(crate) fn define(
             r#"
         Move the low 64 bits of the float vector ``y`` to the high 64 bits of float vector ``x``
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -401,41 +420,48 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
+
     let x = &operand_doc("x", IxN, "Vector value to shift");
     let y = &operand_doc("y", I64x2, "Number of bits to shift");
     let a = &operand("a", IxN);
+
     ig.push(
         Inst::new(
             "x86_psll",
             r#"
-        Shift Packed Data Left Logical -- This implements the behavior of the shared instruction 
+        Shift Packed Data Left Logical -- This implements the behavior of the shared instruction
         ``ishl`` but alters the shift operand to live in an XMM register as expected by the PSLL*
         family of instructions.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
     );
+
     ig.push(
         Inst::new(
             "x86_psrl",
             r#"
-        Shift Packed Data Right Logical -- This implements the behavior of the shared instruction 
+        Shift Packed Data Right Logical -- This implements the behavior of the shared instruction
         ``ushr`` but alters the shift operand to live in an XMM register as expected by the PSRL*
         family of instructions.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
     );
+
     ig.push(
         Inst::new(
             "x86_psra",
             r#"
-        Shift Packed Data Right Arithmetic -- This implements the behavior of the shared 
-        instruction ``sshr`` but alters the shift operand to live in an XMM register as expected by 
+        Shift Packed Data Right Arithmetic -- This implements the behavior of the shared
+        instruction ``sshr`` but alters the shift operand to live in an XMM register as expected by
         the PSRA* family of instructions.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),

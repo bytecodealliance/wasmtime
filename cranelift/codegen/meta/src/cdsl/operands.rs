@@ -138,11 +138,11 @@ pub struct OperandKind {
 }
 
 impl OperandKind {
-    pub fn imm_key(&self) -> Option<String> {
+    pub fn imm_name(&self) -> Option<&str> {
         match self.fields {
             OperandKindFields::ImmEnum(_)
             | OperandKindFields::ImmValue
-            | OperandKindFields::EntityRef => Some(self.name.to_string()),
+            | OperandKindFields::EntityRef => Some(&self.name),
             _ => None,
         }
     }

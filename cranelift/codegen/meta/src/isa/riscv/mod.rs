@@ -89,11 +89,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let settings = define_settings(&shared_defs.settings);
     let regs = define_registers();
 
-    let inst_group = InstructionGroupBuilder::new(
-        &mut shared_defs.all_instructions,
-        &shared_defs.format_registry,
-    )
-    .build();
+    let inst_group = InstructionGroupBuilder::new(&mut shared_defs.all_instructions).build();
 
     // CPU modes for 32-bit and 64-bit operation.
     let mut rv_32 = CpuMode::new("RV32");

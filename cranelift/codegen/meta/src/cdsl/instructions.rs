@@ -1,3 +1,4 @@
+use cranelift_codegen_shared::condcodes::IntCC;
 use cranelift_entity::{entity_impl, PrimaryMap};
 
 use std::collections::HashMap;
@@ -6,13 +7,14 @@ use std::fmt::{Display, Error, Formatter};
 use std::rc::Rc;
 
 use crate::cdsl::camel_case;
-use crate::cdsl::formats::{FormatField, FormatRegistry, InstructionFormat};
+use crate::cdsl::formats::{FormatField, InstructionFormat};
 use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::types::{LaneType, ReferenceType, ValueType, VectorType};
 use crate::cdsl::typevar::TypeVar;
+
+use crate::shared::formats::Formats;
 use crate::shared::types::{Bool, Float, Int, Reference};
-use cranelift_codegen_shared::condcodes::IntCC;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct OpcodeNumber(u32);
@@ -20,19 +22,14 @@ entity_impl!(OpcodeNumber);
 
 pub(crate) type AllInstructions = PrimaryMap<OpcodeNumber, Instruction>;
 
-pub(crate) struct InstructionGroupBuilder<'format_reg, 'all_inst> {
-    format_registry: &'format_reg FormatRegistry,
+pub(crate) struct InstructionGroupBuilder<'all_inst> {
     all_instructions: &'all_inst mut AllInstructions,
     own_instructions: Vec<Instruction>,
 }
 
-impl<'format_reg, 'all_inst> InstructionGroupBuilder<'format_reg, 'all_inst> {
-    pub fn new(
-        all_instructions: &'all_inst mut AllInstructions,
-        format_registry: &'format_reg FormatRegistry,
-    ) -> Self {
+impl<'all_inst> InstructionGroupBuilder<'all_inst> {
+    pub fn new(all_instructions: &'all_inst mut AllInstructions) -> Self {
         Self {
-            format_registry,
             all_instructions,
             own_instructions: Vec::new(),
         }
@@ -40,7 +37,7 @@ impl<'format_reg, 'all_inst> InstructionGroupBuilder<'format_reg, 'all_inst> {
 
     pub fn push(&mut self, builder: InstructionBuilder) {
         let opcode_number = OpcodeNumber(self.all_instructions.next_key().as_u32());
-        let inst = builder.build(self.format_registry, opcode_number);
+        let inst = builder.build(opcode_number);
         // Note this clone is cheap, since Instruction is a Rc<> wrapper for InstructionContent.
         self.own_instructions.push(inst.clone());
         self.all_instructions.push(inst);
@@ -201,6 +198,7 @@ impl fmt::Display for InstructionContent {
 pub(crate) struct InstructionBuilder {
     name: String,
     doc: String,
+    format: Rc<InstructionFormat>,
     operands_in: Option<Vec<Operand>>,
     operands_out: Option<Vec<Operand>>,
     constraints: Option<Vec<Constraint>>,
@@ -219,10 +217,11 @@ pub(crate) struct InstructionBuilder {
 }
 
 impl InstructionBuilder {
-    pub fn new<S: Into<String>>(name: S, doc: S) -> Self {
+    pub fn new<S: Into<String>>(name: S, doc: S, format: &Rc<InstructionFormat>) -> Self {
         Self {
             name: name.into(),
             doc: doc.into(),
+            format: format.clone(),
             operands_in: None,
             operands_out: None,
             constraints: None,
@@ -297,7 +296,7 @@ impl InstructionBuilder {
         self
     }
 
-    fn build(self, format_registry: &FormatRegistry, opcode_number: OpcodeNumber) -> Instruction {
+    fn build(self, opcode_number: OpcodeNumber) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_else(Vec::new);
         let operands_out = self.operands_out.unwrap_or_else(Vec::new);
 
@@ -319,9 +318,10 @@ impl InstructionBuilder {
             .filter_map(|(i, op)| if op.is_value() { Some(i) } else { None })
             .collect();
 
-        let format = format_registry.lookup(&operands_in).clone();
+        verify_format(&self.name, &operands_in, &self.format);
+
         let polymorphic_info =
-            verify_polymorphic(&operands_in, &operands_out, &format, &value_opnums);
+            verify_polymorphic(&operands_in, &operands_out, &self.format, &value_opnums);
 
         // Infer from output operands whether an instruciton clobbers CPU flags or not.
         let writes_cpu_flags = operands_out.iter().any(|op| op.is_cpu_flags());
@@ -336,7 +336,7 @@ impl InstructionBuilder {
             operands_in,
             operands_out,
             constraints: self.constraints.unwrap_or_else(Vec::new),
-            format,
+            format: self.format,
             polymorphic_info,
             value_opnums,
             value_results,
@@ -531,6 +531,57 @@ impl Bindable for BoundInstruction {
         modified.verify_bindings().unwrap();
         modified
     }
+}
+
+/// Checks that the input operands actually match the given format.
+fn verify_format(inst_name: &str, operands_in: &Vec<Operand>, format: &InstructionFormat) {
+    // A format is defined by:
+    // - its number of input value operands,
+    // - its number and names of input immediate operands,
+    // - whether it has a value list or not.
+    let mut num_values = 0;
+    let mut imm_index = 0;
+
+    for operand in operands_in.iter() {
+        if operand.is_varargs() {
+            assert!(
+                format.has_value_list,
+                "instruction {} has varargs, but its format {} doesn't have a value list; you may \
+                 need to use a different format.",
+                inst_name, format.name
+            );
+        }
+        if operand.is_value() {
+            num_values += 1;
+        }
+        if let Some(imm_name) = operand.kind.imm_name() {
+            if let Some(format_field) = format.imm_fields.get(imm_index) {
+                assert_eq!(
+                    format_field.kind.name, imm_name,
+                    "{}th operand of {} should be {} (according to format), not {} (according to \
+                     inst definition). You may need to use a different format.",
+                    imm_index, inst_name, format_field.kind.name, imm_name
+                );
+                imm_index += 1;
+            }
+        }
+    }
+
+    assert_eq!(
+        num_values, format.num_value_operands,
+        "inst {} doesnt' have as many value input operand as its format {} declares; you may need \
+         to use a different format.",
+        inst_name, format.name
+    );
+
+    assert_eq!(
+        imm_index,
+        format.imm_fields.len(),
+        "inst {} doesn't have as many immediate input \
+         operands as its format {} declares; you may need to use a different format.",
+        inst_name,
+        format.name
+    );
 }
 
 /// Check if this instruction is polymorphic, and verify its use of type variables.
@@ -1089,8 +1140,8 @@ impl InstructionPredicate {
         ))
     }
 
-    pub fn new_is_colocated_data(format_registry: &FormatRegistry) -> InstructionPredicateNode {
-        let format = format_registry.by_name("UnaryGlobalValue");
+    pub fn new_is_colocated_data(formats: &Formats) -> InstructionPredicateNode {
+        let format = &formats.unary_global_value;
         InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
             &*format,
             "global_value",
@@ -1271,7 +1322,6 @@ mod test {
         outputs: Vec<OperandKindFields>,
     ) -> Instruction {
         // setup a format from the input operands
-        let mut formats = FormatRegistry::new();
         let mut format = InstructionFormatBuilder::new("fake");
         for (i, f) in inputs.iter().enumerate() {
             match f {
@@ -1282,13 +1332,13 @@ mod test {
                 _ => {}
             };
         }
-        formats.insert(format);
+        let format = format.build();
 
         // create the fake instruction
-        InstructionBuilder::new("fake", "A fake instruction for testing.")
+        InstructionBuilder::new("fake", "A fake instruction for testing.", &format)
             .operands_in(field_to_operands(inputs).iter().collect())
             .operands_out(field_to_operands(outputs).iter().collect())
-            .build(&formats, OpcodeNumber(42))
+            .build(OpcodeNumber(42))
     }
 
     #[test]

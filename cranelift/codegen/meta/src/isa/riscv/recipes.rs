@@ -46,23 +46,7 @@ impl RecipeGroup {
 }
 
 pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeGroup {
-    // Format shorthands.
-    let formats = &shared_defs.format_registry;
-
-    let f_binary = formats.by_name("Binary");
-    let f_binary_imm = formats.by_name("BinaryImm");
-    let f_branch = formats.by_name("Branch");
-    let f_branch_icmp = formats.by_name("BranchIcmp");
-    let f_call = formats.by_name("Call");
-    let f_call_indirect = formats.by_name("CallIndirect");
-    let f_copy_to_ssa = formats.by_name("CopyToSsa");
-    let f_int_compare = formats.by_name("IntCompare");
-    let f_int_compare_imm = formats.by_name("IntCompareImm");
-    let f_jump = formats.by_name("Jump");
-    let f_multiary = formats.by_name("MultiAry");
-    let f_regmove = formats.by_name("RegMove");
-    let f_unary = formats.by_name("Unary");
-    let f_unary_imm = formats.by_name("UnaryImm");
+    let formats = &shared_defs.formats;
 
     // Register classes shorthands.
     let gpr = regs.class_by_name("GPR");
@@ -73,7 +57,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
     // R-type 32-bit instructions: These are mostly binary arithmetic instructions.
     // The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
     recipes.push(
-        EncodingRecipeBuilder::new("R", f_binary, 4)
+        EncodingRecipeBuilder::new("R", &formats.binary, 4)
             .operands_in(vec![gpr, gpr])
             .operands_out(vec![gpr])
             .emit("put_r(bits, in_reg0, in_reg1, out_reg0, sink);"),
@@ -81,7 +65,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // R-type with an immediate shift amount instead of rs2.
     recipes.push(
-        EncodingRecipeBuilder::new("Rshamt", f_binary_imm, 4)
+        EncodingRecipeBuilder::new("Rshamt", &formats.binary_imm, 4)
             .operands_in(vec![gpr])
             .operands_out(vec![gpr])
             .emit("put_rshamt(bits, in_reg0, imm.into(), out_reg0, sink);"),
@@ -89,18 +73,18 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // R-type encoding of an integer comparison.
     recipes.push(
-        EncodingRecipeBuilder::new("Ricmp", f_int_compare, 4)
+        EncodingRecipeBuilder::new("Ricmp", &formats.int_compare, 4)
             .operands_in(vec![gpr, gpr])
             .operands_out(vec![gpr])
             .emit("put_r(bits, in_reg0, in_reg1, out_reg0, sink);"),
     );
 
     recipes.push(
-        EncodingRecipeBuilder::new("Ii", f_binary_imm, 4)
+        EncodingRecipeBuilder::new("Ii", &formats.binary_imm, 4)
             .operands_in(vec![gpr])
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                &*f_binary_imm,
+                &*formats.binary_imm,
                 "imm",
                 12,
                 0,
@@ -110,10 +94,10 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // I-type instruction with a hardcoded %x0 rs1.
     recipes.push(
-        EncodingRecipeBuilder::new("Iz", f_unary_imm, 4)
+        EncodingRecipeBuilder::new("Iz", &formats.unary_imm, 4)
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                &*f_unary_imm,
+                &*&formats.unary_imm,
                 "imm",
                 12,
                 0,
@@ -123,11 +107,11 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // I-type encoding of an integer comparison.
     recipes.push(
-        EncodingRecipeBuilder::new("Iicmp", f_int_compare_imm, 4)
+        EncodingRecipeBuilder::new("Iicmp", &formats.int_compare_imm, 4)
             .operands_in(vec![gpr])
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                &*f_int_compare_imm,
+                &*&formats.int_compare_imm,
                 "imm",
                 12,
                 0,
@@ -137,8 +121,9 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // I-type encoding for `jalr` as a return instruction. We won't use the immediate offset.  The
     // variable return values are not encoded.
-    recipes.push(EncodingRecipeBuilder::new("Iret", f_multiary, 4).emit(
-        r#"
+    recipes.push(
+        EncodingRecipeBuilder::new("Iret", &formats.multiary, 4).emit(
+            r#"
                     // Return instructions are always a jalr to %x1.
                     // The return address is provided as a special-purpose link argument.
                     put_i(
@@ -149,11 +134,12 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
                         sink,
                     );
                 "#,
-    ));
+        ),
+    );
 
     // I-type encoding for `jalr` as a call_indirect.
     recipes.push(
-        EncodingRecipeBuilder::new("Icall", f_call_indirect, 4)
+        EncodingRecipeBuilder::new("Icall", &formats.call_indirect, 4)
             .operands_in(vec![gpr])
             .emit(
                 r#"
@@ -171,7 +157,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // Copy of a GPR is implemented as addi x, 0.
     recipes.push(
-        EncodingRecipeBuilder::new("Icopy", f_unary, 4)
+        EncodingRecipeBuilder::new("Icopy", &formats.unary, 4)
             .operands_in(vec![gpr])
             .operands_out(vec![gpr])
             .emit("put_i(bits, in_reg0, 0, out_reg0, sink);"),
@@ -179,14 +165,14 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // Same for a GPR regmove.
     recipes.push(
-        EncodingRecipeBuilder::new("Irmov", f_regmove, 4)
+        EncodingRecipeBuilder::new("Irmov", &formats.reg_move, 4)
             .operands_in(vec![gpr])
             .emit("put_i(bits, src, 0, dst, sink);"),
     );
 
     // Same for copy-to-SSA -- GPR regmove.
     recipes.push(
-        EncodingRecipeBuilder::new("copytossa", f_copy_to_ssa, 4)
+        EncodingRecipeBuilder::new("copytossa", &formats.copy_to_ssa, 4)
             // No operands_in to mention, because a source register is specified directly.
             .operands_out(vec![gpr])
             .emit("put_i(bits, src, 0, out_reg0, sink);"),
@@ -194,10 +180,10 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // U-type instructions have a 20-bit immediate that targets bits 12-31.
     recipes.push(
-        EncodingRecipeBuilder::new("U", f_unary_imm, 4)
+        EncodingRecipeBuilder::new("U", &formats.unary_imm, 4)
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                &*f_unary_imm,
+                &*&formats.unary_imm,
                 "imm",
                 32,
                 12,
@@ -207,7 +193,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // UJ-type unconditional branch instructions.
     recipes.push(
-        EncodingRecipeBuilder::new("UJ", f_jump, 4)
+        EncodingRecipeBuilder::new("UJ", &formats.jump, 4)
             .branch_range((0, 21))
             .emit(
                 r#"
@@ -218,7 +204,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
             ),
     );
 
-    recipes.push(EncodingRecipeBuilder::new("UJcall", f_call, 4).emit(
+    recipes.push(EncodingRecipeBuilder::new("UJcall", &formats.call, 4).emit(
         r#"
                     sink.reloc_external(Reloc::RiscvCall,
                                         &func.dfg.ext_funcs[func_ref].name,
@@ -230,7 +216,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // SB-type branch instructions.
     recipes.push(
-        EncodingRecipeBuilder::new("SB", f_branch_icmp, 4)
+        EncodingRecipeBuilder::new("SB", &formats.branch_icmp, 4)
             .operands_in(vec![gpr, gpr])
             .branch_range((0, 13))
             .emit(
@@ -244,7 +230,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // SB-type branch instruction with rs2 fixed to zero.
     recipes.push(
-        EncodingRecipeBuilder::new("SBzero", f_branch, 4)
+        EncodingRecipeBuilder::new("SBzero", &formats.branch, 4)
             .operands_in(vec![gpr])
             .branch_range((0, 13))
             .emit(
@@ -258,7 +244,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // Spill of a GPR.
     recipes.push(
-        EncodingRecipeBuilder::new("GPsp", f_unary, 4)
+        EncodingRecipeBuilder::new("GPsp", &formats.unary, 4)
             .operands_in(vec![gpr])
             .operands_out(vec![Stack::new(gpr)])
             .emit("unimplemented!();"),
@@ -266,7 +252,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // Fill of a GPR.
     recipes.push(
-        EncodingRecipeBuilder::new("GPfi", f_unary, 4)
+        EncodingRecipeBuilder::new("GPfi", &formats.unary, 4)
             .operands_in(vec![Stack::new(gpr)])
             .operands_out(vec![gpr])
             .emit("unimplemented!();"),
@@ -274,7 +260,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // Stack-slot to same stack-slot copy, which is guaranteed to turn into a no-op.
     recipes.push(
-        EncodingRecipeBuilder::new("stacknull", f_unary, 0)
+        EncodingRecipeBuilder::new("stacknull", &formats.unary, 0)
             .operands_in(vec![Stack::new(gpr)])
             .operands_out(vec![Stack::new(gpr)])
             .emit(""),
@@ -282,7 +268,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     // No-op fills, created by late-stage redundant-fill removal.
     recipes.push(
-        EncodingRecipeBuilder::new("fillnull", f_unary, 0)
+        EncodingRecipeBuilder::new("fillnull", &formats.unary, 0)
             .operands_in(vec![Stack::new(gpr)])
             .operands_out(vec![gpr])
             .clobbers_flags(false)

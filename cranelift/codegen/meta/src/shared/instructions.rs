@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 
-use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::{
     AllInstructions, InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
 };
@@ -8,16 +7,17 @@ use crate::cdsl::operands::{create_operand as operand, create_operand_doc as ope
 use crate::cdsl::type_inference::Constraint::WiderOrEq;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
+use crate::shared::formats::Formats;
 use crate::shared::types;
 use crate::shared::{entities::EntityRefs, immediates::Immediates};
 
 pub(crate) fn define(
     all_instructions: &mut AllInstructions,
-    format_registry: &FormatRegistry,
+    formats: &Formats,
     imm: &Immediates,
     entities: &EntityRefs,
 ) -> InstructionGroup {
-    let mut ig = InstructionGroupBuilder::new(all_instructions, format_registry);
+    let mut ig = InstructionGroupBuilder::new(all_instructions);
 
     // Operand kind shorthands.
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
@@ -130,6 +130,7 @@ pub(crate) fn define(
         EBB arguments. The number and types of arguments must match the
         destination EBB.
         "#,
+            &formats.jump,
         )
         .operands_in(vec![EBB, args])
         .is_terminator(true)
@@ -149,6 +150,7 @@ pub(crate) fn define(
         relaxation pass. There is no reason to use this instruction outside
         that pass.
         "#,
+            &formats.jump,
         )
         .operands_in(vec![EBB, args])
         .is_terminator(true)
@@ -164,6 +166,7 @@ pub(crate) fn define(
         If ``c`` is a `b1` value, take the branch when ``c`` is false. If
         ``c`` is an integer value, take the branch when ``c = 0``.
         "#,
+            &formats.branch,
         )
         .operands_in(vec![c, EBB, args])
         .is_branch(true),
@@ -178,6 +181,7 @@ pub(crate) fn define(
         If ``c`` is a `b1` value, take the branch when ``c`` is true. If
         ``c`` is an integer value, take the branch when ``c != 0``.
         "#,
+            &formats.branch,
         )
         .operands_in(vec![c, EBB, args])
         .is_branch(true),
@@ -207,6 +211,7 @@ pub(crate) fn define(
         implement all or some of the condition codes. The instruction can also
         be used to represent *macro-op fusion* on architectures like Intel's.
         "#,
+            &formats.branch_icmp,
         )
         .operands_in(vec![Cond, x, y, EBB, args])
         .is_branch(true),
@@ -220,6 +225,7 @@ pub(crate) fn define(
             r#"
         Branch when condition is true in integer CPU flags.
         "#,
+            &formats.branch_int,
         )
         .operands_in(vec![Cond, f, EBB, args])
         .is_branch(true),
@@ -234,6 +240,7 @@ pub(crate) fn define(
             r#"
         Branch when condition is true in floating point CPU flags.
         "#,
+            &formats.branch_float,
         )
         .operands_in(vec![Cond, f, EBB, args])
         .is_branch(true),
@@ -263,6 +270,7 @@ pub(crate) fn define(
         function in a dynamic library, that will typically use
         ``call_indirect``.
         "#,
+            &formats.branch_table,
         )
         .operands_in(vec![x, EBB, JT])
         .is_terminator(true)
@@ -287,6 +295,7 @@ pub(crate) fn define(
     Currently, the only type supported is entries which are relative to the
     base of the jump table.
     "#,
+            &formats.branch_table_entry,
         )
         .operands_in(vec![x, addr, Size, JT])
         .operands_out(vec![entry])
@@ -304,6 +313,7 @@ pub(crate) fn define(
     load an entry using ``jump_table_entry``, then use this instruction to add
     the relative base back to it.
     "#,
+            &formats.branch_table_base,
         )
         .operands_in(vec![JT])
         .operands_out(vec![addr]),
@@ -318,6 +328,7 @@ pub(crate) fn define(
     Unconditionally jump via a jump table entry that was previously loaded
     with the ``jump_table_entry`` instruction.
     "#,
+            &formats.indirect_jump,
         )
         .operands_in(vec![addr, JT])
         .is_indirect_branch(true)
@@ -331,6 +342,7 @@ pub(crate) fn define(
             r#"
     Encodes an assembly debug trap.
     "#,
+            &formats.nullary,
         )
         .other_side_effects(true)
         .can_load(true)
@@ -345,6 +357,7 @@ pub(crate) fn define(
             r#"
         Terminate execution unconditionally.
         "#,
+            &formats.trap,
         )
         .operands_in(vec![code])
         .can_trap(true)
@@ -359,6 +372,7 @@ pub(crate) fn define(
 
         if ``c`` is non-zero, execution continues at the following instruction.
         "#,
+            &formats.cond_trap,
         )
         .operands_in(vec![c, code])
         .can_trap(true),
@@ -372,6 +386,7 @@ pub(crate) fn define(
 
         This instruction allows non-conditional traps to be used as non-terminal instructions.
         "#,
+            &formats.trap,
         )
         .operands_in(vec![code])
         .can_trap(true),
@@ -385,6 +400,7 @@ pub(crate) fn define(
 
         if ``c`` is zero, execution continues at the following instruction.
         "#,
+            &formats.cond_trap,
         )
         .operands_in(vec![c, code])
         .can_trap(true),
@@ -399,6 +415,7 @@ pub(crate) fn define(
             r#"
         Trap when condition is true in integer CPU flags.
         "#,
+            &formats.int_cond_trap,
         )
         .operands_in(vec![Cond, f, code])
         .can_trap(true),
@@ -413,6 +430,7 @@ pub(crate) fn define(
             r#"
         Trap when condition is true in floating point CPU flags.
         "#,
+            &formats.float_cond_trap,
         )
         .operands_in(vec![Cond, f, code])
         .can_trap(true),
@@ -430,6 +448,7 @@ pub(crate) fn define(
         provided return values. The list of return values must match the
         function signature's return types.
         "#,
+            &formats.multiary,
         )
         .operands_in(vec![rvals])
         .is_return(true)
@@ -446,6 +465,7 @@ pub(crate) fn define(
         a custom epilogue, which will then perform the real return. This
         instruction has no encoding.
         "#,
+            &formats.multiary,
         )
         .operands_in(vec![rvals])
         .is_return(true)
@@ -468,6 +488,7 @@ pub(crate) fn define(
         Call a function which has been declared in the preamble. The argument
         types must match the function's signature.
         "#,
+            &formats.call,
         )
         .operands_in(vec![FN, args])
         .operands_out(vec![rvals])
@@ -491,6 +512,7 @@ pub(crate) fn define(
         `table_addr` and `load` are used to obtain a native address
         from a table.
         "#,
+            &formats.call_indirect,
         )
         .operands_in(vec![SIG, callee, args])
         .operands_out(vec![rvals])
@@ -509,6 +531,7 @@ pub(crate) fn define(
         are too far away to be addressable by a direct `call`
         instruction.
         "#,
+            &formats.func_addr,
         )
         .operands_in(vec![FN])
         .operands_out(vec![addr]),
@@ -531,6 +554,7 @@ pub(crate) fn define(
         This is a polymorphic instruction that can load any value type which
         has a memory representation.
         "#,
+            &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
@@ -546,6 +570,7 @@ pub(crate) fn define(
         This is a polymorphic instruction that can load any value type which
         has a memory representation.
         "#,
+            &formats.load_complex,
         )
         .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
@@ -561,6 +586,7 @@ pub(crate) fn define(
         This is a polymorphic instruction that can store any value type with a
         memory representation.
         "#,
+            &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
         .can_store(true),
@@ -575,6 +601,7 @@ pub(crate) fn define(
         This is a polymorphic instruction that can store any value type with a
         memory representation.
         "#,
+            &formats.store_complex,
         )
         .operands_in(vec![MemFlags, x, args, Offset])
         .can_store(true),
@@ -596,6 +623,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i8`` followed by ``uextend``.
         "#,
+            &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
@@ -610,6 +638,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i8`` followed by ``uextend``.
         "#,
+            &formats.load_complex,
         )
         .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
@@ -624,6 +653,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i8`` followed by ``sextend``.
         "#,
+            &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
@@ -638,6 +668,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i8`` followed by ``sextend``.
         "#,
+            &formats.load_complex,
         )
         .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
@@ -652,6 +683,7 @@ pub(crate) fn define(
 
         This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
         "#,
+            &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
         .can_store(true),
@@ -665,6 +697,7 @@ pub(crate) fn define(
 
         This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
         "#,
+            &formats.store_complex,
         )
         .operands_in(vec![MemFlags, x, args, Offset])
         .can_store(true),
@@ -686,6 +719,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i16`` followed by ``uextend``.
         "#,
+            &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
@@ -700,6 +734,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i16`` followed by ``uextend``.
         "#,
+            &formats.load_complex,
         )
         .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
@@ -714,6 +749,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i16`` followed by ``sextend``.
         "#,
+            &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
@@ -728,6 +764,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i16`` followed by ``sextend``.
         "#,
+            &formats.load_complex,
         )
         .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
@@ -742,6 +779,7 @@ pub(crate) fn define(
 
         This is equivalent to ``ireduce.i16`` followed by ``store.i16``.
         "#,
+            &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
         .can_store(true),
@@ -755,6 +793,7 @@ pub(crate) fn define(
 
         This is equivalent to ``ireduce.i16`` followed by ``store.i16``.
         "#,
+            &formats.store_complex,
         )
         .operands_in(vec![MemFlags, x, args, Offset])
         .can_store(true),
@@ -776,6 +815,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i32`` followed by ``uextend``.
         "#,
+            &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
@@ -790,6 +830,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i32`` followed by ``uextend``.
         "#,
+            &formats.load_complex,
         )
         .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
@@ -804,6 +845,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i32`` followed by ``sextend``.
         "#,
+            &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
@@ -818,6 +860,7 @@ pub(crate) fn define(
 
         This is equivalent to ``load.i32`` followed by ``sextend``.
         "#,
+            &formats.load_complex,
         )
         .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
@@ -832,6 +875,7 @@ pub(crate) fn define(
 
         This is equivalent to ``ireduce.i32`` followed by ``store.i32``.
         "#,
+            &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
         .can_store(true),
@@ -845,6 +889,7 @@ pub(crate) fn define(
 
         This is equivalent to ``ireduce.i32`` followed by ``store.i32``.
         "#,
+            &formats.store_complex,
         )
         .operands_in(vec![MemFlags, x, args, Offset])
         .can_store(true),
@@ -867,6 +912,7 @@ pub(crate) fn define(
         access cannot go out of bounds, i.e.
         `sizeof(a) + Offset <= sizeof(SS)`.
         "#,
+            &formats.stack_load,
         )
         .operands_in(vec![SS, Offset])
         .operands_out(vec![a])
@@ -886,6 +932,7 @@ pub(crate) fn define(
         access cannot go out of bounds, i.e.
         `sizeof(a) + Offset <= sizeof(SS)`.
         "#,
+            &formats.stack_store,
         )
         .operands_in(vec![x, SS, Offset])
         .can_store(true),
@@ -901,6 +948,7 @@ pub(crate) fn define(
         refer to a byte inside the stack slot:
         `0 <= Offset < sizeof(SS)`.
         "#,
+            &formats.stack_load,
         )
         .operands_in(vec![SS, Offset])
         .operands_out(vec![addr]),
@@ -914,6 +962,7 @@ pub(crate) fn define(
             r#"
         Compute the value of global GV.
         "#,
+            &formats.unary_global_value,
         )
         .operands_in(vec![GV])
         .operands_out(vec![a]),
@@ -925,6 +974,7 @@ pub(crate) fn define(
             r#"
         Compute the value of global GV, which is a symbolic value.
         "#,
+            &formats.unary_global_value,
         )
         .operands_in(vec![GV])
         .operands_out(vec![a]),
@@ -954,6 +1004,7 @@ pub(crate) fn define(
            heap's base address.
         2. If ``p + Size`` is greater than the heap bound, generate a trap.
         "#,
+            &formats.heap_addr,
         )
         .operands_in(vec![H, p, Size])
         .operands_out(vec![addr]),
@@ -971,6 +1022,7 @@ pub(crate) fn define(
             r#"
             Gets the content of the pinned register, when it's enabled.
         "#,
+            &formats.nullary,
         )
         .operands_out(vec![addr])
         .other_side_effects(true),
@@ -982,6 +1034,7 @@ pub(crate) fn define(
             r#"
         Sets the content of the pinned register, when it's enabled.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![addr])
         .other_side_effects(true),
@@ -1012,6 +1065,7 @@ pub(crate) fn define(
            base address.
         2. If ``p`` is greater than the table bound, generate a trap.
         "#,
+            &formats.table_addr,
         )
         .operands_in(vec![T, p, Offset])
         .operands_out(vec![addr]),
@@ -1029,6 +1083,7 @@ pub(crate) fn define(
         Create a scalar integer SSA value with an immediate constant value, or
         an integer vector where all the lanes have the same value.
         "#,
+            &formats.unary_imm,
         )
         .operands_in(vec![N])
         .operands_out(vec![a]),
@@ -1045,6 +1100,7 @@ pub(crate) fn define(
 
         Create a `f32` SSA value with an immediate constant value.
         "#,
+            &formats.unary_ieee32,
         )
         .operands_in(vec![N])
         .operands_out(vec![a]),
@@ -1061,6 +1117,7 @@ pub(crate) fn define(
 
         Create a `f64` SSA value with an immediate constant value.
         "#,
+            &formats.unary_ieee64,
         )
         .operands_in(vec![N])
         .operands_out(vec![a]),
@@ -1078,6 +1135,7 @@ pub(crate) fn define(
         Create a scalar boolean SSA value with an immediate constant value, or
         a boolean vector where all the lanes have the same value.
         "#,
+            &formats.unary_bool,
         )
         .operands_in(vec![N])
         .operands_out(vec![a]),
@@ -1098,6 +1156,7 @@ pub(crate) fn define(
 
         Construct a vector with the given immediate bytes.
         "#,
+            &formats.unary_const,
         )
         .operands_in(vec![N])
         .operands_out(vec![a]),
@@ -1127,12 +1186,13 @@ pub(crate) fn define(
             "shuffle",
             r#"
         SIMD vector shuffle.
-        
+
         Shuffle two vectors using the given immediate bytes. For each of the 16 bytes of the
-        immediate, a value i of 0-15 selects the i-th element of the first vector and a value i of 
-        16-31 selects the (i-16)th element of the second vector. Immediate values outside of the 
+        immediate, a value i of 0-15 selects the i-th element of the first vector and a value i of
+        16-31 selects the (i-16)th element of the second vector. Immediate values outside of the
         0-31 range place a 0 in the resulting vector lane.
         "#,
+            &formats.shuffle,
         )
         .operands_in(vec![a, b, mask])
         .operands_out(vec![a]),
@@ -1148,6 +1208,7 @@ pub(crate) fn define(
 
         Create a scalar reference SSA value with a constant null value.
         "#,
+            &formats.nullary,
         )
         .operands_out(vec![a]),
     );
@@ -1155,10 +1216,11 @@ pub(crate) fn define(
     ig.push(Inst::new(
         "nop",
         r#"
-        Just a dummy instruction
+        Just a dummy instruction.
 
-        Note: this doesn't compile to a machine code nop
+        Note: this doesn't compile to a machine code nop.
         "#,
+        &formats.nullary,
     ));
 
     let c = &operand_doc("c", Testable, "Controlling value to test");
@@ -1175,6 +1237,7 @@ pub(crate) fn define(
         This instruction selects whole values. Use `vselect` for
         lane-wise selection.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![c, x, y])
         .operands_out(vec![a]),
@@ -1189,6 +1252,7 @@ pub(crate) fn define(
             r#"
         Conditional select, dependent on integer condition codes.
         "#,
+            &formats.int_select,
         )
         .operands_in(vec![cc, flags, x, y])
         .operands_out(vec![a]),
@@ -1201,10 +1265,11 @@ pub(crate) fn define(
             r#"
         Conditional select of bits.
 
-        For each bit in `c`, this instruction selects the corresponding bit from `x` if the bit 
-        in `c` is 1 and the corresponding bit from `y` if the bit in `c` is 0. See also: 
+        For each bit in `c`, this instruction selects the corresponding bit from `x` if the bit
+        in `c` is 1 and the corresponding bit from `y` if the bit in `c` is 0. See also:
         `select`, `vselect`.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![c, x, y])
         .operands_out(vec![a]),
@@ -1225,6 +1290,7 @@ pub(crate) fn define(
         instruction transformations, and the register allocator needs a way of
         representing register copies.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -1239,6 +1305,7 @@ pub(crate) fn define(
         This instruction behaves exactly like `copy`, but the result
         value is assigned to a spill slot.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -1254,6 +1321,7 @@ pub(crate) fn define(
         This instruction behaves exactly like `copy`, but creates a new
         SSA value for the spilled input value.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -1270,6 +1338,7 @@ pub(crate) fn define(
         registers and stack slots have been assigned.  It is used to replace `fill`s that have
         been identified as redundant.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -1294,6 +1363,7 @@ pub(crate) fn define(
         before the value leaves the EBB. At the entry to a new EBB, all live
         values must be in their originally assigned registers.
         "#,
+            &formats.reg_move,
         )
         .operands_in(vec![x, src, dst])
         .other_side_effects(true),
@@ -1310,6 +1380,7 @@ pub(crate) fn define(
         special registers, e.g. copying the stack register to the frame
         register in a function prologue.
         "#,
+            &formats.copy_special,
         )
         .operands_in(vec![src, dst])
         .other_side_effects(true),
@@ -1326,6 +1397,7 @@ pub(crate) fn define(
         of ''copy_special''.  This instruction is internal and should not be created by
         Cranelift users.
         "#,
+            &formats.copy_to_ssa,
         )
         .operands_in(vec![src])
         .operands_out(vec![a])
@@ -1341,6 +1413,7 @@ pub(crate) fn define(
 
         This instruction copies its input, preserving the value type.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -1356,6 +1429,7 @@ pub(crate) fn define(
 
     This instruction is used to adjust the stack pointer by a dynamic amount.
     "#,
+            &formats.unary,
         )
         .operands_in(vec![delta])
         .other_side_effects(true),
@@ -1373,6 +1447,7 @@ pub(crate) fn define(
     prologues and epilogues. ``Offset`` is constrained to the size of a signed
     32-bit integer.
     "#,
+            &formats.unary_imm,
         )
         .operands_in(vec![Offset])
         .other_side_effects(true),
@@ -1391,6 +1466,7 @@ pub(crate) fn define(
     prologues and epilogues. ``Offset`` is constrained to the size of a signed
     32-bit integer.
     "#,
+            &formats.unary_imm,
         )
         .operands_in(vec![Offset])
         .other_side_effects(true),
@@ -1407,6 +1483,7 @@ pub(crate) fn define(
     This is like `ifcmp` where ``addr`` is the LHS operand and the stack
     pointer is the RHS.
     "#,
+            &formats.unary,
         )
         .operands_in(vec![addr])
         .operands_out(vec![f]),
@@ -1425,6 +1502,7 @@ pub(crate) fn define(
 
         See also `regmove`.
         "#,
+            &formats.reg_spill,
         )
         .operands_in(vec![x, src, SS])
         .other_side_effects(true),
@@ -1443,6 +1521,7 @@ pub(crate) fn define(
 
         See also `regmove`.
         "#,
+            &formats.reg_fill,
         )
         .operands_in(vec![x, SS, dst])
         .other_side_effects(true),
@@ -1461,6 +1540,7 @@ pub(crate) fn define(
         This instruction will provide live reference values at a point in
         the function. It can only be used by the compiler.
         "#,
+            &formats.multiary,
         )
         .operands_in(vec![N])
         .other_side_effects(true),
@@ -1480,6 +1560,7 @@ pub(crate) fn define(
         the lanes from ``x``. The result may be two scalars if ``x`` only had
         two lanes.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![lo, hi])
@@ -1515,6 +1596,7 @@ pub(crate) fn define(
 
         It is possible to form a vector by concatenating two scalars.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a])
@@ -1535,6 +1617,7 @@ pub(crate) fn define(
         Select lanes from ``x`` or ``y`` controlled by the lanes of the boolean
         vector ``c``.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![c, x, y])
         .operands_out(vec![a]),
@@ -1550,6 +1633,7 @@ pub(crate) fn define(
 
         Return a vector whose lanes are all ``x``.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -1568,6 +1652,7 @@ pub(crate) fn define(
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``.
         "#,
+            &formats.insert_lane,
         )
         .operands_in(vec![x, Idx, y])
         .operands_out(vec![a]),
@@ -1584,9 +1669,10 @@ pub(crate) fn define(
 
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``. Note that the upper bits of ``a``
-        may or may not be zeroed depending on the ISA but the type system should prevent using 
+        may or may not be zeroed depending on the ISA but the type system should prevent using
         ``a`` as anything other than the extracted value.
         "#,
+            &formats.extract_lane,
         )
         .operands_in(vec![x, Idx])
         .operands_out(vec![a]),
@@ -1625,6 +1711,7 @@ pub(crate) fn define(
         When this instruction compares integer vectors, it returns a boolean
         vector of lane-wise comparisons.
         "#,
+            &formats.int_compare,
         )
         .operands_in(vec![Cond, x, y])
         .operands_out(vec![a]),
@@ -1646,6 +1733,7 @@ pub(crate) fn define(
         This instruction can only compare scalars. Use `icmp` for
         lane-wise vector comparisons.
         "#,
+            &formats.int_compare_imm,
         )
         .operands_in(vec![Cond, x, Y])
         .operands_out(vec![a]),
@@ -1664,6 +1752,7 @@ pub(crate) fn define(
         Compare two scalar integer values and return integer CPU flags
         representing the result.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![f]),
@@ -1678,6 +1767,7 @@ pub(crate) fn define(
         Like `icmp_imm`, but returns integer CPU flags instead of testing
         a specific condition code.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![f]),
@@ -1696,6 +1786,7 @@ pub(crate) fn define(
         This instruction does not depend on the signed/unsigned interpretation
         of the operands.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1707,10 +1798,11 @@ pub(crate) fn define(
             r#"
         Add with unsigned saturation.
 
-        This is similar to `iadd` but the operands are interpreted as unsigned integers and their 
+        This is similar to `iadd` but the operands are interpreted as unsigned integers and their
         summed result, instead of wrapping, will be saturated to the highest unsigned integer for
         the controlling type (e.g. `0xFF` for i8).
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1722,12 +1814,13 @@ pub(crate) fn define(
             r#"
         Add with signed saturation.
 
-        This is similar to `iadd` but the operands are interpreted as signed integers and their 
-        summed result, instead of wrapping, will be saturated to the lowest or highest 
-        signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8). For example, 
-        since an `iadd_ssat.i8` of `0x70` and `0x70` is greater than `0x7F`, the result will be 
+        This is similar to `iadd` but the operands are interpreted as signed integers and their
+        summed result, instead of wrapping, will be saturated to the lowest or highest
+        signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8). For example,
+        since an `iadd_ssat.i8` of `0x70` and `0x70` is greater than `0x7F`, the result will be
         clamped to `0x7F`.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1742,6 +1835,7 @@ pub(crate) fn define(
         This instruction does not depend on the signed/unsigned interpretation
         of the operands.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1753,10 +1847,11 @@ pub(crate) fn define(
             r#"
         Subtract with unsigned saturation.
 
-        This is similar to `isub` but the operands are interpreted as unsigned integers and their 
+        This is similar to `isub` but the operands are interpreted as unsigned integers and their
         difference, instead of wrapping, will be saturated to the lowest unsigned integer for
         the controlling type (e.g. `0x00` for i8).
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1768,10 +1863,11 @@ pub(crate) fn define(
             r#"
         Subtract with signed saturation.
 
-        This is similar to `isub` but the operands are interpreted as signed integers and their 
-        difference, instead of wrapping, will be saturated to the lowest or highest 
+        This is similar to `isub` but the operands are interpreted as signed integers and their
+        difference, instead of wrapping, will be saturated to the lowest or highest
         signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8).
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1783,6 +1879,7 @@ pub(crate) fn define(
             r#"
         Integer negation: `a := -x \pmod{2^B}`.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -1799,6 +1896,7 @@ pub(crate) fn define(
 
         Polymorphic over all integer types (vector and scalar).
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1814,6 +1912,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1829,6 +1928,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -1842,6 +1942,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a])
@@ -1859,6 +1960,7 @@ pub(crate) fn define(
         representable in `B` bits two's complement. This only happens
         when `x = -2^{B-1}, y = -1`.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a])
@@ -1873,6 +1975,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a])
@@ -1887,6 +1990,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a])
@@ -1908,6 +2012,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -1922,6 +2027,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -1935,6 +2041,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -1950,6 +2057,7 @@ pub(crate) fn define(
         representable in `B` bits two's complement. This only happens
         when `x = -2^{B-1}, Y = -1`.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -1963,6 +2071,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -1976,6 +2085,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -1994,6 +2104,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2028,6 +2139,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, c_in])
         .operands_out(vec![a]),
@@ -2048,6 +2160,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, c_if_in])
         .operands_out(vec![a]),
@@ -2069,6 +2182,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a, c_out]),
@@ -2090,6 +2204,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a, c_if_out]),
@@ -2111,6 +2226,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, c_in])
         .operands_out(vec![a, c_out]),
@@ -2132,6 +2248,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, c_if_in])
         .operands_out(vec![a, c_if_out]),
@@ -2152,6 +2269,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, b_in])
         .operands_out(vec![a]),
@@ -2172,6 +2290,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, b_if_in])
         .operands_out(vec![a]),
@@ -2193,6 +2312,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a, b_out]),
@@ -2214,6 +2334,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a, b_if_out]),
@@ -2235,6 +2356,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, b_in])
         .operands_out(vec![a, b_out]),
@@ -2256,6 +2378,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, b_if_in])
         .operands_out(vec![a, b_if_out]),
@@ -2282,6 +2405,7 @@ pub(crate) fn define(
             r#"
         Bitwise and.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2293,6 +2417,7 @@ pub(crate) fn define(
             r#"
         Bitwise or.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2304,6 +2429,7 @@ pub(crate) fn define(
             r#"
         Bitwise xor.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2315,6 +2441,7 @@ pub(crate) fn define(
             r#"
         Bitwise not.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2328,6 +2455,7 @@ pub(crate) fn define(
 
         Computes `x & ~y`.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2341,6 +2469,7 @@ pub(crate) fn define(
 
         Computes `x | ~y`.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2354,6 +2483,7 @@ pub(crate) fn define(
 
         Computes `x ^ ~y`.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2374,6 +2504,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2390,6 +2521,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2406,6 +2538,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2424,6 +2557,7 @@ pub(crate) fn define(
 
         Rotate the bits in ``x`` by ``y`` places.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2437,6 +2571,7 @@ pub(crate) fn define(
 
         Rotate the bits in ``x`` by ``y`` places.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2448,6 +2583,7 @@ pub(crate) fn define(
             r#"
         Rotate left by immediate.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2459,6 +2595,7 @@ pub(crate) fn define(
             r#"
         Rotate right by immediate.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2480,6 +2617,7 @@ pub(crate) fn define(
             a &:= x \cdot 2^s \pmod{2^B}.
         ```
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2502,6 +2640,7 @@ pub(crate) fn define(
             a &:= \lfloor x \cdot 2^{-s} \rfloor.
         ```
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2517,6 +2656,7 @@ pub(crate) fn define(
 
         The shift amount is masked to the size of the register.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2530,6 +2670,7 @@ pub(crate) fn define(
 
         The shift amount is masked to the size of ``x``.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2543,6 +2684,7 @@ pub(crate) fn define(
 
         The shift amount is masked to the size of the register.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2556,6 +2698,7 @@ pub(crate) fn define(
 
         The shift amount is masked to the size of the register.
         "#,
+            &formats.binary_imm,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2572,6 +2715,7 @@ pub(crate) fn define(
 
         Reverses the bits in ``x``.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2587,6 +2731,7 @@ pub(crate) fn define(
         reaching the first one bit. When ``x`` is zero, returns the size of x
         in bits.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2602,6 +2747,7 @@ pub(crate) fn define(
         consecutive bits identical to the sign bit. When ``x`` is 0 or -1,
         returns one less than the size of x in bits.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2617,6 +2763,7 @@ pub(crate) fn define(
         reaching the first one bit. When ``x`` is zero, returns the size of x
         in bits.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2630,6 +2777,7 @@ pub(crate) fn define(
 
         Count the number of one bits in ``x``.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2712,6 +2860,7 @@ pub(crate) fn define(
         When this instruction compares floating point vectors, it returns a
         boolean vector with the results of lane-wise comparisons.
         "#,
+            &formats.float_compare,
         )
         .operands_in(vec![Cond, x, y])
         .operands_out(vec![a]),
@@ -2728,6 +2877,7 @@ pub(crate) fn define(
         Compares two numbers like `fcmp`, but returns floating point CPU
         flags instead of testing a specific condition.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![f]),
@@ -2744,6 +2894,7 @@ pub(crate) fn define(
             r#"
         Floating point addition.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2755,6 +2906,7 @@ pub(crate) fn define(
             r#"
         Floating point subtraction.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2766,6 +2918,7 @@ pub(crate) fn define(
             r#"
         Floating point multiplication.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2781,6 +2934,7 @@ pub(crate) fn define(
         `udiv`, this can't trap. Division by zero is infinity or
         NaN, depending on the dividend.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2792,6 +2946,7 @@ pub(crate) fn define(
             r#"
         Floating point square root.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2806,6 +2961,7 @@ pub(crate) fn define(
         Computes `a := xy+z` without any intermediate rounding of the
         product.
         "#,
+            &formats.ternary,
         )
         .operands_in(vec![x, y, z])
         .operands_out(vec![a]),
@@ -2821,6 +2977,7 @@ pub(crate) fn define(
 
         Note that this is a pure bitwise operation.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2836,6 +2993,7 @@ pub(crate) fn define(
 
         Note that this is a pure bitwise operation.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2856,6 +3014,7 @@ pub(crate) fn define(
         Note that this is a pure bitwise operation. The sign bit from ``y`` is
         copied to the sign bit of ``x``.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2871,6 +3030,7 @@ pub(crate) fn define(
 
         If either operand is NaN, this returns a NaN.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2886,6 +3046,7 @@ pub(crate) fn define(
 
         If either operand is NaN, this returns a NaN.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
@@ -2899,6 +3060,7 @@ pub(crate) fn define(
             r#"
         Round floating point round to integral, towards positive infinity.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2910,6 +3072,7 @@ pub(crate) fn define(
             r#"
         Round floating point round to integral, towards negative infinity.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2921,6 +3084,7 @@ pub(crate) fn define(
             r#"
         Round floating point round to integral, towards zero.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2933,6 +3097,7 @@ pub(crate) fn define(
         Round floating point round to integral, towards nearest with ties to
         even.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2950,6 +3115,7 @@ pub(crate) fn define(
         The condition code determines if the reference type in question is
         null or not.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -2968,6 +3134,7 @@ pub(crate) fn define(
         Check the CPU flags in ``f`` against the ``Cond`` condition code and
         return true when the condition code is satisfied.
         "#,
+            &formats.int_cond,
         )
         .operands_in(vec![Cond, f])
         .operands_out(vec![a]),
@@ -2985,6 +3152,7 @@ pub(crate) fn define(
         Check the CPU flags in ``f`` against the ``Cond`` condition code and
         return true when the condition code is satisfied.
         "#,
+            &formats.float_cond,
         )
         .operands_in(vec![Cond, f])
         .operands_out(vec![a]),
@@ -3003,6 +3171,7 @@ pub(crate) fn define(
         size. A bitcast is equivalent to storing one type and loading the other
         type from the same address.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -3025,6 +3194,7 @@ pub(crate) fn define(
         lane is a raw_bitcast of the corresponding operand lane. TODO there is
         currently no mechanism for enforcing the bit width constraint.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -3037,12 +3207,13 @@ pub(crate) fn define(
         Inst::new(
             "scalar_to_vector",
             r#"
-    Scalar To Vector -- move a value out of a scalar register and into a vector register; the 
-    scalar will be moved to the lowest-order bits of the vector register. Note that this 
-    instruction is intended as a low-level legalization instruction and frontends should prefer 
+    Scalar To Vector -- move a value out of a scalar register and into a vector register; the
+    scalar will be moved to the lowest-order bits of the vector register. Note that this
+    instruction is intended as a low-level legalization instruction and frontends should prefer
     insertlane; on certain architectures, scalar_to_vector may zero the highest-order bits for some
     types (e.g. integers) but not for others (e.g. floats).
     "#,
+            &formats.unary,
         )
         .operands_in(vec![s])
         .operands_out(vec![a]),
@@ -3079,6 +3250,7 @@ pub(crate) fn define(
         and each lane must not have more bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3106,6 +3278,7 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3132,6 +3305,7 @@ pub(crate) fn define(
         True maps to 1 and false maps to 0. The result type must have the same
         number of vector lanes as the input.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -3146,6 +3320,7 @@ pub(crate) fn define(
         True maps to all 1s and false maps to all 0s. The result type must have
         the same number of vector lanes as the input.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -3185,6 +3360,7 @@ pub(crate) fn define(
         and each lane must not have more bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3216,6 +3392,7 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3236,6 +3413,7 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3269,6 +3447,7 @@ pub(crate) fn define(
         and the result lanes must not have fewer bits than the input lanes. If
         the input and output types are the same, this is a no-op.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3291,6 +3470,7 @@ pub(crate) fn define(
         and the result lanes must not have more bits than the input lanes. If
         the input and output types are the same, this is a no-op.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3312,6 +3492,7 @@ pub(crate) fn define(
 
         The result type must have the same number of vector lanes as the input.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3326,6 +3507,7 @@ pub(crate) fn define(
         saturates the input instead of trapping. NaN and negative values are
         converted to 0.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -3343,6 +3525,7 @@ pub(crate) fn define(
 
         The result type must have the same number of vector lanes as the input.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
@@ -3356,6 +3539,7 @@ pub(crate) fn define(
         Convert floating point to signed integer as fcvt_to_sint does, but
         saturates the input instead of trapping. NaN values are converted to 0.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -3375,6 +3559,7 @@ pub(crate) fn define(
 
         The result type must have the same number of vector lanes as the input.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -3391,6 +3576,7 @@ pub(crate) fn define(
 
         The result type must have the same number of vector lanes as the input.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
@@ -3420,6 +3606,7 @@ pub(crate) fn define(
         Returns the low half of `x` and the high half of `x` as two independent
         values.
         "#,
+            &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![lo, hi])
@@ -3453,6 +3640,7 @@ pub(crate) fn define(
         the same number of lanes as the inputs, but the lanes are twice the
         size.
         "#,
+            &formats.binary,
         )
         .operands_in(vec![lo, hi])
         .operands_out(vec![a])

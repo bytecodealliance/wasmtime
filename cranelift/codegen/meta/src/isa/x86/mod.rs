@@ -20,7 +20,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let inst_group = instructions::define(
         &mut shared_defs.all_instructions,
-        &shared_defs.format_registry,
+        &shared_defs.formats,
         &shared_defs.imm,
     );
     legalize::define(shared_defs, &inst_group);
