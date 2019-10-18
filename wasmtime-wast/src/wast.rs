@@ -6,7 +6,6 @@ use wasmtime_jit::{
     ActionError, ActionOutcome, Compiler, Context, Features, InstanceHandle, InstantiationError,
     RuntimeValue, SetupError,
 };
-use wast_parser as wast;
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
 fn runtime_value(v: &wast::Expression<'_>) -> RuntimeValue {
@@ -141,7 +140,7 @@ impl WastContext {
 
     /// Run a wast script from a byte buffer.
     pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<(), Error> {
-        use wast_parser::WastDirective::*;
+        use wast::WastDirective::*;
 
         let wast = str::from_utf8(wast)?;
 

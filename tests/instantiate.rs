@@ -14,7 +14,7 @@ const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
 #[test]
 fn test_environ_translate() {
     let path = PathBuf::from(PATH_MODULE_RS2WASM_ADD_FUNC);
-    let data = wast::parse_file(path).expect("expecting valid wat-file");
+    let data = wat::parse_file(path).expect("expecting valid wat-file");
     assert!(data.len() > 0);
 
     let mut flag_builder = settings::builder();

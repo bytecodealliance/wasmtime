@@ -1,7 +1,7 @@
 use super::{module::ExecutionError, translate, ExecutableModule};
 
 fn translate_wat(wat: &str) -> ExecutableModule {
-    let wasm = wast::parse_str(wat).unwrap();
+    let wasm = wat::parse_str(wat).unwrap();
     let compiled = translate(&wasm).unwrap();
     compiled
 }
