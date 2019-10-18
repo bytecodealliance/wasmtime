@@ -151,12 +151,38 @@ jobs:
   - template: ci/azure-prepare-centos-6.yml
   - template: ci/azure-build-wheels.yml
 
+- job: Doc_book
+  displayName: "Doc - build the book"
+  steps:
+    - script: |
+        set -e
+        curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.3.1/mdbook-v0.3.1-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
+        echo "##vso[task.prependpath]$PWD"
+      displayName: "Install mdbook"
+    - script: (cd docs && mdbook build)
+    - task: PublishPipelineArtifact@1
+      inputs:
+        artifactName: doc_book
+        path: docs/book
+
+- job: Doc_api
+  displayName: "Doc - build the API documentation"
+  steps:
+    - template: ci/azure-install-rust.yml
+    - script: cargo doc
+    - task: PublishPipelineArtifact@1
+      inputs:
+        artifactName: doc_api
+        path: target/doc
+
 - job: Publish
   dependsOn:
   - Build
   - Build_wheels
   - Build_linux
   - Build_linux_wheels
+  - Doc_book
+  - Doc_api
   condition: and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
   steps:
   # Checking out the sources is needed to be able to delete the "dev" tag, see below.
@@ -166,6 +192,21 @@ jobs:
   - task: DownloadPipelineArtifact@1
     inputs:
       targetPath: $(Build.ArtifactStagingDirectory)
+  - script: |
+      set -e
+      mv $(Build.ArtifactStagingDirectory)/doc_book gh-pages
+      mv $(Build.ArtifactStagingDirectory)/doc_api gh-pages/api
+    displayName: Create gh-pages directory
+  - script: |
+      set -e
+      cd gh-pages
+      git init
+      cp ../.git/config .git
+      git add .
+      git -c user.name='ci' -c user.email='ci' commit -m init
+      git push -f -q https://github.com/CraneStation/wasmtime HEAD:gh-pages
+    displayName: Publish gh-pages directory
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
   - script: |
       echo "##vso[task.setvariable variable=tagName;]`echo $BUILD_SOURCEBRANCH | sed -e 's|refs/tags/||'`"
     condition: startsWith(variables['Build.SourceBranch'], 'refs/tags/')
