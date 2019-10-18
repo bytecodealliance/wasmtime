@@ -452,6 +452,7 @@ impl From<Immediate> for BindParameter {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)] // TODO(#1150): remove this once we use it in legalization patterns.
 pub enum Immediate {
     UInt8(u8),
     UInt128(u128),
