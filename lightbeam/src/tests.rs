@@ -1,8 +1,7 @@
 use super::{module::ExecutionError, translate, ExecutableModule};
-use wabt;
 
 fn translate_wat(wat: &str) -> ExecutableModule {
-    let wasm = wabt::wat2wasm(wat).unwrap();
+    let wasm = wat::parse_str(wat).unwrap();
     let compiled = translate(&wasm).unwrap();
     compiled
 }

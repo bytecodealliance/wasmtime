@@ -39,7 +39,6 @@ wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "c3bf
 docopt = "1.0.1"
 serde = { "version" = "1.0.94", features = ["derive"] }
 pretty_env_logger = "0.3.0"
-wabt = "0.9.2"
 wasmtime-wast = { path="../wasmtime-wast" }
 wasmtime-wasi = { path="../wasmtime-wasi" }
 rayon = "1.1"

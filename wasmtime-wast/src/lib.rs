@@ -23,14 +23,12 @@
 )]
 
 extern crate alloc;
-#[macro_use]
-extern crate failure_derive;
 
 mod spectest;
 mod wast;
 
 pub use crate::spectest::instantiate_spectest;
-pub use crate::wast::{WastContext, WastError};
+pub use crate::wast::WastContext;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

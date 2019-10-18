@@ -33,7 +33,7 @@ failure = "0.1"
 target-lexicon = { version = "0.8.1", default-features = false }
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.1"
-wabt = "0.9.2"
+wat = "1.0.2"
 libc = "0.2.60"
 rayon = "1.1"
 wasm-webidl-bindings = "0.5"

@@ -40,9 +40,8 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::path::Component;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::exit;
-use wabt;
 use wasi_common::preopen_dir;
 use wasmtime::pick_compilation_strategy;
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
@@ -113,19 +112,6 @@ struct Args {
     flag_dir: Vec<String>,
     flag_mapdir: Vec<String>,
     flag_wasi_c: bool,
-}
-
-fn read_wasm(path: PathBuf) -> Result<Vec<u8>, Error> {
-    let data = std::fs::read(&path)
-        .with_context(|_| format!("failed to read file: {}", path.display()))?;
-
-    // If data is a wasm binary, use that. If it's using wat format, convert it
-    // to a wasm binary with wat2wasm.
-    Ok(if data.starts_with(&[b'\0', b'a', b's', b'm']) {
-        data
-    } else {
-        wabt::wat2wasm(data)?
-    })
 }
 
 fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(String, File)> {
@@ -353,8 +339,8 @@ fn instantiate_module(
     module_registry: &HashMap<String, (Instance, HashMap<String, usize>)>,
     path: &Path,
 ) -> Result<(HostRef<Instance>, HostRef<Module>, Vec<u8>), Error> {
-    // Read the wasm module binary.
-    let data = read_wasm(path.to_path_buf())?;
+    // Read the wasm module binary either as `*.wat` or a raw binary
+    let data = wat::parse_file(path.to_path_buf())?;
 
     let module = HostRef::new(Module::new(store.clone(), &data)?);
 
