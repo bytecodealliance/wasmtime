@@ -59,7 +59,10 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
             let mut cx = #root::wasmtime_jit::Context::with_isa(
                 isa,
                 #root::wasmtime_jit::CompilationStrategy::Auto
-            );
+            ).with_features(#root::wasmtime_jit::Features {
+                multi_value: true,
+                ..Default::default()
+            });
             let data = #root::wasmtime_interface_types::ModuleData::new(&bytes)?;
             let handle = cx.instantiate_module(None, &bytes)?;
 

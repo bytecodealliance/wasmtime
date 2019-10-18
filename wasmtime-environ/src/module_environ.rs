@@ -11,7 +11,7 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    SignatureIndex, Table, TableIndex, WasmResult,
+    ModuleTranslationState, SignatureIndex, Table, TableIndex, WasmResult,
 };
 
 /// Contains function data: byte code and its offset in the module.
@@ -42,6 +42,9 @@ pub struct ModuleTranslation<'data> {
 
     /// Tunable parameters.
     pub tunables: Tunables,
+
+    /// The decoded Wasm types for the module.
+    pub module_translation: Option<ModuleTranslationState>,
 }
 
 impl<'data> ModuleTranslation<'data> {
@@ -67,6 +70,7 @@ impl<'data> ModuleEnvironment<'data> {
                 function_body_inputs: PrimaryMap::new(),
                 data_initializers: Vec::new(),
                 tunables,
+                module_translation: None,
             },
         }
     }
@@ -78,8 +82,9 @@ impl<'data> ModuleEnvironment<'data> {
     /// Translate a wasm module using this environment. This consumes the
     /// `ModuleEnvironment` and produces a `ModuleTranslation`.
     pub fn translate(mut self, data: &'data [u8]) -> WasmResult<ModuleTranslation<'data>> {
-        translate_module(data, &mut self)?;
-
+        assert!(self.result.module_translation.is_none());
+        let module_translation = translate_module(data, &mut self)?;
+        self.result.module_translation = Some(module_translation);
         Ok(self.result)
     }
 }
@@ -320,6 +325,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn define_function_body(
         &mut self,
+        _module_translation: &ModuleTranslationState,
         body_bytes: &'data [u8],
         body_offset: usize,
     ) -> WasmResult<()> {

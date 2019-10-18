@@ -21,7 +21,7 @@ use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::isa;
 use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 /// Implementation of a relocation sink that just saves all the information for later
@@ -177,6 +177,7 @@ impl crate::compilation::Compiler for Cranelift {
     /// associated relocations.
     fn compile_module<'data, 'module>(
         module: &'module Module,
+        module_translation: &ModuleTranslationState,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
@@ -213,71 +214,74 @@ impl crate::compilation::Compiler for Cranelift {
                     .into_iter()
                     .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'data>)>>()
                     .par_iter()
-                    .map(|(i, input)| {
-                        let func_index = module.func_index(*i);
-                        let mut context = Context::new();
-                        context.func.name = get_func_name(func_index);
-                        context.func.signature =
-                            module.signatures[module.functions[func_index]].clone();
-                        if generate_debug_info {
-                            context.func.collect_debug_info();
-                        }
+                    .map_init(
+                        || FuncTranslator::new(),
+                        |func_translator, (i, input)| {
+                            let func_index = module.func_index(*i);
+                            let mut context = Context::new();
+                            context.func.name = get_func_name(func_index);
+                            context.func.signature =
+                                module.signatures[module.functions[func_index]].clone();
+                            if generate_debug_info {
+                                context.func.collect_debug_info();
+                            }
 
-                        let mut trans = FuncTranslator::new();
-                        trans
-                            .translate(
-                                input.data,
-                                input.module_offset,
-                                &mut context.func,
-                                &mut FuncEnvironment::new(isa.frontend_config(), module),
-                            )
-                            .map_err(CompileError::Wasm)?;
+                            func_translator
+                                .translate(
+                                    module_translation,
+                                    input.data,
+                                    input.module_offset,
+                                    &mut context.func,
+                                    &mut FuncEnvironment::new(isa.frontend_config(), module),
+                                )
+                                .map_err(CompileError::Wasm)?;
 
-                        let mut code_buf: Vec<u8> = Vec::new();
-                        let mut reloc_sink = RelocSink::new(func_index);
-                        let mut trap_sink = TrapSink::new();
-                        let mut stackmap_sink = binemit::NullStackmapSink {};
-                        context
-                            .compile_and_emit(
-                                isa,
-                                &mut code_buf,
-                                &mut reloc_sink,
-                                &mut trap_sink,
-                                &mut stackmap_sink,
-                            )
-                            .map_err(CompileError::Codegen)?;
+                            let mut code_buf: Vec<u8> = Vec::new();
+                            let mut reloc_sink = RelocSink::new(func_index);
+                            let mut trap_sink = TrapSink::new();
+                            let mut stackmap_sink = binemit::NullStackmapSink {};
+                            context
+                                .compile_and_emit(
+                                    isa,
+                                    &mut code_buf,
+                                    &mut reloc_sink,
+                                    &mut trap_sink,
+                                    &mut stackmap_sink,
+                                )
+                                .map_err(CompileError::Codegen)?;
 
-                        let jt_offsets = context.func.jt_offsets.clone();
+                            let jt_offsets = context.func.jt_offsets.clone();
 
-                        let address_transform = if generate_debug_info {
-                            let body_len = code_buf.len();
-                            Some(get_function_address_map(&context, input, body_len, isa))
-                        } else {
-                            None
-                        };
+                            let address_transform = if generate_debug_info {
+                                let body_len = code_buf.len();
+                                Some(get_function_address_map(&context, input, body_len, isa))
+                            } else {
+                                None
+                            };
 
-                        let ranges = if generate_debug_info {
-                            Some(
-                                context
-                                    .build_value_labels_ranges(isa)
-                                    .map_err(CompileError::Codegen)?,
-                            )
-                        } else {
-                            None
-                        };
+                            let ranges = if generate_debug_info {
+                                Some(
+                                    context
+                                        .build_value_labels_ranges(isa)
+                                        .map_err(CompileError::Codegen)?,
+                                )
+                            } else {
+                                None
+                            };
 
-                        let stack_slots = context.func.stack_slots.clone();
+                            let stack_slots = context.func.stack_slots.clone();
 
-                        Ok((
-                            code_buf,
-                            jt_offsets,
-                            reloc_sink.func_relocs,
-                            address_transform,
-                            ranges,
-                            stack_slots,
-                            trap_sink.traps,
-                        ))
-                    })
+                            Ok((
+                                code_buf,
+                                jt_offsets,
+                                reloc_sink.func_relocs,
+                                address_transform,
+                                ranges,
+                                stack_slots,
+                                trap_sink.traps,
+                            ))
+                        },
+                    )
                     .collect::<Result<Vec<_>, CompileError>>()?
                     .into_iter()
                     .for_each(

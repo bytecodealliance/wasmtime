@@ -11,11 +11,11 @@ cargo-fuzz = true
 [dependencies]
 wasmtime-environ = { path = "../wasmtime-environ" }
 wasmtime-jit = { path = "../wasmtime-jit" }
-cranelift-codegen = { version = "0.44.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.44.0", features = ["enable-serde"] }
-cranelift-native = "0.44.0"
+cranelift-codegen = { version = "0.46.1", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.46.1", features = ["enable-serde"] }
+cranelift-native = "0.46.1"
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
-wasmparser = { version = "0.39.1", default-features = false }
+wasmparser = { version = "0.39.2", default-features = false }
 binaryen = "0.5.0"
 
 [features]

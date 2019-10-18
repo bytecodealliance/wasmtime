@@ -11,10 +11,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { version = "0.44.0", default-features = false }
+cranelift-codegen = { version = "0.46.1", default-features = false }
 failure = { version = "0.1", default-features = false }
 walrus = "0.12.0"
-wasmparser = { version = "0.39.1", default-features = false }
+wasmparser = { version = "0.39.2", default-features = false }
 wasm-webidl-bindings = "0.5.0"
 wasmtime-jit = { path = '../wasmtime-jit', default-features = false }
 wasmtime-runtime = { path = '../wasmtime-runtime', default-features = false }
