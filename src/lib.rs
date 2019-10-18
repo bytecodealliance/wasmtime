@@ -1,11 +1,8 @@
 use wasmtime_jit::CompilationStrategy;
 
-pub fn pick_compilation_strategy(
-    always_cranelift: bool,
-    always_lightbeam: bool,
-) -> CompilationStrategy {
+pub fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> CompilationStrategy {
     // Decide how to compile.
-    match (always_lightbeam, always_cranelift) {
+    match (lightbeam, cranelift) {
         #[cfg(feature = "lightbeam")]
         (true, false) => CompilationStrategy::Lightbeam,
         #[cfg(not(feature = "lightbeam"))]
