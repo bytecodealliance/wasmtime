@@ -17,3 +17,13 @@ ebb0(v0: b32x4):
     ; nextln: v1 = trueif ne v2
     return v1
 }
+
+function %vall_true_i64x2(i64x2) -> b1 {
+ebb0(v0: i64x2):
+    v1 = vall_true v0
+    ; check: v2 = vconst.i64x2 0x00
+    ; nextln: v3 = icmp eq v0, v2
+    ; nextln: v4 = x86_ptest v3, v3
+    ; nextln: v1 = trueif eq v4
+    return v1
+}

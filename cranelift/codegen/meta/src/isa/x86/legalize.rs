@@ -39,6 +39,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let fmax = insts.by_name("fmax");
     let fmin = insts.by_name("fmin");
     let iadd = insts.by_name("iadd");
+    let icmp = insts.by_name("icmp");
     let iconst = insts.by_name("iconst");
     let imul = insts.by_name("imul");
     let ineg = insts.by_name("ineg");
@@ -62,6 +63,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let urem = insts.by_name("urem");
     let ushr = insts.by_name("ushr");
     let vconst = insts.by_name("vconst");
+    let vall_true = insts.by_name("vall_true");
     let vany_true = insts.by_name("vany_true");
 
     let x86_bsf = x86_instructions.by_name("x86_bsf");
@@ -457,6 +459,40 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             def!(y = vany_true(x)),
             vec![def!(a = x86_ptest(x, x)), def!(y = trueif(ne, a))],
         );
+    }
+
+    // SIMD vall_true
+    let zeroes = constant(vec![0x00; 16]);
+    let eq = Literal::enumerator_for(&imm.intcc, "eq");
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let vall_true = vall_true.bind(vector(ty, sse_vector_size));
+        if ty.is_int() {
+            // In the common case (Wasm's integer-only all_true), we do not require a bitcast.
+            narrow.legalize(
+                def!(y = vall_true(x)),
+                vec![
+                    def!(a = vconst(zeroes)),
+                    def!(c = icmp(eq, x, a)),
+                    def!(d = x86_ptest(c, c)),
+                    def!(y = trueif(eq, d)),
+                ],
+            );
+        } else {
+            // However, to support other types we must bitcast them to an integer vector to use
+            // icmp.
+            let lane_type_as_int = LaneType::int_from_bits(ty.lane_bits() as u16);
+            let raw_bitcast_to_int = raw_bitcast.bind(vector(lane_type_as_int, sse_vector_size));
+            narrow.legalize(
+                def!(y = vall_true(x)),
+                vec![
+                    def!(a = vconst(zeroes)),
+                    def!(b = raw_bitcast_to_int(x)),
+                    def!(c = icmp(eq, b, a)),
+                    def!(d = x86_ptest(c, c)),
+                    def!(y = trueif(eq, d)),
+                ],
+            );
+        }
     }
 
     narrow.custom_legalize(shuffle, "convert_shuffle");

@@ -1639,6 +1639,20 @@ pub(crate) fn define(
         .operands_out(vec![s]),
     );
 
+    ig.push(
+        Inst::new(
+            "vall_true",
+            r#"
+        Reduce a vector to a scalar boolean.
+
+        Return a scalar boolean true if all lanes in ``i`` are non-zero, false otherwise.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![a])
+        .operands_out(vec![s]),
+    );
+
     let x = &operand("x", &TxN.lane_of());
 
     ig.push(
