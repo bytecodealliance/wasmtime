@@ -1147,6 +1147,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // operands must match (hence the bitcast).
             state.push1(builder.ins().bitselect(bitcast_c, bitcast_a, bitcast_b))
         }
+        Operator::I8x16AnyTrue
+        | Operator::I16x8AnyTrue
+        | Operator::I32x4AnyTrue
+        | Operator::I64x2AnyTrue => {
+            let bool_result = builder.ins().vany_true(state.pop1());
+            state.push1(builder.ins().bint(I32, bool_result))
+        }
         Operator::I8x16Eq
         | Operator::I8x16Ne
         | Operator::I8x16LtS
@@ -1189,17 +1196,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2Gt
         | Operator::F64x2Le
         | Operator::F64x2Ge
-        | Operator::I8x16AnyTrue
         | Operator::I8x16AllTrue
         | Operator::I8x16Shl
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
         | Operator::I8x16Mul
-        | Operator::I16x8AnyTrue
         | Operator::I16x8AllTrue
-        | Operator::I32x4AnyTrue
         | Operator::I32x4AllTrue
-        | Operator::I64x2AnyTrue
         | Operator::I64x2AllTrue
         | Operator::I64x2ShrS
         | Operator::F32x4Abs
