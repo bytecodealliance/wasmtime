@@ -2,9 +2,8 @@ use crate::cdsl::operands::{Operand, OperandKind};
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::rc::Rc;
 use std::slice;
-
-use cranelift_entity::{entity_impl, PrimaryMap};
 
 /// An immediate field in an instruction format.
 ///
@@ -152,15 +151,10 @@ impl InstructionFormatBuilder {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct InstructionFormatIndex(u32);
-entity_impl!(InstructionFormatIndex);
-
 pub struct FormatRegistry {
-    /// Map (immediate kinds names, number of values, has varargs) to an instruction format index
-    /// in the actual map.
-    sig_to_index: HashMap<(Vec<String>, usize, bool), InstructionFormatIndex>,
-    map: PrimaryMap<InstructionFormatIndex, InstructionFormat>,
+    /// Map (immediate kinds names, number of values, has varargs) to an instruction format.
+    sig_to_index: HashMap<(Vec<String>, usize, bool), usize>,
+    formats: Vec<Rc<InstructionFormat>>,
     name_set: HashSet<&'static str>,
 }
 
@@ -168,14 +162,14 @@ impl FormatRegistry {
     pub fn new() -> Self {
         Self {
             sig_to_index: HashMap::new(),
-            map: PrimaryMap::new(),
+            formats: Vec::new(),
             name_set: HashSet::new(),
         }
     }
 
     /// Find an existing instruction format that matches the given lists of instruction inputs and
     /// outputs.
-    pub fn lookup(&self, operands_in: &Vec<Operand>) -> InstructionFormatIndex {
+    pub fn lookup(&self, operands_in: &Vec<Operand>) -> &Rc<InstructionFormat> {
         let mut imm_keys = Vec::new();
         let mut num_values = 0;
         let mut has_varargs = false;
@@ -193,22 +187,19 @@ impl FormatRegistry {
         }
 
         let sig = (imm_keys, num_values, has_varargs);
-        *self
+        let index = *self
             .sig_to_index
             .get(&sig)
-            .expect("unknown InstructionFormat; please define it in shared/formats.rs first")
+            .expect("unknown InstructionFormat; please define it in shared/formats.rs first");
+        &self.formats[index]
     }
 
-    pub fn by_name(&self, name: &str) -> InstructionFormatIndex {
-        self.map
+    pub fn by_name(&self, name: &str) -> &Rc<InstructionFormat> {
+        &self
+            .formats
             .iter()
-            .find(|(_key, value)| value.name == name)
+            .find(|format| format.name == name)
             .unwrap_or_else(|| panic!("format with name '{}' doesn't exist", name))
-            .0
-    }
-
-    pub fn get(&self, index: InstructionFormatIndex) -> &InstructionFormat {
-        self.map.get(index).unwrap()
     }
 
     pub fn insert(&mut self, inst_format: InstructionFormatBuilder) {
@@ -230,17 +221,18 @@ impl FormatRegistry {
             .collect();
         let key = (imm_keys, format.num_value_operands, format.has_value_list);
 
-        let index = self.map.push(format);
+        let index = self.formats.len();
+        self.formats.push(Rc::new(format));
         if let Some(already_inserted) = self.sig_to_index.insert(key, index) {
             panic!(
                 "duplicate InstructionFormat: trying to insert '{}' while '{}' already has the same structure.",
-                self.map.get(index).unwrap().name,
-                self.map.get(already_inserted).unwrap().name
+                self.formats[index].name,
+                self.formats[already_inserted].name
             );
         }
     }
 
-    pub fn iter(&self) -> slice::Iter<InstructionFormat> {
-        self.map.values()
+    pub fn iter(&self) -> slice::Iter<Rc<InstructionFormat>> {
+        self.formats.iter()
     }
 }

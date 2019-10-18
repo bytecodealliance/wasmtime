@@ -13,24 +13,21 @@ use crate::shared::types::Reference::{R32, R64};
 use crate::shared::Definitions as SharedDefinitions;
 
 use super::recipes::RecipeGroup;
-use crate::cdsl::formats::FormatRegistry;
 
 pub(crate) struct PerCpuModeEncodings<'defs> {
     pub inst_pred_reg: InstructionPredicateRegistry,
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
     recipes: &'defs Recipes,
-    formats: &'defs FormatRegistry,
 }
 
 impl<'defs> PerCpuModeEncodings<'defs> {
-    fn new(recipes: &'defs Recipes, formats: &'defs FormatRegistry) -> Self {
+    fn new(recipes: &'defs Recipes) -> Self {
         Self {
             inst_pred_reg: InstructionPredicateRegistry::new(),
             enc32: Vec::new(),
             enc64: Vec::new(),
             recipes,
-            formats,
         }
     }
     fn enc(
@@ -39,7 +36,7 @@ impl<'defs> PerCpuModeEncodings<'defs> {
         recipe: EncodingRecipeNumber,
         bits: u16,
     ) -> EncodingBuilder {
-        EncodingBuilder::new(inst.into(), recipe, bits, self.formats)
+        EncodingBuilder::new(inst.into(), recipe, bits)
     }
     fn add32(&mut self, encoding: EncodingBuilder) {
         self.enc32
@@ -176,7 +173,7 @@ pub(crate) fn define<'defs>(
     let use_m = isa_settings.predicate_by_name("use_m");
 
     // Definitions.
-    let mut e = PerCpuModeEncodings::new(&recipes.recipes, &shared_defs.format_registry);
+    let mut e = PerCpuModeEncodings::new(&recipes.recipes);
 
     // Basic arithmetic binary instructions are encoded in an R-type instruction.
     for &(inst, inst_imm, f3, f7) in &[
@@ -242,7 +239,7 @@ pub(crate) fn define<'defs>(
                 bound_inst.clone().into(),
                 vec![Expr::Literal(cc), Expr::Var(x), Expr::Var(y)],
             )
-            .inst_predicate(&shared_defs.format_registry, &var_pool)
+            .inst_predicate(&var_pool)
             .unwrap()
         };
 
@@ -339,7 +336,7 @@ pub(crate) fn define<'defs>(
                     Expr::Var(args),
                 ],
             )
-            .inst_predicate(&shared_defs.format_registry, &var_pool)
+            .inst_predicate(&var_pool)
             .unwrap()
         };
 

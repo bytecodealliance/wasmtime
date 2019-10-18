@@ -20,27 +20,24 @@ use crate::shared::Definitions as SharedDefinitions;
 use crate::isa::x86::opcodes::*;
 
 use super::recipes::{RecipeGroup, Template};
-use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::BindParameter::Any;
 
-pub(crate) struct PerCpuModeEncodings<'defs> {
+pub(crate) struct PerCpuModeEncodings {
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
     pub recipes: Recipes,
     recipes_by_name: HashMap<String, EncodingRecipeNumber>,
     pub inst_pred_reg: InstructionPredicateRegistry,
-    formats: &'defs FormatRegistry,
 }
 
-impl<'defs> PerCpuModeEncodings<'defs> {
-    fn new(formats: &'defs FormatRegistry) -> Self {
+impl PerCpuModeEncodings {
+    fn new() -> Self {
         Self {
             enc32: Vec::new(),
             enc64: Vec::new(),
             recipes: Recipes::new(),
             recipes_by_name: HashMap::new(),
             inst_pred_reg: InstructionPredicateRegistry::new(),
-            formats,
         }
     }
 
@@ -73,7 +70,7 @@ impl<'defs> PerCpuModeEncodings<'defs> {
     {
         let (recipe, bits) = template.build();
         let recipe_number = self.add_recipe(recipe);
-        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits, self.formats);
+        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits);
         builder_closure(builder).build(&self.recipes, &mut self.inst_pred_reg)
     }
 
@@ -105,7 +102,7 @@ impl<'defs> PerCpuModeEncodings<'defs> {
     }
     fn enc32_rec(&mut self, inst: impl Into<InstSpec>, recipe: &EncodingRecipe, bits: u16) {
         let recipe_number = self.add_recipe(recipe.clone());
-        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits, self.formats);
+        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits);
         let encoding = builder.build(&self.recipes, &mut self.inst_pred_reg);
         self.enc32.push(encoding);
     }
@@ -138,7 +135,7 @@ impl<'defs> PerCpuModeEncodings<'defs> {
     }
     fn enc64_rec(&mut self, inst: impl Into<InstSpec>, recipe: &EncodingRecipe, bits: u16) {
         let recipe_number = self.add_recipe(recipe.clone());
-        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits, self.formats);
+        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits);
         let encoding = builder.build(&self.recipes, &mut self.inst_pred_reg);
         self.enc64.push(encoding);
     }
@@ -370,12 +367,12 @@ impl<'defs> PerCpuModeEncodings<'defs> {
 
 // Definitions.
 
-pub(crate) fn define<'defs>(
-    shared_defs: &'defs SharedDefinitions,
+pub(crate) fn define(
+    shared_defs: &SharedDefinitions,
     settings: &SettingGroup,
     x86: &InstructionGroup,
     r: &RecipeGroup,
-) -> PerCpuModeEncodings<'defs> {
+) -> PerCpuModeEncodings {
     let shared = &shared_defs.instructions;
     let formats = &shared_defs.format_registry;
 
@@ -688,7 +685,7 @@ pub(crate) fn define<'defs>(
     let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
 
     // Definitions.
-    let mut e = PerCpuModeEncodings::new(formats);
+    let mut e = PerCpuModeEncodings::new();
 
     // The pinned reg is fixed to a certain value entirely user-controlled, so it generates nothing!
     e.enc64_rec(get_pinned_reg.bind(I64), rec_get_pinned_reg, 0);
@@ -777,8 +774,8 @@ pub(crate) fn define<'defs>(
     e.enc64(iconst.bind(I32), rec_pu_id.opcodes(&MOV_IMM));
 
     // The 32-bit immediate movl also zero-extends to 64 bits.
-    let f_unary_imm = formats.get(formats.by_name("UnaryImm"));
-    let is_unsigned_int32 = InstructionPredicate::new_is_unsigned_int(f_unary_imm, "imm", 32, 0);
+    let f_unary_imm = formats.by_name("UnaryImm");
+    let is_unsigned_int32 = InstructionPredicate::new_is_unsigned_int(&*f_unary_imm, "imm", 32, 0);
 
     e.enc64_func(
         iconst.bind(I64),
@@ -883,8 +880,8 @@ pub(crate) fn define<'defs>(
     e.enc64_isap(ctz.bind(I32), rec_urm.opcodes(&TZCNT), use_bmi1);
 
     // Loads and stores.
-    let f_load_complex = formats.get(formats.by_name("LoadComplex"));
-    let is_load_complex_length_two = InstructionPredicate::new_length_equals(f_load_complex, 2);
+    let f_load_complex = formats.by_name("LoadComplex");
+    let is_load_complex_length_two = InstructionPredicate::new_length_equals(&*f_load_complex, 2);
 
     for recipe in &[rec_ldWithIndex, rec_ldWithIndexDisp8, rec_ldWithIndexDisp32] {
         e.enc_i32_i64_instp(
@@ -928,8 +925,9 @@ pub(crate) fn define<'defs>(
         );
     }
 
-    let f_store_complex = formats.get(formats.by_name("StoreComplex"));
-    let is_store_complex_length_three = InstructionPredicate::new_length_equals(f_store_complex, 3);
+    let f_store_complex = formats.by_name("StoreComplex");
+    let is_store_complex_length_three =
+        InstructionPredicate::new_length_equals(&*f_store_complex, 3);
 
     for recipe in &[rec_stWithIndex, rec_stWithIndexDisp8, rec_stWithIndexDisp32] {
         e.enc_i32_i64_instp(
@@ -1235,8 +1233,8 @@ pub(crate) fn define<'defs>(
     );
 
     // 64-bit, colocated, both PIC and non-PIC. Use the lea instruction's pc-relative field.
-    let f_func_addr = formats.get(formats.by_name("FuncAddr"));
-    let is_colocated_func = InstructionPredicate::new_is_colocated_func(f_func_addr, "func_ref");
+    let f_func_addr = formats.by_name("FuncAddr");
+    let is_colocated_func = InstructionPredicate::new_is_colocated_func(&*f_func_addr, "func_ref");
     e.enc64_instp(
         func_addr.bind(I64),
         rec_pcrel_fnaddr8.opcodes(&LEA).rex().w(),
@@ -1295,8 +1293,8 @@ pub(crate) fn define<'defs>(
     e.enc32(call, rec_call_id.opcodes(&CALL_RELATIVE));
 
     // 64-bit, colocated, both PIC and non-PIC. Use the call instruction's pc-relative field.
-    let f_call = formats.get(formats.by_name("Call"));
-    let is_colocated_func = InstructionPredicate::new_is_colocated_func(f_call, "func_ref");
+    let f_call = formats.by_name("Call");
+    let is_colocated_func = InstructionPredicate::new_is_colocated_func(&*f_call, "func_ref");
     e.enc64_instp(call, rec_call_id.opcodes(&CALL_RELATIVE), is_colocated_func);
 
     // 64-bit, non-colocated, PIC. There is no 64-bit non-colocated non-PIC version, since non-PIC
@@ -1566,16 +1564,18 @@ pub(crate) fn define<'defs>(
 
     // Floating-point constants equal to 0.0 can be encoded using either `xorps` or `xorpd`, for
     // 32-bit and 64-bit floats respectively.
-    let f_unary_ieee32 = formats.get(formats.by_name("UnaryIeee32"));
-    let is_zero_32_bit_float = InstructionPredicate::new_is_zero_32bit_float(f_unary_ieee32, "imm");
+    let f_unary_ieee32 = formats.by_name("UnaryIeee32");
+    let is_zero_32_bit_float =
+        InstructionPredicate::new_is_zero_32bit_float(&*f_unary_ieee32, "imm");
     e.enc32_instp(
         f32const,
         rec_f32imm_z.opcodes(&XORPS),
         is_zero_32_bit_float.clone(),
     );
 
-    let f_unary_ieee64 = formats.get(formats.by_name("UnaryIeee64"));
-    let is_zero_64_bit_float = InstructionPredicate::new_is_zero_64bit_float(f_unary_ieee64, "imm");
+    let f_unary_ieee64 = formats.by_name("UnaryIeee64");
+    let is_zero_64_bit_float =
+        InstructionPredicate::new_is_zero_64bit_float(&*f_unary_ieee64, "imm");
     e.enc32_instp(
         f64const,
         rec_f64imm_z.opcodes(&XORPD),
@@ -1847,18 +1847,18 @@ pub(crate) fn define<'defs>(
     // this must be encoded prior to the MOVUPS implementation (below) so the compiler sees this
     // encoding first
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        let f_unary_const = formats.get(formats.by_name("UnaryConst"));
+        let f_unary_const = formats.by_name("UnaryConst");
         let instruction = vconst.bind(vector(ty, sse_vector_size));
 
         let is_zero_128bit =
-            InstructionPredicate::new_is_all_zeroes(f_unary_const, "constant_handle");
+            InstructionPredicate::new_is_all_zeroes(&*f_unary_const, "constant_handle");
         let template = rec_vconst_optimized.nonrex().opcodes(&PXOR);
         e.enc_32_64_func(instruction.clone(), template, |builder| {
             builder.inst_predicate(is_zero_128bit)
         });
 
         let is_ones_128bit =
-            InstructionPredicate::new_is_all_ones(f_unary_const, "constant_handle");
+            InstructionPredicate::new_is_all_ones(&*f_unary_const, "constant_handle");
         let template = rec_vconst_optimized.nonrex().opcodes(&PCMPEQB);
         e.enc_32_64_func(instruction, template, |builder| {
             builder.inst_predicate(is_ones_128bit)
@@ -2038,9 +2038,9 @@ pub(crate) fn define<'defs>(
         };
 
         let instruction = icmp.bind(vector(ty, sse_vector_size));
-        let f_int_compare = formats.get(formats.by_name("IntCompare"));
+        let f_int_compare = formats.by_name("IntCompare");
         let has_eq_condition_code =
-            InstructionPredicate::new_has_condition_code(f_int_compare, IntCC::Equal, "cond");
+            InstructionPredicate::new_has_condition_code(&*f_int_compare, IntCC::Equal, "cond");
         let template = rec_icscc_fpr.nonrex().opcodes(opcodes);
         e.enc_32_64_func(instruction, template, |builder| {
             let builder = builder.inst_predicate(has_eq_condition_code);

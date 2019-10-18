@@ -1,16 +1,12 @@
 use std::collections::HashMap;
 
-use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::InstructionPredicate;
 use crate::cdsl::recipes::{EncodingRecipeBuilder, EncodingRecipeNumber, Recipes, Stack};
 use crate::cdsl::regs::IsaRegs;
 use crate::shared::Definitions as SharedDefinitions;
 
 /// An helper to create recipes and use them when defining the RISCV encodings.
-pub(crate) struct RecipeGroup<'formats> {
-    /// Memoized format registry, to pass it to the builders.
-    formats: &'formats FormatRegistry,
-
+pub(crate) struct RecipeGroup {
     /// The actualy list of recipes explicitly created in this file.
     pub recipes: Recipes,
 
@@ -18,10 +14,9 @@ pub(crate) struct RecipeGroup<'formats> {
     name_to_recipe: HashMap<String, EncodingRecipeNumber>,
 }
 
-impl<'formats> RecipeGroup<'formats> {
-    fn new(formats: &'formats FormatRegistry) -> Self {
+impl RecipeGroup {
+    fn new() -> Self {
         Self {
-            formats,
             recipes: Recipes::new(),
             name_to_recipe: HashMap::new(),
         }
@@ -33,7 +28,7 @@ impl<'formats> RecipeGroup<'formats> {
             format!("riscv recipe '{}' created twice", builder.name)
         );
         let name = builder.name.clone();
-        let number = self.recipes.push(builder.build(self.formats));
+        let number = self.recipes.push(builder.build());
         self.name_to_recipe.insert(name, number);
     }
 
@@ -50,13 +45,10 @@ impl<'formats> RecipeGroup<'formats> {
     }
 }
 
-pub(crate) fn define<'formats>(
-    shared_defs: &'formats SharedDefinitions,
-    regs: &IsaRegs,
-) -> RecipeGroup<'formats> {
+pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeGroup {
+    // Format shorthands.
     let formats = &shared_defs.format_registry;
 
-    // Format shorthands.
     let f_binary = formats.by_name("Binary");
     let f_binary_imm = formats.by_name("BinaryImm");
     let f_branch = formats.by_name("Branch");
@@ -76,7 +68,7 @@ pub(crate) fn define<'formats>(
     let gpr = regs.class_by_name("GPR");
 
     // Definitions.
-    let mut recipes = RecipeGroup::new(&shared_defs.format_registry);
+    let mut recipes = RecipeGroup::new();
 
     // R-type 32-bit instructions: These are mostly binary arithmetic instructions.
     // The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
@@ -103,36 +95,42 @@ pub(crate) fn define<'formats>(
             .emit("put_r(bits, in_reg0, in_reg1, out_reg0, sink);"),
     );
 
-    let format = formats.get(f_binary_imm);
     recipes.push(
         EncodingRecipeBuilder::new("Ii", f_binary_imm, 4)
             .operands_in(vec![gpr])
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                format, "imm", 12, 0,
+                &*f_binary_imm,
+                "imm",
+                12,
+                0,
             ))
             .emit("put_i(bits, in_reg0, imm.into(), out_reg0, sink);"),
     );
 
     // I-type instruction with a hardcoded %x0 rs1.
-    let format = formats.get(f_unary_imm);
     recipes.push(
         EncodingRecipeBuilder::new("Iz", f_unary_imm, 4)
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                format, "imm", 12, 0,
+                &*f_unary_imm,
+                "imm",
+                12,
+                0,
             ))
             .emit("put_i(bits, 0, imm.into(), out_reg0, sink);"),
     );
 
     // I-type encoding of an integer comparison.
-    let format = formats.get(f_int_compare_imm);
     recipes.push(
         EncodingRecipeBuilder::new("Iicmp", f_int_compare_imm, 4)
             .operands_in(vec![gpr])
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                format, "imm", 12, 0,
+                &*f_int_compare_imm,
+                "imm",
+                12,
+                0,
             ))
             .emit("put_i(bits, in_reg0, imm.into(), out_reg0, sink);"),
     );
@@ -195,12 +193,14 @@ pub(crate) fn define<'formats>(
     );
 
     // U-type instructions have a 20-bit immediate that targets bits 12-31.
-    let format = formats.get(f_unary_imm);
     recipes.push(
         EncodingRecipeBuilder::new("U", f_unary_imm, 4)
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                format, "imm", 32, 12,
+                &*f_unary_imm,
+                "imm",
+                32,
+                12,
             ))
             .emit("put_u(bits, imm.into(), out_reg0, sink);"),
     );

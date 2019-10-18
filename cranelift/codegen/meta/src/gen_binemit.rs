@@ -5,7 +5,6 @@ use cranelift_entity::EntityRef;
 use crate::error;
 use crate::srcgen::Formatter;
 
-use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::recipes::{EncodingRecipe, OperandConstraint, Recipes};
 
 /// Generate code to handle a single recipe.
@@ -14,11 +13,12 @@ use crate::cdsl::recipes::{EncodingRecipe, OperandConstraint, Recipes};
 /// - Determine register locations for operands with register constraints.
 /// - Determine stack slot locations for operands with stack constraints.
 /// - Call hand-written code for the actual emission.
-fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Formatter) {
-    let inst_format = formats.get(recipe.format);
+fn gen_recipe(recipe: &EncodingRecipe, fmt: &mut Formatter) {
+    let inst_format = &recipe.format;
     let num_value_ops = inst_format.num_value_operands;
 
-    // TODO: Set want_args to true for only MultiAry instructions instead of all formats with value list.
+    // TODO: Set want_args to true for only MultiAry instructions instead of all formats with value
+    // list.
     let want_args = inst_format.has_value_list
         || recipe.operands_in.iter().any(|c| match c {
             OperandConstraint::RegClass(_) | OperandConstraint::Stack(_) => true,
@@ -148,7 +148,7 @@ fn unwrap_values(
     varlist
 }
 
-fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mut Formatter) {
+fn gen_isa(isa_name: &str, recipes: &Recipes, fmt: &mut Formatter) {
     fmt.doc_comment(format!(
         "Emit binary machine code for `inst` for the {} ISA.",
         isa_name
@@ -193,7 +193,7 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
                 fmt.comment(format!("Recipe {}", recipe.name));
                 fmtln!(fmt, "{} => {{", i.index());
                 fmt.indent(|fmt| {
-                    gen_recipe(formats, recipe, fmt);
+                    gen_recipe(recipe, fmt);
                 });
                 fmt.line("}");
             }
@@ -212,14 +212,13 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
 }
 
 pub(crate) fn generate(
-    formats: &FormatRegistry,
     isa_name: &str,
     recipes: &Recipes,
     binemit_filename: &str,
     out_dir: &str,
 ) -> Result<(), error::Error> {
     let mut fmt = Formatter::new();
-    gen_isa(formats, isa_name, recipes, &mut fmt);
+    gen_isa(isa_name, recipes, &mut fmt);
     fmt.update_file(binemit_filename, out_dir)?;
     Ok(())
 }

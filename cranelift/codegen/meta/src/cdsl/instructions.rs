@@ -6,9 +6,7 @@ use std::fmt::{Display, Error, Formatter};
 use std::rc::Rc;
 
 use crate::cdsl::camel_case;
-use crate::cdsl::formats::{
-    FormatField, FormatRegistry, InstructionFormat, InstructionFormatIndex,
-};
+use crate::cdsl::formats::{FormatField, FormatRegistry, InstructionFormat};
 use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::types::{LaneType, ReferenceType, ValueType, VectorType};
@@ -104,7 +102,7 @@ pub(crate) struct InstructionContent {
     pub constraints: Vec<Constraint>,
 
     /// Instruction format, automatically derived from the input operands.
-    pub format: InstructionFormatIndex,
+    pub format: Rc<InstructionFormat>,
 
     /// One of the input or output operands is a free type variable. None if the instruction is not
     /// polymorphic, set otherwise.
@@ -321,8 +319,7 @@ impl InstructionBuilder {
             .filter_map(|(i, op)| if op.is_value() { Some(i) } else { None })
             .collect();
 
-        let format_index = format_registry.lookup(&operands_in);
-        let format = format_registry.get(format_index);
+        let format = format_registry.lookup(&operands_in).clone();
         let polymorphic_info =
             verify_polymorphic(&operands_in, &operands_out, &format, &value_opnums);
 
@@ -339,7 +336,7 @@ impl InstructionBuilder {
             operands_in,
             operands_out,
             constraints: self.constraints.unwrap_or_else(Vec::new),
-            format: format_index,
+            format,
             polymorphic_info,
             value_opnums,
             value_results,
@@ -1093,9 +1090,9 @@ impl InstructionPredicate {
     }
 
     pub fn new_is_colocated_data(format_registry: &FormatRegistry) -> InstructionPredicateNode {
-        let format = format_registry.get(format_registry.by_name("UnaryGlobalValue"));
+        let format = format_registry.by_name("UnaryGlobalValue");
         InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
-            format,
+            &*format,
             "global_value",
             FormatPredicateKind::IsColocatedData,
         ))

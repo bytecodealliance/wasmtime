@@ -1,4 +1,3 @@
-use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::{InstSpec, Instruction, InstructionPredicate};
 use crate::cdsl::operands::{OperandKind, OperandKindFields};
 use crate::cdsl::types::ValueType;
@@ -523,23 +522,23 @@ impl Apply {
         format!("{}({})", inst_name, args)
     }
 
-    pub fn inst_predicate(
-        &self,
-        format_registry: &FormatRegistry,
-        var_pool: &VarPool,
-    ) -> InstructionPredicate {
-        let iform = format_registry.get(self.inst.format);
-
+    pub fn inst_predicate(&self, var_pool: &VarPool) -> InstructionPredicate {
         let mut pred = InstructionPredicate::new();
-        for (format_field, &op_num) in iform.imm_fields.iter().zip(self.inst.imm_opnums.iter()) {
+        for (format_field, &op_num) in self
+            .inst
+            .format
+            .imm_fields
+            .iter()
+            .zip(self.inst.imm_opnums.iter())
+        {
             let arg = &self.args[op_num];
             if arg.maybe_var().is_some() {
                 // Ignore free variables for now.
                 continue;
             }
             pred = pred.and(InstructionPredicate::new_is_field_equal_ast(
-                iform,
-                &format_field,
+                &*self.inst.format,
+                format_field,
                 arg.to_rust_code(var_pool),
             ));
         }
@@ -565,12 +564,8 @@ impl Apply {
     }
 
     /// Same as `inst_predicate()`, but also check the controlling type variable.
-    pub fn inst_predicate_with_ctrl_typevar(
-        &self,
-        format_registry: &FormatRegistry,
-        var_pool: &VarPool,
-    ) -> InstructionPredicate {
-        let mut pred = self.inst_predicate(format_registry, var_pool);
+    pub fn inst_predicate_with_ctrl_typevar(&self, var_pool: &VarPool) -> InstructionPredicate {
+        let mut pred = self.inst_predicate(var_pool);
 
         if !self.value_types.is_empty() {
             let bound_type = &self.value_types[0];

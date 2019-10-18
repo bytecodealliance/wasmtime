@@ -400,7 +400,7 @@ fn gen_bool_accessor<T: Fn(&Instruction) -> bool>(
     fmt.empty_line();
 }
 
-fn gen_opcodes<'a>(all_inst: &AllInstructions, formats: &FormatRegistry, fmt: &mut Formatter) {
+fn gen_opcodes<'a>(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.doc_comment(
         r#"
         An instruction opcode.
@@ -418,13 +418,12 @@ fn gen_opcodes<'a>(all_inst: &AllInstructions, formats: &FormatRegistry, fmt: &m
     fmt.indent(|fmt| {
         let mut is_first_opcode = true;
         for inst in all_inst.values() {
-            let format = formats.get(inst.format);
-            fmt.doc_comment(format!("`{}`. ({})", inst, format.name));
+            fmt.doc_comment(format!("`{}`. ({})", inst, inst.format.name));
 
             // Document polymorphism.
             if let Some(poly) = &inst.polymorphic_info {
                 if poly.use_typevar_operand {
-                    let op_num = inst.value_opnums[format.typevar_operand.unwrap()];
+                    let op_num = inst.value_opnums[inst.format.typevar_operand.unwrap()];
                     fmt.doc_comment(format!(
                         "Type inferred from `{}`.",
                         inst.operands_in[op_num].name
@@ -537,8 +536,12 @@ fn gen_opcodes<'a>(all_inst: &AllInstructions, formats: &FormatRegistry, fmt: &m
     );
     fmt.indent(|fmt| {
         for inst in all_inst.values() {
-            let format = formats.get(inst.format);
-            fmtln!(fmt, "InstructionFormat::{}, // {}", format.name, inst.name);
+            fmtln!(
+                fmt,
+                "InstructionFormat::{}, // {}",
+                inst.format.name,
+                inst.name
+            );
         }
     });
     fmtln!(fmt, "];");
@@ -1055,7 +1058,7 @@ fn gen_builder(instructions: &AllInstructions, formats: &FormatRegistry, fmt: &m
     fmt.line("pub trait InstBuilder<'f>: InstBuilderBase<'f> {");
     fmt.indent(|fmt| {
         for inst in instructions.values() {
-            gen_inst_builder(inst, formats.get(inst.format), fmt);
+            gen_inst_builder(inst, &*inst.format, fmt);
         }
         for format in formats.iter() {
             gen_format_constructor(format, fmt);
@@ -1080,7 +1083,7 @@ pub(crate) fn generate(
     fmt.empty_line();
     gen_instruction_data_impl(format_registry, &mut fmt);
     fmt.empty_line();
-    gen_opcodes(all_inst, format_registry, &mut fmt);
+    gen_opcodes(all_inst, &mut fmt);
     gen_type_constraints(all_inst, &mut fmt);
     fmt.update_file(opcode_filename, out_dir)?;
 

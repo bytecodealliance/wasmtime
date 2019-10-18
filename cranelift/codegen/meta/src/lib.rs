@@ -39,13 +39,7 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
 
     gen_inst::generate(&shared_defs, "opcodes.rs", "inst_builder.rs", &out_dir)?;
 
-    gen_legalizer::generate(
-        &isas,
-        &shared_defs.format_registry,
-        &shared_defs.transform_groups,
-        "legalize",
-        &out_dir,
-    )?;
+    gen_legalizer::generate(&isas, &shared_defs.transform_groups, "legalize", &out_dir)?;
 
     for isa in isas {
         gen_registers::generate(&isa, &format!("registers-{}.rs", isa.name), &out_dir)?;
@@ -65,7 +59,6 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
         )?;
 
         gen_binemit::generate(
-            &shared_defs.format_registry,
             &isa.name,
             &isa.recipes,
             &format!("binemit-{}.rs", isa.name),

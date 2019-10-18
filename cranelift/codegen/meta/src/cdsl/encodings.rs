@@ -1,4 +1,3 @@
-use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::{
     InstSpec, Instruction, InstructionPredicate, InstructionPredicateNode,
     InstructionPredicateNumber, InstructionPredicateRegistry, ValueTypeOrAny,
@@ -62,12 +61,7 @@ pub(crate) struct EncodingBuilder {
 }
 
 impl EncodingBuilder {
-    pub fn new(
-        inst: InstSpec,
-        recipe: EncodingRecipeNumber,
-        encbits: u16,
-        formats: &FormatRegistry,
-    ) -> Self {
+    pub fn new(inst: InstSpec, recipe: EncodingRecipeNumber, encbits: u16) -> Self {
         let (inst_predicate, bound_type) = match &inst {
             InstSpec::Bound(inst) => {
                 let other_typevars = &inst.inst.polymorphic_info.as_ref().unwrap().other_typevars;
@@ -98,7 +92,7 @@ impl EncodingBuilder {
                     .zip(inst.inst.operands_in.iter().filter(|o| o.is_immediate()))
                 {
                     let immediate_predicate = InstructionPredicate::new_is_field_equal(
-                        formats.get(inst.inst.format),
+                        &inst.inst.format,
                         immediate_operand.name,
                         immediate_value.to_string(),
                     );
@@ -158,7 +152,7 @@ impl EncodingBuilder {
 
         let inst = self.inst.inst();
         assert!(
-            inst.format == recipes[self.recipe].format,
+            Rc::ptr_eq(&inst.format, &recipes[self.recipe].format),
             format!(
                 "Inst {} and recipe {} must have the same format!",
                 inst.name, recipes[self.recipe].name
