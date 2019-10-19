@@ -206,38 +206,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // ABI only has a single return register, so we need to wait on full
             // multi-value support in Cranelift.
             (_, _) if is_multi_value => true,
-
-            // Until Windows unwind information is added we must disable SIMD spec tests that trap.
-            (_, _) if testname.starts_with("simd") => return true,
-
-            ("spec_testsuite", "address") => true,
-            ("spec_testsuite", "align") => true,
-            ("spec_testsuite", "call") => true,
-            ("spec_testsuite", "call_indirect") => true,
-            ("spec_testsuite", "conversions") => true,
-            ("spec_testsuite", "elem") => true,
-            ("spec_testsuite", "fac") => true,
-            ("spec_testsuite", "func_ptrs") => true,
-            ("spec_testsuite", "globals") => true,
-            ("spec_testsuite", "i32") => true,
-            ("spec_testsuite", "i64") => true,
-            ("spec_testsuite", "f32") => true,
-            ("spec_testsuite", "f64") => true,
-            ("spec_testsuite", "if") => true,
-            ("spec_testsuite", "imports") => true,
-            ("spec_testsuite", "int_exprs") => true,
-            ("spec_testsuite", "linking") => true,
-            ("spec_testsuite", "memory_grow") => true,
-            ("spec_testsuite", "memory_trap") => true,
-            ("spec_testsuite", "resizing") => true,
-            ("spec_testsuite", "select") => true,
-            ("spec_testsuite", "skip_stack_guard_page") => true,
-            ("spec_testsuite", "start") => true,
-            ("spec_testsuite", "traps") => true,
-            ("spec_testsuite", "unreachable") => true,
-            ("spec_testsuite", "unwind") => true,
-            ("misc_testsuite", "misc_traps") => true,
-            ("misc_testsuite", "stack_overflow") => true,
             (_, _) => false,
         };
     }

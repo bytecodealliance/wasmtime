@@ -21,6 +21,7 @@ extern "C" {
 thread_local! {
     static RECORDED_TRAP: Cell<Option<TrapDescription>> = Cell::new(None);
     static JMP_BUF: Cell<*const u8> = Cell::new(ptr::null());
+    static RESET_GUARD_PAGE: Cell<bool> = Cell::new(false);
 }
 
 /// Check if there is a trap at given PC
@@ -40,7 +41,7 @@ pub extern "C" fn CheckIfTrapAtAddress(_pc: *const u8) -> i8 {
 #[doc(hidden)]
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "C" fn RecordTrap(pc: *const u8) {
+pub extern "C" fn RecordTrap(pc: *const u8, reset_guard_page: bool) {
     // TODO: please see explanation in CheckIfTrapAtAddress.
     let registry = get_trap_registry();
     let trap_desc = registry
@@ -49,6 +50,11 @@ pub extern "C" fn RecordTrap(pc: *const u8) {
             source_loc: ir::SourceLoc::default(),
             trap_code: ir::TrapCode::StackOverflow,
         });
+
+    if reset_guard_page {
+        RESET_GUARD_PAGE.with(|v| v.set(true));
+    }
+
     RECORDED_TRAP.with(|data| {
         assert_eq!(
             data.get(),
@@ -77,8 +83,31 @@ pub extern "C" fn GetScope() -> *const u8 {
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "C" fn LeaveScope(ptr: *const u8) {
+    RESET_GUARD_PAGE.with(|v| {
+        if v.get() {
+            reset_guard_page();
+            v.set(false);
+        }
+    });
+
     JMP_BUF.with(|buf| buf.set(ptr))
 }
+
+#[cfg(target_os = "windows")]
+fn reset_guard_page() {
+    extern "C" {
+        fn _resetstkoflw() -> winapi::ctypes::c_int;
+    }
+
+    // We need to restore guard page under stack to handle future stack overflows properly.
+    // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/resetstkoflw?view=vs-2019
+    if unsafe { _resetstkoflw() } == 0 {
+        panic!("failed to restore stack guard page");
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn reset_guard_page() {}
 
 fn trap_message() -> String {
     let trap_desc = RECORDED_TRAP

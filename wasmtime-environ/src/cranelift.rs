@@ -5,7 +5,7 @@ use crate::address_map::{
 };
 use crate::cache::{ModuleCacheData, ModuleCacheEntry};
 use crate::compilation::{
-    CodeAndJTOffsets, Compilation, CompileError, Relocation, RelocationTarget, Relocations,
+    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, Relocations,
     TrapInformation, Traps,
 };
 use crate::func_environ::{
@@ -235,6 +235,7 @@ impl crate::compilation::Compiler for Cranelift {
                             )?;
 
                             let mut code_buf: Vec<u8> = Vec::new();
+                            let mut unwind_info = Vec::new();
                             let mut reloc_sink = RelocSink::new(func_index);
                             let mut trap_sink = TrapSink::new();
                             let mut stackmap_sink = binemit::NullStackmapSink {};
@@ -246,7 +247,7 @@ impl crate::compilation::Compiler for Cranelift {
                                 &mut stackmap_sink,
                             )?;
 
-                            let jt_offsets = context.func.jt_offsets.clone();
+                            context.emit_unwind_info(isa, &mut unwind_info);
 
                             let address_transform = if generate_debug_info {
                                 let body_len = code_buf.len();
@@ -261,16 +262,15 @@ impl crate::compilation::Compiler for Cranelift {
                                 None
                             };
 
-                            let stack_slots = context.func.stack_slots.clone();
-
                             Ok((
                                 code_buf,
-                                jt_offsets,
+                                context.func.jt_offsets,
                                 reloc_sink.func_relocs,
                                 address_transform,
                                 ranges,
-                                stack_slots,
+                                context.func.stack_slots,
                                 trap_sink.traps,
+                                unwind_info,
                             ))
                         },
                     )
@@ -285,10 +285,12 @@ impl crate::compilation::Compiler for Cranelift {
                             ranges,
                             sss,
                             function_traps,
+                            unwind_info,
                         )| {
-                            functions.push(CodeAndJTOffsets {
+                            functions.push(CompiledFunction {
                                 body: function,
                                 jt_offsets: func_jt_offsets,
+                                unwind_info,
                             });
                             relocations.push(relocs);
                             if let Some(address_transform) = address_transform {

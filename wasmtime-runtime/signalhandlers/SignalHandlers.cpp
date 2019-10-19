@@ -404,7 +404,7 @@ static
 __attribute__ ((warn_unused_result))
 #endif
 bool
-HandleTrap(CONTEXT* context)
+HandleTrap(CONTEXT* context, bool reset_guard_page)
 {
     assert(sAlreadyHandlingTrap);
 
@@ -412,7 +412,7 @@ HandleTrap(CONTEXT* context)
         return false;
     }
 
-    RecordTrap(ContextToPC(context));
+    RecordTrap(ContextToPC(context), reset_guard_page);
 
     // Unwind calls longjmp, so it doesn't run the automatic
     // sAlreadhHanldingTrap cleanups, so reset it manually before doing
@@ -467,7 +467,8 @@ WasmTrapHandler(LPEXCEPTION_POINTERS exception)
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
-    if (!HandleTrap(exception->ContextRecord)) {
+    if (!HandleTrap(exception->ContextRecord,
+                    record->ExceptionCode == EXCEPTION_STACK_OVERFLOW)) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
@@ -549,7 +550,7 @@ HandleMachException(const ExceptionRequest& request)
 
     {
         AutoHandlingTrap aht;
-        if (!HandleTrap(&context)) {
+        if (!HandleTrap(&context, false)) {
             return false;
         }
     }
@@ -632,7 +633,7 @@ WasmTrapHandler(int signum, siginfo_t* info, void* context)
     if (!sAlreadyHandlingTrap) {
         AutoHandlingTrap aht;
         assert(signum == SIGSEGV || signum == SIGBUS || signum == SIGFPE || signum == SIGILL);
-        if (HandleTrap(static_cast<CONTEXT*>(context))) {
+        if (HandleTrap(static_cast<CONTEXT*>(context), false)) {
             return;
         }
     }
