@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(unused)]
-use crate::{host, Result, Error};
+use crate::{host, Error, Result};
 use std::ffi::OsStr;
 use std::fs::OpenOptions;
 use std::os::windows::ffi::OsStrExt;
@@ -34,6 +34,7 @@ pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_er
         ERROR_BUFFER_OVERFLOW => host::__WASI_ENAMETOOLONG,
         ERROR_NOT_A_REPARSE_POINT => host::__WASI_EINVAL,
         ERROR_NEGATIVE_SEEK => host::__WASI_EINVAL,
+        ERROR_DIRECTORY => host::__WASI_ENOTDIR,
         _ => host::__WASI_ENOTSUP,
     }
 }
