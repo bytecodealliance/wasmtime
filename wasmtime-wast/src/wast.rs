@@ -19,6 +19,7 @@ fn runtime_value(v: &wast::Expression<'_>) -> RuntimeValue {
         I64Const(x) => RuntimeValue::I64(*x),
         F32Const(x) => RuntimeValue::F32(x.bits),
         F64Const(x) => RuntimeValue::F64(x.bits),
+        V128Const(x) => RuntimeValue::V128(x.to_le_bytes()),
         other => panic!("couldn't convert {:?} to a runtime value", other),
     }
 }
