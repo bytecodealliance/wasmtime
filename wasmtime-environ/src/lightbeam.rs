@@ -9,7 +9,7 @@ use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::cranelift::RelocSink;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::{PrimaryMap, SecondaryMap};
-use cranelift_wasm::DefinedFuncIndex;
+use cranelift_wasm::{DefinedFuncIndex, ModuleTranslationState};
 use lightbeam;
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
@@ -20,7 +20,7 @@ impl crate::compilation::Compiler for Lightbeam {
     /// associated relocations.
     fn compile_module<'data, 'module>(
         module: &'module Module,
-        module_translation: &ModuleTranslationState,
+        _module_translation: &ModuleTranslationState,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         // TODO
