@@ -1,9 +1,7 @@
 //! A basic `Variable` implementation.
-//!
-//! `FunctionBuilderContext`, `FunctionBuilder`, and related types have a `Variable`
-//! type parameter, to allow frontends that identify variables with
-//! their own index types to use them directly. Frontends which don't
-//! can use the `Variable` defined here.
+//! 
+//! Frontends can use any indexing scheme they see fit and
+//! generate the appropriate `Variable` instances.
 
 use core::u32;
 use cranelift_codegen::entity::EntityRef;
