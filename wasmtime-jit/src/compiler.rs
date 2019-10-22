@@ -133,6 +133,7 @@ impl Compiler {
                 CompilationStrategy::Lightbeam => {
                     wasmtime_environ::lightbeam::Lightbeam::compile_module(
                         module,
+                        module_translation,
                         function_body_inputs,
                         &*self.isa,
                         debug_data.is_some(),
