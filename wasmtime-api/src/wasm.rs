@@ -1651,3 +1651,12 @@ pub unsafe extern "C" fn wasm_instance_set_host_info_with_finalizer(
     };
     (*instance).instance.anyref().set_host_info(info);
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_valtype_vec_copy(
+    out: *mut wasm_valtype_vec_t,
+    src: *mut wasm_valtype_vec_t,
+) {
+    let slice = slice::from_raw_parts((*src).data, (*src).size);
+    (*out).set_from_slice(slice);
+}
