@@ -2,6 +2,7 @@ use crate::host::{
     argv_environ_init, argv_environ_values, fd_prestats, fd_prestats_init, fd_prestats_insert,
     fd_table, fd_table_init, fd_table_insert_existing,
 };
+use crate::syscalls;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use cranelift_codegen::ir::types;
@@ -13,7 +14,6 @@ use std::ffi::CString;
 use std::fs::File;
 use std::mem;
 use std::os::unix::io::AsRawFd;
-use syscalls;
 use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, Export, Module};
 use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMFunctionBody};
