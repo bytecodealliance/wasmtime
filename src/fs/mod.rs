@@ -7,7 +7,7 @@
 //! This corresponds to [`std::fs`].
 //!
 //! Instead of [`std::fs`'s free functions] which operate on paths, this
-//! crate has methods on `Dir` which operate on paths which must be
+//! crate has methods on [`Dir`] which operate on paths which must be
 //! relative to and within the directory.
 //!
 //! Since all functions which expose raw file descriptors are `unsafe`,
@@ -17,6 +17,7 @@
 //!
 //! [`std::fs`]: https://doc.rust-lang.org/std/fs/index.html
 //! [`std::fs`'s free functions]: https://doc.rust-lang.org/std/fs/index.html#functions
+//! [`DIR`]: struct.Dir.html
 
 // TODO: When more things are implemented, remove these.
 #![allow(

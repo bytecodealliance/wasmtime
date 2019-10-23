@@ -3,9 +3,12 @@
 /// This corresponds to [`std::fs::OpenOptions`].
 ///
 /// Note that this `OpenOptions` has no `open` method. To open a file with
-/// an `OptionOptions`, pass it to `Dir::open_file_with`.
+/// an `OptionOptions`, you must first obtain a [`Dir`] containing the file, and
+/// then call [`Dir::open_file_with`].
 ///
 /// [`std::fs::OpenOptions`]: https://doc.rust-lang.org/std/fs/struct.OpenOptions.html
+/// [`Dir`]: struct.Dir.html
+/// [`Dir::open_file_with`]: struct.Dir.html#method.open_file_with
 pub struct OpenOptions {
     pub(crate) read: bool,
     pub(crate) write: bool,

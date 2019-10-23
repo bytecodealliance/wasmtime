@@ -7,10 +7,13 @@ use std::io;
 /// This corresponds to [`std::fs::File`].
 ///
 /// Note that this `File` has no `open` or `create` methods. To open or create
-/// a file, you must first obtain a `Dir` containing the file, and then call
-/// `Dir::open_file` or `Dir::create_file`.
+/// a file, you must first obtain a [`Dir`] containing the file, and then call
+/// [`Dir::open_file`] or [`Dir::create_file`].
 ///
 /// [`std::fs::File`]: https://doc.rust-lang.org/std/fs/struct.File.html
+/// [`Dir`]: struct.Dir.html
+/// [`Dir::open_file`]: struct.Dir.html#method.open_file
+/// [`Dir::create_file`]: struct.Dir.html#method.create_file
 pub struct File<'ctx> {
     ctx: &'ctx mut WasiCtx,
     fd: host::__wasi_fd_t,
