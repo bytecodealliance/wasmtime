@@ -93,7 +93,10 @@ impl EncodingBuilder {
                 {
                     let immediate_predicate = InstructionPredicate::new_is_field_equal(
                         &inst.inst.format,
-                        immediate_operand.name,
+                        immediate_operand
+                            .kind
+                            .default_member
+                            .expect("Immediates must always have a default member name set."),
                         immediate_value.to_string(),
                     );
                     inst_predicate = if let Some(type_predicate) = inst_predicate {

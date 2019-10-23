@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
 use crate::cdsl::instructions::{
-    vector, Bindable, InstSpec, Instruction, InstructionGroup, InstructionPredicate,
+    vector, Bindable, Immediate, InstSpec, Instruction, InstructionGroup, InstructionPredicate,
     InstructionPredicateNode, InstructionPredicateRegistry,
 };
 use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
@@ -2038,21 +2038,11 @@ pub(crate) fn define(
             _ => panic!("invalid size for SIMD icmp"),
         };
 
-        let instruction = icmp.bind(vector(ty, sse_vector_size));
-        let has_eq_condition_code = InstructionPredicate::new_has_condition_code(
-            &*formats.int_compare,
-            IntCC::Equal,
-            "cond",
-        );
+        let instruction = icmp
+            .bind(Immediate::IntCC(IntCC::Equal))
+            .bind(vector(ty, sse_vector_size));
         let template = rec_icscc_fpr.nonrex().opcodes(opcodes);
-        e.enc_32_64_func(instruction, template, |builder| {
-            let builder = builder.inst_predicate(has_eq_condition_code);
-            if let Some(p) = isa_predicate {
-                builder.isa_predicate(p)
-            } else {
-                builder
-            }
-        });
+        e.enc_32_64_maybe_isap(instruction, template, isa_predicate);
     }
 
     // Reference type instructions

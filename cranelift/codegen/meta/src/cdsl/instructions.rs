@@ -443,17 +443,15 @@ impl From<Immediate> for BindParameter {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)] // TODO(#1150): remove this once we use it in legalization patterns.
 pub enum Immediate {
-    UInt8(u8),
-    UInt128(u128),
+    // When needed, this enum should be expanded to include other immediate types (e.g. u8, u128).
+    IntCC(IntCC),
 }
 
 impl Display for Immediate {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self {
-            Immediate::UInt8(x) => write!(f, "{}", x),
-            Immediate::UInt128(x) => write!(f, "{}", x),
+            Immediate::IntCC(x) => write!(f, "IntCC::{:?}", x),
         }
     }
 }
@@ -790,9 +788,6 @@ pub enum FormatPredicateKind {
 
     /// Is the referenced data object colocated?
     IsColocatedData,
-
-    /// Does the operation have a specific condition code?
-    HasConditionCode(IntCC),
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -879,10 +874,6 @@ impl FormatPredicateNode {
             FormatPredicateKind::IsColocatedData => {
                 format!("predicates::is_colocated_data({}, func)", self.member_name)
             }
-            FormatPredicateKind::HasConditionCode(code) => format!(
-                "predicates::is_equal({}, IntCC::{:?})",
-                self.member_name, code
-            ),
         }
     }
 }
@@ -1165,18 +1156,6 @@ impl InstructionPredicate {
         ))
     }
 
-    pub fn new_has_condition_code(
-        format: &InstructionFormat,
-        condition_code: IntCC,
-        field_name: &'static str,
-    ) -> InstructionPredicateNode {
-        InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
-            format,
-            field_name,
-            FormatPredicateKind::HasConditionCode(condition_code),
-        ))
-    }
-
     pub fn and(mut self, new_node: InstructionPredicateNode) -> Self {
         let node = self.node;
         let mut and_nodes = match node {
@@ -1318,7 +1297,7 @@ mod test {
     use crate::shared::types::Int::{I32, I64};
 
     fn field_to_operand(index: usize, field: OperandKindFields) -> Operand {
-        // pretend the index string is &'static
+        // Pretend the index string is &'static.
         let name = Box::leak(index.to_string().into_boxed_str());
         let kind = OperandKindBuilder::new(name, field).build();
         let operand = OperandBuilder::new(name, kind).build();
@@ -1337,7 +1316,7 @@ mod test {
         inputs: Vec<OperandKindFields>,
         outputs: Vec<OperandKindFields>,
     ) -> Instruction {
-        // setup a format from the input operands
+        // Setup a format from the input operands.
         let mut format = InstructionFormatBuilder::new("fake");
         for (i, f) in inputs.iter().enumerate() {
             match f {
@@ -1350,7 +1329,7 @@ mod test {
         }
         let format = format.build();
 
-        // create the fake instruction
+        // Create the fake instruction.
         InstructionBuilder::new("fake", "A fake instruction for testing.", &format)
             .operands_in(field_to_operands(inputs).iter().collect())
             .operands_out(field_to_operands(outputs).iter().collect())
@@ -1368,7 +1347,7 @@ mod test {
     #[test]
     fn ensure_bound_instructions_can_bind_immediates() {
         let inst = build_fake_instruction(vec![OperandKindFields::ImmValue], vec![]);
-        let bound_inst = inst.bind(Immediate::UInt8(42));
+        let bound_inst = inst.bind(Immediate::IntCC(IntCC::Equal));
         assert!(bound_inst.verify_bindings().is_ok());
     }
 
@@ -1377,7 +1356,7 @@ mod test {
     fn ensure_instructions_fail_to_bind() {
         let inst = build_fake_instruction(vec![], vec![]);
         inst.bind(BindParameter::Lane(LaneType::IntType(I32)));
-        // trying to bind to an instruction with no inputs should fail
+        // Trying to bind to an instruction with no inputs should fail.
     }
 
     #[test]
@@ -1394,8 +1373,9 @@ mod test {
     #[should_panic]
     fn ensure_instructions_fail_to_bind_too_many_immediates() {
         let inst = build_fake_instruction(vec![OperandKindFields::ImmValue], vec![]);
-        inst.bind(BindParameter::Immediate(Immediate::UInt8(0)))
-            .bind(BindParameter::Immediate(Immediate::UInt8(1)));
-        // trying to bind too many immediates to an instruction  should fail
+        inst.bind(BindParameter::Immediate(Immediate::IntCC(IntCC::Equal)))
+            .bind(BindParameter::Immediate(Immediate::IntCC(IntCC::Equal)));
+        // Trying to bind too many immediates to an instruction should fail; note that the immediate
+        // values are nonsensical but irrelevant to the purpose of this test.
     }
 }
