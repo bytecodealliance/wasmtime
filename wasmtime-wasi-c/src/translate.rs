@@ -1,8 +1,8 @@
+use crate::host;
+use crate::wasm32;
 use core::convert::TryFrom;
-use host;
 use std::mem::{align_of, size_of, zeroed};
 use std::slice;
-use wasm32;
 use wasmtime_runtime::{Export, VMContext};
 
 /// Translate a wasm pointer into a native pointer.

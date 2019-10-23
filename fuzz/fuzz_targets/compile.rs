@@ -2,11 +2,8 @@
 
 #[macro_use]
 extern crate libfuzzer_sys;
-extern crate cranelift_codegen;
-extern crate cranelift_native;
-extern crate wasmparser;
-extern crate wasmtime_environ;
-extern crate wasmtime_jit;
+extern crate alloc;
+extern crate core;
 
 use alloc::rc::Rc;
 use core::cell::RefCell;

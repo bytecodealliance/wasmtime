@@ -1,11 +1,11 @@
+use crate::host;
 use crate::host::{argv_environ_values, fd_prestats, fd_table};
 use crate::instantiate::WASIState;
+use crate::translate::*;
+use crate::wasm32;
 use core::convert::TryFrom;
 use cranelift_codegen::ir::types::{Type, I32, I64};
-use host;
 use std::{mem, ptr, slice, str};
-use translate::*;
-use wasm32;
 use wasmtime_runtime::VMContext;
 
 fn str_for_trace<'str>(ptr: *const i8, len: usize) -> Result<&'str str, str::Utf8Error> {
