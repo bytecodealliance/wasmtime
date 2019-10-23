@@ -1,0 +1,45 @@
+test run
+set enable_simd
+target x86_64 skylake
+
+function %icmp_eq_i8x16() -> b8 {
+ebb0:
+    v0 = vconst.i8x16 0x00
+    v1 = vconst.i8x16 0x00
+    v2 = icmp eq v0, v1
+    v3 = extractlane v2, 0
+    return v3
+}
+; run
+
+function %icmp_eq_i64x2() -> b64 {
+ebb0:
+    v0 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    v1 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    v2 = icmp eq v0, v1
+    v3 = extractlane v2, 1
+    return v3
+}
+; run
+
+function %icmp_ne_i32x4() -> b1 {
+ebb0:
+    v0 = vconst.i32x4 [0 1 2 3]
+    v1 = vconst.i32x4 [7 7 7 7]
+    v2 = icmp ne v0, v1
+    v3 = vall_true v2
+    return v3
+}
+; run
+
+function %icmp_ne_i16x8() -> b1 {
+ebb0:
+    v0 = vconst.i16x8 [0 1 2 3 4 5 6 7]
+    v1 = vconst.i16x8 [0 1 2 3 4 5 6 7]
+    v2 = icmp ne v0, v1
+    v3 = vall_true v2
+    v4 = bint.i32 v3
+    v5 = icmp_imm eq v4, 0
+    return v5
+}
+; run

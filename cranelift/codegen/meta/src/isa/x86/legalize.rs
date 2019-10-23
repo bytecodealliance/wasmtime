@@ -496,6 +496,16 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         }
     }
 
+    // SIMD icmp ne
+    let ne = Literal::enumerator_for(&imm.intcc, "ne");
+    for ty in ValueType::all_lane_types().filter(|ty| allowed_simd_type(ty) && ty.is_int()) {
+        let icmp_ = icmp.bind(vector(ty, sse_vector_size));
+        narrow.legalize(
+            def!(c = icmp_(ne, a, b)),
+            vec![def!(x = icmp(eq, a, b)), def!(c = bnot(x))],
+        );
+    }
+
     narrow.custom_legalize(shuffle, "convert_shuffle");
     narrow.custom_legalize(extractlane, "convert_extractlane");
     narrow.custom_legalize(insertlane, "convert_insertlane");
