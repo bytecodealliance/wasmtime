@@ -33,27 +33,24 @@ fn main() {
         {
             test_file(
                 &mut out,
-                "spec_testsuite/proposals/simd/simd_address.wast",
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_address.wast"]),
                 strategy,
             )
             .expect("generating tests");
             test_file(
                 &mut out,
-                "spec_testsuite/proposals/simd/simd_align.wast",
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_align.wast"]),
                 strategy,
             )
             .expect("generating tests");
             test_file(
                 &mut out,
-                "spec_testsuite/proposals/simd/simd_const.wast",
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_const.wast"]),
                 strategy,
             )
             .expect("generating tests");
 
-            let multi_value_suite = Path::new("spec_testsuite")
-                .join("proposals")
-                .join("multi-value");
-            let multi_value_suite = multi_value_suite.display().to_string();
+            let multi_value_suite = &to_os_path(&["spec_testsuite", "proposals", "multi-value"]);
             test_directory(&mut out, &multi_value_suite, strategy).expect("generating tests");
         } else {
             println!("cargo:warning=The spec testsuite is disabled. To enable, run `git submodule update --remote`.");
@@ -61,6 +58,12 @@ fn main() {
 
         writeln!(out, "}}").expect("generating tests");
     }
+}
+
+/// Helper for creating OS-independent paths.
+fn to_os_path(components: &[&str]) -> String {
+    let path: PathBuf = components.iter().collect();
+    path.display().to_string()
 }
 
 fn test_directory(out: &mut File, path: &str, strategy: &str) -> io::Result<()> {
