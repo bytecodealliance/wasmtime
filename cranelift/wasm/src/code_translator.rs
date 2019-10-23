@@ -1164,8 +1164,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let bool_result = builder.ins().vall_true(state.pop1());
             state.push1(builder.ins().bint(I32, bool_result))
         }
-        Operator::I8x16Eq
-        | Operator::I8x16Ne
+        Operator::I8x16Eq | Operator::I16x8Eq | Operator::I32x4Eq => {
+            let (a, b) = state.pop2();
+            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
+            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
+            state.push1(builder.ins().icmp(IntCC::Equal, bitcast_a, bitcast_b))
+        }
+        Operator::I8x16Ne
         | Operator::I8x16LtS
         | Operator::I8x16LtU
         | Operator::I8x16GtS
@@ -1174,7 +1179,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I8x16LeU
         | Operator::I8x16GeS
         | Operator::I8x16GeU
-        | Operator::I16x8Eq
         | Operator::I16x8Ne
         | Operator::I16x8LtS
         | Operator::I16x8LtU
@@ -1184,7 +1188,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8LeU
         | Operator::I16x8GeS
         | Operator::I16x8GeU
-        | Operator::I32x4Eq
         | Operator::I32x4Ne
         | Operator::I32x4LtS
         | Operator::I32x4LtU
