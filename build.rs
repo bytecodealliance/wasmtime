@@ -228,7 +228,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("spec_testsuite", "memory_trap") => true,
             ("spec_testsuite", "resizing") => true,
             ("spec_testsuite", "select") => true,
-            ("spec_testsuite", "skip-stack-guard-page") => true,
+            ("spec_testsuite", "skip_stack_guard_page") => true,
             ("spec_testsuite", "start") => true,
             ("spec_testsuite", "traps") => true,
             ("spec_testsuite", "unreachable") => true,
