@@ -60,6 +60,46 @@ impl Val {
     pub fn from_f64_bits(v: u64) -> Val {
         Val::F64(v)
     }
+
+    pub fn i32(&self) -> i32 {
+        if let Val::I32(i) = self {
+            *i
+        } else {
+            panic!("Invalid conversion of {:?} to i32.", self);
+        }
+    }
+
+    pub fn i64(&self) -> i64 {
+        if let Val::I64(i) = self {
+            *i
+        } else {
+            panic!("Invalid conversion of {:?} to i64.", self);
+        }
+    }
+
+    pub fn f32(&self) -> f32 {
+        RuntimeValue::F32(self.f32_bits()).unwrap_f32()
+    }
+
+    pub fn f64(&self) -> f64 {
+        RuntimeValue::F64(self.f64_bits()).unwrap_f64()
+    }
+
+    pub fn f32_bits(&self) -> u32 {
+        if let Val::F32(i) = self {
+            *i
+        } else {
+            panic!("Invalid conversion of {:?} to f32.", self);
+        }
+    }
+
+    pub fn f64_bits(&self) -> u64 {
+        if let Val::F64(i) = self {
+            *i
+        } else {
+            panic!("Invalid conversion of {:?} to f64.", self);
+        }
+    }
 }
 
 impl From<i32> for Val {
@@ -88,41 +128,25 @@ impl From<f64> for Val {
 
 impl Into<i32> for Val {
     fn into(self) -> i32 {
-        if let Val::I32(i) = self {
-            i
-        } else {
-            panic!("Invalid conversion of {:?} to i32.", self);
-        }
+        self.i32()
     }
 }
 
 impl Into<i64> for Val {
     fn into(self) -> i64 {
-        if let Val::I64(i) = self {
-            i
-        } else {
-            panic!("Invalid conversion of {:?} to i64.", self);
-        }
+        self.i64()
     }
 }
 
 impl Into<f32> for Val {
     fn into(self) -> f32 {
-        if let Val::F32(i) = self {
-            RuntimeValue::F32(i).unwrap_f32()
-        } else {
-            panic!("Invalid conversion of {:?} to f32.", self);
-        }
+        self.f32()
     }
 }
 
 impl Into<f64> for Val {
     fn into(self) -> f64 {
-        if let Val::F64(i) = self {
-            RuntimeValue::F64(i).unwrap_f64()
-        } else {
-            panic!("Invalid conversion of {:?} to f64.", self);
-        }
+        self.f64()
     }
 }
 
