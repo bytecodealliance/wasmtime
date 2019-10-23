@@ -31,24 +31,24 @@ fn main() {
             .next()
             .is_some()
         {
-            //            test_file(
-            //                &mut out,
-            //                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_address.wast"]),
-            //                strategy,
-            //            )
-            //            .expect("generating tests");
-            //            test_file(
-            //                &mut out,
-            //                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_align.wast"]),
-            //                strategy,
-            //            )
-            //            .expect("generating tests");
-            //            test_file(
-            //                &mut out,
-            //                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_const.wast"]),
-            //                strategy,
-            //            )
-            //            .expect("generating tests");
+            test_file(
+                &mut out,
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_address.wast"]),
+                strategy,
+            )
+            .expect("generating tests");
+            test_file(
+                &mut out,
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_align.wast"]),
+                strategy,
+            )
+            .expect("generating tests");
+            test_file(
+                &mut out,
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_const.wast"]),
+                strategy,
+            )
+            .expect("generating tests");
 
             let multi_value_suite = &to_os_path(&["spec_testsuite", "proposals", "multi-value"]);
             test_directory(&mut out, &multi_value_suite, strategy).expect("generating tests");
@@ -206,6 +206,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // ABI only has a single return register, so we need to wait on full
             // multi-value support in Cranelift.
             (_, _) if is_multi_value => true,
+
+            // Until Windows unwind information is added we must disable SIMD spec tests that trap.
+            (_, _) if testname.starts_with("simd") => return true,
 
             ("spec_testsuite", "address") => true,
             ("spec_testsuite", "align") => true,
