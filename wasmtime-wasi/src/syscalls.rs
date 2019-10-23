@@ -874,8 +874,9 @@ syscalls! {
             nsubscriptions,
             nevents,
         );
+        let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
-        hostcalls::poll_oneoff(memory, in_, out, nsubscriptions, nevents)
+        hostcalls::poll_oneoff(wasi_ctx, memory, in_, out, nsubscriptions, nevents)
     }
 
     pub unsafe extern "C" fn proc_exit(_vmctx: *mut VMContext, rval: u32,) -> () {
