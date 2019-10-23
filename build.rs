@@ -31,24 +31,24 @@ fn main() {
             .next()
             .is_some()
         {
-            test_file(
-                &mut out,
-                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_address.wast"]),
-                strategy,
-            )
-            .expect("generating tests");
-            test_file(
-                &mut out,
-                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_align.wast"]),
-                strategy,
-            )
-            .expect("generating tests");
-            test_file(
-                &mut out,
-                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_const.wast"]),
-                strategy,
-            )
-            .expect("generating tests");
+            //            test_file(
+            //                &mut out,
+            //                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_address.wast"]),
+            //                strategy,
+            //            )
+            //            .expect("generating tests");
+            //            test_file(
+            //                &mut out,
+            //                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_align.wast"]),
+            //                strategy,
+            //            )
+            //            .expect("generating tests");
+            //            test_file(
+            //                &mut out,
+            //                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_const.wast"]),
+            //                strategy,
+            //            )
+            //            .expect("generating tests");
 
             let multi_value_suite = &to_os_path(&["spec_testsuite", "proposals", "multi-value"]);
             test_directory(&mut out, &multi_value_suite, strategy).expect("generating tests");
@@ -142,7 +142,7 @@ fn write_testsuite_tests(
     if ignore(testsuite, &testname, strategy) {
         writeln!(out, "        #[ignore]")?;
     }
-    writeln!(out, "        fn r#{}() {{", &testname.replace("-", "_"))?;
+    writeln!(out, "        fn r#{}() {{", &testname)?;
     writeln!(out, "            let isa = native_isa();")?;
     writeln!(
         out,
