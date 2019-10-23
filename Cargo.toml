@@ -1,6 +1,6 @@
 [package]
 name = "wasi-common"
-version = "0.1.0"
+version = "0.4.0"
 authors = [
     "Adam C. Foltzer <acfoltzer@fastly.com>",
     "Frank Denis <github@pureftpd.org>",
@@ -9,6 +9,10 @@ authors = [
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 description = "WASI implementation in Rust"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/CraneStation/wasi-common"
+readme = "README.md"
 
 [features]
 # this feature requires wasm32-wasi target installed, and it enables wasm32
@@ -16,7 +20,7 @@ description = "WASI implementation in Rust"
 wasm_tests = []
 
 [dependencies]
-wasi-common-cbindgen = { path = "wasi-common-cbindgen" }
+wasi-common-cbindgen = { path = "wasi-common-cbindgen", version = "0.4.0" }
 failure = "0.1"
 libc = "0.2"
 rand = "0.7"
@@ -28,7 +32,7 @@ filetime = "0.2.7"
 nix = "0.15"
 
 [target.'cfg(windows)'.dependencies]
-winx = { path = "winx" }
+winx = { path = "winx", version = "0.4.0" }
 winapi = "0.3"
 
 [dev-dependencies]
