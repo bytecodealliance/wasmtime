@@ -80,6 +80,11 @@ impl LinearMemory {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
     pub fn grow(&mut self, delta: u32) -> Option<u32> {
+        // Optimization of memory.grow 0 calls.
+        if delta == 0 {
+            return Some(self.current);
+        }
+
         let new_pages = match self.current.checked_add(delta) {
             Some(new_pages) => new_pages,
             // Linear memory size overflow.
