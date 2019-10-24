@@ -72,6 +72,7 @@ hostcalls! {
     ) -> wasm32::__wasi_errno_t;
 
     pub unsafe fn poll_oneoff(
+        wasi_ctx: &WasiCtx,
         memory: &mut [u8],
         input: wasm32::uintptr_t,
         output: wasm32::uintptr_t,

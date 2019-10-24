@@ -183,6 +183,7 @@ pub(crate) fn clock_time_get(
 }
 
 pub(crate) fn poll_oneoff(
+    _wasi_ctx: &WasiCtx,
     memory: &mut [u8],
     input: wasm32::uintptr_t,
     output: wasm32::uintptr_t,
