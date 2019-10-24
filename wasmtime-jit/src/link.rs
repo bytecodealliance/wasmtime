@@ -41,7 +41,7 @@ pub fn link_module(
                         // TODO: If the difference is in the calling convention,
                         // we could emit a wrapper function to fix it up.
                         return Err(LinkError(
-                            format!("{}/{}: exported function with signature {} incompatible with function import with signature {}",
+                            format!("{}/{}: incompatible import type: exported function with signature {} incompatible with function import with signature {}",
                             module_name, field,
                             signature, import_signature)
                         ));
@@ -54,14 +54,14 @@ pub fn link_module(
                 }
                 Export::Table { .. } | Export::Memory { .. } | Export::Global { .. } => {
                     return Err(LinkError(format!(
-                        "{}/{}: export not compatible with function import",
+                        "{}/{}: incompatible import type: export incompatible with function import",
                         module_name, field
                     )));
                 }
             },
             None => {
                 return Err(LinkError(format!(
-                    "{}/{}: no provided import function",
+                    "{}/{}: unknown import function: function not provided",
                     module_name, field
                 )));
             }
@@ -80,7 +80,7 @@ pub fn link_module(
                     let import_table = &module.table_plans[index];
                     if !is_table_compatible(&table, import_table) {
                         return Err(LinkError(format!(
-                            "{}/{}: exported table incompatible with table import",
+                            "{}/{}: incompatible import type: exported table incompatible with table import",
                             module_name, field,
                         )));
                     }
@@ -92,14 +92,14 @@ pub fn link_module(
                 }
                 Export::Global { .. } | Export::Memory { .. } | Export::Function { .. } => {
                     return Err(LinkError(format!(
-                        "{}/{}: export not compatible with table import",
+                        "{}/{}: incompatible import type: export incompatible with table import",
                         module_name, field
                     )));
                 }
             },
             None => {
                 return Err(LinkError(format!(
-                    "no provided import table for {}/{}",
+                    "unknown import: no provided import table for {}/{}",
                     module_name, field
                 )));
             }
@@ -118,7 +118,7 @@ pub fn link_module(
                     let import_memory = &module.memory_plans[index];
                     if !is_memory_compatible(&memory, import_memory) {
                         return Err(LinkError(format!(
-                            "{}/{}: exported memory incompatible with memory import",
+                            "{}/{}: incompatible import type: exported memory incompatible with memory import",
                             module_name, field
                         )));
                     }
@@ -146,14 +146,14 @@ pub fn link_module(
                 }
                 Export::Table { .. } | Export::Global { .. } | Export::Function { .. } => {
                     return Err(LinkError(format!(
-                        "{}/{}: export not compatible with memory import",
+                        "{}/{}: incompatible import type: export incompatible with memory import",
                         module_name, field
                     )));
                 }
             },
             None => {
                 return Err(LinkError(format!(
-                    "no provided import memory for {}/{}",
+                    "unknown import: no provided import memory for {}/{}",
                     module_name, field
                 )));
             }
@@ -166,7 +166,7 @@ pub fn link_module(
             Some(export_value) => match export_value {
                 Export::Table { .. } | Export::Memory { .. } | Export::Function { .. } => {
                     return Err(LinkError(format!(
-                        "{}/{}: exported global incompatible with global import",
+                        "{}/{}: incompatible import type: exported global incompatible with global import",
                         module_name, field
                     )));
                 }
@@ -178,7 +178,7 @@ pub fn link_module(
                     let imported_global = module.globals[index];
                     if !is_global_compatible(&global, &imported_global) {
                         return Err(LinkError(format!(
-                            "{}/{}: exported global incompatible with global import",
+                            "{}/{}: incompatible import type: exported global incompatible with global import",
                             module_name, field
                         )));
                     }
@@ -188,7 +188,7 @@ pub fn link_module(
             },
             None => {
                 return Err(LinkError(format!(
-                    "no provided import global for {}/{}",
+                    "unknown import: no provided import global for {}/{}",
                     module_name, field
                 )));
             }

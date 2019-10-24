@@ -316,12 +316,16 @@ impl WastContext {
                         Ok(()) => bail!("{}\nexpected module to fail to build", context(span)),
                         Err(e) => e,
                     };
-                    println!(
-                        "{}\nTODO: Check the assert_invalid message: {}",
-                        context(span),
-                        message
-                    );
-                    drop(err);
+                    let error_message = err.to_string();
+                    if !error_message.contains(&message) {
+                        // TODO: change to bail!
+                        println!(
+                            "{}\nassert_invalid: expected {}, got {}",
+                            context(span),
+                            message,
+                            error_message
+                        )
+                    }
                 }
                 AssertMalformed {
                     span,
@@ -341,12 +345,16 @@ impl WastContext {
                         }
                         Err(e) => e,
                     };
-                    println!(
-                        "{}\nTODO: Check the assert_malformed message: {}",
-                        context(span),
-                        message
-                    );
-                    drop(err);
+                    let error_message = err.to_string();
+                    if !error_message.contains(&message) {
+                        // TODO: change to bail!
+                        println!(
+                            "{}\nassert_malformed: expected {}, got {}",
+                            context(span),
+                            message,
+                            error_message
+                        )
+                    }
                 }
                 AssertUnlinkable {
                     span,
@@ -358,12 +366,15 @@ impl WastContext {
                         Ok(()) => bail!("{}\nexpected module to fail to link", context(span)),
                         Err(e) => e,
                     };
-                    println!(
-                        "{}\nTODO: Check the assert_unlinkable message: {}",
-                        context(span),
-                        message
-                    );
-                    drop(err);
+                    let error_message = err.to_string();
+                    if !error_message.contains(&message) {
+                        bail!(
+                            "{}\nassert_unlinkable: expected {}, got {}",
+                            context(span),
+                            message,
+                            error_message
+                        )
+                    }
                 }
                 AssertReturnFunc { .. } => panic!("need to implement assert_return_func"),
             }
