@@ -115,15 +115,15 @@ Read command-line argument data.
 
 The sizes of the buffers should match that returned by [`__wasi_args_sizes_get()`](#args_sizes_get).
 
-Inputs:
+Outputs:
 
-- <a href="#args_get.argv" name="args_get.argv"></a><code>char \*\*<strong>argv</strong></code>
+- <a href="#args_get.argv" name="args_get.argv"></a><code>char \*<strong>argv</strong></code>
 
-    A pointer to a buffer to write the argument pointers.
+    The argument pointers.
 
-- <a href="#args_get.argv_buf" name="args_get.argv_buf"></a><code>char \*<strong>argv\_buf</strong></code>
+- <a href="#args_get.argv_buf" name="args_get.argv_buf"></a><code>char <strong>argv\_buf</strong></code>
 
-    A pointer to a buffer to write the argument string data.
+    The argument string data.
 
 ### <a href="#args_sizes_get" name="args_sizes_get"></a>`__wasi_args_sizes_get()`
 
@@ -190,15 +190,15 @@ Read environment variable data.
 
 The sizes of the buffers should match that returned by [`__wasi_environ_sizes_get()`](#environ_sizes_get).
 
-Inputs:
+Outputs:
 
-- <a href="#environ_get.environ" name="environ_get.environ"></a><code>char \*\*<strong>environ</strong></code>
+- <a href="#environ_get.environ" name="environ_get.environ"></a><code>char \*<strong>environ</strong></code>
 
-    A pointer to a buffer to write the environment variable pointers.
+    Environment variable pointers.
 
-- <a href="#environ_get.environ_buf" name="environ_get.environ_buf"></a><code>char \*<strong>environ\_buf</strong></code>
+- <a href="#environ_get.environ_buf" name="environ_get.environ_buf"></a><code>char <strong>environ\_buf</strong></code>
 
-    A pointer to a buffer to write the environment variable string data.
+    The environment variable string data.
 
 ### <a href="#environ_sizes_get" name="environ_sizes_get"></a>`__wasi_environ_sizes_get()`
 
@@ -347,10 +347,11 @@ Inputs:
 
     The file descriptor to inspect.
 
-- <a href="#fd_filestat_get.buf" name="fd_filestat_get.buf"></a><code>[\_\_wasi\_filestat\_t](#filestat) \*<strong>buf</strong></code>
+Outputs:
 
-    The buffer where the file's attributes are
-    stored.
+- <a href="#fd_filestat_get.buf" name="fd_filestat_get.buf"></a><code>[\_\_wasi\_filestat\_t](#filestat) <strong>buf</strong></code>
+
+    The file's attributes.
 
 ### <a href="#fd_filestat_set_size" name="fd_filestat_set_size"></a>`__wasi_fd_filestat_set_size()`
 
@@ -406,15 +407,15 @@ Inputs:
 
     The file descriptor from which to read data.
 
-- <a href="#fd_pread.iovs" name="fd_pread.iovs"></a><code>const [\_\_wasi\_iovec\_t](#iovec) \*<strong>iovs</strong></code> and <a href="#fd_pread.iovs_len" name="fd_pread.iovs_len"></a><code>size\_t <strong>iovs\_len</strong></code>
-
-    List of scatter/gather vectors in which to store data.
-
 - <a href="#fd_pread.offset" name="fd_pread.offset"></a><code>[\_\_wasi\_filesize\_t](#filesize) <strong>offset</strong></code>
 
     The offset within the file at which to read.
 
 Outputs:
+
+- <a href="#fd_pread.iovs" name="fd_pread.iovs"></a><code>const [\_\_wasi\_iovec\_t](#iovec) <strong>iovs</strong></code> and <a href="#fd_pread.iovs_len" name="fd_pread.iovs_len"></a><code>size\_t <strong>iovs\_len</strong></code>
+
+    List of scatter/gather vectors in which to store data.
 
 - <a href="#fd_pread.nread" name="fd_pread.nread"></a><code>size\_t <strong>nread</strong></code>
 
@@ -430,7 +431,13 @@ Inputs:
 
     The file descriptor about which to retrieve information.
 
-- <a href="#fd_prestat_dir_name.path" name="fd_prestat_dir_name.path"></a><code>const char \*<strong>path</strong></code> and <a href="#fd_prestat_dir_name.path_len" name="fd_prestat_dir_name.path_len"></a><code>size\_t <strong>path\_len</strong></code>
+- <a href="#fd_prestat_dir_name.path_len" name="fd_prestat_dir_name.path_len"></a><code>size\_t <strong>path\_len</strong></code>
+
+    The size of <a href="#fd_prestat_dir_name.path" name="fd_prestat_dir_name.path"></a><code><strong>path</strong></code>
+
+Outputs:
+
+- <a href="#fd_prestat_dir_name.path" name="fd_prestat_dir_name.path"></a><code>char <strong>path</strong></code>
 
     A buffer into which to write the preopened directory name.
 
@@ -444,9 +451,11 @@ Inputs:
 
     The file descriptor about which to retrieve information.
 
-- <a href="#fd_prestat_get.buf" name="fd_prestat_get.buf"></a><code>[\_\_wasi\_prestat\_t](#prestat) \*<strong>buf</strong></code>
+Outputs:
 
-    The buffer where the description is stored.
+- <a href="#fd_prestat_get.buf" name="fd_prestat_get.buf"></a><code>[\_\_wasi\_prestat\_t](#prestat) <strong>buf</strong></code>
+
+    Retrieved information.
 
 ### <a href="#fd_pwrite" name="fd_pwrite"></a>`__wasi_fd_pwrite()`
 
@@ -487,11 +496,11 @@ Inputs:
 
     The file descriptor from which to read data.
 
-- <a href="#fd_read.iovs" name="fd_read.iovs"></a><code>const [\_\_wasi\_iovec\_t](#iovec) \*<strong>iovs</strong></code> and <a href="#fd_read.iovs_len" name="fd_read.iovs_len"></a><code>size\_t <strong>iovs\_len</strong></code>
+Outputs:
+
+- <a href="#fd_read.iovs" name="fd_read.iovs"></a><code>const [\_\_wasi\_iovec\_t](#iovec) <strong>iovs</strong></code> and <a href="#fd_read.iovs_len" name="fd_read.iovs_len"></a><code>size\_t <strong>iovs\_len</strong></code>
 
     List of scatter/gather vectors to which to store data.
-
-Outputs:
 
 - <a href="#fd_read.nread" name="fd_read.nread"></a><code>size\_t <strong>nread</strong></code>
 
@@ -519,9 +528,9 @@ Inputs:
     The directory from which to read the directory
     entries.
 
-- <a href="#fd_readdir.buf" name="fd_readdir.buf"></a><code>void \*<strong>buf</strong></code> and <a href="#fd_readdir.buf_len" name="fd_readdir.buf_len"></a><code>size\_t <strong>buf\_len</strong></code>
+- <a href="#fd_readdir.buf_len" name="fd_readdir.buf_len"></a><code>size\_t <strong>buf\_len</strong></code>
 
-    The buffer where directory entries are stored.
+    The size of <a href="#fd_readdir.buf" name="fd_readdir.buf"></a><code><strong>buf</strong></code>.
 
 - <a href="#fd_readdir.cookie" name="fd_readdir.cookie"></a><code>[\_\_wasi\_dircookie\_t](#dircookie) <strong>cookie</strong></code>
 
@@ -529,6 +538,10 @@ Inputs:
     reading.
 
 Outputs:
+
+- <a href="#fd_readdir.buf" name="fd_readdir.buf"></a><code>void <strong>buf</strong></code>
+
+    The buffer where directory entries are stored.
 
 - <a href="#fd_readdir.bufused" name="fd_readdir.bufused"></a><code>size\_t <strong>bufused</strong></code>
 
@@ -678,7 +691,9 @@ Inputs:
 
     The path of the file or directory to inspect.
 
-- <a href="#path_filestat_get.buf" name="path_filestat_get.buf"></a><code>[\_\_wasi\_filestat\_t](#filestat) \*<strong>buf</strong></code>
+Outputs:
+
+- <a href="#path_filestat_get.buf" name="path_filestat_get.buf"></a><code>[\_\_wasi\_filestat\_t](#filestat) <strong>buf</strong></code>
 
     The buffer where the file's attributes are stored.
 
@@ -820,11 +835,15 @@ Inputs:
 
     The path of the symbolic link from which to read.
 
-- <a href="#path_readlink.buf" name="path_readlink.buf"></a><code>char \*<strong>buf</strong></code> and <a href="#path_readlink.buf_len" name="path_readlink.buf_len"></a><code>size\_t <strong>buf\_len</strong></code>
+- <a href="#path_readlink.buf_len" name="path_readlink.buf_len"></a><code>size\_t <strong>buf\_len</strong></code>
 
-    The buffer to which to write the contents of the symbolic link.
+    The size of <a href="#path_readlink.buf" name="path_readlink.buf"></a><code><strong>buf</strong></code>.
 
 Outputs:
+
+- <a href="#path_readlink.buf" name="path_readlink.buf"></a><code>char <strong>buf</strong></code>
+
+    The buffer to which to write the contents of the symbolic link.
 
 - <a href="#path_readlink.bufused" name="path_readlink.bufused"></a><code>size\_t <strong>bufused</strong></code>
 
@@ -999,15 +1018,19 @@ Inputs:
 
     The socket on which to receive data.
 
-- <a href="#sock_recv.ri_data" name="sock_recv.ri_data"></a><code>const [\_\_wasi\_iovec\_t](#iovec) \*<strong>ri\_data</strong></code> and <a href="#sock_recv.ri_data_len" name="sock_recv.ri_data_len"></a><code>size\_t <strong>ri\_data\_len</strong></code>
+- <a href="#sock_recv.ri_data_len" name="sock_recv.ri_data_len"></a><code>size\_t <strong>ri\_data\_len</strong></code>
 
-    List of scatter/gather vectors to which to store data.
+    The size of <a href="#sock_recv.ri_data" name="sock_recv.ri_data"></a><code><strong>ri\_data</strong></code>.
 
 - <a href="#sock_recv.ri_flags" name="sock_recv.ri_flags"></a><code>[\_\_wasi\_riflags\_t](#riflags) <strong>ri\_flags</strong></code>
 
     Message flags.
 
 Outputs:
+
+- <a href="#sock_recv.ri_data" name="sock_recv.ri_data"></a><code>const [\_\_wasi\_iovec\_t](#iovec) <strong>ri\_data</strong></code>
+
+    List of scatter/gather vectors to which to store data.
 
 - <a href="#sock_recv.ro_datalen" name="sock_recv.ro_datalen"></a><code>size\_t <strong>ro\_datalen</strong></code>
 
