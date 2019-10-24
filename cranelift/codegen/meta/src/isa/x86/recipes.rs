@@ -51,14 +51,14 @@ impl<'builder> RecipeGroup<'builder> {
     pub fn recipe(&self, name: &str) -> &EncodingRecipe {
         self.recipes
             .iter()
-            .find(|recipe| &recipe.name == name)
-            .expect(&format!("unknown recipe name: {}. Try template?", name))
+            .find(|recipe| recipe.name == name)
+            .unwrap_or_else(|| panic!("unknown recipe name: {}. Try template?", name))
     }
     pub fn template(&self, name: &str) -> &Template {
         self.templates
             .iter()
             .find(|recipe| recipe.name() == name)
-            .expect(&format!("unknown tail recipe name: {}. Try recipe?", name))
+            .unwrap_or_else(|| panic!("unknown tail recipe name: {}. Try recipe?", name))
     }
 }
 
@@ -96,7 +96,7 @@ impl<'builder> RecipeGroup<'builder> {
 
 /// Given a sequence of opcode bytes, compute the recipe name prefix and encoding bits.
 fn decode_opcodes(op_bytes: &[u8], rrr: u16, w: u16) -> (&'static str, u16) {
-    assert!(op_bytes.len() >= 1, "at least one opcode byte");
+    assert!(!op_bytes.is_empty(), "at least one opcode byte");
 
     let prefix_bytes = &op_bytes[..op_bytes.len() - 1];
     let (name, mmpp) = match prefix_bytes {
@@ -121,7 +121,7 @@ fn decode_opcodes(op_bytes: &[u8], rrr: u16, w: u16) -> (&'static str, u16) {
         }
     };
 
-    let opcode_byte = op_bytes[op_bytes.len() - 1] as u16;
+    let opcode_byte = u16::from(op_bytes[op_bytes.len() - 1]);
     (name, opcode_byte | (mmpp << 8) | (rrr << 12) | w << 15)
 }
 
@@ -243,7 +243,7 @@ impl<'builder> Template<'builder> {
         if let Some(prefixed) = &self.when_prefixed {
             let mut ret = prefixed.rex();
             // Forward specialized parameters.
-            ret.op_bytes = self.op_bytes.clone();
+            ret.op_bytes = self.op_bytes;
             ret.w_bit = self.w_bit;
             ret.rrr_bits = self.rrr_bits;
             return ret;
@@ -266,18 +266,17 @@ impl<'builder> Template<'builder> {
         self.recipe.base_size += size_addendum;
 
         // Branch ranges are relative to the end of the instruction.
-        self.recipe
-            .branch_range
-            .as_mut()
-            .map(|range| range.inst_size += size_addendum);
+        if let Some(range) = self.recipe.branch_range.as_mut() {
+            range.inst_size += size_addendum;
+        }
 
         self.recipe.emit = replace_put_op(self.recipe.emit, &name);
         self.recipe.name = name + &self.recipe.name;
 
         if !self.rex {
-            let operands_in = self.recipe.operands_in.unwrap_or(Vec::new());
+            let operands_in = self.recipe.operands_in.unwrap_or_default();
             self.recipe.operands_in = Some(replace_nonrex_constraints(self.regs, operands_in));
-            let operands_out = self.recipe.operands_out.unwrap_or(Vec::new());
+            let operands_out = self.recipe.operands_out.unwrap_or_default();
             self.recipe.operands_out = Some(replace_nonrex_constraints(self.regs, operands_out));
         }
 

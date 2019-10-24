@@ -237,7 +237,7 @@ pub struct RegClassIndex(u8);
 
 impl EntityRef for RegClassIndex {
     fn new(idx: usize) -> Self {
-        RegClassIndex(idx as u8)
+        Self(idx as u8)
     }
 
     fn index(self) -> usize {
@@ -247,7 +247,7 @@ impl EntityRef for RegClassIndex {
 
 impl From<RegClass> for RegClassIndex {
     fn from(rc: RegClass) -> Self {
-        RegClassIndex(rc.index)
+        Self(rc.index)
     }
 }
 

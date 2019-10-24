@@ -409,8 +409,8 @@ pub fn parse_name_section<'data>(
     Ok(())
 }
 
-fn parse_function_name_subsection<'data>(
-    mut naming_reader: NamingReader<'data>,
+fn parse_function_name_subsection(
+    mut naming_reader: NamingReader<'_>,
 ) -> Option<HashMap<FuncIndex, &str>> {
     let mut function_names = HashMap::new();
     for _ in 0..naming_reader.get_count() {
@@ -425,5 +425,5 @@ fn parse_function_name_subsection<'data>(
             return None;
         }
     }
-    return Some(function_names);
+    Some(function_names)
 }

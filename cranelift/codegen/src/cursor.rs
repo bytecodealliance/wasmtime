@@ -645,13 +645,14 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
                         let prev_op = self.data_flow_graph()[prev].opcode();
                         let inst_op = self.data_flow_graph()[inst].opcode();
                         let curr_op = self.data_flow_graph()[curr].opcode();
-                        if prev_op.is_branch() && !prev_op.is_terminator() {
-                            if !inst_op.is_terminator() {
-                                panic!(
-                                    "Inserting instruction {} after {}, and before {}",
-                                    inst_op, prev_op, curr_op
-                                )
-                            };
+                        if prev_op.is_branch()
+                            && !prev_op.is_terminator()
+                            && !inst_op.is_terminator()
+                        {
+                            panic!(
+                                "Inserting instruction {} after {}, and before {}",
+                                inst_op, prev_op, curr_op
+                            )
                         }
                     };
                 };
@@ -773,15 +774,16 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
                     if let Some(prev) = self.layout().prev_inst(curr) {
                         let prev_op = self.data_flow_graph()[prev].opcode();
                         let inst_op = self.data_flow_graph()[inst].opcode();
-                        if prev_op.is_branch() && !prev_op.is_terminator() {
-                            if !inst_op.is_terminator() {
-                                panic!(
-                                    "Inserting instruction {} after {} and before {}",
-                                    self.display_inst(inst),
-                                    self.display_inst(prev),
-                                    self.display_inst(curr)
-                                )
-                            };
+                        if prev_op.is_branch()
+                            && !prev_op.is_terminator()
+                            && !inst_op.is_terminator()
+                        {
+                            panic!(
+                                "Inserting instruction {} after {} and before {}",
+                                self.display_inst(inst),
+                                self.display_inst(prev),
+                                self.display_inst(curr)
+                            )
                         }
                     };
                 };

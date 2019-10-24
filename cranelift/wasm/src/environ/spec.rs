@@ -87,7 +87,7 @@ impl From<BinaryReaderError> for WasmError {
     /// Convert from a `BinaryReaderError` to a `WasmError`.
     fn from(e: BinaryReaderError) -> Self {
         let BinaryReaderError { message, offset } = e;
-        WasmError::InvalidWebAssembly { message, offset }
+        Self::InvalidWebAssembly { message, offset }
     }
 }
 
@@ -478,8 +478,7 @@ pub trait ModuleEnvironment<'data> {
     }
 
     /// Indicates that a custom section has been found in the wasm file
-    fn custom_section(&mut self, name: &'data str, data: &'data [u8]) -> WasmResult<()> {
-        drop((name, data));
+    fn custom_section(&mut self, _name: &'data str, _data: &'data [u8]) -> WasmResult<()> {
         Ok(())
     }
 }

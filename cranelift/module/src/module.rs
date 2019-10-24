@@ -25,7 +25,7 @@ entity_impl!(FuncId, "funcid");
 /// Function identifiers are namespace 0 in `ir::ExternalName`
 impl From<FuncId> for ir::ExternalName {
     fn from(id: FuncId) -> Self {
-        ir::ExternalName::User {
+        Self::User {
             namespace: 0,
             index: id.0,
         }
@@ -40,7 +40,7 @@ entity_impl!(DataId, "dataid");
 /// Data identifiers are namespace 1 in `ir::ExternalName`
 impl From<DataId> for ir::ExternalName {
     fn from(id: DataId) -> Self {
-        ir::ExternalName::User {
+        Self::User {
             namespace: 1,
             index: id.0,
         }
@@ -63,33 +63,33 @@ pub enum Linkage {
 impl Linkage {
     fn merge(a: Self, b: Self) -> Self {
         match a {
-            Linkage::Export => Linkage::Export,
-            Linkage::Preemptible => match b {
-                Linkage::Export => Linkage::Export,
-                _ => Linkage::Preemptible,
+            Self::Export => Self::Export,
+            Self::Preemptible => match b {
+                Self::Export => Self::Export,
+                _ => Self::Preemptible,
             },
-            Linkage::Local => match b {
-                Linkage::Export => Linkage::Export,
-                Linkage::Preemptible => Linkage::Preemptible,
-                _ => Linkage::Local,
+            Self::Local => match b {
+                Self::Export => Self::Export,
+                Self::Preemptible => Self::Preemptible,
+                _ => Self::Local,
             },
-            Linkage::Import => b,
+            Self::Import => b,
         }
     }
 
     /// Test whether this linkage can have a definition.
     pub fn is_definable(self) -> bool {
         match self {
-            Linkage::Import => false,
-            Linkage::Local | Linkage::Preemptible | Linkage::Export => true,
+            Self::Import => false,
+            Self::Local | Self::Preemptible | Self::Export => true,
         }
     }
 
     /// Test whether this linkage will have a definition that cannot be preempted.
     pub fn is_final(self) -> bool {
         match self {
-            Linkage::Import | Linkage::Preemptible => false,
-            Linkage::Local | Linkage::Export => true,
+            Self::Import | Self::Preemptible => false,
+            Self::Local | Self::Export => true,
         }
     }
 }

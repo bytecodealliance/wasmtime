@@ -187,7 +187,7 @@ fn unwrap_inst(transform: &Transform, fmt: &mut Formatter) -> bool {
 
     // If the definition creates results, detach the values and place them in locals.
     let mut replace_inst = false;
-    if def.defined_vars.len() > 0 {
+    if !def.defined_vars.is_empty() {
         if def.defined_vars
             == def_pool
                 .get(var_pool.get(def.defined_vars[0]).dst_def.unwrap())
@@ -266,7 +266,7 @@ fn build_derived_expr(tv: &TypeVar) -> String {
 ///
 /// The emitted code is a statement redefining the `predicate` variable like this:
 ///     let predicate = predicate && ...
-fn emit_runtime_typecheck<'a, 'b>(
+fn emit_runtime_typecheck<'a>(
     constraint: &'a Constraint,
     type_sets: &mut UniqueTable<'a, TypeSet>,
     fmt: &mut Formatter,
@@ -586,7 +586,7 @@ fn gen_transform_group<'a>(
             let inst = &transform.def_pool.get(def_index).apply.inst;
             inst_to_transforms
                 .entry(inst.camel_name.clone())
-                .or_insert(Vec::new())
+                .or_insert_with(Vec::new)
                 .push(transform);
         }
 
@@ -606,7 +606,7 @@ fn gen_transform_group<'a>(
                         let replace_inst = unwrap_inst(&transforms[0], fmt);
                         fmt.empty_line();
 
-                        for (i, transform) in transforms.into_iter().enumerate() {
+                        for (i, transform) in transforms.iter().enumerate() {
                             if i > 0 {
                                 fmt.empty_line();
                             }
@@ -697,7 +697,7 @@ fn gen_isa(
 
 /// Generate the legalizer files.
 pub(crate) fn generate(
-    isas: &Vec<TargetIsa>,
+    isas: &[TargetIsa],
     transform_groups: &TransformGroups,
     filename_prefix: &str,
     out_dir: &str,

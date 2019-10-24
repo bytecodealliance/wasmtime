@@ -42,7 +42,7 @@ impl Stack {
     pub fn new(regclass: RegClassIndex) -> Self {
         Self { regclass }
     }
-    pub fn stack_base_mask(&self) -> &'static str {
+    pub fn stack_base_mask(self) -> &'static str {
         // TODO: Make this configurable instead of just using the SP.
         "StackBaseMask(1)"
     }
@@ -253,8 +253,8 @@ impl EncodingRecipeBuilder {
     }
 
     pub fn build(self) -> EncodingRecipe {
-        let operands_in = self.operands_in.unwrap_or(Vec::new());
-        let operands_out = self.operands_out.unwrap_or(Vec::new());
+        let operands_in = self.operands_in.unwrap_or_default();
+        let operands_out = self.operands_out.unwrap_or_default();
 
         // The number of input constraints must match the number of format input operands.
         if !self.format.has_value_list {
@@ -282,7 +282,7 @@ impl EncodingRecipeBuilder {
         let clobbers_flags = self.clobbers_flags.unwrap_or(true);
 
         EncodingRecipe {
-            name: self.name.into(),
+            name: self.name,
             format: self.format,
             base_size: self.base_size,
             operands_in,

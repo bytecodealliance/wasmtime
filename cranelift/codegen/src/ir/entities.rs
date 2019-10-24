@@ -41,7 +41,7 @@ impl Ebb {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(Ebb(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -72,7 +72,7 @@ impl Value {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX / 2 {
-            Some(Value(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -118,7 +118,7 @@ impl StackSlot {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(StackSlot(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -152,7 +152,7 @@ impl GlobalValue {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(GlobalValue(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -174,7 +174,7 @@ impl Constant {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(Constant(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -197,7 +197,7 @@ impl Immediate {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(Immediate(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -225,7 +225,7 @@ impl JumpTable {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(JumpTable(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -258,7 +258,7 @@ impl FuncRef {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(FuncRef(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -287,7 +287,7 @@ impl SigRef {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(SigRef(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -310,7 +310,7 @@ impl Heap {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(Heap(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -334,7 +334,7 @@ impl Table {
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(Table(n))
+            Some(Self(n))
         } else {
             None
         }
@@ -371,17 +371,17 @@ pub enum AnyEntity {
 impl fmt::Display for AnyEntity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            AnyEntity::Function => write!(f, "function"),
-            AnyEntity::Ebb(r) => r.fmt(f),
-            AnyEntity::Inst(r) => r.fmt(f),
-            AnyEntity::Value(r) => r.fmt(f),
-            AnyEntity::StackSlot(r) => r.fmt(f),
-            AnyEntity::GlobalValue(r) => r.fmt(f),
-            AnyEntity::JumpTable(r) => r.fmt(f),
-            AnyEntity::FuncRef(r) => r.fmt(f),
-            AnyEntity::SigRef(r) => r.fmt(f),
-            AnyEntity::Heap(r) => r.fmt(f),
-            AnyEntity::Table(r) => r.fmt(f),
+            Self::Function => write!(f, "function"),
+            Self::Ebb(r) => r.fmt(f),
+            Self::Inst(r) => r.fmt(f),
+            Self::Value(r) => r.fmt(f),
+            Self::StackSlot(r) => r.fmt(f),
+            Self::GlobalValue(r) => r.fmt(f),
+            Self::JumpTable(r) => r.fmt(f),
+            Self::FuncRef(r) => r.fmt(f),
+            Self::SigRef(r) => r.fmt(f),
+            Self::Heap(r) => r.fmt(f),
+            Self::Table(r) => r.fmt(f),
         }
     }
 }
@@ -394,61 +394,61 @@ impl fmt::Debug for AnyEntity {
 
 impl From<Ebb> for AnyEntity {
     fn from(r: Ebb) -> Self {
-        AnyEntity::Ebb(r)
+        Self::Ebb(r)
     }
 }
 
 impl From<Inst> for AnyEntity {
     fn from(r: Inst) -> Self {
-        AnyEntity::Inst(r)
+        Self::Inst(r)
     }
 }
 
 impl From<Value> for AnyEntity {
     fn from(r: Value) -> Self {
-        AnyEntity::Value(r)
+        Self::Value(r)
     }
 }
 
 impl From<StackSlot> for AnyEntity {
     fn from(r: StackSlot) -> Self {
-        AnyEntity::StackSlot(r)
+        Self::StackSlot(r)
     }
 }
 
 impl From<GlobalValue> for AnyEntity {
     fn from(r: GlobalValue) -> Self {
-        AnyEntity::GlobalValue(r)
+        Self::GlobalValue(r)
     }
 }
 
 impl From<JumpTable> for AnyEntity {
     fn from(r: JumpTable) -> Self {
-        AnyEntity::JumpTable(r)
+        Self::JumpTable(r)
     }
 }
 
 impl From<FuncRef> for AnyEntity {
     fn from(r: FuncRef) -> Self {
-        AnyEntity::FuncRef(r)
+        Self::FuncRef(r)
     }
 }
 
 impl From<SigRef> for AnyEntity {
     fn from(r: SigRef) -> Self {
-        AnyEntity::SigRef(r)
+        Self::SigRef(r)
     }
 }
 
 impl From<Heap> for AnyEntity {
     fn from(r: Heap) -> Self {
-        AnyEntity::Heap(r)
+        Self::Heap(r)
     }
 }
 
 impl From<Table> for AnyEntity {
     fn from(r: Table) -> Self {
-        AnyEntity::Table(r)
+        Self::Table(r)
     }
 }
 

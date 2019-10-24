@@ -57,10 +57,10 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
             Feature::With(name) => (name, true),
             Feature::Without(name) => (name, false),
         };
-        let cranelift_has = match flag {
+        let cranelift_has = match *flag {
             // Add any cranelift feature flag here, and make sure that it is forwarded to the
             // cranelift-filetest crate in the top-level Cargo.toml.
-            &"basic-blocks" => cfg!(feature = "basic-blocks"),
+            "basic-blocks" => cfg!(feature = "basic-blocks"),
             _ => {
                 return Err(format!(
                     r#"{:?}: Unknown feature flag named "{}""#,

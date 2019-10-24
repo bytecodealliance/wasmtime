@@ -164,7 +164,7 @@ impl RegClassBuilder {
             name,
             width: 0,
             count: stop - start,
-            start: start,
+            start,
             proto: RegClassProto::SubClass(parent_index),
         }
     }
@@ -214,7 +214,7 @@ impl RegBankBuilder {
         self
     }
     pub fn pinned_reg(mut self, unit: u16) -> Self {
-        assert!(unit < (self.units as u16));
+        assert!(unit < u16::from(self.units));
         self.pinned_reg = Some(unit);
         self
     }
@@ -234,7 +234,7 @@ impl IsaRegsBuilder {
     }
 
     pub fn add_bank(&mut self, builder: RegBankBuilder) -> RegBankIndex {
-        let first_unit = if self.banks.len() == 0 {
+        let first_unit = if self.banks.is_empty() {
             0
         } else {
             let last = &self.banks.last().unwrap();
@@ -358,8 +358,7 @@ impl IsaRegsBuilder {
                             .unwrap()
                             .subclasses
                             .iter()
-                            .find(|x| **x == *i2)
-                            .is_some());
+                            .any(|x| *x == *i2));
                     }
                 }
             }
@@ -402,7 +401,7 @@ impl IsaRegs {
         self.classes
             .values()
             .find(|&class| class.name == name)
-            .expect(&format!("register class {} not found", name))
+            .unwrap_or_else(|| panic!("register class {} not found", name))
             .index
     }
 

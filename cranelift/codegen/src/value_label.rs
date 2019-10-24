@@ -104,14 +104,14 @@ where
         if range.0 >= range.1 || !loc.is_assigned() {
             return;
         }
-        if !ranges.contains_key(&label) {
-            ranges.insert(label, Vec::new());
-        }
-        ranges.get_mut(&label).unwrap().push(ValueLocRange {
-            loc,
-            start: range.0,
-            end: range.1,
-        });
+        ranges
+            .entry(label)
+            .or_insert_with(Vec::new)
+            .push(ValueLocRange {
+                loc,
+                start: range.0,
+                end: range.1,
+            });
     };
 
     let mut end_offset = 0;
@@ -130,7 +130,7 @@ where
                     add_range(*label, (*start_offset, end_offset), *last_loc);
                     return false;
                 }
-                return true;
+                true
             });
 
             let srcloc = func.srclocs[inst];
@@ -152,7 +152,7 @@ where
             }
 
             // New source locations range started: abandon all tracked values.
-            if last_srcloc.is_some() && last_srcloc.as_ref().unwrap() > &srcloc {
+            if last_srcloc.is_some() && last_srcloc.unwrap() > srcloc {
                 for (_, label, start_offset, last_loc) in &tracked_values {
                     add_range(*label, (*start_offset, end_offset), *last_loc);
                 }
@@ -193,7 +193,7 @@ where
 
     // Optimize ranges in-place
     for (_, label_ranges) in ranges.iter_mut() {
-        assert!(label_ranges.len() > 0);
+        assert!(!label_ranges.is_empty());
         label_ranges.sort_by(|a, b| a.start.cmp(&b.start).then_with(|| a.end.cmp(&b.end)));
 
         // Merge ranges
@@ -245,7 +245,7 @@ pub struct ComparableSourceLoc(SourceLoc);
 
 impl From<SourceLoc> for ComparableSourceLoc {
     fn from(s: SourceLoc) -> Self {
-        ComparableSourceLoc(s)
+        Self(s)
     }
 }
 

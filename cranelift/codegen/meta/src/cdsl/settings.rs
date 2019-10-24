@@ -268,7 +268,7 @@ impl SettingGroupBuilder {
         default: bool,
     ) -> BoolSettingIndex {
         assert!(
-            self.predicates.len() == 0,
+            self.predicates.is_empty(),
             "predicates must be added after the boolean settings"
         );
         self.add_setting(name, comment, ProtoSpecificSetting::Bool(default));
@@ -379,7 +379,7 @@ impl SettingGroupBuilder {
         }
 
         assert!(
-            group.predicates.len() == 0,
+            group.predicates.is_empty(),
             "settings_size is the byte size before adding predicates"
         );
         group.settings_size = group.byte_size();
@@ -393,11 +393,11 @@ impl SettingGroupBuilder {
             .extend(predicates.into_iter().map(|predicate| {
                 let number = predicate_number;
                 predicate_number += 1;
-                return Predicate {
+                Predicate {
                     name: predicate.name,
                     node: predicate.node,
                     number,
-                };
+                }
             }));
 
         group.presets.extend(self.presets);

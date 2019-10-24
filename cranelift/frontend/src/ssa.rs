@@ -95,8 +95,8 @@ enum BlockData {
 impl BlockData {
     fn add_predecessor(&mut self, pred: Block, inst: Inst) {
         match *self {
-            BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
-            BlockData::EbbHeader(ref mut data) => {
+            Self::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
+            Self::EbbHeader(ref mut data) => {
                 debug_assert!(!data.sealed, "sealed blocks cannot accept new predecessors");
                 data.predecessors.push(PredBlock::new(pred, inst));
             }
@@ -104,8 +104,8 @@ impl BlockData {
     }
     fn remove_predecessor(&mut self, inst: Inst) -> Block {
         match *self {
-            BlockData::EbbBody { .. } => panic!("should not happen"),
-            BlockData::EbbHeader(ref mut data) => {
+            Self::EbbBody { .. } => panic!("should not happen"),
+            Self::EbbHeader(ref mut data) => {
                 // This a linear complexity operation but the number of predecessors is low
                 // in all non-pathological cases
                 let pred: usize = data
@@ -149,7 +149,7 @@ pub struct Block(u32);
 impl EntityRef for Block {
     fn new(index: usize) -> Self {
         debug_assert!(index < (u32::MAX as usize));
-        Block(index as u32)
+        Self(index as u32)
     }
 
     fn index(self) -> usize {
@@ -159,7 +159,7 @@ impl EntityRef for Block {
 
 impl ReservedValue for Block {
     fn reserved_value() -> Self {
-        Block(u32::MAX)
+        Self(u32::MAX)
     }
 }
 

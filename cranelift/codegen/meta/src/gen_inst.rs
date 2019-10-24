@@ -17,7 +17,7 @@ use crate::unique_table::{UniqueSeqTable, UniqueTable};
 const TYPESET_LIMIT: usize = 0xff;
 
 /// Generate an instruction format enumeration.
-fn gen_formats(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter) {
+fn gen_formats(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     fmt.doc_comment(
         r#"
         An instruction format
@@ -49,7 +49,7 @@ fn gen_formats(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter) {
                 m.arm(
                     format!("InstructionData::{}", format.name),
                     vec![".."],
-                    format!("InstructionFormat::{}", format.name),
+                    format!("Self::{}", format.name),
                 );
             }
             fmt.add_match(m);
@@ -65,7 +65,7 @@ fn gen_formats(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter) {
 /// Every variant must contain an `opcode` field. The size of `InstructionData` should be kept at
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `ValueList` to store the additional information out of line.
-fn gen_instruction_data(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter) {
+fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     fmt.line("#[derive(Clone, Debug)]");
     fmt.line("#[allow(missing_docs)]");
     fmt.line("pub enum InstructionData {");
@@ -93,7 +93,7 @@ fn gen_instruction_data(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter) 
     fmt.line("}");
 }
 
-fn gen_arguments_method(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter, is_mut: bool) {
+fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_mut: bool) {
     let (method, mut_, rslice, as_slice) = if is_mut {
         (
             "arguments_mut",
@@ -116,7 +116,7 @@ fn gen_arguments_method(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter, 
     fmt.indent(|fmt| {
         let mut m = Match::new("*self");
         for format in formats {
-            let name = format!("InstructionData::{}", format.name);
+            let name = format!("Self::{}", format.name);
 
             // Formats with a value list put all of their arguments in the list. We don't split
             // them up, just return it all as variable arguments. (I expect the distinction to go
@@ -163,7 +163,7 @@ fn gen_arguments_method(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter, 
 /// - `pub fn put_value_list(&mut self, args: ir::ValueList>`
 /// - `pub fn eq(&self, &other: Self, &pool) -> bool`
 /// - `pub fn hash<H: Hasher>(&self, state: &mut H, &pool)`
-fn gen_instruction_data_impl(formats: &Vec<&InstructionFormat>, fmt: &mut Formatter) {
+fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     fmt.line("impl InstructionData {");
     fmt.indent(|fmt| {
         fmt.doc_comment("Get the opcode of this instruction.");
@@ -171,7 +171,7 @@ fn gen_instruction_data_impl(formats: &Vec<&InstructionFormat>, fmt: &mut Format
         fmt.indent(|fmt| {
             let mut m = Match::new("*self");
             for format in formats {
-                m.arm(format!("InstructionData::{}", format.name), vec!["opcode", ".."],
+                m.arm(format!("Self::{}", format.name), vec!["opcode", ".."],
                       "opcode".to_string());
             }
             fmt.add_match(m);
@@ -184,7 +184,7 @@ fn gen_instruction_data_impl(formats: &Vec<&InstructionFormat>, fmt: &mut Format
         fmt.indent(|fmt| {
             let mut m = Match::new("*self");
             for format in formats {
-                let name = format!("InstructionData::{}", format.name);
+                let name = format!("Self::{}", format.name);
                 if format.typevar_operand.is_none() {
                     m.arm(name, vec![".."], "None".to_string());
                 } else if format.has_value_list {
@@ -227,7 +227,7 @@ fn gen_instruction_data_impl(formats: &Vec<&InstructionFormat>, fmt: &mut Format
 
             for format in formats {
                 if format.has_value_list {
-                    m.arm(format!("InstructionData::{}", format.name),
+                    m.arm(format!("Self::{}", format.name),
                     vec!["ref mut args", ".."],
                     "Some(args.take())".to_string());
                 }
@@ -254,7 +254,7 @@ fn gen_instruction_data_impl(formats: &Vec<&InstructionFormat>, fmt: &mut Format
             fmt.indent(|fmt| {
                 for format in formats {
                     if format.has_value_list {
-                        fmtln!(fmt, "InstructionData::{} {{ ref mut args, .. }} => args,", format.name);
+                        fmtln!(fmt, "Self::{} {{ ref mut args, .. }} => args,", format.name);
                     }
                 }
                 fmt.line("_ => panic!(\"No value list: {:?}\", self),");
@@ -283,7 +283,7 @@ fn gen_instruction_data_impl(formats: &Vec<&InstructionFormat>, fmt: &mut Format
             fmt.line("match (self, other) {");
             fmt.indent(|fmt| {
                 for format in formats {
-                    let name = format!("&InstructionData::{}", format.name);
+                    let name = format!("&Self::{}", format.name);
                     let mut members = vec!["opcode"];
 
                     let args_eq = if format.typevar_operand.is_none() {
@@ -335,7 +335,7 @@ fn gen_instruction_data_impl(formats: &Vec<&InstructionFormat>, fmt: &mut Format
             fmt.line("match *self {");
             fmt.indent(|fmt| {
                 for format in formats {
-                    let name = format!("InstructionData::{}", format.name);
+                    let name = format!("Self::{}", format.name);
                     let mut members = vec!["opcode"];
 
                     let args = if format.typevar_operand.is_none() {
@@ -388,7 +388,7 @@ fn gen_bool_accessor<T: Fn(&Instruction) -> bool>(
         let mut m = Match::new("self");
         for inst in all_inst.values() {
             if get_attr(inst) {
-                m.arm_no_fields(format!("Opcode::{}", inst.camel_name), "true");
+                m.arm_no_fields(format!("Self::{}", inst.camel_name), "true");
             }
         }
         m.arm_no_fields("_", "false");
@@ -398,7 +398,7 @@ fn gen_bool_accessor<T: Fn(&Instruction) -> bool>(
     fmt.empty_line();
 }
 
-fn gen_opcodes<'a>(all_inst: &AllInstructions, fmt: &mut Formatter) {
+fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.doc_comment(
         r#"
         An instruction opcode.
@@ -613,7 +613,7 @@ fn get_constraint<'entries, 'table>(
     }
 
     assert!(type_var == ctrl_typevar.unwrap());
-    return "Same".into();
+    "Same".into()
 }
 
 fn gen_bitset<'a, T: IntoIterator<Item = &'a u16>>(
@@ -641,22 +641,22 @@ fn iterable_to_string<I: fmt::Display, T: IntoIterator<Item = I>>(iterable: T) -
 
 fn typeset_to_string(ts: &TypeSet) -> String {
     let mut result = format!("TypeSet(lanes={}", iterable_to_string(&ts.lanes));
-    if ts.ints.len() > 0 {
+    if !ts.ints.is_empty() {
         result += &format!(", ints={}", iterable_to_string(&ts.ints));
     }
-    if ts.floats.len() > 0 {
+    if !ts.floats.is_empty() {
         result += &format!(", floats={}", iterable_to_string(&ts.floats));
     }
-    if ts.bools.len() > 0 {
+    if !ts.bools.is_empty() {
         result += &format!(", bools={}", iterable_to_string(&ts.bools));
     }
-    if ts.bitvecs.len() > 0 {
+    if !ts.bitvecs.is_empty() {
         result += &format!(", bitvecs={}", iterable_to_string(&ts.bitvecs));
     }
-    if ts.specials.len() > 0 {
+    if !ts.specials.is_empty() {
         result += &format!(", specials=[{}]", iterable_to_string(&ts.specials));
     }
-    if ts.refs.len() > 0 {
+    if !ts.refs.is_empty() {
         result += &format!(", refs={}", iterable_to_string(&ts.refs));
     }
     result += ")";
@@ -680,7 +680,7 @@ pub fn gen_typesets_table(type_sets: &UniqueTable<TypeSet>, fmt: &mut Formatter)
         for ts in type_sets.iter() {
             fmt.line("ir::instructions::ValueTypeSet {");
             fmt.indent(|fmt| {
-                assert!(ts.bitvecs.len() == 0, "Bitvector types are not emittable.");
+                assert!(ts.bitvecs.is_empty(), "Bitvector types are not emittable.");
                 fmt.comment(typeset_to_string(ts));
                 gen_bitset(&ts.lanes, "lanes", 16, fmt);
                 gen_bitset(&ts.ints, "ints", 8, fmt);
@@ -710,6 +710,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
     let mut operand_seqs = UniqueSeqTable::new();
 
     // Preload table with constraints for typical binops.
+    #[allow(clippy::useless_vec)]
     operand_seqs.add(&vec!["Same".to_string(); 3]);
 
     fmt.comment("Table of opcode constraints.");
@@ -926,7 +927,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         _ => format!("({})", vec!["Value"; inst.value_results.len()].join(", ")),
     };
 
-    let tmpl = if tmpl_types.len() > 0 {
+    let tmpl = if !tmpl_types.is_empty() {
         format!("<{}>", tmpl_types.join(", "))
     } else {
         "".into()
@@ -1005,7 +1006,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         // Call to the format constructor,
         let fcall = format!("self.{}({})", format.name, args.join(", "));
 
-        if inst.value_results.len() == 0 {
+        if inst.value_results.is_empty() {
             fmtln!(fmt, "{}.0", fcall);
             return;
         }
@@ -1037,7 +1038,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
 /// Generate a Builder trait with methods for all instructions.
 fn gen_builder(
     instructions: &AllInstructions,
-    formats: &Vec<&InstructionFormat>,
+    formats: &[&InstructionFormat],
     fmt: &mut Formatter,
 ) {
     fmt.doc_comment(

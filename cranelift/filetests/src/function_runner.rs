@@ -15,20 +15,20 @@ pub struct FunctionRunner {
 impl FunctionRunner {
     /// Build a function runner from a function and the ISA to run on (must be the host machine's ISA)
     pub fn new(function: Function, isa: Box<dyn TargetIsa>) -> Self {
-        FunctionRunner { function, isa }
+        Self { function, isa }
     }
 
     /// Build a function runner using the host machine's ISA and the passed flags
     pub fn with_host_isa(function: Function, flags: settings::Flags) -> Self {
         let builder = host_isa_builder().expect("Unable to build a TargetIsa for the current host");
         let isa = builder.finish(flags);
-        FunctionRunner::new(function, isa)
+        Self::new(function, isa)
     }
 
     /// Build a function runner using the host machine's ISA and the default flags for this ISA
     pub fn with_default_host_isa(function: Function) -> Self {
         let flags = settings::Flags::new(settings::builder());
-        FunctionRunner::with_host_isa(function, flags)
+        Self::with_host_isa(function, flags)
     }
 
     /// Compile and execute a single function, expecting a boolean to be returned; a 'true' value is
@@ -79,9 +79,10 @@ impl FunctionRunner {
         let callable_fn: fn() -> bool = unsafe { mem::transmute(code_page.as_ptr()) };
 
         // execute
-        match callable_fn() {
-            true => Ok(()),
-            false => Err(format!("Failed: {}", context.func.name.to_string())),
+        if callable_fn() {
+            Ok(())
+        } else {
+            Err(format!("Failed: {}", context.func.name.to_string()))
         }
     }
 }

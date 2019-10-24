@@ -255,6 +255,7 @@ fn rewrite_expr(
     Apply::new(apply_target, args)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn rewrite_def_list(
     position: PatternPosition,
     dummy_defs: Vec<DummyDef>,

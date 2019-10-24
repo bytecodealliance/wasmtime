@@ -1,4 +1,5 @@
 //! Fold operations on constants at compile time.
+#![allow(clippy::float_arithmetic)]
 
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
@@ -18,7 +19,7 @@ enum ConstImm {
 
 impl ConstImm {
     fn unwrap_i64(self) -> i64 {
-        if let ConstImm::I64(imm) = self {
+        if let Self::I64(imm) = self {
             imm
         } else {
             panic!("self did not contain an `i64`.")
@@ -27,8 +28,8 @@ impl ConstImm {
 
     fn evaluate_truthiness(self) -> bool {
         match self {
-            ConstImm::Bool(b) => b,
-            ConstImm::I64(imm) => imm != 0,
+            Self::Bool(b) => b,
+            Self::I64(imm) => imm != 0,
             _ => panic!(
                 "Only a `ConstImm::Bool` and `ConstImm::I64` can be evaluated for \"truthiness\""
             ),
@@ -53,11 +54,7 @@ pub fn fold_constants(func: &mut ir::Function) {
                 Unary { opcode, arg } => {
                     fold_unary(&mut pos.func.dfg, inst, opcode, arg);
                 }
-                Branch {
-                    opcode,
-                    args: _,
-                    destination: _,
-                } => {
+                Branch { opcode, .. } => {
                     fold_branch(&mut pos, inst, opcode);
                 }
                 _ => {}

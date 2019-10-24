@@ -141,7 +141,7 @@ mod details {
 
     impl Default for PassTimes {
         fn default() -> Self {
-            PassTimes {
+            Self {
                 pass: [Default::default(); NUM_PASSES],
             }
         }

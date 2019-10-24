@@ -91,7 +91,7 @@ impl Type {
     /// Get a type with the same number of lanes as `self`, but using `lane` as the lane type.
     fn replace_lanes(self, lane: Self) -> Self {
         debug_assert!(lane.is_lane() && !self.is_special());
-        Type((lane.0 & 0x0f) | (self.0 & 0xf0))
+        Self((lane.0 & 0x0f) | (self.0 & 0xf0))
     }
 
     /// Get a type with the same number of lanes as this type, but with the lanes replaced by
@@ -262,7 +262,7 @@ impl Type {
         let log2_lanes: u32 = n.trailing_zeros();
         let new_type = u32::from(self.0) + (log2_lanes << 4);
         if new_type < 0x100 {
-            Some(Type(new_type as u8))
+            Some(Self(new_type as u8))
         } else {
             None
         }
@@ -273,7 +273,7 @@ impl Type {
     /// There is no `double_vector()` method. Use `t.by(2)` instead.
     pub fn half_vector(self) -> Option<Self> {
         if self.is_vector() {
-            Some(Type(self.0 - 0x10))
+            Some(Self(self.0 - 0x10))
         } else {
             None
         }

@@ -6,7 +6,7 @@ use crate::shared::types as shared_types;
 use cranelift_codegen_shared::constants;
 
 // Rust name prefix used for the `rust_name` method.
-static _RUST_NAME_PREFIX: &'static str = "ir::types::";
+static _RUST_NAME_PREFIX: &str = "ir::types::";
 
 // ValueType variants (i8, i32, ...) are provided in `shared::types.rs`.
 
@@ -242,29 +242,29 @@ impl LaneType {
         })
     }
 
-    pub fn by(&self, lanes: u16) -> ValueType {
+    pub fn by(self, lanes: u16) -> ValueType {
         if lanes == 1 {
-            (*self).into()
+            self.into()
         } else {
-            ValueType::Vector(VectorType::new(*self, lanes.into()))
+            ValueType::Vector(VectorType::new(self, lanes.into()))
         }
     }
 
-    pub fn is_float(&self) -> bool {
+    pub fn is_float(self) -> bool {
         match self {
             LaneType::FloatType(_) => true,
             _ => false,
         }
     }
 
-    pub fn is_int(&self) -> bool {
+    pub fn is_int(self) -> bool {
         match self {
             LaneType::IntType(_) => true,
             _ => false,
         }
     }
 
-    pub fn is_bool(&self) -> bool {
+    pub fn is_bool(self) -> bool {
         match self {
             LaneType::BoolType(_) => true,
             _ => false,

@@ -74,7 +74,7 @@ where
 
         let lo_rng = (one << lo) - one;
 
-        BitSet(hi_rng - lo_rng)
+        Self(hi_rng - lo_rng)
     }
 }
 

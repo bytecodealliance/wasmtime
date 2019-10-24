@@ -33,11 +33,10 @@ impl RecipeGroup {
     }
 
     pub fn by_name(&self, name: &str) -> EncodingRecipeNumber {
-        let number = *self
+        *self
             .name_to_recipe
             .get(name)
-            .expect(&format!("unknown riscv recipe name {}", name));
-        number
+            .unwrap_or_else(|| panic!("unknown riscv recipe name {}", name))
     }
 
     pub fn collect(self) -> Recipes {
@@ -97,7 +96,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
         EncodingRecipeBuilder::new("Iz", &formats.unary_imm, 4)
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                &*&formats.unary_imm,
+                &formats.unary_imm,
                 "imm",
                 12,
                 0,
@@ -111,7 +110,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
             .operands_in(vec![gpr])
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                &*&formats.int_compare_imm,
+                &formats.int_compare_imm,
                 "imm",
                 12,
                 0,
@@ -183,7 +182,7 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
         EncodingRecipeBuilder::new("U", &formats.unary_imm, 4)
             .operands_out(vec![gpr])
             .inst_predicate(InstructionPredicate::new_is_signed_int(
-                &*&formats.unary_imm,
+                &formats.unary_imm,
                 "imm",
                 32,
                 12,

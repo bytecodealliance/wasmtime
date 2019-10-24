@@ -327,7 +327,7 @@ impl Backend for ObjectBackend {
             addend,
         } in &func.relocs
         {
-            let offset = func.offset + offset as u64;
+            let offset = func.offset + u64::from(offset);
             let symbol = self.get_symbol(namespace, name);
             self.object
                 .add_relocation(
@@ -364,7 +364,7 @@ impl Backend for ObjectBackend {
             addend,
         } in &data.relocs
         {
-            let offset = data.offset + offset as u64;
+            let offset = data.offset + u64::from(offset);
             let symbol = self.get_symbol(namespace, name);
             self.object
                 .add_relocation(

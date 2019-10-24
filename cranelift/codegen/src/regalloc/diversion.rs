@@ -200,7 +200,7 @@ impl RegDiversions {
         }
         debug_assert!(!entry_diversions.map.contains_key(target));
         let iter = self.current.iter();
-        let mut entry_divert = RegDiversions::new();
+        let mut entry_divert = Self::new();
         entry_divert.current.extend(iter);
         entry_diversions.map.insert(EntryRegDiversionsValue {
             key: target,
@@ -225,7 +225,7 @@ impl RegDiversions {
                 return false;
             }
         }
-        return true;
+        true
     }
 
     /// Return an object that can display the diversions.
@@ -237,7 +237,7 @@ impl RegDiversions {
 impl EntryRegDiversions {
     /// Create a new empty entry diversion, to associate diversions to each EBB entry.
     pub fn new() -> Self {
-        EntryRegDiversions {
+        Self {
             map: SparseMap::new(),
         }
     }

@@ -324,7 +324,7 @@ pub mod detail {
         /// offset field has a different meaning when the detail is a preset.
         pub fn is_preset(self) -> bool {
             match self {
-                Detail::Preset => true,
+                Self::Preset => true,
                 _ => false,
             }
         }

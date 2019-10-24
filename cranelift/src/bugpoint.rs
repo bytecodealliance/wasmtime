@@ -328,6 +328,7 @@ impl Mutator for RemoveUnusedEntities {
         4
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
         let name = match self.kind {
             0 => {

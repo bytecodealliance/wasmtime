@@ -37,6 +37,6 @@ pub type CodegenResult<T> = Result<T, CodegenError>;
 
 impl From<VerifierErrors> for CodegenError {
     fn from(e: VerifierErrors) -> Self {
-        CodegenError::Verifier(e)
+        Self::Verifier(e)
     }
 }

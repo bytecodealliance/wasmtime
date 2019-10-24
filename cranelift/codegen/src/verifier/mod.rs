@@ -167,7 +167,7 @@ impl VerifierErrors {
     /// Return a new `VerifierErrors` struct.
     #[inline]
     pub fn new() -> Self {
-        VerifierErrors(Vec::new())
+        Self(Vec::new())
     }
 
     /// Return whether no errors were reported.
@@ -196,7 +196,7 @@ impl VerifierErrors {
 
 impl From<Vec<VerifierError>> for VerifierErrors {
     fn from(v: Vec<VerifierError>) -> Self {
-        VerifierErrors(v)
+        Self(v)
     }
 }
 

@@ -551,7 +551,7 @@ impl<'a> Context<'a> {
         let is_reload = match &self.cur.func.dfg[inst] {
             InstructionData::Unary {
                 opcode: Opcode::Fill,
-                arg: _,
+                ..
             } => true,
             _ => false,
         };

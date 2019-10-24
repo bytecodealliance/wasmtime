@@ -597,15 +597,14 @@ fn simplify(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) {
             }
         }
 
-        InstructionData::Unary { opcode, arg } => match opcode {
-            Opcode::AdjustSpDown => {
+        InstructionData::Unary { opcode, arg } => {
+            if let Opcode::AdjustSpDown = opcode {
                 if let Some(imm) = resolve_imm64_value(&pos.func.dfg, arg) {
                     // Note this works for both positive and negative immediate values.
                     pos.func.dfg.replace(inst).adjust_sp_down_imm(imm);
                 }
             }
-            _ => {}
-        },
+        }
 
         InstructionData::BinaryImm { opcode, arg, imm } => {
             let ty = pos.func.dfg.ctrl_typevar(inst);
@@ -626,27 +625,25 @@ fn simplify(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) {
                             imm: prev_imm,
                         } = &pos.func.dfg[arg_inst]
                         {
-                            if opcode == *prev_opcode {
-                                if ty == pos.func.dfg.ctrl_typevar(arg_inst) {
-                                    let lhs: i64 = imm.into();
-                                    let rhs: i64 = (*prev_imm).into();
-                                    let new_imm = match opcode {
-                                        Opcode::BorImm => lhs | rhs,
-                                        Opcode::BandImm => lhs & rhs,
-                                        Opcode::BxorImm => lhs ^ rhs,
-                                        Opcode::IaddImm => lhs.wrapping_add(rhs),
-                                        Opcode::ImulImm => lhs.wrapping_mul(rhs),
-                                        _ => panic!("can't happen"),
-                                    };
-                                    let new_imm = immediates::Imm64::from(new_imm);
-                                    let new_arg = *prev_arg;
-                                    pos.func
-                                        .dfg
-                                        .replace(inst)
-                                        .BinaryImm(opcode, ty, new_imm, new_arg);
-                                    imm = new_imm;
-                                    arg = new_arg;
-                                }
+                            if opcode == *prev_opcode && ty == pos.func.dfg.ctrl_typevar(arg_inst) {
+                                let lhs: i64 = imm.into();
+                                let rhs: i64 = (*prev_imm).into();
+                                let new_imm = match opcode {
+                                    Opcode::BorImm => lhs | rhs,
+                                    Opcode::BandImm => lhs & rhs,
+                                    Opcode::BxorImm => lhs ^ rhs,
+                                    Opcode::IaddImm => lhs.wrapping_add(rhs),
+                                    Opcode::ImulImm => lhs.wrapping_mul(rhs),
+                                    _ => panic!("can't happen"),
+                                };
+                                let new_imm = immediates::Imm64::from(new_imm);
+                                let new_arg = *prev_arg;
+                                pos.func
+                                    .dfg
+                                    .replace(inst)
+                                    .BinaryImm(opcode, ty, new_imm, new_arg);
+                                imm = new_imm;
+                                arg = new_arg;
                             }
                         }
                     }
@@ -679,17 +676,14 @@ fn simplify(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) {
                 | (Opcode::SshrImm, 0) => {
                     // Alias the result value with the original argument.
                     replace_single_result_with_alias(&mut pos.func.dfg, inst, arg);
-                    return;
                 }
                 (Opcode::ImulImm, 0) | (Opcode::BandImm, 0) => {
                     // Replace by zero.
                     pos.func.dfg.replace(inst).iconst(ty, 0);
-                    return;
                 }
                 (Opcode::BorImm, -1) => {
                     // Replace by minus one.
                     pos.func.dfg.replace(inst).iconst(ty, -1);
-                    return;
                 }
                 _ => {}
             }
@@ -789,9 +783,9 @@ fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
 
             BranchOptInfo {
                 br_inst: inst,
-                cmp_arg: cmp_arg,
+                cmp_arg,
                 args: br_args.clone(),
-                new_opcode: new_opcode,
+                new_opcode,
             }
         } else {
             return;

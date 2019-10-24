@@ -24,7 +24,7 @@ pub enum ValueLoc {
 
 impl Default for ValueLoc {
     fn default() -> Self {
-        ValueLoc::Unassigned
+        Self::Unassigned
     }
 }
 
@@ -32,7 +32,7 @@ impl ValueLoc {
     /// Is this an assigned location? (That is, not `Unassigned`).
     pub fn is_assigned(self) -> bool {
         match self {
-            ValueLoc::Unassigned => false,
+            Self::Unassigned => false,
             _ => true,
         }
     }
@@ -40,7 +40,7 @@ impl ValueLoc {
     /// Get the register unit of this location, or panic.
     pub fn unwrap_reg(self) -> RegUnit {
         match self {
-            ValueLoc::Reg(ru) => ru,
+            Self::Reg(ru) => ru,
             _ => panic!("Expected register: {:?}", self),
         }
     }
@@ -48,7 +48,7 @@ impl ValueLoc {
     /// Get the stack slot of this location, or panic.
     pub fn unwrap_stack(self) -> StackSlot {
         match self {
-            ValueLoc::Stack(ss) => ss,
+            Self::Stack(ss) => ss,
             _ => panic!("Expected stack slot: {:?}", self),
         }
     }
@@ -109,7 +109,7 @@ pub enum ArgumentLoc {
 
 impl Default for ArgumentLoc {
     fn default() -> Self {
-        ArgumentLoc::Unassigned
+        Self::Unassigned
     }
 }
 
@@ -117,7 +117,7 @@ impl ArgumentLoc {
     /// Is this an assigned location? (That is, not `Unassigned`).
     pub fn is_assigned(self) -> bool {
         match self {
-            ArgumentLoc::Unassigned => false,
+            Self::Unassigned => false,
             _ => true,
         }
     }
@@ -125,7 +125,7 @@ impl ArgumentLoc {
     /// Is this a register location?
     pub fn is_reg(self) -> bool {
         match self {
-            ArgumentLoc::Reg(_) => true,
+            Self::Reg(_) => true,
             _ => false,
         }
     }
@@ -133,7 +133,7 @@ impl ArgumentLoc {
     /// Is this a stack location?
     pub fn is_stack(self) -> bool {
         match self {
-            ArgumentLoc::Stack(_) => true,
+            Self::Stack(_) => true,
             _ => false,
         }
     }

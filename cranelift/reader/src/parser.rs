@@ -3291,6 +3291,9 @@ mod tests {
         let c = Parser::new("true false true false")
             .parse_literals_to_constant_data(B32X4)
             .unwrap();
-        assert_eq!(c.to_vec(), [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
+        assert_eq!(
+            c.into_vec(),
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+        )
     }
 }

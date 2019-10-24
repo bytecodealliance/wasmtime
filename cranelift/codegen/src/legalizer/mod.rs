@@ -389,14 +389,17 @@ fn expand_br_table_conds(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
+    // Ignore the lint for this loop as the range needs to be 0 to table_size
+    #[allow(clippy::needless_range_loop)]
     for i in 0..table_size {
         let dest = pos.func.jump_tables[table].as_slice()[i];
         let t = pos.ins().icmp_imm(IntCC::Equal, arg, i as i64);
         pos.ins().brnz(t, dest, &[]);
         // Jump to the next case.
         if i < table_size - 1 {
-            pos.ins().jump(cond_failed_ebb[i], &[]);
-            pos.insert_ebb(cond_failed_ebb[i]);
+            let ebb = cond_failed_ebb[i];
+            pos.ins().jump(ebb, &[]);
+            pos.insert_ebb(ebb);
         }
     }
 
@@ -699,7 +702,7 @@ fn narrow_icmp_imm(
 
     let imm_low = pos
         .ins()
-        .iconst(ty_half, imm & (1u128 << ty_half.bits() - 1) as i64);
+        .iconst(ty_half, imm & (1u128 << (ty_half.bits() - 1)) as i64);
     let imm_high = pos
         .ins()
         .iconst(ty_half, imm.wrapping_shr(ty_half.bits().into()));

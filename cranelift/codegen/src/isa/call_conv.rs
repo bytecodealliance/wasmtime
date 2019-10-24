@@ -29,8 +29,8 @@ impl CallConv {
         match triple.default_calling_convention() {
             // Default to System V for unknown targets because most everything
             // uses System V.
-            Ok(CallingConvention::SystemV) | Err(()) => CallConv::SystemV,
-            Ok(CallingConvention::WindowsFastcall) => CallConv::WindowsFastcall,
+            Ok(CallingConvention::SystemV) | Err(()) => Self::SystemV,
+            Ok(CallingConvention::WindowsFastcall) => Self::WindowsFastcall,
             Ok(unimp) => unimplemented!("calling convention: {:?}", unimp),
         }
     }
@@ -39,28 +39,28 @@ impl CallConv {
     pub fn for_libcall(isa: &dyn TargetIsa) -> Self {
         match isa.flags().libcall_call_conv() {
             LibcallCallConv::IsaDefault => isa.default_call_conv(),
-            LibcallCallConv::Fast => CallConv::Fast,
-            LibcallCallConv::Cold => CallConv::Cold,
-            LibcallCallConv::SystemV => CallConv::SystemV,
-            LibcallCallConv::WindowsFastcall => CallConv::WindowsFastcall,
-            LibcallCallConv::BaldrdashSystemV => CallConv::BaldrdashSystemV,
-            LibcallCallConv::BaldrdashWindows => CallConv::BaldrdashWindows,
-            LibcallCallConv::Probestack => CallConv::Probestack,
+            LibcallCallConv::Fast => Self::Fast,
+            LibcallCallConv::Cold => Self::Cold,
+            LibcallCallConv::SystemV => Self::SystemV,
+            LibcallCallConv::WindowsFastcall => Self::WindowsFastcall,
+            LibcallCallConv::BaldrdashSystemV => Self::BaldrdashSystemV,
+            LibcallCallConv::BaldrdashWindows => Self::BaldrdashWindows,
+            LibcallCallConv::Probestack => Self::Probestack,
         }
     }
 
     /// Is the calling convention extending the Windows Fastcall ABI?
-    pub fn extends_windows_fastcall(&self) -> bool {
+    pub fn extends_windows_fastcall(self) -> bool {
         match self {
-            CallConv::WindowsFastcall | CallConv::BaldrdashWindows => true,
+            Self::WindowsFastcall | Self::BaldrdashWindows => true,
             _ => false,
         }
     }
 
     /// Is the calling convention extending the Baldrdash ABI?
-    pub fn extends_baldrdash(&self) -> bool {
+    pub fn extends_baldrdash(self) -> bool {
         match self {
-            CallConv::BaldrdashSystemV | CallConv::BaldrdashWindows => true,
+            Self::BaldrdashSystemV | Self::BaldrdashWindows => true,
             _ => false,
         }
     }
@@ -69,13 +69,13 @@ impl CallConv {
 impl fmt::Display for CallConv {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match *self {
-            CallConv::Fast => "fast",
-            CallConv::Cold => "cold",
-            CallConv::SystemV => "system_v",
-            CallConv::WindowsFastcall => "windows_fastcall",
-            CallConv::BaldrdashSystemV => "baldrdash_system_v",
-            CallConv::BaldrdashWindows => "baldrdash_windows",
-            CallConv::Probestack => "probestack",
+            Self::Fast => "fast",
+            Self::Cold => "cold",
+            Self::SystemV => "system_v",
+            Self::WindowsFastcall => "windows_fastcall",
+            Self::BaldrdashSystemV => "baldrdash_system_v",
+            Self::BaldrdashWindows => "baldrdash_windows",
+            Self::Probestack => "probestack",
         })
     }
 }
@@ -84,13 +84,13 @@ impl str::FromStr for CallConv {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "fast" => Ok(CallConv::Fast),
-            "cold" => Ok(CallConv::Cold),
-            "system_v" => Ok(CallConv::SystemV),
-            "windows_fastcall" => Ok(CallConv::WindowsFastcall),
-            "baldrdash_system_v" => Ok(CallConv::BaldrdashSystemV),
-            "baldrdash_windows" => Ok(CallConv::BaldrdashWindows),
-            "probestack" => Ok(CallConv::Probestack),
+            "fast" => Ok(Self::Fast),
+            "cold" => Ok(Self::Cold),
+            "system_v" => Ok(Self::SystemV),
+            "windows_fastcall" => Ok(Self::WindowsFastcall),
+            "baldrdash_system_v" => Ok(Self::BaldrdashSystemV),
+            "baldrdash_windows" => Ok(Self::BaldrdashWindows),
+            "probestack" => Ok(Self::Probestack),
             _ => Err(()),
         }
     }

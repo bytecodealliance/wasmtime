@@ -34,7 +34,7 @@ fn gen_recipe(recipe: &EncodingRecipe, fmt: &mut Formatter) {
     let is_regmove = ["RegMove", "RegSpill", "RegFill"].contains(&inst_format.name);
 
     // Unpack the instruction data.
-    fmtln!(fmt, "if let &InstructionData::{} {{", inst_format.name);
+    fmtln!(fmt, "if let InstructionData::{} {{", inst_format.name);
     fmt.indent(|fmt| {
         fmt.line("opcode,");
         for f in &inst_format.imm_fields {
@@ -49,7 +49,7 @@ fn gen_recipe(recipe: &EncodingRecipe, fmt: &mut Formatter) {
         }
         fmt.line("..");
 
-        fmt.outdented_line("} = inst_data {");
+        fmt.outdented_line("} = *inst_data {");
 
         // Pass recipe arguments in this order: inputs, imm_fields, outputs.
         let mut args = String::new();

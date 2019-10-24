@@ -139,7 +139,7 @@ impl Formatter {
         parse_multiline(contents.as_ref())
             .iter()
             .map(|l| {
-                if l.len() == 0 {
+                if l.is_empty() {
                     "///".into()
                 } else {
                     format!("/// {}", l)
@@ -157,7 +157,7 @@ impl Formatter {
                 let conditions = names
                     .iter()
                     .map(|name| {
-                        if fields.len() > 0 {
+                        if !fields.is_empty() {
                             format!("{} {{ {} }}", name, fields.join(", "))
                         } else {
                             name.clone()

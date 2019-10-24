@@ -158,8 +158,8 @@ fn emit_recipe_predicates(isa: &TargetIsa, fmt: &mut Formatter) {
             fmt,
             "fn {}({}: crate::settings::PredicateView, {}: &ir::InstructionData) -> bool {{",
             func_name,
-            if let Some(_) = isap { "isap" } else { "_" },
-            if let Some(_) = instp { "inst" } else { "_" }
+            if isap.is_some() { "isap" } else { "_" },
+            if instp.is_some() { "inst" } else { "_" }
         );
         fmt.indent(|fmt| {
             match (isap, instp) {
@@ -263,13 +263,13 @@ fn emit_recipe_names(isa: &TargetIsa, fmt: &mut Formatter) {
 }
 
 /// Returns a set of all the registers involved in fixed register constraints.
-fn get_fixed_registers(operands_in: &Vec<OperandConstraint>) -> HashSet<Register> {
+fn get_fixed_registers(operands_in: &[OperandConstraint]) -> HashSet<Register> {
     HashSet::from_iter(
         operands_in
             .iter()
             .map(|constraint| {
                 if let OperandConstraint::FixedReg(reg) = &constraint {
-                    Some(reg.clone())
+                    Some(*reg)
                 } else {
                     None
                 }
@@ -286,13 +286,13 @@ fn get_fixed_registers(operands_in: &Vec<OperandConstraint>) -> HashSet<Register
 fn emit_operand_constraints(
     registers: &IsaRegs,
     recipe: &EncodingRecipe,
-    constraints: &Vec<OperandConstraint>,
+    constraints: &[OperandConstraint],
     field_name: &'static str,
     tied_operands: &HashMap<usize, usize>,
     fixed_registers: &HashSet<Register>,
     fmt: &mut Formatter,
 ) {
-    if constraints.len() == 0 {
+    if constraints.is_empty() {
         fmtln!(fmt, "{}: &[],", field_name);
         return;
     }

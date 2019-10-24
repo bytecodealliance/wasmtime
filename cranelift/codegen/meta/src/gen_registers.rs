@@ -5,7 +5,7 @@ use crate::srcgen::Formatter;
 use cranelift_entity::EntityRef;
 
 fn gen_regbank(fmt: &mut Formatter, reg_bank: &RegBank) {
-    let names = if reg_bank.names.len() > 0 {
+    let names = if !reg_bank.names.is_empty() {
         format!(r#""{}""#, reg_bank.names.join(r#"", ""#))
     } else {
         "".to_string()

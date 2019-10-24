@@ -22,8 +22,7 @@ impl Isa {
         Isa::all()
             .iter()
             .cloned()
-            .filter(|isa| isa.to_string() == name)
-            .next()
+            .find(|isa| isa.to_string() == name)
     }
 
     /// Creates isa target from arch.
@@ -55,7 +54,7 @@ impl fmt::Display for Isa {
     }
 }
 
-pub(crate) fn define(isas: &Vec<Isa>, shared_defs: &mut SharedDefinitions) -> Vec<TargetIsa> {
+pub(crate) fn define(isas: &[Isa], shared_defs: &mut SharedDefinitions) -> Vec<TargetIsa> {
     isas.iter()
         .map(|isa| match isa {
             Isa::Riscv => riscv::define(shared_defs),

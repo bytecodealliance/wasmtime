@@ -11,6 +11,7 @@ use crate::shared::formats::Formats;
 use crate::shared::types;
 use crate::shared::{entities::EntityRefs, immediates::Immediates};
 
+#[allow(clippy::many_single_char_names)]
 pub(crate) fn define(
     all_instructions: &mut AllInstructions,
     formats: &Formats,

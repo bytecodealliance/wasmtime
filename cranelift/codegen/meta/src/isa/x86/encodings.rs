@@ -70,7 +70,7 @@ impl PerCpuModeEncodings {
     {
         let (recipe, bits) = template.build();
         let recipe_number = self.add_recipe(recipe);
-        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits);
+        let builder = EncodingBuilder::new(inst, recipe_number, bits);
         builder_closure(builder).build(&self.recipes, &mut self.inst_pred_reg)
     }
 
@@ -367,6 +367,7 @@ impl PerCpuModeEncodings {
 
 // Definitions.
 
+#[allow(clippy::cognitive_complexity)]
 pub(crate) fn define(
     shared_defs: &SharedDefinitions,
     settings: &SettingGroup,
@@ -1916,7 +1917,7 @@ pub(crate) fn define(
 
     // SIMD integer addition
     for (ty, opcodes) in &[(I8, &PADDB), (I16, &PADDW), (I32, &PADDD), (I64, &PADDQ)] {
-        let iadd = iadd.bind(vector(ty.clone(), sse_vector_size));
+        let iadd = iadd.bind(vector(*ty, sse_vector_size));
         e.enc_32_64(iadd, rec_fa.opcodes(*opcodes));
     }
 
@@ -1940,7 +1941,7 @@ pub(crate) fn define(
 
     // SIMD integer subtraction
     for (ty, opcodes) in &[(I8, &PSUBB), (I16, &PSUBW), (I32, &PSUBD), (I64, &PSUBQ)] {
-        let isub = isub.bind(vector(ty.clone(), sse_vector_size));
+        let isub = isub.bind(vector(*ty, sse_vector_size));
         e.enc_32_64(isub, rec_fa.opcodes(*opcodes));
     }
 
@@ -1968,7 +1969,7 @@ pub(crate) fn define(
         (I16, &PMULLW[..], None),
         (I32, &PMULLD[..], Some(use_sse41_simd)),
     ] {
-        let imul = imul.bind(vector(ty.clone(), sse_vector_size));
+        let imul = imul.bind(vector(*ty, sse_vector_size));
         e.enc_32_64_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
     }
 

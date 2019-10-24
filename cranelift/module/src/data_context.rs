@@ -27,9 +27,9 @@ impl Init {
     /// Return the size of the data to be initialized.
     pub fn size(&self) -> usize {
         match *self {
-            Init::Uninitialized => panic!("data size not initialized yet"),
-            Init::Zeros { size } => size,
-            Init::Bytes { ref contents } => contents.len(),
+            Self::Uninitialized => panic!("data size not initialized yet"),
+            Self::Zeros { size } => size,
+            Self::Bytes { ref contents } => contents.len(),
         }
     }
 }

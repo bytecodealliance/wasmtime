@@ -6,6 +6,7 @@ use crate::shared::types::Float::F64;
 use crate::shared::types::Int::{I16, I32, I64};
 use crate::shared::Definitions as SharedDefinitions;
 
+#[allow(clippy::many_single_char_names)]
 pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGroup) {
     let mut group = TransformGroupBuilder::new(
         "x86_expand",
@@ -253,7 +254,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         def!(r = popcnt.I64(x)),
         vec![
             def!(qv3 = ushr_imm(x, imm64_1)),
-            def!(qc77 = iconst(Literal::constant(&imm.imm64, 0x7777777777777777))),
+            def!(qc77 = iconst(Literal::constant(&imm.imm64, 0x7777_7777_7777_7777))),
             def!(qv4 = band(qv3, qc77)),
             def!(qv5 = isub(x, qv4)),
             def!(qv6 = ushr_imm(qv4, imm64_1)),
@@ -264,9 +265,9 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             def!(qv11 = isub(qv8, qv10)),
             def!(qv12 = ushr_imm(qv11, imm64_4)),
             def!(qv13 = iadd(qv11, qv12)),
-            def!(qc0F = iconst(Literal::constant(&imm.imm64, 0x0F0F0F0F0F0F0F0F))),
+            def!(qc0F = iconst(Literal::constant(&imm.imm64, 0x0F0F_0F0F_0F0F_0F0F))),
             def!(qv14 = band(qv13, qc0F)),
-            def!(qc01 = iconst(Literal::constant(&imm.imm64, 0x0101010101010101))),
+            def!(qc01 = iconst(Literal::constant(&imm.imm64, 0x0101_0101_0101_0101))),
             def!(qv15 = imul(qv14, qc01)),
             def!(r = ushr_imm(qv15, Literal::constant(&imm.imm64, 56))),
         ],
@@ -294,7 +295,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         def!(r = popcnt.I32(x)),
         vec![
             def!(lv3 = ushr_imm(x, imm64_1)),
-            def!(lc77 = iconst(Literal::constant(&imm.imm64, 0x77777777))),
+            def!(lc77 = iconst(Literal::constant(&imm.imm64, 0x7777_7777))),
             def!(lv4 = band(lv3, lc77)),
             def!(lv5 = isub(x, lv4)),
             def!(lv6 = ushr_imm(lv4, imm64_1)),
@@ -305,9 +306,9 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             def!(lv11 = isub(lv8, lv10)),
             def!(lv12 = ushr_imm(lv11, imm64_4)),
             def!(lv13 = iadd(lv11, lv12)),
-            def!(lc0F = iconst(Literal::constant(&imm.imm64, 0x0F0F0F0F))),
+            def!(lc0F = iconst(Literal::constant(&imm.imm64, 0x0F0F_0F0F))),
             def!(lv14 = band(lv13, lc0F)),
-            def!(lc01 = iconst(Literal::constant(&imm.imm64, 0x01010101))),
+            def!(lc01 = iconst(Literal::constant(&imm.imm64, 0x0101_0101))),
             def!(lv15 = imul(lv14, lc01)),
             def!(r = ushr_imm(lv15, Literal::constant(&imm.imm64, 24))),
         ],

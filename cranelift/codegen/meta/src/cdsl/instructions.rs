@@ -61,8 +61,8 @@ impl InstructionGroup {
     pub fn by_name(&self, name: &'static str) -> &Instruction {
         self.instructions
             .iter()
-            .find(|inst| &inst.name == name)
-            .expect(&format!("unexisting instruction with name {}", name))
+            .find(|inst| inst.name == name)
+            .unwrap_or_else(|| panic!("unexisting instruction with name {}", name))
     }
 }
 
@@ -167,7 +167,7 @@ impl Bindable for Instruction {
 
 impl fmt::Display for InstructionContent {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        if self.operands_out.len() > 0 {
+        if !self.operands_out.is_empty() {
             let operands_out = self
                 .operands_out
                 .iter()
@@ -180,7 +180,7 @@ impl fmt::Display for InstructionContent {
 
         fmt.write_str(&self.name)?;
 
-        if self.operands_in.len() > 0 {
+        if !self.operands_in.is_empty() {
             let operands_in = self
                 .operands_in
                 .iter()
@@ -244,53 +244,70 @@ impl InstructionBuilder {
         self.operands_in = Some(operands.iter().map(|x| (*x).clone()).collect());
         self
     }
+
     pub fn operands_out(mut self, operands: Vec<&Operand>) -> Self {
         assert!(self.operands_out.is_none());
         self.operands_out = Some(operands.iter().map(|x| (*x).clone()).collect());
         self
     }
+
     pub fn constraints(mut self, constraints: Vec<Constraint>) -> Self {
         assert!(self.constraints.is_none());
         self.constraints = Some(constraints);
         self
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_terminator(mut self, val: bool) -> Self {
         self.is_terminator = val;
         self
     }
+
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_branch(mut self, val: bool) -> Self {
         self.is_branch = val;
         self
     }
+
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_indirect_branch(mut self, val: bool) -> Self {
         self.is_indirect_branch = val;
         self
     }
+
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_call(mut self, val: bool) -> Self {
         self.is_call = val;
         self
     }
+
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_return(mut self, val: bool) -> Self {
         self.is_return = val;
         self
     }
+
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_ghost(mut self, val: bool) -> Self {
         self.is_ghost = val;
         self
     }
+
     pub fn can_load(mut self, val: bool) -> Self {
         self.can_load = val;
         self
     }
+
     pub fn can_store(mut self, val: bool) -> Self {
         self.can_store = val;
         self
     }
+
     pub fn can_trap(mut self, val: bool) -> Self {
         self.can_trap = val;
         self
     }
+
     pub fn other_side_effects(mut self, val: bool) -> Self {
         self.other_side_effects = val;
         self
@@ -534,7 +551,7 @@ impl Bindable for BoundInstruction {
 }
 
 /// Checks that the input operands actually match the given format.
-fn verify_format(inst_name: &str, operands_in: &Vec<Operand>, format: &InstructionFormat) {
+fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionFormat) {
     // A format is defined by:
     // - its number of input value operands,
     // - its number and names of input immediate operands,
@@ -586,10 +603,10 @@ fn verify_format(inst_name: &str, operands_in: &Vec<Operand>, format: &Instructi
 
 /// Check if this instruction is polymorphic, and verify its use of type variables.
 fn verify_polymorphic(
-    operands_in: &Vec<Operand>,
-    operands_out: &Vec<Operand>,
+    operands_in: &[Operand],
+    operands_out: &[Operand],
     format: &InstructionFormat,
-    value_opnums: &Vec<usize>,
+    value_opnums: &[usize],
 ) -> Option<PolymorphicInfo> {
     // The instruction is polymorphic if it has one free input or output operand.
     let is_polymorphic = operands_in
@@ -633,7 +650,7 @@ fn verify_polymorphic(
     // If we reached here, it means the type variable indicated as the typevar operand couldn't
     // control every other input and output type variable. We need to look at the result type
     // variables.
-    if operands_out.len() == 0 {
+    if operands_out.is_empty() {
         // No result means no other possible type variable, so it's a type inference failure.
         match maybe_error_message {
             Some(msg) => panic!(msg),
@@ -670,8 +687,8 @@ fn verify_polymorphic(
 /// Return a vector of other type variables used, or a string explaining what went wrong.
 fn is_ctrl_typevar_candidate(
     ctrl_typevar: &TypeVar,
-    operands_in: &Vec<Operand>,
-    operands_out: &Vec<Operand>,
+    operands_in: &[Operand],
+    operands_out: &[Operand],
 ) -> Result<Vec<TypeVar>, String> {
     let mut other_typevars = Vec::new();
 
@@ -995,8 +1012,7 @@ impl InstructionPredicate {
             .value_opnums
             .iter()
             .enumerate()
-            .filter(|(_, &op_num)| inst.operands_in[op_num].type_var().unwrap() == type_var)
-            .next()
+            .find(|(_, &op_num)| inst.operands_in[op_num].type_var().unwrap() == type_var)
             .unwrap()
             .0;
         InstructionPredicateNode::TypePredicate(TypePredicateNode::TypeVarCheck(

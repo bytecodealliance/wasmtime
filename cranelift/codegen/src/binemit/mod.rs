@@ -63,14 +63,14 @@ impl fmt::Display for Reloc {
     /// already unambiguous, e.g. clif syntax with isa specified. In other contexts, use Debug.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Reloc::Abs4 => write!(f, "Abs4"),
-            Reloc::Abs8 => write!(f, "Abs8"),
-            Reloc::X86PCRel4 => write!(f, "PCRel4"),
-            Reloc::X86PCRelRodata4 => write!(f, "PCRelRodata4"),
-            Reloc::X86CallPCRel4 => write!(f, "CallPCRel4"),
-            Reloc::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
-            Reloc::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
-            Reloc::Arm32Call | Reloc::Arm64Call | Reloc::RiscvCall => write!(f, "Call"),
+            Self::Abs4 => write!(f, "Abs4"),
+            Self::Abs8 => write!(f, "Abs8"),
+            Self::X86PCRel4 => write!(f, "PCRel4"),
+            Self::X86PCRelRodata4 => write!(f, "PCRelRodata4"),
+            Self::X86CallPCRel4 => write!(f, "CallPCRel4"),
+            Self::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
+            Self::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
+            Self::Arm32Call | Self::Arm64Call | Self::RiscvCall => write!(f, "Call"),
         }
     }
 }

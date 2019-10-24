@@ -13,6 +13,7 @@ use core::fmt;
 ///
 /// An inner node contains at least M/2 node references unless it is the right-most node at its
 /// level. A leaf node contains at least N/2 keys unless it is the right-most leaf.
+#[allow(dead_code)] // workaround for https://github.com/rust-lang/rust/issues/64362
 pub(super) enum NodeData<F: Forest> {
     Inner {
         /// The number of keys in this node.
@@ -55,7 +56,7 @@ impl<F: Forest> NodeData<F> {
     /// Is this a free/unused node?
     pub fn is_free(&self) -> bool {
         match *self {
-            NodeData::Free { .. } => true,
+            Self::Free { .. } => true,
             _ => false,
         }
     }
@@ -66,9 +67,9 @@ impl<F: Forest> NodeData<F> {
     /// a leaf node.
     pub fn entries(&self) -> usize {
         match *self {
-            NodeData::Inner { size, .. } => usize::from(size) + 1,
-            NodeData::Leaf { size, .. } => usize::from(size),
-            NodeData::Free { .. } => panic!("freed node"),
+            Self::Inner { size, .. } => usize::from(size) + 1,
+            Self::Leaf { size, .. } => usize::from(size),
+            Self::Free { .. } => panic!("freed node"),
         }
     }
 
@@ -78,7 +79,7 @@ impl<F: Forest> NodeData<F> {
         // Saves us from inventing a default/reserved value.
         let mut tree = [right; INNER_SIZE];
         tree[0] = left;
-        NodeData::Inner {
+        Self::Inner {
             size: 1,
             keys: [key; INNER_SIZE - 1],
             tree,
@@ -87,7 +88,7 @@ impl<F: Forest> NodeData<F> {
 
     /// Create a leaf node with a single key-value pair.
     pub fn leaf(key: F::Key, value: F::Value) -> Self {
-        NodeData::Leaf {
+        Self::Leaf {
             size: 1,
             keys: F::splat_key(key),
             vals: F::splat_value(value),
@@ -97,7 +98,7 @@ impl<F: Forest> NodeData<F> {
     /// Unwrap an inner node into two slices (keys, trees).
     pub fn unwrap_inner(&self) -> (&[F::Key], &[Node]) {
         match *self {
-            NodeData::Inner {
+            Self::Inner {
                 size,
                 ref keys,
                 ref tree,
@@ -114,7 +115,7 @@ impl<F: Forest> NodeData<F> {
     /// Unwrap a leaf node into two slices (keys, values) of the same length.
     pub fn unwrap_leaf(&self) -> (&[F::Key], &[F::Value]) {
         match *self {
-            NodeData::Leaf {
+            Self::Leaf {
                 size,
                 ref keys,
                 ref vals,
@@ -133,7 +134,7 @@ impl<F: Forest> NodeData<F> {
     /// Unwrap a mutable leaf node into two slices (keys, values) of the same length.
     pub fn unwrap_leaf_mut(&mut self) -> (&mut [F::Key], &mut [F::Value]) {
         match *self {
-            NodeData::Leaf {
+            Self::Leaf {
                 size,
                 ref mut keys,
                 ref mut vals,
@@ -153,7 +154,7 @@ impl<F: Forest> NodeData<F> {
     /// This is simply the first key.
     pub fn leaf_crit_key(&self) -> F::Key {
         match *self {
-            NodeData::Leaf { size, ref keys, .. } => {
+            Self::Leaf { size, ref keys, .. } => {
                 debug_assert!(size > 0, "Empty leaf node");
                 keys.borrow()[0]
             }
@@ -166,7 +167,7 @@ impl<F: Forest> NodeData<F> {
     /// If the node is full, this leaves the node unchanged and returns false.
     pub fn try_inner_insert(&mut self, index: usize, key: F::Key, node: Node) -> bool {
         match *self {
-            NodeData::Inner {
+            Self::Inner {
                 ref mut size,
                 ref mut keys,
                 ref mut tree,
@@ -192,7 +193,7 @@ impl<F: Forest> NodeData<F> {
     /// is full.
     pub fn try_leaf_insert(&mut self, index: usize, key: F::Key, value: F::Value) -> bool {
         match *self {
-            NodeData::Leaf {
+            Self::Leaf {
                 ref mut size,
                 ref mut keys,
                 ref mut vals,
@@ -223,7 +224,7 @@ impl<F: Forest> NodeData<F> {
     /// node will be split in half with a bias towards an even split after the insertion is retried.
     pub fn split(&mut self, insert_index: usize) -> SplitOff<F> {
         match *self {
-            NodeData::Inner {
+            Self::Inner {
                 ref mut size,
                 ref keys,
                 ref tree,
@@ -255,14 +256,14 @@ impl<F: Forest> NodeData<F> {
                     lhs_entries: l_ents,
                     rhs_entries: r_ents,
                     crit_key: keys[l_ents - 1],
-                    rhs_data: NodeData::Inner {
+                    rhs_data: Self::Inner {
                         size: (r_ents - 1) as u8,
                         keys: r_keys,
                         tree: r_tree,
                     },
                 }
             }
-            NodeData::Leaf {
+            Self::Leaf {
                 ref mut size,
                 ref keys,
                 ref vals,
@@ -288,7 +289,7 @@ impl<F: Forest> NodeData<F> {
                     lhs_entries: l_size,
                     rhs_entries: r_size,
                     crit_key: o_keys[l_size],
-                    rhs_data: NodeData::Leaf {
+                    rhs_data: Self::Leaf {
                         size: r_size as u8,
                         keys: r_keys,
                         vals: r_vals,
@@ -308,7 +309,7 @@ impl<F: Forest> NodeData<F> {
     /// Return an indication of the node's health (i.e. below half capacity).
     pub fn inner_remove(&mut self, index: usize) -> Removed {
         match *self {
-            NodeData::Inner {
+            Self::Inner {
                 ref mut size,
                 ref mut keys,
                 ref mut tree,
@@ -333,7 +334,7 @@ impl<F: Forest> NodeData<F> {
     /// Return an indication of the node's health (i.e. below half capacity).
     pub fn leaf_remove(&mut self, index: usize) -> Removed {
         match *self {
-            NodeData::Leaf {
+            Self::Leaf {
                 ref mut size,
                 ref mut keys,
                 ref mut vals,
@@ -363,12 +364,12 @@ impl<F: Forest> NodeData<F> {
     pub fn balance(&mut self, crit_key: F::Key, rhs: &mut Self) -> Option<F::Key> {
         match (self, rhs) {
             (
-                &mut NodeData::Inner {
+                &mut Self::Inner {
                     size: ref mut l_size,
                     keys: ref mut l_keys,
                     tree: ref mut l_tree,
                 },
-                &mut NodeData::Inner {
+                &mut Self::Inner {
                     size: ref mut r_size,
                     keys: ref mut r_keys,
                     tree: ref mut r_tree,
@@ -411,12 +412,12 @@ impl<F: Forest> NodeData<F> {
                 }
             }
             (
-                &mut NodeData::Leaf {
+                &mut Self::Leaf {
                     size: ref mut l_size,
                     keys: ref mut l_keys,
                     vals: ref mut l_vals,
                 },
-                &mut NodeData::Leaf {
+                &mut Self::Leaf {
                     size: ref mut r_size,
                     keys: ref mut r_keys,
                     vals: ref mut r_vals,
@@ -521,14 +522,14 @@ impl Removed {
     fn new(removed: usize, new_size: usize, capacity: usize) -> Self {
         if 2 * new_size >= capacity {
             if removed == new_size {
-                Removed::Rightmost
+                Self::Rightmost
             } else {
-                Removed::Healthy
+                Self::Healthy
             }
         } else if new_size > 0 {
-            Removed::Underflow
+            Self::Underflow
         } else {
-            Removed::Empty
+            Self::Empty
         }
     }
 }
@@ -558,14 +559,14 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            NodeData::Inner { size, keys, tree } => {
+            Self::Inner { size, keys, tree } => {
                 write!(f, "[ {}", tree[0])?;
                 for i in 0..usize::from(size) {
                     write!(f, " {} {}", keys[i], tree[i + 1])?;
                 }
                 write!(f, " ]")
             }
-            NodeData::Leaf { size, keys, vals } => {
+            Self::Leaf { size, keys, vals } => {
                 let keys = keys.borrow();
                 let vals = vals.borrow();
                 write!(f, "[")?;
@@ -575,8 +576,8 @@ where
                 }
                 write!(f, " ]")
             }
-            NodeData::Free { next: Some(n) } => write!(f, "[ free -> {} ]", n),
-            NodeData::Free { next: None } => write!(f, "[ free ]"),
+            Self::Free { next: Some(n) } => write!(f, "[ free -> {} ]", n),
+            Self::Free { next: None } => write!(f, "[ free ]"),
         }
     }
 }

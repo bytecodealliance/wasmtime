@@ -7,6 +7,7 @@ use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I128, I16, I32, I64, I8};
 use cranelift_codegen_shared::condcodes::{CondCode, IntCC};
 
+#[allow(clippy::many_single_char_names, clippy::cognitive_complexity)]
 pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGroups {
     let mut narrow = TransformGroupBuilder::new(
         "narrow",
@@ -766,24 +767,24 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     expand.legalize(
         def!(a = bitrev.I32(x)),
         vec![
-            def!(a1 = band_imm(x, Literal::constant(&imm.imm64, 0xaaaaaaaa))),
+            def!(a1 = band_imm(x, Literal::constant(&imm.imm64, 0xaaaa_aaaa))),
             def!(a2 = ushr_imm(a1, imm64_1)),
-            def!(a3 = band_imm(x, Literal::constant(&imm.imm64, 0x55555555))),
+            def!(a3 = band_imm(x, Literal::constant(&imm.imm64, 0x5555_5555))),
             def!(a4 = ishl_imm(a3, imm64_1)),
             def!(b = bor(a2, a4)),
-            def!(b1 = band_imm(b, Literal::constant(&imm.imm64, 0xcccccccc))),
+            def!(b1 = band_imm(b, Literal::constant(&imm.imm64, 0xcccc_cccc))),
             def!(b2 = ushr_imm(b1, imm64_2)),
-            def!(b3 = band_imm(b, Literal::constant(&imm.imm64, 0x33333333))),
+            def!(b3 = band_imm(b, Literal::constant(&imm.imm64, 0x3333_3333))),
             def!(b4 = ishl_imm(b3, imm64_2)),
             def!(c = bor(b2, b4)),
-            def!(c1 = band_imm(c, Literal::constant(&imm.imm64, 0xf0f0f0f0))),
+            def!(c1 = band_imm(c, Literal::constant(&imm.imm64, 0xf0f0_f0f0))),
             def!(c2 = ushr_imm(c1, imm64_4)),
-            def!(c3 = band_imm(c, Literal::constant(&imm.imm64, 0x0f0f0f0f))),
+            def!(c3 = band_imm(c, Literal::constant(&imm.imm64, 0x0f0f_0f0f))),
             def!(c4 = ishl_imm(c3, imm64_4)),
             def!(d = bor(c2, c4)),
-            def!(d1 = band_imm(d, Literal::constant(&imm.imm64, 0xff00ff00))),
+            def!(d1 = band_imm(d, Literal::constant(&imm.imm64, 0xff00_ff00))),
             def!(d2 = ushr_imm(d1, imm64_8)),
-            def!(d3 = band_imm(d, Literal::constant(&imm.imm64, 0x00ff00ff))),
+            def!(d3 = band_imm(d, Literal::constant(&imm.imm64, 0x00ff_00ff))),
             def!(d4 = ishl_imm(d3, imm64_8)),
             def!(e = bor(d2, d4)),
             def!(e1 = ushr_imm(e, imm64_16)),
@@ -793,20 +794,20 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     );
 
     #[allow(overflowing_literals)]
-    let imm64_0xaaaaaaaaaaaaaaaa = Literal::constant(&imm.imm64, 0xaaaaaaaaaaaaaaaa);
-    let imm64_0x5555555555555555 = Literal::constant(&imm.imm64, 0x5555555555555555);
+    let imm64_0xaaaaaaaaaaaaaaaa = Literal::constant(&imm.imm64, 0xaaaa_aaaa_aaaa_aaaa);
+    let imm64_0x5555555555555555 = Literal::constant(&imm.imm64, 0x5555_5555_5555_5555);
     #[allow(overflowing_literals)]
-    let imm64_0xcccccccccccccccc = Literal::constant(&imm.imm64, 0xcccccccccccccccc);
-    let imm64_0x3333333333333333 = Literal::constant(&imm.imm64, 0x3333333333333333);
+    let imm64_0xcccccccccccccccc = Literal::constant(&imm.imm64, 0xcccc_cccc_cccc_cccc);
+    let imm64_0x3333333333333333 = Literal::constant(&imm.imm64, 0x3333_3333_3333_3333);
     #[allow(overflowing_literals)]
-    let imm64_0xf0f0f0f0f0f0f0f0 = Literal::constant(&imm.imm64, 0xf0f0f0f0f0f0f0f0);
-    let imm64_0x0f0f0f0f0f0f0f0f = Literal::constant(&imm.imm64, 0x0f0f0f0f0f0f0f0f);
+    let imm64_0xf0f0f0f0f0f0f0f0 = Literal::constant(&imm.imm64, 0xf0f0_f0f0_f0f0_f0f0);
+    let imm64_0x0f0f0f0f0f0f0f0f = Literal::constant(&imm.imm64, 0x0f0f_0f0f_0f0f_0f0f);
     #[allow(overflowing_literals)]
-    let imm64_0xff00ff00ff00ff00 = Literal::constant(&imm.imm64, 0xff00ff00ff00ff00);
-    let imm64_0x00ff00ff00ff00ff = Literal::constant(&imm.imm64, 0x00ff00ff00ff00ff);
+    let imm64_0xff00ff00ff00ff00 = Literal::constant(&imm.imm64, 0xff00_ff00_ff00_ff00);
+    let imm64_0x00ff00ff00ff00ff = Literal::constant(&imm.imm64, 0x00ff_00ff_00ff_00ff);
     #[allow(overflowing_literals)]
-    let imm64_0xffff0000ffff0000 = Literal::constant(&imm.imm64, 0xffff0000ffff0000);
-    let imm64_0x0000ffff0000ffff = Literal::constant(&imm.imm64, 0x0000ffff0000ffff);
+    let imm64_0xffff0000ffff0000 = Literal::constant(&imm.imm64, 0xffff_0000_ffff_0000);
+    let imm64_0x0000ffff0000ffff = Literal::constant(&imm.imm64, 0x0000_ffff_0000_ffff);
     let imm64_32 = Literal::constant(&imm.imm64, 32);
 
     expand.legalize(
@@ -845,11 +846,11 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
 
     // Floating-point sign manipulations.
     for &(ty, const_inst, minus_zero) in &[
-        (F32, f32const, &Literal::bits(&imm.ieee32, 0x80000000)),
+        (F32, f32const, &Literal::bits(&imm.ieee32, 0x8000_0000)),
         (
             F64,
             f64const,
-            &Literal::bits(&imm.ieee64, 0x8000000000000000),
+            &Literal::bits(&imm.ieee64, 0x8000_0000_0000_0000),
         ),
     ] {
         expand.legalize(

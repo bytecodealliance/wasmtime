@@ -378,7 +378,7 @@ impl ValueDef {
     /// Unwrap the instruction where the value was defined, or panic.
     pub fn unwrap_inst(&self) -> Inst {
         match *self {
-            ValueDef::Result(inst, _) => inst,
+            Self::Result(inst, _) => inst,
             _ => panic!("Value is not an instruction result"),
         }
     }
@@ -386,7 +386,7 @@ impl ValueDef {
     /// Unwrap the EBB there the parameter is defined, or panic.
     pub fn unwrap_ebb(&self) -> Ebb {
         match *self {
-            ValueDef::Param(ebb, _) => ebb,
+            Self::Param(ebb, _) => ebb,
             _ => panic!("Value is not an EBB parameter"),
         }
     }
@@ -402,7 +402,7 @@ impl ValueDef {
     /// this value.
     pub fn num(self) -> usize {
         match self {
-            ValueDef::Result(_, n) | ValueDef::Param(_, n) => n,
+            Self::Result(_, n) | Self::Param(_, n) => n,
         }
     }
 }

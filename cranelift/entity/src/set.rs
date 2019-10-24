@@ -126,8 +126,7 @@ where
             // `(i + 1) * 8` = Last bit in byte.
             // `last - byte.leading_zeros()` = last set bit in byte.
             // `as usize` won't ever truncate as the potential range is `0..=8`.
-            .map(|(i, byte)| ((i + 1) * 8) - byte.leading_zeros() as usize)
-            .unwrap_or(0);
+            .map_or(0, |(i, byte)| ((i + 1) * 8) - byte.leading_zeros() as usize);
 
         Some(K::new(last_index))
     }

@@ -168,10 +168,12 @@ pub(crate) enum Literal {
 impl Literal {
     pub fn enumerator_for(kind: &OperandKind, value: &'static str) -> Self {
         let value = match &kind.fields {
-            OperandKindFields::ImmEnum(values) => values.get(value).expect(&format!(
-                "nonexistent value '{}' in enumeration '{}'",
-                value, kind.name
-            )),
+            OperandKindFields::ImmEnum(values) => values.get(value).unwrap_or_else(|| {
+                panic!(
+                    "nonexistent value '{}' in enumeration '{}'",
+                    value, kind.name
+                )
+            }),
             _ => panic!("enumerator is for enum values"),
         };
         Literal::Enumerator {

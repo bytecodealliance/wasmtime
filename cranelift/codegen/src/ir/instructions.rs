@@ -101,7 +101,7 @@ pub struct VariableArgs(Vec<Value>);
 impl VariableArgs {
     /// Create an empty argument list.
     pub fn new() -> Self {
-        VariableArgs(Vec::new())
+        Self(Vec::new())
     }
 
     /// Add an argument to the end.
@@ -168,35 +168,35 @@ impl InstructionData {
     /// here.
     pub fn analyze_branch<'a>(&'a self, pool: &'a ValueListPool) -> BranchInfo<'a> {
         match *self {
-            InstructionData::Jump {
+            Self::Jump {
                 destination,
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, args.as_slice(pool)),
-            InstructionData::BranchInt {
+            Self::BranchInt {
                 destination,
                 ref args,
                 ..
             }
-            | InstructionData::BranchFloat {
+            | Self::BranchFloat {
                 destination,
                 ref args,
                 ..
             }
-            | InstructionData::Branch {
+            | Self::Branch {
                 destination,
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[1..]),
-            InstructionData::BranchIcmp {
+            Self::BranchIcmp {
                 destination,
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
-            InstructionData::BranchTable {
+            Self::BranchTable {
                 table, destination, ..
             } => BranchInfo::Table(table, Some(destination)),
-            InstructionData::IndirectJump { table, .. } => BranchInfo::Table(table, None),
+            Self::IndirectJump { table, .. } => BranchInfo::Table(table, None),
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 BranchInfo::NotABranch
@@ -210,12 +210,12 @@ impl InstructionData {
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination(&self) -> Option<Ebb> {
         match *self {
-            InstructionData::Jump { destination, .. }
-            | InstructionData::Branch { destination, .. }
-            | InstructionData::BranchInt { destination, .. }
-            | InstructionData::BranchFloat { destination, .. }
-            | InstructionData::BranchIcmp { destination, .. } => Some(destination),
-            InstructionData::BranchTable { .. } | InstructionData::IndirectJump { .. } => None,
+            Self::Jump { destination, .. }
+            | Self::Branch { destination, .. }
+            | Self::BranchInt { destination, .. }
+            | Self::BranchFloat { destination, .. }
+            | Self::BranchIcmp { destination, .. } => Some(destination),
+            Self::BranchTable { .. } | Self::IndirectJump { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None
@@ -229,27 +229,27 @@ impl InstructionData {
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination_mut(&mut self) -> Option<&mut Ebb> {
         match *self {
-            InstructionData::Jump {
+            Self::Jump {
                 ref mut destination,
                 ..
             }
-            | InstructionData::Branch {
+            | Self::Branch {
                 ref mut destination,
                 ..
             }
-            | InstructionData::BranchInt {
+            | Self::BranchInt {
                 ref mut destination,
                 ..
             }
-            | InstructionData::BranchFloat {
+            | Self::BranchFloat {
                 ref mut destination,
                 ..
             }
-            | InstructionData::BranchIcmp {
+            | Self::BranchIcmp {
                 ref mut destination,
                 ..
             } => Some(destination),
-            InstructionData::BranchTable { .. } => None,
+            Self::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None
@@ -262,10 +262,10 @@ impl InstructionData {
     /// Any instruction that can call another function reveals its call signature here.
     pub fn analyze_call<'a>(&'a self, pool: &'a ValueListPool) -> CallInfo<'a> {
         match *self {
-            InstructionData::Call {
+            Self::Call {
                 func_ref, ref args, ..
             } => CallInfo::Direct(func_ref, args.as_slice(pool)),
-            InstructionData::CallIndirect {
+            Self::CallIndirect {
                 sig_ref, ref args, ..
             } => CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..]),
             _ => {

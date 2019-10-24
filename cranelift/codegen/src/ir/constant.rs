@@ -29,7 +29,7 @@ pub struct ConstantData(Vec<u8>);
 impl FromIterator<u8> for ConstantData {
     fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
         let v = iter.into_iter().collect();
-        ConstantData(v)
+        Self(v)
     }
 }
 
@@ -58,7 +58,7 @@ impl ConstantData {
     }
 
     /// Convert the data to a vector.
-    pub fn to_vec(self) -> Vec<u8> {
+    pub fn into_vec(self) -> Vec<u8> {
         self.0
     }
 
@@ -122,7 +122,7 @@ impl FromStr for ConstantData {
     /// ```
     /// use cranelift_codegen::ir::ConstantData;
     /// let c: ConstantData = "0x000102".parse().unwrap();
-    /// assert_eq!(c.to_vec(), [2, 1, 0]);
+    /// assert_eq!(c.into_vec(), [2, 1, 0]);
     /// ```
     fn from_str(s: &str) -> Result<Self, &'static str> {
         if s.len() <= 2 || &s[0..2] != "0x" {
@@ -137,7 +137,7 @@ impl FromStr for ConstantData {
             .cloned()
             .collect(); // remove 0x prefix and any intervening _ characters
 
-        if cleaned.len() == 0 {
+        if cleaned.is_empty() {
             Err("Hexadecimal string must have some digits")
         } else if cleaned.len() % 2 != 0 {
             Err("Hexadecimal string must have an even number of digits")
@@ -152,7 +152,7 @@ impl FromStr for ConstantData {
                     .or_else(|_| Err("Unable to parse as hexadecimal"))?;
                 buffer.insert(0, byte);
             }
-            Ok(ConstantData(buffer))
+            Ok(Self(buffer))
         }
     }
 }
@@ -221,15 +221,13 @@ impl ConstantPool {
     /// returned.
     pub fn insert(&mut self, constant_value: ConstantData) -> Constant {
         if self.values_to_handles.contains_key(&constant_value) {
-            self.values_to_handles.get(&constant_value).unwrap().clone()
+            *self.values_to_handles.get(&constant_value).unwrap()
         } else {
             let constant_handle = Constant::new(self.len());
             self.values_to_handles
-                .insert(constant_value.clone(), constant_handle.clone());
-            self.handles_to_values.insert(
-                constant_handle.clone(),
-                ConstantPoolEntry::new(constant_value),
-            );
+                .insert(constant_value.clone(), constant_handle);
+            self.handles_to_values
+                .insert(constant_handle, ConstantPoolEntry::new(constant_value));
             constant_handle
         }
     }
@@ -402,13 +400,13 @@ mod tests {
     fn add_to_constant_data() {
         let d = ConstantData::from([1, 2].as_ref());
         let e = d.append(i16::from(3u8));
-        assert_eq!(e.to_vec(), vec![1, 2, 3, 0])
+        assert_eq!(e.into_vec(), vec![1, 2, 3, 0])
     }
 
     #[test]
     fn extend_constant_data() {
         let d = ConstantData::from([1, 2].as_ref());
-        assert_eq!(d.expand_to(4).to_vec(), vec![1, 2, 0, 0])
+        assert_eq!(d.expand_to(4).into_vec(), vec![1, 2, 0, 0])
     }
 
     #[test]
@@ -460,7 +458,7 @@ mod tests {
 
     #[test]
     fn verify_stored_bytes_in_constant_data() {
-        assert_eq!("0x01".parse::<ConstantData>().unwrap().to_vec(), [1]);
+        assert_eq!("0x01".parse::<ConstantData>().unwrap().into_vec(), [1]);
         assert_eq!(ConstantData::from([1, 0].as_ref()).0, [1, 0]);
         assert_eq!(ConstantData::from(vec![1, 0, 0, 0]).0, [1, 0, 0, 0]);
     }
@@ -468,7 +466,10 @@ mod tests {
     #[test]
     fn check_constant_data_endianness_as_uimm128() {
         fn parse_to_uimm128(from: &str) -> Vec<u8> {
-            from.parse::<ConstantData>().unwrap().expand_to(16).to_vec()
+            from.parse::<ConstantData>()
+                .unwrap()
+                .expand_to(16)
+                .into_vec()
         }
 
         assert_eq!(

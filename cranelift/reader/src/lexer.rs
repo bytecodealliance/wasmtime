@@ -461,6 +461,7 @@ impl<'a> Lexer<'a> {
     /// Get the next token or a lexical error.
     ///
     /// Return None when the end of the source is encountered.
+    #[allow(clippy::cognitive_complexity)]
     pub fn next(&mut self) -> Option<Result<LocatedToken<'a>, LocatedError>> {
         loop {
             let loc = self.loc();

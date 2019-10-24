@@ -30,7 +30,7 @@ pub enum Affinity {
 
 impl Default for Affinity {
     fn default() -> Self {
-        Affinity::Unassigned
+        Self::Unassigned
     }
 }
 
@@ -41,25 +41,25 @@ impl Affinity {
     /// Use the `Default` implementation for that.
     pub fn new(constraint: &OperandConstraint) -> Self {
         if constraint.kind == ConstraintKind::Stack {
-            Affinity::Stack
+            Self::Stack
         } else {
-            Affinity::Reg(constraint.regclass.into())
+            Self::Reg(constraint.regclass.into())
         }
     }
 
     /// Create an affinity that matches an ABI argument for `isa`.
     pub fn abi(arg: &AbiParam, isa: &dyn TargetIsa) -> Self {
         match arg.location {
-            ArgumentLoc::Unassigned => Affinity::Unassigned,
-            ArgumentLoc::Reg(_) => Affinity::Reg(isa.regclass_for_abi_type(arg.value_type).into()),
-            ArgumentLoc::Stack(_) => Affinity::Stack,
+            ArgumentLoc::Unassigned => Self::Unassigned,
+            ArgumentLoc::Reg(_) => Self::Reg(isa.regclass_for_abi_type(arg.value_type).into()),
+            ArgumentLoc::Stack(_) => Self::Stack,
         }
     }
 
     /// Is this the `Unassigned` affinity?
     pub fn is_unassigned(self) -> bool {
         match self {
-            Affinity::Unassigned => true,
+            Self::Unassigned => true,
             _ => false,
         }
     }
@@ -67,7 +67,7 @@ impl Affinity {
     /// Is this the `Reg` affinity?
     pub fn is_reg(self) -> bool {
         match self {
-            Affinity::Reg(_) => true,
+            Self::Reg(_) => true,
             _ => false,
         }
     }
@@ -75,7 +75,7 @@ impl Affinity {
     /// Is this the `Stack` affinity?
     pub fn is_stack(self) -> bool {
         match self {
-            Affinity::Stack => true,
+            Self::Stack => true,
             _ => false,
         }
     }
@@ -86,8 +86,8 @@ impl Affinity {
     /// satisfies the constraint.
     pub fn merge(&mut self, constraint: &OperandConstraint, reginfo: &RegInfo) {
         match *self {
-            Affinity::Unassigned => *self = Self::new(constraint),
-            Affinity::Reg(rc) => {
+            Self::Unassigned => *self = Self::new(constraint),
+            Self::Reg(rc) => {
                 // If the preferred register class is a subclass of the constraint, there's no need
                 // to change anything.
                 if constraint.kind != ConstraintKind::Stack && !constraint.regclass.has_subclass(rc)
@@ -96,11 +96,11 @@ impl Affinity {
                     // we just keep our previous affinity.
                     if let Some(subclass) = constraint.regclass.intersect_index(reginfo.rc(rc)) {
                         // This constraint shrinks our preferred register class.
-                        *self = Affinity::Reg(subclass);
+                        *self = Self::Reg(subclass);
                     }
                 }
             }
-            Affinity::Stack => {}
+            Self::Stack => {}
         }
     }
 

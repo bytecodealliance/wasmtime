@@ -22,7 +22,7 @@ pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
 }
 
 /// Generates all the Rust source files used in Cranelift from the meta-language.
-pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error> {
+pub fn generate(isas: &[isa::Isa], out_dir: &str) -> Result<(), error::Error> {
     // Create all the definitions:
     // - common definitions.
     let mut shared_defs = shared::define();

@@ -230,7 +230,7 @@ fn try_fold_redundant_jump(
     let arguments_vec: alloc::vec::Vec<_> = first_args
         .iter()
         .chain(second_params.iter())
-        .map(|x| *x)
+        .copied()
         .collect();
     let value_list = ValueList::from_slice(&arguments_vec, &mut func.dfg.value_lists);
 
@@ -255,7 +255,7 @@ fn try_fold_redundant_jump(
         func.layout.remove_ebb(first_dest); // ...from the layout.
     }
 
-    return true;
+    true
 }
 
 /// Redirects `jump` instructions that point to other `jump` instructions to the final destination.

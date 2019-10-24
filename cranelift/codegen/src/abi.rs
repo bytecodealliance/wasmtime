@@ -26,13 +26,13 @@ pub enum ArgAction {
 
 impl From<ArgumentLoc> for ArgAction {
     fn from(x: ArgumentLoc) -> Self {
-        ArgAction::Assign(x)
+        Self::Assign(x)
     }
 }
 
 impl From<ValueConversion> for ArgAction {
     fn from(x: ValueConversion) -> Self {
-        ArgAction::Convert(x)
+        Self::Convert(x)
     }
 }
 
@@ -59,17 +59,17 @@ impl ValueConversion {
     /// Apply this conversion to a type, return the converted type.
     pub fn apply(self, ty: Type) -> Type {
         match self {
-            ValueConversion::IntSplit => ty.half_width().expect("Integer type too small to split"),
-            ValueConversion::VectorSplit => ty.half_vector().expect("Not a vector"),
-            ValueConversion::IntBits => Type::int(ty.bits()).expect("Bad integer size"),
-            ValueConversion::Sext(nty) | ValueConversion::Uext(nty) => nty,
+            Self::IntSplit => ty.half_width().expect("Integer type too small to split"),
+            Self::VectorSplit => ty.half_vector().expect("Not a vector"),
+            Self::IntBits => Type::int(ty.bits()).expect("Bad integer size"),
+            Self::Sext(nty) | Self::Uext(nty) => nty,
         }
     }
 
     /// Is this a split conversion that results in two arguments?
     pub fn is_split(self) -> bool {
         match self {
-            ValueConversion::IntSplit | ValueConversion::VectorSplit => true,
+            Self::IntSplit | Self::VectorSplit => true,
             _ => false,
         }
     }

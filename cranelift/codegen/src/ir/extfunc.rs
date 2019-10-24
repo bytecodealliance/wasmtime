@@ -294,14 +294,14 @@ impl FromStr for ArgumentPurpose {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, ()> {
         match s {
-            "normal" => Ok(ArgumentPurpose::Normal),
-            "sret" => Ok(ArgumentPurpose::StructReturn),
-            "link" => Ok(ArgumentPurpose::Link),
-            "fp" => Ok(ArgumentPurpose::FramePointer),
-            "csr" => Ok(ArgumentPurpose::CalleeSaved),
-            "vmctx" => Ok(ArgumentPurpose::VMContext),
-            "sigid" => Ok(ArgumentPurpose::SignatureId),
-            "stack_limit" => Ok(ArgumentPurpose::StackLimit),
+            "normal" => Ok(Self::Normal),
+            "sret" => Ok(Self::StructReturn),
+            "link" => Ok(Self::Link),
+            "fp" => Ok(Self::FramePointer),
+            "csr" => Ok(Self::CalleeSaved),
+            "vmctx" => Ok(Self::VMContext),
+            "sigid" => Ok(Self::SignatureId),
+            "stack_limit" => Ok(Self::StackLimit),
             _ => Err(()),
         }
     }

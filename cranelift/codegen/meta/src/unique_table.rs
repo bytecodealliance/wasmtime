@@ -48,8 +48,8 @@ impl<T: PartialEq + Clone> UniqueSeqTable<T> {
     pub fn new() -> Self {
         Self { table: Vec::new() }
     }
-    pub fn add(&mut self, values: &Vec<T>) -> usize {
-        if values.len() == 0 {
+    pub fn add(&mut self, values: &[T]) -> usize {
+        if values.is_empty() {
             return 0;
         }
         if let Some(offset) = find_subsequence(values, &self.table) {
@@ -87,19 +87,19 @@ impl<T: PartialEq + Clone> UniqueSeqTable<T> {
 /// Try to find the subsequence `sub` in the `whole` sequence. Returns None if
 /// it's not been found, or Some(index) if it has been. Naive implementation
 /// until proven we need something better.
-fn find_subsequence<T: PartialEq>(sub: &Vec<T>, whole: &Vec<T>) -> Option<usize> {
-    assert!(sub.len() > 0);
+fn find_subsequence<T: PartialEq>(sub: &[T], whole: &[T]) -> Option<usize> {
+    assert!(!sub.is_empty());
     // We want i + sub.len() <= whole.len(), i.e. i < whole.len() + 1 - sub.len().
     if whole.len() < sub.len() {
         return None;
     }
     let max = whole.len() - sub.len();
-    for i in 0..max + 1 {
+    for i in 0..=max {
         if whole[i..i + sub.len()] == sub[..] {
             return Some(i);
         }
     }
-    return None;
+    None
 }
 
 #[test]

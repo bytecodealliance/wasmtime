@@ -20,7 +20,7 @@ impl From<Inst> for ProgramPoint {
     fn from(inst: Inst) -> Self {
         let idx = inst.index();
         debug_assert!(idx < (u32::MAX / 2) as usize);
-        ProgramPoint((idx * 2) as u32)
+        Self((idx * 2) as u32)
     }
 }
 
@@ -28,7 +28,7 @@ impl From<Ebb> for ProgramPoint {
     fn from(ebb: Ebb) -> Self {
         let idx = ebb.index();
         debug_assert!(idx < (u32::MAX / 2) as usize);
-        ProgramPoint((idx * 2 + 1) as u32)
+        Self((idx * 2 + 1) as u32)
     }
 }
 
@@ -55,21 +55,21 @@ impl ExpandedProgramPoint {
     /// Get the instruction we know is inside.
     pub fn unwrap_inst(self) -> Inst {
         match self {
-            ExpandedProgramPoint::Inst(x) => x,
-            ExpandedProgramPoint::Ebb(x) => panic!("expected inst: {}", x),
+            Self::Inst(x) => x,
+            Self::Ebb(x) => panic!("expected inst: {}", x),
         }
     }
 }
 
 impl From<Inst> for ExpandedProgramPoint {
     fn from(inst: Inst) -> Self {
-        ExpandedProgramPoint::Inst(inst)
+        Self::Inst(inst)
     }
 }
 
 impl From<Ebb> for ExpandedProgramPoint {
     fn from(ebb: Ebb) -> Self {
-        ExpandedProgramPoint::Ebb(ebb)
+        Self::Ebb(ebb)
     }
 }
 
@@ -85,9 +85,9 @@ impl From<ValueDef> for ExpandedProgramPoint {
 impl From<ProgramPoint> for ExpandedProgramPoint {
     fn from(pp: ProgramPoint) -> Self {
         if pp.0 & 1 == 0 {
-            ExpandedProgramPoint::Inst(Inst::from_u32(pp.0 / 2))
+            Self::Inst(Inst::from_u32(pp.0 / 2))
         } else {
-            ExpandedProgramPoint::Ebb(Ebb::from_u32(pp.0 / 2))
+            Self::Ebb(Ebb::from_u32(pp.0 / 2))
         }
     }
 }
@@ -95,8 +95,8 @@ impl From<ProgramPoint> for ExpandedProgramPoint {
 impl fmt::Display for ExpandedProgramPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ExpandedProgramPoint::Inst(x) => write!(f, "{}", x),
-            ExpandedProgramPoint::Ebb(x) => write!(f, "{}", x),
+            Self::Inst(x) => write!(f, "{}", x),
+            Self::Ebb(x) => write!(f, "{}", x),
         }
     }
 }

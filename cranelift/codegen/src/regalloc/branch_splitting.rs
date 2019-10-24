@@ -96,7 +96,7 @@ impl<'a> Context<'a> {
             let dfg = &mut self.cur.func.dfg;
             let old_args: Vec<_> = {
                 let args = dfg[branch].take_value_list().expect("ebb parameters");
-                args.as_slice(&dfg.value_lists).iter().map(|x| *x).collect()
+                args.as_slice(&dfg.value_lists).iter().copied().collect()
             };
             let (branch_args, ebb_params) = old_args.split_at(num_fixed);
 
@@ -159,16 +159,13 @@ impl<'a> Context<'a> {
     /// Returns whether we should introduce a new branch.
     fn should_split_edge(&self, target: Ebb) -> bool {
         // We should split the edge if the target has any parameters.
-        if self.cur.func.dfg.ebb_params(target).len() > 0 {
+        if !self.cur.func.dfg.ebb_params(target).is_empty() {
             return true;
         };
 
         // Or, if the target has more than one block reaching it.
         debug_assert!(self.cfg.pred_iter(target).next() != None);
-        if let Some(_) = self.cfg.pred_iter(target).skip(1).next() {
-            return true;
-        };
 
-        false
+        self.cfg.pred_iter(target).nth(1).is_some()
     }
 }

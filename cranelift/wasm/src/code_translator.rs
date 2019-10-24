@@ -41,7 +41,10 @@ use cranelift_frontend::{FunctionBuilder, Variable};
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
-#[cfg_attr(feature = "cargo-clippy", allow(clippy::unneeded_field_pattern))]
+#[cfg_attr(
+    feature = "cargo-clippy",
+    allow(clippy::unneeded_field_pattern, clippy::cognitive_complexity)
+)]
 /// Translates wasm operators into Cranelift IR instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(

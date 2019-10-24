@@ -53,7 +53,7 @@ impl CpuMode {
             Some(typ) => self
                 .typed_legalize
                 .get(typ)
-                .map(|x| *x)
+                .copied()
                 .unwrap_or_else(|| self.get_default_legalize_code()),
             None => self
                 .monomorphic_legalize

@@ -156,33 +156,33 @@ impl TypeVar {
         let ts = self.get_typeset();
 
         // Safety checks to avoid over/underflows.
-        assert!(ts.specials.len() == 0, "can't derive from special types");
+        assert!(ts.specials.is_empty(), "can't derive from special types");
         match derived_func {
             DerivedFunc::HalfWidth => {
                 assert!(
-                    ts.ints.len() == 0 || *ts.ints.iter().min().unwrap() > 8,
+                    ts.ints.is_empty() || *ts.ints.iter().min().unwrap() > 8,
                     "can't halve all integer types"
                 );
                 assert!(
-                    ts.floats.len() == 0 || *ts.floats.iter().min().unwrap() > 32,
+                    ts.floats.is_empty() || *ts.floats.iter().min().unwrap() > 32,
                     "can't halve all float types"
                 );
                 assert!(
-                    ts.bools.len() == 0 || *ts.bools.iter().min().unwrap() > 8,
+                    ts.bools.is_empty() || *ts.bools.iter().min().unwrap() > 8,
                     "can't halve all boolean types"
                 );
             }
             DerivedFunc::DoubleWidth => {
                 assert!(
-                    ts.ints.len() == 0 || *ts.ints.iter().max().unwrap() < MAX_BITS,
+                    ts.ints.is_empty() || *ts.ints.iter().max().unwrap() < MAX_BITS,
                     "can't double all integer types"
                 );
                 assert!(
-                    ts.floats.len() == 0 || *ts.floats.iter().max().unwrap() < MAX_FLOAT_BITS,
+                    ts.floats.is_empty() || *ts.floats.iter().max().unwrap() < MAX_FLOAT_BITS,
                     "can't double all float types"
                 );
                 assert!(
-                    ts.bools.len() == 0 || *ts.bools.iter().max().unwrap() < MAX_BITS,
+                    ts.bools.is_empty() || *ts.bools.iter().max().unwrap() < MAX_BITS,
                     "can't double all boolean types"
                 );
             }
@@ -203,7 +203,7 @@ impl TypeVar {
             }
         }
 
-        return TypeVar {
+        TypeVar {
             content: Rc::new(RefCell::new(TypeVarContent {
                 name: format!("{}({})", derived_func.name(), self.name),
                 doc: "".into(),
@@ -213,29 +213,29 @@ impl TypeVar {
                     derived_func,
                 }),
             })),
-        };
+        }
     }
 
     pub fn lane_of(&self) -> TypeVar {
-        return self.derived(DerivedFunc::LaneOf);
+        self.derived(DerivedFunc::LaneOf)
     }
     pub fn as_bool(&self) -> TypeVar {
-        return self.derived(DerivedFunc::AsBool);
+        self.derived(DerivedFunc::AsBool)
     }
     pub fn half_width(&self) -> TypeVar {
-        return self.derived(DerivedFunc::HalfWidth);
+        self.derived(DerivedFunc::HalfWidth)
     }
     pub fn double_width(&self) -> TypeVar {
-        return self.derived(DerivedFunc::DoubleWidth);
+        self.derived(DerivedFunc::DoubleWidth)
     }
     pub fn half_vector(&self) -> TypeVar {
-        return self.derived(DerivedFunc::HalfVector);
+        self.derived(DerivedFunc::HalfVector)
     }
     pub fn double_vector(&self) -> TypeVar {
-        return self.derived(DerivedFunc::DoubleVector);
+        self.derived(DerivedFunc::DoubleVector)
     }
     pub fn to_bitvec(&self) -> TypeVar {
-        return self.derived(DerivedFunc::ToBitVec);
+        self.derived(DerivedFunc::ToBitVec)
     }
 
     /// Constrain the range of types this variable can assume to a subset of those in the typeset
@@ -347,7 +347,7 @@ pub enum DerivedFunc {
 }
 
 impl DerivedFunc {
-    pub fn name(&self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             DerivedFunc::LaneOf => "lane_of",
             DerivedFunc::AsBool => "as_bool",
@@ -360,7 +360,7 @@ impl DerivedFunc {
     }
 
     /// Returns the inverse function of this one, if it is a bijection.
-    pub fn inverse(&self) -> Option<DerivedFunc> {
+    pub fn inverse(self) -> Option<DerivedFunc> {
         match self {
             DerivedFunc::HalfWidth => Some(DerivedFunc::DoubleWidth),
             DerivedFunc::DoubleWidth => Some(DerivedFunc::HalfWidth),
@@ -476,7 +476,7 @@ impl TypeSet {
         copy.floats = NumSet::new();
         copy.refs = NumSet::new();
         copy.bitvecs = NumSet::new();
-        if (&self.lanes - &num_set![1]).len() > 0 {
+        if !(&self.lanes - &num_set![1]).is_empty() {
             copy.bools = &self.ints | &self.floats;
             copy.bools = &copy.bools | &self.bools;
         }
@@ -512,7 +512,7 @@ impl TypeSet {
                 .iter()
                 .filter(|&&x| x < MAX_BITS)
                 .map(|&x| x * 2)
-                .filter(legal_bool),
+                .filter(|x| legal_bool(*x)),
         );
         copy.bitvecs = NumSet::from_iter(
             self.bitvecs
@@ -600,7 +600,7 @@ impl TypeSet {
     fn get_singleton(&self) -> ValueType {
         let mut types = self.concrete_types();
         assert_eq!(types.len(), 1);
-        return types.remove(0);
+        types.remove(0)
     }
 
     /// Return the inverse image of self across the derived function func.
@@ -615,7 +615,7 @@ impl TypeSet {
                 let mut copy = self.clone();
                 copy.bitvecs = NumSet::new();
                 copy.lanes =
-                    NumSet::from_iter((0..MAX_LANES.trailing_zeros() + 1).map(|i| u16::pow(2, i)));
+                    NumSet::from_iter((0..=MAX_LANES.trailing_zeros()).map(|i| u16::pow(2, i)));
                 copy
             }
             DerivedFunc::AsBool => {
@@ -724,11 +724,11 @@ impl TypeSet {
 }
 
 fn set_wider_or_equal(s1: &NumSet, s2: &NumSet) -> bool {
-    s1.len() > 0 && s2.len() > 0 && s1.iter().min() >= s2.iter().max()
+    !s1.is_empty() && !s2.is_empty() && s1.iter().min() >= s2.iter().max()
 }
 
 fn set_narrower(s1: &NumSet, s2: &NumSet) -> bool {
-    s1.len() > 0 && s2.len() > 0 && s1.iter().min() < s2.iter().max()
+    !s1.is_empty() && !s2.is_empty() && s1.iter().min() < s2.iter().max()
 }
 
 impl fmt::Debug for TypeSet {
@@ -854,7 +854,7 @@ impl TypeSetBuilder {
 
         let bools = range_to_set(self.bools.to_range(1..MAX_BITS, None))
             .into_iter()
-            .filter(legal_bool)
+            .filter(|x| legal_bool(*x))
             .collect();
 
         TypeSet::new(
@@ -921,9 +921,9 @@ impl Into<Interval> for Range {
     }
 }
 
-fn legal_bool(bits: &RangeBound) -> bool {
+fn legal_bool(bits: RangeBound) -> bool {
     // Only allow legal bit widths for bool types.
-    *bits == 1 || (*bits >= 8 && *bits <= MAX_BITS && bits.is_power_of_two())
+    bits == 1 || (bits >= 8 && bits <= MAX_BITS && bits.is_power_of_two())
 }
 
 /// Generates a set with all the powers of two included in the range.
@@ -939,7 +939,7 @@ fn range_to_set(range: Option<Range>) -> NumSet {
     assert!(high.is_power_of_two());
     assert!(low <= high);
 
-    for i in low.trailing_zeros()..high.trailing_zeros() + 1 {
+    for i in low.trailing_zeros()..=high.trailing_zeros() {
         assert!(1 << i <= RangeBound::max_value());
         set.insert(1 << i);
     }

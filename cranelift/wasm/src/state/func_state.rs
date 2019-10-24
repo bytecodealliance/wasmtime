@@ -91,55 +91,54 @@ pub enum ControlStackFrame {
 impl ControlStackFrame {
     pub fn num_return_values(&self) -> usize {
         match *self {
-            ControlStackFrame::If {
+            Self::If {
                 num_return_values, ..
             }
-            | ControlStackFrame::Block {
+            | Self::Block {
                 num_return_values, ..
             }
-            | ControlStackFrame::Loop {
+            | Self::Loop {
                 num_return_values, ..
             } => num_return_values,
         }
     }
     pub fn num_param_values(&self) -> usize {
         match *self {
-            ControlStackFrame::If {
+            Self::If {
                 num_param_values, ..
             }
-            | ControlStackFrame::Block {
+            | Self::Block {
                 num_param_values, ..
             }
-            | ControlStackFrame::Loop {
+            | Self::Loop {
                 num_param_values, ..
             } => num_param_values,
         }
     }
     pub fn following_code(&self) -> Ebb {
         match *self {
-            ControlStackFrame::If { destination, .. }
-            | ControlStackFrame::Block { destination, .. }
-            | ControlStackFrame::Loop { destination, .. } => destination,
+            Self::If { destination, .. }
+            | Self::Block { destination, .. }
+            | Self::Loop { destination, .. } => destination,
         }
     }
     pub fn br_destination(&self) -> Ebb {
         match *self {
-            ControlStackFrame::If { destination, .. }
-            | ControlStackFrame::Block { destination, .. } => destination,
-            ControlStackFrame::Loop { header, .. } => header,
+            Self::If { destination, .. } | Self::Block { destination, .. } => destination,
+            Self::Loop { header, .. } => header,
         }
     }
     pub fn original_stack_size(&self) -> usize {
         match *self {
-            ControlStackFrame::If {
+            Self::If {
                 original_stack_size,
                 ..
             }
-            | ControlStackFrame::Block {
+            | Self::Block {
                 original_stack_size,
                 ..
             }
-            | ControlStackFrame::Loop {
+            | Self::Loop {
                 original_stack_size,
                 ..
             } => original_stack_size,
@@ -147,36 +146,36 @@ impl ControlStackFrame {
     }
     pub fn is_loop(&self) -> bool {
         match *self {
-            ControlStackFrame::If { .. } | ControlStackFrame::Block { .. } => false,
-            ControlStackFrame::Loop { .. } => true,
+            Self::If { .. } | Self::Block { .. } => false,
+            Self::Loop { .. } => true,
         }
     }
 
     pub fn exit_is_branched_to(&self) -> bool {
         match *self {
-            ControlStackFrame::If {
+            Self::If {
                 exit_is_branched_to,
                 ..
             }
-            | ControlStackFrame::Block {
+            | Self::Block {
                 exit_is_branched_to,
                 ..
             } => exit_is_branched_to,
-            ControlStackFrame::Loop { .. } => false,
+            Self::Loop { .. } => false,
         }
     }
 
     pub fn set_branched_to_exit(&mut self) {
         match *self {
-            ControlStackFrame::If {
+            Self::If {
                 ref mut exit_is_branched_to,
                 ..
             }
-            | ControlStackFrame::Block {
+            | Self::Block {
                 ref mut exit_is_branched_to,
                 ..
             } => *exit_is_branched_to = true,
-            ControlStackFrame::Loop { .. } => {}
+            Self::Loop { .. } => {}
         }
     }
 }

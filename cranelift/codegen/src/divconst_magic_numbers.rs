@@ -79,7 +79,7 @@ pub fn magic_u32(d: u32) -> MU32 {
 
     MU32 {
         mul_by: q2 + 1,
-        do_add: do_add,
+        do_add,
         shift_by: p - 32,
     }
 }
@@ -125,7 +125,7 @@ pub fn magic_u64(d: u64) -> MU64 {
 
     MU64 {
         mul_by: q2 + 1,
-        do_add: do_add,
+        do_add,
         shift_by: p - 64,
     }
 }
