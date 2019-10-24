@@ -202,13 +202,7 @@ impl Mutator for ReplaceInstWithConst {
 
             // Copy result SSA names into our own vector; otherwise we couldn't mutably borrow pos
             // in the loop below.
-            let results = pos
-                .func
-                .dfg
-                .inst_results(prev_inst)
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>();
+            let results = pos.func.dfg.inst_results(prev_inst).to_vec();
 
             // Detach results from the previous instruction, since we're going to reuse them.
             pos.func.dfg.clear_results(prev_inst);
@@ -390,15 +384,12 @@ impl Mutator for RemoveUnusedEntities {
                 let mut signatures_usage_map = HashMap::new();
                 for ebb in func.layout.ebbs() {
                     for inst in func.layout.ebb_insts(ebb) {
-                        match func.dfg[inst] {
-                            // Add new cases when there are new instruction formats taking a `SigRef`.
-                            InstructionData::CallIndirect { sig_ref, .. } => {
-                                signatures_usage_map
-                                    .entry(sig_ref)
-                                    .or_insert_with(Vec::new)
-                                    .push(SigRefUser::Instruction(inst));
-                            }
-                            _ => {}
+                        // Add new cases when there are new instruction formats taking a `SigRef`.
+                        if let InstructionData::CallIndirect { sig_ref, .. } = func.dfg[inst] {
+                            signatures_usage_map
+                                .entry(sig_ref)
+                                .or_insert_with(Vec::new)
+                                .push(SigRefUser::Instruction(inst));
                         }
                     }
                 }
@@ -500,15 +491,14 @@ impl Mutator for RemoveUnusedEntities {
                 let mut global_value_usage_map = HashMap::new();
                 for ebb in func.layout.ebbs() {
                     for inst in func.layout.ebb_insts(ebb) {
-                        match func.dfg[inst] {
-                            // Add new cases when there are new instruction formats taking a `GlobalValue`.
-                            InstructionData::UnaryGlobalValue { global_value, .. } => {
-                                global_value_usage_map
-                                    .entry(global_value)
-                                    .or_insert_with(Vec::new)
-                                    .push(inst);
-                            }
-                            _ => {}
+                        // Add new cases when there are new instruction formats taking a `GlobalValue`.
+                        if let InstructionData::UnaryGlobalValue { global_value, .. } =
+                            func.dfg[inst]
+                        {
+                            global_value_usage_map
+                                .entry(global_value)
+                                .or_insert_with(Vec::new)
+                                .push(inst);
                         }
                     }
                 }
@@ -519,8 +509,9 @@ impl Mutator for RemoveUnusedEntities {
                         // These can create cyclic references, which cause complications. Just skip
                         // the global value removal for now.
                         // FIXME Handle them in a better way.
-                        GlobalValueData::Load { base: _, .. }
-                        | GlobalValueData::IAddImm { base: _, .. } => return None,
+                        GlobalValueData::Load { .. } | GlobalValueData::IAddImm { .. } => {
+                            return None
+                        }
                     }
                 }
 
@@ -647,11 +638,11 @@ impl Mutator for MergeBlocks {
         // we'll start back to this EBB.
         self.prev_ebb = Some(pred.ebb);
 
-        return Some((
+        Some((
             func,
             format!("merged {} and {}", pred.ebb, ebb),
             ProgressStatus::ExpandedOrShrinked,
-        ));
+        ))
     }
 
     fn did_crash(&mut self) {
@@ -701,9 +692,9 @@ fn reduce(
 
     match context.check_for_crash(&func) {
         CheckResult::Succeed => {
-            return Err(format!(
-                "Given function compiled successfully or gave a verifier error."
-            ));
+            return Err(
+                "Given function compiled successfully or gave a verifier error.".to_string(),
+            );
         }
         CheckResult::Crash(_) => {}
     }
@@ -926,8 +917,8 @@ mod tests {
 
     #[test]
     fn test_reduce() {
-        const TEST: &'static str = include_str!("../tests/bugpoint_test.clif");
-        const EXPECTED: &'static str = include_str!("../tests/bugpoint_test_expected.clif");
+        const TEST: &str = include_str!("../tests/bugpoint_test.clif");
+        const EXPECTED: &str = include_str!("../tests/bugpoint_test_expected.clif");
 
         let test_file = parse_test(TEST, ParseOptions::default()).unwrap();
 

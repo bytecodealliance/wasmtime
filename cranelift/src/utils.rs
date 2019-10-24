@@ -49,8 +49,8 @@ impl OwnedFlagsOrIsa {
     /// Produce a FlagsOrIsa reference.
     pub fn as_fisa(&self) -> FlagsOrIsa {
         match *self {
-            OwnedFlagsOrIsa::Flags(ref flags) => FlagsOrIsa::from(flags),
-            OwnedFlagsOrIsa::Isa(ref isa) => FlagsOrIsa::from(&**isa),
+            Self::Flags(ref flags) => FlagsOrIsa::from(flags),
+            Self::Isa(ref isa) => FlagsOrIsa::from(&**isa),
         }
     }
 }

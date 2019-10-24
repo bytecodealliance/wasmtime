@@ -9,7 +9,7 @@ use cranelift_codegen::cfg_printer::CFGPrinter;
 use cranelift_reader::parse_functions;
 
 pub fn run(files: &[String]) -> CommandResult {
-    for (i, f) in files.into_iter().enumerate() {
+    for (i, f) in files.iter().enumerate() {
         if i != 0 {
             println!();
         }

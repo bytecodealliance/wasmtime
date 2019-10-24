@@ -581,7 +581,7 @@ impl Apply {
         pred
     }
 
-    pub fn rust_builder(&self, defined_vars: &Vec<VarIndex>, var_pool: &VarPool) -> String {
+    pub fn rust_builder(&self, defined_vars: &[VarIndex], var_pool: &VarPool) -> String {
         let mut args = self
             .args
             .iter()

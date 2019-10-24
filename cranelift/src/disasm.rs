@@ -25,12 +25,7 @@ impl binemit::RelocSink for PrintRelocs {
         offset: binemit::CodeOffset,
     ) {
         if self.flag_print {
-            write!(
-                &mut self.text,
-                "reloc_ebb: {} {} at {}\n",
-                r, offset, where_
-            )
-            .unwrap();
+            writeln!(&mut self.text, "reloc_ebb: {} {} at {}", r, offset, where_).unwrap();
         }
     }
 
@@ -42,9 +37,9 @@ impl binemit::RelocSink for PrintRelocs {
         addend: binemit::Addend,
     ) {
         if self.flag_print {
-            write!(
+            writeln!(
                 &mut self.text,
-                "reloc_external: {} {} {} at {}\n",
+                "reloc_external: {} {} {} at {}",
                 r, name, addend, where_
             )
             .unwrap();
@@ -53,7 +48,7 @@ impl binemit::RelocSink for PrintRelocs {
 
     fn reloc_jt(&mut self, where_: binemit::CodeOffset, r: binemit::Reloc, jt: ir::JumpTable) {
         if self.flag_print {
-            write!(&mut self.text, "reloc_jt: {} {} at {}\n", r, jt, where_).unwrap();
+            writeln!(&mut self.text, "reloc_jt: {} {} at {}", r, jt, where_).unwrap();
         }
     }
 
@@ -64,9 +59,9 @@ impl binemit::RelocSink for PrintRelocs {
         constant: ir::ConstantOffset,
     ) {
         if self.flag_print {
-            write!(
+            writeln!(
                 &mut self.text,
-                "reloc_constant: {} {} at {}\n",
+                "reloc_constant: {} {} at {}",
                 reloc, constant, code_offset
             )
             .unwrap();
@@ -91,7 +86,7 @@ impl PrintTraps {
 impl binemit::TrapSink for PrintTraps {
     fn trap(&mut self, offset: binemit::CodeOffset, _srcloc: ir::SourceLoc, code: ir::TrapCode) {
         if self.flag_print {
-            write!(&mut self.text, "trap: {} at {}\n", code, offset).unwrap();
+            writeln!(&mut self.text, "trap: {} at {}", code, offset).unwrap();
         }
     }
 }
@@ -113,7 +108,7 @@ impl PrintStackmaps {
 impl binemit::StackmapSink for PrintStackmaps {
     fn add_stackmap(&mut self, offset: binemit::CodeOffset, _: binemit::Stackmap) {
         if self.flag_print {
-            write!(&mut self.text, "add_stackmap at {}\n", offset).unwrap();
+            writeln!(&mut self.text, "add_stackmap at {}", offset).unwrap();
         }
     }
 }

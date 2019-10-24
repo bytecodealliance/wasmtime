@@ -52,7 +52,7 @@ fn iterate_files(files: Vec<String>) -> impl Iterator<Item = PathBuf> {
         .filter(|f| match f {
             Ok(d) => {
                 // filter out hidden files (starting with .)
-                !d.file_name().to_str().map_or(false, |s| s.starts_with("."))
+                !d.file_name().to_str().map_or(false, |s| s.starts_with('.'))
                     // filter out directories
                     && !d.file_type().is_dir()
             }
@@ -96,7 +96,7 @@ fn create_target_isa(isa_spec: &IsaSpec) -> Result<Box<dyn TargetIsa>, String> {
         let builder = host_isa_builder()?;
         Ok(builder.finish(flags.clone()))
     } else {
-        Err(String::from("A target ISA was specified in the file but should not have been--only the host ISA can be used for running CLIF files"))?
+        Err(String::from("A target ISA was specified in the file but should not have been--only the host ISA can be used for running CLIF files"))
     }
 }
 
