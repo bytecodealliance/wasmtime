@@ -509,34 +509,42 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         );
     }
 
-    // SIMD icmp ugt
+    // SIMD icmp greater-/less-than
+    let sgt = Literal::enumerator_for(&imm.intcc, "sgt");
     let ugt = Literal::enumerator_for(&imm.intcc, "ugt");
+    let sge = Literal::enumerator_for(&imm.intcc, "sge");
+    let uge = Literal::enumerator_for(&imm.intcc, "uge");
+    let slt = Literal::enumerator_for(&imm.intcc, "slt");
+    let ult = Literal::enumerator_for(&imm.intcc, "ult");
+    let sle = Literal::enumerator_for(&imm.intcc, "sle");
+    let ule = Literal::enumerator_for(&imm.intcc, "ule");
     for ty in &[I8, I16, I32] {
+        // greater-than
         let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
         narrow.legalize(
             def!(c = icmp_(ugt, a, b)),
             vec![def!(x = x86_pmaxu(a, b)), def!(c = icmp(eq, a, x))],
         );
-    }
-
-    // SIMD icmp sge
-    let sge = Literal::enumerator_for(&imm.intcc, "sge");
-    for ty in &[I8, I16, I32] {
         let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
         narrow.legalize(
             def!(c = icmp_(sge, a, b)),
             vec![def!(x = x86_pmins(a, b)), def!(c = icmp(eq, x, b))],
         );
-    }
-
-    // SIMD icmp uge
-    let uge = Literal::enumerator_for(&imm.intcc, "uge");
-    for ty in &[I8, I16, I32] {
         let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
         narrow.legalize(
             def!(c = icmp_(uge, a, b)),
             vec![def!(x = x86_pminu(a, b)), def!(c = icmp(eq, x, b))],
         );
+
+        // less-than
+        let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(def!(c = icmp_(slt, a, b)), vec![def!(c = icmp(sgt, b, a))]);
+        let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(def!(c = icmp_(ult, a, b)), vec![def!(c = icmp(ugt, b, a))]);
+        let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(def!(c = icmp_(sle, a, b)), vec![def!(c = icmp(sge, b, a))]);
+        let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(def!(c = icmp_(ule, a, b)), vec![def!(c = icmp(uge, b, a))]);
     }
 
     narrow.custom_legalize(shuffle, "convert_shuffle");
