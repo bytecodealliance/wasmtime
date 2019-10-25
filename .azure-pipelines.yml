@@ -69,7 +69,7 @@ jobs:
       displayName: Fetch cargo dependencies
 
     # Build and test all features except for lightbeam
-    - bash: cargo test --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py
+    - bash: cargo test --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py -- --nocapture
       displayName: Cargo test
       env:
         RUST_BACKTRACE: 1
@@ -78,7 +78,7 @@ jobs:
     - bash: cargo build --package lightbeam
       displayName: Cargo build lightbeam
       condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
-    - bash: cargo test --package lightbeam
+    - bash: cargo test --package lightbeam -- --nocapture
       displayName: Cargo test lightbeam
       # Lightbeam tests fail right now, but we don't want to block on that.
       continueOnError: true

@@ -33,15 +33,24 @@ fn main() {
         {
             test_file(
                 &mut out,
-                "spec_testsuite/proposals/simd/simd_const.wast",
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_address.wast"]),
+                strategy,
+            )
+            .expect("generating tests");
+            test_file(
+                &mut out,
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_align.wast"]),
+                strategy,
+            )
+            .expect("generating tests");
+            test_file(
+                &mut out,
+                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_const.wast"]),
                 strategy,
             )
             .expect("generating tests");
 
-            let multi_value_suite = Path::new("spec_testsuite")
-                .join("proposals")
-                .join("multi-value");
-            let multi_value_suite = multi_value_suite.display().to_string();
+            let multi_value_suite = &to_os_path(&["spec_testsuite", "proposals", "multi-value"]);
             test_directory(&mut out, &multi_value_suite, strategy).expect("generating tests");
         } else {
             println!("cargo:warning=The spec testsuite is disabled. To enable, run `git submodule update --remote`.");
@@ -51,8 +60,14 @@ fn main() {
     }
 }
 
-fn test_directory(out: &mut File, testsuite: &str, strategy: &str) -> io::Result<()> {
-    let mut dir_entries: Vec<_> = read_dir(testsuite)
+/// Helper for creating OS-independent paths.
+fn to_os_path(components: &[&str]) -> String {
+    let path: PathBuf = components.iter().collect();
+    path.display().to_string()
+}
+
+fn test_directory(out: &mut File, path: &str, strategy: &str) -> io::Result<()> {
+    let mut dir_entries: Vec<_> = read_dir(path)
         .expect("reading testsuite directory")
         .map(|r| r.expect("reading testsuite directory entry"))
         .filter(|dir_entry| {
@@ -76,6 +91,7 @@ fn test_directory(out: &mut File, testsuite: &str, strategy: &str) -> io::Result
 
     dir_entries.sort_by_key(|dir| dir.path());
 
+    let testsuite = &extract_name(path);
     start_test_module(out, testsuite)?;
     for dir_entry in dir_entries {
         write_testsuite_tests(out, &dir_entry.path(), testsuite, strategy)?;
@@ -84,25 +100,26 @@ fn test_directory(out: &mut File, testsuite: &str, strategy: &str) -> io::Result
 }
 
 fn test_file(out: &mut File, testfile: &str, strategy: &str) -> io::Result<()> {
-    let testsuite = "single_file_spec_test";
     let path = Path::new(testfile);
-    start_test_module(out, testsuite)?;
-    write_testsuite_tests(out, path, testsuite, strategy)?;
+    let testsuite = format!("single_test_{}", extract_name(path));
+    start_test_module(out, &testsuite)?;
+    write_testsuite_tests(out, path, &testsuite, strategy)?;
     finish_test_module(out)
 }
 
+/// Extract a valid Rust identifier from the stem of a path.
+fn extract_name(path: impl AsRef<Path>) -> String {
+    path.as_ref()
+        .file_stem()
+        .expect("filename should have a stem")
+        .to_str()
+        .expect("filename should be representable as a string")
+        .replace("-", "_")
+        .replace("/", "_")
+}
+
 fn start_test_module(out: &mut File, testsuite: &str) -> io::Result<()> {
-    writeln!(
-        out,
-        "    mod {} {{",
-        Path::new(testsuite)
-            .file_stem()
-            .expect("testsuite filename should have a stem")
-            .to_str()
-            .expect("testsuite filename should be representable as a string")
-            .replace("-", "_")
-            .replace("/", "_")
-    )?;
+    writeln!(out, "    mod {} {{", testsuite)?;
     writeln!(
         out,
         "        use super::super::{{native_isa, Path, WastContext, Compiler, Features, CompilationStrategy}};"
@@ -119,17 +136,13 @@ fn write_testsuite_tests(
     testsuite: &str,
     strategy: &str,
 ) -> io::Result<()> {
-    let stemstr = path
-        .file_stem()
-        .expect("file_stem")
-        .to_str()
-        .expect("to_str");
+    let testname = extract_name(path);
 
     writeln!(out, "        #[test]")?;
-    if ignore(testsuite, stemstr, strategy) {
+    if ignore(testsuite, &testname, strategy) {
         writeln!(out, "        #[ignore]")?;
     }
-    writeln!(out, "        fn r#{}() {{", &stemstr.replace("-", "_"))?;
+    writeln!(out, "        fn r#{}() {{", &testname)?;
     writeln!(out, "            let isa = native_isa();")?;
     writeln!(
         out,
@@ -138,8 +151,9 @@ fn write_testsuite_tests(
     )?;
     writeln!(
         out,
-        "            let features = Features {{ simd: true, multi_value: {}, ..Default::default() }};",
-        testsuite.contains("multi-value")
+        "            let features = Features {{ simd: {}, multi_value: {}, ..Default::default() }};",
+        testsuite.contains("simd"),
+        testsuite.contains("multi_value")
     )?;
     writeln!(
         out,
@@ -166,16 +180,16 @@ fn write_testsuite_tests(
 }
 
 /// Ignore tests that aren't supported yet.
-fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
-    let is_multi_value = testsuite.ends_with("multi-value");
+fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
+    let is_multi_value = testsuite.ends_with("multi_value");
     match strategy {
         #[cfg(feature = "lightbeam")]
-        "Lightbeam" => match (testsuite, name) {
-            ("single_file_spec_test", "simd_const") => return true,
+        "Lightbeam" => match (testsuite, testname) {
+            (_, _) if testname.starts_with("simd") => return true,
             (_, _) if is_multi_value => return true,
             _ => (),
         },
-        "Cranelift" => match (testsuite, name) {
+        "Cranelift" => match (testsuite, testname) {
             // We don't currently support more return values than available
             // registers, and this contains a function with many, many more
             // return values than that.
@@ -186,12 +200,15 @@ fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
     }
 
     if cfg!(windows) {
-        return match (testsuite, name) {
+        return match (testsuite, testname) {
             // Currently, our multi-value support only works with however many
             // extra return registers we have available, and windows' fastcall
             // ABI only has a single return register, so we need to wait on full
             // multi-value support in Cranelift.
             (_, _) if is_multi_value => true,
+
+            // Until Windows unwind information is added we must disable SIMD spec tests that trap.
+            (_, _) if testname.starts_with("simd") => return true,
 
             ("spec_testsuite", "address") => true,
             ("spec_testsuite", "align") => true,
@@ -214,7 +231,7 @@ fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
             ("spec_testsuite", "memory_trap") => true,
             ("spec_testsuite", "resizing") => true,
             ("spec_testsuite", "select") => true,
-            ("spec_testsuite", "skip-stack-guard-page") => true,
+            ("spec_testsuite", "skip_stack_guard_page") => true,
             ("spec_testsuite", "start") => true,
             ("spec_testsuite", "traps") => true,
             ("spec_testsuite", "unreachable") => true,
@@ -242,7 +259,7 @@ fn ignore(testsuite: &str, name: &str, strategy: &str) -> bool {
         .to_bits()
             != 0x26800001
         {
-            return match (testsuite, name) {
+            return match (testsuite, testname) {
                 ("spec_testsuite", "const") => true,
                 ("single_file_spec_test", "simd_const") => true,
                 (_, _) => false,
