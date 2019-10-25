@@ -9,8 +9,8 @@ on:
       - master
 
 jobs:
-  build:
-    name: Build
+  build_stable:
+    name: Build stable
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -21,8 +21,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v1
-      with:
-        submodules: recursive
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -44,6 +42,29 @@ jobs:
       with:
         command: build
         args: --release
+        
+  build_nightly:
+    name: Build beta & nightly
+    runs-on: macOS-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [beta, nightly]
+        
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust }}
+        override: true
+    - name: Build debug
+      continue-on-error: true
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
 
   test:
     name: Test
