@@ -24,9 +24,7 @@ pub(crate) unsafe fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasm32::__wasi_fd_t) -
         }
     }
 
-    let mut fe = wasi_ctx.fds.remove(&fd).ok_or(Error::EBADF)?;
-    fe.fd_object.needs_close = true;
-
+    wasi_ctx.fds.remove(&fd).ok_or(Error::EBADF)?;
     Ok(())
 }
 
@@ -158,7 +156,7 @@ pub(crate) unsafe fn fd_read(
         .map(|vec| host::iovec_to_host_mut(vec))
         .collect();
 
-    let maybe_host_nread = match &mut *fe.fd_object.descriptor {
+    let maybe_host_nread = match &mut fe.fd_object.descriptor {
         Descriptor::OsFile(file) => file.read_vectored(&mut iovs),
         Descriptor::Stdin => io::stdin().lock().read_vectored(&mut iovs),
         _ => return Err(Error::EBADF),
@@ -374,7 +372,7 @@ pub(crate) unsafe fn fd_write(
     let iovs: Vec<io::IoSlice> = iovs.iter().map(|vec| host::iovec_to_host(vec)).collect();
 
     // perform unbuffered writes
-    let host_nwritten = match &mut *fe.fd_object.descriptor {
+    let host_nwritten = match &mut fe.fd_object.descriptor {
         Descriptor::OsFile(file) => file.write_vectored(&iovs)?,
         Descriptor::Stdin => return Err(Error::EBADF),
         Descriptor::Stdout => {
