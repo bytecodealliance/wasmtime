@@ -1186,27 +1186,48 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     .icmp(IntCC::SignedGreaterThan, bitcast_a, bitcast_b),
             )
         }
+        Operator::I8x16GtU | Operator::I16x8GtU | Operator::I32x4GtU => {
+            let (a, b) = state.pop2();
+            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
+            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
+            state.push1(
+                builder
+                    .ins()
+                    .icmp(IntCC::UnsignedGreaterThan, bitcast_a, bitcast_b),
+            )
+        }
+        Operator::I8x16GeS | Operator::I16x8GeS | Operator::I32x4GeS => {
+            let (a, b) = state.pop2();
+            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
+            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
+            state.push1(
+                builder
+                    .ins()
+                    .icmp(IntCC::SignedGreaterThanOrEqual, bitcast_a, bitcast_b),
+            )
+        }
+        Operator::I8x16GeU | Operator::I16x8GeU | Operator::I32x4GeU => {
+            let (a, b) = state.pop2();
+            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
+            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
+            state.push1(
+                builder
+                    .ins()
+                    .icmp(IntCC::UnsignedGreaterThanOrEqual, bitcast_a, bitcast_b),
+            )
+        }
         Operator::I8x16LtS
         | Operator::I8x16LtU
-        | Operator::I8x16GtU
         | Operator::I8x16LeS
         | Operator::I8x16LeU
-        | Operator::I8x16GeS
-        | Operator::I8x16GeU
         | Operator::I16x8LtS
         | Operator::I16x8LtU
-        | Operator::I16x8GtU
         | Operator::I16x8LeS
         | Operator::I16x8LeU
-        | Operator::I16x8GeS
-        | Operator::I16x8GeU
         | Operator::I32x4LtS
         | Operator::I32x4LtU
-        | Operator::I32x4GtU
         | Operator::I32x4LeS
         | Operator::I32x4LeU
-        | Operator::I32x4GeS
-        | Operator::I32x4GeU
         | Operator::F32x4Eq
         | Operator::F32x4Ne
         | Operator::F32x4Lt
