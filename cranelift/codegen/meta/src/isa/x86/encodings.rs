@@ -685,6 +685,7 @@ pub(crate) fn define(
     let use_sse41 = settings.predicate_by_name("use_sse41");
     let use_ssse3_simd = settings.predicate_by_name("use_ssse3_simd");
     let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
+    let use_sse42_simd = settings.predicate_by_name("use_sse42_simd");
 
     // Definitions.
     let mut e = PerCpuModeEncodings::new();
@@ -2025,21 +2026,25 @@ pub(crate) fn define(
         e.enc_32_64(x86_psra, rec_fa.opcodes(*opcodes));
     }
 
-    // SIMD icmp using PCMPEQ*
-    for ty in ValueType::all_lane_types().filter(|t| t.is_int() && allowed_simd_type(t)) {
-        let (opcodes, isa_predicate): (&[_], _) = match ty.lane_bits() {
-            8 => (&PCMPEQB, None),
-            16 => (&PCMPEQW, None),
-            32 => (&PCMPEQD, None),
-            64 => (&PCMPEQQ, Some(use_sse41_simd)),
-            _ => panic!("invalid size for SIMD icmp"),
-        };
-
-        let instruction = icmp
-            .bind(Immediate::IntCC(IntCC::Equal))
-            .bind(vector(ty, sse_vector_size));
-        let template = rec_icscc_fpr.nonrex().opcodes(opcodes);
-        e.enc_32_64_maybe_isap(instruction, template, isa_predicate);
+    // SIMD integer comparisons
+    {
+        use IntCC::*;
+        for (ty, cc, opcodes, isa_predicate) in &[
+            (I8, Equal, &PCMPEQB[..], None),
+            (I16, Equal, &PCMPEQW[..], None),
+            (I32, Equal, &PCMPEQD[..], None),
+            (I64, Equal, &PCMPEQQ[..], Some(use_sse41_simd)),
+            (I8, SignedGreaterThan, &PCMPGTB[..], None),
+            (I16, SignedGreaterThan, &PCMPGTW[..], None),
+            (I32, SignedGreaterThan, &PCMPGTD[..], None),
+            (I64, SignedGreaterThan, &PCMPGTQ, Some(use_sse42_simd)),
+        ] {
+            let instruction = icmp
+                .bind(Immediate::IntCC(*cc))
+                .bind(vector(*ty, sse_vector_size));
+            let template = rec_icscc_fpr.nonrex().opcodes(opcodes);
+            e.enc_32_64_maybe_isap(instruction, template, *isa_predicate);
+        }
     }
 
     // Reference type instructions

@@ -43,3 +43,26 @@ ebb0:
     return v5
 }
 ; run
+
+function %icmp_sgt_i8x16() -> b1 {
+ebb0:
+    v0 = vconst.i8x16 [0 1 2 0 0 0 0 0 0 0 0 0 0 0 0 0]
+    v1 = vconst.i8x16 [1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
+    v2 = icmp sgt v0, v1
+    v3 = raw_bitcast.i8x16 v2
+    v4 = vconst.i8x16 [0 0 0xff 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
+    v7 = icmp eq v3, v4
+    v8 = vall_true v7
+    return v8
+}
+; run
+
+function %icmp_sgt_i64x2() -> b1 {
+ebb0:
+    v0 = vconst.i64x2 [0 -42]
+    v1 = vconst.i64x2 [-1 -43]
+    v2 = icmp sgt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run

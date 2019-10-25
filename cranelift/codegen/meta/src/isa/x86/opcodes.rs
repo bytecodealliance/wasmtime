@@ -281,6 +281,18 @@ pub static PCMPEQQ: [u8; 4] = [0x66, 0x0f, 0x38, 0x29];
 /// Compare packed data for equal (SSE2).
 pub static PCMPEQW: [u8; 3] = [0x66, 0x0f, 0x75];
 
+/// Compare packed signed byte integers for greater than (SSE2).
+pub static PCMPGTB: [u8; 3] = [0x66, 0x0f, 0x64];
+
+/// Compare packed signed doubleword integers for greater than (SSE2).
+pub static PCMPGTD: [u8; 3] = [0x66, 0x0f, 0x66];
+
+/// Compare packed signed quadword integers for greater than (SSE4.2).
+pub static PCMPGTQ: [u8; 4] = [0x66, 0x0f, 0x38, 0x37];
+
+/// Compare packed signed word integers for greater than (SSE2).
+pub static PCMPGTW: [u8; 3] = [0x66, 0x0f, 0x65];
+
 /// Extract doubleword or quadword, depending on REX.W (SSE4.1).
 pub static PEXTR: [u8; 4] = [0x66, 0x0f, 0x3a, 0x16];
 
