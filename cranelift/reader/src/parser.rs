@@ -665,9 +665,15 @@ impl<'a> Parser<'a> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
-            // Parse it as a u8 to check for overflow and other issues.
-            text.parse()
-                .map_err(|_| self.error("expected u8 decimal immediate"))
+            if text.starts_with("0x") {
+                // Parse it as a u8 in hexadecimal form.
+                u8::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse u8 as a hexadecimal immediate"))
+            } else {
+                // Parse it as a u8 to check for overflow and other issues.
+                text.parse()
+                    .map_err(|_| self.error("expected u8 decimal immediate"))
+            }
         } else {
             err!(self.loc, err_msg)
         }
@@ -3253,6 +3259,18 @@ mod tests {
             parser.parse_function(None).unwrap().0.signature.call_conv,
             CallConv::Cold
         );
+    }
+
+    #[test]
+    fn u8_as_hex() {
+        fn parse_as_uimm8(text: &str) -> ParseResult<u8> {
+            Parser::new(text).match_uimm8("unable to parse u8")
+        }
+
+        assert_eq!(parse_as_uimm8("0").unwrap(), 0);
+        assert_eq!(parse_as_uimm8("0xff").unwrap(), 255);
+        assert!(parse_as_uimm8("-1").is_err());
+        assert!(parse_as_uimm8("0xffa").is_err());
     }
 
     #[test]
