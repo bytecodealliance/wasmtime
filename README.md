@@ -1,10 +1,10 @@
 # wasi-common
-[![build-status]][azure] [![rustc-1.36]][rustc]
+[![build-status]][azure] [![rustc-1.37]][rustc]
 
 [build-status]: https://dev.azure.com/CraneStation/wasi-common/_apis/build/status/CraneStation.wasi-common?branchName=master
 [azure]: https://dev.azure.com/CraneStation/wasi-common/_build/latest?definitionId=3&branchName=master
-[rustc-1.36]: https://img.shields.io/badge/rustc-1.36+-lightgray.svg
-[rustc]: https://blog.rust-lang.org/2019/07/04/Rust-1.36.0.html
+[rustc-1.37]: https://img.shields.io/badge/rustc-1.37+-lightgray.svg
+[rustc]: https://blog.rust-lang.org/2019/08/15/Rust-1.37.0.html
 [Wasmtime]: https://github.com/CraneStation/wasmtime
 [Lucet]: https://github.com/fastly/lucet
 [lucet-wasi]: https://github.com/fastly/lucet/tree/master/lucet-wasi
@@ -18,7 +18,7 @@ such as [Wasmtime] and [Lucet].
 The library is an adaption of [lucet-wasi] crate from the [Lucet] project, and it is
 currently based on [40ae1df][lucet-wasi-tracker] git revision.
 
-Please note that the library requires Rust compiler version at least 1.36.0.
+Please note that the library requires Rust compiler version at least 1.37.0.
 
 ## Supported syscalls
 
