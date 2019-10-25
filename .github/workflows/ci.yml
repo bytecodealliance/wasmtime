@@ -33,16 +33,16 @@ jobs:
     - name: Check formatting
       uses: actions-rs/cargo@v1
       with:
-        cmd: fmt
+        command: fmt
         args: --all -- --check
     - name: Build debug
       uses: actions-rs/cargo@v1
       with:
-        cmd: build
+        command: build
     - name: Build release
       uses: actions-rs/cargo@v1
       with:
-        cmd: build
+        command: build
         args: --release
 
   test:
@@ -70,5 +70,5 @@ jobs:
     - name: Run tests
       uses: actions-rs/cargo@v1
       with:
-        cmd: test
+        command: test
         args: --all --features wasm_tests
