@@ -1,8 +1,8 @@
 # wasi-common
-[![build-status]][azure] [![rustc-1.37]][rustc]
+[![build-status]][actions] [![rustc-1.37]][rustc]
 
-[build-status]: https://dev.azure.com/CraneStation/wasi-common/_apis/build/status/CraneStation.wasi-common?branchName=master
-[azure]: https://dev.azure.com/CraneStation/wasi-common/_build/latest?definitionId=3&branchName=master
+[build-status]: https://github.com/CraneStation/wasi-common/workflows/Continuous%20Integration/badge.svg
+[actions]: https://github.com/CraneStation/wasi-common/actions
 [rustc-1.37]: https://img.shields.io/badge/rustc-1.37+-lightgray.svg
 [rustc]: https://blog.rust-lang.org/2019/08/15/Rust-1.37.0.html
 [Wasmtime]: https://github.com/CraneStation/wasmtime
