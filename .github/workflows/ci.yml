@@ -47,7 +47,6 @@ jobs:
 
   test:
     name: Test
-    needs: build
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -72,3 +71,22 @@ jobs:
       with:
         command: test
         args: --all --features wasm_tests
+
+  doc:
+    name: Doc
+    runs-on: macOS-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Generate docs
+      uses: actions-rs/cargo@v1
+      with:
+        command: doc
+        args: --no-deps --all
