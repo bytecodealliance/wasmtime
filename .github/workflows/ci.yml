@@ -1,0 +1,74 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        rust: [stable, 1.36.0]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+      with:
+        submodules: recursive
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust }}
+        override: true
+        components: rustfmt
+    - name: Check formatting
+      uses: actions-rs/cargo@v1
+      with:
+        cmd: fmt
+        args: --all -- --check
+    - name: Build debug
+      uses: actions-rs/cargo@v1
+      with:
+        cmd: build
+    - name: Build release
+      uses: actions-rs/cargo@v1
+      with:
+        cmd: build
+        args: --release
+
+  test:
+    name: Test
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        rust: [stable, beta, nightly, 1.36.0]
+        
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+      with:
+        submodules: recursive
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust }}
+        target: wasm32-wasi
+        override: true
+    - name: Run tests
+      uses: actions-rs/cargo@v1
+      with:
+        cmd: test
+        args: --all --features wasm_tests
