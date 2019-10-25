@@ -20,6 +20,21 @@ mod wasm_tests {
     use std::process::{Command, Stdio};
 
     pub(crate) fn build_and_generate_tests() {
+        // Validate if any of test sources are present and if they changed
+        let bin_tests = std::fs::read_dir("misc_testsuite/src/bin")
+            .expect("wasm_tests feature requires initialized misc_testsuite: `git submodule update --init`?");
+        for test in bin_tests {
+            if let Ok(test_file) = test {
+                let test_file_path = test_file
+                    .path()
+                    .into_os_string()
+                    .into_string()
+                    .expect("test file path");
+                println!("cargo:rerun-if-changed={}", test_file_path);
+            }
+        }
+
+        // Build tests to OUT_DIR (target/*/build/wasi-common-*/out/wasm32-wasi/release/*.wasm)
         let out_dir = PathBuf::from(
             env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
         );
