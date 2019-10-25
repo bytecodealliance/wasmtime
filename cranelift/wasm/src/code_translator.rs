@@ -1165,57 +1165,26 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().bint(I32, bool_result))
         }
         Operator::I8x16Eq | Operator::I16x8Eq | Operator::I32x4Eq => {
-            let (a, b) = state.pop2();
-            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
-            state.push1(builder.ins().icmp(IntCC::Equal, bitcast_a, bitcast_b))
+            translate_vector_icmp(IntCC::Equal, type_of(op), builder, state)
         }
         Operator::I8x16Ne | Operator::I16x8Ne | Operator::I32x4Ne => {
-            let (a, b) = state.pop2();
-            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
-            state.push1(builder.ins().icmp(IntCC::NotEqual, bitcast_a, bitcast_b))
+            translate_vector_icmp(IntCC::NotEqual, type_of(op), builder, state)
         }
         Operator::I8x16GtS | Operator::I16x8GtS | Operator::I32x4GtS => {
-            let (a, b) = state.pop2();
-            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
-            state.push1(
-                builder
-                    .ins()
-                    .icmp(IntCC::SignedGreaterThan, bitcast_a, bitcast_b),
-            )
+            translate_vector_icmp(IntCC::SignedGreaterThan, type_of(op), builder, state)
         }
         Operator::I8x16GtU | Operator::I16x8GtU | Operator::I32x4GtU => {
-            let (a, b) = state.pop2();
-            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
-            state.push1(
-                builder
-                    .ins()
-                    .icmp(IntCC::UnsignedGreaterThan, bitcast_a, bitcast_b),
-            )
+            translate_vector_icmp(IntCC::UnsignedGreaterThan, type_of(op), builder, state)
         }
         Operator::I8x16GeS | Operator::I16x8GeS | Operator::I32x4GeS => {
-            let (a, b) = state.pop2();
-            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
-            state.push1(
-                builder
-                    .ins()
-                    .icmp(IntCC::SignedGreaterThanOrEqual, bitcast_a, bitcast_b),
-            )
+            translate_vector_icmp(IntCC::SignedGreaterThanOrEqual, type_of(op), builder, state)
         }
-        Operator::I8x16GeU | Operator::I16x8GeU | Operator::I32x4GeU => {
-            let (a, b) = state.pop2();
-            let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitcast_b = optionally_bitcast_vector(b, type_of(op), builder);
-            state.push1(
-                builder
-                    .ins()
-                    .icmp(IntCC::UnsignedGreaterThanOrEqual, bitcast_a, bitcast_b),
-            )
-        }
+        Operator::I8x16GeU | Operator::I16x8GeU | Operator::I32x4GeU => translate_vector_icmp(
+            IntCC::UnsignedGreaterThanOrEqual,
+            type_of(op),
+            builder,
+            state,
+        ),
         Operator::I8x16LtS
         | Operator::I8x16LtU
         | Operator::I8x16LeS
@@ -1496,6 +1465,18 @@ fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut FuncTran
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().icmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
+}
+
+fn translate_vector_icmp(
+    cc: IntCC,
+    needed_type: Type,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+) {
+    let (a, b) = state.pop2();
+    let bitcast_a = optionally_bitcast_vector(a, needed_type, builder);
+    let bitcast_b = optionally_bitcast_vector(b, needed_type, builder);
+    state.push1(builder.ins().icmp(cc, bitcast_a, bitcast_b))
 }
 
 fn translate_fcmp(cc: FloatCC, builder: &mut FunctionBuilder, state: &mut FuncTranslationState) {
