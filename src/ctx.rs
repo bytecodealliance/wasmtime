@@ -96,6 +96,24 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
+    /// Provide a File to use as stdin
+    pub fn stdin(mut self, file: File) -> Result<Self> {
+        self.fds.insert(0, FdEntry::from(file)?);
+        Ok(self)
+    }
+
+    /// Provide a File to use as stdout
+    pub fn stdout(mut self, file: File) -> Result<Self> {
+        self.fds.insert(1, FdEntry::from(file)?);
+        Ok(self)
+    }
+
+    /// Provide a File to use as stderr
+    pub fn stderr(mut self, file: File) -> Result<Self> {
+        self.fds.insert(2, FdEntry::from(file)?);
+        Ok(self)
+    }
+
     /// Add a preopened directory.
     pub fn preopened_dir<P: AsRef<Path>>(mut self, dir: File, guest_path: P) -> Self {
         self.preopens.push((guest_path.as_ref().to_owned(), dir));
