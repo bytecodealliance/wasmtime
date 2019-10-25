@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macOS-latest, windows-latest]
-        rust: [stable, 1.36.0]
+        rust: [stable, 1.37.0]
 
     steps:
     - name: Checkout
