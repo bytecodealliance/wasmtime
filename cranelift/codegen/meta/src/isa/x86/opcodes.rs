@@ -311,6 +311,54 @@ pub static PINSRB: [u8; 4] = [0x66, 0x0f, 0x3a, 0x20];
 /// Insert word (SSE2).
 pub static PINSRW: [u8; 3] = [0x66, 0x0f, 0xc4];
 
+/// Compare packed signed byte integers in xmm1 and xmm2/m128 and store packed maximum values in
+/// xmm1 (SSE4.1).
+pub static PMAXSB: [u8; 4] = [0x66, 0x0f, 0x38, 0x3c];
+
+/// Compare packed signed doubleword integers in xmm1 and xmm2/m128 and store packed maximum
+/// values in xmm1 (SSE4.1).
+pub static PMAXSD: [u8; 4] = [0x66, 0x0f, 0x38, 0x3d];
+
+/// Compare packed signed word integers in xmm1 and xmm2/m128 and store packed maximum values in
+/// xmm1 (SSE2).
+pub static PMAXSW: [u8; 3] = [0x66, 0x0f, 0xee];
+
+/// Compare packed unsigned byte integers in xmm1 and xmm2/m128 and store packed maximum values in
+/// xmm1 (SSE2).
+pub static PMAXUB: [u8; 3] = [0x66, 0x0f, 0xde];
+
+/// Compare packed unsigned doubleword integers in xmm1 and xmm2/m128 and store packed maximum
+/// values in xmm1 (SSE4.1).
+pub static PMAXUD: [u8; 4] = [0x66, 0x0f, 0x38, 0x3f];
+
+/// Compare packed unsigned word integers in xmm1 and xmm2/m128 and store packed maximum values in
+/// xmm1 (SSE4.1).
+pub static PMAXUW: [u8; 4] = [0x66, 0x0f, 0x38, 0x3e];
+
+/// Compare packed signed byte integers in xmm1 and xmm2/m128 and store packed minimum values in
+/// xmm1 (SSE4.1).
+pub static PMINSB: [u8; 4] = [0x66, 0x0f, 0x38, 0x38];
+
+/// Compare packed signed doubleword integers in xmm1 and xmm2/m128 and store packed minimum
+/// values in xmm1 (SSE4.1).
+pub static PMINSD: [u8; 4] = [0x66, 0x0f, 0x38, 0x39];
+
+/// Compare packed signed word integers in xmm1 and xmm2/m128 and store packed minimum values in
+/// xmm1 (SSE2).
+pub static PMINSW: [u8; 3] = [0x66, 0x0f, 0xea];
+
+/// Compare packed unsigned byte integers in xmm1 and xmm2/m128 and store packed minimum values in
+/// xmm1 (SSE2).
+pub static PMINUB: [u8; 3] = [0x66, 0x0f, 0xda];
+
+/// Compare packed unsigned doubleword integers in xmm1 and xmm2/m128 and store packed minimum
+/// values in xmm1 (SSE4.1).
+pub static PMINUD: [u8; 4] = [0x66, 0x0f, 0x38, 0x3b];
+
+/// Compare packed unsigned word integers in xmm1 and xmm2/m128 and store packed minimum values in
+/// xmm1 (SSE4.1).
+pub static PMINUW: [u8; 4] = [0x66, 0x0f, 0x38, 0x3a];
+
 /// Multiply the packed signed word integers in xmm1 and xmm2/m128, and store the low 16 bits of
 /// the results in xmm1 (SSE2).
 pub static PMULLW: [u8; 3] = [0x66, 0x0f, 0xd5];

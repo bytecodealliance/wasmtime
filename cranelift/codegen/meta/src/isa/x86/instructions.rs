@@ -487,5 +487,60 @@ pub(crate) fn define(
         .operands_out(vec![f]),
     );
 
+    let x = &Operand::new("x", IxN);
+    let y = &Operand::new("y", IxN);
+    let a = &Operand::new("a", IxN);
+    ig.push(
+        Inst::new(
+            "x86_pmaxs",
+            r#"
+        Maximum of Packed Signed Integers -- Compare signed integers in the first and second
+        operand and return the maximum values.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_pmaxu",
+            r#"
+        Maximum of Packed Unsigned Integers -- Compare unsigned integers in the first and second
+        operand and return the maximum values.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_pmins",
+            r#"
+        Minimum of Packed Signed Integers -- Compare signed integers in the first and second
+        operand and return the minimum values.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_pminu",
+            r#"
+        Minimum of Packed Unsigned Integers -- Compare unsigned integers in the first and second
+        operand and return the minimum values.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     ig.build()
 }

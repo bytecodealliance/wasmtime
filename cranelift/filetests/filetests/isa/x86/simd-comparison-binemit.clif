@@ -25,3 +25,30 @@ ebb0(v0: i64x2 [%xmm0], v1: i64x2 [%xmm7]):
 [-, %xmm0]  v2 = icmp sgt v0, v1     ; bin: 66 0f 38 37 c7
             return v2
 }
+
+function %min_max_i8x16(i8x16, i8x16) {
+ebb0(v0: i8x16 [%xmm3], v1: i8x16 [%xmm1]):
+[-, %xmm3]  v2 = x86_pmaxs v0, v1     ; bin: 66 0f 38 3c d9
+[-, %xmm3]  v3 = x86_pmaxu v0, v1     ; bin: 66 0f de d9
+[-, %xmm3]  v4 = x86_pmins v0, v1     ; bin: 66 0f 38 38 d9
+[-, %xmm3]  v5 = x86_pminu v0, v1     ; bin: 66 0f da d9
+            return
+}
+
+function %min_max_i16x8(i16x8, i16x8) {
+ebb0(v0: i16x8 [%xmm2], v1: i16x8 [%xmm5]):
+[-, %xmm2]  v2 = x86_pmaxs v0, v1     ; bin: 66 0f ee d5
+[-, %xmm2]  v3 = x86_pmaxu v0, v1     ; bin: 66 0f 38 3e d5
+[-, %xmm2]  v4 = x86_pmins v0, v1     ; bin: 66 0f ea d5
+[-, %xmm2]  v5 = x86_pminu v0, v1     ; bin: 66 0f 38 3a d5
+            return
+}
+
+function %min_max_i32x4(i32x4, i32x4) {
+ebb0(v0: i32x4 [%xmm2], v1: i32x4 [%xmm4]):
+[-, %xmm2]  v2 = x86_pmaxs v0, v1     ; bin: 66 0f 38 3d d4
+[-, %xmm2]  v3 = x86_pmaxu v0, v1     ; bin: 66 0f 38 3f d4
+[-, %xmm2]  v4 = x86_pmins v0, v1     ; bin: 66 0f 38 39 d4
+[-, %xmm2]  v5 = x86_pminu v0, v1     ; bin: 66 0f 38 3b d4
+            return
+}

@@ -517,6 +517,10 @@ pub(crate) fn define(
     let x86_pop = x86.by_name("x86_pop");
     let x86_pextr = x86.by_name("x86_pextr");
     let x86_pinsr = x86.by_name("x86_pinsr");
+    let x86_pmaxs = x86.by_name("x86_pmaxs");
+    let x86_pmaxu = x86.by_name("x86_pmaxu");
+    let x86_pmins = x86.by_name("x86_pmins");
+    let x86_pminu = x86.by_name("x86_pminu");
     let x86_pshufd = x86.by_name("x86_pshufd");
     let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_psll = x86.by_name("x86_psll");
@@ -2045,6 +2049,25 @@ pub(crate) fn define(
             let template = rec_icscc_fpr.nonrex().opcodes(opcodes);
             e.enc_32_64_maybe_isap(instruction, template, *isa_predicate);
         }
+    }
+
+    // SIMD min/max
+    for (ty, inst, opcodes, isa_predicate) in &[
+        (I8, x86_pmaxs, &PMAXSB[..], Some(use_sse41_simd)),
+        (I16, x86_pmaxs, &PMAXSW[..], None),
+        (I32, x86_pmaxs, &PMAXSD[..], Some(use_sse41_simd)),
+        (I8, x86_pmaxu, &PMAXUB[..], None),
+        (I16, x86_pmaxu, &PMAXUW[..], Some(use_sse41_simd)),
+        (I32, x86_pmaxu, &PMAXUD[..], Some(use_sse41_simd)),
+        (I8, x86_pmins, &PMINSB[..], Some(use_sse41_simd)),
+        (I16, x86_pmins, &PMINSW[..], None),
+        (I32, x86_pmins, &PMINSD[..], Some(use_sse41_simd)),
+        (I8, x86_pminu, &PMINUB[..], None),
+        (I16, x86_pminu, &PMINUW[..], Some(use_sse41_simd)),
+        (I32, x86_pminu, &PMINUD[..], Some(use_sse41_simd)),
+    ] {
+        let inst_ = inst.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64_maybe_isap(inst_, rec_fa.opcodes(opcodes), *isa_predicate);
     }
 
     // Reference type instructions
