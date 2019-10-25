@@ -107,3 +107,33 @@ ebb0:
     return v8
 }
 ; run
+
+function %icmp_ugt_i8x16() -> b1 {
+ebb0:
+    v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v1 = vconst.i8x16 [0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+    v2 = icmp ugt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %icmp_sge_i16x8() -> b1 {
+ebb0:
+    v0 = vconst.i16x8 [-1 1 2 3 4 5 6 7]
+    v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1]
+    v2 = icmp sge v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %icmp_uge_i32x4() -> b1 {
+ebb0:
+    v0 = vconst.i32x4 [1 2 3 4]
+    v1 = vconst.i32x4 [1 1 1 1]
+    v2 = icmp uge v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run

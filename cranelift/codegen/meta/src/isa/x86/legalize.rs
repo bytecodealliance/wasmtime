@@ -3,7 +3,7 @@ use crate::cdsl::instructions::{vector, Bindable, InstructionGroup};
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::xform::TransformGroupBuilder;
 use crate::shared::types::Float::F64;
-use crate::shared::types::Int::{I16, I32, I64};
+use crate::shared::types::Int::{I16, I32, I64, I8};
 use crate::shared::Definitions as SharedDefinitions;
 
 #[allow(clippy::many_single_char_names)]
@@ -69,6 +69,9 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     let x86_bsf = x86_instructions.by_name("x86_bsf");
     let x86_bsr = x86_instructions.by_name("x86_bsr");
+    let x86_pmaxu = x86_instructions.by_name("x86_pmaxu");
+    let x86_pmins = x86_instructions.by_name("x86_pmins");
+    let x86_pminu = x86_instructions.by_name("x86_pminu");
     let x86_pshufb = x86_instructions.by_name("x86_pshufb");
     let x86_pshufd = x86_instructions.by_name("x86_pshufd");
     let x86_psll = x86_instructions.by_name("x86_psll");
@@ -503,6 +506,36 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(c = icmp_(ne, a, b)),
             vec![def!(x = icmp(eq, a, b)), def!(c = bnot(x))],
+        );
+    }
+
+    // SIMD icmp ugt
+    let ugt = Literal::enumerator_for(&imm.intcc, "ugt");
+    for ty in &[I8, I16, I32] {
+        let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(
+            def!(c = icmp_(ugt, a, b)),
+            vec![def!(x = x86_pmaxu(a, b)), def!(c = icmp(eq, a, x))],
+        );
+    }
+
+    // SIMD icmp sge
+    let sge = Literal::enumerator_for(&imm.intcc, "sge");
+    for ty in &[I8, I16, I32] {
+        let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(
+            def!(c = icmp_(sge, a, b)),
+            vec![def!(x = x86_pmins(a, b)), def!(c = icmp(eq, x, b))],
+        );
+    }
+
+    // SIMD icmp uge
+    let uge = Literal::enumerator_for(&imm.intcc, "uge");
+    for ty in &[I8, I16, I32] {
+        let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(
+            def!(c = icmp_(uge, a, b)),
+            vec![def!(x = x86_pminu(a, b)), def!(c = icmp(eq, x, b))],
         );
     }
 
