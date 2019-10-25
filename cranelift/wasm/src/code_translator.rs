@@ -1173,11 +1173,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I8x16GtS | Operator::I16x8GtS | Operator::I32x4GtS => {
             translate_vector_icmp(IntCC::SignedGreaterThan, type_of(op), builder, state)
         }
+        Operator::I8x16LtS | Operator::I16x8LtS | Operator::I32x4LtS => {
+            translate_vector_icmp(IntCC::SignedLessThan, type_of(op), builder, state)
+        }
         Operator::I8x16GtU | Operator::I16x8GtU | Operator::I32x4GtU => {
             translate_vector_icmp(IntCC::UnsignedGreaterThan, type_of(op), builder, state)
         }
+        Operator::I8x16LtU | Operator::I16x8LtU | Operator::I32x4LtU => {
+            translate_vector_icmp(IntCC::UnsignedLessThan, type_of(op), builder, state)
+        }
         Operator::I8x16GeS | Operator::I16x8GeS | Operator::I32x4GeS => {
             translate_vector_icmp(IntCC::SignedGreaterThanOrEqual, type_of(op), builder, state)
+        }
+        Operator::I8x16LeS | Operator::I16x8LeS | Operator::I32x4LeS => {
+            translate_vector_icmp(IntCC::SignedLessThanOrEqual, type_of(op), builder, state)
         }
         Operator::I8x16GeU | Operator::I16x8GeU | Operator::I32x4GeU => translate_vector_icmp(
             IntCC::UnsignedGreaterThanOrEqual,
@@ -1185,19 +1194,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder,
             state,
         ),
-        Operator::I8x16LtS
-        | Operator::I8x16LtU
-        | Operator::I8x16LeS
-        | Operator::I8x16LeU
-        | Operator::I16x8LtS
-        | Operator::I16x8LtU
-        | Operator::I16x8LeS
-        | Operator::I16x8LeU
-        | Operator::I32x4LtS
-        | Operator::I32x4LtU
-        | Operator::I32x4LeS
-        | Operator::I32x4LeU
-        | Operator::F32x4Eq
+        Operator::I8x16LeU | Operator::I16x8LeU | Operator::I32x4LeU => {
+            translate_vector_icmp(IntCC::UnsignedLessThanOrEqual, type_of(op), builder, state)
+        }
+        Operator::F32x4Eq
         | Operator::F32x4Ne
         | Operator::F32x4Lt
         | Operator::F32x4Gt
