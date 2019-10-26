@@ -91,7 +91,7 @@ fn read_imports_and_exports(
             }
             SectionCode::Function => {
                 let section = section.get_function_section_reader()?;
-                sigs.reserve_exact(section.get_count() as usize);
+                func_sig.reserve_exact(section.get_count() as usize);
                 for entry in section {
                     func_sig.push(entry?);
                 }
