@@ -48,7 +48,7 @@ impl From<DataId> for ir::ExternalName {
 }
 
 /// Linkage refers to where an entity is defined and who can see it.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Linkage {
     /// Defined outside of a module.
     Import,
