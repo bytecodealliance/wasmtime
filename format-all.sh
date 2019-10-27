@@ -9,4 +9,4 @@ cd "$topdir"
 # Make sure we can find rustfmt.
 export PATH="$PATH:$HOME/.cargo/bin"
 
-exec cargo +stable fmt --all -- "$@"
+exec cargo fmt --all -- "$@"

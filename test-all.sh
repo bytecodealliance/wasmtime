@@ -22,7 +22,7 @@ function banner {
 
 # Run rustfmt if we have it.
 banner "Rust formatting"
-if cargo +stable fmt -- --version > /dev/null ; then
+if cargo fmt -- --version > /dev/null ; then
     if ! "$topdir/format-all.sh" --check ; then
         echo "Formatting diffs detected! Run \"cargo fmt --all\" to correct."
         exit 1
@@ -31,7 +31,7 @@ else
     echo "cargo-fmt not available; formatting not checked!"
     echo
     echo "If you are using rustup, rustfmt can be installed via"
-    echo "\"rustup component add --toolchain=stable rustfmt-preview\", or see"
+    echo "\"rustup component add rustfmt-preview\", or see"
     echo "https://github.com/rust-lang-nursery/rustfmt for more information."
 fi
 
