@@ -56,7 +56,7 @@ impl Operand {
     }
 
     /// Returns true if the operand has an immediate kind.
-    pub fn is_pure_immediate(&self) -> bool {
+    pub fn is_immediate(&self) -> bool {
         match self.kind.fields {
             OperandKindFields::ImmEnum(_) | OperandKindFields::ImmValue => true,
             _ => false,

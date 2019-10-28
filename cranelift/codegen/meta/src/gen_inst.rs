@@ -910,7 +910,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     let mut tmpl_types = Vec::new();
     let mut into_args = Vec::new();
     for op in &inst.operands_in {
-        let t = if op.is_pure_immediate() {
+        let t = if op.is_immediate() {
             let t = format!("T{}{}", tmpl_types.len() + 1, op.kind.name);
             tmpl_types.push(format!("{}: Into<{}>", t, op.kind.rust_type));
             into_args.push(op.name);

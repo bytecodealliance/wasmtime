@@ -86,12 +86,11 @@ impl EncodingBuilder {
                 }
 
                 // Add immediate value predicates
-                for (immediate_value, immediate_operand) in inst.immediate_values.iter().zip(
-                    inst.inst
-                        .operands_in
-                        .iter()
-                        .filter(|o| o.is_pure_immediate()),
-                ) {
+                for (immediate_value, immediate_operand) in inst
+                    .immediate_values
+                    .iter()
+                    .zip(inst.inst.operands_in.iter().filter(|o| o.is_immediate()))
+                {
                     let immediate_predicate = InstructionPredicate::new_is_field_equal(
                         &inst.inst.format,
                         immediate_operand
