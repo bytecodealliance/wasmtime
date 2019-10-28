@@ -1,4 +1,4 @@
-#![allow(non_camel_case_types, dead_code)]
+#![allow(non_camel_case_types, non_snake_case, dead_code)]
 
 include!(concat!(env!("OUT_DIR"), "/wasmtime_ssp.rs"));
 
