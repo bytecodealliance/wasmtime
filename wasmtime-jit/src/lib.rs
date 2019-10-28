@@ -44,6 +44,7 @@ mod resolver;
 mod target_tunables;
 
 pub use crate::action::{ActionError, ActionOutcome, RuntimeValue};
+pub use crate::code_memory::CodeMemory;
 pub use crate::compiler::{CompilationStrategy, Compiler};
 pub use crate::context::{Context, ContextError, Features, UnknownInstance};
 pub use crate::instantiate::{instantiate, CompiledModule, SetupError};

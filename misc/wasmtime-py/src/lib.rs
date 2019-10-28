@@ -11,7 +11,6 @@ use core::cell::RefCell;
 use std::rc::Rc;
 use wasmtime_interface_types::ModuleData;
 
-mod code_memory;
 mod function;
 mod import;
 mod instance;

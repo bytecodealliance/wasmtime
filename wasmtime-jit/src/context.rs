@@ -1,8 +1,8 @@
 use crate::action::{get, inspect_memory, invoke};
 use crate::HashMap;
 use crate::{
-    instantiate, ActionError, ActionOutcome, CompilationStrategy, Compiler, InstanceHandle,
-    Namespace, RuntimeValue, SetupError,
+    instantiate, ActionError, ActionOutcome, CompilationStrategy, CompiledModule, Compiler,
+    InstanceHandle, Namespace, RuntimeValue, SetupError,
 };
 use alloc::boxed::Box;
 use alloc::rc::Rc;
@@ -158,6 +158,20 @@ impl Context {
         let instance = self.instantiate(data).map_err(ActionError::Setup)?;
         self.optionally_name_instance(instance_name, instance.clone());
         Ok(instance)
+    }
+
+    /// Compile a module.
+    pub fn compile_module(&mut self, data: &[u8]) -> Result<CompiledModule, SetupError> {
+        self.validate(&data).map_err(SetupError::Validate)?;
+        let debug_info = self.debug_info();
+
+        CompiledModule::new(
+            &mut *self.compiler,
+            data,
+            &mut self.namespace,
+            Rc::clone(&self.global_exports),
+            debug_info,
+        )
     }
 
     /// If `name` isn't None, register it for the given instance.

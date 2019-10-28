@@ -5,7 +5,6 @@ extern crate alloc;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyTuple};
 
-use crate::code_memory::CodeMemory;
 use crate::function::Function;
 use crate::memory::Memory;
 use crate::value::{read_value_from, write_value_to};
@@ -18,6 +17,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex};
 use target_lexicon::HOST;
 use wasmtime_environ::{Export, Module};
+use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{Imports, InstanceHandle, VMContext, VMFunctionBody};
 
 use alloc::rc::Rc;

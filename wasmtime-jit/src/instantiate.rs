@@ -223,6 +223,16 @@ impl CompiledModule {
             Box::new(()),
         )
     }
+
+    /// Return a reference-counting pointer to a module.
+    pub fn module(&self) -> Rc<Module> {
+        self.module.clone()
+    }
+
+    /// Return a reference to a module.
+    pub fn module_ref(&self) -> &Module {
+        &self.module
+    }
 }
 
 /// Similar to `DataInitializer`, but owns its own copy of the data rather

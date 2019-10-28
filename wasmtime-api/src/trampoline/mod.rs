@@ -1,6 +1,5 @@
 //! Utility module to create trampolines in/out WebAssembly module.
 
-mod code_memory;
 mod create_handle;
 mod func;
 mod global;
