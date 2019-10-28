@@ -488,7 +488,13 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 Some(ch) if ch.is_digit(10) => Some(self.scan_number()),
-                Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
+                Some(ch) if ch.is_alphabetic() => {
+                    if self.looking_at("NaN") || self.looking_at("Inf") {
+                        Some(self.scan_number())
+                    } else {
+                        Some(self.scan_word())
+                    }
+                }
                 Some('%') => Some(self.scan_name()),
                 Some('"') => Some(self.scan_string()),
                 Some('#') => Some(self.scan_hex_sequence()),
@@ -593,7 +599,7 @@ mod tests {
 
     #[test]
     fn lex_numbers() {
-        let mut lex = Lexer::new(" 0 2_000 -1,0xf -0x0 0.0 0x0.4p-34 +5");
+        let mut lex = Lexer::new(" 0 2_000 -1,0xf -0x0 0.0 0x0.4p-34 NaN +5");
         assert_eq!(lex.next(), token(Token::Integer("0"), 1));
         assert_eq!(lex.next(), token(Token::Integer("2_000"), 1));
         assert_eq!(lex.next(), token(Token::Integer("-1"), 1));
@@ -602,6 +608,7 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Integer("-0x0"), 1));
         assert_eq!(lex.next(), token(Token::Float("0.0"), 1));
         assert_eq!(lex.next(), token(Token::Float("0x0.4p-34"), 1));
+        assert_eq!(lex.next(), token(Token::Float("NaN"), 1));
         assert_eq!(lex.next(), token(Token::Integer("+5"), 1));
         assert_eq!(lex.next(), None);
     }
