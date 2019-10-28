@@ -3015,6 +3015,43 @@ pub(crate) fn define<'shared>(
             ),
     );
 
+    {
+        let supported_floatccs: Vec<Literal> = ["eq", "lt", "le", "uno", "ne", "gt", "ge", "ord"]
+            .iter()
+            .map(|name| Literal::enumerator_for(floatcc, name))
+            .collect();
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("pfcmp", &formats.float_compare, 2)
+                .operands_in(vec![fpr, fpr])
+                .operands_out(vec![0])
+                .inst_predicate(supported_floatccs_predicate(
+                    &supported_floatccs[..],
+                    &*formats.float_compare,
+                ))
+                .emit(
+                    r#"
+                    // Comparison instruction.
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
+                    modrm_rr(in_reg1, in_reg0, sink);
+                    // Add immediate byte indicating what type of comparison.
+                    use crate::ir::condcodes::FloatCC::*;
+                    let imm = match cond {
+                        Equal               => 0x00,
+                        LessThan            => 0x01,
+                        LessThanOrEqual     => 0x02,
+                        Unordered           => 0x03,
+                        NotEqual            => 0x04,
+                        GreaterThanOrEqual  => 0x05,
+                        GreaterThan         => 0x06,
+                        Ordered             => 0x07,
+                        _ => panic!("{} not supported by pfcmp", cond),
+                    };
+                    sink.put1(imm);
+                "#,
+                ),
+        );
+    }
+
     recipes.add_template_recipe(
         EncodingRecipeBuilder::new("is_zero", &formats.unary, 2 + 2)
             .operands_in(vec![gpr])

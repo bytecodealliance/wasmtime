@@ -177,3 +177,43 @@ ebb0:
     return v8
 }
 ; run
+
+function %fcmp_eq_f32x4() -> b1 {
+ebb0:
+    v0 = vconst.f32x4 [0.0 -0x4.2 0x0.33333 -0.0]
+    v1 = vconst.f32x4 [0.0 -0x4.2 0x0.33333 -0.0]
+    v2 = fcmp eq v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %fcmp_lt_f32x4() -> b1 {
+ebb0:
+    v0 = vconst.f32x4 [0.0      -0x4.2  0x0.0       -0.0]
+    v1 = vconst.f32x4 [0x0.001  0x4.2   0x0.33333   0x1.0]
+    v2 = fcmp lt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %fcmp_ge_f64x2() -> b1 {
+ebb0:
+    v0 = vconst.f64x2 [0x0.0  0x4.2]
+    v1 = vconst.f64x2 [0.0    0x4.1]
+    v2 = fcmp ge v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %fcmp_uno_f64x2() -> b1 {
+ebb0:
+    v0 = vconst.f64x2 [0.0  NaN]
+    v1 = vconst.f64x2 [NaN  0x4.1]
+    v2 = fcmp uno v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run

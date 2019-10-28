@@ -610,6 +610,7 @@ pub(crate) fn define(
     let rec_null_fpr = r.recipe("null_fpr");
     let rec_pcrel_fnaddr8 = r.template("pcrel_fnaddr8");
     let rec_pcrel_gvaddr8 = r.template("pcrel_gvaddr8");
+    let rec_pfcmp = r.template("pfcmp");
     let rec_popq = r.template("popq");
     let rec_pu_id = r.template("pu_id");
     let rec_pu_id_bool = r.template("pu_id_bool");
@@ -2069,6 +2070,16 @@ pub(crate) fn define(
         let inst_ = inst.bind(vector(*ty, sse_vector_size));
         e.enc_32_64_maybe_isap(inst_, rec_fa.opcodes(opcodes), *isa_predicate);
     }
+
+    // SIMD float comparisons
+    e.enc_both(
+        fcmp.bind(vector(F32, sse_vector_size)),
+        rec_pfcmp.opcodes(&CMPPS),
+    );
+    e.enc_both(
+        fcmp.bind(vector(F64, sse_vector_size)),
+        rec_pfcmp.opcodes(&CMPPD),
+    );
 
     // Reference type instructions
 

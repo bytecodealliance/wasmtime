@@ -61,6 +61,14 @@ pub static CMP_IMM8: [u8; 1] = [0x83];
 /// Compare r{16,32,64} with r/m of the same size.
 pub static CMP_REG: [u8; 1] = [0x39];
 
+/// Compare packed double-precision floating-point value in xmm2/m32 and xmm1 using bits 2:0 of
+/// imm8 as comparison predicate (SSE2).
+pub static CMPPD: [u8; 3] = [0x66, 0x0f, 0xc2];
+
+/// Compare packed single-precision floating-point value in xmm2/m32 and xmm1 using bits 2:0 of
+/// imm8 as comparison predicate (SSE).
+pub static CMPPS: [u8; 2] = [0x0f, 0xc2];
+
 /// Convert scalar double-precision floating-point value to scalar single-precision
 /// floating-point value.
 pub static CVTSD2SS: [u8; 3] = [0xf2, 0x0f, 0x5a];
