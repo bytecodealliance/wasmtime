@@ -1197,19 +1197,25 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I8x16LeU | Operator::I16x8LeU | Operator::I32x4LeU => {
             translate_vector_icmp(IntCC::UnsignedLessThanOrEqual, type_of(op), builder, state)
         }
-        Operator::F32x4Eq
-        | Operator::F32x4Ne
-        | Operator::F32x4Lt
-        | Operator::F32x4Gt
-        | Operator::F32x4Le
-        | Operator::F32x4Ge
-        | Operator::F64x2Eq
-        | Operator::F64x2Ne
-        | Operator::F64x2Lt
-        | Operator::F64x2Gt
-        | Operator::F64x2Le
-        | Operator::F64x2Ge
-        | Operator::I8x16Shl
+        Operator::F32x4Eq | Operator::F64x2Eq => {
+            translate_vector_fcmp(FloatCC::Equal, type_of(op), builder, state)
+        }
+        Operator::F32x4Ne | Operator::F64x2Ne => {
+            translate_vector_fcmp(FloatCC::NotEqual, type_of(op), builder, state)
+        }
+        Operator::F32x4Lt | Operator::F64x2Lt => {
+            translate_vector_fcmp(FloatCC::LessThan, type_of(op), builder, state)
+        }
+        Operator::F32x4Gt | Operator::F64x2Gt => {
+            translate_vector_fcmp(FloatCC::GreaterThan, type_of(op), builder, state)
+        }
+        Operator::F32x4Le | Operator::F64x2Le => {
+            translate_vector_fcmp(FloatCC::LessThanOrEqual, type_of(op), builder, state)
+        }
+        Operator::F32x4Ge | Operator::F64x2Ge => {
+            translate_vector_fcmp(FloatCC::GreaterThanOrEqual, type_of(op), builder, state)
+        }
+        Operator::I8x16Shl
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
         | Operator::I8x16Mul
@@ -1483,6 +1489,18 @@ fn translate_fcmp(cc: FloatCC, builder: &mut FunctionBuilder, state: &mut FuncTr
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().fcmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
+}
+
+fn translate_vector_fcmp(
+    cc: FloatCC,
+    needed_type: Type,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+) {
+    let (a, b) = state.pop2();
+    let bitcast_a = optionally_bitcast_vector(a, needed_type, builder);
+    let bitcast_b = optionally_bitcast_vector(b, needed_type, builder);
+    state.push1(builder.ins().fcmp(cc, bitcast_a, bitcast_b))
 }
 
 fn translate_br_if(
