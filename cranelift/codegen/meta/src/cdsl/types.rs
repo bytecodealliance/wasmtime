@@ -15,7 +15,7 @@ static _RUST_NAME_PREFIX: &str = "ir::types::";
 /// All SSA values have a type that is described by an instance of `ValueType`
 /// or one of its subclasses.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ValueType {
+pub(crate) enum ValueType {
     BV(BVType),
     Lane(LaneType),
     Reference(ReferenceType),
@@ -151,7 +151,7 @@ impl From<VectorType> for ValueType {
 
 /// A concrete scalar type that can appear as a vector lane too.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LaneType {
+pub(crate) enum LaneType {
     BoolType(shared_types::Bool),
     FloatType(shared_types::Float),
     IntType(shared_types::Int),
@@ -319,7 +319,7 @@ impl From<shared_types::Int> for LaneType {
 }
 
 /// An iterator for different lane types.
-pub struct LaneTypeIterator {
+pub(crate) struct LaneTypeIterator {
     bool_iter: shared_types::BoolIterator,
     int_iter: shared_types::IntIterator,
     float_iter: shared_types::FloatIterator,
@@ -356,7 +356,7 @@ impl Iterator for LaneTypeIterator {
 /// A vector type has a lane type which is an instance of `LaneType`,
 /// and a positive number of lanes.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct VectorType {
+pub(crate) struct VectorType {
     base: LaneType,
     lanes: u64,
 }
@@ -422,7 +422,7 @@ impl fmt::Debug for VectorType {
 
 /// A flat bitvector type. Used for semantics description only.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct BVType {
+pub(crate) struct BVType {
     bits: u64,
 }
 
@@ -459,7 +459,7 @@ impl fmt::Debug for BVType {
 ///
 /// Special types cannot be used to form vectors.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SpecialType {
+pub(crate) enum SpecialType {
     Flag(shared_types::Flag),
 }
 
@@ -521,7 +521,7 @@ impl From<shared_types::Flag> for SpecialType {
     }
 }
 
-pub struct SpecialTypeIterator {
+pub(crate) struct SpecialTypeIterator {
     flag_iter: shared_types::FlagIterator,
 }
 
@@ -546,7 +546,7 @@ impl Iterator for SpecialTypeIterator {
 
 /// Reference type is scalar type, but not lane type.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ReferenceType(pub shared_types::Reference);
+pub(crate) struct ReferenceType(pub shared_types::Reference);
 
 impl ReferenceType {
     /// Return a string containing the documentation comment for this reference type.
@@ -600,7 +600,7 @@ impl From<shared_types::Reference> for ReferenceType {
 }
 
 /// An iterator for different reference types.
-pub struct ReferenceTypeIterator {
+pub(crate) struct ReferenceTypeIterator {
     reference_iter: shared_types::ReferenceIterator,
 }
 

@@ -35,7 +35,7 @@ macro_rules! fmtln {
     };
 }
 
-pub struct Formatter {
+pub(crate) struct Formatter {
     indent: usize,
     lines: Vec<String>,
 }
@@ -260,7 +260,7 @@ fn parse_multiline(s: &str) -> Vec<String> {
 /// Note that this class is ignorant of Rust types, and considers two fields
 /// with the same name to be equivalent. BTreeMap/BTreeSet are used to
 /// represent the arms in order to make the order deterministic.
-pub struct Match {
+pub(crate) struct Match {
     expr: String,
     arms: BTreeMap<(Vec<String>, String), BTreeSet<String>>,
     /// The clause for the placeholder pattern _.

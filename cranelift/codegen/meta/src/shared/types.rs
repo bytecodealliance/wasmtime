@@ -1,7 +1,7 @@
 //! This module predefines all the Cranelift scalar types.
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum Bool {
+pub(crate) enum Bool {
     /// 1-bit bool.
     B1 = 1,
     /// 8-bit bool.
@@ -17,7 +17,7 @@ pub enum Bool {
 }
 
 /// This provides an iterator through all of the supported bool variants.
-pub struct BoolIterator {
+pub(crate) struct BoolIterator {
     index: u8,
 }
 
@@ -45,7 +45,7 @@ impl Iterator for BoolIterator {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum Int {
+pub(crate) enum Int {
     /// 8-bit int.
     I8 = 8,
     /// 16-bit int.
@@ -59,7 +59,7 @@ pub enum Int {
 }
 
 /// This provides an iterator through all of the supported int variants.
-pub struct IntIterator {
+pub(crate) struct IntIterator {
     index: u8,
 }
 
@@ -86,13 +86,13 @@ impl Iterator for IntIterator {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum Float {
+pub(crate) enum Float {
     F32 = 32,
     F64 = 64,
 }
 
 /// Iterator through the variants of the Float enum.
-pub struct FloatIterator {
+pub(crate) struct FloatIterator {
     index: u8,
 }
 
@@ -120,7 +120,7 @@ impl Iterator for FloatIterator {
 ///
 /// Flags can't be stored in memory.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum Flag {
+pub(crate) enum Flag {
     /// CPU flags from an integer comparison.
     IFlags,
     /// CPU flags from a floating point comparison.
@@ -128,7 +128,7 @@ pub enum Flag {
 }
 
 /// Iterator through the variants of the Flag enum.
-pub struct FlagIterator {
+pub(crate) struct FlagIterator {
     index: u8,
 }
 
@@ -152,7 +152,7 @@ impl Iterator for FlagIterator {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum Reference {
+pub(crate) enum Reference {
     /// 32-bit reference.
     R32 = 32,
     /// 64-bit reference.
@@ -160,7 +160,7 @@ pub enum Reference {
 }
 
 /// This provides an iterator through all of the supported reference variants.
-pub struct ReferenceIterator {
+pub(crate) struct ReferenceIterator {
     index: u8,
 }
 

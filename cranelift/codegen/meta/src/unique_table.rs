@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::slice;
 
 /// Collect items into the `table` list, removing duplicates.
-pub struct UniqueTable<'entries, T: Eq + Hash> {
+pub(crate) struct UniqueTable<'entries, T: Eq + Hash> {
     table: Vec<&'entries T>,
     map: HashMap<&'entries T, usize>,
 }
@@ -40,7 +40,7 @@ impl<'entries, T: Eq + Hash> UniqueTable<'entries, T> {
 }
 
 /// A table of sequences which tries to avoid common subsequences.
-pub struct UniqueSeqTable<T: PartialEq + Clone> {
+pub(crate) struct UniqueSeqTable<T: PartialEq + Clone> {
     table: Vec<T>,
 }
 

@@ -18,7 +18,7 @@ use crate::cdsl::settings::SettingPredicateNumber;
 /// Register instances can be created with the constructor, or accessed as
 /// attributes on the register class: `GPR.rcx`.
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
-pub struct Register {
+pub(crate) struct Register {
     pub regclass: RegClassIndex,
     pub unit: u8,
 }
@@ -34,7 +34,7 @@ impl Register {
 /// A `Stack` object can be used to indicate an operand constraint for a value
 /// operand that must live in a stack slot.
 #[derive(Copy, Clone, Hash, PartialEq)]
-pub struct Stack {
+pub(crate) struct Stack {
     pub regclass: RegClassIndex,
 }
 
@@ -49,13 +49,13 @@ impl Stack {
 }
 
 #[derive(Clone, Hash, PartialEq)]
-pub struct BranchRange {
+pub(crate) struct BranchRange {
     pub inst_size: u64,
     pub range: u64,
 }
 
 #[derive(Copy, Clone, Hash, PartialEq)]
-pub enum OperandConstraint {
+pub(crate) enum OperandConstraint {
     RegClass(RegClassIndex),
     FixedReg(Register),
     TiedInput(usize),

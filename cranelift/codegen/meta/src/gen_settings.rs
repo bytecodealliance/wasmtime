@@ -10,7 +10,7 @@ use crate::error;
 use crate::srcgen::{Formatter, Match};
 use crate::unique_table::UniqueSeqTable;
 
-pub enum ParentGroup {
+pub(crate) enum ParentGroup {
     None,
     Shared,
 }

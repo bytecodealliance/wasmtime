@@ -17,7 +17,7 @@ use crate::cdsl::typevar::TypeVar;
 /// 4. An `EntityRefKind` instance indicates an operand that references another entity in the
 ///    function, typically something declared in the function preamble.
 #[derive(Clone, Debug)]
-pub struct Operand {
+pub(crate) struct Operand {
     pub name: &'static str,
     pub doc: Option<String>,
     pub kind: OperandKind,
@@ -75,7 +75,7 @@ impl Operand {
     }
 }
 
-pub struct OperandBuilder {
+pub(crate) struct OperandBuilder {
     name: &'static str,
     doc: Option<String>,
     kind: OperandKind,
@@ -114,7 +114,7 @@ impl OperandBuilder {
 type EnumValues = HashMap<&'static str, &'static str>;
 
 #[derive(Clone, Debug)]
-pub enum OperandKindFields {
+pub(crate) enum OperandKindFields {
     EntityRef,
     VariableArgs,
     ImmValue,
@@ -123,7 +123,7 @@ pub enum OperandKindFields {
 }
 
 #[derive(Clone, Debug)]
-pub struct OperandKind {
+pub(crate) struct OperandKind {
     pub name: &'static str,
 
     doc: Option<String>,
@@ -145,16 +145,9 @@ impl OperandKind {
             _ => None,
         }
     }
-
-    pub fn type_var(&self) -> TypeVar {
-        match &self.fields {
-            OperandKindFields::TypeVar(tvar) => tvar.clone(),
-            _ => panic!("not a typevar"),
-        }
-    }
 }
 
-pub struct OperandKindBuilder {
+pub(crate) struct OperandKindBuilder {
     name: &'static str,
 
     doc: Option<String>,
@@ -270,12 +263,12 @@ impl Into<OperandKind> for &OperandKind {
 }
 
 /// Helper to create an operand in definitions files.
-pub fn create_operand(name: &'static str, kind: impl Into<OperandKind>) -> Operand {
+pub(crate) fn create_operand(name: &'static str, kind: impl Into<OperandKind>) -> Operand {
     OperandBuilder::new(name, kind.into()).build()
 }
 
 /// Helper to create an operand with a documentation in definitions files.
-pub fn create_operand_doc(
+pub(crate) fn create_operand_doc(
     name: &'static str,
     kind: impl Into<OperandKind>,
     doc: &'static str,

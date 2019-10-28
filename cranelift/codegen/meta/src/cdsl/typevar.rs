@@ -21,7 +21,7 @@ const MAX_BITVEC: u16 = MAX_BITS * MAX_LANES;
 /// types and whether the type variable can assume scalar or vector types, or
 /// both.
 #[derive(Debug)]
-pub struct TypeVarContent {
+pub(crate) struct TypeVarContent {
     /// Short name of type variable used in instruction descriptions.
     pub name: String,
 
@@ -37,7 +37,7 @@ pub struct TypeVarContent {
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeVar {
+pub(crate) struct TypeVar {
     content: Rc<RefCell<TypeVarContent>>,
 }
 
@@ -336,7 +336,7 @@ impl ops::Deref for TypeVar {
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
-pub enum DerivedFunc {
+pub(crate) enum DerivedFunc {
     LaneOf,
     AsBool,
     HalfWidth,
@@ -372,7 +372,7 @@ impl DerivedFunc {
 }
 
 #[derive(Debug, Hash)]
-pub struct TypeVarParent {
+pub(crate) struct TypeVarParent {
     pub type_var: TypeVar,
     pub derived_func: DerivedFunc,
 }
@@ -406,7 +406,7 @@ macro_rules! num_set {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct TypeSet {
+pub(crate) struct TypeSet {
     pub lanes: NumSet,
     pub ints: NumSet,
     pub floats: NumSet,
@@ -784,7 +784,7 @@ impl fmt::Debug for TypeSet {
     }
 }
 
-pub struct TypeSetBuilder {
+pub(crate) struct TypeSetBuilder {
     ints: Interval,
     floats: Interval,
     bools: Interval,
@@ -883,7 +883,7 @@ impl TypeSetBuilder {
 }
 
 #[derive(PartialEq)]
-pub enum Interval {
+pub(crate) enum Interval {
     None,
     All,
     Range(Range),

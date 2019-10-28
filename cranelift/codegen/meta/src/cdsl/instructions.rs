@@ -393,7 +393,7 @@ impl ValueTypeOrAny {
 type VectorBitWidth = u64;
 
 /// An parameter used for binding instructions to specific types or values
-pub enum BindParameter {
+pub(crate) enum BindParameter {
     Any,
     Lane(LaneType),
     Vector(LaneType, VectorBitWidth),
@@ -402,7 +402,7 @@ pub enum BindParameter {
 }
 
 /// Constructor for more easily building vector parameters from any lane type
-pub fn vector(parameter: impl Into<LaneType>, vector_size: VectorBitWidth) -> BindParameter {
+pub(crate) fn vector(parameter: impl Into<LaneType>, vector_size: VectorBitWidth) -> BindParameter {
     BindParameter::Vector(parameter.into(), vector_size)
 }
 
@@ -443,7 +443,7 @@ impl From<Immediate> for BindParameter {
 }
 
 #[derive(Clone)]
-pub enum Immediate {
+pub(crate) enum Immediate {
     // When needed, this enum should be expanded to include other immediate types (e.g. u8, u128).
     IntCC(IntCC),
 }
@@ -750,7 +750,7 @@ fn is_ctrl_typevar_candidate(
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub enum FormatPredicateKind {
+pub(crate) enum FormatPredicateKind {
     /// Is the field member equal to the expected value (stored here)?
     IsEqual(String),
 
@@ -791,7 +791,7 @@ pub enum FormatPredicateKind {
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub struct FormatPredicateNode {
+pub(crate) struct FormatPredicateNode {
     format_name: &'static str,
     member_name: &'static str,
     kind: FormatPredicateKind,
@@ -879,7 +879,7 @@ impl FormatPredicateNode {
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub enum TypePredicateNode {
+pub(crate) enum TypePredicateNode {
     /// Is the value argument (at the index designated by the first member) the same type as the
     /// type name (second member)?
     TypeVarCheck(usize, String),
@@ -905,7 +905,7 @@ impl TypePredicateNode {
 
 /// A basic node in an instruction predicate: either an atom, or an AND of two conditions.
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub enum InstructionPredicateNode {
+pub(crate) enum InstructionPredicateNode {
     FormatPredicate(FormatPredicateNode),
 
     TypePredicate(TypePredicateNode),

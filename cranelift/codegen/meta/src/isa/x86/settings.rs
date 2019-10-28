@@ -1,6 +1,6 @@
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 
-pub fn define(shared: &SettingGroup) -> SettingGroup {
+pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("x86");
 
     // CPUID.01H:ECX

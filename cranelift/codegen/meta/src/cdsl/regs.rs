@@ -2,10 +2,10 @@ use cranelift_codegen_shared::constants;
 use cranelift_entity::{entity_impl, EntityRef, PrimaryMap};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct RegBankIndex(u32);
+pub(crate) struct RegBankIndex(u32);
 entity_impl!(RegBankIndex);
 
-pub struct RegBank {
+pub(crate) struct RegBank {
     pub name: &'static str,
     pub first_unit: u8,
     pub units: u8,
@@ -73,10 +73,10 @@ impl RegBank {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-pub struct RegClassIndex(u32);
+pub(crate) struct RegClassIndex(u32);
 entity_impl!(RegClassIndex);
 
-pub struct RegClass {
+pub(crate) struct RegClass {
     pub name: &'static str,
     pub index: RegClassIndex,
     pub width: u8,
@@ -130,12 +130,12 @@ impl RegClass {
     }
 }
 
-pub enum RegClassProto {
+pub(crate) enum RegClassProto {
     TopLevel(RegBankIndex),
     SubClass(RegClassIndex),
 }
 
-pub struct RegClassBuilder {
+pub(crate) struct RegClassBuilder {
     pub name: &'static str,
     pub width: u8,
     pub count: u8,
@@ -181,7 +181,7 @@ impl RegClassBuilder {
     }
 }
 
-pub struct RegBankBuilder {
+pub(crate) struct RegBankBuilder {
     pub name: &'static str,
     pub units: u8,
     pub names: Vec<&'static str>,
@@ -220,7 +220,7 @@ impl RegBankBuilder {
     }
 }
 
-pub struct IsaRegsBuilder {
+pub(crate) struct IsaRegsBuilder {
     pub banks: PrimaryMap<RegBankIndex, RegBank>,
     pub classes: PrimaryMap<RegClassIndex, RegClass>,
 }
@@ -384,7 +384,7 @@ impl IsaRegsBuilder {
     }
 }
 
-pub struct IsaRegs {
+pub(crate) struct IsaRegs {
     pub banks: PrimaryMap<RegBankIndex, RegBank>,
     pub classes: PrimaryMap<RegClassIndex, RegClass>,
 }

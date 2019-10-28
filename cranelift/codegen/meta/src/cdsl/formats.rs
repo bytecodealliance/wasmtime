@@ -7,7 +7,7 @@ use std::rc::Rc;
 /// This corresponds to a single member of a variant of the `InstructionData`
 /// data type.
 #[derive(Debug)]
-pub struct FormatField {
+pub(crate) struct FormatField {
     /// Immediate operand kind.
     pub kind: OperandKind,
 
