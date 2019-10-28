@@ -346,6 +346,24 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                         // try creating a dir symlink instead
                         symlink_dir(old_path, new_path).map_err(Into::into)
                     }
+                    WinError::ERROR_ACCESS_DENIED => {
+                        // does the target exist?
+                        if new_path.exists() {
+                            Err(Error::EEXIST)
+                        } else {
+                            Err(WinError::ERROR_ACCESS_DENIED.into())
+                        }
+                    }
+                    WinError::ERROR_INVALID_NAME => {
+                        // does the target without trailing slashes exist?
+                        let suffix = resolved.path().trim_end_matches('/');
+                        let out_path = concatenate(resolved.dirfd(), Path::new(suffix))?;
+                        if out_path.exists() {
+                            Err(Error::EEXIST)
+                        } else {
+                            Err(WinError::ERROR_INVALID_NAME.into())
+                        }
+                    }
                     e => Err(e.into()),
                 }
             }

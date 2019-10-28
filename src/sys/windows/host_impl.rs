@@ -22,7 +22,7 @@ pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_er
         ERROR_SHARING_VIOLATION => host::__WASI_EACCES,
         ERROR_PRIVILEGE_NOT_HELD => host::__WASI_ENOTCAPABLE, // TODO is this the correct mapping?
         ERROR_INVALID_HANDLE => host::__WASI_EBADF,
-        ERROR_INVALID_NAME => host::__WASI_EINVAL,
+        ERROR_INVALID_NAME => host::__WASI_ENOENT,
         ERROR_NOT_ENOUGH_MEMORY => host::__WASI_ENOMEM,
         ERROR_OUTOFMEMORY => host::__WASI_ENOMEM,
         ERROR_DIR_NOT_EMPTY => host::__WASI_ENOTEMPTY,
@@ -35,6 +35,7 @@ pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_er
         ERROR_NOT_A_REPARSE_POINT => host::__WASI_EINVAL,
         ERROR_NEGATIVE_SEEK => host::__WASI_EINVAL,
         ERROR_DIRECTORY => host::__WASI_ENOTDIR,
+        ERROR_ALREADY_EXISTS => host::__WASI_EEXIST,
         _ => host::__WASI_ENOTSUP,
     }
 }

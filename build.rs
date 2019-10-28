@@ -200,7 +200,6 @@ mod wasm_tests {
                         "truncation_rights" => true,
                         "fd_readdir" => true,
                         "path_rename_trailing_slashes" => true,
-                        "path_symlink_trailing_slashes" => true,
                         _ => false,
                     }
                 } else {

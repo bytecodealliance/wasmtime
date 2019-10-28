@@ -86,6 +86,8 @@ win_error_expand! {
     ERROR_NEGATIVE_SEEK,
     /// The directory name is invalid.
     ERROR_DIRECTORY,
+    /// Cannot create a file when that file already exists.
+    ERROR_ALREADY_EXISTS,
 }
 
 impl WinError {
