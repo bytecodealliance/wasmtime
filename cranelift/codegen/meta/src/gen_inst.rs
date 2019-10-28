@@ -650,9 +650,6 @@ fn typeset_to_string(ts: &TypeSet) -> String {
     if !ts.bools.is_empty() {
         result += &format!(", bools={}", iterable_to_string(&ts.bools));
     }
-    if !ts.bitvecs.is_empty() {
-        result += &format!(", bitvecs={}", iterable_to_string(&ts.bitvecs));
-    }
     if !ts.specials.is_empty() {
         result += &format!(", specials=[{}]", iterable_to_string(&ts.specials));
     }
@@ -680,7 +677,6 @@ pub(crate) fn gen_typesets_table(type_sets: &UniqueTable<TypeSet>, fmt: &mut For
         for ts in type_sets.iter() {
             fmt.line("ir::instructions::ValueTypeSet {");
             fmt.indent(|fmt| {
-                assert!(ts.bitvecs.is_empty(), "Bitvector types are not emittable.");
                 fmt.comment(typeset_to_string(ts));
                 gen_bitset(&ts.lanes, "lanes", 16, fmt);
                 gen_bitset(&ts.ints, "ints", 8, fmt);

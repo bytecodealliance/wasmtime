@@ -16,7 +16,6 @@ static _RUST_NAME_PREFIX: &str = "ir::types::";
 /// or one of its subclasses.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ValueType {
-    BV(BVType),
     Lane(LaneType),
     Reference(ReferenceType),
     Special(SpecialType),
@@ -41,7 +40,6 @@ impl ValueType {
     /// Return a string containing the documentation comment for this type.
     pub fn doc(&self) -> String {
         match *self {
-            ValueType::BV(ref b) => b.doc(),
             ValueType::Lane(l) => l.doc(),
             ValueType::Reference(r) => r.doc(),
             ValueType::Special(s) => s.doc(),
@@ -52,7 +50,6 @@ impl ValueType {
     /// Return the number of bits in a lane.
     pub fn lane_bits(&self) -> u64 {
         match *self {
-            ValueType::BV(ref b) => b.lane_bits(),
             ValueType::Lane(l) => l.lane_bits(),
             ValueType::Reference(r) => r.lane_bits(),
             ValueType::Special(s) => s.lane_bits(),
@@ -76,7 +73,6 @@ impl ValueType {
     /// Find the unique number associated with this type.
     pub fn number(&self) -> Option<u8> {
         match *self {
-            ValueType::BV(_) => None,
             ValueType::Lane(l) => Some(l.number()),
             ValueType::Reference(r) => Some(r.number()),
             ValueType::Special(s) => Some(s.number()),
@@ -105,19 +101,11 @@ impl ValueType {
 impl fmt::Display for ValueType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ValueType::BV(ref b) => b.fmt(f),
             ValueType::Lane(l) => l.fmt(f),
             ValueType::Reference(r) => r.fmt(f),
             ValueType::Special(s) => s.fmt(f),
             ValueType::Vector(ref v) => v.fmt(f),
         }
-    }
-}
-
-/// Create a ValueType from a given bitvector type.
-impl From<BVType> for ValueType {
-    fn from(bv: BVType) -> Self {
-        ValueType::BV(bv)
     }
 }
 
@@ -260,13 +248,6 @@ impl LaneType {
     pub fn is_int(self) -> bool {
         match self {
             LaneType::IntType(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_bool(self) -> bool {
-        match self {
-            LaneType::BoolType(_) => true,
             _ => false,
         }
     }
@@ -417,41 +398,6 @@ impl fmt::Debug for VectorType {
             self.base,
             self.lane_count()
         )
-    }
-}
-
-/// A flat bitvector type. Used for semantics description only.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub(crate) struct BVType {
-    bits: u64,
-}
-
-impl BVType {
-    /// Initialize a new bitvector type with `n` bits.
-    pub fn new(bits: u16) -> Self {
-        Self { bits: bits.into() }
-    }
-
-    /// Return a string containing the documentation comment for this bitvector type.
-    pub fn doc(&self) -> String {
-        format!("A bitvector type with {} bits.", self.bits)
-    }
-
-    /// Return the number of bits in a lane.
-    pub fn lane_bits(&self) -> u64 {
-        self.bits
-    }
-}
-
-impl fmt::Display for BVType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "bv{}", self.bits)
-    }
-}
-
-impl fmt::Debug for BVType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "BVType(bits={})", self.lane_bits())
     }
 }
 
