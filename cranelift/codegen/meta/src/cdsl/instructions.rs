@@ -322,7 +322,7 @@ impl InstructionBuilder {
         for (i, op) in operands_in.iter().enumerate() {
             if op.is_value() {
                 value_opnums.push(i);
-            } else if op.is_immediate() {
+            } else if op.is_immediate_or_entityref() {
                 imm_opnums.push(i);
             } else {
                 assert!(op.is_varargs());
@@ -500,7 +500,7 @@ impl BoundInstruction {
             .inst
             .operands_in
             .iter()
-            .filter(|o| o.is_immediate())
+            .filter(|o| o.is_immediate_or_entityref())
             .count();
         if self.immediate_values.len() > immediate_count {
             return Err(format!(

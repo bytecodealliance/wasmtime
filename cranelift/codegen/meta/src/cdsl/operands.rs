@@ -46,8 +46,7 @@ impl Operand {
     }
 
     /// Returns true if the operand has an immediate kind or is an EntityRef.
-    // TODO inherited name from the python, rename to is_immediate_or_entityref later.
-    pub fn is_immediate(&self) -> bool {
+    pub fn is_immediate_or_entityref(&self) -> bool {
         match self.kind.fields {
             OperandKindFields::ImmEnum(_)
             | OperandKindFields::ImmValue

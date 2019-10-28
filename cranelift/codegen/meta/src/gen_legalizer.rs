@@ -66,7 +66,7 @@ fn unwrap_inst(transform: &Transform, fmt: &mut Formatter) -> bool {
         let mut imm_and_varargs = inst
             .operands_in
             .iter()
-            .filter(|op| op.is_immediate())
+            .filter(|op| op.is_immediate_or_entityref())
             .count();
         if iform.has_value_list {
             imm_and_varargs += 1;
@@ -115,7 +115,7 @@ fn unwrap_inst(transform: &Transform, fmt: &mut Formatter) -> bool {
         let emit_one_value =
             |fmt: &mut Formatter, needs_comma: bool, op_num: usize, op: &Operand| {
                 let comma = if needs_comma { "," } else { "" };
-                if op.is_immediate() {
+                if op.is_immediate_or_entityref() {
                     let n = inst.imm_opnums.iter().position(|&i| i == op_num).unwrap();
                     fmtln!(fmt, "{}{}", iform.imm_fields[n].member, comma);
                 } else if op.is_value() {
