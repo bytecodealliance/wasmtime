@@ -1215,6 +1215,34 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::F32x4Ge | Operator::F64x2Ge => {
             translate_vector_fcmp(FloatCC::GreaterThanOrEqual, type_of(op), builder, state)
         }
+        Operator::F32x4Add | Operator::F64x2Add => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().fadd(a, b))
+        }
+        Operator::F32x4Sub | Operator::F64x2Sub => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().fsub(a, b))
+        }
+        Operator::F32x4Mul | Operator::F64x2Mul => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().fmul(a, b))
+        }
+        Operator::F32x4Div | Operator::F64x2Div => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().fdiv(a, b))
+        }
+        Operator::F32x4Max | Operator::F64x2Max => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().fmax(a, b))
+        }
+        Operator::F32x4Min | Operator::F64x2Min => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().fmin(a, b))
+        }
+        Operator::F32x4Sqrt | Operator::F64x2Sqrt => {
+            let a = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().sqrt(a))
+        }
         Operator::I8x16Shl
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
@@ -1222,22 +1250,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2ShrS
         | Operator::F32x4Abs
         | Operator::F32x4Neg
-        | Operator::F32x4Sqrt
-        | Operator::F32x4Add
-        | Operator::F32x4Sub
-        | Operator::F32x4Mul
-        | Operator::F32x4Div
-        | Operator::F32x4Min
-        | Operator::F32x4Max
         | Operator::F64x2Abs
         | Operator::F64x2Neg
-        | Operator::F64x2Sqrt
-        | Operator::F64x2Add
-        | Operator::F64x2Sub
-        | Operator::F64x2Mul
-        | Operator::F64x2Div
-        | Operator::F64x2Min
-        | Operator::F64x2Max
         | Operator::I32x4TruncSF32x4Sat
         | Operator::I32x4TruncUF32x4Sat
         | Operator::I64x2TruncSF64x2Sat
@@ -1700,7 +1714,7 @@ fn type_of(operator: &Operator) -> Type {
 }
 
 /// Some SIMD operations only operate on I8X16 in CLIF; this will convert them to that type by
-/// adding a raw_bitcast if necessary
+/// adding a raw_bitcast if necessary.
 fn optionally_bitcast_vector(
     value: Value,
     needed_type: Type,
@@ -1711,4 +1725,29 @@ fn optionally_bitcast_vector(
     } else {
         value
     }
+}
+
+/// A helper for popping and bitcasting a single value; since SIMD values can lose their type by
+/// using v128 (i.e. CLIF's I8x16) we must re-type the values using a bitcast to avoid CLIF
+/// typing issues.
+fn pop1_with_bitcast(
+    state: &mut FuncTranslationState,
+    needed_type: Type,
+    builder: &mut FunctionBuilder,
+) -> Value {
+    optionally_bitcast_vector(state.pop1(), needed_type, builder)
+}
+
+/// A helper for popping and bitcasting two values; since SIMD values can lose their type by
+/// using v128 (i.e. CLIF's I8x16) we must re-type the values using a bitcast to avoid CLIF
+/// typing issues.
+fn pop2_with_bitcast(
+    state: &mut FuncTranslationState,
+    needed_type: Type,
+    builder: &mut FunctionBuilder,
+) -> (Value, Value) {
+    let (a, b) = state.pop2();
+    let bitcast_a = optionally_bitcast_vector(a, needed_type, builder);
+    let bitcast_b = optionally_bitcast_vector(b, needed_type, builder);
+    (bitcast_a, bitcast_b)
 }
