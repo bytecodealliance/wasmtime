@@ -1,9 +1,9 @@
 # Build example's file
 
-To build `main.wasm` use rustc (nightly) for wasm32 target with debug information:
+To build `demo.wasm` use rustc (nightly) for wasm32 target with debug information:
 
 ```
-rustc +nightly --target=wasm32-unknown-unknown main.rs --crate-type=cdylib
+rustc +nightly --target=wasm32-unknown-unknown demo.rs --crate-type=cdylib
 ```
 
 # Run example

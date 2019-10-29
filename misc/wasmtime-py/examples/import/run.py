@@ -1,4 +1,4 @@
 import wasmtime
-import main
+import demo
 
-main.test()
+demo.test()
