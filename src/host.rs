@@ -226,9 +226,14 @@ pub(crate) const RIGHTS_ALL: __wasi_rights_t = __WASI_RIGHT_FD_DATASYNC
 
 // Block and character device interaction is outside the scope of
 // WASI. Simply allow everything.
+// Those constants are unused on Windows
+#[allow(unused)]
 pub(crate) const RIGHTS_BLOCK_DEVICE_BASE: __wasi_rights_t = RIGHTS_ALL;
+#[allow(unused)]
 pub(crate) const RIGHTS_BLOCK_DEVICE_INHERITING: __wasi_rights_t = RIGHTS_ALL;
+#[allow(unused)]
 pub(crate) const RIGHTS_CHARACTER_DEVICE_BASE: __wasi_rights_t = RIGHTS_ALL;
+#[allow(unused)]
 pub(crate) const RIGHTS_CHARACTER_DEVICE_INHERITING: __wasi_rights_t = RIGHTS_ALL;
 
 // Only allow directory operations on directories. Directories can only

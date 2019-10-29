@@ -196,7 +196,6 @@ mod wasm_tests {
                         "readlink_no_buffer" => true,
                         "dangling_symlink" => true,
                         "symlink_loop" => true,
-                        "clock_time_get" => true,
                         "truncation_rights" => true,
                         "fd_readdir" => true,
                         "path_rename_trailing_slashes" => true,

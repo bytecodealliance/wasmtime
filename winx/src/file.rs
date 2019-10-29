@@ -320,42 +320,40 @@ pub unsafe fn get_file_access_mode(handle: RawHandle) -> Result<AccessMode> {
     use winapi::um::accctrl;
     use winapi::um::aclapi::GetSecurityInfo;
     use winapi::um::securitybaseapi::{GetAce, IsValidAcl};
-    unsafe {
-        let mut dacl = 0 as winnt::PACL;
-        let mut sec_desc = 0 as winnt::PSECURITY_DESCRIPTOR;
+    let mut dacl = 0 as winnt::PACL;
+    let mut sec_desc = 0 as winnt::PSECURITY_DESCRIPTOR;
 
-        let err = winerror::WinError::from_u32(GetSecurityInfo(
-            handle,
-            accctrl::SE_FILE_OBJECT,
-            winnt::DACL_SECURITY_INFORMATION,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            &mut dacl,
-            std::ptr::null_mut(),
-            &mut sec_desc,
-        ));
+    let err = winerror::WinError::from_u32(GetSecurityInfo(
+        handle,
+        accctrl::SE_FILE_OBJECT,
+        winnt::DACL_SECURITY_INFORMATION,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        &mut dacl,
+        std::ptr::null_mut(),
+        &mut sec_desc,
+    ));
 
-        if err != winerror::WinError::ERROR_SUCCESS {
-            return Err(err);
-        }
-
-        if IsValidAcl(dacl) == FALSE {
-            return Err(winerror::WinError::last());
-        }
-
-        // let count = (*dacl).AceCount;
-        let mut ace = 0 as winnt::PVOID;
-
-        if GetAce(dacl, 0, &mut ace) == FALSE {
-            return Err(winerror::WinError::last());
-        }
-
-        // TODO: check for PACCESS_ALLOWED_ACE in Ace before accessing
-        // let header = (*(ace as winnt::PACCESS_ALLOWED_ACE)).Header.AceType;
-        Ok(AccessMode::from_bits_truncate(
-            (*(ace as winnt::PACCESS_ALLOWED_ACE)).Mask,
-        ))
+    if err != winerror::WinError::ERROR_SUCCESS {
+        return Err(err);
     }
+
+    if IsValidAcl(dacl) == FALSE {
+        return Err(winerror::WinError::last());
+    }
+
+    // let count = (*dacl).AceCount;
+    let mut ace = 0 as winnt::PVOID;
+
+    if GetAce(dacl, 0, &mut ace) == FALSE {
+        return Err(winerror::WinError::last());
+    }
+
+    // TODO: check for PACCESS_ALLOWED_ACE in Ace before accessing
+    // let header = (*(ace as winnt::PACCESS_ALLOWED_ACE)).Header.AceType;
+    Ok(AccessMode::from_bits_truncate(
+        (*(ace as winnt::PACCESS_ALLOWED_ACE)).Mask,
+    ))
 }
 
 pub fn get_file_path(file: &File) -> Result<OsString> {
