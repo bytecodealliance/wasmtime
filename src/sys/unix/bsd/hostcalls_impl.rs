@@ -1,10 +1,10 @@
 use super::osfile::OsFile;
+use crate::helpers::str_to_cstring;
 use crate::hostcalls_impl::PathGet;
 use crate::sys::host_impl;
 use crate::{host, Error, Result};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
-use std::ffi::CString;
 use std::fs::File;
 use std::os::unix::prelude::AsRawFd;
 
@@ -12,7 +12,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use nix::errno;
     use nix::libc::unlinkat;
 
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let path_cstr = resolved.path_cstring()?;
 
     // nix doesn't expose unlinkat() yet
     match unsafe { unlinkat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0) } {
@@ -52,8 +52,8 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     use nix::{errno::Errno, fcntl::AtFlags, libc::symlinkat, sys::stat::fstatat};
 
-    let old_path_cstr = CString::new(old_path.as_bytes()).map_err(|_| Error::EILSEQ)?;
-    let new_path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let old_path_cstr = str_to_cstring(old_path)?;
+    let new_path_cstr = resolved.path_cstring()?;
 
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
@@ -93,8 +93,8 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::{errno::Errno, fcntl::AtFlags, libc::renameat, sys::stat::fstatat};
-    let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
-    let new_path_cstr = CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let old_path_cstr = resolved_old.path_cstring()?;
+    let new_path_cstr = resolved_new.path_cstring()?;
 
     let res = unsafe {
         renameat(

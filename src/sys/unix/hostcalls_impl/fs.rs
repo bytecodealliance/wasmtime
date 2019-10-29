@@ -7,7 +7,6 @@ use crate::sys::host_impl;
 use crate::{host, Error, Result};
 use nix::libc;
 use std::convert::TryInto;
-use std::ffi::CString;
 use std::fs::{File, Metadata};
 use std::os::unix::fs::FileExt;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};
@@ -58,7 +57,7 @@ pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: host::__wasi_fdflags_t) ->
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
     use nix::libc::mkdirat;
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let path_cstr = resolved.path_cstring()?;
     // nix doesn't expose mkdirat() yet
     match unsafe { mkdirat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0o777) } {
         0 => Ok(()),
@@ -68,8 +67,8 @@ pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::libc::linkat;
-    let old_path_cstr = CString::new(resolved_old.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
-    let new_path_cstr = CString::new(resolved_new.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let old_path_cstr = resolved_old.path_cstring()?;
+    let new_path_cstr = resolved_new.path_cstring()?;
 
     // Not setting AT_SYMLINK_FOLLOW fails on most filesystems
     let atflags = libc::AT_SYMLINK_FOLLOW;
@@ -184,7 +183,7 @@ pub(crate) fn path_open(
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
     use nix::errno::Errno;
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let path_cstr = resolved.path_cstring()?;
 
     // Linux requires that the buffer size is positive, whereas POSIX does not.
     // Use a fake buffer to store the results if the size is zero.
@@ -341,7 +340,7 @@ pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
     use nix::errno;
     use nix::libc::{unlinkat, AT_REMOVEDIR};
 
-    let path_cstr = CString::new(resolved.path().as_bytes()).map_err(|_| Error::EILSEQ)?;
+    let path_cstr = resolved.path_cstring()?;
 
     // nix doesn't expose unlinkat() yet
     match unsafe {

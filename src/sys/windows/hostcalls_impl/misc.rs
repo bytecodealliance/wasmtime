@@ -14,7 +14,6 @@ lazy_static! {
     static ref START_MONOTONIC: Instant = Instant::now();
 }
 
-
 pub(crate) fn clock_res_get(clock_id: host::__wasi_clockid_t) -> Result<host::__wasi_timestamp_t> {
     unimplemented!("clock_res_get")
 }
