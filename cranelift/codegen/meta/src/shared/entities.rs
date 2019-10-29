@@ -1,4 +1,9 @@
-use crate::cdsl::operands::{OperandKind, OperandKindBuilder as Builder, OperandKindFields};
+use crate::cdsl::operands::{OperandKind, OperandKindFields};
+
+/// Small helper to initialize an OperandBuilder with the right kind, for a given name and doc.
+fn new(format_field_name: &'static str, rust_type: &'static str, doc: &'static str) -> OperandKind {
+    OperandKind::new(format_field_name, rust_type, OperandKindFields::EntityRef).with_doc(doc)
+}
 
 pub(crate) struct EntityRefs {
     /// A reference to an extended basic block in the same function.
@@ -35,43 +40,34 @@ pub(crate) struct EntityRefs {
 impl EntityRefs {
     pub fn new() -> Self {
         Self {
-            ebb: create(
+            ebb: new(
                 "destination",
                 "ir::Ebb",
                 "An extended basic block in the same function.",
-            )
-            .build(),
+            ),
+            stack_slot: new("stack_slot", "ir::StackSlot", "A stack slot"),
 
-            stack_slot: create("stack_slot", "ir::StackSlot", "A stack slot").build(),
+            global_value: new("global_value", "ir::GlobalValue", "A global value."),
 
-            global_value: create("global_value", "ir::GlobalValue", "A global value.").build(),
+            sig_ref: new("sig_ref", "ir::SigRef", "A function signature."),
 
-            sig_ref: create("sig_ref", "ir::SigRef", "A function signature.").build(),
+            func_ref: new("func_ref", "ir::FuncRef", "An external function."),
 
-            func_ref: create("func_ref", "ir::FuncRef", "An external function.").build(),
+            jump_table: new("table", "ir::JumpTable", "A jump table."),
 
-            jump_table: create("table", "ir::JumpTable", "A jump table.").build(),
+            heap: new("heap", "ir::Heap", "A heap."),
 
-            heap: create("heap", "ir::Heap", "A heap.").build(),
+            table: new("table", "ir::Table", "A table."),
 
-            table: create("table", "ir::Table", "A table.").build(),
-
-            varargs: Builder::new("", "&[Value]", OperandKindFields::VariableArgs)
-                .with_doc(
-                    r#"
+            varargs: OperandKind::new("", "&[Value]", OperandKindFields::VariableArgs).with_doc(
+                r#"
                         A variable size list of `value` operands.
 
                         Use this to represent arguments passed to a function call, arguments
                         passed to an extended basic block, or a variable number of results
                         returned from an instruction.
                     "#,
-                )
-                .build(),
+            ),
         }
     }
-}
-
-/// Small helper to initialize an OperandBuilder with the right kind, for a given name and doc.
-fn create(format_field_name: &'static str, rust_type: &'static str, doc: &'static str) -> Builder {
-    Builder::new(format_field_name, rust_type, OperandKindFields::EntityRef).with_doc(doc)
 }

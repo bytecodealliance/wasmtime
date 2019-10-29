@@ -100,7 +100,7 @@ impl Operand {
     }
 }
 
-type EnumValues = HashMap<&'static str, &'static str>;
+pub type EnumValues = HashMap<&'static str, &'static str>;
 
 #[derive(Clone, Debug)]
 pub(crate) enum OperandKindFields {
@@ -126,6 +126,23 @@ pub(crate) struct OperandKind {
 }
 
 impl OperandKind {
+    pub fn new(
+        rust_field_name: &'static str,
+        rust_type: &'static str,
+        fields: OperandKindFields,
+    ) -> Self {
+        Self {
+            rust_field_name,
+            rust_type,
+            fields,
+            doc: None,
+        }
+    }
+    pub fn with_doc(mut self, doc: &'static str) -> Self {
+        assert!(self.doc.is_none());
+        self.doc = Some(doc);
+        self
+    }
     fn doc(&self) -> Option<&str> {
         if let Some(doc) = &self.doc {
             return Some(doc);
@@ -142,71 +159,15 @@ impl OperandKind {
 
 impl Into<OperandKind> for &TypeVar {
     fn into(self) -> OperandKind {
-        OperandKindBuilder::new(
+        OperandKind::new(
             "value",
             "ir::Value",
             OperandKindFields::TypeVar(self.into()),
         )
-        .build()
     }
 }
 impl Into<OperandKind> for &OperandKind {
     fn into(self) -> OperandKind {
         self.clone()
-    }
-}
-
-pub(crate) struct OperandKindBuilder {
-    rust_field_name: &'static str,
-    rust_type: &'static str,
-    fields: OperandKindFields,
-    doc: Option<&'static str>,
-}
-
-impl OperandKindBuilder {
-    pub fn new(
-        rust_field_name: &'static str,
-        rust_type: &'static str,
-        fields: OperandKindFields,
-    ) -> Self {
-        Self {
-            rust_field_name,
-            rust_type,
-            fields,
-            doc: None,
-        }
-    }
-    pub fn new_imm(rust_field_name: &'static str, rust_type: &'static str) -> Self {
-        Self {
-            rust_field_name,
-            rust_type,
-            fields: OperandKindFields::ImmValue,
-            doc: None,
-        }
-    }
-    pub fn new_enum(
-        rust_field_name: &'static str,
-        rust_type: &'static str,
-        values: EnumValues,
-    ) -> Self {
-        Self {
-            rust_field_name,
-            rust_type,
-            fields: OperandKindFields::ImmEnum(values),
-            doc: None,
-        }
-    }
-    pub fn with_doc(mut self, doc: &'static str) -> Self {
-        assert!(self.doc.is_none());
-        self.doc = Some(doc);
-        self
-    }
-    pub fn build(self) -> OperandKind {
-        OperandKind {
-            rust_type: self.rust_type,
-            fields: self.fields,
-            rust_field_name: self.rust_field_name,
-            doc: self.doc,
-        }
     }
 }

@@ -1,4 +1,4 @@
-use crate::cdsl::operands::{OperandKind, OperandKindBuilder as Builder};
+use crate::cdsl::operands::{EnumValues, OperandKind, OperandKindFields};
 
 use std::collections::HashMap;
 
@@ -73,45 +73,40 @@ pub(crate) struct Immediates {
     pub trapcode: OperandKind,
 }
 
+fn new_imm(format_field_name: &'static str, rust_type: &'static str) -> OperandKind {
+    OperandKind::new(format_field_name, rust_type, OperandKindFields::ImmValue)
+}
+fn new_enum(
+    format_field_name: &'static str,
+    rust_type: &'static str,
+    values: EnumValues,
+) -> OperandKind {
+    OperandKind::new(
+        format_field_name,
+        rust_type,
+        OperandKindFields::ImmEnum(values),
+    )
+}
+
 impl Immediates {
     pub fn new() -> Self {
         Self {
-            imm64: Builder::new_imm("imm", "ir::immediates::Imm64")
-                .with_doc("A 64-bit immediate integer.")
-                .build(),
-
-            uimm8: Builder::new_imm("imm", "ir::immediates::Uimm8")
-                .with_doc("An 8-bit immediate unsigned integer.")
-                .build(),
-
-            uimm32: Builder::new_imm("imm", "ir::immediates::Uimm32")
-                .with_doc("A 32-bit immediate unsigned integer.")
-                .build(),
-
-            uimm128: Builder::new_imm("imm", "ir::Immediate")
-                .with_doc("A 128-bit immediate unsigned integer.")
-                .build(),
-
-            pool_constant: Builder::new_imm("constant_handle", "ir::Constant")
-                .with_doc("A constant stored in the constant pool.")
-                .build(),
-
-            offset32: Builder::new_imm("offset", "ir::immediates::Offset32")
-                .with_doc("A 32-bit immediate signed offset.")
-                .build(),
-
-            ieee32: Builder::new_imm("imm", "ir::immediates::Ieee32")
-                .with_doc("A 32-bit immediate floating point number.")
-                .build(),
-
-            ieee64: Builder::new_imm("imm", "ir::immediates::Ieee64")
-                .with_doc("A 64-bit immediate floating point number.")
-                .build(),
-
-            boolean: Builder::new_imm("imm", "bool")
-                .with_doc("An immediate boolean.")
-                .build(),
-
+            imm64: new_imm("imm", "ir::immediates::Imm64").with_doc("A 64-bit immediate integer."),
+            uimm8: new_imm("imm", "ir::immediates::Uimm8")
+                .with_doc("An 8-bit immediate unsigned integer."),
+            uimm32: new_imm("imm", "ir::immediates::Uimm32")
+                .with_doc("A 32-bit immediate unsigned integer."),
+            uimm128: new_imm("imm", "ir::Immediate")
+                .with_doc("A 128-bit immediate unsigned integer."),
+            pool_constant: new_imm("constant_handle", "ir::Constant")
+                .with_doc("A constant stored in the constant pool."),
+            offset32: new_imm("offset", "ir::immediates::Offset32")
+                .with_doc("A 32-bit immediate signed offset."),
+            ieee32: new_imm("imm", "ir::immediates::Ieee32")
+                .with_doc("A 32-bit immediate floating point number."),
+            ieee64: new_imm("imm", "ir::immediates::Ieee64")
+                .with_doc("A 64-bit immediate floating point number."),
+            boolean: new_imm("imm", "bool").with_doc("An immediate boolean."),
             intcc: {
                 let mut intcc_values = HashMap::new();
                 intcc_values.insert("eq", "Equal");
@@ -126,9 +121,8 @@ impl Immediates {
                 intcc_values.insert("ult", "UnsignedLessThan");
                 intcc_values.insert("of", "Overflow");
                 intcc_values.insert("nof", "NotOverflow");
-                Builder::new_enum("cond", "ir::condcodes::IntCC", intcc_values)
+                new_enum("cond", "ir::condcodes::IntCC", intcc_values)
                     .with_doc("An integer comparison condition code.")
-                    .build()
             },
 
             floatcc: {
@@ -147,28 +141,20 @@ impl Immediates {
                 floatcc_values.insert("ule", "UnorderedOrLessThanOrEqual");
                 floatcc_values.insert("ugt", "UnorderedOrGreaterThan");
                 floatcc_values.insert("uge", "UnorderedOrGreaterThanOrEqual");
-                Builder::new_enum("cond", "ir::condcodes::FloatCC", floatcc_values)
+                new_enum("cond", "ir::condcodes::FloatCC", floatcc_values)
                     .with_doc("A floating point comparison condition code")
-                    .build()
             },
 
-            memflags: Builder::new_imm("flags", "ir::MemFlags")
-                .with_doc("Memory operation flags")
-                .build(),
-
-            regunit: Builder::new_imm("regunit", "isa::RegUnit")
-                .with_doc("A register unit in the target ISA")
-                .build(),
-
+            memflags: new_imm("flags", "ir::MemFlags").with_doc("Memory operation flags"),
+            regunit: new_imm("regunit", "isa::RegUnit")
+                .with_doc("A register unit in the target ISA"),
             trapcode: {
                 let mut trapcode_values = HashMap::new();
                 trapcode_values.insert("stk_ovf", "StackOverflow");
                 trapcode_values.insert("heap_oob", "HeapOutOfBounds");
                 trapcode_values.insert("int_ovf", "IntegerOverflow");
                 trapcode_values.insert("int_divz", "IntegerDivisionByZero");
-                Builder::new_enum("code", "ir::TrapCode", trapcode_values)
-                    .with_doc("A trap reason code.")
-                    .build()
+                new_enum("code", "ir::TrapCode", trapcode_values).with_doc("A trap reason code.")
             },
         }
     }

@@ -49,6 +49,7 @@ pub(crate) struct InstructionFormat {
 pub(crate) struct FormatStructure {
     pub num_value_operands: usize,
     pub has_value_list: bool,
+    /// Tuples of (Rust field name / Rust type) for each immediate field.
     pub imm_field_names: Vec<(&'static str, &'static str)>,
 }
 
