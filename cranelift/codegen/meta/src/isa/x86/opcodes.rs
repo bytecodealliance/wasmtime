@@ -15,6 +15,14 @@ pub static ADD_IMM: [u8; 1] = [0x81];
 /// Add sign-extended imm8 to r/m{16,32,64}.
 pub static ADD_IMM8_SIGN_EXTEND: [u8; 1] = [0x83];
 
+/// Add packed double-precision floating-point values from xmm2/mem to xmm1 and store result in  
+/// xmm1 (SSE2).
+pub static ADDPD: [u8; 3] = [0x66, 0x0f, 0x58];
+
+/// Add packed single-precision floating-point values from xmm2/mem to xmm1 and store result in  
+/// xmm1 (SSE).
+pub static ADDPS: [u8; 2] = [0x0f, 0x58];
+
 /// Add the low double-precision floating-point value from xmm2/mem to xmm1
 /// and store the result in xmm1.
 pub static ADDSD: [u8; 3] = [0xf2, 0x0f, 0x58];
@@ -93,6 +101,14 @@ pub static CVTTSS2SI: [u8; 3] = [0xf3, 0x0f, 0x2c];
 /// Unsigned divide for {16,32,64}-bit.
 pub static DIV: [u8; 1] = [0xf7];
 
+/// Divide packed double-precision floating-point values in xmm1 by packed double-precision
+/// floating-point values in xmm2/mem (SSE2).
+pub static DIVPD: [u8; 3] = [0x66, 0x0f, 0x5e];
+
+/// Divide packed single-precision floating-point values in xmm1 by packed single-precision
+/// floating-point values in xmm2/mem (SSE).
+pub static DIVPS: [u8; 2] = [0x0f, 0x5e];
+
 /// Divide low double-precision floating-point value in xmm1 by low double-precision
 /// floating-point value in xmm2/m64.
 pub static DIVSD: [u8; 3] = [0xf2, 0x0f, 0x5e];
@@ -142,6 +158,14 @@ pub static LEA: [u8; 1] = [0x8d];
 /// Count the number of leading zero bits.
 pub static LZCNT: [u8; 3] = [0xf3, 0x0f, 0xbd];
 
+/// Return the maximum packed double-precision floating-point values between xmm1 and xmm2/m128
+/// (SSE2).
+pub static MAXPD: [u8; 3] = [0x66, 0x0f, 0x5f];
+
+/// Return the maximum packed single-precision floating-point values between  xmm1 and xmm2/m128
+/// (SSE).
+pub static MAXPS: [u8; 2] = [0x0f, 0x5f];
+
 /// Return the maximum scalar double-precision floating-point value between
 /// xmm2/m64 and xmm1.
 pub static MAXSD: [u8; 3] = [0xf2, 0x0f, 0x5f];
@@ -149,6 +173,14 @@ pub static MAXSD: [u8; 3] = [0xf2, 0x0f, 0x5f];
 /// Return the maximum scalar single-precision floating-point value between
 /// xmm2/m32 and xmm1.
 pub static MAXSS: [u8; 3] = [0xf3, 0x0f, 0x5f];
+
+/// Return the minimum packed double-precision floating-point values between xmm1 and xmm2/m128
+/// (SSE2).
+pub static MINPD: [u8; 3] = [0x66, 0x0f, 0x5d];
+
+/// Return the minimum packed single-precision floating-point values between xmm1 and xmm2/m128
+/// (SSE).
+pub static MINPS: [u8; 2] = [0x0f, 0x5d];
 
 /// Return the minimum scalar double-precision floating-point value between
 /// xmm2/m64 and xmm1.
@@ -223,6 +255,14 @@ pub static MOVZX_WORD: [u8; 2] = [0x0f, 0xb7];
 
 /// Unsigned multiply for {16,32,64}-bit.
 pub static MUL: [u8; 1] = [0xf7];
+
+/// Multiply packed double-precision floating-point values from xmm2/mem to xmm1 and store result
+/// in xmm1 (SSE2).
+pub static MULPD: [u8; 3] = [0x66, 0x0f, 0x59];
+
+/// Multiply packed single-precision floating-point values from xmm2/mem to xmm1 and store result
+/// in xmm1 (SSE).
+pub static MULPS: [u8; 2] = [0x0f, 0x59];
 
 /// Multiply the low double-precision floating-point value in xmm2/m64 by the
 /// low double-precision floating-point value in xmm1.
@@ -474,6 +514,14 @@ pub static SBB: [u8; 1] = [0x19];
 /// Set byte if overflow (OF=1).
 pub static SET_BYTE_IF_OVERFLOW: [u8; 2] = [0x0f, 0x90];
 
+/// Compute the square root of the packed double-precision floating-point values and store the
+/// result in xmm1 (SSE2).
+pub static SQRTPD: [u8; 3] = [0x66, 0x0f, 0x51];
+
+/// Compute the square root of the packed double-precision floating-point values and store the
+/// result in xmm1 (SSE).
+pub static SQRTPS: [u8; 2] = [0x0f, 0x51];
+
 /// Compute square root of scalar double-precision floating-point value.
 pub static SQRTSD: [u8; 3] = [0xf2, 0x0f, 0x51];
 
@@ -482,6 +530,14 @@ pub static SQRTSS: [u8; 3] = [0xf3, 0x0f, 0x51];
 
 /// Subtract r{16,32,64} from r/m of same size.
 pub static SUB: [u8; 1] = [0x29];
+
+/// Subtract packed double-precision floating-point values in xmm2/mem from xmm1 and store result
+/// in xmm1 (SSE2).
+pub static SUBPD: [u8; 3] = [0x66, 0x0f, 0x5c];
+
+/// Subtract packed single-precision floating-point values in xmm2/mem from xmm1 and store result
+/// in xmm1 (SSE).
+pub static SUBPS: [u8; 2] = [0x0f, 0x5c];
 
 /// Subtract the low double-precision floating-point value in xmm2/m64 from xmm1
 /// and store the result in xmm1.

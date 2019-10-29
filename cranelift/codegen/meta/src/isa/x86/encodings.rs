@@ -417,6 +417,8 @@ pub(crate) fn define(
     let fill = shared.by_name("fill");
     let fill_nop = shared.by_name("fill_nop");
     let floor = shared.by_name("floor");
+    let fmax = shared.by_name("fmax");
+    let fmin = shared.by_name("fmin");
     let fmul = shared.by_name("fmul");
     let fpromote = shared.by_name("fpromote");
     let fsub = shared.by_name("fsub");
@@ -2080,6 +2082,29 @@ pub(crate) fn define(
         fcmp.bind(vector(F64, sse_vector_size)),
         rec_pfcmp.opcodes(&CMPPD),
     );
+
+    // SIMD float arithmetic
+    for (ty, inst, opcodes) in &[
+        (F32, fadd, &ADDPS[..]),
+        (F64, fadd, &ADDPD[..]),
+        (F32, fsub, &SUBPS[..]),
+        (F64, fsub, &SUBPD[..]),
+        (F32, fmul, &MULPS[..]),
+        (F64, fmul, &MULPD[..]),
+        (F32, fdiv, &DIVPS[..]),
+        (F64, fdiv, &DIVPD[..]),
+        (F32, fmin, &MINPS[..]),
+        (F64, fmin, &MINPD[..]),
+        (F32, fmax, &MAXPS[..]),
+        (F64, fmax, &MAXPD[..]),
+    ] {
+        let inst_ = inst.bind(vector(*ty, sse_vector_size));
+        e.enc_both(inst_, rec_fa.opcodes(opcodes));
+    }
+    for (ty, inst, opcodes) in &[(F32, sqrt, &SQRTPS[..]), (F64, sqrt, &SQRTPD[..])] {
+        let inst_ = inst.bind(vector(*ty, sse_vector_size));
+        e.enc_both(inst_, rec_furm.opcodes(opcodes));
+    }
 
     // Reference type instructions
 

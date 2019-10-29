@@ -173,3 +173,27 @@ ebb0:
 [-, %xmm3]    v3 = usub_sat v0, v1 ; bin: 66 0f d9 dd
     return
 }
+
+function %float_arithmetic_f32x4(f32x4, f32x4) {
+ebb0(v0: f32x4 [%xmm3], v1: f32x4 [%xmm5]):
+[-, %xmm3]    v2 = fadd v0, v1      ; bin: 40 0f 58 dd
+[-, %xmm3]    v3 = fsub v0, v1      ; bin: 40 0f 5c dd
+[-, %xmm3]    v4 = fmul v0, v1      ; bin: 40 0f 59 dd
+[-, %xmm3]    v5 = fdiv v0, v1      ; bin: 40 0f 5e dd
+[-, %xmm3]    v6 = fmin v0, v1      ; bin: 40 0f 5d dd
+[-, %xmm3]    v7 = fmax v0, v1      ; bin: 40 0f 5f dd
+[-, %xmm3]    v8 = sqrt v0          ; bin: 40 0f 51 db
+    return
+}
+
+function %float_arithmetic_f64x2(f64x2, f64x2) {
+ebb0(v0: f64x2 [%xmm3], v1: f64x2 [%xmm5]):
+[-, %xmm3]    v2 = fadd v0, v1      ; bin: 66 40 0f 58 dd
+[-, %xmm3]    v3 = fsub v0, v1      ; bin: 66 40 0f 5c dd
+[-, %xmm3]    v4 = fmul v0, v1      ; bin: 66 40 0f 59 dd
+[-, %xmm3]    v5 = fdiv v0, v1      ; bin: 66 40 0f 5e dd
+[-, %xmm3]    v6 = fmin v0, v1      ; bin: 66 40 0f 5d dd
+[-, %xmm3]    v7 = fmax v0, v1      ; bin: 66 40 0f 5f dd
+[-, %xmm3]    v8 = sqrt v0          ; bin: 66 40 0f 51 db
+    return
+}

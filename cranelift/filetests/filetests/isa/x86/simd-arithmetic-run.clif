@@ -153,3 +153,77 @@ ebb0:
     return v8
 }
 ; run
+
+function %add_sub_f32x4() -> b1 {
+ebb0:
+    v0 = vconst.f32x4 [0x4.2 0.0 0.0 0.0]
+    v1 = vconst.f32x4 [0x1.0 0x1.0 0x1.0 0x1.0]
+    v2 = vconst.f32x4 [0x5.2 0x1.0 0x1.0 0x1.0]
+
+    v3 = fadd v0, v1
+    v4 = fcmp eq v3, v2
+
+    v6 = fsub v2, v1
+    v7 = fcmp eq v6, v0
+
+    v8 = band v4, v7
+    v9 = vall_true v8
+    return v9
+}
+; run
+
+function %mul_div_f32x4() -> b1 {
+ebb0:
+    v0 = vconst.f32x4 [0x4.2 -0x2.1 0x2.0 0.0]
+    v1 = vconst.f32x4 [0x3.4 0x6.7 0x8.9 0xa.b]
+    v2 = vconst.f32x4 [0xd.68 -0xd.47 0x11.2 0x0.0]
+
+    v3 = fmul v0, v1
+    v4 = fcmp eq v3, v2
+
+    v6 = fdiv v2, v1
+    v7 = fcmp eq v6, v0
+
+    v8 = band v4, v7
+    v9 = vall_true v8
+    return v9
+}
+; run
+
+function %sqrt_f64x2() -> b1 {
+ebb0:
+    v0 = vconst.f64x2 [0x9.0 0x1.0]
+    v1 = sqrt v0
+    v2 = vconst.f64x2 [0x3.0 0x1.0]
+    v3 = fcmp eq v2, v1
+    v4 = vall_true v3
+    return v4
+}
+; run
+
+function %fmax_f64x2() -> b1 {
+ebb0:
+    v0 = vconst.f64x2 [-0.0 -0x1.0]
+    v1 = vconst.f64x2 [+0.0 +0x1.0]
+
+    v2 = fmax v0, v1
+    v3 = fcmp eq v2, v1
+    v4 = vall_true v3
+
+    return v4
+}
+; run
+
+
+function %fmin_f64x2() -> b1 {
+ebb0:
+    v0 = vconst.f64x2 [-0x1.0 -0x1.0]
+    v1 = vconst.f64x2 [+0.0 +0x1.0]
+
+    v2 = fmin v0, v1
+    v3 = fcmp eq v2, v0
+    v4 = vall_true v3
+
+    return v4
+}
+; run
