@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 
 fn run_example(name: &'static str) {
     let cargo = env::var("CARGO").unwrap_or("cargo".to_string());
-    let pkg_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or(".".to_string());
+    let pkg_dir = env!("CARGO_MANIFEST_DIR");
     assert!(
         Command::new(cargo)
             .current_dir(pkg_dir)
