@@ -95,13 +95,13 @@ impl Immediates {
 
             pool_constant: Builder::new_imm("poolConstant")
                 .doc("A constant stored in the constant pool.")
-                .default_member("constant_handle")
+                .rust_field_name("constant_handle")
                 .rust_type("ir::Constant")
                 .build(),
 
             offset32: Builder::new_imm("offset32")
                 .doc("A 32-bit immediate signed offset.")
-                .default_member("offset")
+                .rust_field_name("offset")
                 .build(),
 
             ieee32: Builder::new_imm("ieee32")
@@ -133,7 +133,7 @@ impl Immediates {
                 intcc_values.insert("nof", "NotOverflow");
                 Builder::new_enum("intcc", intcc_values)
                     .doc("An integer comparison condition code.")
-                    .default_member("cond")
+                    .rust_field_name("cond")
                     .rust_type("ir::condcodes::IntCC")
                     .build()
             },
@@ -156,14 +156,14 @@ impl Immediates {
                 floatcc_values.insert("uge", "UnorderedOrGreaterThanOrEqual");
                 Builder::new_enum("floatcc", floatcc_values)
                     .doc("A floating point comparison condition code")
-                    .default_member("cond")
+                    .rust_field_name("cond")
                     .rust_type("ir::condcodes::FloatCC")
                     .build()
             },
 
             memflags: Builder::new_imm("memflags")
                 .doc("Memory operation flags")
-                .default_member("flags")
+                .rust_field_name("flags")
                 .rust_type("ir::MemFlags")
                 .build(),
 
@@ -180,7 +180,7 @@ impl Immediates {
                 trapcode_values.insert("int_divz", "IntegerDivisionByZero");
                 Builder::new_enum("trapcode", trapcode_values)
                     .doc("A trap reason code.")
-                    .default_member("code")
+                    .rust_field_name("code")
                     .rust_type("ir::TrapCode")
                     .build()
             },

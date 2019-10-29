@@ -36,7 +36,7 @@ impl EntityRefs {
     pub fn new() -> Self {
         Self {
             ebb: create("ebb", "An extended basic block in the same function.")
-                .default_member("destination")
+                .rust_field_name("destination")
                 .build(),
 
             stack_slot: create("stack_slot", "A stack slot").build(),
@@ -48,7 +48,7 @@ impl EntityRefs {
             func_ref: create("func_ref", "An external function.").build(),
 
             jump_table: create("jump_table", "A jump table.")
-                .default_member("table")
+                .rust_field_name("table")
                 .build(),
 
             heap: create("heap", "A heap.").build(),

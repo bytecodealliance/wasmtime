@@ -95,8 +95,8 @@ impl EncodingBuilder {
                         &inst.inst.format,
                         immediate_operand
                             .kind
-                            .default_member()
-                            .expect("Immediates must always have a default member name set."),
+                            .rust_field_name()
+                            .expect("Immediates must always have a field name."),
                         immediate_value.to_string(),
                     );
                     inst_predicate = if let Some(type_predicate) = inst_predicate {

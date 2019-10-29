@@ -112,7 +112,7 @@ pub(crate) enum OperandKindFields {
 pub(crate) struct OperandKind {
     pub name: &'static str,
     doc: Option<&'static str>,
-    default_member: Option<&'static str>,
+    rust_field_name: Option<&'static str>,
     /// The camel-cased name of an operand kind is also the Rust type used to represent it.
     pub rust_type: String,
     pub fields: OperandKindFields,
@@ -122,7 +122,7 @@ impl OperandKind {
     fn new(
         name: &'static str,
         doc: Option<&'static str>,
-        default_member: Option<&'static str>,
+        rust_field_name: Option<&'static str>,
         rust_type: Option<&'static str>,
         fields: OperandKindFields,
     ) -> Self {
@@ -142,15 +142,15 @@ impl OperandKind {
         Self {
             name,
             doc,
-            default_member,
+            rust_field_name,
             rust_type,
             fields,
         }
     }
 
     /// Name of this OperandKind in the format's member field.
-    pub fn default_member(&self) -> Option<&'static str> {
-        if let Some(member) = &self.default_member {
+    pub fn rust_field_name(&self) -> Option<&'static str> {
+        if let Some(member) = &self.rust_field_name {
             return Some(member);
         }
         match &self.fields {
@@ -188,7 +188,7 @@ impl Into<OperandKind> for &OperandKind {
 pub(crate) struct OperandKindBuilder {
     name: &'static str,
     doc: Option<&'static str>,
-    default_member: Option<&'static str>,
+    rust_field_name: Option<&'static str>,
     rust_type: Option<&'static str>,
     fields: OperandKindFields,
 }
@@ -198,7 +198,7 @@ impl OperandKindBuilder {
         Self {
             name,
             doc: None,
-            default_member: None,
+            rust_field_name: None,
             rust_type: None,
             fields,
         }
@@ -207,7 +207,7 @@ impl OperandKindBuilder {
         Self {
             name,
             doc: None,
-            default_member: None,
+            rust_field_name: None,
             rust_type: None,
             fields: OperandKindFields::ImmValue,
         }
@@ -216,7 +216,7 @@ impl OperandKindBuilder {
         Self {
             name,
             doc: None,
-            default_member: None,
+            rust_field_name: None,
             rust_type: None,
             fields: OperandKindFields::ImmEnum(values),
         }
@@ -226,9 +226,9 @@ impl OperandKindBuilder {
         self.doc = Some(doc);
         self
     }
-    pub fn default_member(mut self, default_member: &'static str) -> Self {
-        assert!(self.default_member.is_none());
-        self.default_member = Some(default_member);
+    pub fn rust_field_name(mut self, rust_field_name: &'static str) -> Self {
+        assert!(self.rust_field_name.is_none());
+        self.rust_field_name = Some(rust_field_name);
         self
     }
     pub fn rust_type(mut self, rust_type: &'static str) -> Self {
@@ -240,7 +240,7 @@ impl OperandKindBuilder {
         OperandKind::new(
             self.name,
             self.doc,
-            self.default_member,
+            self.rust_field_name,
             self.rust_type,
             self.fields,
         )
