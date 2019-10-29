@@ -895,11 +895,18 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     }
     .to_string()];
 
+    let mut args_doc = Vec::new();
+    let mut rets_doc = Vec::new();
+
     // The controlling type variable will be inferred from the input values if
     // possible. Otherwise, it is the first method argument.
     if let Some(poly) = &inst.polymorphic_info {
         if !poly.use_typevar_operand {
             args.push(format!("{}: crate::ir::Type", poly.ctrl_typevar.name));
+            args_doc.push(format!(
+                "- {} (controlling type variable): {}",
+                poly.ctrl_typevar.name, poly.ctrl_typevar.doc
+            ));
         }
     }
 
@@ -915,6 +922,23 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
             op.kind.rust_type.clone()
         };
         args.push(format!("{}: {}", op.name, t));
+        args_doc.push(format!(
+            "- {}: {}",
+            op.name,
+            op.doc
+                .as_ref()
+                .expect("every instruction's input operand must be documented")
+        ));
+    }
+
+    for op in &inst.operands_out {
+        rets_doc.push(format!(
+            "- {}: {}",
+            op.name,
+            op.doc
+                .as_ref()
+                .expect("every instruction's output operand must be documented")
+        ));
     }
 
     let rtype = match inst.value_results.len() {
@@ -938,6 +962,23 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     );
 
     fmt.doc_comment(&inst.doc);
+    if !args_doc.is_empty() {
+        fmt.line("///");
+        fmt.doc_comment("Inputs:");
+        fmt.line("///");
+        for doc_line in args_doc {
+            fmt.doc_comment(doc_line);
+        }
+    }
+    if !rets_doc.is_empty() {
+        fmt.line("///");
+        fmt.doc_comment("Outputs:");
+        fmt.line("///");
+        for doc_line in rets_doc {
+            fmt.doc_comment(doc_line);
+        }
+    }
+
     fmt.line("#[allow(non_snake_case)]");
     fmtln!(fmt, "fn {} {{", proto);
     fmt.indent(|fmt| {
@@ -1058,9 +1099,13 @@ fn gen_builder(
     fmt.indent(|fmt| {
         for inst in instructions.values() {
             gen_inst_builder(inst, &*inst.format, fmt);
+            fmt.empty_line();
         }
-        for format in formats {
+        for (i, format) in formats.iter().enumerate() {
             gen_format_constructor(format, fmt);
+            if i + 1 != formats.len() {
+                fmt.empty_line();
+            }
         }
     });
     fmt.line("}");
