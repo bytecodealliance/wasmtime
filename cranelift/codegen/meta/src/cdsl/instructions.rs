@@ -555,7 +555,7 @@ fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionF
     // - its number and names of input immediate operands,
     // - whether it has a value list or not.
     let mut num_values = 0;
-    let mut imm_index = 0;
+    let mut num_immediates = 0;
 
     for operand in operands_in.iter() {
         if operand.is_varargs() {
@@ -569,15 +569,15 @@ fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionF
         if operand.is_value() {
             num_values += 1;
         }
-        if let Some(imm_name) = operand.kind.imm_name() {
-            if let Some(format_field) = format.imm_fields.get(imm_index) {
+        if operand.is_immediate_or_entityref() {
+            if let Some(format_field) = format.imm_fields.get(num_immediates) {
                 assert_eq!(
-                    format_field.kind.name, imm_name,
+                    format_field.kind.name, operand.kind.name,
                     "{}th operand of {} should be {} (according to format), not {} (according to \
                      inst definition). You may need to use a different format.",
-                    imm_index, inst_name, format_field.kind.name, imm_name
+                    num_immediates, inst_name, format_field.kind.name, operand.kind.name
                 );
-                imm_index += 1;
+                num_immediates += 1;
             }
         }
     }
@@ -590,7 +590,7 @@ fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionF
     );
 
     assert_eq!(
-        imm_index,
+        num_immediates,
         format.imm_fields.len(),
         "inst {} doesn't have as many immediate input \
          operands as its format {} declares; you may need to use a different format.",

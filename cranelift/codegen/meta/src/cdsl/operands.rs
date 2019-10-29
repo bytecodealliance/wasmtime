@@ -172,15 +172,6 @@ impl OperandKind {
             | OperandKindFields::VariableArgs => None,
         }
     }
-
-    pub fn imm_name(&self) -> Option<&str> {
-        match self.fields {
-            OperandKindFields::ImmEnum(_)
-            | OperandKindFields::ImmValue
-            | OperandKindFields::EntityRef => Some(&self.name),
-            _ => None,
-        }
-    }
 }
 
 impl Into<OperandKind> for &TypeVar {
