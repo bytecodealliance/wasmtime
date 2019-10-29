@@ -1019,12 +1019,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(splatted)
         }
         Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
-            let vector = optionally_bitcast_vector(state.pop1(), type_of(op), builder);
+            let vector = pop1_with_bitcast(state, type_of(op), builder);
             let extracted = builder.ins().extractlane(vector, lane.clone());
             state.push1(builder.ins().sextend(I32, extracted))
         }
         Operator::I8x16ExtractLaneU { lane } | Operator::I16x8ExtractLaneU { lane } => {
-            let vector = optionally_bitcast_vector(state.pop1(), type_of(op), builder);
+            let vector = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().extractlane(vector, lane.clone()));
             // on x86, PEXTRB zeroes the upper bits of the destination register of extractlane so uextend is elided; of course, this depends on extractlane being legalized to a PEXTRB
         }
@@ -1032,7 +1032,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2ExtractLane { lane }
         | Operator::F32x4ExtractLane { lane }
         | Operator::F64x2ExtractLane { lane } => {
-            let vector = optionally_bitcast_vector(state.pop1(), type_of(op), builder);
+            let vector = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().extractlane(vector, lane.clone()))
         }
         Operator::I8x16ReplaceLane { lane }
@@ -1054,9 +1054,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             ))
         }
         Operator::V8x16Shuffle { lanes, .. } => {
-            let (vector_a, vector_b) = state.pop2();
-            let a = optionally_bitcast_vector(vector_a, I8X16, builder);
-            let b = optionally_bitcast_vector(vector_b, I8X16, builder);
+            let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             let lanes = ConstantData::from(lanes.as_ref());
             let mask = builder.func.dfg.immediates.push(lanes);
             let shuffled = builder.ins().shuffle(a, b, mask);
@@ -1067,35 +1065,35 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // types (e.g. i8x16) for others.
         }
         Operator::I8x16Add | Operator::I16x8Add | Operator::I32x4Add | Operator::I64x2Add => {
-            let (a, b) = state.pop2();
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().iadd(a, b))
         }
         Operator::I8x16AddSaturateS | Operator::I16x8AddSaturateS => {
-            let (a, b) = state.pop2();
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().sadd_sat(a, b))
         }
         Operator::I8x16AddSaturateU | Operator::I16x8AddSaturateU => {
-            let (a, b) = state.pop2();
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().uadd_sat(a, b))
         }
         Operator::I8x16Sub | Operator::I16x8Sub | Operator::I32x4Sub | Operator::I64x2Sub => {
-            let (a, b) = state.pop2();
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().isub(a, b))
         }
         Operator::I8x16SubSaturateS | Operator::I16x8SubSaturateS => {
-            let (a, b) = state.pop2();
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().ssub_sat(a, b))
         }
         Operator::I8x16SubSaturateU | Operator::I16x8SubSaturateU => {
-            let (a, b) = state.pop2();
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().usub_sat(a, b))
         }
         Operator::I8x16Neg | Operator::I16x8Neg | Operator::I32x4Neg | Operator::I64x2Neg => {
-            let a = state.pop1();
+            let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().ineg(a))
         }
         Operator::I16x8Mul | Operator::I32x4Mul => {
-            let (a, b) = state.pop2();
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().imul(a, b))
         }
         Operator::V128Not => {
