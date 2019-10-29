@@ -160,33 +160,17 @@ fn write_testsuite_tests(
 
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    let is_multi_value = testsuite.ends_with("multi_value");
     match strategy {
         #[cfg(feature = "lightbeam")]
         "Lightbeam" => match (testsuite, testname) {
             (_, _) if testname.starts_with("simd") => return true,
-            (_, _) if is_multi_value => return true,
+            (_, _) if testsuite.ends_with("multi_value") => return true,
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
-            // We don't currently support more return values than available
-            // registers, and this contains a function with many, many more
-            // return values than that.
-            (_, "func") if is_multi_value => return true,
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
-    }
-
-    if cfg!(windows) {
-        return match (testsuite, testname) {
-            // Currently, our multi-value support only works with however many
-            // extra return registers we have available, and windows' fastcall
-            // ABI only has a single return register, so we need to wait on full
-            // multi-value support in Cranelift.
-            (_, _) if is_multi_value => true,
-            (_, _) => false,
-        };
     }
 
     false
