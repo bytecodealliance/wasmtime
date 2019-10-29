@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use std::fmt;
 use std::num::TryFromIntError;
 
-#[derive(Clone, Copy, Debug, Fail)]
+#[derive(Clone, Copy, Debug, Fail, Eq, PartialEq)]
 #[repr(u16)]
 pub enum WasiError {
     ESUCCESS = host::__WASI_ESUCCESS,
@@ -251,8 +251,13 @@ impl Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            _ => write!(f, "{:?}", self),
+        match self {
+            Self::Io(e) => e.fmt(f),
+            Self::Wasi(e) => e.fmt(f),
+            #[cfg(unix)]
+            Self::Nix(e) => e.fmt(f),
+            #[cfg(windows)]
+            Self::Win(e) => e.fmt(f),
         }
     }
 }
