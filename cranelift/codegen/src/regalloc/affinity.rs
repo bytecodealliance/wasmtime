@@ -92,10 +92,8 @@ impl Affinity {
                 // to change anything.
                 if constraint.kind != ConstraintKind::Stack && !constraint.regclass.has_subclass(rc)
                 {
-                    // If the register classes don't overlap, `intersect` returns `Unassigned`, and
-                    // we just keep our previous affinity.
+                    // If the register classes overlap, try to shrink our preferred register class.
                     if let Some(subclass) = constraint.regclass.intersect_index(reginfo.rc(rc)) {
-                        // This constraint shrinks our preferred register class.
                         *self = Self::Reg(subclass);
                     }
                 }

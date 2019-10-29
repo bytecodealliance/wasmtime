@@ -389,7 +389,6 @@ impl Liveness {
         // The liveness computation needs to visit all uses, but the order doesn't matter.
         // TODO: Perhaps this traversal of the function could be combined with a dead code
         // elimination pass if we visit a post-order of the dominator tree?
-        // TODO: Resolve value aliases while we're visiting instructions?
         for ebb in func.layout.ebbs() {
             // Make sure we have created live ranges for dead EBB parameters.
             // TODO: If these parameters are really dead, we could remove them, except for the
@@ -436,11 +435,9 @@ impl Liveness {
 
 impl Index<Value> for Liveness {
     type Output = LiveRange;
-
     fn index(&self, index: Value) -> &LiveRange {
-        match self.ranges.get(index) {
-            Some(lr) => lr,
-            None => panic!("{} has no live range", index),
-        }
+        self.ranges
+            .get(index)
+            .unwrap_or_else(|| panic!("{} has no live range", index))
     }
 }
