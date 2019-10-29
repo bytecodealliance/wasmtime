@@ -51,25 +51,60 @@ fn main() -> Result<()> {
             .context("Error instantiating module!")?,
     );
 
-    // Extract export.
+    // Extract exports.
     println!("Extracting export...");
     let exports = Ref::map(instance.borrow(), |instance| instance.exports());
     ensure!(!exports.is_empty(), "Error accessing exports!");
-    let run_func = exports[0].func().context("Error accessing exports!")?;
+    let g = exports[0].func().context("> Error accessing export $g!")?;
+    let round_trip_many = exports[1]
+        .func()
+        .context("> Error accessing export $round_trip_many")?;
 
-    // Call.
-    println!("Calling export...");
+    // Call `$g`.
+    println!("Calling export \"g\"...");
     let args = vec![Val::I32(1), Val::I64(3)];
-    let results = run_func
+    let results = g
         .borrow()
         .call(&args)
-        .map_err(|e| format_err!("> Error calling function: {:?}", e))?;
+        .map_err(|e| format_err!("> Error calling g! {:?}", e))?;
 
     println!("Printing result...");
     println!("> {} {}", results[0].i64(), results[1].i32());
 
     debug_assert_eq!(results[0].i64(), 4);
     debug_assert_eq!(results[1].i32(), 2);
+
+    // Call `$round_trip_many`.
+    println!("Calling export \"round_trip_many\"...");
+    let args = vec![
+        Val::I64(0),
+        Val::I64(1),
+        Val::I64(2),
+        Val::I64(3),
+        Val::I64(4),
+        Val::I64(5),
+        Val::I64(6),
+        Val::I64(7),
+        Val::I64(8),
+        Val::I64(9),
+    ];
+    let results = round_trip_many
+        .borrow()
+        .call(&args)
+        .map_err(|e| format_err!("> Error calling round_trip_many! {:?}", e))?;
+
+    println!("Printing result...");
+    print!(">");
+    for r in results.iter() {
+        print!(" {}", r.i64());
+    }
+    println!();
+
+    debug_assert_eq!(results.len(), 10);
+    debug_assert!(args
+        .iter()
+        .zip(results.iter())
+        .all(|(a, r)| a.i64() == r.i64()));
 
     // Shut down.
     println!("Shutting down...");
