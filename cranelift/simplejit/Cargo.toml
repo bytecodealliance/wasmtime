@@ -10,14 +10,19 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.46.1" }
 cranelift-module = { path = "../cranelift-module", version = "0.46.1" }
 cranelift-native = { path = "../cranelift-native", version = "0.46.1" }
 region = "2.0.0"
 libc = { version = "0.2.42" }
 errno = "0.2.4"
 target-lexicon = "0.8.1"
-memmap = { version = "0.7.0", optional = true } 
+memmap = { version = "0.7.0", optional = true }
+
+[dependencies.cranelift-codegen]
+path = "../cranelift-codegen"
+version = "0.46.1"
+default-features = false
+features = ["std"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
