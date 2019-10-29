@@ -35,28 +35,29 @@ pub(crate) struct EntityRefs {
 impl EntityRefs {
     pub fn new() -> Self {
         Self {
-            ebb: create("ebb", "An extended basic block in the same function.")
-                .rust_field_name("destination")
-                .build(),
+            ebb: create(
+                "destination",
+                "ir::Ebb",
+                "An extended basic block in the same function.",
+            )
+            .build(),
 
-            stack_slot: create("stack_slot", "A stack slot").build(),
+            stack_slot: create("stack_slot", "ir::StackSlot", "A stack slot").build(),
 
-            global_value: create("global_value", "A global value.").build(),
+            global_value: create("global_value", "ir::GlobalValue", "A global value.").build(),
 
-            sig_ref: create("sig_ref", "A function signature.").build(),
+            sig_ref: create("sig_ref", "ir::SigRef", "A function signature.").build(),
 
-            func_ref: create("func_ref", "An external function.").build(),
+            func_ref: create("func_ref", "ir::FuncRef", "An external function.").build(),
 
-            jump_table: create("jump_table", "A jump table.")
-                .rust_field_name("table")
-                .build(),
+            jump_table: create("table", "ir::JumpTable", "A jump table.").build(),
 
-            heap: create("heap", "A heap.").build(),
+            heap: create("heap", "ir::Heap", "A heap.").build(),
 
-            table: create("table", "A table.").build(),
+            table: create("table", "ir::Table", "A table.").build(),
 
-            varargs: Builder::new("variable_args", OperandKindFields::VariableArgs)
-                .doc(
+            varargs: Builder::new("", "&[Value]", OperandKindFields::VariableArgs)
+                .with_doc(
                     r#"
                         A variable size list of `value` operands.
 
@@ -71,6 +72,6 @@ impl EntityRefs {
 }
 
 /// Small helper to initialize an OperandBuilder with the right kind, for a given name and doc.
-fn create(name: &'static str, doc: &'static str) -> Builder {
-    Builder::new(name, OperandKindFields::EntityRef).doc(doc)
+fn create(format_field_name: &'static str, rust_type: &'static str, doc: &'static str) -> Builder {
+    Builder::new(format_field_name, rust_type, OperandKindFields::EntityRef).with_doc(doc)
 }

@@ -76,45 +76,40 @@ pub(crate) struct Immediates {
 impl Immediates {
     pub fn new() -> Self {
         Self {
-            imm64: Builder::new_imm("imm64")
-                .doc("A 64-bit immediate integer.")
+            imm64: Builder::new_imm("imm", "ir::immediates::Imm64")
+                .with_doc("A 64-bit immediate integer.")
                 .build(),
 
-            uimm8: Builder::new_imm("uimm8")
-                .doc("An 8-bit immediate unsigned integer.")
+            uimm8: Builder::new_imm("imm", "ir::immediates::Uimm8")
+                .with_doc("An 8-bit immediate unsigned integer.")
                 .build(),
 
-            uimm32: Builder::new_imm("uimm32")
-                .doc("A 32-bit immediate unsigned integer.")
+            uimm32: Builder::new_imm("imm", "ir::immediates::Uimm32")
+                .with_doc("A 32-bit immediate unsigned integer.")
                 .build(),
 
-            uimm128: Builder::new_imm("uimm128")
-                .doc("A 128-bit immediate unsigned integer.")
-                .rust_type("ir::Immediate")
+            uimm128: Builder::new_imm("imm", "ir::Immediate")
+                .with_doc("A 128-bit immediate unsigned integer.")
                 .build(),
 
-            pool_constant: Builder::new_imm("poolConstant")
-                .doc("A constant stored in the constant pool.")
-                .rust_field_name("constant_handle")
-                .rust_type("ir::Constant")
+            pool_constant: Builder::new_imm("constant_handle", "ir::Constant")
+                .with_doc("A constant stored in the constant pool.")
                 .build(),
 
-            offset32: Builder::new_imm("offset32")
-                .doc("A 32-bit immediate signed offset.")
-                .rust_field_name("offset")
+            offset32: Builder::new_imm("offset", "ir::immediates::Offset32")
+                .with_doc("A 32-bit immediate signed offset.")
                 .build(),
 
-            ieee32: Builder::new_imm("ieee32")
-                .doc("A 32-bit immediate floating point number.")
+            ieee32: Builder::new_imm("imm", "ir::immediates::Ieee32")
+                .with_doc("A 32-bit immediate floating point number.")
                 .build(),
 
-            ieee64: Builder::new_imm("ieee64")
-                .doc("A 64-bit immediate floating point number.")
+            ieee64: Builder::new_imm("imm", "ir::immediates::Ieee64")
+                .with_doc("A 64-bit immediate floating point number.")
                 .build(),
 
-            boolean: Builder::new_imm("boolean")
-                .doc("An immediate boolean.")
-                .rust_type("bool")
+            boolean: Builder::new_imm("imm", "bool")
+                .with_doc("An immediate boolean.")
                 .build(),
 
             intcc: {
@@ -131,10 +126,8 @@ impl Immediates {
                 intcc_values.insert("ult", "UnsignedLessThan");
                 intcc_values.insert("of", "Overflow");
                 intcc_values.insert("nof", "NotOverflow");
-                Builder::new_enum("intcc", intcc_values)
-                    .doc("An integer comparison condition code.")
-                    .rust_field_name("cond")
-                    .rust_type("ir::condcodes::IntCC")
+                Builder::new_enum("cond", "ir::condcodes::IntCC", intcc_values)
+                    .with_doc("An integer comparison condition code.")
                     .build()
             },
 
@@ -154,22 +147,17 @@ impl Immediates {
                 floatcc_values.insert("ule", "UnorderedOrLessThanOrEqual");
                 floatcc_values.insert("ugt", "UnorderedOrGreaterThan");
                 floatcc_values.insert("uge", "UnorderedOrGreaterThanOrEqual");
-                Builder::new_enum("floatcc", floatcc_values)
-                    .doc("A floating point comparison condition code")
-                    .rust_field_name("cond")
-                    .rust_type("ir::condcodes::FloatCC")
+                Builder::new_enum("cond", "ir::condcodes::FloatCC", floatcc_values)
+                    .with_doc("A floating point comparison condition code")
                     .build()
             },
 
-            memflags: Builder::new_imm("memflags")
-                .doc("Memory operation flags")
-                .rust_field_name("flags")
-                .rust_type("ir::MemFlags")
+            memflags: Builder::new_imm("flags", "ir::MemFlags")
+                .with_doc("Memory operation flags")
                 .build(),
 
-            regunit: Builder::new_imm("regunit")
-                .doc("A register unit in the target ISA")
-                .rust_type("isa::RegUnit")
+            regunit: Builder::new_imm("regunit", "isa::RegUnit")
+                .with_doc("A register unit in the target ISA")
                 .build(),
 
             trapcode: {
@@ -178,10 +166,8 @@ impl Immediates {
                 trapcode_values.insert("heap_oob", "HeapOutOfBounds");
                 trapcode_values.insert("int_ovf", "IntegerOverflow");
                 trapcode_values.insert("int_divz", "IntegerDivisionByZero");
-                Builder::new_enum("trapcode", trapcode_values)
-                    .doc("A trap reason code.")
-                    .rust_field_name("code")
-                    .rust_type("ir::TrapCode")
+                Builder::new_enum("code", "ir::TrapCode", trapcode_values)
+                    .with_doc("A trap reason code.")
                     .build()
             },
         }

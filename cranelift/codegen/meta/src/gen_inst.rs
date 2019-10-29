@@ -914,12 +914,12 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     let mut into_args = Vec::new();
     for op in &inst.operands_in {
         let t = if op.is_immediate() {
-            let t = format!("T{}{}", tmpl_types.len() + 1, op.kind.name);
+            let t = format!("T{}", tmpl_types.len() + 1);
             tmpl_types.push(format!("{}: Into<{}>", t, op.kind.rust_type));
             into_args.push(op.name);
             t
         } else {
-            op.kind.rust_type.clone()
+            op.kind.rust_type.to_string()
         };
         args.push(format!("{}: {}", op.name, t));
         args_doc.push(format!(

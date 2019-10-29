@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::cdsl::camel_case;
 use crate::cdsl::typevar::TypeVar;
 
 /// An instruction operand can be an *immediate*, an *SSA value*, or an *entity reference*. The
@@ -18,9 +17,13 @@ use crate::cdsl::typevar::TypeVar;
 ///    function, typically something declared in the function preamble.
 #[derive(Clone, Debug)]
 pub(crate) struct Operand {
+    /// Name of the operand variable, as it appears in function parameters, legalizations, etc.
     pub name: &'static str,
-    doc: Option<&'static str>,
+
+    /// Type of the operand.
     pub kind: OperandKind,
+
+    doc: Option<&'static str>,
 }
 
 impl Operand {
@@ -110,56 +113,19 @@ pub(crate) enum OperandKindFields {
 
 #[derive(Clone, Debug)]
 pub(crate) struct OperandKind {
-    pub name: &'static str,
-    doc: Option<&'static str>,
-    rust_field_name: Option<&'static str>,
-    /// The camel-cased name of an operand kind is also the Rust type used to represent it.
-    pub rust_type: String,
+    /// String representation of the Rust type mapping to this OperandKind.
+    pub rust_type: &'static str,
+
+    /// Name of this OperandKind in the format's member field.
+    pub rust_field_name: &'static str,
+
+    /// Type-specific fields for this OperandKind.
     pub fields: OperandKindFields,
+
+    doc: Option<&'static str>,
 }
 
 impl OperandKind {
-    fn new(
-        name: &'static str,
-        doc: Option<&'static str>,
-        rust_field_name: Option<&'static str>,
-        rust_type: Option<&'static str>,
-        fields: OperandKindFields,
-    ) -> Self {
-        // Compute the default rust_type value, if it wasn't provided.
-        let rust_type = match rust_type {
-            Some(rust_type) => rust_type.to_string(),
-            None => match &fields {
-                OperandKindFields::ImmEnum(_) | OperandKindFields::ImmValue => {
-                    format!("ir::immediates::{}", camel_case(name))
-                }
-                OperandKindFields::VariableArgs => "&[Value]".to_string(),
-                OperandKindFields::TypeVar(_) | OperandKindFields::EntityRef => {
-                    format!("ir::{}", camel_case(name))
-                }
-            },
-        };
-        Self {
-            name,
-            doc,
-            rust_field_name,
-            rust_type,
-            fields,
-        }
-    }
-
-    /// Name of this OperandKind in the format's member field.
-    pub fn rust_field_name(&self) -> Option<&'static str> {
-        if let Some(member) = &self.rust_field_name {
-            return Some(member);
-        }
-        match &self.fields {
-            OperandKindFields::ImmEnum(_) | OperandKindFields::ImmValue => Some("imm"),
-            OperandKindFields::TypeVar(_) | OperandKindFields::EntityRef => Some(self.name),
-            OperandKindFields::VariableArgs => None,
-        }
-    }
-
     fn doc(&self) -> Option<&str> {
         if let Some(doc) = &self.doc {
             return Some(doc);
@@ -176,7 +142,12 @@ impl OperandKind {
 
 impl Into<OperandKind> for &TypeVar {
     fn into(self) -> OperandKind {
-        OperandKindBuilder::new("value", OperandKindFields::TypeVar(self.into())).build()
+        OperandKindBuilder::new(
+            "value",
+            "ir::Value",
+            OperandKindFields::TypeVar(self.into()),
+        )
+        .build()
     }
 }
 impl Into<OperandKind> for &OperandKind {
@@ -186,63 +157,56 @@ impl Into<OperandKind> for &OperandKind {
 }
 
 pub(crate) struct OperandKindBuilder {
-    name: &'static str,
-    doc: Option<&'static str>,
-    rust_field_name: Option<&'static str>,
-    rust_type: Option<&'static str>,
+    rust_field_name: &'static str,
+    rust_type: &'static str,
     fields: OperandKindFields,
+    doc: Option<&'static str>,
 }
 
 impl OperandKindBuilder {
-    pub fn new(name: &'static str, fields: OperandKindFields) -> Self {
+    pub fn new(
+        rust_field_name: &'static str,
+        rust_type: &'static str,
+        fields: OperandKindFields,
+    ) -> Self {
         Self {
-            name,
-            doc: None,
-            rust_field_name: None,
-            rust_type: None,
+            rust_field_name,
+            rust_type,
             fields,
+            doc: None,
         }
     }
-    pub fn new_imm(name: &'static str) -> Self {
+    pub fn new_imm(rust_field_name: &'static str, rust_type: &'static str) -> Self {
         Self {
-            name,
-            doc: None,
-            rust_field_name: None,
-            rust_type: None,
+            rust_field_name,
+            rust_type,
             fields: OperandKindFields::ImmValue,
-        }
-    }
-    pub fn new_enum(name: &'static str, values: EnumValues) -> Self {
-        Self {
-            name,
             doc: None,
-            rust_field_name: None,
-            rust_type: None,
-            fields: OperandKindFields::ImmEnum(values),
         }
     }
-    pub fn doc(mut self, doc: &'static str) -> Self {
+    pub fn new_enum(
+        rust_field_name: &'static str,
+        rust_type: &'static str,
+        values: EnumValues,
+    ) -> Self {
+        Self {
+            rust_field_name,
+            rust_type,
+            fields: OperandKindFields::ImmEnum(values),
+            doc: None,
+        }
+    }
+    pub fn with_doc(mut self, doc: &'static str) -> Self {
         assert!(self.doc.is_none());
         self.doc = Some(doc);
         self
     }
-    pub fn rust_field_name(mut self, rust_field_name: &'static str) -> Self {
-        assert!(self.rust_field_name.is_none());
-        self.rust_field_name = Some(rust_field_name);
-        self
-    }
-    pub fn rust_type(mut self, rust_type: &'static str) -> Self {
-        assert!(self.rust_type.is_none());
-        self.rust_type = Some(rust_type);
-        self
-    }
     pub fn build(self) -> OperandKind {
-        OperandKind::new(
-            self.name,
-            self.doc,
-            self.rust_field_name,
-            self.rust_type,
-            self.fields,
-        )
+        OperandKind {
+            rust_type: self.rust_type,
+            fields: self.fields,
+            rust_field_name: self.rust_field_name,
+            doc: self.doc,
+        }
     }
 }

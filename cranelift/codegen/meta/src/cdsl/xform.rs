@@ -214,7 +214,7 @@ fn rewrite_expr(
             .inst()
             .operands_in
             .iter()
-            .map(|operand| format!("{}: {}", operand.name, operand.kind.name))
+            .map(|operand| format!("{}: {}", operand.name, operand.kind.rust_type))
             .collect::<Vec<_>>(),
     );
 

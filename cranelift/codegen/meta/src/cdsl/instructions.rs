@@ -572,10 +572,14 @@ fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionF
         if operand.is_immediate_or_entityref() {
             if let Some(format_field) = format.imm_fields.get(num_immediates) {
                 assert_eq!(
-                    format_field.kind.name, operand.kind.name,
+                    format_field.kind.rust_field_name,
+                    operand.kind.rust_field_name,
                     "{}th operand of {} should be {} (according to format), not {} (according to \
                      inst definition). You may need to use a different format.",
-                    num_immediates, inst_name, format_field.kind.name, operand.kind.name
+                    num_immediates,
+                    inst_name,
+                    format_field.kind.rust_field_name,
+                    operand.kind.rust_field_name
                 );
                 num_immediates += 1;
             }
@@ -1299,7 +1303,8 @@ mod test {
     fn field_to_operand(index: usize, field: OperandKindFields) -> Operand {
         // Pretend the index string is &'static.
         let name = Box::leak(index.to_string().into_boxed_str());
-        let kind = OperandKindBuilder::new(name, field).build();
+        // Format's name / rust_type don't matter here.
+        let kind = OperandKindBuilder::new(name, name, field).build();
         let operand = Operand::new(name, kind);
         operand
     }

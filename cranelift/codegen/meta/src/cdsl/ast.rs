@@ -151,12 +151,12 @@ pub(crate) enum Literal {
     /// corresponding to a Rust enum type. An `Enumerator` object is an AST leaf node representing one
     /// of the values.
     Enumerator {
-        rust_type: String,
+        rust_type: &'static str,
         value: &'static str,
     },
 
     /// A bitwise value of an immediate operand, used for bitwise exact floating point constants.
-    Bits { rust_type: String, value: u64 },
+    Bits { rust_type: &'static str, value: u64 },
 
     /// A value of an integer immediate operand.
     Int(i64),
@@ -171,13 +171,13 @@ impl Literal {
             OperandKindFields::ImmEnum(values) => values.get(value).unwrap_or_else(|| {
                 panic!(
                     "nonexistent value '{}' in enumeration '{}'",
-                    value, kind.name
+                    value, kind.rust_type
                 )
             }),
             _ => panic!("enumerator is for enum values"),
         };
         Literal::Enumerator {
-            rust_type: kind.rust_type.clone(),
+            rust_type: kind.rust_type,
             value,
         }
     }
@@ -188,7 +188,7 @@ impl Literal {
             _ => panic!("bits_of is for immediate scalar types"),
         }
         Literal::Bits {
-            rust_type: kind.rust_type.clone(),
+            rust_type: kind.rust_type,
             value: bits,
         }
     }
@@ -475,12 +475,12 @@ impl Apply {
                                 "Nonexistent enum value '{}' passed to field of kind '{}' -- \
                                  did you use the right enum?",
                                 value,
-                                op.kind.name
+                                op.kind.rust_type
                             );
                         } else {
                             panic!(
                                 "Passed non-enum field value {:?} to field of kind {}",
-                                literal, op.kind.name
+                                literal, op.kind.rust_type
                             );
                         }
                     }
@@ -488,14 +488,14 @@ impl Apply {
                         Literal::Enumerator { value, .. } => panic!(
                             "Expected immediate value in immediate field of kind '{}', \
                              obtained enum value '{}'",
-                            op.kind.name, value
+                            op.kind.rust_type, value
                         ),
                         Literal::Bits { .. } | Literal::Int(_) | Literal::EmptyVarArgs => {}
                     },
                     _ => {
                         panic!(
                             "Literal passed to non-literal field of kind {}",
-                            op.kind.name
+                            op.kind.rust_type
                         );
                     }
                 }

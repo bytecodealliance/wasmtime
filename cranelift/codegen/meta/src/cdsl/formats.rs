@@ -49,7 +49,7 @@ pub(crate) struct InstructionFormat {
 pub(crate) struct FormatStructure {
     pub num_value_operands: usize,
     pub has_value_list: bool,
-    pub imm_field_names: Vec<&'static str>,
+    pub imm_field_names: Vec<(&'static str, &'static str)>,
 }
 
 impl fmt::Display for InstructionFormat {
@@ -57,7 +57,7 @@ impl fmt::Display for InstructionFormat {
         let imm_args = self
             .imm_fields
             .iter()
-            .map(|field| format!("{}: {}", field.member, field.kind.name))
+            .map(|field| format!("{}: {}", field.member, field.kind.rust_type))
             .collect::<Vec<_>>()
             .join(", ");
         fmt.write_fmt(format_args!(
@@ -89,7 +89,7 @@ impl InstructionFormat {
             imm_field_names: self
                 .imm_fields
                 .iter()
-                .map(|field| field.kind.name)
+                .map(|field| (field.kind.rust_field_name, field.kind.rust_type))
                 .collect::<Vec<_>>(),
         }
     }
@@ -127,7 +127,7 @@ impl InstructionFormatBuilder {
     pub fn imm(mut self, operand_kind: &OperandKind) -> Self {
         let field = FormatField {
             kind: operand_kind.clone(),
-            member: operand_kind.rust_field_name().unwrap(),
+            member: operand_kind.rust_field_name,
         };
         self.imm_fields.push(field);
         self
