@@ -3,7 +3,7 @@
 use crate::cdsl::instructions::{
     AllInstructions, InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
 };
-use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
+use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint::WiderOrEq;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
@@ -113,13 +113,13 @@ pub(crate) fn define(
 
     let MemTo = &TypeVar::copy_from(Mem, "MemTo".to_string());
 
-    let addr = &operand("addr", iAddr);
-    let c = &operand_doc("c", Testable, "Controlling value to test");
-    let Cond = &operand("Cond", &imm.intcc);
-    let x = &operand("x", iB);
-    let y = &operand("y", iB);
-    let EBB = &operand_doc("EBB", &entities.ebb, "Destination extended basic block");
-    let args = &operand_doc("args", &entities.varargs, "EBB arguments");
+    let addr = &Operand::new("addr", iAddr);
+    let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
+    let Cond = &Operand::new("Cond", &imm.intcc);
+    let x = &Operand::new("x", iB);
+    let y = &Operand::new("y", iB);
+    let EBB = &Operand::new("EBB", &entities.ebb).with_doc("Destination extended basic block");
+    let args = &Operand::new("args", &entities.varargs).with_doc("EBB arguments");
 
     ig.push(
         Inst::new(
@@ -218,7 +218,7 @@ pub(crate) fn define(
         .is_branch(true),
     );
 
-    let f = &operand("f", iflags);
+    let f = &Operand::new("f", iflags);
 
     ig.push(
         Inst::new(
@@ -232,8 +232,8 @@ pub(crate) fn define(
         .is_branch(true),
     );
 
-    let Cond = &operand("Cond", &imm.floatcc);
-    let f = &operand("f", fflags);
+    let Cond = &Operand::new("Cond", &imm.floatcc);
+    let f = &Operand::new("f", fflags);
 
     ig.push(
         Inst::new(
@@ -248,9 +248,9 @@ pub(crate) fn define(
     );
 
     // The index into the br_table can be any type; legalizer will convert it to the right type.
-    let x = &operand_doc("x", iB, "index into jump table");
-    let entry = &operand_doc("entry", iAddr, "entry of jump table");
-    let JT = &operand("JT", &entities.jump_table);
+    let x = &Operand::new("x", iB).with_doc("index into jump table");
+    let entry = &Operand::new("entry", iAddr).with_doc("entry of jump table");
+    let JT = &Operand::new("JT", &entities.jump_table);
 
     ig.push(
         Inst::new(
@@ -280,8 +280,8 @@ pub(crate) fn define(
 
     // These are the instructions which br_table legalizes to: they perform address computations,
     // using pointer-sized integers, so their type variables are more constrained.
-    let x = &operand_doc("x", iAddr, "index into jump table");
-    let Size = &operand_doc("Size", &imm.uimm8, "Size in bytes");
+    let x = &Operand::new("x", iAddr).with_doc("index into jump table");
+    let Size = &Operand::new("Size", &imm.uimm8).with_doc("Size in bytes");
 
     ig.push(
         Inst::new(
@@ -350,7 +350,7 @@ pub(crate) fn define(
         .can_store(true),
     );
 
-    let code = &operand("code", &imm.trapcode);
+    let code = &Operand::new("code", &imm.trapcode);
 
     ig.push(
         Inst::new(
@@ -407,8 +407,8 @@ pub(crate) fn define(
         .can_trap(true),
     );
 
-    let Cond = &operand("Cond", &imm.intcc);
-    let f = &operand("f", iflags);
+    let Cond = &Operand::new("Cond", &imm.intcc);
+    let f = &Operand::new("f", iflags);
 
     ig.push(
         Inst::new(
@@ -422,8 +422,8 @@ pub(crate) fn define(
         .can_trap(true),
     );
 
-    let Cond = &operand("Cond", &imm.floatcc);
-    let f = &operand("f", fflags);
+    let Cond = &Operand::new("Cond", &imm.floatcc);
+    let f = &Operand::new("f", fflags);
 
     ig.push(
         Inst::new(
@@ -437,7 +437,7 @@ pub(crate) fn define(
         .can_trap(true),
     );
 
-    let rvals = &operand_doc("rvals", &entities.varargs, "return values");
+    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
 
     ig.push(
         Inst::new(
@@ -473,12 +473,9 @@ pub(crate) fn define(
         .is_terminator(true),
     );
 
-    let FN = &operand_doc(
-        "FN",
-        &entities.func_ref,
-        "function to call, declared by `function`",
-    );
-    let args = &operand_doc("args", &entities.varargs, "call arguments");
+    let FN = &Operand::new("FN", &entities.func_ref)
+        .with_doc("function to call, declared by `function`");
+    let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
 
     ig.push(
         Inst::new(
@@ -496,8 +493,8 @@ pub(crate) fn define(
         .is_call(true),
     );
 
-    let SIG = &operand_doc("SIG", &entities.sig_ref, "function signature");
-    let callee = &operand_doc("callee", iAddr, "address of function to call");
+    let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
+    let callee = &Operand::new("callee", iAddr).with_doc("address of function to call");
 
     ig.push(
         Inst::new(
@@ -538,13 +535,13 @@ pub(crate) fn define(
         .operands_out(vec![addr]),
     );
 
-    let SS = &operand("SS", &entities.stack_slot);
-    let Offset = &operand_doc("Offset", &imm.offset32, "Byte offset from base address");
-    let x = &operand_doc("x", Mem, "Value to be stored");
-    let a = &operand_doc("a", Mem, "Value loaded");
-    let p = &operand("p", iAddr);
-    let MemFlags = &operand("MemFlags", &imm.memflags);
-    let args = &operand_doc("args", &entities.varargs, "Address arguments");
+    let SS = &Operand::new("SS", &entities.stack_slot);
+    let Offset = &Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address");
+    let x = &Operand::new("x", Mem).with_doc("Value to be stored");
+    let a = &Operand::new("a", Mem).with_doc("Value loaded");
+    let p = &Operand::new("p", iAddr);
+    let MemFlags = &Operand::new("MemFlags", &imm.memflags);
+    let args = &Operand::new("args", &entities.varargs).with_doc("Address arguments");
 
     ig.push(
         Inst::new(
@@ -613,8 +610,8 @@ pub(crate) fn define(
         "An integer type with more than 8 bits",
         TypeSetBuilder::new().ints(16..64).build(),
     );
-    let x = &operand("x", iExt8);
-    let a = &operand("a", iExt8);
+    let x = &Operand::new("x", iExt8);
+    let a = &Operand::new("a", iExt8);
 
     ig.push(
         Inst::new(
@@ -709,8 +706,8 @@ pub(crate) fn define(
         "An integer type with more than 16 bits",
         TypeSetBuilder::new().ints(32..64).build(),
     );
-    let x = &operand("x", iExt16);
-    let a = &operand("a", iExt16);
+    let x = &Operand::new("x", iExt16);
+    let a = &Operand::new("a", iExt16);
 
     ig.push(
         Inst::new(
@@ -805,8 +802,8 @@ pub(crate) fn define(
         "An integer type with more than 32 bits",
         TypeSetBuilder::new().ints(64..64).build(),
     );
-    let x = &operand("x", iExt32);
-    let a = &operand("a", iExt32);
+    let x = &Operand::new("x", iExt32);
+    let a = &Operand::new("a", iExt32);
 
     ig.push(
         Inst::new(
@@ -896,9 +893,10 @@ pub(crate) fn define(
         .can_store(true),
     );
 
-    let x = &operand_doc("x", Mem, "Value to be stored");
-    let a = &operand_doc("a", Mem, "Value loaded");
-    let Offset = &operand_doc("Offset", &imm.offset32, "In-bounds offset into stack slot");
+    let x = &Operand::new("x", Mem).with_doc("Value to be stored");
+    let a = &Operand::new("a", Mem).with_doc("Value loaded");
+    let Offset =
+        &Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot");
 
     ig.push(
         Inst::new(
@@ -955,7 +953,7 @@ pub(crate) fn define(
         .operands_out(vec![addr]),
     );
 
-    let GV = &operand("GV", &entities.global_value);
+    let GV = &Operand::new("GV", &entities.global_value);
 
     ig.push(
         Inst::new(
@@ -987,9 +985,9 @@ pub(crate) fn define(
         TypeSetBuilder::new().ints(32..64).build(),
     );
 
-    let H = &operand("H", &entities.heap);
-    let p = &operand("p", HeapOffset);
-    let Size = &operand_doc("Size", &imm.uimm32, "Size in bytes");
+    let H = &Operand::new("H", &entities.heap);
+    let p = &Operand::new("p", HeapOffset);
+    let Size = &Operand::new("Size", &imm.uimm32).with_doc("Size in bytes");
 
     ig.push(
         Inst::new(
@@ -1046,9 +1044,10 @@ pub(crate) fn define(
         "An unsigned table offset",
         TypeSetBuilder::new().ints(32..64).build(),
     );
-    let T = &operand("T", &entities.table);
-    let p = &operand("p", TableOffset);
-    let Offset = &operand_doc("Offset", &imm.offset32, "Byte offset from element address");
+    let T = &Operand::new("T", &entities.table);
+    let p = &Operand::new("p", TableOffset);
+    let Offset =
+        &Operand::new("Offset", &imm.offset32).with_doc("Byte offset from element address");
 
     ig.push(
         Inst::new(
@@ -1072,8 +1071,8 @@ pub(crate) fn define(
         .operands_out(vec![addr]),
     );
 
-    let N = &operand("N", &imm.imm64);
-    let a = &operand_doc("a", Int, "A constant integer scalar or vector value");
+    let N = &Operand::new("N", &imm.imm64);
+    let a = &Operand::new("a", Int).with_doc("A constant integer scalar or vector value");
 
     ig.push(
         Inst::new(
@@ -1090,8 +1089,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &operand("N", &imm.ieee32);
-    let a = &operand_doc("a", f32_, "A constant f32 scalar value");
+    let N = &Operand::new("N", &imm.ieee32);
+    let a = &Operand::new("a", f32_).with_doc("A constant f32 scalar value");
 
     ig.push(
         Inst::new(
@@ -1107,8 +1106,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &operand("N", &imm.ieee64);
-    let a = &operand_doc("a", f64_, "A constant f64 scalar value");
+    let N = &Operand::new("N", &imm.ieee64);
+    let a = &Operand::new("a", f64_).with_doc("A constant f64 scalar value");
 
     ig.push(
         Inst::new(
@@ -1124,8 +1123,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &operand("N", &imm.boolean);
-    let a = &operand_doc("a", Bool, "A constant boolean scalar or vector value");
+    let N = &Operand::new("N", &imm.boolean);
+    let a = &Operand::new("a", Bool).with_doc("A constant boolean scalar or vector value");
 
     ig.push(
         Inst::new(
@@ -1142,12 +1141,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &operand_doc(
-        "N",
-        &imm.pool_constant,
-        "The 16 immediate bytes of a 128-bit vector",
-    );
-    let a = &operand_doc("a", TxN, "A constant vector value");
+    let N = &Operand::new("N", &imm.pool_constant)
+        .with_doc("The 16 immediate bytes of a 128-bit vector");
+    let a = &Operand::new("a", TxN).with_doc("A constant vector value");
 
     ig.push(
         Inst::new(
@@ -1163,11 +1159,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let mask = &operand_doc(
-        "mask",
-        &imm.uimm128,
-        "The 16 immediate bytes used for selecting the elements to shuffle",
-    );
+    let mask = &Operand::new("mask", &imm.uimm128)
+        .with_doc("The 16 immediate bytes used for selecting the elements to shuffle");
     let Tx16 = &TypeVar::new(
         "Tx16",
         "A SIMD vector with exactly 16 lanes of 8-bit values; eventually this may support other \
@@ -1179,8 +1172,8 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let a = &operand_doc("a", Tx16, "A vector value");
-    let b = &operand_doc("b", Tx16, "A vector value");
+    let a = &Operand::new("a", Tx16).with_doc("A vector value");
+    let b = &Operand::new("b", Tx16).with_doc("A vector value");
 
     ig.push(
         Inst::new(
@@ -1199,7 +1192,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand_doc("a", Ref, "A constant reference null value");
+    let a = &Operand::new("a", Ref).with_doc("A constant reference null value");
 
     ig.push(
         Inst::new(
@@ -1224,10 +1217,10 @@ pub(crate) fn define(
         &formats.nullary,
     ));
 
-    let c = &operand_doc("c", Testable, "Controlling value to test");
-    let x = &operand_doc("x", Any, "Value to use when `c` is true");
-    let y = &operand_doc("y", Any, "Value to use when `c` is false");
-    let a = &operand("a", Any);
+    let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
+    let x = &Operand::new("x", Any).with_doc("Value to use when `c` is true");
+    let y = &Operand::new("y", Any).with_doc("Value to use when `c` is false");
+    let a = &Operand::new("a", Any);
 
     ig.push(
         Inst::new(
@@ -1244,8 +1237,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let cc = &operand_doc("cc", &imm.intcc, "Controlling condition code");
-    let flags = &operand_doc("flags", iflags, "The machine's flag register");
+    let cc = &Operand::new("cc", &imm.intcc).with_doc("Controlling condition code");
+    let flags = &Operand::new("flags", iflags).with_doc("The machine's flag register");
 
     ig.push(
         Inst::new(
@@ -1259,7 +1252,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let c = &operand_doc("c", Any, "Controlling value to test");
+    let c = &Operand::new("c", Any).with_doc("Controlling value to test");
     ig.push(
         Inst::new(
             "bitselect",
@@ -1276,7 +1269,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", Any);
+    let x = &Operand::new("x", Any);
 
     ig.push(
         Inst::new(
@@ -1346,8 +1339,8 @@ pub(crate) fn define(
         .can_load(true),
     );
 
-    let src = &operand("src", &imm.regunit);
-    let dst = &operand("dst", &imm.regunit);
+    let src = &Operand::new("src", &imm.regunit);
+    let dst = &Operand::new("dst", &imm.regunit);
 
     ig.push(
         Inst::new(
@@ -1420,7 +1413,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let delta = &operand("delta", Int);
+    let delta = &Operand::new("delta", Int);
 
     ig.push(
         Inst::new(
@@ -1436,7 +1429,7 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
-    let Offset = &operand_doc("Offset", &imm.imm64, "Offset from current stack pointer");
+    let Offset = &Operand::new("Offset", &imm.imm64).with_doc("Offset from current stack pointer");
 
     ig.push(
         Inst::new(
@@ -1454,7 +1447,7 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
-    let Offset = &operand_doc("Offset", &imm.imm64, "Offset from current stack pointer");
+    let Offset = &Operand::new("Offset", &imm.imm64).with_doc("Offset from current stack pointer");
 
     ig.push(
         Inst::new(
@@ -1473,7 +1466,7 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
-    let f = &operand("f", iflags);
+    let f = &Operand::new("f", iflags);
 
     ig.push(
         Inst::new(
@@ -1528,11 +1521,8 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
-    let N = &operand_doc(
-        "args",
-        &entities.varargs,
-        "Variable number of args for Stackmap",
-    );
+    let N =
+        &Operand::new("args", &entities.varargs).with_doc("Variable number of args for Stackmap");
 
     ig.push(
         Inst::new(
@@ -1547,9 +1537,9 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
-    let x = &operand_doc("x", TxN, "Vector to split");
-    let lo = &operand_doc("lo", &TxN.half_vector(), "Low-numbered lanes of `x`");
-    let hi = &operand_doc("hi", &TxN.half_vector(), "High-numbered lanes of `x`");
+    let x = &Operand::new("x", TxN).with_doc("Vector to split");
+    let lo = &Operand::new("lo", &TxN.half_vector()).with_doc("Low-numbered lanes of `x`");
+    let hi = &Operand::new("hi", &TxN.half_vector()).with_doc("High-numbered lanes of `x`");
 
     ig.push(
         Inst::new(
@@ -1580,9 +1570,9 @@ pub(crate) fn define(
             .build(),
     );
 
-    let x = &operand_doc("x", Any128, "Low-numbered lanes");
-    let y = &operand_doc("y", Any128, "High-numbered lanes");
-    let a = &operand_doc("a", &Any128.double_vector(), "Concatenation of `x` and `y`");
+    let x = &Operand::new("x", Any128).with_doc("Low-numbered lanes");
+    let y = &Operand::new("y", Any128).with_doc("High-numbered lanes");
+    let a = &Operand::new("a", &Any128.double_vector()).with_doc("Concatenation of `x` and `y`");
 
     ig.push(
         Inst::new(
@@ -1604,10 +1594,10 @@ pub(crate) fn define(
         .is_ghost(true),
     );
 
-    let c = &operand_doc("c", &TxN.as_bool(), "Controlling vector");
-    let x = &operand_doc("x", TxN, "Value to use where `c` is true");
-    let y = &operand_doc("y", TxN, "Value to use where `c` is false");
-    let a = &operand("a", TxN);
+    let c = &Operand::new("c", &TxN.as_bool()).with_doc("Controlling vector");
+    let x = &Operand::new("x", TxN).with_doc("Value to use where `c` is true");
+    let y = &Operand::new("y", TxN).with_doc("Value to use where `c` is false");
+    let a = &Operand::new("a", TxN);
 
     ig.push(
         Inst::new(
@@ -1624,7 +1614,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let s = &operand("s", b1);
+    let s = &Operand::new("s", b1);
 
     ig.push(
         Inst::new(
@@ -1654,7 +1644,7 @@ pub(crate) fn define(
         .operands_out(vec![s]),
     );
 
-    let x = &operand("x", &TxN.lane_of());
+    let x = &Operand::new("x", &TxN.lane_of());
 
     ig.push(
         Inst::new(
@@ -1670,9 +1660,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand_doc("x", TxN, "SIMD vector to modify");
-    let y = &operand_doc("y", &TxN.lane_of(), "New lane value");
-    let Idx = &operand_doc("Idx", &imm.uimm8, "Lane index");
+    let x = &Operand::new("x", TxN).with_doc("SIMD vector to modify");
+    let y = &Operand::new("y", &TxN.lane_of()).with_doc("New lane value");
+    let Idx = &Operand::new("Idx", &imm.uimm8).with_doc("Lane index");
 
     ig.push(
         Inst::new(
@@ -1689,8 +1679,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", TxN);
-    let a = &operand("a", &TxN.lane_of());
+    let x = &Operand::new("x", TxN);
+    let a = &Operand::new("a", &TxN.lane_of());
 
     ig.push(
         Inst::new(
@@ -1709,10 +1699,10 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand("a", &Int.as_bool());
-    let Cond = &operand("Cond", &imm.intcc);
-    let x = &operand("x", Int);
-    let y = &operand("y", Int);
+    let a = &Operand::new("a", &Int.as_bool());
+    let Cond = &Operand::new("Cond", &imm.intcc);
+    let x = &Operand::new("x", Int);
+    let y = &Operand::new("y", Int);
 
     ig.push(
         Inst::new(
@@ -1748,9 +1738,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand("a", b1);
-    let x = &operand("x", iB);
-    let Y = &operand("Y", &imm.imm64);
+    let a = &Operand::new("a", b1);
+    let x = &Operand::new("x", iB);
+    let Y = &Operand::new("Y", &imm.imm64);
 
     ig.push(
         Inst::new(
@@ -1770,9 +1760,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let f = &operand("f", iflags);
-    let x = &operand("x", iB);
-    let y = &operand("y", iB);
+    let f = &Operand::new("f", iflags);
+    let x = &Operand::new("x", iB);
+    let y = &Operand::new("y", iB);
 
     ig.push(
         Inst::new(
@@ -1804,9 +1794,9 @@ pub(crate) fn define(
         .operands_out(vec![f]),
     );
 
-    let a = &operand("a", Int);
-    let x = &operand("x", Int);
-    let y = &operand("y", Int);
+    let a = &Operand::new("a", Int);
+    let x = &Operand::new("x", Int);
+    let y = &Operand::new("y", Int);
 
     ig.push(
         Inst::new(
@@ -2028,9 +2018,9 @@ pub(crate) fn define(
         .can_trap(true),
     );
 
-    let a = &operand("a", iB);
-    let x = &operand("x", iB);
-    let Y = &operand("Y", &imm.imm64);
+    let a = &Operand::new("a", iB);
+    let x = &Operand::new("x", iB);
+    let Y = &Operand::new("Y", &imm.imm64);
 
     ig.push(
         Inst::new(
@@ -2141,19 +2131,19 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand("a", iB);
-    let x = &operand("x", iB);
-    let y = &operand("y", iB);
+    let a = &Operand::new("a", iB);
+    let x = &Operand::new("x", iB);
+    let y = &Operand::new("y", iB);
 
-    let c_in = &operand_doc("c_in", b1, "Input carry flag");
-    let c_out = &operand_doc("c_out", b1, "Output carry flag");
-    let b_in = &operand_doc("b_in", b1, "Input borrow flag");
-    let b_out = &operand_doc("b_out", b1, "Output borrow flag");
+    let c_in = &Operand::new("c_in", b1).with_doc("Input carry flag");
+    let c_out = &Operand::new("c_out", b1).with_doc("Output carry flag");
+    let b_in = &Operand::new("b_in", b1).with_doc("Input borrow flag");
+    let b_out = &Operand::new("b_out", b1).with_doc("Output borrow flag");
 
-    let c_if_in = &operand("c_in", iflags);
-    let c_if_out = &operand("c_out", iflags);
-    let b_if_in = &operand("b_in", iflags);
-    let b_if_out = &operand("b_out", iflags);
+    let c_if_in = &Operand::new("c_in", iflags);
+    let c_if_out = &Operand::new("c_out", iflags);
+    let b_if_in = &Operand::new("b_in", iflags);
+    let b_if_out = &Operand::new("b_out", iflags);
 
     ig.push(
         Inst::new(
@@ -2426,9 +2416,9 @@ pub(crate) fn define(
             .includes_scalars(true)
             .build(),
     );
-    let x = &operand("x", bits);
-    let y = &operand("y", bits);
-    let a = &operand("a", bits);
+    let x = &Operand::new("x", bits);
+    let y = &Operand::new("y", bits);
+    let a = &Operand::new("a", bits);
 
     ig.push(
         Inst::new(
@@ -2520,9 +2510,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", iB);
-    let Y = &operand("Y", &imm.imm64);
-    let a = &operand("a", iB);
+    let x = &Operand::new("x", iB);
+    let Y = &Operand::new("Y", &imm.imm64);
+    let a = &Operand::new("a", iB);
 
     ig.push(
         Inst::new(
@@ -2575,10 +2565,10 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand_doc("x", Int, "Scalar or vector value to shift");
-    let y = &operand_doc("y", iB, "Number of bits to shift");
-    let Y = &operand("Y", &imm.imm64);
-    let a = &operand("a", Int);
+    let x = &Operand::new("x", Int).with_doc("Scalar or vector value to shift");
+    let y = &Operand::new("y", iB).with_doc("Number of bits to shift");
+    let Y = &Operand::new("Y", &imm.imm64);
+    let a = &Operand::new("a", Int);
 
     ig.push(
         Inst::new(
@@ -2735,8 +2725,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", iB);
-    let a = &operand("a", iB);
+    let x = &Operand::new("x", iB);
+    let a = &Operand::new("a", iB);
 
     ig.push(
         Inst::new(
@@ -2822,10 +2812,10 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let Cond = &operand("Cond", &imm.floatcc);
-    let x = &operand("x", Float);
-    let y = &operand("y", Float);
-    let a = &operand("a", &Float.as_bool());
+    let Cond = &Operand::new("Cond", &imm.floatcc);
+    let x = &Operand::new("x", Float);
+    let y = &Operand::new("y", Float);
+    let a = &Operand::new("a", &Float.as_bool());
 
     ig.push(
         Inst::new(
@@ -2897,7 +2887,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let f = &operand("f", fflags);
+    let f = &Operand::new("f", fflags);
 
     ig.push(
         Inst::new(
@@ -2914,10 +2904,10 @@ pub(crate) fn define(
         .operands_out(vec![f]),
     );
 
-    let x = &operand("x", Float);
-    let y = &operand("y", Float);
-    let z = &operand("z", Float);
-    let a = &operand_doc("a", Float, "Result of applying operator to each lane");
+    let x = &Operand::new("x", Float);
+    let y = &Operand::new("y", Float);
+    let z = &Operand::new("z", Float);
+    let a = &Operand::new("a", Float).with_doc("Result of applying operator to each lane");
 
     ig.push(
         Inst::new(
@@ -2998,7 +2988,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand_doc("a", Float, "``x`` with its sign bit inverted");
+    let a = &Operand::new("a", Float).with_doc("``x`` with its sign bit inverted");
 
     ig.push(
         Inst::new(
@@ -3014,7 +3004,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand_doc("a", Float, "``x`` with its sign bit cleared");
+    let a = &Operand::new("a", Float).with_doc("``x`` with its sign bit cleared");
 
     ig.push(
         Inst::new(
@@ -3030,11 +3020,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand_doc(
-        "a",
-        Float,
-        "``x`` with its sign bit changed to that of ``y``",
-    );
+    let a = &Operand::new("a", Float).with_doc("``x`` with its sign bit changed to that of ``y``");
 
     ig.push(
         Inst::new(
@@ -3051,7 +3037,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand_doc("a", Float, "The smaller of ``x`` and ``y``");
+    let a = &Operand::new("a", Float).with_doc("The smaller of ``x`` and ``y``");
 
     ig.push(
         Inst::new(
@@ -3067,7 +3053,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand_doc("a", Float, "The larger of ``x`` and ``y``");
+    let a = &Operand::new("a", Float).with_doc("The larger of ``x`` and ``y``");
 
     ig.push(
         Inst::new(
@@ -3083,7 +3069,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand_doc("a", Float, "``x`` rounded to integral value");
+    let a = &Operand::new("a", Float).with_doc("``x`` rounded to integral value");
 
     ig.push(
         Inst::new(
@@ -3134,8 +3120,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand("a", b1);
-    let x = &operand("x", Ref);
+    let a = &Operand::new("a", b1);
+    let x = &Operand::new("x", Ref);
 
     ig.push(
         Inst::new(
@@ -3152,9 +3138,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Cond = &operand("Cond", &imm.intcc);
-    let f = &operand("f", iflags);
-    let a = &operand("a", b1);
+    let Cond = &Operand::new("Cond", &imm.intcc);
+    let f = &Operand::new("f", iflags);
+    let a = &Operand::new("a", b1);
 
     ig.push(
         Inst::new(
@@ -3171,8 +3157,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Cond = &operand("Cond", &imm.floatcc);
-    let f = &operand("f", fflags);
+    let Cond = &Operand::new("Cond", &imm.floatcc);
+    let f = &Operand::new("f", fflags);
 
     ig.push(
         Inst::new(
@@ -3189,8 +3175,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", Mem);
-    let a = &operand_doc("a", MemTo, "Bits of `x` reinterpreted");
+    let x = &Operand::new("x", Mem);
+    let a = &Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted");
 
     ig.push(
         Inst::new(
@@ -3208,8 +3194,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", Any);
-    let a = &operand_doc("a", AnyTo, "Bits of `x` reinterpreted");
+    let x = &Operand::new("x", Any);
+    let a = &Operand::new("a", AnyTo).with_doc("Bits of `x` reinterpreted");
 
     ig.push(
         Inst::new(
@@ -3231,8 +3217,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &operand_doc("a", TxN, "A vector value");
-    let s = &operand_doc("s", &TxN.lane_of(), "A scalar value");
+    let a = &Operand::new("a", TxN).with_doc("A vector value");
+    let s = &Operand::new("s", &TxN.lane_of()).with_doc("A scalar value");
 
     ig.push(
         Inst::new(
@@ -3268,8 +3254,8 @@ pub(crate) fn define(
             .build(),
     );
 
-    let x = &operand("x", Bool);
-    let a = &operand("a", BoolTo);
+    let x = &Operand::new("x", Bool);
+    let a = &Operand::new("a", BoolTo);
 
     ig.push(
         Inst::new(
@@ -3296,8 +3282,8 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &operand("x", Bool);
-    let a = &operand("a", BoolTo);
+    let x = &Operand::new("x", Bool);
+    let a = &Operand::new("a", BoolTo);
 
     ig.push(
         Inst::new(
@@ -3324,8 +3310,8 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &operand("x", Bool);
-    let a = &operand("a", IntTo);
+    let x = &Operand::new("x", Bool);
+    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -3374,8 +3360,8 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &operand("x", Int);
-    let a = &operand("a", IntTo);
+    let x = &Operand::new("x", Int);
+    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -3406,8 +3392,8 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &operand("x", Int);
-    let a = &operand("a", IntTo);
+    let x = &Operand::new("x", Int);
+    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -3459,8 +3445,8 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &operand("x", Float);
-    let a = &operand("a", FloatTo);
+    let x = &Operand::new("x", Float);
+    let a = &Operand::new("a", FloatTo);
 
     ig.push(
         Inst::new(
@@ -3508,8 +3494,8 @@ pub(crate) fn define(
         .constraints(vec![WiderOrEq(Float.clone(), FloatTo.clone())]),
     );
 
-    let x = &operand("x", Float);
-    let a = &operand("a", IntTo);
+    let x = &Operand::new("x", Float);
+    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -3576,8 +3562,8 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", Int);
-    let a = &operand("a", FloatTo);
+    let x = &Operand::new("x", Int);
+    let a = &Operand::new("a", FloatTo);
 
     ig.push(
         Inst::new(
@@ -3621,9 +3607,9 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &operand("x", WideInt);
-    let lo = &operand_doc("lo", &WideInt.half_width(), "The low bits of `x`");
-    let hi = &operand_doc("hi", &WideInt.half_width(), "The high bits of `x`");
+    let x = &Operand::new("x", WideInt);
+    let lo = &Operand::new("lo", &WideInt.half_width()).with_doc("The low bits of `x`");
+    let hi = &Operand::new("hi", &WideInt.half_width()).with_doc("The high bits of `x`");
 
     ig.push(
         Inst::new(
@@ -3653,13 +3639,10 @@ pub(crate) fn define(
             .build(),
     );
 
-    let lo = &operand("lo", NarrowInt);
-    let hi = &operand("hi", NarrowInt);
-    let a = &operand_doc(
-        "a",
-        &NarrowInt.double_width(),
-        "The concatenation of `lo` and `hi`",
-    );
+    let lo = &Operand::new("lo", NarrowInt);
+    let hi = &Operand::new("hi", NarrowInt);
+    let a = &Operand::new("a", &NarrowInt.double_width())
+        .with_doc("The concatenation of `lo` and `hi`");
 
     ig.push(
         Inst::new(

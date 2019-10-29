@@ -19,18 +19,30 @@ use crate::cdsl::typevar::TypeVar;
 #[derive(Clone, Debug)]
 pub(crate) struct Operand {
     pub name: &'static str,
-    doc: Option<String>,
+    doc: Option<&'static str>,
     pub kind: OperandKind,
 }
 
 impl Operand {
+    pub fn new(name: &'static str, kind: impl Into<OperandKind>) -> Self {
+        Self {
+            name,
+            doc: None,
+            kind: kind.into(),
+        }
+    }
+    pub fn with_doc(mut self, doc: &'static str) -> Self {
+        self.doc = Some(doc);
+        self
+    }
+
     pub fn doc(&self) -> Option<&str> {
-        match &self.doc {
-            Some(doc) => Some(doc),
-            None => match &self.kind.fields {
-                OperandKindFields::TypeVar(tvar) => Some(&tvar.doc),
-                _ => self.kind.doc(),
-            },
+        if let Some(doc) = &self.doc {
+            return Some(doc);
+        }
+        match &self.kind.fields {
+            OperandKindFields::TypeVar(tvar) => Some(&tvar.doc),
+            _ => self.kind.doc(),
         }
     }
 
@@ -85,34 +97,6 @@ impl Operand {
     }
 }
 
-pub(crate) struct OperandBuilder {
-    name: &'static str,
-    doc: Option<String>,
-    kind: OperandKind,
-}
-
-impl OperandBuilder {
-    pub fn new(name: &'static str, kind: OperandKind) -> Self {
-        Self {
-            name,
-            doc: None,
-            kind,
-        }
-    }
-    pub fn doc(mut self, doc: impl Into<String>) -> Self {
-        assert!(self.doc.is_none());
-        self.doc = Some(doc.into());
-        self
-    }
-    pub fn build(self) -> Operand {
-        Operand {
-            name: self.name,
-            doc: self.doc,
-            kind: self.kind,
-        }
-    }
-}
-
 type EnumValues = HashMap<&'static str, &'static str>;
 
 #[derive(Clone, Debug)]
@@ -140,15 +124,15 @@ pub(crate) struct OperandKind {
 
 impl OperandKind {
     fn doc(&self) -> Option<&str> {
-        match &self.doc {
-            Some(doc) => Some(&doc),
-            None => match &self.fields {
-                OperandKindFields::TypeVar(type_var) => Some(&type_var.doc),
-                OperandKindFields::ImmEnum(_)
-                | OperandKindFields::ImmValue
-                | OperandKindFields::EntityRef
-                | OperandKindFields::VariableArgs => None,
-            },
+        if let Some(doc) = &self.doc {
+            return Some(doc);
+        }
+        match &self.fields {
+            OperandKindFields::TypeVar(type_var) => Some(&type_var.doc),
+            OperandKindFields::ImmEnum(_)
+            | OperandKindFields::ImmValue
+            | OperandKindFields::EntityRef
+            | OperandKindFields::VariableArgs => None,
         }
     }
 
@@ -264,18 +248,4 @@ impl Into<OperandKind> for &OperandKind {
     fn into(self) -> OperandKind {
         self.clone()
     }
-}
-
-/// Helper to create an operand in definitions files.
-pub(crate) fn create_operand(name: &'static str, kind: impl Into<OperandKind>) -> Operand {
-    OperandBuilder::new(name, kind.into()).build()
-}
-
-/// Helper to create an operand with a documentation in definitions files.
-pub(crate) fn create_operand_doc(
-    name: &'static str,
-    kind: impl Into<OperandKind>,
-    doc: &'static str,
-) -> Operand {
-    OperandBuilder::new(name, kind.into()).doc(doc).build()
 }

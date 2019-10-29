@@ -1292,7 +1292,7 @@ impl Into<InstSpec> for BoundInstruction {
 mod test {
     use super::*;
     use crate::cdsl::formats::InstructionFormatBuilder;
-    use crate::cdsl::operands::{OperandBuilder, OperandKindBuilder, OperandKindFields};
+    use crate::cdsl::operands::{OperandKindBuilder, OperandKindFields};
     use crate::cdsl::typevar::TypeSetBuilder;
     use crate::shared::types::Int::{I32, I64};
 
@@ -1300,7 +1300,7 @@ mod test {
         // Pretend the index string is &'static.
         let name = Box::leak(index.to_string().into_boxed_str());
         let kind = OperandKindBuilder::new(name, field).build();
-        let operand = OperandBuilder::new(name, kind).build();
+        let operand = Operand::new(name, kind);
         operand
     }
 

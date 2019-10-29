@@ -3,7 +3,7 @@
 use crate::cdsl::instructions::{
     AllInstructions, InstructionBuilder as Inst, InstructionGroup, InstructionGroupBuilder,
 };
-use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
+use crate::cdsl::operands::Operand;
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 
@@ -26,11 +26,11 @@ pub(crate) fn define(
         "A scalar integer machine word",
         TypeSetBuilder::new().ints(32..64).build(),
     );
-    let nlo = &operand_doc("nlo", iWord, "Low part of numerator");
-    let nhi = &operand_doc("nhi", iWord, "High part of numerator");
-    let d = &operand_doc("d", iWord, "Denominator");
-    let q = &operand_doc("q", iWord, "Quotient");
-    let r = &operand_doc("r", iWord, "Remainder");
+    let nlo = &Operand::new("nlo", iWord).with_doc("Low part of numerator");
+    let nhi = &Operand::new("nhi", iWord).with_doc("High part of numerator");
+    let d = &Operand::new("d", iWord).with_doc("Denominator");
+    let q = &Operand::new("q", iWord).with_doc("Quotient");
+    let r = &Operand::new("r", iWord).with_doc("Remainder");
 
     ig.push(
         Inst::new(
@@ -72,10 +72,10 @@ pub(crate) fn define(
         .can_trap(true),
     );
 
-    let argL = &operand("argL", iWord);
-    let argR = &operand("argR", iWord);
-    let resLo = &operand("resLo", iWord);
-    let resHi = &operand("resHi", iWord);
+    let argL = &Operand::new("argL", iWord);
+    let argR = &Operand::new("argR", iWord);
+    let resLo = &Operand::new("resLo", iWord);
+    let resHi = &Operand::new("resHi", iWord);
 
     ig.push(
         Inst::new(
@@ -123,8 +123,8 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &operand("x", Float);
-    let a = &operand("a", IntTo);
+    let x = &Operand::new("x", Float);
+    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -144,9 +144,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", Float);
-    let a = &operand("a", Float);
-    let y = &operand("y", Float);
+    let x = &Operand::new("x", Float);
+    let a = &Operand::new("a", Float);
+    let y = &Operand::new("y", Float);
 
     ig.push(
         Inst::new(
@@ -186,7 +186,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", iWord);
+    let x = &Operand::new("x", iWord);
 
     ig.push(
         Inst::new(
@@ -225,8 +225,8 @@ pub(crate) fn define(
         .can_load(true),
     );
 
-    let y = &operand("y", iWord);
-    let rflags = &operand("rflags", iflags);
+    let y = &Operand::new("y", iWord);
+    let rflags = &Operand::new("rflags", iflags);
 
     ig.push(
         Inst::new(
@@ -271,9 +271,9 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let a = &operand_doc("a", TxN, "A vector value (i.e. held in an XMM register)");
-    let b = &operand_doc("b", TxN, "A vector value (i.e. held in an XMM register)");
-    let i = &operand_doc("i", uimm8, "An ordering operand controlling the copying of data from the source to the destination; see PSHUFD in Intel manual for details");
+    let a = &Operand::new("a", TxN).with_doc("A vector value (i.e. held in an XMM register)");
+    let b = &Operand::new("b", TxN).with_doc("A vector value (i.e. held in an XMM register)");
+    let i = &Operand::new("i", uimm8,).with_doc( "An ordering operand controlling the copying of data from the source to the destination; see PSHUFD in Intel manual for details");
 
     ig.push(
         Inst::new(
@@ -301,9 +301,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Idx = &operand_doc("Idx", uimm8, "Lane index");
-    let x = &operand("x", TxN);
-    let a = &operand("a", &TxN.lane_of());
+    let Idx = &Operand::new("Idx", uimm8).with_doc("Lane index");
+    let x = &Operand::new("x", TxN);
+    let a = &Operand::new("a", &TxN.lane_of());
 
     ig.push(
         Inst::new(
@@ -329,9 +329,9 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let x = &operand("x", IBxN);
-    let y = &operand_doc("y", &IBxN.lane_of(), "New lane value");
-    let a = &operand("a", IBxN);
+    let x = &Operand::new("x", IBxN);
+    let y = &Operand::new("y", &IBxN.lane_of()).with_doc("New lane value");
+    let a = &Operand::new("a", IBxN);
 
     ig.push(
         Inst::new(
@@ -356,9 +356,9 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let x = &operand("x", FxN);
-    let y = &operand_doc("y", &FxN.lane_of(), "New lane value");
-    let a = &operand("a", FxN);
+    let x = &Operand::new("x", FxN);
+    let y = &Operand::new("y", &FxN.lane_of()).with_doc("New lane value");
+    let a = &Operand::new("a", FxN);
 
     ig.push(
         Inst::new(
@@ -374,9 +374,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", FxN);
-    let y = &operand("y", FxN);
-    let a = &operand("a", FxN);
+    let x = &Operand::new("x", FxN);
+    let y = &Operand::new("y", FxN);
+    let a = &Operand::new("a", FxN);
 
     ig.push(
         Inst::new(
@@ -422,9 +422,9 @@ pub(crate) fn define(
             .build(),
     );
 
-    let x = &operand_doc("x", IxN, "Vector value to shift");
-    let y = &operand_doc("y", I64x2, "Number of bits to shift");
-    let a = &operand("a", IxN);
+    let x = &Operand::new("x", IxN).with_doc("Vector value to shift");
+    let y = &Operand::new("y", I64x2).with_doc("Number of bits to shift");
+    let a = &Operand::new("a", IxN);
 
     ig.push(
         Inst::new(
@@ -468,16 +468,16 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &operand("x", TxN);
-    let y = &operand("y", TxN);
-    let f = &operand("f", iflags);
+    let x = &Operand::new("x", TxN);
+    let y = &Operand::new("y", TxN);
+    let f = &Operand::new("f", iflags);
     ig.push(
         Inst::new(
             "x86_ptest",
             r#"
-        Logical Compare -- PTEST will set the ZF flag if all bits in the result are 0 of the 
-        bitwise AND of the first source operand (first operand) and the second source operand 
-        (second operand). PTEST sets the CF flag if all bits in the result are 0 of the bitwise  
+        Logical Compare -- PTEST will set the ZF flag if all bits in the result are 0 of the
+        bitwise AND of the first source operand (first operand) and the second source operand
+        (second operand). PTEST sets the CF flag if all bits in the result are 0 of the bitwise
         AND of the second source operand (second operand) and the logical NOT of the destination
         operand (first operand).
         "#,
