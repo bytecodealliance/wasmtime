@@ -925,8 +925,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         args_doc.push(format!(
             "- {}: {}",
             op.name,
-            op.doc
-                .as_ref()
+            op.doc()
                 .expect("every instruction's input operand must be documented")
         ));
     }
@@ -935,8 +934,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         rets_doc.push(format!(
             "- {}: {}",
             op.name,
-            op.doc
-                .as_ref()
+            op.doc()
                 .expect("every instruction's output operand must be documented")
         ));
     }

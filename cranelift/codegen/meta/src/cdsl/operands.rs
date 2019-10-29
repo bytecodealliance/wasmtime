@@ -19,11 +19,21 @@ use crate::cdsl::typevar::TypeVar;
 #[derive(Clone, Debug)]
 pub(crate) struct Operand {
     pub name: &'static str,
-    pub doc: Option<String>,
+    doc: Option<String>,
     pub kind: OperandKind,
 }
 
 impl Operand {
+    pub fn doc(&self) -> Option<&str> {
+        match &self.doc {
+            Some(doc) => Some(doc),
+            None => match &self.kind.fields {
+                OperandKindFields::TypeVar(tvar) => Some(&tvar.doc),
+                _ => self.kind.doc(),
+            },
+        }
+    }
+
     pub fn is_value(&self) -> bool {
         match self.kind.fields {
             OperandKindFields::TypeVar(_) => true,
@@ -95,17 +105,9 @@ impl OperandBuilder {
         self
     }
     pub fn build(self) -> Operand {
-        let doc = match self.doc {
-            Some(doc) => Some(doc),
-            None => match &self.kind.fields {
-                OperandKindFields::TypeVar(tvar) => Some(tvar.doc.clone()),
-                _ => self.kind.doc.clone(),
-            },
-        };
-
         Operand {
             name: self.name,
-            doc,
+            doc: self.doc,
             kind: self.kind,
         }
     }
@@ -137,6 +139,19 @@ pub(crate) struct OperandKind {
 }
 
 impl OperandKind {
+    fn doc(&self) -> Option<&str> {
+        match &self.doc {
+            Some(doc) => Some(&doc),
+            None => match &self.fields {
+                OperandKindFields::TypeVar(type_var) => Some(&type_var.doc),
+                OperandKindFields::ImmEnum(_)
+                | OperandKindFields::ImmValue
+                | OperandKindFields::EntityRef
+                | OperandKindFields::VariableArgs => None,
+            },
+        }
+    }
+
     pub fn imm_name(&self) -> Option<&str> {
         match self.fields {
             OperandKindFields::ImmEnum(_)
@@ -230,20 +245,9 @@ impl OperandKindBuilder {
             },
         };
 
-        let doc = match self.doc {
-            Some(doc) => Some(doc),
-            None => match &self.fields {
-                OperandKindFields::TypeVar(type_var) => Some(type_var.doc.clone()),
-                OperandKindFields::ImmEnum(_)
-                | OperandKindFields::ImmValue
-                | OperandKindFields::EntityRef
-                | OperandKindFields::VariableArgs => None,
-            },
-        };
-
         OperandKind {
             name: self.name,
-            doc,
+            doc: self.doc,
             default_member,
             rust_type,
             fields: self.fields,
