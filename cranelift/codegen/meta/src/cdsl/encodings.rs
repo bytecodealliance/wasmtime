@@ -95,7 +95,7 @@ impl EncodingBuilder {
                         &inst.inst.format,
                         immediate_operand
                             .kind
-                            .default_member
+                            .default_member()
                             .expect("Immediates must always have a default member name set."),
                         immediate_value.to_string(),
                     );

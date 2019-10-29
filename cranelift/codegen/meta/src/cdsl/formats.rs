@@ -127,7 +127,7 @@ impl InstructionFormatBuilder {
     pub fn imm(mut self, operand_kind: &OperandKind) -> Self {
         let field = FormatField {
             kind: operand_kind.clone(),
-            member: operand_kind.default_member.unwrap(),
+            member: operand_kind.default_member().unwrap(),
         };
         self.imm_fields.push(field);
         self
