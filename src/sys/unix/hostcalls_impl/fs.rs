@@ -175,7 +175,7 @@ pub(crate) fn path_open(
         }
     };
 
-    log::debug!("path_open new_fd = {:?}", new_fd);
+    log::debug!("path_open (host) new_fd = {:?}", new_fd);
 
     // Determine the type of the new file descriptor and which rights contradict with this type
     Ok(unsafe { File::from_raw_fd(new_fd) })

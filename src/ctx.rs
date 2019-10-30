@@ -134,7 +134,9 @@ impl WasiCtxBuilder {
             }
             let mut fe = FdEntry::from(dir)?;
             fe.preopen_path = Some(guest_path);
+            log::debug!("WasiCtx inserting ({:?}, {:?})", preopen_fd, fe);
             self.fds.insert(preopen_fd, fe);
+            log::debug!("WasiCtx fds = {:?}", self.fds);
             preopen_fd = preopen_fd.checked_add(1).ok_or(Error::ENFILE)?;
         }
 

@@ -199,6 +199,7 @@ mod wasm_tests {
                         "truncation_rights" => true,
                         "fd_readdir" => true,
                         "path_rename_trailing_slashes" => true,
+                        "poll_oneoff" => true,
                         _ => false,
                     }
                 } else {
