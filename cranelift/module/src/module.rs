@@ -11,11 +11,11 @@ use crate::Backend;
 use cranelift_codegen::binemit::{self, CodeInfo};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{ir, isa, CodegenError, Context};
-use failure::Fail;
 use log::info;
 use std::borrow::ToOwned;
 use std::string::String;
 use std::vec::Vec;
+use thiserror::Error;
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -121,32 +121,29 @@ pub struct FunctionDeclaration {
 }
 
 /// Error messages for all `Module` and `Backend` methods
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum ModuleError {
     /// Indicates an identifier was used before it was declared
-    #[fail(display = "Undeclared identifier: {}", _0)]
+    #[error("Undeclared identifier: {0}")]
     Undeclared(String),
     /// Indicates an identifier was used as data/function first, but then used as the other
-    #[fail(display = "Incompatible declaration of identifier: {}", _0)]
+    #[error("Incompatible declaration of identifier: {0}")]
     IncompatibleDeclaration(String),
     /// Indicates a function identifier was declared with a
     /// different signature than declared previously
-    #[fail(
-        display = "Function {} signature {:?} is incompatible with previous declaration {:?}",
-        _0, _2, _1
-    )]
+    #[error("Function {0} signature {2:?} is incompatible with previous declaration {1:?}")]
     IncompatibleSignature(String, ir::Signature, ir::Signature),
     /// Indicates an identifier was defined more than once
-    #[fail(display = "Duplicate definition of identifier: {}", _0)]
+    #[error("Duplicate definition of identifier: {0}")]
     DuplicateDefinition(String),
     /// Indicates an identifier was defined, but was declared as an import
-    #[fail(display = "Invalid to define identifier declared as an import: {}", _0)]
+    #[error("Invalid to define identifier declared as an import: {0}")]
     InvalidImportDefinition(String),
     /// Wraps a `cranelift-codegen` error
-    #[fail(display = "Compilation error: {}", _0)]
+    #[error("Compilation error: {0}")]
     Compilation(CodegenError),
     /// Wraps a generic error from a backend
-    #[fail(display = "Backend error: {}", _0)]
+    #[error("Backend error: {0}")]
     Backend(String),
 }
 

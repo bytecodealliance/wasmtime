@@ -65,8 +65,8 @@ use crate::settings::SetResult;
 use crate::timing;
 use alloc::boxed::Box;
 use core::fmt;
-use failure_derive::Fail;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
+use thiserror::Error;
 
 #[cfg(feature = "riscv")]
 mod riscv;
@@ -124,14 +124,14 @@ pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
 }
 
 /// Describes reason for target lookup failure
-#[derive(Fail, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(Error, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum LookupError {
     /// Support for this target was disabled in the current build.
-    #[fail(display = "Support for this target is disabled")]
+    #[error("Support for this target is disabled")]
     SupportDisabled,
 
     /// Support for this target has not yet been implemented.
-    #[fail(display = "Support for this target has not been implemented yet")]
+    #[error("Support for this target has not been implemented yet")]
     Unsupported,
 }
 

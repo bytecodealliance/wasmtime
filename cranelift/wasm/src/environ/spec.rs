@@ -16,8 +16,8 @@ use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_frontend::FunctionBuilder;
-use failure_derive::Fail;
 use std::boxed::Box;
+use thiserror::Error;
 use wasmparser::BinaryReaderError;
 use wasmparser::Operator;
 
@@ -42,13 +42,13 @@ pub enum GlobalVariable {
 ///
 /// When a WebAssembly function can't be translated, one of these error codes will be returned
 /// to describe the failure.
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum WasmError {
     /// The input WebAssembly code is invalid.
     ///
     /// This error code is used by a WebAssembly translator when it encounters invalid WebAssembly
     /// code. This should never happen for validated WebAssembly code.
-    #[fail(display = "Invalid input WebAssembly code at offset {}: {}", _1, _0)]
+    #[error("Invalid input WebAssembly code at offset {offset}: {message}")]
     InvalidWebAssembly {
         /// A string describing the validation error.
         message: &'static str,
@@ -59,7 +59,7 @@ pub enum WasmError {
     /// A feature used by the WebAssembly code is not supported by the embedding environment.
     ///
     /// Embedding environments may have their own limitations and feature restrictions.
-    #[fail(display = "Unsupported feature: {}", _0)]
+    #[error("Unsupported feature: {0}")]
     Unsupported(std::string::String),
 
     /// An implementation limit was exceeded.
@@ -68,11 +68,11 @@ pub enum WasmError {
     /// limits][limits] that cause compilation to fail when they are exceeded.
     ///
     /// [limits]: https://cranelift.readthedocs.io/en/latest/ir.html#implementation-limits
-    #[fail(display = "Implementation limit exceeded")]
+    #[error("Implementation limit exceeded")]
     ImplLimitExceeded,
 
     /// Any user-defined error.
-    #[fail(display = "User error: {}", _0)]
+    #[error("User error: {0}")]
     User(std::string::String),
 }
 

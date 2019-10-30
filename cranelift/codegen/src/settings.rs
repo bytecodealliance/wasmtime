@@ -26,7 +26,7 @@ use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use core::fmt;
 use core::str;
-use failure_derive::Fail;
+use thiserror::Error;
 
 /// A string-based configurator for settings groups.
 ///
@@ -165,18 +165,18 @@ impl Configurable for Builder {
 }
 
 /// An error produced when changing a setting.
-#[derive(Fail, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum SetError {
     /// No setting by this name exists.
-    #[fail(display = "No existing setting named '{}'", _0)]
+    #[error("No existing setting named '{0}'")]
     BadName(String),
 
     /// Type mismatch for setting (e.g., setting an enum setting as a bool).
-    #[fail(display = "Trying to set a setting with the wrong type")]
+    #[error("Trying to set a setting with the wrong type")]
     BadType,
 
     /// This is not a valid value for this setting.
-    #[fail(display = "Unexpected value for a setting, expected {}", _0)]
+    #[error("Unexpected value for a setting, expected {0}")]
     BadValue(String),
 }
 

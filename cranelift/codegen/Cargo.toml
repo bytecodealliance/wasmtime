@@ -16,13 +16,12 @@ edition = "2018"
 cranelift-codegen-shared = { path = "./shared", version = "0.46.1" }
 cranelift-entity = { path = "../cranelift-entity", version = "0.46.1" }
 cranelift-bforest = { path = "../cranelift-bforest", version = "0.46.1" }
-failure = { version = "0.1.1", default-features = false, features = ["derive"] }
-failure_derive = { version = "0.1.1", default-features = false }
 hashbrown = { version = "0.6", optional = true }
 target-lexicon = "0.8.1"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
 smallvec = { version = "0.6.10" }
+thiserror = "1.0.4"
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
