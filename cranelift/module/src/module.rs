@@ -547,14 +547,14 @@ where
         func: FuncId,
         ctx: &mut Context,
     ) -> ModuleResult<binemit::CodeOffset> {
-        let CodeInfo { total_size, .. } = ctx.compile(self.backend.isa()).map_err(|e| {
-            info!(
-                "defining function {}: {}",
-                func,
-                ctx.func.display(self.backend.isa())
-            );
-            ModuleError::Compilation(e)
-        })?;
+        info!(
+            "defining function {}: {}",
+            func,
+            ctx.func.display(self.backend.isa())
+        );
+        let CodeInfo { total_size, .. } = ctx
+            .compile(self.backend.isa())
+            .map_err(ModuleError::Compilation)?;
         let info = &self.contents.functions[func];
         if info.compiled.is_some() {
             return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
