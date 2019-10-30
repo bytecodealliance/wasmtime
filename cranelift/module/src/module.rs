@@ -141,7 +141,7 @@ pub enum ModuleError {
     InvalidImportDefinition(String),
     /// Wraps a `cranelift-codegen` error
     #[error("Compilation error: {0}")]
-    Compilation(CodegenError),
+    Compilation(#[from] CodegenError),
     /// Wraps a generic error from a backend
     #[error("Backend error: {0}")]
     Backend(String),
@@ -549,9 +549,7 @@ where
             func,
             ctx.func.display(self.backend.isa())
         );
-        let CodeInfo { total_size, .. } = ctx
-            .compile(self.backend.isa())
-            .map_err(ModuleError::Compilation)?;
+        let CodeInfo { total_size, .. } = ctx.compile(self.backend.isa())?;
         let info = &self.contents.functions[func];
         if info.compiled.is_some() {
             return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
