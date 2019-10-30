@@ -162,7 +162,7 @@ impl WasiCtxBuilder {
 
 #[derive(Debug)]
 pub struct WasiCtx {
-    pub(crate) fds: HashMap<host::__wasi_fd_t, FdEntry>,
+    fds: HashMap<host::__wasi_fd_t, FdEntry>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,
 }
@@ -183,48 +183,28 @@ impl WasiCtx {
             .and_then(|ctx| ctx.build())
     }
 
+    /// Check if `WasiCtx` contains the specified raw WASI `fd`.
     pub(crate) unsafe fn contains_fd_entry(&self, fd: host::__wasi_fd_t) -> bool {
         self.fds.contains_key(&fd)
     }
 
-    pub(crate) unsafe fn get_fd_entry(
-        &self,
-        fd: host::__wasi_fd_t,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
-    ) -> Result<&FdEntry> {
-        if let Some(fe) = self.fds.get(&fd) {
-            Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
-        } else {
-            Err(Error::EBADF)
-        }
+    /// Get an immutable `FdEntry` corresponding to the specified raw WASI `fd`.
+    pub(crate) unsafe fn get_fd_entry(&self, fd: host::__wasi_fd_t) -> Result<&FdEntry> {
+        self.fds.get(&fd).ok_or(Error::EBADF)
     }
 
+    /// Get a mutable `FdEntry` corresponding to the specified raw WASI `fd`.
     pub(crate) unsafe fn get_fd_entry_mut(
         &mut self,
         fd: host::__wasi_fd_t,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
     ) -> Result<&mut FdEntry> {
-        if let Some(fe) = self.fds.get_mut(&fd) {
-            Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
-        } else {
-            Err(Error::EBADF)
-        }
+        self.fds.get_mut(&fd).ok_or(Error::EBADF)
     }
 
-    fn validate_rights(
-        fe: &FdEntry,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
-    ) -> Result<()> {
-        if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0 {
-            Err(Error::ENOTCAPABLE)
-        } else {
-            Ok(())
-        }
-    }
-
+    /// Insert the specified `FdEntry` into the `WasiCtx` object.
+    ///
+    /// The `FdEntry` will automatically get another free raw WASI `fd` assigned. Note that
+    /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
     pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<host::__wasi_fd_t> {
         // never insert where stdio handles usually are
         let mut fd = 3;
@@ -237,5 +217,20 @@ impl WasiCtx {
         }
         self.fds.insert(fd, fe);
         Ok(fd)
+    }
+
+    /// Insert the specified `FdEntry` with the specified raw WASI `fd` key into the `WasiCtx`
+    /// object.
+    pub(crate) fn insert_fd_entry_at(
+        &mut self,
+        fd: host::__wasi_fd_t,
+        fe: FdEntry,
+    ) -> Option<FdEntry> {
+        self.fds.insert(fd, fe)
+    }
+
+    /// Remove `FdEntry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
+    pub(crate) fn remove_fd_entry(&mut self, fd: host::__wasi_fd_t) -> Result<FdEntry> {
+        self.fds.remove(&fd).ok_or(Error::EBADF)
     }
 }

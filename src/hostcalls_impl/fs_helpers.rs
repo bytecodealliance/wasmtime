@@ -2,7 +2,7 @@
 use crate::helpers::str_to_cstring;
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::*;
-use crate::{fdentry::FdObject, host, Error, Result};
+use crate::{fdentry::FdEntry, host, Error, Result};
 use std::ffi::CString;
 use std::fs::File;
 use std::path::{Component, Path};
@@ -31,7 +31,9 @@ impl PathGet {
 ///
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn path_get(
-    fo: &FdObject,
+    fe: &FdEntry,
+    rights_base: host::__wasi_rights_t,
+    rights_inheriting: host::__wasi_rights_t,
     dirflags: host::__wasi_lookupflags_t,
     path: &str,
     needs_final_component: bool,
@@ -43,12 +45,15 @@ pub(crate) fn path_get(
         return Err(Error::EILSEQ);
     }
 
-    if fo.file_type != host::__WASI_FILETYPE_DIRECTORY {
+    if fe.file_type != host::__WASI_FILETYPE_DIRECTORY {
         // if `dirfd` doesn't refer to a directory, return `ENOTDIR`.
         return Err(Error::ENOTDIR);
     }
 
-    let dirfd = fo.descriptor.as_file()?.try_clone()?;
+    let dirfd = fe
+        .as_descriptor(rights_base, rights_inheriting)?
+        .as_file()?
+        .try_clone()?;
 
     // Stack of directory file descriptors. Index 0 always corresponds with the directory provided
     // to this function. Entering a directory causes a file descriptor to be pushed, while handling

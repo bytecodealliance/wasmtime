@@ -255,8 +255,8 @@ pub(crate) fn poll_oneoff(
 
                 match unsafe {
                     wasi_ctx
-                        .get_fd_entry(wasi_fd, rights, 0)
-                        .map(|fe| &fe.fd_object.descriptor)
+                        .get_fd_entry(wasi_fd)
+                        .and_then(|fe| fe.as_descriptor(rights, 0))
                 } {
                     Ok(descriptor) => fd_events.push(FdEventData {
                         descriptor,
@@ -281,7 +281,7 @@ pub(crate) fn poll_oneoff(
                             enc_event(event);
                         events_count += 1;
                     }
-                }
+                };
             }
             _ => unreachable!(),
         }
