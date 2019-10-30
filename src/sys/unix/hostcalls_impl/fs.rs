@@ -4,6 +4,7 @@ use super::fs_helpers::*;
 use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::{FileType, PathGet};
 use crate::sys::host_impl;
+use crate::sys::unix::str_to_cstring;
 use crate::{host, Error, Result};
 use nix::libc;
 use std::convert::TryInto;
@@ -57,7 +58,7 @@ pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: host::__wasi_fdflags_t) ->
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
     use nix::libc::mkdirat;
-    let path_cstr = resolved.path_cstring()?;
+    let path_cstr = str_to_cstring(resolved.path())?;
     // nix doesn't expose mkdirat() yet
     match unsafe { mkdirat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0o777) } {
         0 => Ok(()),
@@ -67,8 +68,8 @@ pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use nix::libc::linkat;
-    let old_path_cstr = resolved_old.path_cstring()?;
-    let new_path_cstr = resolved_new.path_cstring()?;
+    let old_path_cstr = str_to_cstring(resolved_old.path())?;
+    let new_path_cstr = str_to_cstring(resolved_new.path())?;
 
     // Not setting AT_SYMLINK_FOLLOW fails on most filesystems
     let atflags = libc::AT_SYMLINK_FOLLOW;
@@ -183,7 +184,7 @@ pub(crate) fn path_open(
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
     use nix::errno::Errno;
-    let path_cstr = resolved.path_cstring()?;
+    let path_cstr = str_to_cstring(resolved.path())?;
 
     // Linux requires that the buffer size is positive, whereas POSIX does not.
     // Use a fake buffer to store the results if the size is zero.
@@ -340,7 +341,7 @@ pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
     use nix::errno;
     use nix::libc::{unlinkat, AT_REMOVEDIR};
 
-    let path_cstr = resolved.path_cstring()?;
+    let path_cstr = str_to_cstring(resolved.path())?;
 
     // nix doesn't expose unlinkat() yet
     match unsafe {

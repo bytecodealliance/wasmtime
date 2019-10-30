@@ -1,9 +1,7 @@
 #![allow(non_camel_case_types)]
-use crate::helpers::str_to_cstring;
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::*;
 use crate::{fdentry::FdEntry, host, Error, Result};
-use std::ffi::CString;
 use std::fs::File;
 use std::path::{Component, Path};
 
@@ -20,10 +18,6 @@ impl PathGet {
 
     pub(crate) fn path(&self) -> &str {
         &self.path
-    }
-
-    pub(crate) fn path_cstring(&self) -> Result<CString> {
-        str_to_cstring(&self.path)
     }
 }
 
