@@ -33,7 +33,9 @@ jobs:
   - checkout: self
     submodules: true
   - template: ci/azure-install-rust.yml
-  - script: cargo doc
+  - script: |
+      cargo doc --all --exclude cranelift-codegen-meta
+      cargo doc --package cranelift-codegen-meta --document-private-items
     displayName: Build documentation
   - script: cargo install cargo-deadlinks
     displayName: Install cargo-deadlinks

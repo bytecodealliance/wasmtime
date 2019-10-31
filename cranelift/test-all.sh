@@ -69,14 +69,16 @@ ensure_installed() {
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/cranelift/index.html"
 if has_toolchain nightly; then
-    cargo +nightly doc
+    cargo +nightly doc --all --exclude cranelift-codegen-meta
+    cargo +nightly doc --package cranelift-codegen-meta --document-private-items
 
     # Make sure the documentation doesn't have broken links.
     banner "Rust documentation link test"
     ensure_installed cargo-deadlinks
     find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
 else
-    cargo doc
+    cargo doc --all --exclude cranelift-codegen-meta
+    cargo doc --package cranelift-codegen-meta --document-private-items
     echo "nightly toolchain not found, some documentation links will not work"
 fi
 
