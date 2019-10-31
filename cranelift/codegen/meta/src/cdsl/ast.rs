@@ -390,10 +390,12 @@ impl VarPool {
     }
 }
 
-/// Contains constants created in the AST that must be inserted into the true [ConstantPool]
-/// (cranelift_codegen::ir::ConstantPool) when the legalizer code is generated. The constant data
-/// is named in the order it is inserted; inserting data using [insert]
-/// (cranelift_codegen_meta::cdsl::ast::insert) will avoid duplicates.
+/// Contains constants created in the AST that must be inserted into the true [ConstantPool] when
+/// the legalizer code is generated. The constant data is named in the order it is inserted;
+/// inserting data using [insert] will avoid duplicates.
+///
+/// [ConstantPool]: ../../../cranelift_codegen/ir/constant/struct.ConstantPool.html
+/// [insert]: ConstPool::insert
 pub(crate) struct ConstPool {
     pool: Vec<Vec<u8>>,
 }

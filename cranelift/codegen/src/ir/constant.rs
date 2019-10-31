@@ -21,8 +21,9 @@ use cranelift_entity::EntityRef;
 
 /// This type describes the actual constant data. Note that the bytes stored in this structure are
 /// expected to be in little-endian order; this is due to ease-of-use when interacting with
-/// WebAssembly values, which are [little-endian by design]
-/// (https://github.com/WebAssembly/design/blob/master/Portability.md).
+/// WebAssembly values, which are [little-endian by design].
+///
+/// [little-endian by design]: https://github.com/WebAssembly/design/blob/master/Portability.md
 #[derive(Clone, Hash, Eq, PartialEq, Debug, Default)]
 pub struct ConstantData(Vec<u8>);
 
@@ -116,8 +117,7 @@ impl fmt::Display for ConstantData {
 impl FromStr for ConstantData {
     type Err = &'static str;
 
-    /// Parse a hexadecimal string to `ConstantData`. This is the inverse of [ConstantData::fmt]
-    /// (cranelift_codegen::ir::ConstantData::fmt).
+    /// Parse a hexadecimal string to `ConstantData`. This is the inverse of `Display::fmt`.
     ///
     /// ```
     /// use cranelift_codegen::ir::ConstantData;
