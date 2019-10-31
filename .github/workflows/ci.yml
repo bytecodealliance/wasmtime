@@ -33,11 +33,9 @@ jobs:
       with:
         command: fmt
         args: --all -- --check
-    - name: Build debug
-      uses: actions-rs/cargo@v1
-      with:
-        command: build
-    - name: Build release
+    - name: Build
+      env:
+        RUSTFLAGS: "-D warnings"
       uses: actions-rs/cargo@v1
       with:
         command: build
@@ -60,11 +58,12 @@ jobs:
         profile: minimal
         toolchain: ${{ matrix.rust }}
         override: true
-    - name: Build debug
+    - name: Build
       continue-on-error: true
       uses: actions-rs/cargo@v1
       with:
         command: build
+        args: --release
 
   test:
     name: Test
