@@ -28,6 +28,7 @@ pub(crate) mod fdentry_impl {
 pub(crate) mod host_impl {
     use super::super::host_impl::dirent_filetype_from_host;
     use crate::{wasi, Error, Result};
+    use std::convert::TryFrom;
 
     pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
 
@@ -43,8 +44,8 @@ pub(crate) mod host_impl {
         }
         let d_type = dirent_filetype_from_host(host_entry)?;
         entry.d_ino = host_entry.d_ino;
-        entry.d_next = host_entry.d_off as u64;
-        entry.d_namlen = d_namlen as u32;
+        entry.d_next = u64::try_from(host_entry.d_off).map_err(|_| Error::EOVERFLOW)?;
+        entry.d_namlen = u32::try_from(d_namlen).map_err(|_| Error::EOVERFLOW)?;
         entry.d_type = d_type;
         Ok(entry)
     }
