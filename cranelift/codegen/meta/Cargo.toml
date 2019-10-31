@@ -15,3 +15,6 @@ cranelift-entity = { path = "../../cranelift-entity", version = "0.46.1" }
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }
+
+[package.metadata.docs.rs]
+rustdoc-args = [ "--document-private-items" ]
