@@ -1,3 +1,4 @@
+//! Generate instruction data (including opcodes, formats, builders, etc.).
 use std::fmt;
 
 use cranelift_codegen_shared::constant_hash;

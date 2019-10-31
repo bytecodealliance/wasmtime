@@ -1,3 +1,4 @@
+//! An index-accessed table implementation that avoids duplicate entries.
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::slice;

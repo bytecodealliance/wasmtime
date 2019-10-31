@@ -1,3 +1,5 @@
+//! This crate generates Rust sources for use by
+//! [`cranelift_codegen`](../cranelift_codegen/index.html).
 #[macro_use]
 mod cdsl;
 mod srcgen;
@@ -17,6 +19,7 @@ mod default_map;
 mod shared;
 mod unique_table;
 
+/// Generate an ISA from an architecture string (e.g. "x86_64").
 pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
     isa::Isa::from_arch(arch).ok_or_else(|| format!("no supported isa found for arch `{}`", arch))
 }

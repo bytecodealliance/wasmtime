@@ -1,3 +1,4 @@
+//! Error returned during meta code-generation.
 use std::fmt;
 use std::io;
 

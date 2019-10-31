@@ -1,3 +1,4 @@
+//! Generate the ISA-specific settings.
 use std::collections::HashMap;
 
 use cranelift_codegen_shared::constant_hash::{generate_table, simple_hash};

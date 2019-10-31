@@ -1,3 +1,4 @@
+//! Generate transformations to legalize instructions without encodings.
 use crate::cdsl::ast::{Def, DefPool, Expr, VarPool};
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::operands::Operand;

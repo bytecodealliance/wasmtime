@@ -1,3 +1,4 @@
+//! Generate the ISA-specific registers.
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{RegBank, RegClass};
 use crate::error;

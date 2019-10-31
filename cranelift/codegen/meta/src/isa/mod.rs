@@ -1,3 +1,4 @@
+//! Define supported ISAs; includes ISA-specific instructions, encodings, registers, settings, etc.
 use crate::cdsl::isa::TargetIsa;
 use crate::shared::Definitions as SharedDefinitions;
 use std::fmt;

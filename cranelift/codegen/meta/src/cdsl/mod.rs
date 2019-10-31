@@ -39,6 +39,7 @@ macro_rules! predicate {
     };
 }
 
+/// A macro that joins boolean settings into a list (e.g. `preset!(feature_a && feature_b)`).
 #[macro_export]
 macro_rules! preset {
     () => {

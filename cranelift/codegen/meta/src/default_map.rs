@@ -1,3 +1,4 @@
+//! Trait for extending `HashMap` with `get_or_default`.
 use std::collections::HashMap;
 use std::hash::Hash;
 
