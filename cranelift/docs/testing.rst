@@ -376,3 +376,24 @@ which is normally used to compile code. This type of test often depends
 on assertions or verifier errors, but it is also possible to use
 filecheck directives which will be matched against the final form of the
 Cranelift IR right before binary machine code emission.
+
+`test run`
+----------
+
+Compile and execute a function.
+
+Add a ``; run`` directive after each function that should be executed. These
+functions must have the signature ``() -> bNN`` where ``bNN`` is some sort of
+boolean, e.g. ``b1`` or ``b32``. A ``true`` value is interpreted as a successful
+test execution, whereas a ``false`` value is interpreted as a failed test.
+
+Example::
+
+    test run
+
+    function %trivial_test() -> b1 {
+    ebb0:
+        v0 = bconst.b1 true
+        return v0
+    }
+    ; run
