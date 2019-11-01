@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 use crate::hostcalls_impl::FileType;
-use crate::{host, Error, Result};
+use crate::{helpers, wasi, Error, Result};
 use log::warn;
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
@@ -106,61 +106,61 @@ pub(crate) fn errno_from_nix(errno: nix::errno::Errno) -> Error {
     }
 }
 
-pub(crate) fn nix_from_fdflags(fdflags: host::__wasi_fdflags_t) -> nix::fcntl::OFlag {
+pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> nix::fcntl::OFlag {
     use nix::fcntl::OFlag;
     let mut nix_flags = OFlag::empty();
-    if fdflags & host::__WASI_FDFLAG_APPEND != 0 {
+    if fdflags & wasi::__WASI_FDFLAG_APPEND != 0 {
         nix_flags.insert(OFlag::O_APPEND);
     }
-    if fdflags & host::__WASI_FDFLAG_DSYNC != 0 {
+    if fdflags & wasi::__WASI_FDFLAG_DSYNC != 0 {
         nix_flags.insert(OFlag::O_DSYNC);
     }
-    if fdflags & host::__WASI_FDFLAG_NONBLOCK != 0 {
+    if fdflags & wasi::__WASI_FDFLAG_NONBLOCK != 0 {
         nix_flags.insert(OFlag::O_NONBLOCK);
     }
-    if fdflags & host::__WASI_FDFLAG_RSYNC != 0 {
+    if fdflags & wasi::__WASI_FDFLAG_RSYNC != 0 {
         nix_flags.insert(O_RSYNC);
     }
-    if fdflags & host::__WASI_FDFLAG_SYNC != 0 {
+    if fdflags & wasi::__WASI_FDFLAG_SYNC != 0 {
         nix_flags.insert(OFlag::O_SYNC);
     }
     nix_flags
 }
 
-pub(crate) fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> host::__wasi_fdflags_t {
+pub(crate) fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> wasi::__wasi_fdflags_t {
     use nix::fcntl::OFlag;
     let mut fdflags = 0;
     if oflags.contains(OFlag::O_APPEND) {
-        fdflags |= host::__WASI_FDFLAG_APPEND;
+        fdflags |= wasi::__WASI_FDFLAG_APPEND;
     }
     if oflags.contains(OFlag::O_DSYNC) {
-        fdflags |= host::__WASI_FDFLAG_DSYNC;
+        fdflags |= wasi::__WASI_FDFLAG_DSYNC;
     }
     if oflags.contains(OFlag::O_NONBLOCK) {
-        fdflags |= host::__WASI_FDFLAG_NONBLOCK;
+        fdflags |= wasi::__WASI_FDFLAG_NONBLOCK;
     }
     if oflags.contains(O_RSYNC) {
-        fdflags |= host::__WASI_FDFLAG_RSYNC;
+        fdflags |= wasi::__WASI_FDFLAG_RSYNC;
     }
     if oflags.contains(OFlag::O_SYNC) {
-        fdflags |= host::__WASI_FDFLAG_SYNC;
+        fdflags |= wasi::__WASI_FDFLAG_SYNC;
     }
     fdflags
 }
 
-pub(crate) fn nix_from_oflags(oflags: host::__wasi_oflags_t) -> nix::fcntl::OFlag {
+pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> nix::fcntl::OFlag {
     use nix::fcntl::OFlag;
     let mut nix_flags = OFlag::empty();
-    if oflags & host::__WASI_O_CREAT != 0 {
+    if oflags & wasi::__WASI_O_CREAT != 0 {
         nix_flags.insert(OFlag::O_CREAT);
     }
-    if oflags & host::__WASI_O_DIRECTORY != 0 {
+    if oflags & wasi::__WASI_O_DIRECTORY != 0 {
         nix_flags.insert(OFlag::O_DIRECTORY);
     }
-    if oflags & host::__WASI_O_EXCL != 0 {
+    if oflags & wasi::__WASI_O_EXCL != 0 {
         nix_flags.insert(OFlag::O_EXCL);
     }
-    if oflags & host::__WASI_O_TRUNC != 0 {
+    if oflags & wasi::__WASI_O_TRUNC != 0 {
         nix_flags.insert(OFlag::O_TRUNC);
     }
     nix_flags
@@ -187,26 +187,26 @@ pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> FileType {
 
 pub(crate) fn filestat_from_nix(
     filestat: nix::sys::stat::FileStat,
-) -> Result<host::__wasi_filestat_t> {
+) -> Result<wasi::__wasi_filestat_t> {
     use std::convert::TryFrom;
-    fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<host::__wasi_timestamp_t> {
+    fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<wasi::__wasi_timestamp_t> {
         secs.checked_mul(1_000_000_000)
             .and_then(|sec_nsec| sec_nsec.checked_add(nsecs))
             .ok_or(Error::EOVERFLOW)
     }
 
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
-    let dev = host::__wasi_device_t::try_from(filestat.st_dev)?;
-    let ino = host::__wasi_inode_t::try_from(filestat.st_ino)?;
+    let dev = wasi::__wasi_device_t::try_from(filestat.st_dev)?;
+    let ino = wasi::__wasi_inode_t::try_from(filestat.st_ino)?;
     let st_atim = filestat_to_timestamp(filestat.st_atime as u64, filestat.st_atime_nsec as u64)?;
     let st_ctim = filestat_to_timestamp(filestat.st_ctime as u64, filestat.st_ctime_nsec as u64)?;
     let st_mtim = filestat_to_timestamp(filestat.st_mtime as u64, filestat.st_mtime_nsec as u64)?;
 
-    Ok(host::__wasi_filestat_t {
+    Ok(wasi::__wasi_filestat_t {
         st_dev: dev,
         st_ino: ino,
-        st_nlink: filestat.st_nlink as host::__wasi_linkcount_t,
-        st_size: filestat.st_size as host::__wasi_filesize_t,
+        st_nlink: filestat.st_nlink as wasi::__wasi_linkcount_t,
+        st_size: filestat.st_size as wasi::__wasi_filesize_t,
         st_atim,
         st_ctim,
         st_mtim,
@@ -216,23 +216,23 @@ pub(crate) fn filestat_from_nix(
 
 pub(crate) fn dirent_filetype_from_host(
     host_entry: &nix::libc::dirent,
-) -> Result<host::__wasi_filetype_t> {
+) -> Result<wasi::__wasi_filetype_t> {
     match host_entry.d_type {
-        libc::DT_FIFO => Ok(host::__WASI_FILETYPE_UNKNOWN),
-        libc::DT_CHR => Ok(host::__WASI_FILETYPE_CHARACTER_DEVICE),
-        libc::DT_DIR => Ok(host::__WASI_FILETYPE_DIRECTORY),
-        libc::DT_BLK => Ok(host::__WASI_FILETYPE_BLOCK_DEVICE),
-        libc::DT_REG => Ok(host::__WASI_FILETYPE_REGULAR_FILE),
-        libc::DT_LNK => Ok(host::__WASI_FILETYPE_SYMBOLIC_LINK),
+        libc::DT_FIFO => Ok(wasi::__WASI_FILETYPE_UNKNOWN),
+        libc::DT_CHR => Ok(wasi::__WASI_FILETYPE_CHARACTER_DEVICE),
+        libc::DT_DIR => Ok(wasi::__WASI_FILETYPE_DIRECTORY),
+        libc::DT_BLK => Ok(wasi::__WASI_FILETYPE_BLOCK_DEVICE),
+        libc::DT_REG => Ok(wasi::__WASI_FILETYPE_REGULAR_FILE),
+        libc::DT_LNK => Ok(wasi::__WASI_FILETYPE_SYMBOLIC_LINK),
         libc::DT_SOCK => {
             // TODO how to discriminate between STREAM and DGRAM?
             // Perhaps, we should create a more general WASI filetype
             // such as __WASI_FILETYPE_SOCKET, and then it would be
             // up to the client to check whether it's actually
             // STREAM or DGRAM?
-            Ok(host::__WASI_FILETYPE_UNKNOWN)
+            Ok(wasi::__WASI_FILETYPE_UNKNOWN)
         }
-        libc::DT_UNKNOWN => Ok(host::__WASI_FILETYPE_UNKNOWN),
+        libc::DT_UNKNOWN => Ok(wasi::__WASI_FILETYPE_UNKNOWN),
         _ => Err(Error::EINVAL),
     }
 }
@@ -242,5 +242,5 @@ pub(crate) fn dirent_filetype_from_host(
 /// NB WASI spec requires OS string to be valid UTF-8. Otherwise,
 /// `__WASI_EILSEQ` error is returned.
 pub(crate) fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
-    host::path_from_slice(s.as_ref().as_bytes()).map(String::from)
+    helpers::path_from_slice(s.as_ref().as_bytes()).map(String::from)
 }

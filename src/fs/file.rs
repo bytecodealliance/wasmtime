@@ -1,5 +1,5 @@
 use crate::fs::{error::wasi_errno_to_io_error, Metadata};
-use crate::{host, hostcalls, WasiCtx};
+use crate::{host, hostcalls, wasi, WasiCtx};
 use std::io;
 
 /// A reference to an open file on the filesystem.
@@ -16,7 +16,7 @@ use std::io;
 /// [`Dir::create_file`]: struct.Dir.html#method.create_file
 pub struct File<'ctx> {
     ctx: &'ctx mut WasiCtx,
-    fd: host::__wasi_fd_t,
+    fd: wasi::__wasi_fd_t,
 }
 
 impl<'ctx> File<'ctx> {
@@ -25,7 +25,7 @@ impl<'ctx> File<'ctx> {
     /// This corresponds to [`std::fs::File::from_raw_fd`].
     ///
     /// [`std::fs::File::from_raw_fd`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.from_raw_fd
-    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx mut WasiCtx, fd: host::__wasi_fd_t) -> Self {
+    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx mut WasiCtx, fd: wasi::__wasi_fd_t) -> Self {
         Self { ctx, fd }
     }
 

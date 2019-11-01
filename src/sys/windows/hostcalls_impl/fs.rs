@@ -8,7 +8,7 @@ use crate::hostcalls_impl::{fd_filestat_set_times_impl, FileType, PathGet};
 use crate::sys::fdentry_impl::{determine_type_rights, OsFile};
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::convert::TryInto;
 use std::fs::{File, Metadata, OpenOptions};
 use std::io::{self, Seek, SeekFrom};
@@ -40,40 +40,40 @@ fn write_at(mut file: &File, buf: &[u8], offset: u64) -> io::Result<usize> {
 pub(crate) fn fd_pread(
     file: &File,
     buf: &mut [u8],
-    offset: host::__wasi_filesize_t,
+    offset: wasi::__wasi_filesize_t,
 ) -> Result<usize> {
     read_at(file, buf, offset).map_err(Into::into)
 }
 
 // TODO refactor common code with unix
-pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t) -> Result<usize> {
+pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t) -> Result<usize> {
     write_at(file, buf, offset).map_err(Into::into)
 }
 
-pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {
+pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
     use winx::file::AccessMode;
     unsafe { winx::file::get_file_access_mode(fd.as_raw_handle()) }
         .map(host_impl::fdflags_from_win)
         .map_err(Into::into)
 }
 
-pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: host::__wasi_fdflags_t) -> Result<()> {
+pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
     unimplemented!("fd_fdstat_set_flags")
 }
 
 pub(crate) fn fd_advise(
     _file: &File,
-    advice: host::__wasi_advice_t,
-    _offset: host::__wasi_filesize_t,
-    _len: host::__wasi_filesize_t,
+    advice: wasi::__wasi_advice_t,
+    _offset: wasi::__wasi_filesize_t,
+    _len: wasi::__wasi_filesize_t,
 ) -> Result<()> {
     match advice {
-        host::__WASI_ADVICE_DONTNEED
-        | host::__WASI_ADVICE_SEQUENTIAL
-        | host::__WASI_ADVICE_WILLNEED
-        | host::__WASI_ADVICE_NOREUSE
-        | host::__WASI_ADVICE_RANDOM
-        | host::__WASI_ADVICE_NORMAL => {}
+        wasi::__WASI_ADVICE_DONTNEED
+        | wasi::__WASI_ADVICE_SEQUENTIAL
+        | wasi::__WASI_ADVICE_WILLNEED
+        | wasi::__WASI_ADVICE_NOREUSE
+        | wasi::__WASI_ADVICE_RANDOM
+        | wasi::__WASI_ADVICE_NORMAL => {}
         _ => return Err(Error::EINVAL),
     }
 
@@ -93,8 +93,8 @@ pub(crate) fn path_open(
     resolved: PathGet,
     read: bool,
     write: bool,
-    oflags: host::__wasi_oflags_t,
-    fdflags: host::__wasi_fdflags_t,
+    oflags: wasi::__wasi_oflags_t,
+    fdflags: wasi::__wasi_fdflags_t,
 ) -> Result<File> {
     use winx::file::{AccessMode, CreationDisposition, Flags};
 
@@ -137,7 +137,7 @@ pub(crate) fn path_open(
                 return Err(Error::ELOOP);
             }
             // check if we are trying to open a file as a dir
-            if file_type.is_file() && oflags & host::__WASI_O_DIRECTORY != 0 {
+            if file_type.is_file() && oflags & wasi::__WASI_O_DIRECTORY != 0 {
                 return Err(Error::ENOTDIR);
             }
         }
@@ -169,7 +169,7 @@ pub(crate) fn path_open(
 pub(crate) fn fd_readdir(
     fd: &mut OsFile,
     host_buf: &mut [u8],
-    cookie: host::__wasi_dircookie_t,
+    cookie: wasi::__wasi_dircookie_t,
 ) -> Result<usize> {
     unimplemented!("fd_readdir")
 }
@@ -276,9 +276,9 @@ pub(crate) fn change_time(file: &File, _metadata: &Metadata) -> io::Result<i64> 
     winx::file::change_time(file)
 }
 
-pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_filestat_t> {
+pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
     let metadata = file.metadata()?;
-    Ok(host::__wasi_filestat_t {
+    Ok(wasi::__wasi_filestat_t {
         st_dev: device_id(file, &metadata)?,
         st_ino: file_serial_no(file, &metadata)?,
         st_nlink: num_hardlinks(file, &metadata)?.try_into()?, // u64 doesn't fit into u32
@@ -307,8 +307,8 @@ fn filetype(_file: &File, metadata: &Metadata) -> Result<FileType> {
 
 pub(crate) fn path_filestat_get(
     resolved: PathGet,
-    dirflags: host::__wasi_lookupflags_t,
-) -> Result<host::__wasi_filestat_t> {
+    dirflags: wasi::__wasi_lookupflags_t,
+) -> Result<wasi::__wasi_filestat_t> {
     let path = resolved.concatenate()?;
     let file = File::open(path)?;
     fd_filestat_get_impl(&file)
@@ -316,10 +316,10 @@ pub(crate) fn path_filestat_get(
 
 pub(crate) fn path_filestat_set_times(
     resolved: PathGet,
-    dirflags: host::__wasi_lookupflags_t,
-    st_atim: host::__wasi_timestamp_t,
-    mut st_mtim: host::__wasi_timestamp_t,
-    fst_flags: host::__wasi_fstflags_t,
+    dirflags: wasi::__wasi_lookupflags_t,
+    st_atim: wasi::__wasi_timestamp_t,
+    mut st_mtim: wasi::__wasi_timestamp_t,
+    fst_flags: wasi::__wasi_fstflags_t,
 ) -> Result<()> {
     use winx::file::AccessMode;
     let path = resolved.concatenate()?;

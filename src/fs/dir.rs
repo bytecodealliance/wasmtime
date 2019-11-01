@@ -1,5 +1,5 @@
 use crate::fs::{error::wasi_errno_to_io_error, File, OpenOptions, ReadDir};
-use crate::{host, hostcalls, WasiCtx};
+use crate::{host, hostcalls, wasi, WasiCtx};
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 use std::{io, path::Path};
@@ -16,12 +16,12 @@ use std::{io, path::Path};
 /// don't interoperate well with the capability-oriented security model.
 pub struct Dir<'ctx> {
     ctx: &'ctx mut WasiCtx,
-    fd: host::__wasi_fd_t,
+    fd: wasi::__wasi_fd_t,
 }
 
 impl<'ctx> Dir<'ctx> {
     /// Constructs a new instance of `Self` from the given raw WASI file descriptor.
-    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx mut WasiCtx, fd: host::__wasi_fd_t) -> Self {
+    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx mut WasiCtx, fd: wasi::__wasi_fd_t) -> Self {
         Self { ctx, fd }
     }
 
@@ -52,7 +52,7 @@ impl<'ctx> Dir<'ctx> {
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
-            host::__WASI_LOOKUP_SYMLINK_FOLLOW,
+            wasi::__WASI_LOOKUP_SYMLINK_FOLLOW,
             path.as_os_str().as_bytes(),
             path.as_os_str().len(),
             0,
@@ -98,9 +98,9 @@ impl<'ctx> Dir<'ctx> {
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
-            host::__WASI_LOOKUP_SYMLINK_FOLLOW,
+            wasi::__WASI_LOOKUP_SYMLINK_FOLLOW,
             path.as_os_str().as_bytes(),
-            host::__WASI_O_DIRECTORY,
+            wasi::__WASI_O_DIRECTORY,
             !0,
             !0,
             0,
@@ -132,10 +132,10 @@ impl<'ctx> Dir<'ctx> {
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
-            host::__WASI_LOOKUP_SYMLINK_FOLLOW,
+            wasi::__WASI_LOOKUP_SYMLINK_FOLLOW,
             path.as_os_str().as_bytes(),
             path.as_os_str().len(),
-            host::__WASI_O_CREAT | host::__WASI_O_TRUNC,
+            wasi::__WASI_O_CREAT | wasi::__WASI_O_TRUNC,
             !0,
             !0,
             0,

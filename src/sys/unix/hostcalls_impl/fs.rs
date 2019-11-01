@@ -5,7 +5,7 @@ use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::{FileType, PathGet};
 use crate::sys::host_impl;
 use crate::sys::unix::str_to_cstring;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use nix::libc;
 use std::convert::TryInto;
 use std::fs::{File, Metadata};
@@ -30,16 +30,16 @@ cfg_if::cfg_if! {
 pub(crate) fn fd_pread(
     file: &File,
     buf: &mut [u8],
-    offset: host::__wasi_filesize_t,
+    offset: wasi::__wasi_filesize_t,
 ) -> Result<usize> {
     file.read_at(buf, offset).map_err(Into::into)
 }
 
-pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: host::__wasi_filesize_t) -> Result<usize> {
+pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t) -> Result<usize> {
     file.write_at(buf, offset).map_err(Into::into)
 }
 
-pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {
+pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
     use nix::fcntl::{fcntl, OFlag, F_GETFL};
     match fcntl(fd.as_raw_fd(), F_GETFL).map(OFlag::from_bits_truncate) {
         Ok(flags) => Ok(host_impl::fdflags_from_nix(flags)),
@@ -47,7 +47,7 @@ pub(crate) fn fd_fdstat_get(fd: &File) -> Result<host::__wasi_fdflags_t> {
     }
 }
 
-pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: host::__wasi_fdflags_t) -> Result<()> {
+pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
     use nix::fcntl::{fcntl, F_SETFL};
     let nix_flags = host_impl::nix_from_fdflags(fdflags);
     match fcntl(fd.as_raw_fd(), F_SETFL(nix_flags)) {
@@ -93,8 +93,8 @@ pub(crate) fn path_open(
     resolved: PathGet,
     read: bool,
     write: bool,
-    oflags: host::__wasi_oflags_t,
-    fs_flags: host::__wasi_fdflags_t,
+    oflags: wasi::__wasi_oflags_t,
+    fs_flags: wasi::__wasi_fdflags_t,
 ) -> Result<File> {
     use nix::errno::Errno;
     use nix::fcntl::{openat, AtFlags, OFlag};
@@ -213,11 +213,11 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     }
 }
 
-pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<host::__wasi_filestat_t> {
+pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
     use std::os::unix::fs::MetadataExt;
 
     let metadata = file.metadata()?;
-    Ok(host::__wasi_filestat_t {
+    Ok(wasi::__wasi_filestat_t {
         st_dev: metadata.dev(),
         st_ino: metadata.ino(),
         st_nlink: metadata.nlink().try_into()?, // u64 doesn't fit into u32
@@ -259,8 +259,8 @@ fn filetype(file: &File, metadata: &Metadata) -> Result<FileType> {
 
 pub(crate) fn path_filestat_get(
     resolved: PathGet,
-    dirflags: host::__wasi_lookupflags_t,
-) -> Result<host::__wasi_filestat_t> {
+    dirflags: wasi::__wasi_lookupflags_t,
+) -> Result<wasi::__wasi_filestat_t> {
     use nix::fcntl::AtFlags;
     use nix::sys::stat::fstatat;
 
@@ -276,10 +276,10 @@ pub(crate) fn path_filestat_get(
 
 pub(crate) fn path_filestat_set_times(
     resolved: PathGet,
-    dirflags: host::__wasi_lookupflags_t,
-    st_atim: host::__wasi_timestamp_t,
-    st_mtim: host::__wasi_timestamp_t,
-    fst_flags: host::__wasi_fstflags_t,
+    dirflags: wasi::__wasi_lookupflags_t,
+    st_atim: wasi::__wasi_timestamp_t,
+    st_mtim: wasi::__wasi_timestamp_t,
+    fst_flags: wasi::__wasi_fstflags_t,
 ) -> Result<()> {
     use nix::sys::stat::{utimensat, UtimensatFlags};
     use nix::sys::time::{TimeSpec, TimeValLike};
@@ -301,17 +301,17 @@ pub(crate) fn path_filestat_set_times(
         unsafe { std::mem::transmute(raw_ts) }
     };
 
-    let set_atim = fst_flags & host::__WASI_FILESTAT_SET_ATIM != 0;
-    let set_atim_now = fst_flags & host::__WASI_FILESTAT_SET_ATIM_NOW != 0;
-    let set_mtim = fst_flags & host::__WASI_FILESTAT_SET_MTIM != 0;
-    let set_mtim_now = fst_flags & host::__WASI_FILESTAT_SET_MTIM_NOW != 0;
+    let set_atim = fst_flags & wasi::__WASI_FILESTAT_SET_ATIM != 0;
+    let set_atim_now = fst_flags & wasi::__WASI_FILESTAT_SET_ATIM_NOW != 0;
+    let set_mtim = fst_flags & wasi::__WASI_FILESTAT_SET_MTIM != 0;
+    let set_mtim_now = fst_flags & wasi::__WASI_FILESTAT_SET_MTIM_NOW != 0;
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
         return Err(Error::EINVAL);
     }
 
     let atflags = match dirflags {
-        host::__WASI_LOOKUP_SYMLINK_FOLLOW => UtimensatFlags::FollowSymlink,
+        wasi::__WASI_LOOKUP_SYMLINK_FOLLOW => UtimensatFlags::FollowSymlink,
         _ => UtimensatFlags::NoFollowSymlink,
     };
 

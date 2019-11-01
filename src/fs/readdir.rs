@@ -1,5 +1,5 @@
 use crate::fs::DirEntry;
-use crate::{host, hostcalls};
+use crate::{hostcalls, wasi};
 
 /// Iterator over the entries in a directory.
 ///
@@ -9,12 +9,12 @@ use crate::{host, hostcalls};
 ///
 /// [`std::fs::ReadDir`]: https://doc.rust-lang.org/std/fs/struct.ReadDir.html
 pub struct ReadDir {
-    fd: host::__wasi_fd_t,
+    fd: wasi::__wasi_fd_t,
 }
 
 impl ReadDir {
     /// Constructs a new instance of `Self` from the given raw WASI file descriptor.
-    pub unsafe fn from_raw_wasi_fd(fd: host::__wasi_fd_t) -> Self {
+    pub unsafe fn from_raw_wasi_fd(fd: wasi::__wasi_fd_t) -> Self {
         Self { fd }
     }
 }

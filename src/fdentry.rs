@@ -1,5 +1,5 @@
 use crate::sys::fdentry_impl::{determine_type_and_access_rights, OsFile};
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::path::PathBuf;
 use std::{fs, io};
 
@@ -68,10 +68,10 @@ impl Descriptor {
 /// specified, verifying whether the stored `Descriptor` object is valid for the rights specified.
 #[derive(Debug)]
 pub(crate) struct FdEntry {
-    pub(crate) file_type: host::__wasi_filetype_t,
+    pub(crate) file_type: wasi::__wasi_filetype_t,
     descriptor: Descriptor,
-    pub(crate) rights_base: host::__wasi_rights_t,
-    pub(crate) rights_inheriting: host::__wasi_rights_t,
+    pub(crate) rights_base: wasi::__wasi_rights_t,
+    pub(crate) rights_inheriting: wasi::__wasi_rights_t,
     pub(crate) preopen_path: Option<PathBuf>,
     // TODO: directories
 }
@@ -138,8 +138,8 @@ impl FdEntry {
     /// `FdEntry::validate_rights` method. If the check fails, `Error::ENOTCAPABLE` is returned.
     pub(crate) fn as_descriptor(
         &self,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
+        rights_base: wasi::__wasi_rights_t,
+        rights_inheriting: wasi::__wasi_rights_t,
     ) -> Result<&Descriptor> {
         self.validate_rights(rights_base, rights_inheriting)?;
         Ok(&self.descriptor)
@@ -154,8 +154,8 @@ impl FdEntry {
     /// `FdEntry::validate_rights` method. If the check fails, `Error::ENOTCAPABLE` is returned.
     pub(crate) fn as_descriptor_mut(
         &mut self,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
+        rights_base: wasi::__wasi_rights_t,
+        rights_inheriting: wasi::__wasi_rights_t,
     ) -> Result<&mut Descriptor> {
         self.validate_rights(rights_base, rights_inheriting)?;
         Ok(&mut self.descriptor)
@@ -168,8 +168,8 @@ impl FdEntry {
     /// Upon unsuccessful check, `Error::ENOTCAPABLE` is returned.
     fn validate_rights(
         &self,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
+        rights_base: wasi::__wasi_rights_t,
+        rights_inheriting: wasi::__wasi_rights_t,
     ) -> Result<()> {
         if !self.rights_base & rights_base != 0 || !self.rights_inheriting & rights_inheriting != 0
         {

@@ -1,9 +1,6 @@
-//! WASI types as defined in wasm32. This file was originally generated
-//! by running bindgen over wasi/core.h with a wasm32 target, and the content
-//! still largely reflects that, however it's been heavily modified, to
-//! be host-independent, to avoid exposing libc implementation details,
-//! to clean up cases where the headers use complex preprocessor macros,
-//! and to
+//! Types and constants shared between 32-bit and 64-bit wasi. Types involving
+//! pointer or `usize`-sized data are excluded here, so this file only contains
+//! fixed-size types, so it's host/target independent.
 
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -17,8 +14,6 @@ pub type short = i16;
 pub type ushort = u16;
 pub type int = i32;
 pub type uint = u32;
-pub type long = i32;
-pub type ulong = u32;
 pub type longlong = i64;
 pub type ulonglong = u64;
 
@@ -49,9 +44,6 @@ pub type uint_fast8_t = u8;
 pub type uint_fast16_t = u32;
 pub type uint_fast32_t = u32;
 pub type uint_fast64_t = u64;
-pub type size_t = ulong;
-pub type intptr_t = long;
-pub type uintptr_t = ulong;
 pub type wchar_t = i32;
 
 // libc types
@@ -75,7 +67,6 @@ pub type suseconds_t = i64;
 pub type daddr_t = i32;
 pub type key_t = i32;
 pub type clockid_t = i32;
-pub type timer_t = uintptr_t; // *mut ::std::os::raw::c_void
 pub type blksize_t = i64;
 pub type blkcnt_t = i64;
 pub type blkcnt64_t = i64;
@@ -86,7 +77,6 @@ pub type fsfilcnt64_t = u64;
 pub type fsword_t = i64;
 pub type ssize_t = i32;
 pub type loff_t = off64_t;
-pub type caddr_t = uintptr_t; // *mut i8
 pub type socklen_t = u32;
 pub type sig_atomic_t = i32;
 
@@ -128,6 +118,112 @@ pub type __wasi_timestamp_t = u64;
 pub type __wasi_userdata_t = u64;
 pub type __wasi_whence_t = u8;
 
+pub(crate) const RIGHTS_ALL: __wasi_rights_t = __WASI_RIGHT_FD_DATASYNC
+    | __WASI_RIGHT_FD_READ
+    | __WASI_RIGHT_FD_SEEK
+    | __WASI_RIGHT_FD_FDSTAT_SET_FLAGS
+    | __WASI_RIGHT_FD_SYNC
+    | __WASI_RIGHT_FD_TELL
+    | __WASI_RIGHT_FD_WRITE
+    | __WASI_RIGHT_FD_ADVISE
+    | __WASI_RIGHT_FD_ALLOCATE
+    | __WASI_RIGHT_PATH_CREATE_DIRECTORY
+    | __WASI_RIGHT_PATH_CREATE_FILE
+    | __WASI_RIGHT_PATH_LINK_SOURCE
+    | __WASI_RIGHT_PATH_LINK_TARGET
+    | __WASI_RIGHT_PATH_OPEN
+    | __WASI_RIGHT_FD_READDIR
+    | __WASI_RIGHT_PATH_READLINK
+    | __WASI_RIGHT_PATH_RENAME_SOURCE
+    | __WASI_RIGHT_PATH_RENAME_TARGET
+    | __WASI_RIGHT_PATH_FILESTAT_GET
+    | __WASI_RIGHT_PATH_FILESTAT_SET_SIZE
+    | __WASI_RIGHT_PATH_FILESTAT_SET_TIMES
+    | __WASI_RIGHT_FD_FILESTAT_GET
+    | __WASI_RIGHT_FD_FILESTAT_SET_SIZE
+    | __WASI_RIGHT_FD_FILESTAT_SET_TIMES
+    | __WASI_RIGHT_PATH_SYMLINK
+    | __WASI_RIGHT_PATH_UNLINK_FILE
+    | __WASI_RIGHT_PATH_REMOVE_DIRECTORY
+    | __WASI_RIGHT_POLL_FD_READWRITE
+    | __WASI_RIGHT_SOCK_SHUTDOWN;
+
+// Block and character device interaction is outside the scope of
+// WASI. Simply allow everything.
+pub(crate) const RIGHTS_BLOCK_DEVICE_BASE: __wasi_rights_t = RIGHTS_ALL;
+pub(crate) const RIGHTS_BLOCK_DEVICE_INHERITING: __wasi_rights_t = RIGHTS_ALL;
+pub(crate) const RIGHTS_CHARACTER_DEVICE_BASE: __wasi_rights_t = RIGHTS_ALL;
+pub(crate) const RIGHTS_CHARACTER_DEVICE_INHERITING: __wasi_rights_t = RIGHTS_ALL;
+
+// Only allow directory operations on directories. Directories can only
+// yield file descriptors to other directories and files.
+pub(crate) const RIGHTS_DIRECTORY_BASE: __wasi_rights_t = __WASI_RIGHT_FD_FDSTAT_SET_FLAGS
+    | __WASI_RIGHT_FD_SYNC
+    | __WASI_RIGHT_FD_ADVISE
+    | __WASI_RIGHT_PATH_CREATE_DIRECTORY
+    | __WASI_RIGHT_PATH_CREATE_FILE
+    | __WASI_RIGHT_PATH_LINK_SOURCE
+    | __WASI_RIGHT_PATH_LINK_TARGET
+    | __WASI_RIGHT_PATH_OPEN
+    | __WASI_RIGHT_FD_READDIR
+    | __WASI_RIGHT_PATH_READLINK
+    | __WASI_RIGHT_PATH_RENAME_SOURCE
+    | __WASI_RIGHT_PATH_RENAME_TARGET
+    | __WASI_RIGHT_PATH_FILESTAT_GET
+    | __WASI_RIGHT_PATH_FILESTAT_SET_SIZE
+    | __WASI_RIGHT_PATH_FILESTAT_SET_TIMES
+    | __WASI_RIGHT_FD_FILESTAT_GET
+    | __WASI_RIGHT_FD_FILESTAT_SET_TIMES
+    | __WASI_RIGHT_PATH_SYMLINK
+    | __WASI_RIGHT_PATH_UNLINK_FILE
+    | __WASI_RIGHT_PATH_REMOVE_DIRECTORY
+    | __WASI_RIGHT_POLL_FD_READWRITE;
+pub(crate) const RIGHTS_DIRECTORY_INHERITING: __wasi_rights_t =
+    RIGHTS_DIRECTORY_BASE | RIGHTS_REGULAR_FILE_BASE;
+
+// Operations that apply to regular files.
+pub(crate) const RIGHTS_REGULAR_FILE_BASE: __wasi_rights_t = __WASI_RIGHT_FD_DATASYNC
+    | __WASI_RIGHT_FD_READ
+    | __WASI_RIGHT_FD_SEEK
+    | __WASI_RIGHT_FD_FDSTAT_SET_FLAGS
+    | __WASI_RIGHT_FD_SYNC
+    | __WASI_RIGHT_FD_TELL
+    | __WASI_RIGHT_FD_WRITE
+    | __WASI_RIGHT_FD_ADVISE
+    | __WASI_RIGHT_FD_ALLOCATE
+    | __WASI_RIGHT_FD_FILESTAT_GET
+    | __WASI_RIGHT_FD_FILESTAT_SET_SIZE
+    | __WASI_RIGHT_FD_FILESTAT_SET_TIMES
+    | __WASI_RIGHT_POLL_FD_READWRITE;
+pub(crate) const RIGHTS_REGULAR_FILE_INHERITING: __wasi_rights_t = 0;
+
+// Operations that apply to shared memory objects.
+#[allow(unused)]
+pub(crate) const RIGHTS_SHARED_MEMORY_BASE: __wasi_rights_t = __WASI_RIGHT_FD_READ
+    | __WASI_RIGHT_FD_WRITE
+    | __WASI_RIGHT_FD_FILESTAT_GET
+    | __WASI_RIGHT_FD_FILESTAT_SET_SIZE;
+#[allow(unused)]
+pub(crate) const RIGHTS_SHARED_MEMORY_INHERITING: __wasi_rights_t = 0;
+
+// Operations that apply to sockets and socket pairs.
+pub(crate) const RIGHTS_SOCKET_BASE: __wasi_rights_t = __WASI_RIGHT_FD_READ
+    | __WASI_RIGHT_FD_FDSTAT_SET_FLAGS
+    | __WASI_RIGHT_FD_WRITE
+    | __WASI_RIGHT_FD_FILESTAT_GET
+    | __WASI_RIGHT_POLL_FD_READWRITE
+    | __WASI_RIGHT_SOCK_SHUTDOWN;
+pub(crate) const RIGHTS_SOCKET_INHERITING: __wasi_rights_t = RIGHTS_ALL;
+
+// Operations that apply to TTYs.
+pub(crate) const RIGHTS_TTY_BASE: __wasi_rights_t = __WASI_RIGHT_FD_READ
+    | __WASI_RIGHT_FD_FDSTAT_SET_FLAGS
+    | __WASI_RIGHT_FD_WRITE
+    | __WASI_RIGHT_FD_FILESTAT_GET
+    | __WASI_RIGHT_POLL_FD_READWRITE;
+#[allow(unused)]
+pub(crate) const RIGHTS_TTY_INHERITING: __wasi_rights_t = 0;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct __wasi_dirent_t {
@@ -161,25 +257,6 @@ pub struct __wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
     pub nbytes: __wasi_filesize_t,
     pub flags: __wasi_eventrwflags_t,
     pub __bindgen_padding_0: [u16; 3usize],
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct __wasi_prestat_t {
-    pub pr_type: __wasi_preopentype_t,
-    pub u: __wasi_prestat_t___wasi_prestat_u,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union __wasi_prestat_t___wasi_prestat_u {
-    pub dir: __wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
-    pub pr_name_len: size_t,
 }
 
 #[repr(C)]
@@ -225,20 +302,6 @@ pub struct __wasi_filestat_t {
     pub st_atim: __wasi_timestamp_t,
     pub st_mtim: __wasi_timestamp_t,
     pub st_ctim: __wasi_timestamp_t,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __wasi_ciovec_t {
-    pub buf: uintptr_t, // *const ::std::os::raw::c_void
-    pub buf_len: size_t,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __wasi_iovec_t {
-    pub buf: uintptr_t, // *mut ::std::os::raw::c_void
-    pub buf_len: size_t,
 }
 
 #[repr(C)]
@@ -397,14 +460,6 @@ pub const INT_FAST32_MAX: u32 = 2147483647;
 pub const UINT_FAST8_MAX: u32 = 255;
 pub const UINT_FAST16_MAX: u32 = 4294967295;
 pub const UINT_FAST32_MAX: u32 = 4294967295;
-pub const INTPTR_MIN: i32 = -2147483648;
-pub const INTPTR_MAX: u32 = 2147483647;
-pub const UINTPTR_MAX: u32 = 4294967295;
-pub const PTRDIFF_MIN: i32 = -2147483648;
-pub const PTRDIFF_MAX: u32 = 2147483647;
-pub const SIG_ATOMIC_MIN: i32 = -2147483648;
-pub const SIG_ATOMIC_MAX: u32 = 2147483647;
-pub const SIZE_MAX: u32 = 4294967295;
 pub const WINT_MIN: i32 = -2147483648;
 pub const WINT_MAX: i32 = 2147483647;
 
@@ -800,103 +855,6 @@ mod test {
     }
 
     #[test]
-    fn bindgen_test_layout___wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t() {
-        assert_eq!(
-            ::std::mem::size_of::<__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t>(),
-            4usize,
-            concat!(
-                "Size of: ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t)
-            )
-        );
-        assert_eq!(
-            ::std::mem::align_of::<__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t>(),
-            4usize,
-            concat!(
-                "Alignment of ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t)
-            )
-        );
-        assert_eq!(
-            unsafe {
-                &(*(::std::ptr::null::<__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t>()))
-                    .pr_name_len as *const _ as usize
-            },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t),
-                "::",
-                stringify!(pr_name_len)
-            )
-        );
-    }
-
-    #[test]
-    fn bindgen_test_layout___wasi_prestat_t___wasi_prestat_u() {
-        assert_eq!(
-            ::std::mem::size_of::<__wasi_prestat_t___wasi_prestat_u>(),
-            4usize,
-            concat!("Size of: ", stringify!(__wasi_prestat_t___wasi_prestat_u))
-        );
-        assert_eq!(
-            ::std::mem::align_of::<__wasi_prestat_t___wasi_prestat_u>(),
-            4usize,
-            concat!(
-                "Alignment of ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u)
-            )
-        );
-        assert_eq!(
-            unsafe {
-                &(*(::std::ptr::null::<__wasi_prestat_t___wasi_prestat_u>())).dir as *const _
-                    as usize
-            },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u),
-                "::",
-                stringify!(dir)
-            )
-        );
-    }
-
-    #[test]
-    fn bindgen_test_layout___wasi_prestat_t() {
-        assert_eq!(
-            ::std::mem::size_of::<__wasi_prestat_t>(),
-            8usize,
-            concat!("Size of: ", stringify!(__wasi_prestat_t))
-        );
-        assert_eq!(
-            ::std::mem::align_of::<__wasi_prestat_t>(),
-            4usize,
-            concat!("Alignment of ", stringify!(__wasi_prestat_t))
-        );
-        assert_eq!(
-            unsafe { &(*(::std::ptr::null::<__wasi_prestat_t>())).pr_type as *const _ as usize },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(__wasi_prestat_t),
-                "::",
-                stringify!(pr_type)
-            )
-        );
-        assert_eq!(
-            unsafe { &(*(::std::ptr::null::<__wasi_prestat_t>())).u as *const _ as usize },
-            4usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(__wasi_prestat_t),
-                "::",
-                stringify!(u)
-            )
-        );
-    }
-
-    #[test]
     fn bindgen_test_layout_wasi_event_t__bindgen_ty_1__bindgen_ty_1() {
         assert_eq!(
             ::std::mem::size_of::<__wasi_event_t__bindgen_ty_1__bindgen_ty_1>(),
@@ -1187,74 +1145,6 @@ mod test {
     }
 
     #[test]
-    fn bindgen_test_layout_wasi_ciovec_t() {
-        assert_eq!(
-            ::std::mem::size_of::<__wasi_ciovec_t>(),
-            8usize,
-            concat!("Size of: ", stringify!(__wasi_ciovec_t))
-        );
-        assert_eq!(
-            ::std::mem::align_of::<__wasi_ciovec_t>(),
-            4usize,
-            concat!("Alignment of ", stringify!(__wasi_ciovec_t))
-        );
-        assert_eq!(
-            unsafe { &(*(::std::ptr::null::<__wasi_ciovec_t>())).buf as *const _ as usize },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(__wasi_ciovec_t),
-                "::",
-                stringify!(buf)
-            )
-        );
-        assert_eq!(
-            unsafe { &(*(::std::ptr::null::<__wasi_ciovec_t>())).buf_len as *const _ as usize },
-            4usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(__wasi_ciovec_t),
-                "::",
-                stringify!(buf_len)
-            )
-        );
-    }
-
-    #[test]
-    fn bindgen_test_layout_wasi_iovec_t() {
-        assert_eq!(
-            ::std::mem::size_of::<__wasi_iovec_t>(),
-            8usize,
-            concat!("Size of: ", stringify!(__wasi_iovec_t))
-        );
-        assert_eq!(
-            ::std::mem::align_of::<__wasi_iovec_t>(),
-            4usize,
-            concat!("Alignment of ", stringify!(__wasi_iovec_t))
-        );
-        assert_eq!(
-            unsafe { &(*(::std::ptr::null::<__wasi_iovec_t>())).buf as *const _ as usize },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(__wasi_iovec_t),
-                "::",
-                stringify!(buf)
-            )
-        );
-        assert_eq!(
-            unsafe { &(*(::std::ptr::null::<__wasi_iovec_t>())).buf_len as *const _ as usize },
-            4usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(__wasi_iovec_t),
-                "::",
-                stringify!(buf_len)
-            )
-        );
-    }
-
-    #[test]
     fn bindgen_test_layout___wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t(
     ) {
         assert_eq!(
@@ -1502,6 +1392,215 @@ mod test {
                 stringify!(__wasi_subscription_t),
                 "::",
                 stringify!(u)
+            )
+        );
+    }
+
+    #[test]
+    fn bindgen_test_layout___wasi_filestat_t() {
+        assert_eq!(
+            ::std::mem::size_of::<__wasi_filestat_t>(),
+            56usize,
+            concat!("Size of: ", stringify!(__wasi_filestat_t))
+        );
+        assert_eq!(
+            ::std::mem::align_of::<__wasi_filestat_t>(),
+            8usize,
+            concat!("Alignment of ", stringify!(__wasi_filestat_t))
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_filestat_t>())).st_dev as *const _ as usize },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_filestat_t),
+                "::",
+                stringify!(st_dev)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_filestat_t>())).st_ino as *const _ as usize },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_filestat_t),
+                "::",
+                stringify!(st_ino)
+            )
+        );
+        assert_eq!(
+            unsafe {
+                &(*(::std::ptr::null::<__wasi_filestat_t>())).st_filetype as *const _ as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_filestat_t),
+                "::",
+                stringify!(st_filetype)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_filestat_t>())).st_nlink as *const _ as usize },
+            20usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_filestat_t),
+                "::",
+                stringify!(st_nlink)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_filestat_t>())).st_size as *const _ as usize },
+            24usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_filestat_t),
+                "::",
+                stringify!(st_size)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_filestat_t>())).st_atim as *const _ as usize },
+            32usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_filestat_t),
+                "::",
+                stringify!(st_atim)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_filestat_t>())).st_mtim as *const _ as usize },
+            40usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_filestat_t),
+                "::",
+                stringify!(st_mtim)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_filestat_t>())).st_ctim as *const _ as usize },
+            48usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_filestat_t),
+                "::",
+                stringify!(st_ctim)
+            )
+        );
+    }
+
+    #[test]
+    fn bindgen_test_layout___wasi_fdstat_t() {
+        assert_eq!(
+            ::std::mem::size_of::<__wasi_fdstat_t>(),
+            24usize,
+            concat!("Size of: ", stringify!(__wasi_fdstat_t))
+        );
+        assert_eq!(
+            ::std::mem::align_of::<__wasi_fdstat_t>(),
+            8usize,
+            concat!("Alignment of ", stringify!(__wasi_fdstat_t))
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_fdstat_t>())).fs_filetype as *const _ as usize },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_fdstat_t),
+                "::",
+                stringify!(fs_filetype)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_fdstat_t>())).fs_flags as *const _ as usize },
+            2usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_fdstat_t),
+                "::",
+                stringify!(fs_flags)
+            )
+        );
+        assert_eq!(
+            unsafe {
+                &(*(::std::ptr::null::<__wasi_fdstat_t>())).fs_rights_base as *const _ as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_fdstat_t),
+                "::",
+                stringify!(fs_rights_base)
+            )
+        );
+        assert_eq!(
+            unsafe {
+                &(*(::std::ptr::null::<__wasi_fdstat_t>())).fs_rights_inheriting as *const _
+                    as usize
+            },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_fdstat_t),
+                "::",
+                stringify!(fs_rights_inheriting)
+            )
+        );
+    }
+
+    #[test]
+    fn bindgen_test_layout___wasi_dirent_t() {
+        assert_eq!(
+            ::std::mem::size_of::<__wasi_dirent_t>(),
+            24usize,
+            concat!("Size of: ", stringify!(__wasi_dirent_t))
+        );
+        assert_eq!(
+            ::std::mem::align_of::<__wasi_dirent_t>(),
+            8usize,
+            concat!("Alignment of ", stringify!(__wasi_dirent_t))
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_dirent_t>())).d_next as *const _ as usize },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_dirent_t),
+                "::",
+                stringify!(d_next)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_dirent_t>())).d_ino as *const _ as usize },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_dirent_t),
+                "::",
+                stringify!(d_ino)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_dirent_t>())).d_namlen as *const _ as usize },
+            16usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_dirent_t),
+                "::",
+                stringify!(d_namlen)
+            )
+        );
+        assert_eq!(
+            unsafe { &(*(::std::ptr::null::<__wasi_dirent_t>())).d_type as *const _ as usize },
+            20usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(__wasi_dirent_t),
+                "::",
+                stringify!(d_type)
             )
         );
     }

@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 use crate::hostcalls_impl::PathGet;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -17,29 +17,29 @@ impl PathGetExt for PathGet {
 }
 
 pub(crate) fn path_open_rights(
-    rights_base: host::__wasi_rights_t,
-    rights_inheriting: host::__wasi_rights_t,
-    oflags: host::__wasi_oflags_t,
-    fdflags: host::__wasi_fdflags_t,
-) -> (host::__wasi_rights_t, host::__wasi_rights_t) {
+    rights_base: wasi::__wasi_rights_t,
+    rights_inheriting: wasi::__wasi_rights_t,
+    oflags: wasi::__wasi_oflags_t,
+    fdflags: wasi::__wasi_fdflags_t,
+) -> (wasi::__wasi_rights_t, wasi::__wasi_rights_t) {
     // which rights are needed on the dirfd?
-    let mut needed_base = host::__WASI_RIGHT_PATH_OPEN;
+    let mut needed_base = wasi::__WASI_RIGHT_PATH_OPEN;
     let mut needed_inheriting = rights_base | rights_inheriting;
 
     // convert open flags
-    if oflags & host::__WASI_O_CREAT != 0 {
-        needed_base |= host::__WASI_RIGHT_PATH_CREATE_FILE;
-    } else if oflags & host::__WASI_O_TRUNC != 0 {
-        needed_base |= host::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+    if oflags & wasi::__WASI_O_CREAT != 0 {
+        needed_base |= wasi::__WASI_RIGHT_PATH_CREATE_FILE;
+    } else if oflags & wasi::__WASI_O_TRUNC != 0 {
+        needed_base |= wasi::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
-    if fdflags & host::__WASI_FDFLAG_DSYNC != 0
-        || fdflags & host::__WASI_FDFLAG_RSYNC != 0
-        || fdflags & host::__WASI_FDFLAG_SYNC != 0
+    if fdflags & wasi::__WASI_FDFLAG_DSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAG_RSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAG_SYNC != 0
     {
-        needed_inheriting |= host::__WASI_RIGHT_FD_DATASYNC;
-        needed_inheriting |= host::__WASI_RIGHT_FD_SYNC;
+        needed_inheriting |= wasi::__WASI_RIGHT_FD_DATASYNC;
+        needed_inheriting |= wasi::__WASI_RIGHT_FD_SYNC;
     }
 
     (needed_base, needed_inheriting)

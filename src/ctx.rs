@@ -1,6 +1,6 @@
 use crate::fdentry::FdEntry;
 use crate::sys::dev_null;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::env;
@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
-    fds: HashMap<host::__wasi_fd_t, FdEntry>,
+    fds: HashMap<wasi::__wasi_fd_t, FdEntry>,
     preopens: Vec<(PathBuf, File)>,
     args: Vec<CString>,
     env: HashMap<CString, CString>,
@@ -162,7 +162,7 @@ impl WasiCtxBuilder {
 
 #[derive(Debug)]
 pub struct WasiCtx {
-    fds: HashMap<host::__wasi_fd_t, FdEntry>,
+    fds: HashMap<wasi::__wasi_fd_t, FdEntry>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,
 }
@@ -184,19 +184,19 @@ impl WasiCtx {
     }
 
     /// Check if `WasiCtx` contains the specified raw WASI `fd`.
-    pub(crate) unsafe fn contains_fd_entry(&self, fd: host::__wasi_fd_t) -> bool {
+    pub(crate) unsafe fn contains_fd_entry(&self, fd: wasi::__wasi_fd_t) -> bool {
         self.fds.contains_key(&fd)
     }
 
     /// Get an immutable `FdEntry` corresponding to the specified raw WASI `fd`.
-    pub(crate) unsafe fn get_fd_entry(&self, fd: host::__wasi_fd_t) -> Result<&FdEntry> {
+    pub(crate) unsafe fn get_fd_entry(&self, fd: wasi::__wasi_fd_t) -> Result<&FdEntry> {
         self.fds.get(&fd).ok_or(Error::EBADF)
     }
 
     /// Get a mutable `FdEntry` corresponding to the specified raw WASI `fd`.
     pub(crate) unsafe fn get_fd_entry_mut(
         &mut self,
-        fd: host::__wasi_fd_t,
+        fd: wasi::__wasi_fd_t,
     ) -> Result<&mut FdEntry> {
         self.fds.get_mut(&fd).ok_or(Error::EBADF)
     }
@@ -205,7 +205,7 @@ impl WasiCtx {
     ///
     /// The `FdEntry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
-    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<host::__wasi_fd_t> {
+    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<wasi::__wasi_fd_t> {
         // never insert where stdio handles usually are
         let mut fd = 3;
         while self.fds.contains_key(&fd) {
@@ -223,14 +223,14 @@ impl WasiCtx {
     /// object.
     pub(crate) fn insert_fd_entry_at(
         &mut self,
-        fd: host::__wasi_fd_t,
+        fd: wasi::__wasi_fd_t,
         fe: FdEntry,
     ) -> Option<FdEntry> {
         self.fds.insert(fd, fe)
     }
 
     /// Remove `FdEntry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
-    pub(crate) fn remove_fd_entry(&mut self, fd: host::__wasi_fd_t) -> Result<FdEntry> {
+    pub(crate) fn remove_fd_entry(&mut self, fd: wasi::__wasi_fd_t) -> Result<FdEntry> {
         self.fds.remove(&fd).ok_or(Error::EBADF)
     }
 }

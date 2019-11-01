@@ -2,54 +2,54 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(unused)]
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::ffi::OsStr;
 use std::fs::OpenOptions;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::OpenOptionsExt;
 use winx::file::{AccessMode, Attributes, CreationDisposition, Flags};
 
-pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> host::__wasi_errno_t {
+pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> wasi::__wasi_errno_t {
     // TODO: implement error mapping between Windows and WASI
     use winx::winerror::WinError::*;
     match error {
-        ERROR_SUCCESS => host::__WASI_ESUCCESS,
-        ERROR_BAD_ENVIRONMENT => host::__WASI_E2BIG,
-        ERROR_FILE_NOT_FOUND => host::__WASI_ENOENT,
-        ERROR_PATH_NOT_FOUND => host::__WASI_ENOENT,
-        ERROR_TOO_MANY_OPEN_FILES => host::__WASI_ENFILE,
-        ERROR_ACCESS_DENIED => host::__WASI_EACCES,
-        ERROR_SHARING_VIOLATION => host::__WASI_EACCES,
-        ERROR_PRIVILEGE_NOT_HELD => host::__WASI_ENOTCAPABLE, // TODO is this the correct mapping?
-        ERROR_INVALID_HANDLE => host::__WASI_EBADF,
-        ERROR_INVALID_NAME => host::__WASI_ENOENT,
-        ERROR_NOT_ENOUGH_MEMORY => host::__WASI_ENOMEM,
-        ERROR_OUTOFMEMORY => host::__WASI_ENOMEM,
-        ERROR_DIR_NOT_EMPTY => host::__WASI_ENOTEMPTY,
-        ERROR_NOT_READY => host::__WASI_EBUSY,
-        ERROR_BUSY => host::__WASI_EBUSY,
-        ERROR_NOT_SUPPORTED => host::__WASI_ENOTSUP,
-        ERROR_FILE_EXISTS => host::__WASI_EEXIST,
-        ERROR_BROKEN_PIPE => host::__WASI_EPIPE,
-        ERROR_BUFFER_OVERFLOW => host::__WASI_ENAMETOOLONG,
-        ERROR_NOT_A_REPARSE_POINT => host::__WASI_EINVAL,
-        ERROR_NEGATIVE_SEEK => host::__WASI_EINVAL,
-        ERROR_DIRECTORY => host::__WASI_ENOTDIR,
-        ERROR_ALREADY_EXISTS => host::__WASI_EEXIST,
-        _ => host::__WASI_ENOTSUP,
+        ERROR_SUCCESS => wasi::__WASI_ESUCCESS,
+        ERROR_BAD_ENVIRONMENT => wasi::__WASI_E2BIG,
+        ERROR_FILE_NOT_FOUND => wasi::__WASI_ENOENT,
+        ERROR_PATH_NOT_FOUND => wasi::__WASI_ENOENT,
+        ERROR_TOO_MANY_OPEN_FILES => wasi::__WASI_ENFILE,
+        ERROR_ACCESS_DENIED => wasi::__WASI_EACCES,
+        ERROR_SHARING_VIOLATION => wasi::__WASI_EACCES,
+        ERROR_PRIVILEGE_NOT_HELD => wasi::__WASI_ENOTCAPABLE, // TODO is this the correct mapping?
+        ERROR_INVALID_HANDLE => wasi::__WASI_EBADF,
+        ERROR_INVALID_NAME => wasi::__WASI_ENOENT,
+        ERROR_NOT_ENOUGH_MEMORY => wasi::__WASI_ENOMEM,
+        ERROR_OUTOFMEMORY => wasi::__WASI_ENOMEM,
+        ERROR_DIR_NOT_EMPTY => wasi::__WASI_ENOTEMPTY,
+        ERROR_NOT_READY => wasi::__WASI_EBUSY,
+        ERROR_BUSY => wasi::__WASI_EBUSY,
+        ERROR_NOT_SUPPORTED => wasi::__WASI_ENOTSUP,
+        ERROR_FILE_EXISTS => wasi::__WASI_EEXIST,
+        ERROR_BROKEN_PIPE => wasi::__WASI_EPIPE,
+        ERROR_BUFFER_OVERFLOW => wasi::__WASI_ENAMETOOLONG,
+        ERROR_NOT_A_REPARSE_POINT => wasi::__WASI_EINVAL,
+        ERROR_NEGATIVE_SEEK => wasi::__WASI_EINVAL,
+        ERROR_DIRECTORY => wasi::__WASI_ENOTDIR,
+        ERROR_ALREADY_EXISTS => wasi::__WASI_EEXIST,
+        _ => wasi::__WASI_ENOTSUP,
     }
 }
 
-pub(crate) fn fdflags_from_win(mode: AccessMode) -> host::__wasi_fdflags_t {
+pub(crate) fn fdflags_from_win(mode: AccessMode) -> wasi::__wasi_fdflags_t {
     let mut fdflags = 0;
     // TODO verify this!
     if mode.contains(AccessMode::FILE_APPEND_DATA) {
-        fdflags |= host::__WASI_FDFLAG_APPEND;
+        fdflags |= wasi::__WASI_FDFLAG_APPEND;
     }
     if mode.contains(AccessMode::SYNCHRONIZE) {
-        fdflags |= host::__WASI_FDFLAG_DSYNC;
-        fdflags |= host::__WASI_FDFLAG_RSYNC;
-        fdflags |= host::__WASI_FDFLAG_SYNC;
+        fdflags |= wasi::__WASI_FDFLAG_DSYNC;
+        fdflags |= wasi::__WASI_FDFLAG_RSYNC;
+        fdflags |= wasi::__WASI_FDFLAG_SYNC;
     }
     // The NONBLOCK equivalent is FILE_FLAG_OVERLAPPED
     // but it seems winapi doesn't provide a mechanism
@@ -63,20 +63,20 @@ pub(crate) fn fdflags_from_win(mode: AccessMode) -> host::__wasi_fdflags_t {
     fdflags
 }
 
-pub(crate) fn win_from_fdflags(fdflags: host::__wasi_fdflags_t) -> (AccessMode, Flags) {
+pub(crate) fn win_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> (AccessMode, Flags) {
     let mut access_mode = AccessMode::empty();
     let mut flags = Flags::empty();
 
     // TODO verify this!
-    if fdflags & host::__WASI_FDFLAG_NONBLOCK != 0 {
+    if fdflags & wasi::__WASI_FDFLAG_NONBLOCK != 0 {
         flags.insert(Flags::FILE_FLAG_OVERLAPPED);
     }
-    if fdflags & host::__WASI_FDFLAG_APPEND != 0 {
+    if fdflags & wasi::__WASI_FDFLAG_APPEND != 0 {
         access_mode.insert(AccessMode::FILE_APPEND_DATA);
     }
-    if fdflags & host::__WASI_FDFLAG_DSYNC != 0
-        || fdflags & host::__WASI_FDFLAG_RSYNC != 0
-        || fdflags & host::__WASI_FDFLAG_SYNC != 0
+    if fdflags & wasi::__WASI_FDFLAG_DSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAG_RSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAG_SYNC != 0
     {
         access_mode.insert(AccessMode::SYNCHRONIZE);
     }
@@ -84,14 +84,14 @@ pub(crate) fn win_from_fdflags(fdflags: host::__wasi_fdflags_t) -> (AccessMode, 
     (access_mode, flags)
 }
 
-pub(crate) fn win_from_oflags(oflags: host::__wasi_oflags_t) -> CreationDisposition {
-    if oflags & host::__WASI_O_CREAT != 0 {
-        if oflags & host::__WASI_O_EXCL != 0 {
+pub(crate) fn win_from_oflags(oflags: wasi::__wasi_oflags_t) -> CreationDisposition {
+    if oflags & wasi::__WASI_O_CREAT != 0 {
+        if oflags & wasi::__WASI_O_EXCL != 0 {
             CreationDisposition::CREATE_NEW
         } else {
             CreationDisposition::CREATE_ALWAYS
         }
-    } else if oflags & host::__WASI_O_TRUNC != 0 {
+    } else if oflags & wasi::__WASI_O_TRUNC != 0 {
         CreationDisposition::TRUNCATE_EXISTING
     } else {
         CreationDisposition::OPEN_EXISTING

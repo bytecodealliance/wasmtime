@@ -1,4 +1,4 @@
-use crate::host;
+use crate::wasi;
 use cfg_if::cfg_if;
 
 cfg_if! {
@@ -7,7 +7,7 @@ cfg_if! {
         pub(crate) use self::unix::*;
         pub use self::unix::preopen_dir;
 
-        pub(crate) fn errno_from_host(err: i32) -> host::__wasi_errno_t {
+        pub(crate) fn errno_from_host(err: i32) -> wasi::__wasi_errno_t {
             host_impl::errno_from_nix(nix::errno::from_i32(err)).as_wasi_errno()
         }
     } else if #[cfg(windows)] {
@@ -15,7 +15,7 @@ cfg_if! {
         pub(crate) use self::windows::*;
         pub use self::windows::preopen_dir;
 
-        pub(crate) fn errno_from_host(err: i32) -> host::__wasi_errno_t {
+        pub(crate) fn errno_from_host(err: i32) -> wasi::__wasi_errno_t {
             host_impl::errno_from_win(winx::winerror::WinError::from_u32(err as u32))
         }
     } else {

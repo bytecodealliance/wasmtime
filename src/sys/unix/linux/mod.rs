@@ -27,14 +27,14 @@ pub(crate) mod fdentry_impl {
 
 pub(crate) mod host_impl {
     use super::super::host_impl::dirent_filetype_from_host;
-    use crate::{host, memory, Error, Result};
+    use crate::{wasi, Error, Result};
 
     pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
 
     pub(crate) fn dirent_from_host(
         host_entry: &nix::libc::dirent,
-    ) -> Result<host::__wasi_dirent_t> {
-        let mut entry = unsafe { std::mem::zeroed::<host::__wasi_dirent_t>() };
+    ) -> Result<wasi::__wasi_dirent_t> {
+        let mut entry = unsafe { std::mem::zeroed::<wasi::__wasi_dirent_t>() };
         let d_namlen = unsafe { std::ffi::CStr::from_ptr(host_entry.d_name.as_ptr()) }
             .to_bytes()
             .len();
@@ -42,10 +42,10 @@ pub(crate) mod host_impl {
             return Err(Error::EIO);
         }
         let d_type = dirent_filetype_from_host(host_entry)?;
-        entry.d_ino = memory::enc_inode(host_entry.d_ino);
-        entry.d_next = memory::enc_dircookie(host_entry.d_off as u64);
-        entry.d_namlen = memory::enc_u32(d_namlen as u32);
-        entry.d_type = memory::enc_filetype(d_type);
+        entry.d_ino = host_entry.d_ino;
+        entry.d_next = host_entry.d_off as u64;
+        entry.d_namlen = d_namlen as u32;
+        entry.d_type = d_type;
         Ok(entry)
     }
 }

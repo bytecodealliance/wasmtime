@@ -2,7 +2,7 @@ use super::osfile::OsFile;
 use crate::hostcalls_impl::PathGet;
 use crate::sys::host_impl;
 use crate::sys::unix::str_to_cstring;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
 use std::fs::File;
@@ -142,7 +142,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
 pub(crate) fn fd_readdir(
     os_file: &mut OsFile,
     host_buf: &mut [u8],
-    cookie: host::__wasi_dircookie_t,
+    cookie: wasi::__wasi_dircookie_t,
 ) -> Result<usize> {
     use crate::sys::unix::bsd::osfile::DirStream;
     use libc::{fdopendir, readdir, rewinddir, seekdir, telldir};
@@ -166,7 +166,7 @@ pub(crate) fn fd_readdir(
     let host_buf_ptr = host_buf.as_mut_ptr();
     let host_buf_len = host_buf.len();
 
-    if cookie != host::__WASI_DIRCOOKIE_START {
+    if cookie != wasi::__WASI_DIRCOOKIE_START {
         unsafe { seekdir(dir_stream.dir_ptr, cookie as c_long) };
     } else {
         unsafe { rewinddir(dir_stream.dir_ptr) };
@@ -189,13 +189,13 @@ pub(crate) fn fd_readdir(
             }
         }
 
-        let mut entry: host::__wasi_dirent_t =
+        let mut entry: wasi::__wasi_dirent_t =
             host_impl::dirent_from_host(&unsafe { *host_entry })?;
         // Set d_next manually:
         // * on macOS d_seekoff is not set for some reason
         // * on FreeBSD d_seekoff doesn't exist; there is d_off but it is
         //   not equivalent to the value read from telldir call
-        entry.d_next = unsafe { telldir(dir_stream.dir_ptr) } as host::__wasi_dircookie_t;
+        entry.d_next = unsafe { telldir(dir_stream.dir_ptr) } as wasi::__wasi_dircookie_t;
 
         log::debug!("fd_readdir entry = {:?}", entry);
 
@@ -206,7 +206,7 @@ pub(crate) fn fd_readdir(
         }
         unsafe {
             let ptr = host_buf_ptr.offset(host_buf_offset.try_into()?) as *mut c_void
-                as *mut host::__wasi_dirent_t;
+                as *mut wasi::__wasi_dirent_t;
             *ptr = entry;
         }
         host_buf_offset += std::mem::size_of_val(&entry);
@@ -228,21 +228,21 @@ pub(crate) fn fd_readdir(
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) fn fd_advise(
     file: &File,
-    advice: host::__wasi_advice_t,
-    offset: host::__wasi_filesize_t,
-    len: host::__wasi_filesize_t,
+    advice: wasi::__wasi_advice_t,
+    offset: wasi::__wasi_filesize_t,
+    len: wasi::__wasi_filesize_t,
 ) -> Result<()> {
     use nix::errno::Errno;
 
     match advice {
-        host::__WASI_ADVICE_DONTNEED => return Ok(()),
+        wasi::__WASI_ADVICE_DONTNEED => return Ok(()),
         // unfortunately, the advisory syscall in macOS doesn't take any flags of this
         // sort (unlike on Linux), hence, they are left here as a noop
-        host::__WASI_ADVICE_SEQUENTIAL
-        | host::__WASI_ADVICE_WILLNEED
-        | host::__WASI_ADVICE_NOREUSE
-        | host::__WASI_ADVICE_RANDOM
-        | host::__WASI_ADVICE_NORMAL => {}
+        wasi::__WASI_ADVICE_SEQUENTIAL
+        | wasi::__WASI_ADVICE_WILLNEED
+        | wasi::__WASI_ADVICE_NOREUSE
+        | wasi::__WASI_ADVICE_RANDOM
+        | wasi::__WASI_ADVICE_NORMAL => {}
         _ => return Err(Error::EINVAL),
     }
 
@@ -271,17 +271,17 @@ pub(crate) fn fd_advise(
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 pub(crate) fn fd_advise(
     _file: &File,
-    advice: host::__wasi_advice_t,
-    _offset: host::__wasi_filesize_t,
-    _len: host::__wasi_filesize_t,
+    advice: wasi::__wasi_advice_t,
+    _offset: wasi::__wasi_filesize_t,
+    _len: wasi::__wasi_filesize_t,
 ) -> Result<()> {
     match advice {
-        host::__WASI_ADVICE_DONTNEED
-        | host::__WASI_ADVICE_SEQUENTIAL
-        | host::__WASI_ADVICE_WILLNEED
-        | host::__WASI_ADVICE_NOREUSE
-        | host::__WASI_ADVICE_RANDOM
-        | host::__WASI_ADVICE_NORMAL => {}
+        wasi::__WASI_ADVICE_DONTNEED
+        | wasi::__WASI_ADVICE_SEQUENTIAL
+        | wasi::__WASI_ADVICE_WILLNEED
+        | wasi::__WASI_ADVICE_NOREUSE
+        | wasi::__WASI_ADVICE_RANDOM
+        | wasi::__WASI_ADVICE_NORMAL => {}
         _ => return Err(Error::EINVAL),
     }
 

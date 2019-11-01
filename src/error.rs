@@ -1,6 +1,6 @@
 // Due to https://github.com/rust-lang/rust/issues/64247
 #![allow(clippy::use_self)]
-use crate::host;
+use crate::wasi;
 use failure::Fail;
 use std::convert::Infallible;
 use std::fmt;
@@ -9,88 +9,88 @@ use std::num::TryFromIntError;
 #[derive(Clone, Copy, Debug, Fail, Eq, PartialEq)]
 #[repr(u16)]
 pub enum WasiError {
-    ESUCCESS = host::__WASI_ESUCCESS,
-    E2BIG = host::__WASI_E2BIG,
-    EACCES = host::__WASI_EACCES,
-    EADDRINUSE = host::__WASI_EADDRINUSE,
-    EADDRNOTAVAIL = host::__WASI_EADDRNOTAVAIL,
-    EAFNOSUPPORT = host::__WASI_EAFNOSUPPORT,
-    EAGAIN = host::__WASI_EAGAIN,
-    EALREADY = host::__WASI_EALREADY,
-    EBADF = host::__WASI_EBADF,
-    EBADMSG = host::__WASI_EBADMSG,
-    EBUSY = host::__WASI_EBUSY,
-    ECANCELED = host::__WASI_ECANCELED,
-    ECHILD = host::__WASI_ECHILD,
-    ECONNABORTED = host::__WASI_ECONNABORTED,
-    ECONNREFUSED = host::__WASI_ECONNREFUSED,
-    ECONNRESET = host::__WASI_ECONNRESET,
-    EDEADLK = host::__WASI_EDEADLK,
-    EDESTADDRREQ = host::__WASI_EDESTADDRREQ,
-    EDOM = host::__WASI_EDOM,
-    EDQUOT = host::__WASI_EDQUOT,
-    EEXIST = host::__WASI_EEXIST,
-    EFAULT = host::__WASI_EFAULT,
-    EFBIG = host::__WASI_EFBIG,
-    EHOSTUNREACH = host::__WASI_EHOSTUNREACH,
-    EIDRM = host::__WASI_EIDRM,
-    EILSEQ = host::__WASI_EILSEQ,
-    EINPROGRESS = host::__WASI_EINPROGRESS,
-    EINTR = host::__WASI_EINTR,
-    EINVAL = host::__WASI_EINVAL,
-    EIO = host::__WASI_EIO,
-    EISCONN = host::__WASI_EISCONN,
-    EISDIR = host::__WASI_EISDIR,
-    ELOOP = host::__WASI_ELOOP,
-    EMFILE = host::__WASI_EMFILE,
-    EMLINK = host::__WASI_EMLINK,
-    EMSGSIZE = host::__WASI_EMSGSIZE,
-    EMULTIHOP = host::__WASI_EMULTIHOP,
-    ENAMETOOLONG = host::__WASI_ENAMETOOLONG,
-    ENETDOWN = host::__WASI_ENETDOWN,
-    ENETRESET = host::__WASI_ENETRESET,
-    ENETUNREACH = host::__WASI_ENETUNREACH,
-    ENFILE = host::__WASI_ENFILE,
-    ENOBUFS = host::__WASI_ENOBUFS,
-    ENODEV = host::__WASI_ENODEV,
-    ENOENT = host::__WASI_ENOENT,
-    ENOEXEC = host::__WASI_ENOEXEC,
-    ENOLCK = host::__WASI_ENOLCK,
-    ENOLINK = host::__WASI_ENOLINK,
-    ENOMEM = host::__WASI_ENOMEM,
-    ENOMSG = host::__WASI_ENOMSG,
-    ENOPROTOOPT = host::__WASI_ENOPROTOOPT,
-    ENOSPC = host::__WASI_ENOSPC,
-    ENOSYS = host::__WASI_ENOSYS,
-    ENOTCONN = host::__WASI_ENOTCONN,
-    ENOTDIR = host::__WASI_ENOTDIR,
-    ENOTEMPTY = host::__WASI_ENOTEMPTY,
-    ENOTRECOVERABLE = host::__WASI_ENOTRECOVERABLE,
-    ENOTSOCK = host::__WASI_ENOTSOCK,
-    ENOTSUP = host::__WASI_ENOTSUP,
-    ENOTTY = host::__WASI_ENOTTY,
-    ENXIO = host::__WASI_ENXIO,
-    EOVERFLOW = host::__WASI_EOVERFLOW,
-    EOWNERDEAD = host::__WASI_EOWNERDEAD,
-    EPERM = host::__WASI_EPERM,
-    EPIPE = host::__WASI_EPIPE,
-    EPROTO = host::__WASI_EPROTO,
-    EPROTONOSUPPORT = host::__WASI_EPROTONOSUPPORT,
-    EPROTOTYPE = host::__WASI_EPROTOTYPE,
-    ERANGE = host::__WASI_ERANGE,
-    EROFS = host::__WASI_EROFS,
-    ESPIPE = host::__WASI_ESPIPE,
-    ESRCH = host::__WASI_ESRCH,
-    ESTALE = host::__WASI_ESTALE,
-    ETIMEDOUT = host::__WASI_ETIMEDOUT,
-    ETXTBSY = host::__WASI_ETXTBSY,
-    EXDEV = host::__WASI_EXDEV,
-    ENOTCAPABLE = host::__WASI_ENOTCAPABLE,
+    ESUCCESS = wasi::__WASI_ESUCCESS,
+    E2BIG = wasi::__WASI_E2BIG,
+    EACCES = wasi::__WASI_EACCES,
+    EADDRINUSE = wasi::__WASI_EADDRINUSE,
+    EADDRNOTAVAIL = wasi::__WASI_EADDRNOTAVAIL,
+    EAFNOSUPPORT = wasi::__WASI_EAFNOSUPPORT,
+    EAGAIN = wasi::__WASI_EAGAIN,
+    EALREADY = wasi::__WASI_EALREADY,
+    EBADF = wasi::__WASI_EBADF,
+    EBADMSG = wasi::__WASI_EBADMSG,
+    EBUSY = wasi::__WASI_EBUSY,
+    ECANCELED = wasi::__WASI_ECANCELED,
+    ECHILD = wasi::__WASI_ECHILD,
+    ECONNABORTED = wasi::__WASI_ECONNABORTED,
+    ECONNREFUSED = wasi::__WASI_ECONNREFUSED,
+    ECONNRESET = wasi::__WASI_ECONNRESET,
+    EDEADLK = wasi::__WASI_EDEADLK,
+    EDESTADDRREQ = wasi::__WASI_EDESTADDRREQ,
+    EDOM = wasi::__WASI_EDOM,
+    EDQUOT = wasi::__WASI_EDQUOT,
+    EEXIST = wasi::__WASI_EEXIST,
+    EFAULT = wasi::__WASI_EFAULT,
+    EFBIG = wasi::__WASI_EFBIG,
+    EHOSTUNREACH = wasi::__WASI_EHOSTUNREACH,
+    EIDRM = wasi::__WASI_EIDRM,
+    EILSEQ = wasi::__WASI_EILSEQ,
+    EINPROGRESS = wasi::__WASI_EINPROGRESS,
+    EINTR = wasi::__WASI_EINTR,
+    EINVAL = wasi::__WASI_EINVAL,
+    EIO = wasi::__WASI_EIO,
+    EISCONN = wasi::__WASI_EISCONN,
+    EISDIR = wasi::__WASI_EISDIR,
+    ELOOP = wasi::__WASI_ELOOP,
+    EMFILE = wasi::__WASI_EMFILE,
+    EMLINK = wasi::__WASI_EMLINK,
+    EMSGSIZE = wasi::__WASI_EMSGSIZE,
+    EMULTIHOP = wasi::__WASI_EMULTIHOP,
+    ENAMETOOLONG = wasi::__WASI_ENAMETOOLONG,
+    ENETDOWN = wasi::__WASI_ENETDOWN,
+    ENETRESET = wasi::__WASI_ENETRESET,
+    ENETUNREACH = wasi::__WASI_ENETUNREACH,
+    ENFILE = wasi::__WASI_ENFILE,
+    ENOBUFS = wasi::__WASI_ENOBUFS,
+    ENODEV = wasi::__WASI_ENODEV,
+    ENOENT = wasi::__WASI_ENOENT,
+    ENOEXEC = wasi::__WASI_ENOEXEC,
+    ENOLCK = wasi::__WASI_ENOLCK,
+    ENOLINK = wasi::__WASI_ENOLINK,
+    ENOMEM = wasi::__WASI_ENOMEM,
+    ENOMSG = wasi::__WASI_ENOMSG,
+    ENOPROTOOPT = wasi::__WASI_ENOPROTOOPT,
+    ENOSPC = wasi::__WASI_ENOSPC,
+    ENOSYS = wasi::__WASI_ENOSYS,
+    ENOTCONN = wasi::__WASI_ENOTCONN,
+    ENOTDIR = wasi::__WASI_ENOTDIR,
+    ENOTEMPTY = wasi::__WASI_ENOTEMPTY,
+    ENOTRECOVERABLE = wasi::__WASI_ENOTRECOVERABLE,
+    ENOTSOCK = wasi::__WASI_ENOTSOCK,
+    ENOTSUP = wasi::__WASI_ENOTSUP,
+    ENOTTY = wasi::__WASI_ENOTTY,
+    ENXIO = wasi::__WASI_ENXIO,
+    EOVERFLOW = wasi::__WASI_EOVERFLOW,
+    EOWNERDEAD = wasi::__WASI_EOWNERDEAD,
+    EPERM = wasi::__WASI_EPERM,
+    EPIPE = wasi::__WASI_EPIPE,
+    EPROTO = wasi::__WASI_EPROTO,
+    EPROTONOSUPPORT = wasi::__WASI_EPROTONOSUPPORT,
+    EPROTOTYPE = wasi::__WASI_EPROTOTYPE,
+    ERANGE = wasi::__WASI_ERANGE,
+    EROFS = wasi::__WASI_EROFS,
+    ESPIPE = wasi::__WASI_ESPIPE,
+    ESRCH = wasi::__WASI_ESRCH,
+    ESTALE = wasi::__WASI_ESTALE,
+    ETIMEDOUT = wasi::__WASI_ETIMEDOUT,
+    ETXTBSY = wasi::__WASI_ETXTBSY,
+    EXDEV = wasi::__WASI_EXDEV,
+    ENOTCAPABLE = wasi::__WASI_ENOTCAPABLE,
 }
 
 impl WasiError {
-    pub fn as_raw_errno(self) -> host::__wasi_errno_t {
-        self as host::__wasi_errno_t
+    pub fn as_raw_errno(self) -> wasi::__wasi_errno_t {
+        self as wasi::__wasi_errno_t
     }
 }
 
@@ -151,7 +151,7 @@ impl From<winx::winerror::WinError> for Error {
 }
 
 impl Error {
-    pub(crate) fn as_wasi_errno(&self) -> host::__wasi_errno_t {
+    pub(crate) fn as_wasi_errno(&self) -> wasi::__wasi_errno_t {
         match self {
             Self::Wasi(no) => no.as_raw_errno(),
             Self::Io(e) => errno_from_ioerror(e.to_owned()),
@@ -262,12 +262,12 @@ impl fmt::Display for Error {
     }
 }
 
-fn errno_from_ioerror(e: &std::io::Error) -> host::__wasi_errno_t {
+fn errno_from_ioerror(e: &std::io::Error) -> wasi::__wasi_errno_t {
     match e.raw_os_error() {
         Some(code) => crate::sys::errno_from_host(code),
         None => {
             log::debug!("Inconvertible OS error: {}", e);
-            host::__WASI_EIO
+            wasi::__WASI_EIO
         }
     }
 }

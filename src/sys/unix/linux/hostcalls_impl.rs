@@ -2,7 +2,7 @@ use super::osfile::OsFile;
 use crate::hostcalls_impl::PathGet;
 use crate::sys::host_impl;
 use crate::sys::unix::str_to_cstring;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use nix::libc::{self, c_long, c_void};
 use std::convert::TryInto;
 use std::fs::File;
@@ -70,7 +70,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
 pub(crate) fn fd_readdir(
     os_file: &mut OsFile,
     host_buf: &mut [u8],
-    cookie: host::__wasi_dircookie_t,
+    cookie: wasi::__wasi_dircookie_t,
 ) -> Result<usize> {
     use libc::{dirent, fdopendir, readdir_r, rewinddir, seekdir};
 
@@ -81,7 +81,7 @@ pub(crate) fn fd_readdir(
         return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
     }
 
-    if cookie != host::__WASI_DIRCOOKIE_START {
+    if cookie != wasi::__WASI_DIRCOOKIE_START {
         unsafe { seekdir(dir, cookie as c_long) };
     } else {
         // If cookie set to __WASI_DIRCOOKIE_START, rewind the dir ptr
@@ -108,7 +108,7 @@ pub(crate) fn fd_readdir(
             break;
         }
         unsafe { entry_buf.assume_init() };
-        let entry: host::__wasi_dirent_t = host_impl::dirent_from_host(&unsafe { *host_entry })?;
+        let entry: wasi::__wasi_dirent_t = host_impl::dirent_from_host(&unsafe { *host_entry })?;
 
         log::debug!("fd_readdir entry = {:?}", entry);
 
@@ -119,7 +119,7 @@ pub(crate) fn fd_readdir(
         }
         unsafe {
             let ptr = host_buf_ptr.offset(host_buf_offset.try_into()?) as *mut c_void
-                as *mut host::__wasi_dirent_t;
+                as *mut wasi::__wasi_dirent_t;
             *ptr = entry;
         }
         host_buf_offset += std::mem::size_of_val(&entry);
@@ -140,9 +140,9 @@ pub(crate) fn fd_readdir(
 
 pub(crate) fn fd_advise(
     file: &File,
-    advice: host::__wasi_advice_t,
-    offset: host::__wasi_filesize_t,
-    len: host::__wasi_filesize_t,
+    advice: wasi::__wasi_advice_t,
+    offset: wasi::__wasi_filesize_t,
+    len: wasi::__wasi_filesize_t,
 ) -> Result<()> {
     {
         use nix::fcntl::{posix_fadvise, PosixFadviseAdvice};
@@ -150,12 +150,12 @@ pub(crate) fn fd_advise(
         let offset = offset.try_into()?;
         let len = len.try_into()?;
         let host_advice = match advice {
-            host::__WASI_ADVICE_DONTNEED => PosixFadviseAdvice::POSIX_FADV_DONTNEED,
-            host::__WASI_ADVICE_SEQUENTIAL => PosixFadviseAdvice::POSIX_FADV_SEQUENTIAL,
-            host::__WASI_ADVICE_WILLNEED => PosixFadviseAdvice::POSIX_FADV_WILLNEED,
-            host::__WASI_ADVICE_NOREUSE => PosixFadviseAdvice::POSIX_FADV_NOREUSE,
-            host::__WASI_ADVICE_RANDOM => PosixFadviseAdvice::POSIX_FADV_RANDOM,
-            host::__WASI_ADVICE_NORMAL => PosixFadviseAdvice::POSIX_FADV_NORMAL,
+            wasi::__WASI_ADVICE_DONTNEED => PosixFadviseAdvice::POSIX_FADV_DONTNEED,
+            wasi::__WASI_ADVICE_SEQUENTIAL => PosixFadviseAdvice::POSIX_FADV_SEQUENTIAL,
+            wasi::__WASI_ADVICE_WILLNEED => PosixFadviseAdvice::POSIX_FADV_WILLNEED,
+            wasi::__WASI_ADVICE_NOREUSE => PosixFadviseAdvice::POSIX_FADV_NOREUSE,
+            wasi::__WASI_ADVICE_RANDOM => PosixFadviseAdvice::POSIX_FADV_RANDOM,
+            wasi::__WASI_ADVICE_NORMAL => PosixFadviseAdvice::POSIX_FADV_NORMAL,
             _ => return Err(Error::EINVAL),
         };
 

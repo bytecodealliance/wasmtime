@@ -1,5 +1,5 @@
 use crate::fdentry::Descriptor;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::io;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
@@ -35,9 +35,9 @@ impl AsRawFd for Descriptor {
 pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
     fd: &Fd,
 ) -> Result<(
-    host::__wasi_filetype_t,
-    host::__wasi_rights_t,
-    host::__wasi_rights_t,
+    wasi::__wasi_filetype_t,
+    wasi::__wasi_rights_t,
+    wasi::__wasi_rights_t,
 )> {
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(fd)?;
 
@@ -46,9 +46,9 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
     let flags = OFlag::from_bits_truncate(flags_bits);
     let accmode = flags & OFlag::O_ACCMODE;
     if accmode == OFlag::O_RDONLY {
-        rights_base &= !host::__WASI_RIGHT_FD_WRITE;
+        rights_base &= !wasi::__WASI_RIGHT_FD_WRITE;
     } else if accmode == OFlag::O_WRONLY {
-        rights_base &= !host::__WASI_RIGHT_FD_READ;
+        rights_base &= !wasi::__WASI_RIGHT_FD_READ;
     }
 
     Ok((file_type, rights_base, rights_inheriting))
@@ -58,9 +58,9 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
 pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
     fd: &Fd,
 ) -> Result<(
-    host::__wasi_filetype_t,
-    host::__wasi_rights_t,
-    host::__wasi_rights_t,
+    wasi::__wasi_filetype_t,
+    wasi::__wasi_rights_t,
+    wasi::__wasi_rights_t,
 )> {
     let (file_type, rights_base, rights_inheriting) = {
         // we just make a `File` here for convenience; we don't want it to close when it drops
@@ -69,61 +69,61 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
         if ft.is_block_device() {
             log::debug!("Host fd {:?} is a block device", fd.as_raw_fd());
             (
-                host::__WASI_FILETYPE_BLOCK_DEVICE,
-                host::RIGHTS_BLOCK_DEVICE_BASE,
-                host::RIGHTS_BLOCK_DEVICE_INHERITING,
+                wasi::__WASI_FILETYPE_BLOCK_DEVICE,
+                wasi::RIGHTS_BLOCK_DEVICE_BASE,
+                wasi::RIGHTS_BLOCK_DEVICE_INHERITING,
             )
         } else if ft.is_char_device() {
             log::debug!("Host fd {:?} is a char device", fd.as_raw_fd());
             if isatty(fd)? {
                 (
-                    host::__WASI_FILETYPE_CHARACTER_DEVICE,
-                    host::RIGHTS_TTY_BASE,
-                    host::RIGHTS_TTY_BASE,
+                    wasi::__WASI_FILETYPE_CHARACTER_DEVICE,
+                    wasi::RIGHTS_TTY_BASE,
+                    wasi::RIGHTS_TTY_BASE,
                 )
             } else {
                 (
-                    host::__WASI_FILETYPE_CHARACTER_DEVICE,
-                    host::RIGHTS_CHARACTER_DEVICE_BASE,
-                    host::RIGHTS_CHARACTER_DEVICE_INHERITING,
+                    wasi::__WASI_FILETYPE_CHARACTER_DEVICE,
+                    wasi::RIGHTS_CHARACTER_DEVICE_BASE,
+                    wasi::RIGHTS_CHARACTER_DEVICE_INHERITING,
                 )
             }
         } else if ft.is_dir() {
             log::debug!("Host fd {:?} is a directory", fd.as_raw_fd());
             (
-                host::__WASI_FILETYPE_DIRECTORY,
-                host::RIGHTS_DIRECTORY_BASE,
-                host::RIGHTS_DIRECTORY_INHERITING,
+                wasi::__WASI_FILETYPE_DIRECTORY,
+                wasi::RIGHTS_DIRECTORY_BASE,
+                wasi::RIGHTS_DIRECTORY_INHERITING,
             )
         } else if ft.is_file() {
             log::debug!("Host fd {:?} is a file", fd.as_raw_fd());
             (
-                host::__WASI_FILETYPE_REGULAR_FILE,
-                host::RIGHTS_REGULAR_FILE_BASE,
-                host::RIGHTS_REGULAR_FILE_INHERITING,
+                wasi::__WASI_FILETYPE_REGULAR_FILE,
+                wasi::RIGHTS_REGULAR_FILE_BASE,
+                wasi::RIGHTS_REGULAR_FILE_INHERITING,
             )
         } else if ft.is_socket() {
             log::debug!("Host fd {:?} is a socket", fd.as_raw_fd());
             use nix::sys::socket;
             match socket::getsockopt(fd.as_raw_fd(), socket::sockopt::SockType)? {
                 socket::SockType::Datagram => (
-                    host::__WASI_FILETYPE_SOCKET_DGRAM,
-                    host::RIGHTS_SOCKET_BASE,
-                    host::RIGHTS_SOCKET_INHERITING,
+                    wasi::__WASI_FILETYPE_SOCKET_DGRAM,
+                    wasi::RIGHTS_SOCKET_BASE,
+                    wasi::RIGHTS_SOCKET_INHERITING,
                 ),
                 socket::SockType::Stream => (
-                    host::__WASI_FILETYPE_SOCKET_STREAM,
-                    host::RIGHTS_SOCKET_BASE,
-                    host::RIGHTS_SOCKET_INHERITING,
+                    wasi::__WASI_FILETYPE_SOCKET_STREAM,
+                    wasi::RIGHTS_SOCKET_BASE,
+                    wasi::RIGHTS_SOCKET_INHERITING,
                 ),
                 _ => return Err(Error::EINVAL),
             }
         } else if ft.is_fifo() {
             log::debug!("Host fd {:?} is a fifo", fd.as_raw_fd());
             (
-                host::__WASI_FILETYPE_UNKNOWN,
-                host::RIGHTS_REGULAR_FILE_BASE,
-                host::RIGHTS_REGULAR_FILE_INHERITING,
+                wasi::__WASI_FILETYPE_UNKNOWN,
+                wasi::RIGHTS_REGULAR_FILE_BASE,
+                wasi::RIGHTS_REGULAR_FILE_INHERITING,
             )
         } else {
             log::debug!("Host fd {:?} is unknown", fd.as_raw_fd());
