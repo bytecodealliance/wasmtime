@@ -13,7 +13,7 @@ edition = "2018"
 wasmtime-runtime = { path = "../wasmtime-runtime" }
 wasmtime-environ = { path = "../wasmtime-environ" }
 wasmtime-jit = { path = "../wasmtime-jit" }
-wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "3a374d0"}
+wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "37ce4ba"}
 cranelift-codegen = { version = "0.46.1", features = ["enable-serde"] }
 cranelift-entity = { version = "0.46.1", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.46.1", features = ["enable-serde"] }
