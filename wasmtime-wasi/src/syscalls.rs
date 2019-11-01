@@ -1,6 +1,6 @@
 use cranelift_codegen::ir::types::{Type, I32, I64};
 use log::{error, trace};
-use wasi_common::{hostcalls, wasm32, WasiCtx};
+use wasi_common::{hostcalls, wasi, wasi32, WasiCtx};
 use wasmtime_runtime::{Export, VMContext};
 
 pub trait AbiRet {
@@ -74,7 +74,7 @@ impl AbiRet for () {
     }
 }
 
-fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasm32::__wasi_errno_t> {
+fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasi::__wasi_errno_t> {
     unsafe {
         vmctx
             .host_state()
@@ -83,7 +83,7 @@ fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasm32::__wasi_er
     }
 }
 
-fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasm32::__wasi_errno_t> {
+fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasi::__wasi_errno_t> {
     unsafe {
         match vmctx.lookup_global_export("memory") {
             Some(Export::Memory {
@@ -99,7 +99,7 @@ fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasm32::__wasi_errno_t
                     "no export named \"memory\", or the export isn't a mem: {:?}",
                     x
                 );
-                Err(wasm32::__WASI_EINVAL)
+                Err(wasi::__WASI_EINVAL)
             }
         }
     }
@@ -110,7 +110,7 @@ macro_rules! ok_or_errno {
         match $expr {
             Ok(v) => v,
             Err(e) => {
-                trace!("    -> errno={}", wasm32::strerror(e));
+                trace!("    -> errno={}", wasi::strerror(e));
                 return e;
             }
         }
@@ -163,9 +163,9 @@ macro_rules! syscalls {
 syscalls! {
     pub unsafe extern "C" fn args_get(
         vmctx: *mut VMContext,
-        argv: wasm32::uintptr_t,
-        argv_buf: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        argv: wasi32::uintptr_t,
+        argv_buf: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "args_get(argv={:#x?}, argv_buf={:#x?})",
             argv,
@@ -178,9 +178,9 @@ syscalls! {
 
     pub unsafe extern "C" fn args_sizes_get(
         vmctx: *mut VMContext,
-        argc: wasm32::uintptr_t,
-        argv_buf_size: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        argc: wasi32::uintptr_t,
+        argv_buf_size: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "args_sizes_get(argc={:#x?}, argv_buf_size={:#x?})",
             argc,
@@ -193,9 +193,9 @@ syscalls! {
 
     pub unsafe extern "C" fn clock_res_get(
         vmctx: *mut VMContext,
-        clock_id: wasm32::__wasi_clockid_t,
-        resolution: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        clock_id: wasi::__wasi_clockid_t,
+        resolution: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "clock_res_get(clock_id={:?}, resolution={:#x?})",
             clock_id,
@@ -207,10 +207,10 @@ syscalls! {
 
     pub unsafe extern "C" fn clock_time_get(
         vmctx: *mut VMContext,
-        clock_id: wasm32::__wasi_clockid_t,
-        precision: wasm32::__wasi_timestamp_t,
-        time: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        clock_id: wasi::__wasi_clockid_t,
+        precision: wasi::__wasi_timestamp_t,
+        time: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "clock_time_get(clock_id={:?}, precision={:?}, time={:#x?})",
             clock_id,
@@ -223,9 +223,9 @@ syscalls! {
 
     pub unsafe extern "C" fn environ_get(
         vmctx: *mut VMContext,
-        environ: wasm32::uintptr_t,
-        environ_buf: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        environ: wasi32::uintptr_t,
+        environ_buf: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "environ_get(environ={:#x?}, environ_buf={:#x?})",
             environ,
@@ -238,9 +238,9 @@ syscalls! {
 
     pub unsafe extern "C" fn environ_sizes_get(
         vmctx: *mut VMContext,
-        environ_count: wasm32::uintptr_t,
-        environ_buf_size: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        environ_count: wasi32::uintptr_t,
+        environ_buf_size: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "environ_sizes_get(environ_count={:#x?}, environ_buf_size={:#x?})",
             environ_count,
@@ -253,9 +253,9 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_prestat_get(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        buf: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        buf: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_prestat_get(fd={:?}, buf={:#x?})", fd, buf);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
@@ -264,10 +264,10 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_prestat_dir_name(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        path: wasm32::uintptr_t,
-        path_len: wasm32::size_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        path: wasi32::uintptr_t,
+        path_len: wasi32::size_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_prestat_dir_name(fd={:?}, path={:#x?}, path_len={})", fd, path, path_len);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
@@ -276,8 +276,8 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_close(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_close(fd={:?})", fd);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_close(wasi_ctx, fd)
@@ -285,8 +285,8 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_datasync(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_datasync(fd={:?})", fd);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_datasync(wasi_ctx, fd)
@@ -294,12 +294,12 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_pread(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        iovs: wasm32::uintptr_t,
-        iovs_len: wasm32::size_t,
-        offset: wasm32::__wasi_filesize_t,
-        nread: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        iovs: wasi32::uintptr_t,
+        iovs_len: wasi32::size_t,
+        offset: wasi::__wasi_filesize_t,
+        nread: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_pread(fd={:?}, iovs={:#x?}, iovs_len={:?}, offset={}, nread={:#x?})",
             fd,
@@ -323,12 +323,12 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_pwrite(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        iovs: wasm32::uintptr_t,
-        iovs_len: wasm32::size_t,
-        offset: wasm32::__wasi_filesize_t,
-        nwritten: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        iovs: wasi32::uintptr_t,
+        iovs_len: wasi32::size_t,
+        offset: wasi::__wasi_filesize_t,
+        nwritten: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_pwrite(fd={:?}, iovs={:#x?}, iovs_len={:?}, offset={}, nwritten={:#x?})",
             fd,
@@ -352,11 +352,11 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_read(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        iovs: wasm32::uintptr_t,
-        iovs_len: wasm32::size_t,
-        nread: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        iovs: wasi32::uintptr_t,
+        iovs_len: wasi32::size_t,
+        nread: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_read(fd={:?}, iovs={:#x?}, iovs_len={:?}, nread={:#x?})",
             fd,
@@ -371,9 +371,9 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_renumber(
         vmctx: *mut VMContext,
-        from: wasm32::__wasi_fd_t,
-        to: wasm32::__wasi_fd_t,
-    ) -> wasm32::__wasi_errno_t {
+        from: wasi::__wasi_fd_t,
+        to: wasi::__wasi_fd_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_renumber(from={:?}, to={:?})", from, to);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_renumber(wasi_ctx, from, to)
@@ -381,16 +381,16 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_seek(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        offset: wasm32::__wasi_filedelta_t,
-        whence: wasm32::__wasi_whence_t,
-        newoffset: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        offset: wasi::__wasi_filedelta_t,
+        whence: wasi::__wasi_whence_t,
+        newoffset: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_seek(fd={:?}, offset={:?}, whence={}, newoffset={:#x?})",
             fd,
             offset,
-            wasm32::whence_to_str(whence),
+            wasi::whence_to_str(whence),
             newoffset
         );
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
@@ -400,9 +400,9 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_tell(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        newoffset: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        newoffset: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
@@ -411,9 +411,9 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_fdstat_get(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        buf: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        buf: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_fdstat_get(fd={:?}, buf={:#x?})", fd, buf);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
@@ -422,9 +422,9 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_fdstat_set_flags(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        flags: wasm32::__wasi_fdflags_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        flags: wasi::__wasi_fdflags_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_fdstat_set_flags(fd={:?}, flags={:#x?})",
             fd,
@@ -436,10 +436,10 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_fdstat_set_rights(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        fs_rights_base: wasm32::__wasi_rights_t,
-        fs_rights_inheriting: wasm32::__wasi_rights_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        fs_rights_base: wasi::__wasi_rights_t,
+        fs_rights_inheriting: wasi::__wasi_rights_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_fdstat_set_rights(fd={:?}, fs_rights_base={:#x?}, fs_rights_inheriting={:#x?})",
             fd,
@@ -457,8 +457,8 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_sync(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_sync(fd={:?})", fd);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_sync(wasi_ctx, fd)
@@ -466,11 +466,11 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_write(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        iovs: wasm32::uintptr_t,
-        iovs_len: wasm32::size_t,
-        nwritten: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        iovs: wasi32::uintptr_t,
+        iovs_len: wasi32::size_t,
+        nwritten: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_write(fd={:?}, iovs={:#x?}, iovs_len={:?}, nwritten={:#x?})",
             fd,
@@ -485,11 +485,11 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_advise(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        offset: wasm32::__wasi_filesize_t,
-        len: wasm32::__wasi_filesize_t,
-        advice: wasm32::__wasi_advice_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        offset: wasi::__wasi_filesize_t,
+        len: wasi::__wasi_filesize_t,
+        advice: wasi::__wasi_advice_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_advise(fd={:?}, offset={}, len={}, advice={:?})",
             fd,
@@ -503,10 +503,10 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_allocate(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        offset: wasm32::__wasi_filesize_t,
-        len: wasm32::__wasi_filesize_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        offset: wasi::__wasi_filesize_t,
+        len: wasi::__wasi_filesize_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_allocate(fd={:?}, offset={}, len={})", fd, offset, len);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         hostcalls::fd_allocate(wasi_ctx, fd, offset, len)
@@ -514,10 +514,10 @@ syscalls! {
 
     pub unsafe extern "C" fn path_create_directory(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        path: wasm32::uintptr_t,
-        path_len: wasm32::size_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        path: wasi32::uintptr_t,
+        path_len: wasi32::size_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_create_directory(fd={:?}, path={:#x?}, path_len={})",
             fd,
@@ -531,14 +531,14 @@ syscalls! {
 
     pub unsafe extern "C" fn path_link(
         vmctx: *mut VMContext,
-        fd0: wasm32::__wasi_fd_t,
-        flags0: wasm32::__wasi_lookupflags_t,
-        path0: wasm32::uintptr_t,
-        path_len0: wasm32::size_t,
-        fd1: wasm32::__wasi_fd_t,
-        path1: wasm32::uintptr_t,
-        path_len1: wasm32::size_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd0: wasi::__wasi_fd_t,
+        flags0: wasi::__wasi_lookupflags_t,
+        path0: wasi32::uintptr_t,
+        path_len0: wasi32::size_t,
+        fd1: wasi::__wasi_fd_t,
+        path1: wasi32::uintptr_t,
+        path_len1: wasi32::size_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_link(fd0={:?}, flags0={:?}, path0={:#x?}, path_len0={}, fd1={:?}, path1={:#x?}, path_len1={})",
             fd0,
@@ -568,16 +568,16 @@ syscalls! {
     // the `fd` by reference?
     pub unsafe extern "C" fn path_open(
         vmctx: *mut VMContext,
-        dirfd: wasm32::__wasi_fd_t,
-        dirflags: wasm32::__wasi_lookupflags_t,
-        path: wasm32::uintptr_t,
-        path_len: wasm32::size_t,
-        oflags: wasm32::__wasi_oflags_t,
-        fs_rights_base: wasm32::__wasi_rights_t,
-        fs_rights_inheriting: wasm32::__wasi_rights_t,
-        fs_flags: wasm32::__wasi_fdflags_t,
-        fd: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        dirfd: wasi::__wasi_fd_t,
+        dirflags: wasi::__wasi_lookupflags_t,
+        path: wasi32::uintptr_t,
+        path_len: wasi32::size_t,
+        oflags: wasi::__wasi_oflags_t,
+        fs_rights_base: wasi::__wasi_rights_t,
+        fs_rights_inheriting: wasi::__wasi_rights_t,
+        fs_flags: wasi::__wasi_fdflags_t,
+        fd: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_open(dirfd={:?}, dirflags={:?}, path={:#x?}, path_len={:?}, oflags={:#x?}, fs_rights_base={:#x?}, fs_rights_inheriting={:#x?}, fs_flags={:#x?}, fd={:#x?})",
             dirfd,
@@ -609,12 +609,12 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_readdir(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        buf: wasm32::uintptr_t,
-        buf_len: wasm32::size_t,
-        cookie: wasm32::__wasi_dircookie_t,
-        buf_used: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        buf: wasi32::uintptr_t,
+        buf_len: wasi32::size_t,
+        cookie: wasi::__wasi_dircookie_t,
+        buf_used: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_readdir(fd={:?}, buf={:#x?}, buf_len={}, cookie={:#x?}, buf_used={:#x?})",
             fd,
@@ -638,13 +638,13 @@ syscalls! {
 
     pub unsafe extern "C" fn path_readlink(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        path: wasm32::uintptr_t,
-        path_len: wasm32::size_t,
-        buf: wasm32::uintptr_t,
-        buf_len: wasm32::size_t,
-        buf_used: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        path: wasi32::uintptr_t,
+        path_len: wasi32::size_t,
+        buf: wasi32::uintptr_t,
+        buf_len: wasi32::size_t,
+        buf_used: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_readlink(fd={:?}, path={:#x?}, path_len={:?}, buf={:#x?}, buf_len={}, buf_used={:#x?})",
             fd,
@@ -670,13 +670,13 @@ syscalls! {
 
     pub unsafe extern "C" fn path_rename(
         vmctx: *mut VMContext,
-        fd0: wasm32::__wasi_fd_t,
-        path0: wasm32::uintptr_t,
-        path_len0: wasm32::size_t,
-        fd1: wasm32::__wasi_fd_t,
-        path1: wasm32::uintptr_t,
-        path_len1: wasm32::size_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd0: wasi::__wasi_fd_t,
+        path0: wasi32::uintptr_t,
+        path_len0: wasi32::size_t,
+        fd1: wasi::__wasi_fd_t,
+        path1: wasi32::uintptr_t,
+        path_len1: wasi32::size_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_rename(fd0={:?}, path0={:#x?}, path_len0={:?}, fd1={:?}, path1={:#x?}, path_len1={:?})",
             fd0,
@@ -702,9 +702,9 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_filestat_get(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        buf: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        buf: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("fd_filestat_get(fd={:?}, buf={:#x?})", fd, buf);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
@@ -713,11 +713,11 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_filestat_set_times(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        st_atim: wasm32::__wasi_timestamp_t,
-        st_mtim: wasm32::__wasi_timestamp_t,
-        fstflags: wasm32::__wasi_fstflags_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        st_atim: wasi::__wasi_timestamp_t,
+        st_mtim: wasi::__wasi_timestamp_t,
+        fstflags: wasi::__wasi_fstflags_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_filestat_set_times(fd={:?}, st_atim={}, st_mtim={}, fstflags={:#x?})",
             fd,
@@ -730,9 +730,9 @@ syscalls! {
 
     pub unsafe extern "C" fn fd_filestat_set_size(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        size: wasm32::__wasi_filesize_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        size: wasi::__wasi_filesize_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "fd_filestat_set_size(fd={:?}, size={})",
             fd,
@@ -744,12 +744,12 @@ syscalls! {
 
     pub unsafe extern "C" fn path_filestat_get(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        flags: wasm32::__wasi_lookupflags_t,
-        path: wasm32::uintptr_t,
-        path_len: wasm32::size_t,
-        buf: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        flags: wasi::__wasi_lookupflags_t,
+        path: wasi32::uintptr_t,
+        path_len: wasi32::size_t,
+        buf: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_filestat_get(fd={:?}, flags={:?}, path={:#x?}, path_len={}, buf={:#x?})",
             fd,
@@ -765,14 +765,14 @@ syscalls! {
 
     pub unsafe extern "C" fn path_filestat_set_times(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        flags: wasm32::__wasi_lookupflags_t,
-        path: wasm32::uintptr_t,
-        path_len: wasm32::size_t,
-        st_atim: wasm32::__wasi_timestamp_t,
-        st_mtim: wasm32::__wasi_timestamp_t,
-        fstflags: wasm32::__wasi_fstflags_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        flags: wasi::__wasi_lookupflags_t,
+        path: wasi32::uintptr_t,
+        path_len: wasi32::size_t,
+        st_atim: wasi::__wasi_timestamp_t,
+        st_mtim: wasi::__wasi_timestamp_t,
+        fstflags: wasi::__wasi_fstflags_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_filestat_set_times(fd={:?}, flags={:?}, path={:#x?}, path_len={}, st_atim={}, st_mtim={}, fstflags={:#x?})",
             fd,
@@ -799,12 +799,12 @@ syscalls! {
 
     pub unsafe extern "C" fn path_symlink(
         vmctx: *mut VMContext,
-        path0: wasm32::uintptr_t,
-        path_len0: wasm32::size_t,
-        fd: wasm32::__wasi_fd_t,
-        path1: wasm32::uintptr_t,
-        path_len1: wasm32::size_t,
-    ) -> wasm32::__wasi_errno_t {
+        path0: wasi32::uintptr_t,
+        path_len0: wasi32::size_t,
+        fd: wasi::__wasi_fd_t,
+        path1: wasi32::uintptr_t,
+        path_len1: wasi32::size_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_symlink(path0={:#x?}, path_len0={}, fd={:?}, path1={:#x?}, path_len1={})",
             path0,
@@ -828,10 +828,10 @@ syscalls! {
 
     pub unsafe extern "C" fn path_unlink_file(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        path: wasm32::uintptr_t,
-        path_len: wasm32::size_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        path: wasi32::uintptr_t,
+        path_len: wasi32::size_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_unlink_file(fd={:?}, path={:#x?}, path_len={})",
             fd,
@@ -845,10 +845,10 @@ syscalls! {
 
     pub unsafe extern "C" fn path_remove_directory(
         vmctx: *mut VMContext,
-        fd: wasm32::__wasi_fd_t,
-        path: wasm32::uintptr_t,
-        path_len: wasm32::size_t,
-    ) -> wasm32::__wasi_errno_t {
+        fd: wasi::__wasi_fd_t,
+        path: wasi32::uintptr_t,
+        path_len: wasi32::size_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "path_remove_directory(fd={:?}, path={:#x?}, path_len={})",
             fd,
@@ -862,11 +862,11 @@ syscalls! {
 
     pub unsafe extern "C" fn poll_oneoff(
         vmctx: *mut VMContext,
-        in_: wasm32::uintptr_t,
-        out: wasm32::uintptr_t,
-        nsubscriptions: wasm32::size_t,
-        nevents: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        in_: wasi32::uintptr_t,
+        out: wasi32::uintptr_t,
+        nsubscriptions: wasi32::size_t,
+        nevents: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "poll_oneoff(in={:#x?}, out={:#x?}, nsubscriptions={}, nevents={:#x?})",
             in_,
@@ -886,8 +886,8 @@ syscalls! {
 
     pub unsafe extern "C" fn proc_raise(
         vmctx: *mut VMContext,
-        sig: wasm32::__wasi_signal_t,
-    ) -> wasm32::__wasi_errno_t {
+        sig: wasi::__wasi_signal_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("proc_raise(sig={:?})", sig);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
@@ -896,28 +896,28 @@ syscalls! {
 
     pub unsafe extern "C" fn random_get(
         vmctx: *mut VMContext,
-        buf: wasm32::uintptr_t,
-        buf_len: wasm32::size_t,
-    ) -> wasm32::__wasi_errno_t {
+        buf: wasi32::uintptr_t,
+        buf_len: wasi32::size_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("random_get(buf={:#x?}, buf_len={:?})", buf, buf_len);
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
         hostcalls::random_get(memory, buf, buf_len)
     }
 
-    pub unsafe extern "C" fn sched_yield(_vmctx: *mut VMContext,) -> wasm32::__wasi_errno_t {
+    pub unsafe extern "C" fn sched_yield(_vmctx: *mut VMContext,) -> wasi::__wasi_errno_t {
         trace!("sched_yield(void)");
         hostcalls::sched_yield()
     }
 
     pub unsafe extern "C" fn sock_recv(
         vmctx: *mut VMContext,
-        sock: wasm32::__wasi_fd_t,
-        ri_data: wasm32::uintptr_t,
-        ri_data_len: wasm32::size_t,
-        ri_flags: wasm32::__wasi_riflags_t,
-        ro_datalen: wasm32::uintptr_t,
-        ro_flags: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        sock: wasi::__wasi_fd_t,
+        ri_data: wasi32::uintptr_t,
+        ri_data_len: wasi32::size_t,
+        ri_flags: wasi::__wasi_riflags_t,
+        ro_datalen: wasi32::uintptr_t,
+        ro_flags: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "sock_recv(sock={:?}, ri_data={:#x?}, ri_data_len={}, ri_flags={:#x?}, ro_datalen={:#x?}, ro_flags={:#x?})",
             sock,
@@ -940,12 +940,12 @@ syscalls! {
 
     pub unsafe extern "C" fn sock_send(
         vmctx: *mut VMContext,
-        sock: wasm32::__wasi_fd_t,
-        si_data: wasm32::uintptr_t,
-        si_data_len: wasm32::size_t,
-        si_flags: wasm32::__wasi_siflags_t,
-        so_datalen: wasm32::uintptr_t,
-    ) -> wasm32::__wasi_errno_t {
+        sock: wasi::__wasi_fd_t,
+        si_data: wasi32::uintptr_t,
+        si_data_len: wasi32::size_t,
+        si_flags: wasi::__wasi_siflags_t,
+        so_datalen: wasi32::uintptr_t,
+    ) -> wasi::__wasi_errno_t {
         trace!(
             "sock_send(sock={:?}, si_data={:#x?}, si_data_len={}, si_flags={:#x?}, so_datalen={:#x?})",
             sock,
@@ -966,9 +966,9 @@ syscalls! {
 
     pub unsafe extern "C" fn sock_shutdown(
         vmctx: *mut VMContext,
-        sock: wasm32::__wasi_fd_t,
-        how: wasm32::__wasi_sdflags_t,
-    ) -> wasm32::__wasi_errno_t {
+        sock: wasi::__wasi_fd_t,
+        how: wasi::__wasi_sdflags_t,
+    ) -> wasi::__wasi_errno_t {
         trace!("sock_shutdown(sock={:?}, how={:?})", sock, how);
         let wasi_ctx = ok_or_errno!(get_wasi_ctx(&mut *vmctx));
         let memory = ok_or_errno!(get_memory(&mut *vmctx));
