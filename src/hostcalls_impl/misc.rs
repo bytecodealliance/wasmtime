@@ -22,7 +22,7 @@ pub(crate) fn args_get(
     let mut argv_buf_offset = 0;
     let mut argv = vec![];
 
-    for arg in wasi_ctx.args.iter() {
+    for arg in &wasi_ctx.args {
         let arg_bytes = arg.as_bytes_with_nul();
         let arg_ptr = argv_buf + argv_buf_offset;
 
@@ -80,7 +80,7 @@ pub(crate) fn environ_get(
     let mut environ_buf_offset = 0;
     let mut environ = vec![];
 
-    for pair in wasi_ctx.env.iter() {
+    for pair in &wasi_ctx.env {
         let env_bytes = pair.as_bytes_with_nul();
         let env_ptr = environ_buf + environ_buf_offset;
 

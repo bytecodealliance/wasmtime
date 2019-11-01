@@ -108,7 +108,7 @@ pub(crate) unsafe fn fd_pwrite(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_READ, 0)?
+        .as_descriptor(wasi::__WASI_RIGHT_FD_WRITE, 0)?
         .as_file()?;
     let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
 
@@ -314,8 +314,7 @@ pub(crate) unsafe fn fd_fdstat_set_rights(
         fs_rights_inheriting
     );
 
-    let fe = &mut wasi_ctx.get_fd_entry_mut(fd)?;
-
+    let fe = wasi_ctx.get_fd_entry_mut(fd)?;
     if fe.rights_base & fs_rights_base != fs_rights_base
         || fe.rights_inheriting & fs_rights_inheriting != fs_rights_inheriting
     {
@@ -450,7 +449,7 @@ pub(crate) unsafe fn path_create_directory(
     trace!("     | (path_ptr,path_len)='{}'", path);
 
     let rights = wasi::__WASI_RIGHT_PATH_OPEN | wasi::__WASI_RIGHT_PATH_CREATE_DIRECTORY;
-    let fe = &wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(fe, rights, 0, 0, path, false)?;
 
     hostcalls_impl::path_create_directory(resolved)
@@ -484,8 +483,8 @@ pub(crate) unsafe fn path_link(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let old_fe = &wasi_ctx.get_fd_entry(old_dirfd)?;
-    let new_fe = &wasi_ctx.get_fd_entry(new_dirfd)?;
+    let old_fe = wasi_ctx.get_fd_entry(old_dirfd)?;
+    let new_fe = wasi_ctx.get_fd_entry(new_dirfd)?;
     let resolved_old = path_get(
         old_fe,
         wasi::__WASI_RIGHT_PATH_LINK_SOURCE,
@@ -541,7 +540,7 @@ pub(crate) unsafe fn path_open(
 
     let (needed_base, needed_inheriting) =
         path_open_rights(fs_rights_base, fs_rights_inheriting, oflags, fs_flags);
-    let fe = &wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(
         fe,
         needed_base,
@@ -635,7 +634,7 @@ pub(crate) unsafe fn path_readlink(
 
     trace!("     | (path_ptr,path_len)='{}'", &path);
 
-    let fe = &wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(fe, wasi::__WASI_RIGHT_PATH_READLINK, 0, 0, &path, false)?;
 
     let mut buf = dec_slice_of_mut_u8(memory, buf_ptr, buf_len)?;
@@ -674,8 +673,8 @@ pub(crate) unsafe fn path_rename(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let old_fe = &wasi_ctx.get_fd_entry(old_dirfd)?;
-    let new_fe = &wasi_ctx.get_fd_entry(new_dirfd)?;
+    let old_fe = wasi_ctx.get_fd_entry(old_dirfd)?;
+    let new_fe = wasi_ctx.get_fd_entry(new_dirfd)?;
     let resolved_old = path_get(
         old_fe,
         wasi::__WASI_RIGHT_PATH_RENAME_SOURCE,
@@ -820,7 +819,7 @@ pub(crate) unsafe fn path_filestat_get(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let fe = &wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(
         fe,
         wasi::__WASI_RIGHT_PATH_FILESTAT_GET,
@@ -861,7 +860,7 @@ pub(crate) unsafe fn path_filestat_set_times(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let fe = &wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(
         fe,
         wasi::__WASI_RIGHT_PATH_FILESTAT_SET_TIMES,
@@ -898,7 +897,7 @@ pub(crate) unsafe fn path_symlink(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let fe = &wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved_new = path_get(fe, wasi::__WASI_RIGHT_PATH_SYMLINK, 0, 0, new_path, true)?;
 
     hostcalls_impl::path_symlink(old_path, resolved_new)
@@ -922,7 +921,7 @@ pub(crate) unsafe fn path_unlink_file(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let fe = &wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(fe, wasi::__WASI_RIGHT_PATH_UNLINK_FILE, 0, 0, path, false)?;
 
     hostcalls_impl::path_unlink_file(resolved)
@@ -946,7 +945,7 @@ pub(crate) unsafe fn path_remove_directory(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let fe = &wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(
         fe,
         wasi::__WASI_RIGHT_PATH_REMOVE_DIRECTORY,
@@ -974,7 +973,7 @@ pub(crate) unsafe fn fd_prestat_get(
     );
 
     // TODO: should we validate any rights here?
-    let fe = &wasi_ctx.get_fd_entry(fd)?;
+    let fe = wasi_ctx.get_fd_entry(fd)?;
     let po_path = fe.preopen_path.as_ref().ok_or(Error::ENOTSUP)?;
     if fe.file_type != wasi::__WASI_FILETYPE_DIRECTORY {
         return Err(Error::ENOTDIR);
@@ -1011,7 +1010,7 @@ pub(crate) unsafe fn fd_prestat_dir_name(
     );
 
     // TODO: should we validate any rights here?
-    let fe = &wasi_ctx.get_fd_entry(fd)?;
+    let fe = wasi_ctx.get_fd_entry(fd)?;
     let po_path = fe.preopen_path.as_ref().ok_or(Error::ENOTSUP)?;
     if fe.file_type != wasi::__WASI_FILETYPE_DIRECTORY {
         return Err(Error::ENOTDIR);
