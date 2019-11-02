@@ -197,15 +197,6 @@ pub(crate) const RIGHTS_REGULAR_FILE_BASE: __wasi_rights_t = __WASI_RIGHT_FD_DAT
     | __WASI_RIGHT_POLL_FD_READWRITE;
 pub(crate) const RIGHTS_REGULAR_FILE_INHERITING: __wasi_rights_t = 0;
 
-// Operations that apply to shared memory objects.
-#[allow(unused)]
-pub(crate) const RIGHTS_SHARED_MEMORY_BASE: __wasi_rights_t = __WASI_RIGHT_FD_READ
-    | __WASI_RIGHT_FD_WRITE
-    | __WASI_RIGHT_FD_FILESTAT_GET
-    | __WASI_RIGHT_FD_FILESTAT_SET_SIZE;
-#[allow(unused)]
-pub(crate) const RIGHTS_SHARED_MEMORY_INHERITING: __wasi_rights_t = 0;
-
 // Operations that apply to sockets and socket pairs.
 pub(crate) const RIGHTS_SOCKET_BASE: __wasi_rights_t = __WASI_RIGHT_FD_READ
     | __WASI_RIGHT_FD_FDSTAT_SET_FLAGS
