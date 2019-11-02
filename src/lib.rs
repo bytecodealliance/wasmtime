@@ -40,10 +40,3 @@ pub use sys::preopen_dir;
 
 pub type Error = error::Error;
 pub(crate) type Result<T> = std::result::Result<T, Error>;
-
-// We can remove this once Wasmtime is updated.
-#[deprecated = "wasm32 is deprecated; use wasi or wasi32 instead"]
-pub mod wasm32 {
-    pub use crate::wasi::*;
-    pub use crate::wasi32::*;
-}
