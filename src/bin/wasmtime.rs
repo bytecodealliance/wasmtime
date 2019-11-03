@@ -185,16 +185,7 @@ fn compute_environ(flag_env: &[String]) -> Vec<(String, String)> {
     result
 }
 
-fn main() {
-    let err = match rmain() {
-        Ok(()) => return,
-        Err(e) => e,
-    };
-    eprintln!("{:?}", err);
-    exit(1);
-}
-
-fn rmain() -> Result<()> {
+fn main() -> Result<()> {
     let version = env!("CARGO_PKG_VERSION");
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
