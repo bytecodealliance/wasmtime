@@ -211,17 +211,31 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     }
 }
 
+fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> Result<Option<PathBuf>> {
+    if resolved.path().ends_with('/') {
+        let suffix = resolved.path().trim_end_matches('/');
+        concatenate(resolved.dirfd(), Path::new(suffix)).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use std::fs;
 
     let old_path = resolved_old.concatenate()?;
     let new_path = resolved_new.concatenate()?;
 
-    // First, sanity check that we're not trying to rename dir to file or vice versa.
+    // First sanity check: check we're not trying to rename dir to file or vice versa.
     // NB on Windows, the former is actually permitted [std::fs::rename].
     //
     // [std::fs::rename]: https://doc.rust-lang.org/std/fs/fn.rename.html
     if old_path.is_dir() && new_path.is_file() {
+        return Err(Error::ENOTDIR);
+    }
+    // Second sanity check: check we're not trying to rename a file into a path
+    // ending in a trailing slash.
+    if old_path.is_file() && resolved_new.path().ends_with('/') {
         return Err(Error::ENOTDIR);
     }
 
@@ -245,6 +259,16 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                             .and_then(|()| fs::rename(old_path, new_path))
                             .map_err(Into::into)
                     }
+                }
+                WinError::ERROR_INVALID_NAME => {
+                    // If source contains trailing slashes, check if we are dealing with
+                    // a file instead of a dir, and if so, throw ENOTDIR.
+                    if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved_old)? {
+                        if path.is_file() {
+                            return Err(Error::ENOTDIR);
+                        }
+                    }
+                    Err(WinError::ERROR_INVALID_NAME.into())
                 }
                 e => Err(e.into()),
             }
@@ -356,13 +380,12 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                     }
                     WinError::ERROR_INVALID_NAME => {
                         // does the target without trailing slashes exist?
-                        let suffix = resolved.path().trim_end_matches('/');
-                        let out_path = concatenate(resolved.dirfd(), Path::new(suffix))?;
-                        if out_path.exists() {
-                            Err(Error::EEXIST)
-                        } else {
-                            Err(WinError::ERROR_INVALID_NAME.into())
+                        if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved)? {
+                            if path.exists() {
+                                return Err(Error::EEXIST);
+                            }
                         }
+                        Err(WinError::ERROR_INVALID_NAME.into())
                     }
                     e => Err(e.into()),
                 }
