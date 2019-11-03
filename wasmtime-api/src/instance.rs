@@ -9,8 +9,8 @@ use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use anyhow::Result;
 use core::cell::RefCell;
-use failure::Error;
 
 use wasmtime_jit::{instantiate, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle};
@@ -34,7 +34,7 @@ pub fn instantiate_in_context(
     imports: Vec<(String, String, Extern)>,
     mut context: Context,
     exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
-) -> Result<(InstanceHandle, HashSet<Context>), Error> {
+) -> Result<(InstanceHandle, HashSet<Context>)> {
     let mut contexts = HashSet::new();
     let debug_info = context.debug_info();
     let mut resolver = SimpleResolver { imports };
@@ -64,7 +64,7 @@ impl Instance {
         store: HostRef<Store>,
         module: HostRef<Module>,
         externs: &[Extern],
-    ) -> Result<Instance, Error> {
+    ) -> Result<Instance> {
         let context = store.borrow_mut().context().clone();
         let exports = store.borrow_mut().global_exports().clone();
         let imports = module
@@ -105,7 +105,7 @@ impl Instance {
     pub fn from_handle(
         store: HostRef<Store>,
         instance_handle: InstanceHandle,
-    ) -> Result<(Instance, HashMap<String, usize>), Error> {
+    ) -> Result<(Instance, HashMap<String, usize>)> {
         let contexts = HashSet::new();
 
         let mut exports = Vec::new();

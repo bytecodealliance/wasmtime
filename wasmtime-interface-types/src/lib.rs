@@ -13,11 +13,11 @@ extern crate alloc;
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use anyhow::{bail, format_err, Result};
 use core::convert::TryFrom;
 use core::slice;
 use core::str;
 use cranelift_codegen::ir;
-use failure::{bail, format_err, Error};
 use wasm_webidl_bindings::ast;
 use wasmtime_jit::{ActionOutcome, Context, RuntimeValue};
 use wasmtime_runtime::{Export, InstanceHandle};
@@ -59,7 +59,7 @@ impl ModuleData {
     /// interface types.
     ///
     /// Returns an error if the wasm file is malformed.
-    pub fn new(wasm: &[u8]) -> Result<ModuleData, Error> {
+    pub fn new(wasm: &[u8]) -> Result<ModuleData> {
         // Perform a fast search through the module for the right custom
         // section. Actually parsing out the interface types data is currently a
         // pretty expensive operation so we want to only do that if we actually
@@ -93,7 +93,8 @@ impl ModuleData {
         // this much more tightly with the rest of wasmtime.
         let module = walrus::ModuleConfig::new()
             .on_parse(wasm_webidl_bindings::binary::on_parse)
-            .parse(wasm)?;
+            .parse(wasm)
+            .map_err(|e| e.compat())?;
 
         Ok(ModuleData {
             inner: Some(Inner { module }),
@@ -109,7 +110,7 @@ impl ModuleData {
         handle: &mut InstanceHandle,
         export: &str,
         args: &[Value],
-    ) -> Result<Vec<Value>, Error> {
+    ) -> Result<Vec<Value>> {
         let binding = self.binding_for_export(handle, export)?;
         let incoming = binding.param_bindings()?;
         let outgoing = binding.result_bindings()?;
@@ -130,7 +131,7 @@ impl ModuleData {
         &self,
         instance: &mut InstanceHandle,
         name: &str,
-    ) -> Result<ExportBinding<'_>, Error> {
+    ) -> Result<ExportBinding<'_>> {
         if let Some(binding) = self.interface_binding_for_export(name) {
             return Ok(binding);
         }
@@ -170,7 +171,7 @@ impl ModuleData {
 impl ExportBinding<'_> {
     /// Returns the list of binding expressions used to create the parameters
     /// for this binding.
-    pub fn param_bindings(&self) -> Result<Vec<ast::IncomingBindingExpression>, Error> {
+    pub fn param_bindings(&self) -> Result<Vec<ast::IncomingBindingExpression>> {
         match &self.kind {
             ExportBindingKind::Rich { binding, .. } => Ok(binding.params.bindings.clone()),
             ExportBindingKind::Raw(sig) => sig
@@ -184,7 +185,7 @@ impl ExportBinding<'_> {
     }
 
     /// Returns the list of scalar types used for this binding
-    pub fn param_types(&self) -> Result<Vec<ast::WebidlScalarType>, Error> {
+    pub fn param_types(&self) -> Result<Vec<ast::WebidlScalarType>> {
         match &self.kind {
             ExportBindingKind::Rich {
                 binding, section, ..
@@ -217,7 +218,7 @@ impl ExportBinding<'_> {
 
     /// Returns the list of binding expressions used to extract the return
     /// values of this binding.
-    pub fn result_bindings(&self) -> Result<Vec<ast::OutgoingBindingExpression>, Error> {
+    pub fn result_bindings(&self) -> Result<Vec<ast::OutgoingBindingExpression>> {
         match &self.kind {
             ExportBindingKind::Rich { binding, .. } => Ok(binding.result.bindings.clone()),
             ExportBindingKind::Raw(sig) => sig
@@ -230,10 +231,7 @@ impl ExportBinding<'_> {
     }
 }
 
-fn default_incoming(
-    idx: usize,
-    param: &ir::AbiParam,
-) -> Result<ast::IncomingBindingExpression, Error> {
+fn default_incoming(idx: usize, param: &ir::AbiParam) -> Result<ast::IncomingBindingExpression> {
     let get = ast::IncomingBindingExpressionGet { idx: idx as u32 };
     let ty = if param.value_type == ir::types::I32 {
         walrus::ValType::I32
@@ -253,10 +251,7 @@ fn default_incoming(
     .into())
 }
 
-fn default_outgoing(
-    idx: usize,
-    param: &ir::AbiParam,
-) -> Result<ast::OutgoingBindingExpression, Error> {
+fn default_outgoing(idx: usize, param: &ir::AbiParam) -> Result<ast::OutgoingBindingExpression> {
     let ty = abi2ast(param)?;
     Ok(ast::OutgoingBindingExpressionAs {
         ty: ty.into(),
@@ -265,7 +260,7 @@ fn default_outgoing(
     .into())
 }
 
-fn abi2ast(param: &ir::AbiParam) -> Result<ast::WebidlScalarType, Error> {
+fn abi2ast(param: &ir::AbiParam) -> Result<ast::WebidlScalarType> {
     Ok(if param.value_type == ir::types::I32 {
         ast::WebidlScalarType::Long
     } else if param.value_type == ir::types::I64 {
@@ -284,7 +279,7 @@ fn translate_incoming(
     handle: &mut InstanceHandle,
     bindings: &[ast::IncomingBindingExpression],
     args: &[Value],
-) -> Result<Vec<RuntimeValue>, Error> {
+) -> Result<Vec<RuntimeValue>> {
     let get = |expr: &ast::IncomingBindingExpression| match expr {
         ast::IncomingBindingExpression::Get(g) => args
             .get(g.idx as usize)
@@ -375,7 +370,7 @@ fn translate_outgoing(
     handle: &mut InstanceHandle,
     bindings: &[ast::OutgoingBindingExpression],
     args: &[RuntimeValue],
-) -> Result<Vec<Value>, Error> {
+) -> Result<Vec<Value>> {
     let mut values = Vec::new();
 
     let raw_memory = || unsafe {

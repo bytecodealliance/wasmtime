@@ -1,5 +1,5 @@
 use crate::spectest::instantiate_spectest;
-use failure::{bail, Error, ResultExt};
+use anyhow::{bail, Context as _, Result};
 use std::path::Path;
 use std::str;
 use wasmtime_jit::{
@@ -51,7 +51,7 @@ impl WastContext {
         }
     }
 
-    fn get_instance(&mut self, instance_name: Option<&str>) -> Result<&mut InstanceHandle, Error> {
+    fn get_instance(&mut self, instance_name: Option<&str>) -> Result<&mut InstanceHandle> {
         let instance = if let Some(instance_name) = instance_name {
             self.context
                 .get_instance(instance_name)
@@ -59,21 +59,21 @@ impl WastContext {
         } else {
             self.current
                 .as_mut()
-                .ok_or_else(|| failure::format_err!("no current instance"))?
+                .ok_or_else(|| anyhow::format_err!("no current instance"))?
         };
 
         Ok(instance)
     }
 
     /// Register "spectest" which is used by the spec testsuite.
-    pub fn register_spectest(&mut self) -> Result<(), Error> {
+    pub fn register_spectest(&mut self) -> Result<()> {
         let instance = instantiate_spectest()?;
         self.context.name_instance("spectest".to_owned(), instance);
         Ok(())
     }
 
     /// Perform the action portion of a command.
-    fn perform_execute(&mut self, exec: wast::WastExecute<'_>) -> Result<ActionOutcome, Error> {
+    fn perform_execute(&mut self, exec: wast::WastExecute<'_>) -> Result<ActionOutcome> {
         match exec {
             wast::WastExecute::Invoke(invoke) => self.perform_invoke(invoke),
             wast::WastExecute::Module(mut module) => {
@@ -91,12 +91,12 @@ impl WastContext {
         }
     }
 
-    fn perform_invoke(&mut self, exec: wast::WastInvoke<'_>) -> Result<ActionOutcome, Error> {
+    fn perform_invoke(&mut self, exec: wast::WastInvoke<'_>) -> Result<ActionOutcome> {
         self.invoke(exec.module.map(|i| i.name()), exec.name, &exec.args)
     }
 
     /// Define a module and register it.
-    fn module(&mut self, instance_name: Option<&str>, module: &[u8]) -> Result<(), Error> {
+    fn module(&mut self, instance_name: Option<&str>, module: &[u8]) -> Result<()> {
         let index = self
             .context
             .instantiate_module(instance_name.map(|s| s.to_string()), module)?;
@@ -105,7 +105,7 @@ impl WastContext {
     }
 
     /// Register an instance to make it available for performing actions.
-    fn register(&mut self, name: Option<&str>, as_name: &str) -> Result<(), Error> {
+    fn register(&mut self, name: Option<&str>, as_name: &str) -> Result<()> {
         let instance = self.get_instance(name)?.clone();
         self.context.name_instance(as_name.to_string(), instance);
         Ok(())
@@ -117,30 +117,30 @@ impl WastContext {
         instance_name: Option<&str>,
         field: &str,
         args: &[wast::Expression],
-    ) -> Result<ActionOutcome, Error> {
+    ) -> Result<ActionOutcome> {
         let value_args = args.iter().map(runtime_value).collect::<Vec<_>>();
         let mut instance = self.get_instance(instance_name)?.clone();
         let result = self
             .context
             .invoke(&mut instance, field, &value_args)
-            .with_context(|_| format!("failed to invoke `{}`", field))?;
+            .with_context(|| format!("failed to invoke `{}`", field))?;
         Ok(result)
     }
 
     /// Get the value of an exported global from an instance.
-    fn get(&mut self, instance_name: Option<&str>, field: &str) -> Result<ActionOutcome, Error> {
+    fn get(&mut self, instance_name: Option<&str>, field: &str) -> Result<ActionOutcome> {
         let instance = self
             .get_instance(instance_name.as_ref().map(|x| &**x))?
             .clone();
         let result = self
             .context
             .get(&instance, field)
-            .with_context(|_| format!("failed to get field `{}`", field))?;
+            .with_context(|| format!("failed to get field `{}`", field))?;
         Ok(result)
     }
 
     /// Run a wast script from a byte buffer.
-    pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<(), Error> {
+    pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<()> {
         use wast::WastDirective::*;
 
         let wast = str::from_utf8(wast)?;
@@ -163,21 +163,21 @@ impl WastContext {
                 Module(mut module) => {
                     let binary = module.encode().map_err(adjust_wast)?;
                     self.module(module.name.map(|s| s.name()), &binary)
-                        .with_context(|_| context(module.span))?;
+                        .with_context(|| context(module.span))?;
                 }
                 Register { span, name, module } => {
                     self.register(module.map(|s| s.name()), name)
-                        .with_context(|_| context(span))?;
+                        .with_context(|| context(span))?;
                 }
                 Invoke(i) => {
                     let span = i.span;
-                    self.perform_invoke(i).with_context(|_| context(span))?;
+                    self.perform_invoke(i).with_context(|| context(span))?;
                 }
                 AssertReturn {
                     span,
                     exec,
                     results,
-                } => match self.perform_execute(exec).with_context(|_| context(span))? {
+                } => match self.perform_execute(exec).with_context(|| context(span))? {
                     ActionOutcome::Returned { values } => {
                         for (v, e) in values.iter().zip(results.iter().map(runtime_value)) {
                             if *v == e {
@@ -194,7 +194,7 @@ impl WastContext {
                     span,
                     exec,
                     message,
-                } => match self.perform_execute(exec).with_context(|_| context(span))? {
+                } => match self.perform_execute(exec).with_context(|| context(span))? {
                     ActionOutcome::Returned { values } => {
                         bail!("{}\nexpected trap, got {:?}", context(span), values)
                     }
@@ -224,7 +224,7 @@ impl WastContext {
                     span,
                     call,
                     message,
-                } => match self.perform_invoke(call).with_context(|_| context(span))? {
+                } => match self.perform_invoke(call).with_context(|| context(span))? {
                     ActionOutcome::Returned { values } => {
                         bail!("{}\nexpected trap, got {:?}", context(span), values)
                     }
@@ -243,10 +243,7 @@ impl WastContext {
                     }
                 },
                 AssertReturnCanonicalNan { span, invoke } => {
-                    match self
-                        .perform_invoke(invoke)
-                        .with_context(|_| context(span))?
-                    {
+                    match self.perform_invoke(invoke).with_context(|| context(span))? {
                         ActionOutcome::Returned { values } => {
                             for v in values.iter() {
                                 match v {
@@ -275,10 +272,7 @@ impl WastContext {
                     }
                 }
                 AssertReturnArithmeticNan { span, invoke } => {
-                    match self
-                        .perform_invoke(invoke)
-                        .with_context(|_| context(span))?
-                    {
+                    match self.perform_invoke(invoke).with_context(|| context(span))? {
                         ActionOutcome::Returned { values } => {
                             for v in values.iter() {
                                 match v {
@@ -384,9 +378,9 @@ impl WastContext {
     }
 
     /// Run a wast script from a file.
-    pub fn run_file(&mut self, path: &Path) -> Result<(), Error> {
+    pub fn run_file(&mut self, path: &Path) -> Result<()> {
         let bytes =
-            std::fs::read(path).with_context(|_| format!("failed to read `{}`", path.display()))?;
+            std::fs::read(path).with_context(|| format!("failed to read `{}`", path.display()))?;
         self.run_buffer(path.to_str().unwrap(), &bytes)
     }
 }

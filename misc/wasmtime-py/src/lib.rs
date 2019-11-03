@@ -18,14 +18,8 @@ mod memory;
 mod module;
 mod value;
 
-fn err2py(err: failure::Error) -> PyErr {
-    let mut desc = err.to_string();
-    for cause in err.iter_causes() {
-        desc.push_str("\n");
-        desc.push_str("    caused by: ");
-        desc.push_str(&cause.to_string());
-    }
-    PyErr::new::<Exception, _>(desc)
+fn err2py(err: anyhow::Error) -> PyErr {
+    PyErr::new::<Exception, _>(format!("{:?}", err))
 }
 
 #[pyclass]

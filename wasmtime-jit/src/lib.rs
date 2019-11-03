@@ -30,9 +30,6 @@ use hashbrown::{hash_map, HashMap, HashSet};
 #[cfg(feature = "std")]
 use std::collections::{hash_map, HashMap, HashSet};
 
-#[macro_use]
-extern crate failure_derive;
-
 mod action;
 mod code_memory;
 mod compiler;

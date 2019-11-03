@@ -8,7 +8,7 @@ mod table;
 
 use crate::r#ref::HostRef;
 use alloc::rc::Rc;
-use failure::Error;
+use anyhow::Result;
 
 use self::func::create_handle_with_function;
 use self::global::create_global;
@@ -22,7 +22,7 @@ pub fn generate_func_export(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
     store: &HostRef<Store>,
-) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export), Error> {
+) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
     let mut instance = create_handle_with_function(ft, func, store)?;
     let export = instance.lookup("trampoline").expect("trampoline export");
     Ok((instance, export))
@@ -31,13 +31,13 @@ pub fn generate_func_export(
 pub fn generate_global_export(
     gt: &GlobalType,
     val: Val,
-) -> Result<(wasmtime_runtime::Export, GlobalState), Error> {
+) -> Result<(wasmtime_runtime::Export, GlobalState)> {
     create_global(gt, val)
 }
 
 pub fn generate_memory_export(
     m: &MemoryType,
-) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export), Error> {
+) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
     let mut instance = create_handle_with_memory(m)?;
     let export = instance.lookup("memory").expect("memory export");
     Ok((instance, export))
@@ -45,7 +45,7 @@ pub fn generate_memory_export(
 
 pub fn generate_table_export(
     t: &TableType,
-) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export), Error> {
+) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
     let mut instance = create_handle_with_table(t)?;
     let export = instance.lookup("table").expect("table export");
     Ok((instance, export))

@@ -8,38 +8,26 @@ use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use core::cell::RefCell;
-use core::{fmt, str};
 use cranelift_codegen::isa::TargetIsa;
+use thiserror::Error;
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
 
 /// Indicates an unknown instance was specified.
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
+#[error("no instance {instance_name} present")]
 pub struct UnknownInstance {
     instance_name: String,
 }
 
-impl fmt::Display for UnknownInstance {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "no instance {} present", self.instance_name)
-    }
-}
-
 /// Error message used by `WastContext`.
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum ContextError {
     /// An unknown instance name was used.
-    Instance(UnknownInstance),
+    #[error("{0}")]
+    Instance(#[from] UnknownInstance),
     /// An error occured while performing an action.
-    Action(ActionError),
-}
-
-impl fmt::Display for ContextError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            ContextError::Instance(ref error) => error.fmt(f),
-            ContextError::Action(ref error) => error.fmt(f),
-        }
-    }
+    #[error("{0}")]
+    Action(#[from] ActionError),
 }
 
 /// The collection of features configurable during compilation

@@ -27,8 +27,6 @@
 extern crate lazy_static;
 #[macro_use]
 extern crate memoffset;
-#[macro_use]
-extern crate failure_derive;
 extern crate alloc;
 
 mod export;

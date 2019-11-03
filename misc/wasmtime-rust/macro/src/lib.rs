@@ -46,12 +46,12 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
     let name = &item.ident;
     let root = root();
     Ok(quote! {
-        #vis fn load_file(path: impl AsRef<std::path::Path>) -> Result<#name, #root::failure::Error> {
+        #vis fn load_file(path: impl AsRef<std::path::Path>) -> #root::anyhow::Result<#name> {
             let bytes = std::fs::read(path)?;
 
             let isa = {
                 let isa_builder = #root::cranelift_native::builder()
-                    .map_err(|s| #root::failure::format_err!("{}", s))?;
+                    .map_err(|s| #root::anyhow::format_err!("{}", s))?;
                 let flag_builder = #root::cranelift_codegen::settings::builder();
                 isa_builder.finish(#root::cranelift_codegen::settings::Flags::new(flag_builder))
             };

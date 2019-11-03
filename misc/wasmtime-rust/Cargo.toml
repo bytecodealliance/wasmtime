@@ -12,9 +12,9 @@ test = false
 doctest = false
 
 [dependencies]
-cranelift-codegen = "0.46.1"
-cranelift-native = "0.46.1"
-failure = "0.1.5"
+cranelift-codegen = { version = "0.47" }
+cranelift-native = { version = "0.47" }
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
 wasmtime-jit = { path = "../../wasmtime-jit" }
 wasmtime-rust-macro = { path = "./macro" }
+anyhow = "1.0.19"

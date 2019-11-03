@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 use core::cmp::max;
 use core::{fmt, mem, ptr, slice};
 use cranelift_codegen::ir;
+use thiserror::Error;
 use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle, VMInvokeArgument};
 
 /// A runtime value.
@@ -110,22 +111,22 @@ pub enum ActionOutcome {
 /// An error detected while invoking a wasm function or reading a wasm global.
 /// Note that at this level, traps are not reported errors, but are rather
 /// returned through `ActionOutcome`.
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum ActionError {
     /// An internal implementation error occurred.
-    #[fail(display = "{}", _0)]
-    Setup(SetupError),
+    #[error("{0}")]
+    Setup(#[from] SetupError),
 
     /// No field with the specified name was present.
-    #[fail(display = "Unknown field: {}", _0)]
+    #[error("Unknown field: {0}")]
     Field(String),
 
     /// The field was present but was the wrong kind (eg. function, table, global, or memory).
-    #[fail(display = "Kind error: {}", _0)]
+    #[error("Kind error: {0}")]
     Kind(String),
 
     /// The field was present but was the wrong type (eg. i32, i64, f32, or f64).
-    #[fail(display = "Type error: {}", _0)]
+    #[error("Type error: {0}")]
     Type(String),
 }
 

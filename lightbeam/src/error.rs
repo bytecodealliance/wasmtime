@@ -1,15 +1,16 @@
 use capstone;
+use thiserror::Error;
 use wasmparser::BinaryReaderError;
 
-#[derive(Fail, PartialEq, Eq, Clone, Debug)]
+#[derive(Error, PartialEq, Eq, Clone, Debug)]
 pub enum Error {
-    #[fail(display = "Disassembler error: {}", _0)]
+    #[error("Disassembler error: {0}")]
     Disassembler(String),
 
-    #[fail(display = "Assembler error: {}", _0)]
+    #[error("Assembler error: {0}")]
     Assembler(String),
 
-    #[fail(display = "Input error: {}", _0)]
+    #[error("Input error: {0}")]
     Input(String),
 }
 

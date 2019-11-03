@@ -5,10 +5,7 @@
 extern crate smallvec;
 extern crate capstone;
 extern crate either;
-extern crate failure;
 pub extern crate wasmparser;
-#[macro_use]
-extern crate failure_derive;
 #[macro_use]
 extern crate memoffset;
 extern crate dynasm;

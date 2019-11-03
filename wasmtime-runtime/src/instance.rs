@@ -33,6 +33,7 @@ use cranelift_wasm::{
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use indexmap;
+use thiserror::Error;
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 fn signature_id(
@@ -1275,22 +1276,22 @@ fn initialize_globals(instance: &mut Instance) {
 }
 
 /// An link error while instantiating a module.
-#[derive(Fail, Debug)]
-#[fail(display = "Link error: {}", _0)]
+#[derive(Error, Debug)]
+#[error("Link error: {0}")]
 pub struct LinkError(pub String);
 
 /// An error while instantiating a module.
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum InstantiationError {
     /// Insufficient resources available for execution.
-    #[fail(display = "Insufficient resources: {}", _0)]
+    #[error("Insufficient resources: {0}")]
     Resource(String),
 
     /// A wasm link error occured.
-    #[fail(display = "{}", _0)]
-    Link(LinkError),
+    #[error("{0}")]
+    Link(#[from] LinkError),
 
     /// A compilation error occured.
-    #[fail(display = "Trap occurred while invoking start function: {}", _0)]
+    #[error("Trap occurred while invoking start function: {0}")]
     StartTrap(String),
 }

@@ -24,12 +24,12 @@ macro_rules! from {
         }
 
         impl TryFrom<Value> for $a {
-            type Error = failure::Error;
+            type Error = anyhow::Error;
 
             fn try_from(val: Value) -> Result<$a, Self::Error> {
                 match val {
                     Value::$b(v) => Ok(v),
-                    v => failure::bail!("cannot convert {:?} to {}", v, stringify!($a)),
+                    v => anyhow::bail!("cannot convert {:?} to {}", v, stringify!($a)),
                 }
             }
         }

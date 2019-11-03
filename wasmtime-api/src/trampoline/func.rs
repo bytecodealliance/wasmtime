@@ -1,6 +1,7 @@
 //! Support for a calling of an imported function.
 
 use crate::r#ref::HostRef;
+use anyhow::Result;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode};
 use cranelift_codegen::Context;
@@ -9,7 +10,6 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex};
 //use target_lexicon::HOST;
-use failure::Error;
 use wasmtime_environ::{Export, Module};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
@@ -195,7 +195,7 @@ pub fn create_handle_with_function(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
     store: &HostRef<Store>,
-) -> Result<InstanceHandle, Error> {
+) -> Result<InstanceHandle> {
     let sig = ft.get_cranelift_signature().clone();
 
     let isa = {

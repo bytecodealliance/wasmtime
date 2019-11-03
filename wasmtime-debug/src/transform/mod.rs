@@ -4,6 +4,7 @@ use crate::HashSet;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use failure::Error;
 use simulate::generate_simulated_dwarf;
+use thiserror::Error;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 use gimli;
@@ -31,8 +32,8 @@ pub(crate) trait Reader: gimli::Reader<Offset = usize> {}
 
 impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where Endian: gimli::Endianity {}
 
-#[derive(Fail, Debug)]
-#[fail(display = "Debug info transform error: {}", _0)]
+#[derive(Error, Debug)]
+#[error("Debug info transform error: {0}")]
 pub struct TransformError(&'static str);
 
 pub(crate) struct DebugInputContext<'a, R>

@@ -226,29 +226,25 @@ impl crate::compilation::Compiler for Cranelift {
                                 context.func.collect_debug_info();
                             }
 
-                            func_translator
-                                .translate(
-                                    module_translation,
-                                    input.data,
-                                    input.module_offset,
-                                    &mut context.func,
-                                    &mut FuncEnvironment::new(isa.frontend_config(), module),
-                                )
-                                .map_err(CompileError::Wasm)?;
+                            func_translator.translate(
+                                module_translation,
+                                input.data,
+                                input.module_offset,
+                                &mut context.func,
+                                &mut FuncEnvironment::new(isa.frontend_config(), module),
+                            )?;
 
                             let mut code_buf: Vec<u8> = Vec::new();
                             let mut reloc_sink = RelocSink::new(func_index);
                             let mut trap_sink = TrapSink::new();
                             let mut stackmap_sink = binemit::NullStackmapSink {};
-                            context
-                                .compile_and_emit(
-                                    isa,
-                                    &mut code_buf,
-                                    &mut reloc_sink,
-                                    &mut trap_sink,
-                                    &mut stackmap_sink,
-                                )
-                                .map_err(CompileError::Codegen)?;
+                            context.compile_and_emit(
+                                isa,
+                                &mut code_buf,
+                                &mut reloc_sink,
+                                &mut trap_sink,
+                                &mut stackmap_sink,
+                            )?;
 
                             let jt_offsets = context.func.jt_offsets.clone();
 
@@ -260,11 +256,7 @@ impl crate::compilation::Compiler for Cranelift {
                             };
 
                             let ranges = if generate_debug_info {
-                                Some(
-                                    context
-                                        .build_value_labels_ranges(isa)
-                                        .map_err(CompileError::Codegen)?,
-                                )
+                                Some(context.build_value_labels_ranges(isa)?)
                             } else {
                                 None
                             };

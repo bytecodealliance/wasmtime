@@ -1,15 +1,15 @@
 use alloc::boxed::Box;
 use alloc::string::ToString;
+use anyhow::Result;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::TableElementType;
-use failure::Error;
 use wasmtime_environ::Module;
 use wasmtime_runtime::InstanceHandle;
 
 use super::create_handle::create_handle;
 use crate::{TableType, ValType};
 
-pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle, Error> {
+pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
     let mut module = Module::new();
 
     let table = cranelift_wasm::Table {
