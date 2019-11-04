@@ -3,10 +3,10 @@
 //! Frontends can use any indexing scheme they see fit and
 //! generate the appropriate `Variable` instances.
 //!
-//! Note: The `Variable` is used by Cranelift to index an array containing
-//! information about your mutable variables. Thus, when you create a new
-//! `Variable` you should make sure that the index is provided by a counter
-//! incremented by 1 each time you encounter a new mutable variable.
+//! Note: The `Variable` is used by Cranelift to index into densely allocated
+//! arrays containing information about your mutable variables
+//! Thus, make sure that Variable's indexes are allocated contiguously and
+//! starting at `0`.
 
 use core::u32;
 use cranelift_codegen::entity::EntityRef;
