@@ -42,7 +42,7 @@ wabt = { version = "0.9.1", optional = true }
 target-lexicon = "0.8.1"
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.2"
-indicatif = "0.12.0"
+indicatif = "0.13.0"
 walkdir = "2.2"
 
 [features]
