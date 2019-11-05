@@ -1,0 +1,136 @@
+name: CI
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  rustfmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+    - name: Install Rust
+      run: rustup update stable && rustup default stable && rustup component add rustfmt
+    - run: cargo fmt -- --check
+
+  docs:
+    name: Build API Docs
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+    - name: Install Rust
+      run: rustup update nightly && rustup default nightly
+    - run: cargo doc --all --exclude cranelift-codegen-meta
+    - run: cargo doc --package cranelift-codegen-meta --document-private-items
+    - run: cargo install cargo-deadlinks
+    - run: find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
+      name: Run cargo-deadlinks
+
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # first a list of everything we test...
+        name:
+        - windows-earliest
+        - linux-earliest
+        - mac-earliest
+        - stable
+        - beta
+        - nightly
+        - windows-release
+        - linux-release
+        - mac-release
+        # .. and then the actual configuration for each thing we test
+        include:
+        - name: windows-earliest
+          os: ubuntu-latest
+          rust: 1.37.0
+        - name: linux-earliest
+          os: ubuntu-16.04
+          rust: 1.37.0
+        - name: mac-earliest
+          os: macos-10.14
+          rust: 1.37.0
+        - name: stable
+          os: macos-latest
+          rust: stable
+        - name: beta
+          os: macos-latest
+          rust: beta
+        - name: nightly
+          os: macos-latest
+          rust: nightly
+        - name: mac-release
+          os: macos-latest
+          rust: stable
+          release: --release
+        - name: linux-release
+          os: ubuntu-latest
+          rust: stable
+          release: --release
+        - name: windows-release
+          os: windows-latest
+          rust: stable
+          release: --release
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+
+    - name: Install Rust (rustup)
+      run: rustup update ${{ matrix.rust }} --no-self-update && rustup default ${{ matrix.rust }}
+      if: "!startsWith(matrix.os, 'macos-')"
+      shell: bash
+    - name: Install Rust (macos)
+      run: |
+        curl https://sh.rustup.rs | sh -s -- -y --default-toolchain=${{ matrix.rust }}
+        echo ::add-path::$HOME/.cargo/bin
+      if: startsWith(matrix.os, 'macos-')
+
+    - run: cargo fetch
+    - run: cargo build ${{ matrix.release }}
+    - run: cargo test --all ${{ matrix.release }}
+      env:
+        RUST_BACKTRACE: 1
+
+    # Ensure fuzzer works by running it with a single input
+    - run: cargo install cargo-fuzz
+      if: matrix.rust == 'nightly'
+    - run: |
+        fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
+        cargo fuzz run fuzz_translate_module fuzz/corpus/fuzz_translate_module/$fuzz_module
+      env:
+        RUST_BACKTRACE: 1
+      if: matrix.rust == 'nightly'
+      continue-on-error: true
+
+  fuzz:
+    name: Fuzz Regression
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust
+      run: rustup update nightly && rustup default nightly
+    - run: cargo install cargo-fuzz
+    - run: ci/fuzzit.sh local-regression
+
+  fuzz_push:
+    name: Fuzz (push)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust
+      run: rustup update nightly && rustup default nightly
+    - run: cargo install cargo-fuzz
+    - run: ci/fuzzit.sh fuzzing
+      env:
+        FUZZIT_API_KEY: ${{ secrets.FUZZIT_API_KEY }}
