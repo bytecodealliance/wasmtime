@@ -168,7 +168,7 @@ fn main() {
         wast_context
             .run_file(Path::new(&filename))
             .unwrap_or_else(|e| {
-                eprintln!("{}", e);
+                eprintln!("{:?}", e);
                 process::exit(1)
             });
     }
