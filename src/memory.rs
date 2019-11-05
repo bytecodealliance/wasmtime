@@ -209,7 +209,7 @@ pub(crate) fn dec_ciovec_slice(
             let len = dec_usize(PrimInt::from_le(raw_iov.buf_len));
             let buf = PrimInt::from_le(raw_iov.buf);
             Ok(host::__wasi_ciovec_t {
-                buf: dec_ptr(memory, buf, len)? as *const host::void,
+                buf: dec_ptr(memory, buf, len)? as *const u8,
                 buf_len: len,
             })
         })
@@ -229,7 +229,7 @@ pub(crate) fn dec_iovec_slice(
             let len = dec_usize(PrimInt::from_le(raw_iov.buf_len));
             let buf = PrimInt::from_le(raw_iov.buf);
             Ok(host::__wasi_iovec_t {
-                buf: dec_ptr(memory, buf, len)? as *mut host::void,
+                buf: dec_ptr(memory, buf, len)? as *mut u8,
                 buf_len: len,
             })
         })
@@ -293,7 +293,6 @@ pub(crate) fn dec_fdstat_byref(
         fs_flags: PrimInt::from_le(raw.fs_flags),
         fs_rights_base: PrimInt::from_le(raw.fs_rights_base),
         fs_rights_inheriting: PrimInt::from_le(raw.fs_rights_inheriting),
-        __bindgen_padding_0: 0,
     })
 }
 
@@ -305,7 +304,6 @@ pub(crate) fn enc_fdstat_byref(
     let raw = wasi::__wasi_fdstat_t {
         fs_filetype: PrimInt::to_le(fdstat.fs_filetype),
         fs_flags: PrimInt::to_le(fdstat.fs_flags),
-        __bindgen_padding_0: 0,
         fs_rights_base: PrimInt::to_le(fdstat.fs_rights_base),
         fs_rights_inheriting: PrimInt::to_le(fdstat.fs_rights_inheriting),
     };
@@ -334,8 +332,8 @@ pub(crate) fn dec_prestat_byref(
     match PrimInt::from_le(raw.pr_type) {
         wasi::__WASI_PREOPENTYPE_DIR => Ok(host::__wasi_prestat_t {
             pr_type: wasi::__WASI_PREOPENTYPE_DIR,
-            u: host::__wasi_prestat_t___wasi_prestat_u {
-                dir: host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
+            u: host::__wasi_prestat_u {
+                dir: host::__wasi_prestat_dir {
                     pr_name_len: dec_usize(PrimInt::from_le(unsafe { raw.u.dir.pr_name_len })),
                 },
             },
@@ -352,8 +350,8 @@ pub(crate) fn enc_prestat_byref(
     let raw = match prestat.pr_type {
         wasi::__WASI_PREOPENTYPE_DIR => Ok(wasi32::__wasi_prestat_t {
             pr_type: PrimInt::to_le(wasi::__WASI_PREOPENTYPE_DIR),
-            u: wasi32::__wasi_prestat_t___wasi_prestat_u {
-                dir: wasi32::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
+            u: wasi32::__wasi_prestat_u {
+                dir: wasi32::__wasi_prestat_dir {
                     pr_name_len: enc_usize(unsafe { prestat.u.dir.pr_name_len }),
                 },
             },
@@ -410,39 +408,40 @@ pub(crate) fn dec_subscriptions(
 
     raw_input_slice
         .into_iter()
-        .map(|raw_subscription|{
+        .map(|raw_subscription| {
             let userdata = PrimInt::from_le(raw_subscription.userdata);
-            let type_ = PrimInt::from_le(raw_subscription.type_);
+            let r#type = PrimInt::from_le(raw_subscription.r#type);
             let raw_u = raw_subscription.u;
-            let u = match type_ {
-                wasi::__WASI_EVENTTYPE_CLOCK => wasi::__wasi_subscription_t___wasi_subscription_u {
+            let u = match r#type {
+                wasi::__WASI_EVENTTYPE_CLOCK => wasi::__wasi_subscription_u {
                     clock: unsafe {
-                        wasi::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t {
+                        wasi::__wasi_subscription_clock_t {
                             identifier: PrimInt::from_le(raw_u.clock.identifier),
                             clock_id: PrimInt::from_le(raw_u.clock.clock_id),
                             timeout: PrimInt::from_le(raw_u.clock.timeout),
                             precision: PrimInt::from_le(raw_u.clock.precision),
                             flags: PrimInt::from_le(raw_u.clock.flags),
-                            __bindgen_padding_0: 0,
-                            __bindgen_padding_1: [0,0,0],
                         }
                     },
                 },
-                wasi::__WASI_EVENTTYPE_FD_READ | wasi::__WASI_EVENTTYPE_FD_WRITE => wasi::__wasi_subscription_t___wasi_subscription_u {
-                    fd_readwrite:  wasi::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t {
-                        fd: PrimInt::from_le(unsafe{raw_u.fd_readwrite.fd})
+                wasi::__WASI_EVENTTYPE_FD_READ | wasi::__WASI_EVENTTYPE_FD_WRITE => {
+                    wasi::__wasi_subscription_u {
+                        fd_readwrite: wasi::__wasi_subscription_fd_readwrite_t {
+                            file_descriptor: PrimInt::from_le(unsafe {
+                                raw_u.fd_readwrite.file_descriptor
+                            }),
+                        },
                     }
-                },
-                _  => return Err(Error::EINVAL)
+                }
+                _ => return Err(Error::EINVAL),
             };
             Ok(wasi::__wasi_subscription_t {
                 userdata,
-                type_,
+                r#type,
                 u,
-                __bindgen_padding_0: 0,
             })
         })
-    .collect::<Result<Vec<_>>>()
+        .collect::<Result<Vec<_>>>()
 }
 
 pub(crate) fn enc_events(
@@ -461,17 +460,14 @@ pub(crate) fn enc_events(
             let fd_readwrite = unsafe { event.u.fd_readwrite };
             wasi::__wasi_event_t {
                 userdata: PrimInt::to_le(event.userdata),
-                type_: PrimInt::to_le(event.type_),
+                r#type: PrimInt::to_le(event.r#type),
                 error: PrimInt::to_le(event.error),
-                u: wasi::__wasi_event_t___wasi_event_u {
-                    fd_readwrite:
-                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
-                            nbytes: PrimInt::to_le(fd_readwrite.nbytes),
-                            flags: PrimInt::to_le(fd_readwrite.flags),
-                            __bindgen_padding_0: [0; 3],
-                        },
+                u: wasi::__wasi_event_u {
+                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                        nbytes: PrimInt::to_le(fd_readwrite.nbytes),
+                        flags: PrimInt::to_le(fd_readwrite.flags),
+                    },
                 },
-                __bindgen_padding_0: 0,
             }
         };
     }

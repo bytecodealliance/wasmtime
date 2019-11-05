@@ -83,7 +83,7 @@ impl<'ctx> io::Read for File<'ctx> {
     /// TODO: Not yet implemented. See the comment in `Dir::open_file`.
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let iov = [host::__wasi_iovec_t {
-            buf: buf.as_mut_ptr() as *mut core::ffi::c_void,
+            buf: buf.as_mut_ptr() as *mut u8,
             buf_len: buf.len(),
         }];
         let mut nread = 0;

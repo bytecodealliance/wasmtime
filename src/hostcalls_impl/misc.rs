@@ -217,7 +217,7 @@ pub(crate) fn poll_oneoff(
     let mut timeout: Option<ClockEventData> = None;
     let mut fd_events = Vec::new();
     for subscription in subscriptions {
-        match subscription.type_ {
+        match subscription.r#type {
             wasi::__WASI_EVENTTYPE_CLOCK => {
                 let clock = unsafe { subscription.u.clock };
                 let delay = wasi_clock_to_relative_ns_delay(clock)?;
@@ -234,12 +234,12 @@ pub(crate) fn poll_oneoff(
                     *timeout = current;
                 }
             }
-            type_
-                if type_ == wasi::__WASI_EVENTTYPE_FD_READ
-                    || type_ == wasi::__WASI_EVENTTYPE_FD_WRITE =>
+            r#type
+                if r#type == wasi::__WASI_EVENTTYPE_FD_READ
+                    || r#type == wasi::__WASI_EVENTTYPE_FD_WRITE =>
             {
-                let wasi_fd = unsafe { subscription.u.fd_readwrite.fd };
-                let rights = if type_ == wasi::__WASI_EVENTTYPE_FD_READ {
+                let wasi_fd = unsafe { subscription.u.fd_readwrite.file_descriptor };
+                let rights = if r#type == wasi::__WASI_EVENTTYPE_FD_READ {
                     wasi::__WASI_RIGHT_FD_READ
                 } else {
                     wasi::__WASI_RIGHT_FD_WRITE
@@ -252,22 +252,20 @@ pub(crate) fn poll_oneoff(
                 } {
                     Ok(descriptor) => fd_events.push(FdEventData {
                         descriptor,
-                        type_: subscription.type_,
+                        r#type: subscription.r#type,
                         userdata: subscription.userdata,
                     }),
                     Err(err) => {
                         let event = wasi::__wasi_event_t {
                             userdata: subscription.userdata,
-                            type_,
+                            r#type,
                             error: err.as_wasi_errno(),
-                            u: wasi::__wasi_event_t___wasi_event_u {
-                                fd_readwrite: wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+                            u: wasi::__wasi_event_u {
+                                fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                                     nbytes: 0,
                                     flags: 0,
-                                    __bindgen_padding_0: [0, 0, 0],
                                 },
                             },
-                            __bindgen_padding_0: 0,
                         };
                         events.push(event);
                     }
@@ -291,9 +289,7 @@ pub(crate) fn poll_oneoff(
     enc_int_byref(memory, nevents, events_count)
 }
 
-fn wasi_clock_to_relative_ns_delay(
-    wasi_clock: wasi::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
-) -> Result<u128> {
+fn wasi_clock_to_relative_ns_delay(wasi_clock: wasi::__wasi_subscription_clock_t) -> Result<u128> {
     use std::time::SystemTime;
 
     if wasi_clock.flags != wasi::__WASI_SUBSCRIPTION_CLOCK_ABSTIME {
@@ -316,6 +312,6 @@ pub(crate) struct ClockEventData {
 #[derive(Debug)]
 pub(crate) struct FdEventData<'a> {
     pub(crate) descriptor: &'a Descriptor,
-    pub(crate) type_: wasi::__wasi_eventtype_t,
+    pub(crate) r#type: wasi::__wasi_eventtype_t,
     pub(crate) userdata: wasi::__wasi_userdata_t,
 }

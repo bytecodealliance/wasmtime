@@ -110,7 +110,7 @@ pub(crate) unsafe fn fd_pwrite(
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHT_FD_WRITE, 0)?
         .as_file()?;
-    let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
+    let iovs = dec_ciovec_slice(memory, iovs_ptr, iovs_len)?;
 
     if offset > i64::max_value() as u64 {
         return Err(Error::EIO);
@@ -352,8 +352,8 @@ pub(crate) unsafe fn fd_write(
         nwritten
     );
 
-    let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
-    let iovs: Vec<io::IoSlice> = iovs.iter().map(|vec| host::iovec_to_host(vec)).collect();
+    let iovs = dec_ciovec_slice(memory, iovs_ptr, iovs_len)?;
+    let iovs: Vec<io::IoSlice> = iovs.iter().map(|vec| host::ciovec_to_host(vec)).collect();
 
     // perform unbuffered writes
     let host_nwritten = match wasi_ctx
@@ -986,8 +986,8 @@ pub(crate) unsafe fn fd_prestat_get(
         prestat_ptr,
         host::__wasi_prestat_t {
             pr_type: wasi::__WASI_PREOPENTYPE_DIR,
-            u: host::__wasi_prestat_t___wasi_prestat_u {
-                dir: host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
+            u: host::__wasi_prestat_u {
+                dir: host::__wasi_prestat_dir {
                     pr_name_len: path.len(),
                 },
             },
