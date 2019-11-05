@@ -1,11 +1,11 @@
 //! Example of instantiating of the WebAssembly module and
 //! invoking its exported function.
 
-use failure::{format_err, Error};
+use anyhow::{format_err, Result};
 use std::fs::read;
 use wasmtime_api::*;
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     let wasm = read("examples/gcd.wasm")?;
 
     // Instantiate engine and store.

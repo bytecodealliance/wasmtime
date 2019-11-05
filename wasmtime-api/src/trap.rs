@@ -1,7 +1,8 @@
 use alloc::string::{String, ToString};
+use thiserror::Error;
 
-#[derive(Fail, Debug)]
-#[fail(display = "Wasm trap")]
+#[derive(Error, Debug)]
+#[error("Wasm trap: {message}")]
 pub struct Trap {
     message: String,
 }

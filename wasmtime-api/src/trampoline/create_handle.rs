@@ -1,9 +1,9 @@
 //! Support for a calling of an imported function.
 
+use anyhow::Result;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
 //use target_lexicon::HOST;
-use failure::Error;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 
@@ -22,7 +22,7 @@ pub(crate) fn create_handle(
     signature_registry: Option<RefMut<Store>>,
     finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
     state: Box<dyn Any>,
-) -> Result<InstanceHandle, Error> {
+) -> Result<InstanceHandle> {
     let global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> =
         Rc::new(RefCell::new(HashMap::new()));
 

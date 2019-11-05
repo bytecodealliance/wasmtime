@@ -1,7 +1,7 @@
 //! Translation of the memory example
 
+use anyhow::{bail, ensure, Context as _, Error};
 use core::cell::Ref;
-use failure::{bail, format_err, Error};
 use std::fs::read;
 use wasmtime_api::*;
 
@@ -11,7 +11,7 @@ fn get_export_memory(exports: &[Extern], i: usize) -> Result<HostRef<Memory>, Er
     }
     Ok(exports[i]
         .memory()
-        .ok_or_else(|| format_err!("> Error accessing memory export {}!", i))?
+        .with_context(|| format!("> Error accessing memory export {}!", i))?
         .clone())
 }
 
@@ -21,7 +21,7 @@ fn get_export_func(exports: &[Extern], i: usize) -> Result<HostRef<Func>, Error>
     }
     Ok(exports[i]
         .func()
-        .ok_or_else(|| format_err!("> Error accessing function export {}!", i))?
+        .with_context(|| format!("> Error accessing function export {}!", i))?
         .clone())
 }
 
@@ -73,24 +73,19 @@ fn main() -> Result<(), Error> {
 
     // Compile.
     println!("Compiling module...");
-    let module = HostRef::new(
-        Module::new(store.clone(), &binary)
-            .map_err(|_| format_err!("> Error compiling module!"))?,
-    );
+    let module =
+        HostRef::new(Module::new(store.clone(), &binary).context("> Error compiling module!")?);
 
     // Instantiate.
     println!("Instantiating module...");
     let instance = HostRef::new(
-        Instance::new(store.clone(), module, &[])
-            .map_err(|_| format_err!("> Error instantiating module!"))?,
+        Instance::new(store.clone(), module, &[]).context("> Error instantiating module!")?,
     );
 
     // Extract export.
     println!("Extracting export...");
     let exports = Ref::map(instance.borrow(), |instance| instance.exports());
-    if exports.len() == 0 {
-        bail!("> Error accessing exports!");
-    }
+    ensure!(!exports.is_empty(), "> Error accessing exports!");
     let memory = get_export_memory(&exports, 0)?;
     let size_func = get_export_func(&exports, 1)?;
     let load_func = get_export_func(&exports, 2)?;

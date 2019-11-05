@@ -10,6 +10,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, ModuleTranslationState, WasmError};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
+use thiserror::Error;
 
 /// Compiled machine code: body and jump table offsets.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -144,18 +145,18 @@ pub struct TrapInformation {
 pub type Traps = PrimaryMap<DefinedFuncIndex, Vec<TrapInformation>>;
 
 /// An error while compiling WebAssembly to machine code.
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum CompileError {
     /// A wasm translation error occured.
-    #[fail(display = "WebAssembly translation error: {}", _0)]
-    Wasm(WasmError),
+    #[error("WebAssembly translation error: {0}")]
+    Wasm(#[from] WasmError),
 
     /// A compilation error occured.
-    #[fail(display = "Compilation error: {}", _0)]
-    Codegen(CodegenError),
+    #[error("Compilation error: {0}")]
+    Codegen(#[from] CodegenError),
 
     /// A compilation error occured.
-    #[fail(display = "Debug info is not supported with this configuration")]
+    #[error("Debug info is not supported with this configuration")]
     DebugInfoNotSupported,
 }
 

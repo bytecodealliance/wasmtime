@@ -24,8 +24,6 @@ mod read_debuginfo;
 mod transform;
 mod write_debuginfo;
 
-#[macro_use]
-extern crate failure_derive;
 extern crate alloc;
 
 struct FunctionRelocResolver {}

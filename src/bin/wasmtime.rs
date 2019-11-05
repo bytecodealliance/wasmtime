@@ -30,10 +30,10 @@
     )
 )]
 
+use anyhow::{bail, Context as _, Result};
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use docopt::Docopt;
-use failure::{bail, Error, ResultExt};
 use pretty_env_logger;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -185,19 +185,7 @@ fn compute_environ(flag_env: &[String]) -> Vec<(String, String)> {
     result
 }
 
-fn main() {
-    let err = match rmain() {
-        Ok(()) => return,
-        Err(e) => e,
-    };
-    eprintln!("error: {}", err);
-    for cause in err.iter_causes() {
-        eprintln!("    caused by: {}", cause);
-    }
-    exit(1);
-}
-
-fn rmain() -> Result<(), Error> {
+fn main() -> Result<()> {
     let version = env!("CARGO_PKG_VERSION");
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
@@ -324,13 +312,13 @@ fn rmain() -> Result<(), Error> {
     for filename in &args.flag_preload {
         let path = Path::new(&filename);
         instantiate_module(store.clone(), &module_registry, path)
-            .with_context(|_| format!("failed to process preload at `{}`", path.display()))?;
+            .with_context(|| format!("failed to process preload at `{}`", path.display()))?;
     }
 
     // Load the main wasm module.
     let path = Path::new(&args.arg_file);
     handle_module(store, &module_registry, &args, path)
-        .with_context(|_| format!("failed to process main module `{}`", path.display()))?;
+        .with_context(|| format!("failed to process main module `{}`", path.display()))?;
     Ok(())
 }
 
@@ -338,7 +326,7 @@ fn instantiate_module(
     store: HostRef<Store>,
     module_registry: &HashMap<String, (Instance, HashMap<String, usize>)>,
     path: &Path,
-) -> Result<(HostRef<Instance>, HostRef<Module>, Vec<u8>), Error> {
+) -> Result<(HostRef<Instance>, HostRef<Module>, Vec<u8>)> {
     // Read the wasm module binary either as `*.wat` or a raw binary
     let data = wat::parse_file(path.to_path_buf())?;
 
@@ -378,7 +366,7 @@ fn handle_module(
     module_registry: &HashMap<String, (Instance, HashMap<String, usize>)>,
     args: &Args,
     path: &Path,
-) -> Result<(), Error> {
+) -> Result<()> {
     let (instance, _module, data) = instantiate_module(store.clone(), module_registry, path)?;
 
     // If a function to invoke was given, invoke it.
@@ -396,7 +384,7 @@ fn invoke_export(
     data: &ModuleData,
     name: &str,
     args: &Args,
-) -> Result<(), Error> {
+) -> Result<()> {
     use wasm_webidl_bindings::ast;
     use wasmtime_interface_types::Value;
 
@@ -445,7 +433,7 @@ fn invoke_export(
     let mut context = store.borrow().engine().borrow().create_wasmtime_context();
     let results = data
         .invoke(&mut context, &mut handle, name, &values)
-        .with_context(|_| format!("failed to invoke `{}`", name))?;
+        .with_context(|| format!("failed to invoke `{}`", name))?;
     if results.len() > 0 {
         eprintln!(
             "warning: using `--render` with a function that returns values \

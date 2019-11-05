@@ -16,6 +16,7 @@ use cranelift_entity::{BoxedSlice, PrimaryMap};
 use cranelift_wasm::{DefinedFuncIndex, SignatureIndex};
 #[cfg(feature = "std")]
 use std::io::Write;
+use thiserror::Error;
 use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
@@ -27,23 +28,23 @@ use wasmtime_runtime::{
 
 /// An error condition while setting up a wasm instance, be it validation,
 /// compilation, or instantiation.
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum SetupError {
     /// The module did not pass validation.
-    #[fail(display = "Validation error: {}", _0)]
+    #[error("Validation error: {0}")]
     Validate(String),
 
     /// A wasm translation error occured.
-    #[fail(display = "WebAssembly compilation error: {}", _0)]
-    Compile(CompileError),
+    #[error("WebAssembly compilation error: {0}")]
+    Compile(#[from] CompileError),
 
     /// Some runtime resource was unavailable or insufficient, or the start function
     /// trapped.
-    #[fail(display = "Instantiation error: {}", _0)]
-    Instantiate(InstantiationError),
+    #[error("Instantiation error: {0}")]
+    Instantiate(#[from] InstantiationError),
 
     /// Debug information generation error occured.
-    #[fail(display = "Debug information error: {}", _0)]
+    #[error("Debug information error: {0}")]
     DebugInfo(failure::Error),
 }
 

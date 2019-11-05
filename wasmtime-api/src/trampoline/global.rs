@@ -1,6 +1,6 @@
 use alloc::boxed::Box;
+use anyhow::Result;
 use cranelift_entity::PrimaryMap;
-use failure::Error;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{InstanceHandle, VMGlobalDefinition};
 
@@ -13,10 +13,7 @@ pub struct GlobalState {
     handle: InstanceHandle,
 }
 
-pub fn create_global(
-    gt: &GlobalType,
-    val: Val,
-) -> Result<(wasmtime_runtime::Export, GlobalState), Error> {
+pub fn create_global(gt: &GlobalType, val: Val) -> Result<(wasmtime_runtime::Export, GlobalState)> {
     let mut definition = Box::new(VMGlobalDefinition::new());
     unsafe {
         match val {

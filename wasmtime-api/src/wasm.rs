@@ -682,7 +682,7 @@ pub unsafe extern "C" fn wasm_instance_new(
         }
         Err(_) => {
             if !result.is_null() {
-                // TODO Unwrap trap from failure::Error
+                // TODO Unwrap trap from error
                 let trap = Box::new(wasm_trap_t {
                     trap: HostRef::new(Trap::new("trap during instantiation".to_string())),
                 });

@@ -203,12 +203,7 @@ fn handle_module(
     let isa_builder = match *target {
         Some(ref target) => {
             let target = Triple::from_str(&target).map_err(|_| "could not parse --target")?;
-            isa::lookup(target).map_err(|err| match err {
-                isa::LookupError::SupportDisabled => {
-                    "support for architecture disabled at compile time"
-                }
-                isa::LookupError::Unsupported => "unsupported architecture",
-            })?
+            isa::lookup(target).map_err(|err| format!("{:?}", err))?
         }
         None => cranelift_native::builder().unwrap_or_else(|_| {
             panic!("host machine is not a supported target");

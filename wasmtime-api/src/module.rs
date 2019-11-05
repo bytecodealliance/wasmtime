@@ -7,7 +7,7 @@ use crate::types::{
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
-use failure::Error;
+use anyhow::Result;
 
 use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
 
@@ -61,9 +61,7 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
     TableType::new(ty, limits)
 }
 
-fn read_imports_and_exports(
-    binary: &[u8],
-) -> Result<(Box<[ImportType]>, Box<[ExportType]>), Error> {
+fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[ExportType]>)> {
     let mut reader = ModuleReader::new(binary)?;
     let mut imports = Vec::new();
     let mut exports = Vec::new();
@@ -184,7 +182,7 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn new(store: HostRef<Store>, binary: &[u8]) -> Result<Module, Error> {
+    pub fn new(store: HostRef<Store>, binary: &[u8]) -> Result<Module> {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(Module {
             store,

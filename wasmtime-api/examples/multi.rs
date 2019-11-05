@@ -3,8 +3,8 @@
 extern crate alloc;
 
 use alloc::rc::Rc;
+use anyhow::{ensure, format_err, Context as _, Result};
 use core::cell::Ref;
-use failure::{bail, format_err, Error};
 use std::fs::read;
 use wasmtime_api::*;
 
@@ -21,7 +21,7 @@ impl Callable for Callback {
     }
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     // Initialize.
     println!("Initializing...");
     let engine = HostRef::new(Engine::new(Config::default()));
@@ -33,10 +33,8 @@ fn main() -> Result<(), Error> {
 
     // Compile.
     println!("Compiling module...");
-    let module = HostRef::new(
-        Module::new(store.clone(), &binary)
-            .map_err(|_| format_err!("> Error compiling module!"))?,
-    );
+    let module =
+        HostRef::new(Module::new(store.clone(), &binary).context("Error compiling module!")?);
 
     // Create external print functions.
     println!("Creating callback...");
@@ -51,28 +49,23 @@ fn main() -> Result<(), Error> {
     let imports = vec![callback_func.into()];
     let instance = HostRef::new(
         Instance::new(store.clone(), module, imports.as_slice())
-            .map_err(|_| format_err!("> Error instantiating module!"))?,
+            .context("Error instantiating module!")?,
     );
 
     // Extract export.
     println!("Extracting export...");
     let exports = Ref::map(instance.borrow(), |instance| instance.exports());
-    if exports.len() == 0 {
-        bail!("> Error accessing exports!");
-    }
-    let run_func = exports[0]
-        .func()
-        .ok_or_else(|| format_err!("> Error accessing exports!"))?;
+    ensure!(!exports.is_empty(), "Error accessing exports!");
+    let run_func = exports[0].func().context("Error accessing exports!")?;
 
     // Call.
     println!("Calling export...");
     let args = vec![Val::I32(1), Val::I64(3)];
-    let results = run_func.borrow().call(&args);
-    if let Err(_) = results {
-        bail!("> Error calling function!");
-    }
+    let results = run_func
+        .borrow()
+        .call(&args)
+        .map_err(|e| format_err!("> Error calling function: {:?}", e))?;
 
-    let results = results.unwrap();
     println!("Printing result...");
     println!("> {} {}", results[0].i64(), results[1].i32());
 
