@@ -5,6 +5,7 @@ mod binemit;
 mod enc_tables;
 mod registers;
 pub mod settings;
+mod unwind;
 
 use super::super::settings as shared_settings;
 #[cfg(feature = "testing_hooks")]
@@ -18,6 +19,7 @@ use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::timing;
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::fmt;
 use target_lexicon::{PointerWidth, Triple};
 
@@ -149,6 +151,13 @@ impl TargetIsa for Isa {
 
     fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC {
         ir::condcodes::IntCC::UnsignedLessThan
+    }
+
+    /// Emit unwind information for the given function.
+    ///
+    /// Only some calling conventions (e.g. Windows fastcall) will have unwind information.
+    fn emit_unwind_info(&self, func: &ir::Function, mem: &mut Vec<u8>) {
+        abi::emit_unwind_info(func, self, mem);
     }
 }
 

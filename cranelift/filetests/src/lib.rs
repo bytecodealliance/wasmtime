@@ -54,6 +54,7 @@ mod test_safepoint;
 mod test_shrink;
 mod test_simple_gvn;
 mod test_simple_preopt;
+mod test_unwind;
 mod test_verifier;
 
 /// The result of running the test in a file.
@@ -135,6 +136,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "verifier" => test_verifier::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
         "safepoint" => test_safepoint::subtest(parsed),
+        "unwind" => test_unwind::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

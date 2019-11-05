@@ -1,0 +1,198 @@
+//! Test command for verifying the unwind emitted for each function.
+//!
+//! The `unwind` test command runs each function through the full code generator pipeline.
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+
+use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
+use byteorder::{LittleEndian, ReadBytesExt};
+use cranelift_codegen;
+use cranelift_codegen::ir;
+use cranelift_reader::TestCommand;
+use std::borrow::Cow;
+use std::fmt::Write;
+use std::io::Cursor;
+
+struct TestUnwind;
+
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+    assert_eq!(parsed.command, "unwind");
+    if !parsed.options.is_empty() {
+        Err(format!("No options allowed on {}", parsed))
+    } else {
+        Ok(Box::new(TestUnwind))
+    }
+}
+
+impl SubTest for TestUnwind {
+    fn name(&self) -> &'static str {
+        "unwind"
+    }
+
+    fn is_mutating(&self) -> bool {
+        false
+    }
+
+    fn needs_isa(&self) -> bool {
+        true
+    }
+
+    fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
+        let isa = context.isa.expect("unwind needs an ISA");
+        let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
+
+        comp_ctx.compile(isa).expect("failed to compile function");
+
+        let mut mem = Vec::new();
+        comp_ctx.emit_unwind_info(isa, &mut mem);
+
+        let mut text = String::new();
+        if mem.is_empty() {
+            writeln!(text, "No unwind information.").unwrap();
+        } else {
+            print_unwind_info(&mut text, &mem);
+        }
+
+        run_filecheck(&text, context)
+    }
+}
+
+fn print_unwind_info(text: &mut String, mem: &[u8]) {
+    let info = UnwindInfo::from_cursor(&mut Cursor::new(mem)).expect("failed to read unwind info");
+
+    // Assert correct alignment and padding of the unwind information
+    assert!(mem.len() % 4 == 0);
+    assert_eq!(
+        mem.len(),
+        4 + ((info.unwind_code_count_raw as usize) * 2)
+            + if (info.unwind_code_count_raw & 1) == 1 {
+                2
+            } else {
+                0
+            }
+    );
+
+    writeln!(text, "{:#?}", info).unwrap();
+}
+
+#[derive(Debug)]
+struct UnwindInfo {
+    pub version: u8,
+    pub flags: u8,
+    pub prologue_size: u8,
+    pub unwind_code_count_raw: u8,
+    pub frame_register: u8,
+    pub frame_register_offset: u8,
+    pub unwind_codes: Vec<UnwindCode>,
+}
+
+impl UnwindInfo {
+    fn from_cursor(cursor: &mut Cursor<&[u8]>) -> std::io::Result<Self> {
+        let version_and_flags = cursor.read_u8()?;
+        let prologue_size = cursor.read_u8()?;
+        let unwind_code_count_raw = cursor.read_u8()?;
+        let frame_register_and_offset = cursor.read_u8()?;
+        let mut unwind_codes = Vec::new();
+
+        let mut i = 0;
+        while i < unwind_code_count_raw {
+            let code = UnwindCode::from_cursor(cursor)?;
+
+            i += match &code.value {
+                UnwindValue::None => 1,
+                UnwindValue::U16(_) => 2,
+                UnwindValue::U32(_) => 3,
+            };
+
+            unwind_codes.push(code);
+        }
+
+        Ok(Self {
+            version: version_and_flags & 0x3,
+            flags: (version_and_flags & 0xF8) >> 3,
+            prologue_size,
+            unwind_code_count_raw,
+            frame_register: frame_register_and_offset & 0xF,
+            frame_register_offset: (frame_register_and_offset & 0xF0) >> 4,
+            unwind_codes,
+        })
+    }
+}
+
+#[derive(Debug)]
+struct UnwindCode {
+    pub offset: u8,
+    pub op: UnwindOperation,
+    pub info: u8,
+    pub value: UnwindValue,
+}
+
+impl UnwindCode {
+    fn from_cursor(cursor: &mut Cursor<&[u8]>) -> std::io::Result<Self> {
+        let offset = cursor.read_u8()?;
+        let op_and_info = cursor.read_u8()?;
+        let op = UnwindOperation::from(op_and_info & 0xF);
+        let info = (op_and_info & 0xF0) >> 4;
+
+        let value = match op {
+            UnwindOperation::LargeStackAlloc => match info {
+                0 => UnwindValue::U16(cursor.read_u16::<LittleEndian>()?),
+                1 => UnwindValue::U32(cursor.read_u32::<LittleEndian>()?),
+                _ => panic!("unexpected stack alloc info value"),
+            },
+            UnwindOperation::SaveNonvolatileRegister => {
+                UnwindValue::U16(cursor.read_u16::<LittleEndian>()?)
+            }
+            UnwindOperation::SaveNonvolatileRegisterFar => {
+                UnwindValue::U32(cursor.read_u32::<LittleEndian>()?)
+            }
+            UnwindOperation::SaveXmm128 => UnwindValue::U16(cursor.read_u16::<LittleEndian>()?),
+            UnwindOperation::SaveXmm128Far => UnwindValue::U32(cursor.read_u32::<LittleEndian>()?),
+            _ => UnwindValue::None,
+        };
+
+        Ok(Self {
+            offset,
+            op,
+            info,
+            value,
+        })
+    }
+}
+
+#[derive(Debug)]
+enum UnwindOperation {
+    PushNonvolatileRegister,
+    LargeStackAlloc,
+    SmallStackAlloc,
+    SetFramePointer,
+    SaveNonvolatileRegister,
+    SaveNonvolatileRegisterFar,
+    SaveXmm128,
+    SaveXmm128Far,
+    PushMachineFrame,
+}
+
+impl From<u8> for UnwindOperation {
+    fn from(value: u8) -> Self {
+        // The numerical value is specified as part of the Windows x64 ABI
+        match value {
+            0 => Self::PushNonvolatileRegister,
+            1 => Self::LargeStackAlloc,
+            2 => Self::SmallStackAlloc,
+            3 => Self::SetFramePointer,
+            4 => Self::SaveNonvolatileRegister,
+            5 => Self::SaveNonvolatileRegisterFar,
+            6 => Self::SaveXmm128,
+            7 => Self::SaveXmm128Far,
+            8 => Self::PushMachineFrame,
+            _ => panic!("unsupported unwind operation"),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum UnwindValue {
+    None,
+    U16(u16),
+    U32(u32),
+}

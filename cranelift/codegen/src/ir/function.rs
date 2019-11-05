@@ -83,6 +83,11 @@ pub struct Function {
     /// Track the original source location for each instruction. The source locations are not
     /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
+
+    /// Instruction that marks the end (inclusive) of the function's prologue.
+    ///
+    /// This is used for some calling conventions to track the end of unwind information.
+    pub prologue_end: Option<Inst>,
 }
 
 impl Function {
@@ -104,6 +109,7 @@ impl Function {
             offsets: SecondaryMap::new(),
             jt_offsets: SecondaryMap::new(),
             srclocs: SecondaryMap::new(),
+            prologue_end: None,
         }
     }
 
@@ -123,6 +129,7 @@ impl Function {
         self.offsets.clear();
         self.jt_offsets.clear();
         self.srclocs.clear();
+        self.prologue_end = None;
     }
 
     /// Create a new empty, anonymous function with a Fast calling convention.

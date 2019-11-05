@@ -193,6 +193,16 @@ impl Context {
         sink.info
     }
 
+    /// Emit unwind information.
+    ///
+    /// Requires that the function layout be calculated (see `relax_branches`).
+    ///
+    /// Only some calling conventions (e.g. Windows fastcall) will have unwind information.
+    /// This is a no-op if the function has no unwind information.
+    pub fn emit_unwind_info(&self, isa: &dyn TargetIsa, mem: &mut Vec<u8>) {
+        isa.emit_unwind_info(&self.func, mem);
+    }
+
     /// Run the verifier on the function.
     ///
     /// Also check that the dominator tree and control flow graph are consistent with the function.

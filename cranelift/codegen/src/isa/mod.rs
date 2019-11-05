@@ -64,6 +64,7 @@ use crate::settings;
 use crate::settings::SetResult;
 use crate::timing;
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::fmt;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 use thiserror::Error;
@@ -377,4 +378,11 @@ pub trait TargetIsa: fmt::Display + Sync {
 
     /// IntCC condition for Unsigned Subtraction Overflow (Borrow/Carry).
     fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC;
+
+    /// Emit unwind information for the given function.
+    ///
+    /// Only some calling conventions (e.g. Windows fastcall) will have unwind information.
+    fn emit_unwind_info(&self, _func: &ir::Function, _mem: &mut Vec<u8>) {
+        // No-op by default
+    }
 }

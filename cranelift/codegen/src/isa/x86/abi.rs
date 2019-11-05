@@ -3,6 +3,7 @@
 use super::super::settings as shared_settings;
 use super::registers::{FPR, GPR, RU};
 use super::settings as isa_settings;
+use super::unwind::UnwindInfo;
 use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
 use crate::cursor::{Cursor, CursorPosition, EncCursor};
 use crate::ir;
@@ -16,6 +17,7 @@ use crate::isa::{CallConv, RegClass, RegUnit, TargetIsa};
 use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
+use alloc::vec::Vec;
 use core::i32;
 use target_lexicon::{PointerWidth, Triple};
 
@@ -269,7 +271,7 @@ fn callee_saved_gprs(isa: &dyn TargetIsa, call_conv: CallConv) -> &'static [RU] 
             if call_conv.extends_windows_fastcall() {
                 // "registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15 are considered nonvolatile
                 //  and must be saved and restored by a function that uses them."
-                // as per https://msdn.microsoft.com/en-us/library/6t169e9c.aspx
+                // as per https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention
                 // RSP & RSB are not listed below, since they are restored automatically during
                 // a function call. If that wasn't the case, function calls (RET) would not work.
                 &[
@@ -372,7 +374,7 @@ fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> 
 }
 
 /// Implementation of the fastcall-based Win64 calling convention described at [1]
-/// [1] https://msdn.microsoft.com/en-us/library/ms235286.aspx
+/// [1] https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention
 fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> CodegenResult<()> {
     if isa.triple().pointer_width().unwrap() != PointerWidth::U64 {
         panic!("TODO: windows-fastcall: x86-32 not implemented yet");
@@ -580,11 +582,11 @@ fn insert_common_prologue(
             if !isa.flags().probestack_func_adjusts_sp() {
                 let result = pos.func.dfg.inst_results(call)[0];
                 pos.func.locations[result] = rax_val;
-                pos.ins().adjust_sp_down(result);
+                pos.func.prologue_end = Some(pos.ins().adjust_sp_down(result));
             }
         } else {
             // Simply decrement the stack pointer.
-            pos.ins().adjust_sp_down_imm(Imm64::new(stack_size));
+            pos.func.prologue_end = Some(pos.ins().adjust_sp_down_imm(Imm64::new(stack_size)));
         }
     }
 }
@@ -656,5 +658,13 @@ fn insert_common_epilogue(
 
         pos.func.locations[csr_ret] = ir::ValueLoc::Reg(reg);
         pos.func.dfg.append_inst_arg(inst, csr_ret);
+    }
+}
+
+pub fn emit_unwind_info(func: &ir::Function, isa: &dyn TargetIsa, mem: &mut Vec<u8>) {
+    // Assumption: RBP is being used as the frame pointer
+    // In the future, Windows fastcall codegen should usually omit the frame pointer
+    if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into())) {
+        info.emit(mem).expect("failed to emit unwind information");
     }
 }
