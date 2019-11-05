@@ -16,7 +16,7 @@ cranelift-wasm = { version = "0.47", features = ["enable-serde"] }
 cranelift-native = { version = "0.47" }
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
 wasmparser = { version = "0.39.2", default-features = false }
-binaryen = "0.5.0"
+binaryen = "0.8.1"
 
 [features]
 default = ["wasmparser/core"]
