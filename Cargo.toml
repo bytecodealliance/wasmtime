@@ -20,7 +20,7 @@ readme = "README.md"
 wasm_tests = []
 
 [dependencies]
-wasi-common-cbindgen = { path = "wasi-common-cbindgen", version = "0.4.0" }
+wasi-common-cbindgen = { path = "wasi-common-cbindgen", version = "0.5.0" }
 failure = "0.1"
 libc = "0.2"
 rand = "0.7"
@@ -29,13 +29,13 @@ log = "0.4"
 filetime = "0.2.7"
 lazy_static = "1.4.0"
 num = { version = "0.2.0", default-features = false }
-wig = { path = "wig", version = "0.0.0" }
+wig = { path = "wig", version = "0.1.0" }
 
 [target.'cfg(unix)'.dependencies]
 nix = "0.15"
 
 [target.'cfg(windows)'.dependencies]
-winx = { path = "winx", version = "0.4.0" }
+winx = { path = "winx", version = "0.5.0" }
 winapi = "0.3"
 cpu-time = "1.0"
 
