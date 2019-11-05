@@ -55,7 +55,7 @@ fn legalize_inst(
 
     // Check for ABI boundaries that need to be converted to the legalized signature.
     if opcode.is_call() {
-        if boundary::handle_call_abi(inst, pos.func, cfg) {
+        if boundary::handle_call_abi(isa, inst, pos.func, cfg) {
             return LegalizeInstResult::Legalized;
         }
     } else if opcode.is_return() {

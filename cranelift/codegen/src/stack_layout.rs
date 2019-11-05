@@ -25,7 +25,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
     // stack layout from high to low addresses will be:
     //
     // 1. incoming arguments.
-    // 2. spills + explicits.
+    // 2. spills + explicits + struct returns.
     // 3. outgoing arguments.
     //
     // The incoming arguments can have both positive and negative offsets. A negative offset
@@ -56,7 +56,8 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
                     .ok_or(CodegenError::ImplLimitExceeded)?;
                 outgoing_max = max(outgoing_max, offset);
             }
-            StackSlotKind::SpillSlot
+            StackSlotKind::StructReturnSlot
+            | StackSlotKind::SpillSlot
             | StackSlotKind::ExplicitSlot
             | StackSlotKind::EmergencySlot => {
                 // Determine the smallest alignment of any explicit or spill slot.
@@ -65,9 +66,9 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
         }
     }
 
-    // Lay out spill slots and explicit slots below the incoming arguments.
-    // The offset is negative, growing downwards.
-    // Start with the smallest alignments for better packing.
+    // Lay out spill slots, struct return slots, and explicit slots below the
+    // incoming arguments. The offset is negative, growing downwards. Start with
+    // the smallest alignments for better packing.
     let mut offset = incoming_min;
     debug_assert!(min_align.is_power_of_two());
     while min_align <= alignment {
@@ -75,6 +76,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
             // Pick out explicit and spill slots with exact alignment `min_align`.
             match slot.kind {
                 StackSlotKind::SpillSlot
+                | StackSlotKind::StructReturnSlot
                 | StackSlotKind::ExplicitSlot
                 | StackSlotKind::EmergencySlot => {
                     if slot.alignment(alignment) != min_align {

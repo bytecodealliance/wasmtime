@@ -1420,27 +1420,24 @@ pub(crate) fn define(
     // or 1.
     //
     // Encode movzbq as movzbl, because it's equivalent and shorter.
-    e.enc32(
-        bint.bind(I32).bind(B1),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
-    );
-
-    e.enc64(
-        bint.bind(I64).bind(B1),
-        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
-    );
-    e.enc64(
-        bint.bind(I64).bind(B1),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
-    );
-    e.enc64(
-        bint.bind(I32).bind(B1),
-        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
-    );
-    e.enc64(
-        bint.bind(I32).bind(B1),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
-    );
+    for &to in &[I8, I16, I32, I64] {
+        for &from in &[B1, B8] {
+            e.enc64(
+                bint.bind(to).bind(from),
+                rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+            );
+            e.enc64(
+                bint.bind(to).bind(from),
+                rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+            );
+            if to != I64 {
+                e.enc32(
+                    bint.bind(to).bind(from),
+                    rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+                );
+            }
+        }
+    }
 
     // Numerical conversions.
 

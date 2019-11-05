@@ -23,11 +23,14 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::instructions::CallInfo;
 use crate::ir::{
     AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
-    SigRef, Signature, Type, Value, ValueLoc,
+    MemFlags, SigRef, Signature, StackSlotData, StackSlotKind, Type, Value, ValueLoc,
 };
 use crate::isa::TargetIsa;
 use crate::legalizer::split::{isplit, vsplit};
+use alloc::borrow::Cow;
 use alloc::vec::Vec;
+use core::mem;
+use cranelift_entity::EntityList;
 use log::debug;
 
 /// Legalize all the function signatures in `func`.
@@ -36,9 +39,16 @@ use log::debug;
 /// change the entry block arguments, calls, or return instructions, so this can leave the function
 /// in a state with type discrepancies.
 pub fn legalize_signatures(func: &mut Function, isa: &dyn TargetIsa) {
-    legalize_signature(&mut func.signature, true, isa);
-    for sig_data in func.dfg.signatures.values_mut() {
-        legalize_signature(sig_data, false, isa);
+    if let Some(new) = legalize_signature(&func.signature, true, isa) {
+        let old = mem::replace(&mut func.signature, new);
+        func.old_signature = Some(old);
+    }
+
+    for (sig_ref, sig_data) in func.dfg.signatures.iter_mut() {
+        if let Some(new) = legalize_signature(sig_data, false, isa) {
+            let old = mem::replace(sig_data, new);
+            func.dfg.old_signatures[sig_ref] = Some(old);
+        }
     }
 
     if let Some(entry) = func.layout.entry_block() {
@@ -50,14 +60,25 @@ pub fn legalize_signatures(func: &mut Function, isa: &dyn TargetIsa) {
 /// Legalize the libcall signature, which we may generate on the fly after
 /// `legalize_signatures` has been called.
 pub fn legalize_libcall_signature(signature: &mut Signature, isa: &dyn TargetIsa) {
-    legalize_signature(signature, false, isa);
+    if let Some(s) = legalize_signature(signature, false, isa) {
+        *signature = s;
+    }
 }
 
 /// Legalize the given signature.
 ///
 /// `current` is true if this is the signature for the current function.
-fn legalize_signature(signature: &mut Signature, current: bool, isa: &dyn TargetIsa) {
-    isa.legalize_signature(signature, current);
+fn legalize_signature(
+    signature: &Signature,
+    current: bool,
+    isa: &dyn TargetIsa,
+) -> Option<Signature> {
+    let mut cow = Cow::Borrowed(signature);
+    isa.legalize_signature(&mut cow, current);
+    match cow {
+        Cow::Borrowed(_) => None,
+        Cow::Owned(s) => Some(s),
+    }
 }
 
 /// Legalize the entry block parameters after `func`'s signature has been legalized.
@@ -243,6 +264,166 @@ where
     }
 
     call
+}
+
+fn assert_is_valid_sret_legalization(
+    old_ret_list: &EntityList<Value>,
+    old_sig: &Signature,
+    new_sig: &Signature,
+    pos: &FuncCursor,
+) {
+    debug_assert_eq!(
+        old_sig.returns.len(),
+        old_ret_list.len(&pos.func.dfg.value_lists)
+    );
+
+    // Assert that the only difference in special parameters is that there
+    // is an appended struct return pointer parameter.
+    let old_special_params: Vec<_> = old_sig
+        .params
+        .iter()
+        .filter(|r| r.purpose != ArgumentPurpose::Normal)
+        .collect();
+    let new_special_params: Vec<_> = new_sig
+        .params
+        .iter()
+        .filter(|r| r.purpose != ArgumentPurpose::Normal)
+        .collect();
+    debug_assert_eq!(old_special_params.len() + 1, new_special_params.len());
+    debug_assert!(old_special_params
+        .iter()
+        .zip(&new_special_params)
+        .all(|(old, new)| old.purpose == new.purpose));
+    debug_assert_eq!(
+        new_special_params.last().unwrap().purpose,
+        ArgumentPurpose::StructReturn
+    );
+
+    // If the special returns have changed at all, then the only change
+    // should be that the struct return pointer is returned back out of the
+    // function, so that callers don't have to load its stack address again.
+    let old_special_returns: Vec<_> = old_sig
+        .returns
+        .iter()
+        .filter(|r| r.purpose != ArgumentPurpose::Normal)
+        .collect();
+    let new_special_returns: Vec<_> = new_sig
+        .returns
+        .iter()
+        .filter(|r| r.purpose != ArgumentPurpose::Normal)
+        .collect();
+    debug_assert!(old_special_returns
+        .iter()
+        .zip(&new_special_returns)
+        .all(|(old, new)| old.purpose == new.purpose));
+    debug_assert!(
+        old_special_returns.len() == new_special_returns.len()
+            || (old_special_returns.len() + 1 == new_special_returns.len()
+                && new_special_returns.last().unwrap().purpose == ArgumentPurpose::StructReturn)
+    );
+}
+
+fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef, call: Inst) {
+    let old_ret_list = pos.func.dfg.detach_results(call);
+    let old_sig = pos.func.dfg.old_signatures[sig_ref]
+        .take()
+        .expect("must have an old signature when using an `sret` parameter");
+
+    // We make a bunch of assumptions about the shape of the old, multi-return
+    // signature and the new, sret-using signature in this legalization
+    // function. Assert that these assumptions hold true in debug mode.
+    if cfg!(debug_assertions) {
+        assert_is_valid_sret_legalization(
+            &old_ret_list,
+            &old_sig,
+            &pos.func.dfg.signatures[sig_ref],
+            &pos,
+        );
+    }
+
+    // Go through and remove all normal return values from the `call`
+    // instruction's returns list. These will be stored into the stack slot that
+    // the sret points to. At the same time, calculate the size of the sret
+    // stack slot.
+    let mut sret_slot_size = 0;
+    for (i, ret) in old_sig.returns.iter().enumerate() {
+        let v = old_ret_list.get(i, &pos.func.dfg.value_lists).unwrap();
+        let ty = pos.func.dfg.value_type(v);
+        if ret.purpose == ArgumentPurpose::Normal {
+            debug_assert_eq!(ret.location, ArgumentLoc::Unassigned);
+            let ty = legalized_type_for_sret(ty);
+            let size = ty.bytes();
+            sret_slot_size = round_up_to_multiple_of_type_align(sret_slot_size, ty) + size;
+        } else {
+            let new_v = pos.func.dfg.append_result(call, ty);
+            pos.func.dfg.change_to_alias(v, new_v);
+        }
+    }
+
+    let stack_slot = pos.func.stack_slots.push(StackSlotData {
+        kind: StackSlotKind::StructReturnSlot,
+        size: sret_slot_size,
+        offset: None,
+    });
+
+    // Append the sret pointer to the `call` instruction's arguments.
+    let ptr_type = Type::triple_pointer_type(isa.triple());
+    let sret_arg = pos.ins().stack_addr(ptr_type, stack_slot, 0);
+    pos.func.dfg.append_inst_arg(call, sret_arg);
+
+    // The sret pointer might be returned by the signature as well. If so, we
+    // need to add it to the `call` instruction's results list.
+    //
+    // Additionally, when the sret is explicitly returned in this calling
+    // convention, then use it when loading the sret returns back into ssa
+    // values to avoid keeping the original `sret_arg` live and potentially
+    // having to do spills and fills.
+    let sret =
+        if pos.func.dfg.signatures[sig_ref].uses_special_return(ArgumentPurpose::StructReturn) {
+            pos.func.dfg.append_result(call, ptr_type)
+        } else {
+            sret_arg
+        };
+
+    // Finally, load each of the call's return values out of the sret stack
+    // slot.
+    pos.goto_after_inst(call);
+    let mut offset = 0;
+    for i in 0..old_ret_list.len(&pos.func.dfg.value_lists) {
+        if old_sig.returns[i].purpose != ArgumentPurpose::Normal {
+            continue;
+        }
+
+        let old_v = old_ret_list.get(i, &pos.func.dfg.value_lists).unwrap();
+        let ty = pos.func.dfg.value_type(old_v);
+        let mut legalized_ty = legalized_type_for_sret(ty);
+
+        offset = round_up_to_multiple_of_type_align(offset, legalized_ty);
+
+        let new_legalized_v =
+            pos.ins()
+                .load(legalized_ty, MemFlags::trusted(), sret, offset as i32);
+
+        // "Illegalize" the loaded value from the legalized type back to its
+        // original `ty`. This is basically the opposite of
+        // `legalize_type_for_sret_store`.
+        let mut new_v = new_legalized_v;
+        if ty.is_bool() {
+            legalized_ty = legalized_ty.as_bool_pedantic();
+            new_v = pos.ins().raw_bitcast(legalized_ty, new_v);
+
+            if ty.bits() < legalized_ty.bits() {
+                legalized_ty = ty;
+                new_v = pos.ins().breduce(legalized_ty, new_v);
+            }
+        }
+
+        pos.func.dfg.change_to_alias(old_v, new_v);
+
+        offset += legalized_ty.bytes();
+    }
+
+    pos.func.dfg.old_signatures[sig_ref] = Some(old_sig);
 }
 
 /// Compute original value of type `ty` from the legalized ABI arguments.
@@ -452,6 +633,13 @@ fn legalize_inst_arguments<ArgType>(
         .constraints()
         .num_fixed_value_arguments();
     let have_args = vlist.len(&pos.func.dfg.value_lists) - num_fixed_values;
+    if abi_args < have_args {
+        // This happens with multiple return values after we've legalized the
+        // signature but haven't legalized the return instruction yet. This
+        // legalization is handled in `handle_return_abi`.
+        pos.func.dfg[inst].put_value_list(vlist);
+        return;
+    }
 
     // Grow the value list to the right size and shift all the existing arguments to the right.
     // This lets us write the new argument values into the list without overwriting the old
@@ -508,6 +696,32 @@ fn legalize_inst_arguments<ArgType>(
     pos.func.dfg[inst].put_value_list(vlist);
 }
 
+/// Ensure that the `ty` being returned is a type that can be loaded and stored
+/// (potentially after another narrowing legalization) from memory, since it
+/// will go into the `sret` space.
+fn legalized_type_for_sret(ty: Type) -> Type {
+    if ty.is_bool() {
+        let bits = std::cmp::max(8, ty.bits());
+        Type::int(bits).unwrap()
+    } else {
+        ty
+    }
+}
+
+/// Insert any legalization code required to ensure that `val` can be stored
+/// into the `sret` memory. Returns the (potentially new, potentially
+/// unmodified) legalized value and its type.
+fn legalize_type_for_sret_store(pos: &mut FuncCursor, val: Value, ty: Type) -> (Value, Type) {
+    if ty.is_bool() {
+        let bits = std::cmp::max(8, ty.bits());
+        let ty = Type::int(bits).unwrap();
+        let val = pos.ins().bint(ty, val);
+        (val, ty)
+    } else {
+        (val, ty)
+    }
+}
+
 /// Insert ABI conversion code before and after the call instruction at `pos`.
 ///
 /// Instructions inserted before the call will compute the appropriate ABI values for the
@@ -518,7 +732,12 @@ fn legalize_inst_arguments<ArgType>(
 /// original return values. The call's result values will be adapted to match the new signature.
 ///
 /// Returns `true` if any instructions were inserted.
-pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
+pub fn handle_call_abi(
+    isa: &dyn TargetIsa,
+    mut inst: Inst,
+    func: &mut Function,
+    cfg: &ControlFlowGraph,
+) -> bool {
     let pos = &mut FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
@@ -528,16 +747,27 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
         Err(s) => s,
     };
 
-    // OK, we need to fix the call arguments to match the ABI signature.
-    let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
-    legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
-        func.dfg.signatures[sig_ref].params[abi_arg]
-    });
+    let sig = &pos.func.dfg.signatures[sig_ref];
+    let old_sig = &pos.func.dfg.old_signatures[sig_ref];
 
-    if !pos.func.dfg.signatures[sig_ref].returns.is_empty() {
-        inst = legalize_inst_results(pos, |func, abi_res| {
-            func.dfg.signatures[sig_ref].returns[abi_res]
+    if sig.uses_struct_return_param()
+        && old_sig
+            .as_ref()
+            .map_or(false, |s| !s.uses_struct_return_param())
+    {
+        legalize_sret_call(isa, pos, sig_ref, inst);
+    } else {
+        // OK, we need to fix the call arguments to match the ABI signature.
+        let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
+        legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
+            func.dfg.signatures[sig_ref].params[abi_arg]
         });
+
+        if !pos.func.dfg.signatures[sig_ref].returns.is_empty() {
+            inst = legalize_inst_results(pos, |func, abi_res| {
+                func.dfg.signatures[sig_ref].returns[abi_res]
+            });
+        }
     }
 
     debug_assert!(
@@ -586,8 +816,6 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
         func.signature.returns[abi_arg]
     });
-    debug_assert_eq!(pos.func.dfg.inst_variable_args(inst).len(), abi_args);
-
     // Append special return arguments for any `sret`, `link`, and `vmctx` return values added to
     // the legalized signature. These values should simply be propagated from the entry block
     // arguments.
@@ -598,6 +826,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             pos.func.dfg.display_inst(inst, None)
         );
         let mut vlist = pos.func.dfg[inst].take_value_list().unwrap();
+        let mut sret = None;
+
         for arg in &pos.func.signature.returns[abi_args..] {
             match arg.purpose {
                 ArgumentPurpose::Link
@@ -624,10 +854,45 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 .ebb_params(pos.func.layout.entry_block().unwrap())[idx];
             debug_assert_eq!(pos.func.dfg.value_type(val), arg.value_type);
             vlist.push(val, &mut pos.func.dfg.value_lists);
+
+            if let ArgumentPurpose::StructReturn = arg.purpose {
+                sret = Some(val);
+            }
+        }
+
+        // Store all the regular returns into the retptr space and remove them
+        // from the `return` instruction's value list.
+        if let Some(sret) = sret {
+            let mut offset = 0;
+            let num_regular_rets = vlist.len(&pos.func.dfg.value_lists) - special_args;
+            for i in 0..num_regular_rets {
+                debug_assert_eq!(
+                    pos.func.old_signature.as_ref().unwrap().returns[i].purpose,
+                    ArgumentPurpose::Normal,
+                );
+
+                // The next return value to process is always at `0`, since the
+                // list is emptied as we iterate.
+                let v = vlist.get(0, &pos.func.dfg.value_lists).unwrap();
+                let ty = pos.func.dfg.value_type(v);
+                let (v, ty) = legalize_type_for_sret_store(pos, v, ty);
+
+                let size = ty.bytes();
+                offset = round_up_to_multiple_of_type_align(offset, ty);
+
+                pos.ins().store(MemFlags::trusted(), v, sret, offset as i32);
+                vlist.remove(0, &mut pos.func.dfg.value_lists);
+
+                offset += size;
+            }
         }
         pos.func.dfg[inst].put_value_list(vlist);
     }
 
+    debug_assert_eq!(
+        pos.func.dfg.inst_variable_args(inst).len(),
+        abi_args + special_args
+    );
     debug_assert!(
         check_return_signature(&pos.func.dfg, inst, &pos.func.signature),
         "Signature still wrong: {} / signature {}",
@@ -637,6 +902,56 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
 
     // Yes, we changed stuff.
     true
+}
+
+fn round_up_to_multiple_of_type_align(bytes: u32, ty: Type) -> u32 {
+    // We don't have a dedicated alignment for types, so assume they are
+    // size-aligned.
+    let align = ty.bytes();
+    round_up_to_multiple_of_pow2(bytes, align)
+}
+
+/// Round `n` up to the next multiple of `to` that is greater than or equal to
+/// `n`.
+///
+/// `to` must be a power of two and greater than zero.
+///
+/// This is useful for rounding an offset or pointer up to some type's required
+/// alignment.
+fn round_up_to_multiple_of_pow2(n: u32, to: u32) -> u32 {
+    debug_assert!(to > 0);
+    debug_assert!(to.is_power_of_two());
+
+    // The simple version of this function is
+    //
+    //     (n + to - 1) / to * to
+    //
+    // Consider the numerator: `n + to - 1`. This is ensuring that if there is
+    // any remainder for `n / to`, then the result of the division is one
+    // greater than `n / to`, and that otherwise we get exactly the same result
+    // as `n / to` due to integer division rounding off the remainder. In other
+    // words, we only round up if `n` is not aligned to `to`.
+    //
+    // However, we know `to` is a power of two, and therefore `anything / to` is
+    // equivalent to `anything >> log2(to)` and `anything * to` is equivalent to
+    // `anything << log2(to)`. We can therefore rewrite our simplified function
+    // into the following:
+    //
+    //     (n + to - 1) >> log2(to) << log2(to)
+    //
+    // But shifting a value right by some number of bits `b` and then shifting
+    // it left by that same number of bits `b` is equivalent to clearing the
+    // bottom `b` bits of the number. We can clear the bottom `b` bits of a
+    // number by bit-wise and'ing the number with the bit-wise not of `2^b - 1`.
+    // Plugging this into our function and simplifying, we get:
+    //
+    //       (n + to - 1) >> log2(to) << log2(to)
+    //     = (n + to - 1) & !(2^log2(to) - 1)
+    //     = (n + to - 1) & !(to - 1)
+    //
+    // And now we have the final version of this function!
+
+    (n + to - 1) & !(to - 1)
 }
 
 /// Assign stack slots to incoming function parameters on the stack.
@@ -713,4 +1028,35 @@ fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
 
     // We changed stuff.
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::round_up_to_multiple_of_pow2;
+
+    #[test]
+    fn round_up_to_multiple_of_pow2_works() {
+        for (n, to, expected) in vec![
+            (0, 1, 0),
+            (1, 1, 1),
+            (2, 1, 2),
+            (0, 2, 0),
+            (1, 2, 2),
+            (2, 2, 2),
+            (3, 2, 4),
+            (0, 4, 0),
+            (1, 4, 4),
+            (2, 4, 4),
+            (3, 4, 4),
+            (4, 4, 4),
+            (5, 4, 8),
+        ] {
+            let actual = round_up_to_multiple_of_pow2(n, to);
+            assert_eq!(
+                actual, expected,
+                "round_up_to_multiple_of_pow2(n = {}, to = {}) = {} (expected {})",
+                n, to, actual, expected
+            );
+        }
+    }
 }

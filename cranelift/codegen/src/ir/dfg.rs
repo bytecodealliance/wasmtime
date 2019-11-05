@@ -62,6 +62,9 @@ pub struct DataFlowGraph {
     /// well as the external function references.
     pub signatures: PrimaryMap<SigRef, Signature>,
 
+    /// The pre-legalization signature for each entry in `signatures`, if any.
+    pub old_signatures: SecondaryMap<SigRef, Option<Signature>>,
+
     /// External function references. These are functions that can be called directly.
     pub ext_funcs: PrimaryMap<FuncRef, ExtFuncData>,
 
@@ -85,6 +88,7 @@ impl DataFlowGraph {
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
             signatures: PrimaryMap::new(),
+            old_signatures: SecondaryMap::new(),
             ext_funcs: PrimaryMap::new(),
             values_labels: None,
             constants: ConstantPool::new(),

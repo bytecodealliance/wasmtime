@@ -15,6 +15,7 @@ use crate::isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encoding
 use crate::isa::Builder as IsaBuilder;
 use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::fmt;
 use target_lexicon::{PointerWidth, Triple};
@@ -95,7 +96,7 @@ impl TargetIsa for Isa {
         )
     }
 
-    fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
+    fn legalize_signature(&self, sig: &mut Cow<ir::Signature>, current: bool) {
         abi::legalize_signature(sig, &self.triple, &self.isa_flags, current)
     }
 

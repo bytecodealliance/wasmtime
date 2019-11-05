@@ -17,6 +17,7 @@ use crate::isa::{CallConv, RegClass, RegUnit, TargetIsa};
 use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
+use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::i32;
 use target_lexicon::{PointerWidth, Triple};
@@ -166,9 +167,117 @@ impl ArgAssigner for Args {
     }
 }
 
+/// Get the number of general-purpose and floating-point registers required to
+/// hold the given `AbiParam` returns.
+fn num_return_registers_required<'a>(
+    word_bit_size: u8,
+    call_conv: CallConv,
+    shared_flags: &shared_settings::Flags,
+    isa_flags: &isa_settings::Flags,
+    return_params: impl IntoIterator<Item = &'a AbiParam>,
+) -> (usize, usize) {
+    // Pretend we have "infinite" registers to give out, since we aren't
+    // actually assigning `AbiParam`s to registers yet, just seeing how many
+    // registers we would need in order to fit all the `AbiParam`s in registers.
+    let gprs = &[RU::rax; 128];
+    let fpr_limit = std::usize::MAX;
+
+    let mut assigner = Args::new(
+        word_bit_size,
+        gprs,
+        fpr_limit,
+        call_conv,
+        shared_flags,
+        isa_flags,
+    );
+
+    let mut gprs_required = 0;
+    let mut fprs_required = 0;
+
+    for param in return_params {
+        match param.location {
+            ArgumentLoc::Unassigned => {
+                // Let this fall through so that we assign it a location and
+                // account for how many registers it ends up requiring below...
+            }
+            ArgumentLoc::Reg(_) => {
+                // This is already assigned to a register. Count it.
+                if param.value_type.is_float() {
+                    fprs_required += 1;
+                } else {
+                    gprs_required += 1;
+                }
+                continue;
+            }
+            _ => {
+                // It is already assigned, but not to a register. Skip it.
+                continue;
+            }
+        }
+
+        // We're going to mutate the type as it gets converted, so make our own
+        // copy that isn't visible to the outside world.
+        let mut param = param.clone();
+
+        let mut split_factor = 1;
+
+        loop {
+            match assigner.assign(&param) {
+                ArgAction::Convert(ValueConversion::IntSplit) => {
+                    split_factor *= 2;
+                    param.value_type = param.value_type.half_width().unwrap();
+                }
+                ArgAction::Convert(ValueConversion::VectorSplit) => {
+                    split_factor *= 2;
+                    param.value_type = param.value_type.half_vector().unwrap();
+                }
+                ArgAction::Assign(ArgumentLoc::Reg(_))
+                | ArgAction::Convert(ValueConversion::IntBits)
+                | ArgAction::Convert(ValueConversion::Sext(_))
+                | ArgAction::Convert(ValueConversion::Uext(_)) => {
+                    // Ok! We can fit this (potentially split) value into a
+                    // register! Add the number of params we split the parameter
+                    // into to our current counts.
+                    if param.value_type.is_float() {
+                        fprs_required += split_factor;
+                    } else {
+                        gprs_required += split_factor;
+                    }
+
+                    // But we also have to call `assign` once for each split value, to
+                    // update `assigner`'s internal state.
+                    for _ in 1..split_factor {
+                        match assigner.assign(&param) {
+                            ArgAction::Assign(_)
+                            | ArgAction::Convert(ValueConversion::IntBits)
+                            | ArgAction::Convert(ValueConversion::Sext(_))
+                            | ArgAction::Convert(ValueConversion::Uext(_)) => {
+                                continue;
+                            }
+                            otherwise => panic!(
+                                "unexpected action after first split succeeded: {:?}",
+                                otherwise
+                            ),
+                        }
+                    }
+
+                    // Continue to the next param.
+                    break;
+                }
+                ArgAction::Assign(loc) => panic!(
+                    "unexpected location assignment, should have had enough registers: {:?}",
+                    loc
+                ),
+            }
+        }
+    }
+
+    (gprs_required, fprs_required)
+}
+
 /// Legalize `sig`.
 pub fn legalize_signature(
-    sig: &mut ir::Signature,
+    sig: &mut Cow<ir::Signature>,
     triple: &Triple,
     _current: bool,
     shared_flags: &shared_settings::Flags,
@@ -207,9 +316,7 @@ pub fn legalize_signature(
         }
     }
 
-    legalize_args(&mut sig.params, &mut args);
-
-    let (regs, fpr_limit) = if sig.call_conv.extends_windows_fastcall() {
+    let (ret_regs, ret_fpr_limit) = if sig.call_conv.extends_windows_fastcall() {
         // windows-x64 calling convention only uses XMM0 or RAX for return values
         (&RET_GPRS_WIN_FASTCALL_X64[..], 1)
     } else {
@@ -218,13 +325,77 @@ pub fn legalize_signature(
 
     let mut rets = Args::new(
         bits,
-        regs,
-        fpr_limit,
+        ret_regs,
+        ret_fpr_limit,
         sig.call_conv,
         shared_flags,
         isa_flags,
     );
-    legalize_args(&mut sig.returns, &mut rets);
+
+    if sig.is_multi_return() && {
+        // Even if it is multi-return, see if the return values will fit into
+        // our available return registers.
+        let (gprs_required, fprs_required) = num_return_registers_required(
+            bits,
+            sig.call_conv,
+            shared_flags,
+            isa_flags,
+            &sig.returns,
+        );
+        gprs_required > ret_regs.len() || fprs_required > ret_fpr_limit
+    } {
+        debug_assert!(!sig.uses_struct_return_param());
+
+        // We're using the first register for the return pointer parameter.
+        let mut ret_ptr_param = AbiParam {
+            value_type: args.pointer_type,
+            purpose: ArgumentPurpose::StructReturn,
+            extension: ArgumentExtension::None,
+            location: ArgumentLoc::Unassigned,
+        };
+        match args.assign(&ret_ptr_param) {
+            ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
+                ret_ptr_param.location = ArgumentLoc::Reg(reg);
+                sig.to_mut().params.push(ret_ptr_param);
+            }
+            _ => unreachable!("return pointer should always get a register assignment"),
+        }
+
+        // We're using the first return register for the return pointer (like
+        // sys v does).
+        let mut ret_ptr_return = AbiParam {
+            value_type: args.pointer_type,
+            purpose: ArgumentPurpose::StructReturn,
+            extension: ArgumentExtension::None,
+            location: ArgumentLoc::Unassigned,
+        };
+        match rets.assign(&ret_ptr_return) {
+            ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
+                ret_ptr_return.location = ArgumentLoc::Reg(reg);
+                sig.to_mut().returns.push(ret_ptr_return);
+            }
+            _ => unreachable!("return pointer should always get a register assignment"),
+        }
+
+        sig.to_mut().returns.retain(|ret| {
+            // Either this is the return pointer, in which case we want to keep
+            // it, or else assume that it is assigned for a reason and doesn't
+            // conflict with our return pointering legalization.
+            debug_assert_eq!(
+                ret.location.is_assigned(),
+                ret.purpose != ArgumentPurpose::Normal
+            );
+            ret.location.is_assigned()
+        });
+    }
+
+    if let Some(new_params) = legalize_args(&sig.params, &mut args) {
+        sig.to_mut().params = new_params;
+    }
+
+    if let Some(new_returns) = legalize_args(&sig.returns, &mut rets) {
+        sig.to_mut().returns = new_returns;
+    }
 }
 
 /// Get register class for a type appearing in a legalized signature.

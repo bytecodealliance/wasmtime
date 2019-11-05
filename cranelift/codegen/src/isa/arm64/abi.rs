@@ -5,10 +5,11 @@ use crate::ir;
 use crate::isa::RegClass;
 use crate::regalloc::RegisterSet;
 use crate::settings as shared_settings;
+use alloc::borrow::Cow;
 
 /// Legalize `sig`.
 pub fn legalize_signature(
-    _sig: &mut ir::Signature,
+    _sig: &mut Cow<ir::Signature>,
     _flags: &shared_settings::Flags,
     _current: bool,
 ) {

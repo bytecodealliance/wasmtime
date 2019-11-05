@@ -55,6 +55,53 @@ impl Signature {
     pub fn special_param_index(&self, purpose: ArgumentPurpose) -> Option<usize> {
         self.params.iter().rposition(|arg| arg.purpose == purpose)
     }
+
+    /// Find the index of a presumed unique special-purpose parameter.
+    pub fn special_return_index(&self, purpose: ArgumentPurpose) -> Option<usize> {
+        self.returns.iter().rposition(|arg| arg.purpose == purpose)
+    }
+
+    /// Does this signature have a parameter whose `ArgumentPurpose` is
+    /// `purpose`?
+    pub fn uses_special_param(&self, purpose: ArgumentPurpose) -> bool {
+        self.special_param_index(purpose).is_some()
+    }
+
+    /// Does this signature have a return whose `ArgumentPurpose` is `purpose`?
+    pub fn uses_special_return(&self, purpose: ArgumentPurpose) -> bool {
+        self.special_return_index(purpose).is_some()
+    }
+
+    /// How many special parameters does this function have?
+    pub fn num_special_params(&self) -> usize {
+        self.params
+            .iter()
+            .filter(|p| p.purpose != ArgumentPurpose::Normal)
+            .count()
+    }
+
+    /// How many special returns does this function have?
+    pub fn num_special_returns(&self) -> usize {
+        self.returns
+            .iter()
+            .filter(|r| r.purpose != ArgumentPurpose::Normal)
+            .count()
+    }
+
+    /// Does this signature take an struct return pointer parameter?
+    pub fn uses_struct_return_param(&self) -> bool {
+        self.uses_special_param(ArgumentPurpose::StructReturn)
+    }
+
+    /// Does this return more than one normal value? (Pre-struct return
+    /// legalization)
+    pub fn is_multi_return(&self) -> bool {
+        self.returns
+            .iter()
+            .filter(|r| r.purpose == ArgumentPurpose::Normal)
+            .count()
+            > 1
+    }
 }
 
 /// Wrapper type capable of displaying a `Signature` with correct register names.

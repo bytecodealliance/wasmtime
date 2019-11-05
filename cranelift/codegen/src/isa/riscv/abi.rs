@@ -11,6 +11,7 @@ use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
 use crate::ir::{self, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, Type};
 use crate::isa::RegClass;
 use crate::regalloc::RegisterSet;
+use alloc::borrow::Cow;
 use core::i32;
 use target_lexicon::Triple;
 
@@ -88,7 +89,7 @@ impl ArgAssigner for Args {
 
 /// Legalize `sig` for RISC-V.
 pub fn legalize_signature(
-    sig: &mut ir::Signature,
+    sig: &mut Cow<ir::Signature>,
     triple: &Triple,
     isa_flags: &settings::Flags,
     current: bool,
@@ -96,10 +97,14 @@ pub fn legalize_signature(
     let bits = triple.pointer_width().unwrap().bits();
 
     let mut args = Args::new(bits, isa_flags.enable_e());
-    legalize_args(&mut sig.params, &mut args);
+    if let Some(new_params) = legalize_args(&sig.params, &mut args) {
+        sig.to_mut().params = new_params;
+    }
 
     let mut rets = Args::new(bits, isa_flags.enable_e());
-    legalize_args(&mut sig.returns, &mut rets);
+    if let Some(new_returns) = legalize_args(&sig.returns, &mut rets) {
+        sig.to_mut().returns = new_returns;
+    }
 
     if current {
         let ptr = Type::int(u16::from(bits)).unwrap();
@@ -110,8 +115,8 @@ pub fn legalize_signature(
         // in any register, but a micro-architecture with a return address predictor will only
         // recognize it as a return if the address is in `x1`.
         let link = AbiParam::special_reg(ptr, ArgumentPurpose::Link, GPR.unit(1));
-        sig.params.push(link);
-        sig.returns.push(link);
+        sig.to_mut().params.push(link);
+        sig.to_mut().returns.push(link);
     }
 }
 

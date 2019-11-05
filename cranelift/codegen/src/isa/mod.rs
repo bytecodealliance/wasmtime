@@ -63,6 +63,7 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use crate::timing;
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
@@ -315,7 +316,7 @@ pub trait TargetIsa: fmt::Display + Sync {
     /// Arguments and return values for the caller's frame pointer and other callee-saved registers
     /// should not be added by this function. These arguments are not added until after register
     /// allocation.
-    fn legalize_signature(&self, sig: &mut ir::Signature, current: bool);
+    fn legalize_signature(&self, sig: &mut Cow<ir::Signature>, current: bool);
 
     /// Get the register class that should be used to represent an ABI argument or return value of
     /// type `ty`. This should be the top-level register class that contains the argument

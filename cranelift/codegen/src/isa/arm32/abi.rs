@@ -6,6 +6,7 @@ use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
 use crate::ir::{self, AbiParam, ArgumentExtension, ArgumentLoc, Type};
 use crate::isa::RegClass;
 use crate::regalloc::RegisterSet;
+use alloc::borrow::Cow;
 use core::i32;
 use target_lexicon::Triple;
 
@@ -78,11 +79,13 @@ impl ArgAssigner for Args {
 }
 
 /// Legalize `sig`.
-pub fn legalize_signature(sig: &mut ir::Signature, triple: &Triple, _current: bool) {
+pub fn legalize_signature(sig: &mut Cow<ir::Signature>, triple: &Triple, _current: bool) {
     let bits = triple.pointer_width().unwrap().bits();
 
     let mut args = Args::new(bits);
-    legalize_args(&mut sig.params, &mut args);
+    if let Some(new_params) = legalize_args(&sig.params, &mut args) {
+        sig.to_mut().params = new_params;
+    }
 }
 
 /// Get register class for a type appearing in a legalized signature.
