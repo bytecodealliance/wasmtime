@@ -93,8 +93,7 @@ impl ModuleData {
         // this much more tightly with the rest of wasmtime.
         let module = walrus::ModuleConfig::new()
             .on_parse(wasm_webidl_bindings::binary::on_parse)
-            .parse(wasm)
-            .map_err(|e| e.compat())?;
+            .parse(wasm)?;
 
         Ok(ModuleData {
             inner: Some(Inner { module }),
