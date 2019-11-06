@@ -105,8 +105,26 @@ impl PtrLen {
     }
 }
 
+// `MMapMut` from `cfg(feature = "selinux-fix")` already deallocates properly.
+#[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
+impl Drop for PtrLen {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe {
+                region::protect(self.ptr, self.len, region::Protection::ReadWrite)
+                    .expect("unable to unprotect memory");
+                libc::free(self.ptr as _);
+            }
+        }
+    }
+}
+
+// TODO: add a `Drop` impl for `cfg(target_os = "windows")`
+
 /// JIT memory manager. This manages pages of suitably aligned and
-/// accessible memory.
+/// accessible memory. Memory will be leaked by default to have
+/// function pointers remain valid for the remainder of the
+/// program's life.
 pub struct Memory {
     allocations: Vec<PtrLen>,
     executable: usize,
@@ -209,9 +227,22 @@ impl Memory {
             }
         }
     }
+
+    /// Frees all allocated memory regions that would be leaked otherwise.
+    /// Likely to invalidate existing function pointers, causing unsafety.
+    pub unsafe fn free_memory(&mut self) {
+        self.allocations.clear();
+    }
 }
 
-// TODO: Implement Drop to unprotect and deallocate the memory?
+impl Drop for Memory {
+    fn drop(&mut self) {
+        // leak memory to guarantee validity of function pointers
+        mem::replace(&mut self.allocations, Vec::new())
+            .into_iter()
+            .for_each(mem::forget);
+    }
+}
 
 #[cfg(test)]
 mod tests {
