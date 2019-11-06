@@ -104,6 +104,7 @@ impl DataFlowGraph {
         self.value_lists.clear();
         self.values.clear();
         self.signatures.clear();
+        self.old_signatures.clear();
         self.ext_funcs.clear();
         self.values_labels = None;
         self.constants.clear();
