@@ -351,7 +351,8 @@ pub trait TargetIsa: fmt::Display + Sync {
             func.stack_slots.push(ss);
         }
 
-        layout_stack(&mut func.stack_slots, word_size)?;
+        let is_leaf = func.is_leaf();
+        layout_stack(&mut func.stack_slots, is_leaf, word_size)?;
         Ok(())
     }
 

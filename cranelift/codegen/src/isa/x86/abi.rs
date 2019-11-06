@@ -540,7 +540,8 @@ fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> 
     ss.offset = Some(-(bytes as StackOffset));
     func.stack_slots.push(ss);
 
-    layout_stack(&mut func.stack_slots, stack_align)?;
+    let is_leaf = func.is_leaf();
+    layout_stack(&mut func.stack_slots, is_leaf, stack_align)?;
     Ok(())
 }
 
@@ -587,7 +588,8 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         offset: Some(-(SHADOW_STORE_SIZE + csr_stack_size)),
     });
 
-    let total_stack_size = layout_stack(&mut func.stack_slots, stack_align)? as i32;
+    let is_leaf = func.is_leaf();
+    let total_stack_size = layout_stack(&mut func.stack_slots, is_leaf, stack_align)? as i32;
     let local_stack_size = i64::from(total_stack_size - csr_stack_size);
 
     // Add CSRs to function signature
@@ -642,7 +644,8 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         offset: Some(-csr_stack_size),
     });
 
-    let total_stack_size = layout_stack(&mut func.stack_slots, stack_align)? as i32;
+    let is_leaf = func.is_leaf();
+    let total_stack_size = layout_stack(&mut func.stack_slots, is_leaf, stack_align)? as i32;
     let local_stack_size = i64::from(total_stack_size - csr_stack_size);
 
     // Add CSRs to function signature

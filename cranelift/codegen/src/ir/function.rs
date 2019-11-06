@@ -279,6 +279,14 @@ impl Function {
 
         Ok(())
     }
+
+    /// Returns true if the function is function that doesn't call any other functions. This is not
+    /// to be confused with a "leaf function" in Windows terminology.
+    pub fn is_leaf(&self) -> bool {
+        // Conservative result: if there's at least one function signature referenced in this
+        // function, assume it may call.
+        !self.dfg.signatures.is_empty()
+    }
 }
 
 /// Additional annotations for function display.

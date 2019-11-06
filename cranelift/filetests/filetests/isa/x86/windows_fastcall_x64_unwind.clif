@@ -160,7 +160,7 @@ ebb0(v0: i64, v1: i64):
 ; nextln:         UnwindCode {
 ; nextln:             offset: 19,
 ; nextln:             op: SmallStackAlloc,
-; nextln:             info: 4,
+; nextln:             info: 3,
 ; nextln:             value: None,
 ; nextln:         },
 ; nextln:         UnwindCode {
