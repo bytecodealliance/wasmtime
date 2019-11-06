@@ -1,0 +1,348 @@
+name: CI
+on:
+  push:
+    branches: [master]
+    tags-ignore: [dev]
+  pull_request:
+    branches: [master]
+
+jobs:
+  # Check Code style quickly by running `rustfmt` over all code
+  rustfmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: ./.github/actions/install-rust
+    - run: cargo fmt --all -- --check
+
+  # Build `mdBook` documentation for `wasmtime`, and upload it as a temporary
+  # build artifact
+  doc_book:
+    name: Doc - build the book
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - run: |
+        set -e
+        curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.3.1/mdbook-v0.3.1-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
+        echo ::add-path::`pwd`
+    - run: (cd docs && mdbook build)
+    - uses: actions/upload-artifact@v1
+      with:
+        name: doc-book
+        path: docs/book
+
+  # Build rustdoc API documentation for `wasmtime*` crates. Note that we don't
+  # want to document all our transitive dependencies, hence `--no-deps`. This is
+  # a temporary build artifact we upload to consume later.
+  doc_api:
+    name: Doc - build the API documentation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: ./.github/actions/install-rust
+    - run: cargo doc --no-deps -p wasmtime
+    - run: cargo doc --no-deps -p wasmtime-api
+    - run: cargo doc --no-deps -p wasmtime-debug
+    - run: cargo doc --no-deps -p wasmtime-environ
+    - run: cargo doc --no-deps -p wasmtime-interface-types
+    - run: cargo doc --no-deps -p wasmtime-jit
+    - run: cargo doc --no-deps -p wasmtime-obj
+    - run: cargo doc --no-deps -p wasmtime-runtime
+    - run: cargo doc --no-deps -p wasmtime-wasi
+    - run: cargo doc --no-deps -p wasmtime-wast
+    - uses: actions/upload-artifact@v1
+      with:
+        name: doc-api
+        path: target/doc
+
+  # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
+  # channels of Rust as well as macOS/Linux/Windows.
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [stable, beta, nightly, windows, linux]
+        include:
+          - build: stable
+            os: macos-latest
+            rust: stable
+          - build: beta
+            os: macos-latest
+            rust: beta
+          - build: nightly
+            os: macos-latest
+            rust: nightly
+          - build: linux
+            os: ubuntu-latest
+            rust: stable
+          - build: windows
+            os: windows-latest
+            rust: stable
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: ${{ matrix.rust }}
+
+    - run: cargo fetch
+
+    # Build and test all features except for lightbeam
+    - run: cargo test --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py -- --nocapture
+      env:
+        RUST_BACKTRACE: 1
+
+    # Build and test lightbeam if we're using the nightly toolchain. Note that
+    # Lightbeam tests fail right now, but we don't want to block on that.
+    - run: cargo build --package lightbeam
+      if: matrix.rust == 'nightly'
+    - run: cargo test --package lightbeam -- --nocapture
+      if: matrix.rust == 'nightly'
+      continue-on-error: true
+      env:
+        RUST_BACKTRACE: 1
+
+  # Builds a Python wheel (package) for Windows/Mac/Linux. Note that we're
+  # careful to create binary-compatible releases here to old releases of
+  # Windows/Mac/Linux. This will also build wheels for Python 3.6 and 3.7.
+  wheels:
+    name: Python Wheel
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - uses: actions/checkout@master
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: nightly-2019-08-15
+    - uses: ./.github/actions/binary-compatible-builds
+    - run: mkdir misc/wasmtime-py/wheelhouse
+      shell: bash
+
+    # Install Python & dependencies needed for our `setup.py` scripts
+    - name: Setup Python 3.6
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.6'
+        architecture: x64
+    - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust
+      shell: bash
+    - run: (cd misc/wasmtime-py && $CENTOS $python setup.py bdist_wheel)
+      shell: bash
+
+    # Clear the build directory between building different wheels for different
+    # Python versions to ensure that we don't package dynamic libraries twice by
+    # accident.
+    - run: $CENTOS rm -rf misc/wasmtime-py/build
+      shell: bash
+
+    # Set up Python 3.7 (and build it on Linux), reinstall dependencies, then
+    # rebuild our wheels
+    - name: Setup Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.7'
+        architecture: x64
+      if: matrix.os != 'ubuntu-latest'
+    - name: Build Python 3.7
+      run: $CENTOS sh ci/setup_centos6_python37.sh
+      if: matrix.os == 'ubuntu-latest'
+    - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
+      shell: bash
+    - run: (cd misc/wasmtime-py && $CENTOS $python setup.py bdist_wheel)
+      shell: bash
+
+    # Move `dist/*.whl` into `wheelhouse/` so we can deploy them, but on Linux we
+    # need to run an `auditwheel` command as well to turn these into "manylinux"
+    # wheels to run across a number of distributions.
+    - run: cp misc/wasmtime-py/dist/*.whl misc/wasmtime-py/wheelhouse/
+      shell: bash
+      if: matrix.os != 'ubuntu-latest'
+    - run: |
+        set -e
+        cd misc/wasmtime-py
+        for whl in dist/*.whl; do
+            $CENTOS auditwheel repair "$whl" -w wheelhouse/
+        done
+      shell: bash
+      if: matrix.os == 'ubuntu-latest'
+
+    # Upload this for the publishing stage of pipelines
+    - uses: actions/upload-artifact@v1
+      with:
+        name: wheels-${{ matrix.os }}
+        path: misc/wasmtime-py/wheelhouse
+
+  # Perform release builds of `wasmtime` and `libwasmtime_api.so`. Builds on
+  # Windows/Mac/Linux, and artifacts are uploaded after the build is finished.
+  # Note that we also run tests here to test exactly what we're deploying.
+  build:
+    name: Build wasmtime
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/binary-compatible-builds
+
+    # Build `wasmtime` and executables
+    - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
+      shell: bash
+    # Build `libwasmtime_api.so`
+    - run: $CENTOS cargo build --release --features wasm-c-api --manifest-path wasmtime-api/Cargo.toml
+      shell: bash
+    # Test what we just built
+    - run: $CENTOS cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime-api
+      shell: bash
+      env:
+        RUST_BACKTRACE: 1
+
+    # ... and now perform some goop to move all the relevant artifacts into
+    # something that we'll upload from this action.
+
+    - run: mkdir dist
+      shell: bash
+
+    # Move binaries to dist folder
+    - run: cp target/release/{wasmtime,wasm2obj} dist
+      if: matrix.os != 'windows-latest'
+    - run: cp target/release/{wasmtime,wasm2obj}.exe dist
+      shell: bash
+      if: matrix.os == 'windows-latest'
+
+    # Move libwasmtime_api dylib to dist folder
+    - run: cp target/release/libwasmtime_api.{so,a} dist
+      if: matrix.os == 'ubuntu-latest'
+    - run: cp target/release/libwasmtime_api.{dylib,a} dist
+      if: matrix.os == 'macos-latest'
+    - run: cp target/release/wasmtime_api.{dll,lib} dist
+      shell: bash
+      if: matrix.os == 'windows-latest'
+
+    # Make a Windows MSI installer if we're on Windows
+    - run: |
+        export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
+        "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj installer/msi/wasmtime.wxs
+        "$WIX/bin/light" -out dist/installer.msi target/wasmtime.wixobj -ext WixUtilExtension
+        rm dist/installer.wixpdb
+      shell: bash
+      if: matrix.os == 'windows-latest'
+
+    - uses: actions/upload-artifact@v1
+      with:
+        name: bins-${{ matrix.os }}
+        path: dist
+
+  # Consumes all published artifacts from all the previous build steps, creates
+  # a bunch of tarballs for all of them, and then publishes the tarballs
+  # themselves as an artifact (for inspection) and then optionally creates
+  # github releases and/or tags for pushes.
+  publish:
+    name: Publish
+    needs: [doc_book, doc_api, wheels, build]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+    - run: rustup update stable && rustup default stable
+
+    # Download all the artifacts that we'll be publishing. Should keep an eye on
+    # the `download-artifact` repository to see if we can ever get something
+    # like "download all artifacts" or "download this list of artifacts"
+    - name: Download book
+      uses: actions/download-artifact@v1
+      with:
+        name: doc-book
+    - name: Download API docs
+      uses: actions/download-artifact@v1
+      with:
+        name: doc-api
+    - name: Download macOS Wheel
+      uses: actions/download-artifact@v1
+      with:
+        name: wheels-macos-latest
+    - name: Download macOS binaries
+      uses: actions/download-artifact@v1
+      with:
+        name: bins-macos-latest
+    - name: Download Linux Wheel
+      uses: actions/download-artifact@v1
+      with:
+        name: wheels-ubuntu-latest
+    - name: Download Linux binaries
+      uses: actions/download-artifact@v1
+      with:
+        name: bins-ubuntu-latest
+    - name: Download Windows Wheel
+      uses: actions/download-artifact@v1
+      with:
+        name: wheels-windows-latest
+    - name: Download Windows binaries
+      uses: actions/download-artifact@v1
+      with:
+        name: bins-windows-latest
+
+    - name: Assemble gh-pages
+      run: |
+        mv doc-book gh-pages
+        mv doc-api gh-pages/api
+
+    # If this is a push to the master branch push to the `gh-pages` using a
+    # deploy key. Note that a deploy key is necessary for now because otherwise
+    # using the default token for github actions doesn't actually trigger a page
+    # rebuild.
+    - name: Push to gh-pages
+      run: curl -LsSf https://git.io/fhJ8n | rustc - && (cd gh-pages && ../rust_out)
+      env:
+        GITHUB_DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        BUILD_REPOSITORY_ID: ${{ github.repository }}
+        BUILD_SOURCEVERSION: ${{ github.sha }}
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+
+    - name: Calculate tag name
+      run: |
+        name=dev
+        if [[ $GITHUB_REF == refs/tags* ]]; then
+          name=${GITHUB_REF:10}
+        fi
+        echo ::set-output name=val::$name
+        echo ::set-env name=TAG::$name
+      id: tagname
+
+    # Assemble all the build artifacts into tarballs and zip archives.
+    - name: Assemble tarballs
+      run: |
+        ./ci/build-tarballs.sh x86_64-linux ubuntu-latest
+        ./ci/build-tarballs.sh x86_64-windows windows-latest .exe
+        ./ci/build-tarballs.sh x86_64-macos macos-latest
+
+    # Upload all assembled tarballs as an artifact of the github action run, so
+    # that way even PRs can inspect the output.
+    - uses: actions/upload-artifact@v1
+      with:
+        name: tarballs
+        path: dist
+
+    # ... and if this was an actual push (tag or `master`) then we publish a
+    # new release. This'll automatically publish a tag release or update `dev`
+    # with this `sha`
+    - name: Publish Release
+      uses: ./.github/actions/github-release
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags'))
+      with:
+        files: "dist/*"
+        name: ${{ steps.tagname.outputs.val }}
+        token: ${{ secrets.GITHUB_TOKEN }}
