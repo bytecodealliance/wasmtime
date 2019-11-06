@@ -102,12 +102,9 @@ pub fn instantiate_wasi(
     let signatures = PrimaryMap::new();
 
     let mut wasi_ctx_builder = WasiCtxBuilder::new()
-        .and_then(|ctx| ctx.inherit_stdio())
-        .and_then(|ctx| ctx.args(argv.iter()))
-        .and_then(|ctx| ctx.envs(environ.iter()))
-        .map_err(|err| {
-            InstantiationError::Resource(format!("couldn't assemble WASI context object: {}", err))
-        })?;
+        .inherit_stdio()
+        .args(argv)
+        .envs(environ);
 
     for (dir, f) in preopened_dirs {
         wasi_ctx_builder = wasi_ctx_builder.preopened_dir(
