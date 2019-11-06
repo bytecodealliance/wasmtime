@@ -766,9 +766,9 @@ pub unsafe extern "C" fn wasm_store_delete(store: *mut wasm_store_t) {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_store_new(engine: *mut wasm_engine_t) -> *mut wasm_store_t {
-    let engine = (*engine).engine.clone();
+    let engine = &(*engine).engine;
     let store = Box::new(wasm_store_t {
-        store: HostRef::new(Store::new(engine)),
+        store: HostRef::new(Store::new(&engine)),
     });
     Box::into_raw(store)
 }

@@ -10,7 +10,7 @@ fn main() -> Result<()> {
 
     // Instantiate engine and store.
     let engine = HostRef::new(Engine::default());
-    let store = HostRef::new(Store::new(engine));
+    let store = HostRef::new(Store::new(&engine));
 
     // Load a module.
     let module = HostRef::new(Module::new(&store, &wasm)?);

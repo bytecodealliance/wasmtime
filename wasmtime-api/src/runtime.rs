@@ -102,13 +102,13 @@ pub struct Store {
 }
 
 impl Store {
-    pub fn new(engine: HostRef<Engine>) -> Store {
+    pub fn new(engine: &HostRef<Engine>) -> Store {
         let flags = engine.borrow().config().flags().clone();
         let features = engine.borrow().config().features().clone();
         let debug_info = engine.borrow().config().debug_info();
         let strategy = engine.borrow().config().strategy();
         Store {
-            engine,
+            engine: engine.clone(),
             context: Context::create(flags, features, debug_info, strategy),
             global_exports: Rc::new(RefCell::new(HashMap::new())),
             signature_cache: HashMap::new(),

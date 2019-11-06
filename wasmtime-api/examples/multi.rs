@@ -24,8 +24,8 @@ impl Callable for Callback {
 fn main() -> Result<()> {
     // Initialize.
     println!("Initializing...");
-    let engine = HostRef::new(Engine::new(Config::default()));
-    let store = HostRef::new(Store::new(engine));
+    let engine = HostRef::new(Engine::default());
+    let store = HostRef::new(Store::new(&engine));
 
     // Load binary.
     println!("Loading binary...");

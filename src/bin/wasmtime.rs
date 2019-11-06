@@ -270,7 +270,7 @@ fn main() -> Result<()> {
         strategy,
     );
     let engine = HostRef::new(Engine::new(config));
-    let store = HostRef::new(Store::new(engine));
+    let store = HostRef::new(Store::new(&engine));
 
     let mut module_registry = HashMap::new();
 
