@@ -66,7 +66,7 @@ impl Extern {
     }
 
     pub(crate) fn from_wasmtime_export(
-        store: HostRef<Store>,
+        store: &HostRef<Store>,
         instance_handle: InstanceHandle,
         export: wasmtime_runtime::Export,
     ) -> Extern {
@@ -118,18 +118,18 @@ pub struct Func {
 }
 
 impl Func {
-    pub fn new(store: HostRef<Store>, ty: FuncType, callable: Rc<dyn Callable + 'static>) -> Self {
+    pub fn new(store: &HostRef<Store>, ty: FuncType, callable: Rc<dyn Callable + 'static>) -> Self {
         let callable = Rc::new(NativeCallable::new(callable, &ty, &store));
         Func::from_wrapped(store, ty, callable)
     }
 
     fn from_wrapped(
-        store: HostRef<Store>,
+        store: &HostRef<Store>,
         r#type: FuncType,
         callable: Rc<dyn WrappedCallable + 'static>,
     ) -> Func {
         Func {
-            _store: store,
+            _store: store.clone(),
             callable,
             r#type,
         }
@@ -159,7 +159,7 @@ impl Func {
 
     pub(crate) fn from_wasmtime_function(
         export: wasmtime_runtime::Export,
-        store: HostRef<Store>,
+        store: &HostRef<Store>,
         instance_handle: InstanceHandle,
     ) -> Self {
         let ty = if let wasmtime_runtime::Export::Function { signature, .. } = &export {
@@ -167,7 +167,7 @@ impl Func {
         } else {
             panic!("expected function export")
         };
-        let callable = WasmtimeFn::new(store.clone(), instance_handle, export.clone());
+        let callable = WasmtimeFn::new(store, instance_handle, export.clone());
         Func::from_wrapped(store, ty, Rc::new(callable))
     }
 }
@@ -187,11 +187,11 @@ pub struct Global {
 }
 
 impl Global {
-    pub fn new(store: HostRef<Store>, r#type: GlobalType, val: Val) -> Global {
+    pub fn new(store: &HostRef<Store>, r#type: GlobalType, val: Val) -> Global {
         let (wasmtime_export, wasmtime_state) =
             generate_global_export(&r#type, val).expect("generated global");
         Global {
-            _store: store,
+            _store: store.clone(),
             r#type,
             wasmtime_export,
             wasmtime_state: Some(wasmtime_state),
@@ -248,7 +248,7 @@ impl Global {
 
     pub(crate) fn from_wasmtime_global(
         export: wasmtime_runtime::Export,
-        store: HostRef<Store>,
+        store: &HostRef<Store>,
     ) -> Global {
         let global = if let wasmtime_runtime::Export::Global { ref global, .. } = export {
             global
@@ -257,7 +257,7 @@ impl Global {
         };
         let ty = GlobalType::from_cranelift_global(global.clone());
         Global {
-            _store: store,
+            _store: store.clone(),
             r#type: ty,
             wasmtime_export: export,
             wasmtime_state: None,
@@ -302,7 +302,7 @@ fn set_table_item(
 }
 
 impl Table {
-    pub fn new(store: HostRef<Store>, r#type: TableType, init: Val) -> Table {
+    pub fn new(store: &HostRef<Store>, r#type: TableType, init: Val) -> Table {
         match r#type.element() {
             ValType::FuncRef => (),
             _ => panic!("table is not for funcref"),
@@ -317,7 +317,7 @@ impl Table {
                 let len = unsafe { (*definition).current_elements };
                 for i in 0..len {
                     let _success =
-                        set_table_item(&mut wasmtime_handle, &store, index, i, init.clone());
+                        set_table_item(&mut wasmtime_handle, store, index, i, init.clone());
                     assert!(_success);
                 }
             }
@@ -325,7 +325,7 @@ impl Table {
         }
 
         Table {
-            store,
+            store: store.clone(),
             r#type,
             wasmtime_handle,
             wasmtime_export,
@@ -387,7 +387,7 @@ impl Table {
 
     pub(crate) fn from_wasmtime_table(
         export: wasmtime_runtime::Export,
-        store: HostRef<Store>,
+        store: &HostRef<Store>,
         instance_handle: wasmtime_runtime::InstanceHandle,
     ) -> Table {
         let table = if let wasmtime_runtime::Export::Table { ref table, .. } = export {
@@ -397,7 +397,7 @@ impl Table {
         };
         let ty = TableType::from_cranelift_table(table.table.clone());
         Table {
-            store,
+            store: store.clone(),
             r#type: ty,
             wasmtime_handle: instance_handle,
             wasmtime_export: export,
@@ -413,11 +413,11 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub fn new(store: HostRef<Store>, r#type: MemoryType) -> Memory {
+    pub fn new(store: &HostRef<Store>, r#type: MemoryType) -> Memory {
         let (wasmtime_handle, wasmtime_export) =
             generate_memory_export(&r#type).expect("generated memory");
         Memory {
-            _store: store,
+            _store: store.clone(),
             r#type,
             wasmtime_handle,
             wasmtime_export,
@@ -471,7 +471,7 @@ impl Memory {
 
     pub(crate) fn from_wasmtime_memory(
         export: wasmtime_runtime::Export,
-        store: HostRef<Store>,
+        store: &HostRef<Store>,
         instance_handle: wasmtime_runtime::InstanceHandle,
     ) -> Memory {
         let memory = if let wasmtime_runtime::Export::Memory { ref memory, .. } = export {
@@ -481,7 +481,7 @@ impl Memory {
         };
         let ty = MemoryType::from_cranelift_memory(memory.memory.clone());
         Memory {
-            _store: store,
+            _store: store.clone(),
             r#type: ty,
             wasmtime_handle: instance_handle,
             wasmtime_export: export,

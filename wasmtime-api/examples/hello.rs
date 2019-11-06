@@ -30,19 +30,18 @@ fn main() -> Result<()> {
 
     // Compile.
     println!("Compiling module...");
-    let module =
-        HostRef::new(Module::new(store.clone(), &binary).context("> Error compiling module!")?);
+    let module = HostRef::new(Module::new(&store, &binary).context("> Error compiling module!")?);
 
     // Create external print functions.
     println!("Creating callback...");
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
-    let hello_func = HostRef::new(Func::new(store.clone(), hello_type, Rc::new(HelloCallback)));
+    let hello_func = HostRef::new(Func::new(&store, hello_type, Rc::new(HelloCallback)));
 
     // Instantiate.
     println!("Instantiating module...");
     let imports = vec![hello_func.into()];
     let instance = HostRef::new(
-        Instance::new(store.clone(), module, imports.as_slice())
+        Instance::new(&store, &module, imports.as_slice())
             .context("> Error instantiating module!")?,
     );
 

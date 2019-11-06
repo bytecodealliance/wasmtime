@@ -230,6 +230,6 @@ pub(crate) fn from_checked_anyfunc(
         signature,
         vmctx: item.vmctx,
     };
-    let f = Func::from_wasmtime_function(export, store.clone(), instance_handle);
+    let f = Func::from_wasmtime_function(export, store, instance_handle);
     Val::FuncRef(HostRef::new(f))
 }
