@@ -101,7 +101,7 @@ impl ModuleData {
     }
 
     /// Detects if WASI support is needed: returns module name that is requested.
-    pub fn has_wasi(&self) -> Option<String> {
+    pub fn find_wasi_module_name(&self) -> Option<String> {
         self.inner.as_ref().and_then(|Inner { module }| {
             module
                 .imports
