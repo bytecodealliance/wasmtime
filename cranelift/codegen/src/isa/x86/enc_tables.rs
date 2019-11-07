@@ -10,7 +10,7 @@ use crate::ir::{self, Function, Inst, InstBuilder};
 use crate::isa::constraints::*;
 use crate::isa::enc_tables::*;
 use crate::isa::encoding::base_size;
-use crate::isa::encoding::RecipeSizing;
+use crate::isa::encoding::{Encoding, RecipeSizing};
 use crate::isa::RegUnit;
 use crate::isa::{self, TargetIsa};
 use crate::predicates;
@@ -46,6 +46,7 @@ fn additional_size_if(
 
 fn size_plus_maybe_offset_for_in_reg_0(
     sizing: &RecipeSizing,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
@@ -54,6 +55,7 @@ fn size_plus_maybe_offset_for_in_reg_0(
 }
 fn size_plus_maybe_offset_for_in_reg_1(
     sizing: &RecipeSizing,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
@@ -62,6 +64,7 @@ fn size_plus_maybe_offset_for_in_reg_1(
 }
 fn size_plus_maybe_sib_for_in_reg_0(
     sizing: &RecipeSizing,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
@@ -70,6 +73,7 @@ fn size_plus_maybe_sib_for_in_reg_0(
 }
 fn size_plus_maybe_sib_for_in_reg_1(
     sizing: &RecipeSizing,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
@@ -78,6 +82,7 @@ fn size_plus_maybe_sib_for_in_reg_1(
 }
 fn size_plus_maybe_sib_or_offset_for_in_reg_0(
     sizing: &RecipeSizing,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
@@ -86,6 +91,7 @@ fn size_plus_maybe_sib_or_offset_for_in_reg_0(
 }
 fn size_plus_maybe_sib_or_offset_for_in_reg_1(
     sizing: &RecipeSizing,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,

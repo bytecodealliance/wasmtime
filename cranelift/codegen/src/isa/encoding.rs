@@ -80,23 +80,29 @@ impl fmt::Display for DisplayEncoding {
     }
 }
 
-type SizeCalculatorFn = fn(&RecipeSizing, Inst, &RegDiversions, &Function) -> u8;
+type SizeCalculatorFn = fn(&RecipeSizing, Encoding, Inst, &RegDiversions, &Function) -> u8;
 
 /// Returns the base size of the Recipe, assuming it's fixed. This is the default for most
 /// encodings; others can be variable and longer than this base size, depending on the registers
 /// they're using and use a different function, specific per platform.
-pub fn base_size(sizing: &RecipeSizing, _: Inst, _: &RegDiversions, _: &Function) -> u8 {
+pub fn base_size(
+    sizing: &RecipeSizing,
+    _: Encoding,
+    _: Inst,
+    _: &RegDiversions,
+    _: &Function,
+) -> u8 {
     sizing.base_size
 }
 
 /// Code size information for an encoding recipe.
 ///
-/// All encoding recipes correspond to an exact instruction size.
+/// Encoding recipes may have runtime-determined instruction size.
 pub struct RecipeSizing {
-    /// Size in bytes of instructions encoded with this recipe.
+    /// Minimum size in bytes of instructions encoded with this recipe.
     pub base_size: u8,
 
-    /// Method computing the real instruction's size, given inputs and outputs.
+    /// Method computing the instruction's real size, given inputs and outputs.
     pub compute_size: SizeCalculatorFn,
 
     /// Allowed branch range in this recipe, if any.
@@ -132,7 +138,7 @@ impl EncInfo {
         }
     }
 
-    /// Get the precise size in bytes of instructions encoded with `enc`.
+    /// Get the size in bytes of `inst`, if it were encoded with `enc`.
     ///
     /// Returns 0 for illegal encodings.
     pub fn byte_size(
@@ -144,7 +150,7 @@ impl EncInfo {
     ) -> CodeOffset {
         self.sizing.get(enc.recipe()).map_or(0, |s| {
             let compute_size = s.compute_size;
-            CodeOffset::from(compute_size(&s, inst, divert, func))
+            CodeOffset::from(compute_size(&s, enc, inst, divert, func))
         })
     }
 
