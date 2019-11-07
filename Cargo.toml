@@ -38,10 +38,6 @@ libc = "0.2.60"
 rayon = "1.1"
 wasm-webidl-bindings = "0.6"
 
-# build.rs tests whether to enable a workaround for the libc strtof function.
-[target.'cfg(target_os = "linux")'.build-dependencies]
-libc = "0.2.60"
-
 [workspace]
 members = [
   "misc/wasmtime-rust",
