@@ -1,3 +1,4 @@
+use crate::sys::dev_null;
 use crate::sys::fdentry_impl::{determine_type_and_access_rights, OsFile};
 use crate::{wasi, Error, Result};
 use std::path::PathBuf;
@@ -127,6 +128,10 @@ impl FdEntry {
                 preopen_path: None,
             },
         )
+    }
+
+    pub(crate) fn null() -> Result<Self> {
+        Self::from(dev_null()?)
     }
 
     /// Convert this `FdEntry` into a host `Descriptor` object provided the specified
