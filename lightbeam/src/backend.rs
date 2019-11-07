@@ -616,6 +616,7 @@ struct RelocateAccess {
 pub struct TranslatedCodeSection {
     exec_buf: ExecutableBuffer,
     func_starts: Vec<AssemblyOffset>,
+    #[allow(dead_code)]
     relocatable_accesses: Vec<RelocateAccess>,
     op_offset_map: Vec<(AssemblyOffset, Box<dyn Display + Send + Sync>)>,
 }
@@ -5056,7 +5057,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // TODO: This inefficiently duplicates registers but it's not really possible
     //       to double up stack space right now.
     /// Saves volatile (i.e. caller-saved) registers before a function call, if they are used.
-    fn save_volatile(&mut self, bounds: impl std::ops::RangeBounds<usize>) {
+    fn save_volatile(&mut self, _bounds: impl std::ops::RangeBounds<usize>) {
         self.save_regs(SCRATCH_REGS, ..);
     }
 
