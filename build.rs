@@ -3,108 +3,105 @@
 //! By generating a separate `#[test]` test for each file, we allow cargo test
 //! to automatically run the files in parallel.
 
+use anyhow::Context;
 use std::env;
-use std::fs::{read_dir, File};
-use std::io::{self, Write};
+use std::fmt::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
-fn main() {
-    let out_dir =
-        PathBuf::from(env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set"));
-    let mut out = File::create(out_dir.join("wast_testsuite_tests.rs"))
-        .expect("error generating test source file");
+fn main() -> anyhow::Result<()> {
+    let out_dir = PathBuf::from(
+        env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
+    );
+    let mut out = String::new();
 
     for strategy in &[
         "Cranelift",
         #[cfg(feature = "lightbeam")]
         "Lightbeam",
     ] {
-        writeln!(out, "#[cfg(test)]").expect("generating tests");
-        writeln!(out, "#[allow(non_snake_case)]").expect("generating tests");
-        writeln!(out, "mod {} {{", strategy).expect("generating tests");
+        writeln!(out, "#[cfg(test)]")?;
+        writeln!(out, "#[allow(non_snake_case)]")?;
+        writeln!(out, "mod {} {{", strategy)?;
 
-        test_directory(&mut out, "misc_testsuite", strategy).expect("generating tests");
-        test_directory(&mut out, "spec_testsuite", strategy).expect("generating tests");
-        // Skip running spec_testsuite tests if the submodule isn't checked out.
-        if read_dir("spec_testsuite")
-            .expect("reading testsuite directory")
-            .next()
-            .is_some()
-        {
-            test_file(
+        test_directory(&mut out, "misc_testsuite", strategy)?;
+        let spec_tests = test_directory(&mut out, "spec_testsuite", strategy)?;
+        // Skip running spec_testsuite tests if the submodule isn't checked
+        // out.
+        if spec_tests > 0 {
+            start_test_module(&mut out, "simd")?;
+            write_testsuite_tests(
                 &mut out,
-                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_address.wast"]),
+                "spec_testsuite/proposals/simd/simd_address.wast",
+                "simd",
                 strategy,
-            )
-            .expect("generating tests");
-            test_file(
+            )?;
+            write_testsuite_tests(
                 &mut out,
-                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_align.wast"]),
+                "spec_testsuite/proposals/simd/simd_align.wast",
+                "simd",
                 strategy,
-            )
-            .expect("generating tests");
-            test_file(
+            )?;
+            write_testsuite_tests(
                 &mut out,
-                &to_os_path(&["spec_testsuite", "proposals", "simd", "simd_const.wast"]),
+                "spec_testsuite/proposals/simd/simd_const.wast",
+                "simd",
                 strategy,
-            )
-            .expect("generating tests");
+            )?;
+            finish_test_module(&mut out)?;
 
-            let multi_value_suite = &to_os_path(&["spec_testsuite", "proposals", "multi-value"]);
-            test_directory(&mut out, &multi_value_suite, strategy).expect("generating tests");
+            test_directory(&mut out, "spec_testsuite/proposals/multi-value", strategy)
+                .expect("generating tests");
         } else {
             println!("cargo:warning=The spec testsuite is disabled. To enable, run `git submodule update --remote`.");
         }
 
-        writeln!(out, "}}").expect("generating tests");
+        writeln!(out, "}}")?;
     }
+
+    // Write out our auto-generated tests and opportunistically format them with
+    // `rustfmt` if it's installed.
+    let output = out_dir.join("wast_testsuite_tests.rs");
+    fs::write(&output, out)?;
+    drop(Command::new("rustfmt").arg(&output).status());
+    Ok(())
 }
 
-/// Helper for creating OS-independent paths.
-fn to_os_path(components: &[&str]) -> String {
-    let path: PathBuf = components.iter().collect();
-    path.display().to_string()
-}
-
-fn test_directory(out: &mut File, path: &str, strategy: &str) -> io::Result<()> {
-    let mut dir_entries: Vec<_> = read_dir(path)
-        .expect("reading testsuite directory")
+fn test_directory(
+    out: &mut String,
+    path: impl AsRef<Path>,
+    strategy: &str,
+) -> anyhow::Result<usize> {
+    let path = path.as_ref();
+    let mut dir_entries: Vec<_> = path
+        .read_dir()
+        .context(format!("failed to read {:?}", path))?
         .map(|r| r.expect("reading testsuite directory entry"))
-        .filter(|dir_entry| {
+        .filter_map(|dir_entry| {
             let p = dir_entry.path();
-            if let Some(ext) = p.extension() {
-                // Only look at wast files.
-                if ext == "wast" {
-                    // Ignore files starting with `.`, which could be editor temporary files
-                    if let Some(stem) = p.file_stem() {
-                        if let Some(stemstr) = stem.to_str() {
-                            if !stemstr.starts_with('.') {
-                                return true;
-                            }
-                        }
-                    }
-                }
+            let ext = p.extension()?;
+            // Only look at wast files.
+            if ext != "wast" {
+                return None;
             }
-            false
+            // Ignore files starting with `.`, which could be editor temporary files
+            if p.file_stem()?.to_str()?.starts_with(".") {
+                return None;
+            }
+            Some(p)
         })
         .collect();
 
-    dir_entries.sort_by_key(|dir| dir.path());
+    dir_entries.sort();
 
     let testsuite = &extract_name(path);
     start_test_module(out, testsuite)?;
-    for dir_entry in dir_entries {
-        write_testsuite_tests(out, &dir_entry.path(), testsuite, strategy)?;
+    for entry in dir_entries.iter() {
+        write_testsuite_tests(out, entry, testsuite, strategy)?;
     }
-    finish_test_module(out)
-}
-
-fn test_file(out: &mut File, testfile: &str, strategy: &str) -> io::Result<()> {
-    let path = Path::new(testfile);
-    let testsuite = format!("single_test_{}", extract_name(path));
-    start_test_module(out, &testsuite)?;
-    write_testsuite_tests(out, path, &testsuite, strategy)?;
-    finish_test_module(out)
+    finish_test_module(out)?;
+    Ok(dir_entries.len())
 }
 
 /// Extract a valid Rust identifier from the stem of a path.
@@ -118,63 +115,38 @@ fn extract_name(path: impl AsRef<Path>) -> String {
         .replace("/", "_")
 }
 
-fn start_test_module(out: &mut File, testsuite: &str) -> io::Result<()> {
-    writeln!(out, "    mod {} {{", testsuite)?;
-    writeln!(
-        out,
-        "        use super::super::{{native_isa, Path, WastContext, Compiler, Features, CompilationStrategy}};"
-    )
+fn start_test_module(out: &mut String, testsuite: &str) -> anyhow::Result<()> {
+    writeln!(out, "mod {} {{", testsuite)?;
+    Ok(())
 }
 
-fn finish_test_module(out: &mut File) -> io::Result<()> {
-    writeln!(out, "    }}")
+fn finish_test_module(out: &mut String) -> anyhow::Result<()> {
+    out.push_str("}\n");
+    Ok(())
 }
 
 fn write_testsuite_tests(
-    out: &mut File,
-    path: &Path,
+    out: &mut String,
+    path: impl AsRef<Path>,
     testsuite: &str,
     strategy: &str,
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
+    let path = path.as_ref();
+    println!("cargo:rerun-if-changed={}", path.display());
     let testname = extract_name(path);
 
-    writeln!(out, "        #[test]")?;
+    writeln!(out, "#[test]")?;
     if ignore(testsuite, &testname, strategy) {
-        writeln!(out, "        #[ignore]")?;
+        writeln!(out, "#[ignore]")?;
     }
-    writeln!(out, "        fn r#{}() {{", &testname)?;
-    writeln!(out, "            let isa = native_isa();")?;
+    writeln!(out, "fn r#{}() -> anyhow::Result<()> {{", &testname)?;
     writeln!(
         out,
-        "            let compiler = Compiler::new(isa, CompilationStrategy::{});",
+        "crate::run_wast(r#\"{}\"#, crate::CompilationStrategy::{})",
+        path.display(),
         strategy
     )?;
-    writeln!(
-        out,
-        "            let features = Features {{ simd: {}, multi_value: {}, ..Default::default() }};",
-        testsuite.contains("simd"),
-        testsuite.contains("multi_value")
-    )?;
-    writeln!(
-        out,
-        "            let mut wast_context = WastContext::new(Box::new(compiler)).with_features(features);"
-    )?;
-    writeln!(out, "            wast_context")?;
-    writeln!(out, "                .register_spectest()")?;
-    writeln!(
-        out,
-        "                .expect(\"instantiating \\\"spectest\\\"\");"
-    )?;
-    writeln!(out, "            wast_context")?;
-    write!(out, "                .run_file(Path::new(\"")?;
-    // Write out the string with escape_debug to prevent special characters such
-    // as backslash from being reinterpreted.
-    for c in path.display().to_string().chars() {
-        write!(out, "{}", c.escape_debug())?;
-    }
-    writeln!(out, "\"))")?;
-    writeln!(out, "                .expect(\"error running wast file\");",)?;
-    writeln!(out, "        }}")?;
+    writeln!(out, "}}")?;
     writeln!(out)?;
     Ok(())
 }
