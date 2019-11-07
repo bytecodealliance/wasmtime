@@ -1,0 +1,17 @@
+[package]
+name = "wasi-common-cbindgen"
+version = "0.5.0"
+authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
+edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Interface generator utilities used by wasi-common"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.5", features = ["full"] }
+quote = "1.0.2"
+
+[dev-dependencies]
+trybuild = "1.0.4"
