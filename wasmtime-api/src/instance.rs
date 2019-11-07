@@ -61,8 +61,8 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(
-        store: HostRef<Store>,
-        module: HostRef<Module>,
+        store: &HostRef<Store>,
+        module: &HostRef<Module>,
         externs: &[Extern],
     ) -> Result<Instance> {
         let context = store.borrow_mut().context().clone();
@@ -84,7 +84,7 @@ impl Instance {
                 let name = export.name().to_string();
                 let export = instance_handle.lookup(&name).expect("export");
                 exports.push(Extern::from_wasmtime_export(
-                    store.clone(),
+                    store,
                     instance_handle.clone(),
                     export,
                 ));
@@ -103,7 +103,7 @@ impl Instance {
     }
 
     pub fn from_handle(
-        store: HostRef<Store>,
+        store: &HostRef<Store>,
         instance_handle: InstanceHandle,
     ) -> Result<(Instance, HashMap<String, usize>)> {
         let contexts = HashSet::new();
@@ -121,7 +121,7 @@ impl Instance {
             }
             export_names_map.insert(name.to_owned(), exports.len());
             exports.push(Extern::from_wasmtime_export(
-                store.clone(),
+                store,
                 instance_handle.clone(),
                 export.clone(),
             ));

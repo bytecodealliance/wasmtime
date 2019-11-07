@@ -64,8 +64,8 @@ macro_rules! call {
 fn main() -> Result<(), Error> {
     // Initialize.
     println!("Initializing...");
-    let engine = HostRef::new(Engine::new(Config::default()));
-    let store = HostRef::new(Store::new(engine));
+    let engine = HostRef::new(Engine::default());
+    let store = HostRef::new(Store::new(&engine));
 
     // Load binary.
     println!("Loading binary...");
@@ -73,14 +73,12 @@ fn main() -> Result<(), Error> {
 
     // Compile.
     println!("Compiling module...");
-    let module =
-        HostRef::new(Module::new(store.clone(), &binary).context("> Error compiling module!")?);
+    let module = HostRef::new(Module::new(&store, &binary).context("> Error compiling module!")?);
 
     // Instantiate.
     println!("Instantiating module...");
-    let instance = HostRef::new(
-        Instance::new(store.clone(), module, &[]).context("> Error instantiating module!")?,
-    );
+    let instance =
+        HostRef::new(Instance::new(&store, &module, &[]).context("> Error instantiating module!")?);
 
     // Extract export.
     println!("Extracting export...");
@@ -141,7 +139,7 @@ fn main() -> Result<(), Error> {
     // TODO(wasm+): Once Wasm allows multiple memories, turn this into import.
     println!("Creating stand-alone memory...");
     let memorytype = MemoryType::new(Limits::new(5, 5));
-    let mut memory2 = Memory::new(store.clone(), memorytype);
+    let mut memory2 = Memory::new(&store, memorytype);
     check!(memory2.size(), 5u32);
     check!(memory2.grow(1), false);
     check!(memory2.grow(0), true);

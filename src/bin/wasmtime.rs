@@ -270,14 +270,14 @@ fn main() -> Result<()> {
         strategy,
     );
     let engine = HostRef::new(Engine::new(config));
-    let store = HostRef::new(Store::new(engine));
+    let store = HostRef::new(Store::new(&engine));
 
     let mut module_registry = HashMap::new();
 
     // Make spectest available by default.
     module_registry.insert(
         "spectest".to_owned(),
-        Instance::from_handle(store.clone(), instantiate_spectest()?)?,
+        Instance::from_handle(&store, instantiate_spectest()?)?,
     );
 
     // Make wasi available by default.
@@ -301,36 +301,36 @@ fn main() -> Result<()> {
 
     module_registry.insert(
         "wasi_unstable".to_owned(),
-        Instance::from_handle(store.clone(), wasi.clone())?,
+        Instance::from_handle(&store, wasi.clone())?,
     );
     module_registry.insert(
         "wasi_unstable_preview0".to_owned(),
-        Instance::from_handle(store.clone(), wasi)?,
+        Instance::from_handle(&store, wasi)?,
     );
 
     // Load the preload wasm modules.
     for filename in &args.flag_preload {
         let path = Path::new(&filename);
-        instantiate_module(store.clone(), &module_registry, path)
+        instantiate_module(&store, &module_registry, path)
             .with_context(|| format!("failed to process preload at `{}`", path.display()))?;
     }
 
     // Load the main wasm module.
     let path = Path::new(&args.arg_file);
-    handle_module(store, &module_registry, &args, path)
+    handle_module(&store, &module_registry, &args, path)
         .with_context(|| format!("failed to process main module `{}`", path.display()))?;
     Ok(())
 }
 
 fn instantiate_module(
-    store: HostRef<Store>,
+    store: &HostRef<Store>,
     module_registry: &HashMap<String, (Instance, HashMap<String, usize>)>,
     path: &Path,
 ) -> Result<(HostRef<Instance>, HostRef<Module>, Vec<u8>)> {
     // Read the wasm module binary either as `*.wat` or a raw binary
     let data = wat::parse_file(path.to_path_buf())?;
 
-    let module = HostRef::new(Module::new(store.clone(), &data)?);
+    let module = HostRef::new(Module::new(store, &data)?);
 
     // Resolve import using module_registry.
     let imports = module
@@ -356,18 +356,18 @@ fn instantiate_module(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let instance = HostRef::new(Instance::new(store.clone(), module.clone(), &imports)?);
+    let instance = HostRef::new(Instance::new(store, &module, &imports)?);
 
     Ok((instance, module, data))
 }
 
 fn handle_module(
-    store: HostRef<Store>,
+    store: &HostRef<Store>,
     module_registry: &HashMap<String, (Instance, HashMap<String, usize>)>,
     args: &Args,
     path: &Path,
 ) -> Result<()> {
-    let (instance, _module, data) = instantiate_module(store.clone(), module_registry, path)?;
+    let (instance, _module, data) = instantiate_module(store, module_registry, path)?;
 
     // If a function to invoke was given, invoke it.
     if let Some(f) = &args.flag_invoke {
@@ -379,7 +379,7 @@ fn handle_module(
 }
 
 fn invoke_export(
-    store: HostRef<Store>,
+    store: &HostRef<Store>,
     instance: HostRef<Instance>,
     data: &ModuleData,
     name: &str,

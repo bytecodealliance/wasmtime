@@ -10,10 +10,10 @@ fn main() -> Result<()> {
 
     // Instantiate engine and store.
     let engine = HostRef::new(Engine::default());
-    let store = HostRef::new(Store::new(engine));
+    let store = HostRef::new(Store::new(&engine));
 
     // Load a module.
-    let module = HostRef::new(Module::new(store.clone(), &wasm)?);
+    let module = HostRef::new(Module::new(&store, &wasm)?);
 
     // Find index of the `gcd` export.
     let gcd_index = module
@@ -26,7 +26,7 @@ fn main() -> Result<()> {
         .0;
 
     // Instantiate the module.
-    let instance = HostRef::new(Instance::new(store.clone(), module, &[])?);
+    let instance = HostRef::new(Instance::new(&store, &module, &[])?);
 
     // Invoke `gcd` export
     let gcd = instance.borrow().exports()[gcd_index]
