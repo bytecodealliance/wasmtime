@@ -35,7 +35,7 @@ core = ["hashbrown/nightly", "cranelift-codegen/core", "cranelift-wasm/core", "w
 
 [dev-dependencies]
 # for wasmtime.rs
-wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "37ce4ba"}
+wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "2fe3530"}
 docopt = "1.0.1"
 serde = { "version" = "1.0.94", features = ["derive"] }
 pretty_env_logger = "0.3.0"
