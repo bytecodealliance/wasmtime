@@ -197,6 +197,7 @@ mod wasm_tests {
                         "dangling_symlink" => true,
                         "symlink_loop" => true,
                         "truncation_rights" => true,
+                        "path_rename_trailing_slashes" => true,
                         "fd_readdir" => true,
                         "poll_oneoff" => true,
                         _ => false,

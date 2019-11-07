@@ -4,17 +4,19 @@ use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
 use crate::helpers::systemtime_to_timestamp;
-use crate::hostcalls_impl::{fd_filestat_set_times_impl, FileType, PathGet};
+use crate::hostcalls_impl::{fd_filestat_set_times_impl, Dirent, FileType, PathGet};
 use crate::sys::fdentry_impl::{determine_type_rights, OsFile};
-use crate::sys::host_impl;
+use crate::sys::host_impl::{self, path_from_host};
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
 use crate::{wasi, Error, Result};
+use log::{debug, trace};
 use std::convert::TryInto;
 use std::fs::{File, Metadata, OpenOptions};
 use std::io::{self, Seek, SeekFrom};
 use std::os::windows::fs::{FileExt, OpenOptionsExt};
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::{Path, PathBuf};
+use winx::file::{AccessMode, Flags};
 
 fn read_at(mut file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
     // get current cursor position
@@ -166,12 +168,117 @@ pub(crate) fn path_open(
         .map_err(Into::into)
 }
 
+fn dirent_from_path<P: AsRef<Path>>(
+    path: P,
+    name: &str,
+    cookie: wasi::__wasi_dircookie_t,
+) -> Result<Dirent> {
+    let path = path.as_ref();
+    trace!("dirent_from_path: opening {}", path.to_string_lossy());
+
+    // To open a directory on Windows, FILE_FLAG_BACKUP_SEMANTICS flag must be used
+    let file = OpenOptions::new()
+        .custom_flags(Flags::FILE_FLAG_BACKUP_SEMANTICS.bits())
+        .read(true)
+        .open(path)?;
+    let ty = file.metadata()?.file_type();
+    Ok(Dirent {
+        ftype: filetype_from_std(&ty),
+        name: name.to_owned(),
+        cookie,
+        ino: file_serial_no(&file)?,
+    })
+}
+
+// On Windows there is apparently no support for seeking the directory stream in the OS.
+// cf. https://github.com/WebAssembly/WASI/issues/61
+//
+// The implementation here may perform in O(n^2) if the host buffer is O(1)
+// and the number of directory entries is O(n).
+// TODO: Add a heuristic optimization to achieve O(n) time in the most common case
+//      where fd_readdir is resumed where it previously finished
+//
+// Correctness of this approach relies upon one assumption: that the order of entries
+// returned by `FindNextFileW` is stable, i.e. doesn't change if the directory
+// contents stay the same. This invariant is crucial to be able to implement
+// any kind of seeking whatsoever without having to read the whole directory at once
+// and then return the data from cache. (which leaks memory)
+//
+// The MSDN documentation explicitly says that the order in which the search returns the files
+// is not guaranteed, and is dependent on the file system.
+// cf. https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findnextfilew
+//
+// This stackoverflow post suggests that `FindNextFileW` is indeed stable and that
+// the order of directory entries depends **only** on the filesystem used, but the
+// MSDN documentation is not clear about this.
+// cf. https://stackoverflow.com/questions/47380739/is-findfirstfile-and-findnextfile-order-random-even-for-dvd
+//
+// Implementation details:
+// Cookies for the directory entries start from 1. (0 is reserved by wasi::__WASI_DIRCOOKIE_START)
+// .        gets cookie = 1
+// ..       gets cookie = 2
+// other entries, in order they were returned by FindNextFileW get subsequent integers as their cookies
+pub(crate) fn fd_readdir_impl(
+    fd: &File,
+    cookie: wasi::__wasi_dircookie_t,
+) -> Result<impl Iterator<Item = Result<Dirent>>> {
+    use winx::file::get_file_path;
+
+    let cookie = cookie.try_into()?;
+    let path = get_file_path(fd)?;
+    // std::fs::ReadDir doesn't return . and .., so we need to emulate it
+    let path = Path::new(&path);
+    // The directory /.. is the same as / on Unix (at least on ext4), so emulate this behavior too
+    let parent = path.parent().unwrap_or(path);
+    let dot = dirent_from_path(path, ".", 1)?;
+    let dotdot = dirent_from_path(parent, "..", 2)?;
+
+    trace!("    | fd_readdir impl: executing std::fs::ReadDir");
+    let iter = path.read_dir()?.zip(3..).map(|(dir, no)| {
+        let dir: std::fs::DirEntry = dir?;
+
+        Ok(Dirent {
+            name: path_from_host(dir.file_name())?,
+            ftype: filetype_from_std(&dir.file_type()?),
+            ino: File::open(dir.path()).and_then(|f| file_serial_no(&f))?,
+            cookie: no,
+        })
+    });
+
+    // into_iter for arrays is broken and returns references instead of values,
+    // so we need to use vec![...] and do heap allocation
+    // See https://github.com/rust-lang/rust/issues/25725
+    let iter = vec![dot, dotdot].into_iter().map(Ok).chain(iter);
+
+    // Emulate seekdir(). This may give O(n^2) complexity if used with a
+    // small host_buf, but this is difficult to implement efficiently.
+    //
+    // See https://github.com/WebAssembly/WASI/issues/61 for more details.
+    Ok(iter.skip(cookie))
+}
+
+// This should actually be common code with Linux
 pub(crate) fn fd_readdir(
-    fd: &mut OsFile,
-    host_buf: &mut [u8],
+    os_file: &mut OsFile,
+    mut host_buf: &mut [u8],
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<usize> {
-    unimplemented!("fd_readdir")
+    let iter = fd_readdir_impl(os_file, cookie)?;
+    let mut used = 0;
+    for dirent in iter {
+        let dirent_raw = dirent?.to_wasi_raw()?;
+        let offset = dirent_raw.len();
+        if host_buf.len() < offset {
+            break;
+        } else {
+            host_buf[0..offset].copy_from_slice(&dirent_raw);
+            used += offset;
+            host_buf = &mut host_buf[offset..];
+        }
+    }
+
+    trace!("     | *buf_used={:?}", used);
+    Ok(used)
 }
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
@@ -288,7 +395,7 @@ pub(crate) fn device_id(file: &File, _metadata: &Metadata) -> io::Result<u64> {
     Ok(winx::file::get_fileinfo(file)?.dwVolumeSerialNumber.into())
 }
 
-pub(crate) fn file_serial_no(file: &File, _metadata: &Metadata) -> io::Result<u64> {
+pub(crate) fn file_serial_no(file: &File) -> io::Result<u64> {
     let info = winx::file::get_fileinfo(file)?;
     let high = info.nFileIndexHigh;
     let low = info.nFileIndexLow;
@@ -304,19 +411,18 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_
     let metadata = file.metadata()?;
     Ok(wasi::__wasi_filestat_t {
         st_dev: device_id(file, &metadata)?,
-        st_ino: file_serial_no(file, &metadata)?,
+        st_ino: file_serial_no(file)?,
         st_nlink: num_hardlinks(file, &metadata)?.try_into()?, // u64 doesn't fit into u32
         st_size: metadata.len(),
         st_atim: systemtime_to_timestamp(metadata.accessed()?)?,
         st_ctim: change_time(file, &metadata)?.try_into()?, // i64 doesn't fit into u64
         st_mtim: systemtime_to_timestamp(metadata.modified()?)?,
-        st_filetype: filetype(file, &metadata)?.to_wasi(),
+        st_filetype: filetype_from_std(&metadata.file_type()).to_wasi(),
     })
 }
 
-fn filetype(_file: &File, metadata: &Metadata) -> Result<FileType> {
-    let ftype = metadata.file_type();
-    let ret = if ftype.is_file() {
+pub(crate) fn filetype_from_std(ftype: &std::fs::FileType) -> FileType {
+    if ftype.is_file() {
         FileType::RegularFile
     } else if ftype.is_dir() {
         FileType::Directory
@@ -324,9 +430,7 @@ fn filetype(_file: &File, metadata: &Metadata) -> Result<FileType> {
         FileType::Symlink
     } else {
         FileType::Unknown
-    };
-
-    Ok(ret)
+    }
 }
 
 pub(crate) fn path_filestat_get(

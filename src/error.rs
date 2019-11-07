@@ -5,6 +5,7 @@ use failure::Fail;
 use std::convert::Infallible;
 use std::fmt;
 use std::num::TryFromIntError;
+use std::str;
 
 #[derive(Clone, Copy, Debug, Fail, Eq, PartialEq)]
 #[repr(u16)]
@@ -140,6 +141,12 @@ impl From<TryFromIntError> for Error {
 impl From<Infallible> for Error {
     fn from(_: Infallible) -> Self {
         unreachable!()
+    }
+}
+
+impl From<str::Utf8Error> for Error {
+    fn from(_: str::Utf8Error) -> Self {
+        Self::Wasi(WasiError::EILSEQ)
     }
 }
 

@@ -10,8 +10,10 @@ use crate::sys::{host_impl, hostcalls_impl};
 use crate::{helpers, host, wasi, wasi32, Error, Result};
 use filetime::{set_file_handle_times, FileTime};
 use log::trace;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::mem;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) unsafe fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasi::__wasi_fd_t) -> Result<()> {
@@ -1044,5 +1046,46 @@ pub(crate) enum FileType {
 impl FileType {
     pub(crate) fn to_wasi(&self) -> wasi::__wasi_filetype_t {
         *self as wasi::__wasi_filetype_t
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Dirent {
+    pub name: String,
+    pub ftype: FileType,
+    pub ino: u64,
+    pub cookie: wasi::__wasi_dircookie_t,
+}
+
+impl Dirent {
+    #![allow(unused)] // temporarily, until BSD catches up with this change
+    /// Serialize the directory entry to the format define by `__wasi_fd_readdir`,
+    /// so that the serialized entries can be concatenated by the implementation.
+    pub fn to_wasi_raw(&self) -> Result<Vec<u8>> {
+        use std::slice;
+
+        let name = self.name.as_bytes();
+        let namlen = name.len();
+        let dirent_size = mem::size_of::<wasi::__wasi_dirent_t>();
+        let offset = dirent_size.checked_add(namlen).ok_or(Error::EOVERFLOW)?;
+
+        let mut raw = Vec::<u8>::with_capacity(offset);
+        raw.resize(offset, 0);
+
+        let sys_dirent = raw.as_mut_ptr() as *mut wasi::__wasi_dirent_t;
+        unsafe {
+            *sys_dirent = wasi::__wasi_dirent_t {
+                d_namlen: namlen.try_into()?,
+                d_ino: self.ino,
+                d_next: self.cookie,
+                d_type: self.ftype.to_wasi(),
+            };
+        }
+
+        let sys_name = unsafe { sys_dirent.offset(1) as *mut u8 };
+        let sys_name = unsafe { slice::from_raw_parts_mut(sys_name, namlen) };
+        sys_name.copy_from_slice(&name);
+
+        Ok(raw)
     }
 }

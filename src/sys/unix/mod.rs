@@ -2,6 +2,8 @@ pub(crate) mod fdentry_impl;
 pub(crate) mod host_impl;
 pub(crate) mod hostcalls_impl;
 
+mod dir;
+
 #[cfg(any(
     target_os = "macos",
     target_os = "netbsd",
