@@ -13,4 +13,4 @@ fn setup_log() {
     })
 }
 
-include!(concat!(env!("OUT_DIR"), "/misc_testsuite_tests.rs"));
+include!(concat!(env!("OUT_DIR"), "/wasi_misc_tests.rs"));

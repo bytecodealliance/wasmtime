@@ -1,6 +1,3 @@
-[submodule "misc_testsuite"]
-	path = misc_testsuite
-	url = https://github.com/cranestation/wasi-misc-tests
 [submodule "WASI"]
 	path = WASI
 	url = https://github.com/WebAssembly/WASI

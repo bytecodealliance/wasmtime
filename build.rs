@@ -21,8 +21,8 @@ mod wasm_tests {
 
     pub(crate) fn build_and_generate_tests() {
         // Validate if any of test sources are present and if they changed
-        let bin_tests = std::fs::read_dir("misc_testsuite/src/bin")
-            .expect("wasm_tests feature requires initialized misc_testsuite: `git submodule update --init`?");
+        // This should always work since there is no submodule to init anymore
+        let bin_tests = std::fs::read_dir("wasi-misc-tests/src/bin").unwrap();
         for test in bin_tests {
             if let Ok(test_file) = test {
                 let test_file_path = test_file
@@ -33,23 +33,17 @@ mod wasm_tests {
                 println!("cargo:rerun-if-changed={}", test_file_path);
             }
         }
-
         // Build tests to OUT_DIR (target/*/build/wasi-common-*/out/wasm32-wasi/release/*.wasm)
         let out_dir = PathBuf::from(
             env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
         );
-        let mut out = File::create(out_dir.join("misc_testsuite_tests.rs"))
+        let mut out = File::create(out_dir.join("wasi_misc_tests.rs"))
             .expect("error generating test source file");
-        build_tests("misc_testsuite", &out_dir).expect("building tests");
-        test_directory(&mut out, "misc_testsuite", &out_dir).expect("generating tests");
+        build_tests("wasi-misc-tests", &out_dir).expect("building tests");
+        test_directory(&mut out, "wasi-misc-tests", &out_dir).expect("generating tests");
     }
 
     fn build_tests(testsuite: &str, out_dir: &Path) -> io::Result<()> {
-        // if the submodule has not been checked out, the build will stall
-        if !Path::new(&format!("{}/Cargo.toml", testsuite)).exists() {
-            panic!("Testsuite {} not checked out", testsuite);
-        }
-
         let mut cmd = Command::new("cargo");
         cmd.args(&[
             "build",
@@ -191,7 +185,7 @@ mod wasm_tests {
         } else {
             /// Ignore tests that aren't supported yet.
             fn ignore(testsuite: &str, name: &str) -> bool {
-                if testsuite == "misc_testsuite" {
+                if testsuite == "wasi-misc-tests" {
                     match name {
                         "readlink_no_buffer" => true,
                         "dangling_symlink" => true,
@@ -211,7 +205,7 @@ mod wasm_tests {
 
     /// Mark tests which do not require preopens
     fn no_preopens(testsuite: &str, name: &str) -> bool {
-        if testsuite == "misc_testsuite" {
+        if testsuite == "wasi-misc-tests" {
             match name {
                 "big_random_buf" => true,
                 "clock_time_get" => true,
