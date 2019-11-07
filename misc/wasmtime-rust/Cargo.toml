@@ -17,4 +17,5 @@ cranelift-native = { version = "0.49" }
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
 wasmtime-jit = { path = "../../wasmtime-jit" }
 wasmtime-rust-macro = { path = "./macro" }
+wasmtime-wasi = { path = "../../wasmtime-wasi" }
 anyhow = "1.0.19"
