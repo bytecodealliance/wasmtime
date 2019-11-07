@@ -1027,18 +1027,18 @@ test_select!(select64, i64);
 mod benches {
     extern crate test;
 
-    use super::{translate, wabt, FIBONACCI, FIBONACCI_OPT};
+    use super::{translate, FIBONACCI, FIBONACCI_OPT};
 
     #[bench]
     fn bench_fibonacci_compile(b: &mut test::Bencher) {
-        let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
+        let wasm = wat::parse_str(FIBONACCI).unwrap();
 
         b.iter(|| test::black_box(translate(&wasm).unwrap()));
     }
 
     #[bench]
     fn bench_fibonacci_run(b: &mut test::Bencher) {
-        let wasm = wabt::wat2wasm(FIBONACCI_OPT).unwrap();
+        let wasm = wat::parse_str(FIBONACCI_OPT).unwrap();
         let module = translate(&wasm).unwrap();
 
         b.iter(|| module.execute_func::<_, u32>(0, (20,)));
@@ -1046,7 +1046,7 @@ mod benches {
 
     #[bench]
     fn bench_fibonacci_compile_run(b: &mut test::Bencher) {
-        let wasm = wabt::wat2wasm(FIBONACCI).unwrap();
+        let wasm = wat::parse_str(FIBONACCI).unwrap();
 
         b.iter(|| translate(&wasm).unwrap().execute_func::<_, u32>(0, (20,)));
     }
