@@ -65,19 +65,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build: [stable, beta, nightly, windows, linux]
+        build: [stable, beta, nightly, windows, macos]
         include:
           - build: stable
-            os: macos-latest
+            os: ubuntu-latest
             rust: stable
           - build: beta
-            os: macos-latest
+            os: ubuntu-latest
             rust: beta
           - build: nightly
-            os: macos-latest
-            rust: nightly
-          - build: linux
             os: ubuntu-latest
+            rust: nightly
+          - build: macos
+            os: macos-latest
             rust: stable
           - build: windows
             os: windows-latest
