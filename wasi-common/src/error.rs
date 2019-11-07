@@ -1,13 +1,13 @@
 // Due to https://github.com/rust-lang/rust/issues/64247
 #![allow(clippy::use_self)]
 use crate::wasi;
-use failure::Fail;
 use std::convert::Infallible;
 use std::fmt;
 use std::num::TryFromIntError;
 use std::str;
+use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, Fail, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 #[repr(u16)]
 pub enum WasiError {
     ESUCCESS = wasi::__WASI_ESUCCESS,
@@ -103,7 +103,7 @@ impl fmt::Display for WasiError {
     }
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum Error {
     Wasi(WasiError),
     Io(std::io::Error),

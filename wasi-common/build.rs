@@ -129,17 +129,11 @@ mod wasm_tests {
         }
         writeln!(
             out,
-            "    fn {}() -> Result<(), String> {{",
+            "    fn {}() -> anyhow::Result<()> {{",
             avoid_keywords(&stemstr.replace("-", "_"))
         )?;
         writeln!(out, "        setup_log();")?;
-        write!(out, "        let path = std::path::Path::new(\"")?;
-        // Write out the string with escape_debug to prevent special characters such
-        // as backslash from being reinterpreted.
-        for c in path.display().to_string().chars() {
-            write!(out, "{}", c.escape_debug())?;
-        }
-        writeln!(out, "\");")?;
+        write!(out, "        let path = std::path::Path::new(r#\"{}\"#);", path.display())?;
         writeln!(out, "        let data = utils::read_wasm(path)?;")?;
         writeln!(
             out,
