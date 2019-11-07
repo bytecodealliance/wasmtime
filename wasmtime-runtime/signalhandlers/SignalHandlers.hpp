@@ -13,7 +13,7 @@ extern "C" {
 
 int8_t CheckIfTrapAtAddress(const uint8_t* pc);
 // Record the Trap code and wasm bytecode offset in TLS somewhere
-void RecordTrap(const uint8_t* pc);
+void RecordTrap(const uint8_t* pc, bool reset_guard_page);
 
 void* EnterScope(void*);
 void LeaveScope(void*);

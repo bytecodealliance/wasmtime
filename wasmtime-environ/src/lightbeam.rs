@@ -65,10 +65,11 @@ impl crate::compilation::Compiler for Lightbeam {
 
         // TODO pass jump table offsets to Compilation::from_buffer() when they
         // are implemented in lightbeam -- using empty set of offsets for now.
+        // TODO: pass an empty range for the unwind information until lightbeam emits it
         let code_section_ranges_and_jt = code_section
             .funcs()
             .into_iter()
-            .map(|r| (r, SecondaryMap::new()));
+            .map(|r| (r, SecondaryMap::new(), 0..0));
 
         Ok((
             Compilation::from_buffer(code_section.buffer().to_vec(), code_section_ranges_and_jt),

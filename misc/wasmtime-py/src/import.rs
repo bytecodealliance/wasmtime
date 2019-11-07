@@ -16,7 +16,7 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex};
 use target_lexicon::HOST;
-use wasmtime_environ::{Export, Module};
+use wasmtime_environ::{CompiledFunction, Export, Module};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{Imports, InstanceHandle, VMContext, VMFunctionBody};
 
@@ -184,9 +184,16 @@ fn make_trampoline(
         )
         .expect("compile_and_emit");
 
+    let mut unwind_info = Vec::new();
+    context.emit_unwind_info(isa, &mut unwind_info);
+
     code_memory
-        .allocate_copy_of_byte_slice(&code_buf)
-        .expect("allocate_copy_of_byte_slice")
+        .allocate_for_function(&CompiledFunction {
+            body: code_buf,
+            jt_offsets: context.func.jt_offsets,
+            unwind_info,
+        })
+        .expect("allocate_for_function")
         .as_ptr()
 }
 

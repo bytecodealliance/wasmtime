@@ -12,17 +12,20 @@ use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use thiserror::Error;
 
-/// Compiled machine code: body and jump table offsets.
+/// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct CodeAndJTOffsets {
+pub struct CompiledFunction {
     /// The function body.
     pub body: Vec<u8>,
 
     /// The jump tables offsets (in the body).
     pub jt_offsets: ir::JumpTableOffsets,
+
+    /// The unwind information.
+    pub unwind_info: Vec<u8>,
 }
 
-type Functions = PrimaryMap<DefinedFuncIndex, CodeAndJTOffsets>;
+type Functions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
 
 /// The result of compiling a WebAssembly module's functions.
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
@@ -40,21 +43,22 @@ impl Compilation {
     /// Allocates the compilation result with the given function bodies.
     pub fn from_buffer(
         buffer: Vec<u8>,
-        functions: impl IntoIterator<Item = (Range<usize>, ir::JumpTableOffsets)>,
+        functions: impl IntoIterator<Item = (Range<usize>, ir::JumpTableOffsets, Range<usize>)>,
     ) -> Self {
         Self::new(
             functions
                 .into_iter()
-                .map(|(range, jt_offsets)| CodeAndJTOffsets {
-                    body: buffer[range].to_vec(),
+                .map(|(body_range, jt_offsets, unwind_range)| CompiledFunction {
+                    body: buffer[body_range].to_vec(),
                     jt_offsets,
+                    unwind_info: buffer[unwind_range].to_vec(),
                 })
                 .collect(),
         )
     }
 
     /// Gets the bytes of a single function
-    pub fn get(&self, func: DefinedFuncIndex) -> &CodeAndJTOffsets {
+    pub fn get(&self, func: DefinedFuncIndex) -> &CompiledFunction {
         &self.functions[func]
     }
 
@@ -67,7 +71,7 @@ impl Compilation {
     pub fn get_jt_offsets(&self) -> PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets> {
         self.functions
             .iter()
-            .map(|(_, code_and_jt)| code_and_jt.jt_offsets.clone())
+            .map(|(_, func)| func.jt_offsets.clone())
             .collect::<PrimaryMap<DefinedFuncIndex, _>>()
     }
 }
@@ -88,7 +92,7 @@ pub struct Iter<'a> {
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = &'a CodeAndJTOffsets;
+    type Item = &'a CompiledFunction;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iterator.next().map(|(_, b)| b)

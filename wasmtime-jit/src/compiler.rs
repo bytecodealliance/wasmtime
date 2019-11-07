@@ -17,8 +17,8 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, DefinedMemoryIndex, ModuleTranslationState};
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::{
-    Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, ModuleVmctxInfo,
-    Relocations, Traps, Tunables, VMOffsets,
+    Compilation, CompileError, CompiledFunction, Compiler as _C, FunctionBodyData, Module,
+    ModuleVmctxInfo, Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
     get_mut_trap_registry, InstantiationError, SignatureRegistry, TrapRegistrationGuard,
@@ -323,7 +323,8 @@ fn make_trampoline(
         builder.finalize()
     }
 
-    let mut code_buf: Vec<u8> = Vec::new();
+    let mut code_buf = Vec::new();
+    let mut unwind_info = Vec::new();
     let mut reloc_sink = RelocSink {};
     let mut trap_sink = binemit::NullTrapSink {};
     let mut stackmap_sink = binemit::NullStackmapSink {};
@@ -337,8 +338,14 @@ fn make_trampoline(
         )
         .map_err(|error| SetupError::Compile(CompileError::Codegen(error)))?;
 
+    context.emit_unwind_info(isa, &mut unwind_info);
+
     Ok(code_memory
-        .allocate_copy_of_byte_slice(&code_buf)
+        .allocate_for_function(&CompiledFunction {
+            body: code_buf,
+            jt_offsets: context.func.jt_offsets,
+            unwind_info,
+        })
         .map_err(|message| SetupError::Instantiate(InstantiationError::Resource(message)))?
         .as_ptr())
 }
@@ -347,14 +354,8 @@ fn allocate_functions(
     code_memory: &mut CodeMemory,
     compilation: &Compilation,
 ) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
-    // Allocate code for all function in one continuous memory block.
-    // First, collect all function bodies into vector to pass to the
-    // allocate_copy_of_byte_slices.
-    let bodies = compilation
-        .into_iter()
-        .map(|code_and_jt| &code_and_jt.body[..])
-        .collect::<Vec<&[u8]>>();
-    let fat_ptrs = code_memory.allocate_copy_of_byte_slices(&bodies)?;
+    let fat_ptrs = code_memory.allocate_for_compilation(compilation)?;
+
     // Second, create a PrimaryMap from result vector of pointers.
     let mut result = PrimaryMap::with_capacity(compilation.len());
     for i in 0..fat_ptrs.len() {

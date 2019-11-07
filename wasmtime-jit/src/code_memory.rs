@@ -1,16 +1,18 @@
 //! Memory management for executable code.
 
+use crate::function_table::FunctionTable;
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::{cmp, mem};
 use region;
+use wasmtime_environ::{Compilation, CompiledFunction};
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
 /// Memory manager for executable code.
 pub struct CodeMemory {
-    current: Mmap,
-    mmaps: Vec<Mmap>,
+    current: (Mmap, FunctionTable),
+    mmaps: Vec<(Mmap, FunctionTable)>,
     position: usize,
     published: usize,
 }
@@ -19,11 +21,77 @@ impl CodeMemory {
     /// Create a new `CodeMemory` instance.
     pub fn new() -> Self {
         Self {
-            current: Mmap::new(),
+            current: (Mmap::new(), FunctionTable::new()),
             mmaps: Vec::new(),
             position: 0,
             published: 0,
         }
+    }
+
+    /// Allocate a continuous memory block for a single compiled function.
+    /// TODO: Reorganize the code that calls this to emit code directly into the
+    /// mmap region rather than into a Vec that we need to copy in.
+    pub fn allocate_for_function(
+        &mut self,
+        func: &CompiledFunction,
+    ) -> Result<&mut [VMFunctionBody], String> {
+        let size = Self::function_allocation_size(func);
+
+        let start = self.position as u32;
+        let (buf, table) = self.allocate(size)?;
+
+        let (_, _, _, vmfunc) = Self::copy_function(func, start, buf, table);
+
+        Ok(vmfunc)
+    }
+
+    /// Allocate a continuous memory block for a compilation.
+    ///
+    /// Allocates memory for both the function bodies as well as function unwind data.
+    pub fn allocate_for_compilation(
+        &mut self,
+        compilation: &Compilation,
+    ) -> Result<Box<[&mut [VMFunctionBody]]>, String> {
+        let total_len = compilation
+            .into_iter()
+            .fold(0, |acc, func| acc + Self::function_allocation_size(func));
+
+        let mut start = self.position as u32;
+        let (mut buf, mut table) = self.allocate(total_len)?;
+        let mut result = Vec::with_capacity(compilation.len());
+
+        for func in compilation.into_iter() {
+            let (next_start, next_buf, next_table, vmfunc) =
+                Self::copy_function(func, start, buf, table);
+
+            result.push(vmfunc);
+
+            start = next_start;
+            buf = next_buf;
+            table = next_table;
+        }
+
+        Ok(result.into_boxed_slice())
+    }
+
+    /// Make all allocated memory executable.
+    pub fn publish(&mut self) {
+        self.push_current(0)
+            .expect("failed to push current memory map");
+
+        for (m, t) in &mut self.mmaps[self.published..] {
+            if m.len() != 0 {
+                unsafe {
+                    region::protect(m.as_mut_ptr(), m.len(), region::Protection::ReadExecute)
+                }
+                .expect("unable to make memory readonly and executable");
+            }
+
+            t.publish(m.as_ptr() as u64)
+                .expect("failed to publish function table");
+        }
+
+        self.published = self.mmaps.len();
     }
 
     /// Allocate `size` bytes of memory which can be made executable later by
@@ -32,17 +100,65 @@ impl CodeMemory {
     /// actually executing from it.
     ///
     /// TODO: Add an alignment flag.
-    fn allocate(&mut self, size: usize) -> Result<&mut [u8], String> {
-        if self.current.len() - self.position < size {
-            self.mmaps.push(mem::replace(
-                &mut self.current,
-                Mmap::with_at_least(cmp::max(0x10000, size))?,
-            ));
-            self.position = 0;
+    fn allocate(&mut self, size: usize) -> Result<(&mut [u8], &mut FunctionTable), String> {
+        if self.current.0.len() - self.position < size {
+            self.push_current(cmp::max(0x10000, size))?;
         }
+
         let old_position = self.position;
         self.position += size;
-        Ok(&mut self.current.as_mut_slice()[old_position..self.position])
+
+        Ok((
+            &mut self.current.0.as_mut_slice()[old_position..self.position],
+            &mut self.current.1,
+        ))
+    }
+
+    /// Calculates the allocation size of the given compiled function.
+    fn function_allocation_size(func: &CompiledFunction) -> usize {
+        if func.unwind_info.is_empty() {
+            func.body.len()
+        } else {
+            // Account for necessary unwind information alignment padding (32-bit)
+            ((func.body.len() + 3) & !3) + func.unwind_info.len()
+        }
+    }
+
+    /// Copies the data of the compiled function to the given buffer.
+    ///
+    /// This will also add the function to the current function table.
+    fn copy_function<'a>(
+        func: &CompiledFunction,
+        func_start: u32,
+        buf: &'a mut [u8],
+        table: &'a mut FunctionTable,
+    ) -> (
+        u32,
+        &'a mut [u8],
+        &'a mut FunctionTable,
+        &'a mut [VMFunctionBody],
+    ) {
+        let func_end = func_start + (func.body.len() as u32);
+
+        let (body, remainder) = buf.split_at_mut(func.body.len());
+        body.copy_from_slice(&func.body);
+        let vmfunc = Self::view_as_mut_vmfunc_slice(body);
+
+        if func.unwind_info.is_empty() {
+            return (func_end, remainder, table, vmfunc);
+        }
+
+        // Keep unwind information 32-bit aligned (round up to the nearest 4 byte boundary)
+        let padding = ((func.body.len() + 3) & !3) - func.body.len();
+        let (unwind, remainder) = remainder.split_at_mut(padding + func.unwind_info.len());
+        unwind[padding..].copy_from_slice(&func.unwind_info);
+
+        let unwind_start = func_end + (padding as u32);
+        let unwind_end = unwind_start + (func.unwind_info.len() as u32);
+
+        table.add_function(func_start, func_end, unwind_start);
+
+        (unwind_end, remainder, table, vmfunc)
     }
 
     /// Convert mut a slice from u8 to VMFunctionBody.
@@ -52,51 +168,28 @@ impl CodeMemory {
         unsafe { &mut *body_ptr }
     }
 
-    /// Allocate enough memory to hold a copy of `slice` and copy the data into it.
-    /// TODO: Reorganize the code that calls this to emit code directly into the
-    /// mmap region rather than into a Vec that we need to copy in.
-    pub fn allocate_copy_of_byte_slice(
-        &mut self,
-        slice: &[u8],
-    ) -> Result<&mut [VMFunctionBody], String> {
-        let new = self.allocate(slice.len())?;
-        new.copy_from_slice(slice);
-        Ok(Self::view_as_mut_vmfunc_slice(new))
-    }
+    /// Pushes the current Mmap (and function table) and allocates a new Mmap of the given size.
+    fn push_current(&mut self, new_size: usize) -> Result<(), String> {
+        let previous = mem::replace(
+            &mut self.current,
+            (
+                if new_size == 0 {
+                    Mmap::new()
+                } else {
+                    Mmap::with_at_least(cmp::max(0x10000, new_size))?
+                },
+                FunctionTable::new(),
+            ),
+        );
 
-    /// Allocate enough continuous memory block for multiple code blocks. See also
-    /// allocate_copy_of_byte_slice.
-    pub fn allocate_copy_of_byte_slices(
-        &mut self,
-        slices: &[&[u8]],
-    ) -> Result<Box<[&mut [VMFunctionBody]]>, String> {
-        let total_len = slices.into_iter().fold(0, |acc, slice| acc + slice.len());
-        let new = self.allocate(total_len)?;
-        let mut tail = new;
-        let mut result = Vec::with_capacity(slices.len());
-        for slice in slices {
-            let (block, next_tail) = tail.split_at_mut(slice.len());
-            block.copy_from_slice(slice);
-            tail = next_tail;
-            result.push(Self::view_as_mut_vmfunc_slice(block));
+        if previous.0.len() > 0 {
+            self.mmaps.push(previous);
+        } else {
+            assert!(previous.1.len() == 0);
         }
-        Ok(result.into_boxed_slice())
-    }
 
-    /// Make all allocated memory executable.
-    pub fn publish(&mut self) {
-        self.mmaps
-            .push(mem::replace(&mut self.current, Mmap::new()));
         self.position = 0;
 
-        for m in &mut self.mmaps[self.published..] {
-            if m.len() != 0 {
-                unsafe {
-                    region::protect(m.as_mut_ptr(), m.len(), region::Protection::ReadExecute)
-                }
-                .expect("unable to make memory readonly and executable");
-            }
-        }
-        self.published = self.mmaps.len();
+        Ok(())
     }
 }
