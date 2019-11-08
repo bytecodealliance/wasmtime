@@ -11,12 +11,6 @@ extern crate memoffset;
 extern crate dynasm;
 extern crate dynasmrt;
 extern crate itertools;
-#[cfg(test)]
-#[macro_use]
-extern crate lazy_static;
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
 // Just so we can implement `Signature` for `cranelift_codegen::ir::Signature`
 extern crate cranelift_codegen;
 extern crate multi_mut;
@@ -29,9 +23,9 @@ mod microwasm;
 mod module;
 mod translate_sections;
 
-#[cfg(test)]
-mod tests;
+#[cfg(feature = "bench")]
+mod benches;
 
 pub use crate::backend::CodeGenSession;
 pub use crate::function_body::translate_wasm as translate_function;
-pub use crate::module::{translate, ExecutableModule, ModuleContext, Signature, TranslatedModule};
+pub use crate::module::{translate, ExecutableModule, ModuleContext, Signature, TranslatedModule, ExecutionError};
