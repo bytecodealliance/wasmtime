@@ -51,8 +51,8 @@ banner "Rust unit tests"
 # run the lightbeam tests below if nightly is available.
 #RUST_BACKTRACE=1 cargo test --all
 RUST_BACKTRACE=1 cargo test \
+  --package wasmtime-cli \
   --package wasmtime \
-  --package wasmtime-api \
   --package wasmtime-wasi \
   --package wasmtime-wast \
   --package wasmtime-debug \

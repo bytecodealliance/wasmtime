@@ -15,17 +15,17 @@ cranelift-codegen = { version = "0.49", features = ["enable-serde"] }
 cranelift-entity = { version = "0.49", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
 cranelift-native = { version = "0.49" }
-wasmtime-api = { path = "wasmtime-api" }
-wasmtime-debug = { path = "wasmtime-debug" }
-wasmtime-environ = { path = "wasmtime-environ" }
-wasmtime-interface-types = { path = "wasmtime-interface-types" }
-wasmtime-runtime = { path = "wasmtime-runtime" }
-wasmtime-jit = { path = "wasmtime-jit" }
-wasmtime-obj = { path = "wasmtime-obj" }
-wasmtime-wast = { path = "wasmtime-wast" }
-wasmtime-wasi = { path = "wasmtime-wasi" }
-wasmtime-wasi-c = { path = "wasmtime-wasi-c", optional = true }
-wasi-common = { path = "wasi-common" }
+wasmtime-api = { path = "crates/api" }
+wasmtime-debug = { path = "crates/debug" }
+wasmtime-environ = { path = "crates/environ" }
+wasmtime-interface-types = { path = "crates/interface-types" }
+wasmtime-runtime = { path = "crates/runtime" }
+wasmtime-jit = { path = "crates/jit" }
+wasmtime-obj = { path = "crates/obj" }
+wasmtime-wast = { path = "crates/wast" }
+wasmtime-wasi = { path = "crates/wasi" }
+wasmtime-wasi-c = { path = "crates/wasi-c", optional = true }
+wasi-common = { path = "crates/wasi-common" }
 docopt = "1.0.1"
 serde = { "version" = "1.0.94", features = ["derive"] }
 faerie = "0.12.0"
@@ -43,8 +43,8 @@ anyhow = "1.0.19"
 
 [workspace]
 members = [
-  "misc/wasmtime-rust",
-  "misc/wasmtime-py",
+  "crates/misc/rust",
+  "crates/misc/py",
 ]
 
 exclude = ["wasi-common/wasi-misc-tests"]

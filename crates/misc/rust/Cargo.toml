@@ -14,8 +14,8 @@ doctest = false
 [dependencies]
 cranelift-codegen = { version = "0.49" }
 cranelift-native = { version = "0.49" }
-wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
-wasmtime-jit = { path = "../../wasmtime-jit" }
+wasmtime-interface-types = { path = "../../interface-types" }
+wasmtime-jit = { path = "../../jit" }
 wasmtime-rust-macro = { path = "./macro" }
-wasmtime-wasi = { path = "../../wasmtime-wasi" }
+wasmtime-wasi = { path = "../../wasi" }
 anyhow = "1.0.19"
