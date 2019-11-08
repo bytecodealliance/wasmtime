@@ -45,13 +45,13 @@ Additional goals for Wasmtime include:
 
 #### Including Wasmtime in your project
 
-Wasmtime exposes an API for embedding as a library through the `wasmtime-api` subcrate,
+Wasmtime exposes an API for embedding as a library through the `wasmtime` subcrate,
 which contains both a [high-level and safe Rust API], as well as a C-compatible API
 compatible with the [proposed WebAssembly C API].
 
 For more information, see the [Rust API embedding chapter] of the Wasmtime documentation.
 
-[high-level and safe Rust API]: https://docs.rs/wasmtime-api/
+[high-level and safe Rust API]: https://docs.rs/wasmtime/
 [proposed WebAssembly C API]: https://github.com/WebAssembly/wasm-c-api
 [Rust API embedding chapter]: https://cranestation.github.io/wasmtime/embed-rust.html
 

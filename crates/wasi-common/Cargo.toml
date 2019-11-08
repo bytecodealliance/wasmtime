@@ -41,7 +41,7 @@ wasmtime-runtime = { path = "../runtime" }
 wasmtime-environ = { path = "../environ" }
 wasmtime-jit = { path = "../jit" }
 wasmtime-wasi = { path = "../wasi" }
-wasmtime-api = { path = "../api" }
+wasmtime = { path = "../api" }
 cranelift-codegen = "0.49"
 target-lexicon = "0.8.1"
 pretty_env_logger = "0.3.0"

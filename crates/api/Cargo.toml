@@ -1,5 +1,5 @@
 [package]
-name = "wasmtime-api"
+name = "wasmtime"
 authors = ["The Wasmtime Project Developers"]
 version = "0.1.0"
 description = "High-level API to expose the Wasmtime runtime"

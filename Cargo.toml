@@ -1,5 +1,5 @@
 [package]
-name = "wasmtime"
+name = "wasmtime-cli"
 authors = ["The Wasmtime Project Developers"]
 version = "0.2.0"
 description = "Command-line interface for Wasmtime"
@@ -15,7 +15,7 @@ cranelift-codegen = { version = "0.49", features = ["enable-serde"] }
 cranelift-entity = { version = "0.49", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
 cranelift-native = { version = "0.49" }
-wasmtime-api = { path = "crates/api" }
+wasmtime = { path = "crates/api" }
 wasmtime-debug = { path = "crates/debug" }
 wasmtime-environ = { path = "crates/environ" }
 wasmtime-interface-types = { path = "crates/interface-types" }

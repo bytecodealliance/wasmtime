@@ -49,7 +49,7 @@ use std::process;
 use std::str;
 use std::str::FromStr;
 use target_lexicon::Triple;
-use wasmtime::pick_compilation_strategy;
+use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 #[cfg(feature = "lightbeam")]
 use wasmtime_environ::Lightbeam;
@@ -130,7 +130,7 @@ fn main() {
         None
     } else {
         let prefix = "wasm2obj.dbg.";
-        wasmtime::init_file_per_thread_logger(prefix);
+        wasmtime_cli::init_file_per_thread_logger(prefix);
         Some(prefix)
     };
 

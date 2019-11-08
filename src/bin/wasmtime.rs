@@ -43,7 +43,7 @@ use std::path::Component;
 use std::path::Path;
 use std::process::exit;
 use wasi_common::preopen_dir;
-use wasmtime::pick_compilation_strategy;
+use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_interface_types::ModuleData;
@@ -200,7 +200,7 @@ fn main() -> Result<()> {
         None
     } else {
         let prefix = "wasmtime.dbg.";
-        wasmtime::init_file_per_thread_logger(prefix);
+        wasmtime_cli::init_file_per_thread_logger(prefix);
         Some(prefix)
     };
 
