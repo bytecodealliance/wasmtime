@@ -10,7 +10,7 @@ publish = false
 edition = "2018"
 
 [dependencies]
-smallvec = "0.6"
+smallvec = "1.0.0"
 dynasm = "0.5.1"
 dynasmrt = "0.5.1"
 wasmparser = "0.39.1"
