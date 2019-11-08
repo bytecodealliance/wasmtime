@@ -1,5 +1,5 @@
 [submodule "spec_testsuite"]
-	path = spec_testsuite
+	path = tests/spec_testsuite
 	url = https://github.com/WebAssembly/testsuite
 [submodule "crates/api/c-examples/wasm-c-api"]
 	path = crates/api/c-examples/wasm-c-api

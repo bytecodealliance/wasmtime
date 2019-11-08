@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use wasmtime_jit::{instantiate, CompilationStrategy, Compiler, NullResolver};
 
-const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"filetests/rs2wasm-add-func.wat";
+const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"tests/wat/rs2wasm-add-func.wat";
 
 /// Simple test reading a wasm-file and translating to binary representation.
 #[test]

@@ -20,8 +20,8 @@ for a tutorial on compiling and running programs using WASI and wasmtime, as
 well as an overview of the filesystem sandboxing system.
 
 Wasmtime passes the [WebAssembly spec testsuite]. To run it, update the
-`spec_testsuite` submodule with `git submodule update --remote`, and it will
-be run as part of `cargo test`.
+`tests/spec_testsuite` submodule with `git submodule update --remote`, and it
+will be run as part of `cargo test`.
 
 Wasmtime does not yet implement Spectre mitigations, however this is a subject
 of ongoing research.

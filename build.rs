@@ -25,34 +25,38 @@ fn main() -> anyhow::Result<()> {
         writeln!(out, "#[allow(non_snake_case)]")?;
         writeln!(out, "mod {} {{", strategy)?;
 
-        test_directory(&mut out, "misc_testsuite", strategy)?;
-        let spec_tests = test_directory(&mut out, "spec_testsuite", strategy)?;
+        test_directory(&mut out, "tests/misc_testsuite", strategy)?;
+        let spec_tests = test_directory(&mut out, "tests/spec_testsuite", strategy)?;
         // Skip running spec_testsuite tests if the submodule isn't checked
         // out.
         if spec_tests > 0 {
             start_test_module(&mut out, "simd")?;
             write_testsuite_tests(
                 &mut out,
-                "spec_testsuite/proposals/simd/simd_address.wast",
+                "tests/spec_testsuite/proposals/simd/simd_address.wast",
                 "simd",
                 strategy,
             )?;
             write_testsuite_tests(
                 &mut out,
-                "spec_testsuite/proposals/simd/simd_align.wast",
+                "tests/spec_testsuite/proposals/simd/simd_align.wast",
                 "simd",
                 strategy,
             )?;
             write_testsuite_tests(
                 &mut out,
-                "spec_testsuite/proposals/simd/simd_const.wast",
+                "tests/spec_testsuite/proposals/simd/simd_const.wast",
                 "simd",
                 strategy,
             )?;
             finish_test_module(&mut out)?;
 
-            test_directory(&mut out, "spec_testsuite/proposals/multi-value", strategy)
-                .expect("generating tests");
+            test_directory(
+                &mut out,
+                "tests/spec_testsuite/proposals/multi-value",
+                strategy,
+            )
+            .expect("generating tests");
         } else {
             println!("cargo:warning=The spec testsuite is disabled. To enable, run `git submodule update --remote`.");
         }
