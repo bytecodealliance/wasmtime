@@ -59,7 +59,7 @@ impl binemit::RelocSink for RelocSink {
         } else if *name == get_imported_memory32_size_name() {
             RelocationTarget::ImportedMemory32Size
         } else if let ExternalName::User { namespace, index } = *name {
-            debug_assert!(namespace == 0);
+            debug_assert_eq!(namespace, 0);
             RelocationTarget::UserFunc(FuncIndex::from_u32(index))
         } else if let ExternalName::LibCall(libcall) = *name {
             RelocationTarget::LibCall(libcall)

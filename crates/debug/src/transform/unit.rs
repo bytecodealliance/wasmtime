@@ -174,7 +174,7 @@ where
     let mut entries = unit.entries();
     let (mut comp_unit, file_map, cu_low_pc, wp_die_id, vmctx_die_id) =
         if let Some((depth_delta, entry)) = entries.next_dfs()? {
-            assert!(depth_delta == 0);
+            assert_eq!(depth_delta, 0);
             let (out_line_program, debug_line_offset, file_map) = clone_line_program(
                 &unit,
                 entry,
@@ -298,7 +298,7 @@ where
                 stack.pop();
             }
         } else {
-            assert!(depth_delta == 1);
+            assert_eq!(depth_delta, 1);
         }
 
         if let Some(AttributeValue::Exprloc(expr)) = entry.attr_value(gimli::DW_AT_frame_base)? {
@@ -323,7 +323,7 @@ where
                 &mut pending_die_refs,
             )?;
             stack.push(die_id);
-            assert!(stack.len() == new_stack_len);
+            assert_eq!(stack.len(), new_stack_len);
             die_ref_map.insert(entry.offset(), die_id);
             continue;
         }
@@ -331,7 +331,7 @@ where
         let die_id = comp_unit.add(*parent, entry.tag());
 
         stack.push(die_id);
-        assert!(stack.len() == new_stack_len);
+        assert_eq!(stack.len(), new_stack_len);
         die_ref_map.insert(entry.offset(), die_id);
 
         clone_die_attributes(

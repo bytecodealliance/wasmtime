@@ -131,7 +131,7 @@ impl ExternType {
 
 // Function Types
 fn from_cranelift_abiparam(param: &ir::AbiParam) -> ValType {
-    assert!(param.purpose == ir::ArgumentPurpose::Normal);
+    assert_eq!(param.purpose, ir::ArgumentPurpose::Normal);
     ValType::from_cranelift_type(param.value_type)
 }
 

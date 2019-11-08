@@ -260,15 +260,16 @@ pub struct VMGlobalDefinition {
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
     use core::mem::{align_of, size_of};
+    use more_asserts::assert_ge;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
     fn check_vmglobal_definition_alignment() {
-        assert!(align_of::<VMGlobalDefinition>() >= align_of::<i32>());
-        assert!(align_of::<VMGlobalDefinition>() >= align_of::<i64>());
-        assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
-        assert!(align_of::<VMGlobalDefinition>() >= align_of::<f64>());
-        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[u8; 16]>());
+        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<i32>());
+        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<i64>());
+        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<f32>());
+        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<f64>());
+        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<[u8; 16]>());
     }
 
     #[test]

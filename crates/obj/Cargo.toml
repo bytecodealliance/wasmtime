@@ -16,6 +16,7 @@ cranelift-entity = { version = "0.49", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
 wasmtime-environ = { path = "../environ" }
 faerie = "0.12.0"
+more-asserts = "0.2.1"
 
 [badges]
 maintenance = { status = "experimental" }

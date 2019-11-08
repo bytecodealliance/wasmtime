@@ -20,6 +20,7 @@ cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
 target-lexicon = "0.9.0"
 log = { version = "0.4.8", default-features = false }
 libc = "0.2.60"
+more-asserts = "0.2.1"
 
 [build-dependencies]
 cmake = "0.1.35"

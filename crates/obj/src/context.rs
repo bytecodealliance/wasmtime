@@ -6,6 +6,7 @@ use core::ptr;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::GlobalInit;
+use more_asserts::assert_le;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use wasmtime_environ::{Module, TargetSharedSignatureIndex, VMOffsets};
@@ -31,7 +32,7 @@ pub fn layout_vmcontext(
         let target_index = match signature_registry.entry(sig) {
             Entry::Occupied(o) => *o.get(),
             Entry::Vacant(v) => {
-                assert!(signature_registry_len <= ::core::u32::MAX as usize);
+                assert_le!(signature_registry_len, ::core::u32::MAX as usize);
                 let id = TargetSharedSignatureIndex::new(signature_registry_len as u32);
                 signature_registry_len += 1;
                 *v.insert(id)

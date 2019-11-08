@@ -1385,7 +1385,7 @@ syscalls! {
             return return_encoded_errno(e);
         }
 
-        assert!(in_.len() == host_out.len());
+        assert_eq!(in_.len(), host_out.len());
 
         let e = host::wasmtime_ssp_poll_oneoff(
             curfds,

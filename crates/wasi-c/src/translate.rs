@@ -1,6 +1,7 @@
 use crate::host;
 use crate::wasm32;
 use core::convert::TryFrom;
+use more_asserts::assert_le;
 use std::mem::{align_of, size_of, zeroed};
 use std::slice;
 use wasmtime_runtime::{Export, VMContext};
@@ -571,6 +572,6 @@ pub unsafe fn encode_filestat_byref(
 }
 
 pub fn encode_errno(e: host::__wasi_errno_t) -> wasm32::__wasi_errno_t {
-    assert!(e <= wasm32::__WASI_ENOTCAPABLE);
+    assert_le!(e, wasm32::__WASI_ENOTCAPABLE);
     e
 }

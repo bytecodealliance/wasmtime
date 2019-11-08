@@ -1,6 +1,7 @@
 use super::*;
 use crate::cache::config::tests::test_prolog;
 use core::iter::repeat;
+use more_asserts::{assert_ge, assert_gt, assert_lt};
 use std::process;
 // load_config! comes from crate::cache(::config::tests);
 
@@ -149,7 +150,10 @@ fn test_on_get_recompress_with_mod_file() {
     let scenarios = [(4, false), (7, true), (2, false)];
 
     let mut usages = start_stats.usages;
-    assert!(usages < cache_config.optimized_compression_usage_counter_threshold());
+    assert_lt!(
+        usages,
+        cache_config.optimized_compression_usage_counter_threshold()
+    );
     let mut tested_higher_opt_compr_lvl = false;
     for (times_used, lower_compr_lvl) in &scenarios {
         for _ in 0..*times_used {
@@ -176,13 +180,19 @@ fn test_on_get_recompress_with_mod_file() {
         assert_eq!(decoded_data, mod_data.as_bytes());
 
         if *lower_compr_lvl {
-            assert!(usages >= cache_config.optimized_compression_usage_counter_threshold());
+            assert_ge!(
+                usages,
+                cache_config.optimized_compression_usage_counter_threshold()
+            );
             tested_higher_opt_compr_lvl = true;
             stats.compression_level -= 1;
             assert!(write_stats_file(&stats_file, &stats));
         }
     }
-    assert!(usages >= cache_config.optimized_compression_usage_counter_threshold());
+    assert_ge!(
+        usages,
+        cache_config.optimized_compression_usage_counter_threshold()
+    );
     assert!(tested_higher_opt_compr_lvl);
 }
 
@@ -418,7 +428,7 @@ fn test_on_update_cleanup_limits_trash_locks() {
                 "past",
                 &Duration::from_secs(secs_ago),
             );
-            assert!(secs_ago > 0);
+            assert_gt!(secs_ago, 0);
             secs_ago -= 1;
         }
 

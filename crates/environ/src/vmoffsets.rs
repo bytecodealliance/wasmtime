@@ -9,6 +9,7 @@ use cranelift_wasm::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
     SignatureIndex, TableIndex,
 };
+use more_asserts::assert_lt;
 
 #[cfg(target_pointer_width = "32")]
 fn cast_to_u32(sz: usize) -> u32 {
@@ -365,7 +366,7 @@ impl VMOffsets {
 
     /// Return the offset to `VMSharedSignatureId` index `index`.
     pub fn vmctx_vmshared_signature_id(&self, index: SignatureIndex) -> u32 {
-        assert!(index.as_u32() < self.num_signature_ids);
+        assert_lt!(index.as_u32(), self.num_signature_ids);
         self.vmctx_signature_ids_begin()
             .checked_add(
                 index
@@ -378,7 +379,7 @@ impl VMOffsets {
 
     /// Return the offset to `VMFunctionImport` index `index`.
     pub fn vmctx_vmfunction_import(&self, index: FuncIndex) -> u32 {
-        assert!(index.as_u32() < self.num_imported_functions);
+        assert_lt!(index.as_u32(), self.num_imported_functions);
         self.vmctx_imported_functions_begin()
             .checked_add(
                 index
@@ -391,7 +392,7 @@ impl VMOffsets {
 
     /// Return the offset to `VMTableImport` index `index`.
     pub fn vmctx_vmtable_import(&self, index: TableIndex) -> u32 {
-        assert!(index.as_u32() < self.num_imported_tables);
+        assert_lt!(index.as_u32(), self.num_imported_tables);
         self.vmctx_imported_tables_begin()
             .checked_add(
                 index
@@ -404,7 +405,7 @@ impl VMOffsets {
 
     /// Return the offset to `VMMemoryImport` index `index`.
     pub fn vmctx_vmmemory_import(&self, index: MemoryIndex) -> u32 {
-        assert!(index.as_u32() < self.num_imported_memories);
+        assert_lt!(index.as_u32(), self.num_imported_memories);
         self.vmctx_imported_memories_begin()
             .checked_add(
                 index
@@ -417,7 +418,7 @@ impl VMOffsets {
 
     /// Return the offset to `VMGlobalImport` index `index`.
     pub fn vmctx_vmglobal_import(&self, index: GlobalIndex) -> u32 {
-        assert!(index.as_u32() < self.num_imported_globals);
+        assert_lt!(index.as_u32(), self.num_imported_globals);
         self.vmctx_imported_globals_begin()
             .checked_add(
                 index
@@ -430,7 +431,7 @@ impl VMOffsets {
 
     /// Return the offset to `VMTableDefinition` index `index`.
     pub fn vmctx_vmtable_definition(&self, index: DefinedTableIndex) -> u32 {
-        assert!(index.as_u32() < self.num_defined_tables);
+        assert_lt!(index.as_u32(), self.num_defined_tables);
         self.vmctx_tables_begin()
             .checked_add(
                 index
@@ -443,7 +444,7 @@ impl VMOffsets {
 
     /// Return the offset to `VMMemoryDefinition` index `index`.
     pub fn vmctx_vmmemory_definition(&self, index: DefinedMemoryIndex) -> u32 {
-        assert!(index.as_u32() < self.num_defined_memories);
+        assert_lt!(index.as_u32(), self.num_defined_memories);
         self.vmctx_memories_begin()
             .checked_add(
                 index
@@ -456,7 +457,7 @@ impl VMOffsets {
 
     /// Return the offset to the `VMGlobalDefinition` index `index`.
     pub fn vmctx_vmglobal_definition(&self, index: DefinedGlobalIndex) -> u32 {
-        assert!(index.as_u32() < self.num_defined_globals);
+        assert_lt!(index.as_u32(), self.num_defined_globals);
         self.vmctx_globals_begin()
             .checked_add(
                 index

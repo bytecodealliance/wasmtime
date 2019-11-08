@@ -8,6 +8,7 @@ use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::JumpTableOffsets;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
+use more_asserts::assert_ge;
 use wasmtime_environ::{
     MemoryPlan, MemoryStyle, Module, Relocation, RelocationTarget, Relocations, TablePlan,
 };
@@ -132,11 +133,11 @@ pub fn link_module(
                                 bound: import_bound,
                             },
                         ) => {
-                            assert!(bound >= *import_bound);
+                            assert_ge!(bound, *import_bound);
                         }
                         _ => (),
                     }
-                    assert!(memory.offset_guard_size >= import_memory.offset_guard_size);
+                    assert_ge!(memory.offset_guard_size, import_memory.offset_guard_size);
 
                     dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
                     memory_imports.push(VMMemoryImport {
