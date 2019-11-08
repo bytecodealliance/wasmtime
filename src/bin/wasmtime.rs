@@ -397,7 +397,7 @@ fn invoke_export(
     let binding = data.binding_for_export(&mut handle, name)?;
     if binding.param_types()?.len() > 0 {
         eprintln!(
-            "warning: using `--render` with a function that takes arguments \
+            "warning: using `--invoke` with a function that takes arguments \
              is experimental and may break in the future"
         );
     }
@@ -436,7 +436,7 @@ fn invoke_export(
         .with_context(|| format!("failed to invoke `{}`", name))?;
     if results.len() > 0 {
         eprintln!(
-            "warning: using `--render` with a function that returns values \
+            "warning: using `--invoke` with a function that returns values \
              is experimental and may break in the future"
         );
     }
