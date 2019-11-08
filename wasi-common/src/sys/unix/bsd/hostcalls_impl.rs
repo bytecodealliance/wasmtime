@@ -147,6 +147,7 @@ pub(crate) fn fd_readdir(
     use crate::sys::unix::bsd::osfile::DirStream;
     use libc::{fdopendir, readdir, rewinddir, seekdir, telldir};
     use nix::errno::Errno;
+    use std::ffi::CStr;
     use std::mem::ManuallyDrop;
     use std::sync::Mutex;
 
@@ -176,45 +177,53 @@ pub(crate) fn fd_readdir(
     let mut host_buf_offset: usize = 0;
 
     loop {
-        let host_entry = unsafe { readdir(dir_stream.dir_ptr) };
-        if host_entry.is_null() {
-            // FIXME
-            // Currently, these are verified to be correct on macOS.
-            // Need to still verify these on other BSD-based OSes.
-            match Errno::last() {
-                Errno::EBADF => return Err(Error::EBADF),
-                Errno::EFAULT => return Err(Error::EFAULT),
-                Errno::EIO => return Err(Error::EIO),
-                _ => break, // not an error
+        let errno = Errno::last();
+        let host_entry_ptr = unsafe { readdir(dir_stream.dir_ptr) };
+        if host_entry_ptr.is_null() {
+            if errno != Errno::last() {
+                // TODO Is this correct?
+                // According to POSIX man (for Linux though!), there was an error
+                // if the errno value has changed at some point during the sequence
+                // of readdir calls
+                return Err(host_impl::errno_from_nix(Errno::last()));
+            } else {
+                // Not an error
+                break;
             }
         }
 
-        let mut entry: wasi::__wasi_dirent_t =
-            host_impl::dirent_from_host(&unsafe { *host_entry })?;
+        let host_entry = unsafe { *host_entry_ptr };
+        let mut wasi_entry: wasi::__wasi_dirent_t = host_impl::dirent_from_host(&host_entry)?;
         // Set d_next manually:
         // * on macOS d_seekoff is not set for some reason
         // * on FreeBSD d_seekoff doesn't exist; there is d_off but it is
         //   not equivalent to the value read from telldir call
-        entry.d_next = unsafe { telldir(dir_stream.dir_ptr) } as wasi::__wasi_dircookie_t;
+        wasi_entry.d_next = unsafe { telldir(dir_stream.dir_ptr) } as wasi::__wasi_dircookie_t;
 
-        log::debug!("fd_readdir entry = {:?}", entry);
+        log::debug!("fd_readdir host_entry = {:?}", host_entry);
+        log::debug!("fd_readdir wasi_entry = {:?}", wasi_entry);
 
-        let name_len = entry.d_namlen.try_into()?;
-        let required_space = std::mem::size_of_val(&entry) + name_len;
+        let name_len = host_entry.d_namlen.try_into()?;
+        let required_space = std::mem::size_of_val(&wasi_entry) + name_len;
+
         if required_space > left {
             break;
         }
+
+        let name = unsafe { CStr::from_ptr(host_entry.d_name.as_ptr()) }.to_str()?;
+        log::debug!("fd_readdir entry name = {}", name);
+
         unsafe {
             let ptr = host_buf_ptr.offset(host_buf_offset.try_into()?) as *mut c_void
                 as *mut wasi::__wasi_dirent_t;
-            *ptr = entry;
+            *ptr = wasi_entry;
         }
-        host_buf_offset += std::mem::size_of_val(&entry);
-        let name_ptr = unsafe { *host_entry }.d_name.as_ptr();
+        host_buf_offset += std::mem::size_of_val(&wasi_entry);
+
         unsafe {
             std::ptr::copy_nonoverlapping(
-                name_ptr as *const _,
-                host_buf_ptr.offset(host_buf_offset.try_into()?) as *mut _,
+                name.as_ptr(),
+                host_buf_ptr.offset(host_buf_offset.try_into()?),
                 name_len,
             )
         };
