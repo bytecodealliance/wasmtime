@@ -207,7 +207,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
     - uses: ./.github/actions/binary-compatible-builds
-      
+
     # Install wasm32-wasi target in order to build wasi-common's integration
     # tests
     - run: rustup target add wasm32-wasi
@@ -249,7 +249,7 @@ jobs:
     # Make a Windows MSI installer if we're on Windows
     - run: |
         export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
-        "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj installer/msi/wasmtime.wxs
+        "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj ci/wasmtime.wxs
         "$WIX/bin/light" -out dist/installer.msi target/wasmtime.wixobj -ext WixUtilExtension
         rm dist/installer.wixpdb
       shell: bash
