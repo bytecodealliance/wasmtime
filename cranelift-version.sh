@@ -13,7 +13,7 @@ version="0.49"
 
 # Update all of the Cargo.toml files.
 echo "Updating crate versions to $version"
-for crate in . lightbeam wasmtime-* fuzz misc/wasmtime-*; do
+for crate in . crates/* crates/misc/* fuzz; do
     # Update the version number of this crate to $version.
     sed -i.bk -e "/^cranelift-/s/\"[^\"]*\"/\"$version\"/" \
         "$crate/Cargo.toml"
