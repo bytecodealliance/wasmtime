@@ -216,7 +216,7 @@ jobs:
     - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
       shell: bash
     # Build `libwasmtime_api.so`
-    - run: $CENTOS cargo build --release --manifest-path wasmtime/Cargo.toml
+    - run: $CENTOS cargo build --release --manifest-path crates/api/Cargo.toml
       shell: bash
     # Test what we just built
     - run: $CENTOS cargo test --features wasi-common/wasm_tests --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime
