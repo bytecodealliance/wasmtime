@@ -59,7 +59,7 @@
                 <File Id="README.md" Source="README.md" KeyPath="yes" Checksum="yes"/>
             </Component>
             <Component Id="CACHE_CONFIGURATION" Guid="*">
-                <File Id="CACHE_CONFIGURATION.md" Source="CACHE_CONFIGURATION.md" KeyPath="yes" Checksum="yes"/>
+                <File Id="CACHE_CONFIGURATION.md" Source="docs\CACHE_CONFIGURATION.md" KeyPath="yes" Checksum="yes"/>
             </Component>
         </DirectoryRef>
 

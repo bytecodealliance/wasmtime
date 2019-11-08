@@ -28,8 +28,10 @@ We will be using the wasmtime engine/API to run the wasm file, so we will add th
 
 ```
 [dependencies]
-wasmtime-api = { git = "https://github.com/CraneStation/wasmtime" }
+wasmtime = "<current version>"
 ```
+
+where "<current version>" is the current version number of the `wasmtime` crate.
 
 It is time to add code to the `src/main.rs`. First, the engine and storage need to be activated:
 

@@ -25,8 +25,8 @@ for a tutorial on compiling and running programs using WASI and wasmtime, as
 well as an overview of the filesystem sandboxing system.
 
 Wasmtime passes the [WebAssembly spec testsuite]. To run it, update the
-`spec_testsuite` submodule with `git submodule update --remote`, and it will
-be run as part of `cargo test`.
+`tests/spec_testsuite` submodule with `git submodule update --remote`, and it
+will be run as part of `cargo test`.
 
 Wasmtime does not yet implement Spectre mitigations, however this is a subject
 of ongoing research.
@@ -50,13 +50,13 @@ Additional goals for Wasmtime include:
 
 #### Including Wasmtime in your project
 
-Wasmtime exposes an API for embedding as a library through the `wasmtime-api` subcrate,
+Wasmtime exposes an API for embedding as a library through the `wasmtime` subcrate,
 which contains both a [high-level and safe Rust API], as well as a C-compatible API
 compatible with the [proposed WebAssembly C API].
 
 For more information, see the [Rust API embedding chapter] of the Wasmtime documentation.
 
-[high-level and safe Rust API]: https://docs.rs/wasmtime-api/
+[high-level and safe Rust API]: https://docs.rs/wasmtime/
 [proposed WebAssembly C API]: https://github.com/WebAssembly/wasm-c-api
 [Rust API embedding chapter]: https://cranestation.github.io/wasmtime/embed-rust.html
 

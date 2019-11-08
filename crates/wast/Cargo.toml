@@ -1,0 +1,29 @@
+[package]
+name = "wasmtime-wast"
+version = "0.2.0"
+authors = ["The Wasmtime Project Developers"]
+description = "wast testing support for wasmtime"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/CraneStation/wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+cranelift-codegen = { version = "0.49", features = ["enable-serde"] }
+cranelift-entity = { version = "0.49", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
+wasmtime-jit = { path = "../jit" }
+wasmtime-runtime = { path = "../runtime" }
+wasmtime-environ = { path = "../environ" }
+wast = "3.0.0"
+anyhow = "1.0.19"
+target-lexicon = "0.9.0"
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "CraneStation/wasmtime" }
+
+[features]
+lightbeam = []

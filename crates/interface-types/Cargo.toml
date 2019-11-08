@@ -1,0 +1,20 @@
+[package]
+name = "wasmtime-interface-types"
+version = "0.2.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Support for wasm interface types with wasmtime"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/CraneStation/wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.19"
+cranelift-codegen = { version = "0.49", default-features = false }
+walrus = "0.13"
+wasmparser = { version = "0.39.2", default-features = false }
+wasm-webidl-bindings = "0.6"
+wasmtime-jit = { path = '../jit', default-features = false }
+wasmtime-runtime = { path = '../runtime', default-features = false }
