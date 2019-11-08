@@ -9,10 +9,15 @@ To get started, visit [wasmtime.dev](https://wasmtime.dev/).
 [WebAssembly]: https://webassembly.org/
 [WASI]: https://wasi.dev
 [outside of the Web]: https://webassembly.org/docs/non-web/
+[build-status]: https://github.com/CraneStation/wasmtime/workflows/CI/badge.svg
+[github-actions]: https://github.com/CraneStation/wasmtime/actions?query=workflow%3ACI
+[gitter-chat-badge]: https://badges.gitter.im/CraneStation/CraneStation.svg
+[gitter-chat]: https://gitter.im/CraneStation/Lobby
+[minimum-rustc]: https://img.shields.io/badge/rustc-1.37+-green.svg
 
-[![Build Status](https://dev.azure.com/CraneStation/Wasmtime/_apis/build/status/CraneStation.wasmtime?branchName=master)](https://dev.azure.com/CraneStation/Wasmtime/_build/latest?definitionId=4&branchName=master)
-[![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
-![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
+[![build-status]][github-actions]
+[![gitter-chat-badge]][gitter-chat]
+![minimum-rustc]
 
 There are Rust, C, and C++ toolchains that can compile programs with WASI. See
 the [WASI intro][WASI intro] for more information, and the [WASI tutorial][WASI tutorial]
