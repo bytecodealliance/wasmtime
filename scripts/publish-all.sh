@@ -27,7 +27,7 @@ done
 
 # Update our local Cargo.lock (not checked in).
 cargo update
-./test-all.sh
+./scripts/test-all.sh
 
 # Commands needed to publish.
 #
