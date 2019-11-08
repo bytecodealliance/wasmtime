@@ -21,7 +21,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         CompilationStrategy::Auto,
     );
     let engine = HostRef::new(Engine::new(config));
-    let store = HostRef::new(Store::new(engine));
+    let store = HostRef::new(Store::new(&engine));
 
     let mut module_registry = HashMap::new();
     let global_exports = store.borrow().global_exports().clone();
@@ -56,7 +56,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     module_registry.insert(
         "wasi_unstable".to_owned(),
         Instance::from_handle(
-            store.clone(),
+            &store,
             wasmtime_wasi::instantiate_wasi_with_context(
                 "",
                 global_exports.clone(),
@@ -67,8 +67,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .context("failed to create instance from handle")?,
     );
 
-    let module =
-        HostRef::new(Module::new(store.clone(), &data).context("failed to create wasm module")?);
+    let module = HostRef::new(Module::new(&store, &data).context("failed to create wasm module")?);
     let imports = module
         .borrow()
         .imports()
@@ -91,12 +90,10 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let _ = HostRef::new(
-        Instance::new(store.clone(), module.clone(), &imports).context(format!(
-            "error while instantiating Wasm module '{}'",
-            bin_name,
-        ))?,
-    );
+    let _ = HostRef::new(Instance::new(&store, &module, &imports).context(format!(
+        "error while instantiating Wasm module '{}'",
+        bin_name,
+    ))?);
 
     Ok(())
 }
