@@ -47,7 +47,7 @@ members = [
   "crates/misc/py",
 ]
 
-exclude = ["wasi-common/wasi-misc-tests"]
+exclude = ["crates/wasi-common/wasi-misc-tests"]
 
 [features]
 # Enable all supported architectures by default.
