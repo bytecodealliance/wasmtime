@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "bench", feature(test))]
+#![cfg_attr(test, feature(test))]
 #![feature(proc_macro_hygiene)]
 
 #[macro_use]
@@ -14,6 +14,8 @@ extern crate itertools;
 // Just so we can implement `Signature` for `cranelift_codegen::ir::Signature`
 extern crate cranelift_codegen;
 extern crate multi_mut;
+#[cfg(test)]
+extern crate test;
 
 mod backend;
 mod disassemble;
@@ -23,7 +25,7 @@ mod microwasm;
 mod module;
 mod translate_sections;
 
-#[cfg(feature = "bench")]
+#[cfg(test)]
 mod benches;
 
 pub use crate::backend::CodeGenSession;
