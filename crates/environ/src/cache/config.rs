@@ -171,7 +171,7 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(
     let content = "\
 # Comment out certain settings to use default values.
 # For more settings, please refer to the documentation:
-# https://github.com/CraneStation/wasmtime/blob/master/CACHE_CONFIGURATION.md
+# https://github.com/CraneStation/wasmtime/blob/master/docs/CACHE_CONFIGURATION.md
 
 [cache]
 enabled = true

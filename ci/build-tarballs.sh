@@ -32,7 +32,7 @@ mktarball() {
 # Create the main tarball of binaries
 bin_pkgname=wasmtime-$TAG-$platform
 mkdir tmp/$bin_pkgname
-cp LICENSE README.md CACHE_CONFIGURATION.md tmp/$bin_pkgname
+cp LICENSE README.md docs/CACHE_CONFIGURATION.md tmp/$bin_pkgname
 mv bins-$src/{wasmtime,wasm2obj}$exe tmp/$bin_pkgname
 chmod +x tmp/$bin_pkgname/{wasmtime,wasm2obj}$exe
 mktarball $bin_pkgname
