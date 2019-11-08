@@ -4,12 +4,24 @@ use super::registers::RU;
 use crate::ir::{Function, InstructionData, Opcode};
 use crate::isa::{CallConv, RegUnit, TargetIsa};
 use alloc::vec::Vec;
-use byteorder::{LittleEndian, WriteBytesExt};
+use byteorder::{ByteOrder, LittleEndian};
 
 /// Maximum (inclusive) size of a "small" stack allocation
 const SMALL_ALLOC_MAX_SIZE: u32 = 128;
 /// Maximum (inclusive) size of a "large" stack allocation that can represented in 16-bits
 const LARGE_ALLOC_16BIT_MAX_SIZE: u32 = 524280;
+
+fn write_u16<T: ByteOrder>(mem: &mut Vec<u8>, v: u16) {
+    let mut buf = [0; 2];
+    T::write_u16(&mut buf, v);
+    mem.extend(buf.iter());
+}
+
+fn write_u32<T: ByteOrder>(mem: &mut Vec<u8>, v: u32) {
+    let mut buf = [0; 4];
+    T::write_u32(&mut buf, v);
+    mem.extend(buf.iter());
+}
 
 /// The supported unwind codes for the x64 Windows ABI.
 ///
@@ -24,7 +36,7 @@ enum UnwindCode {
 }
 
 impl UnwindCode {
-    fn emit(&self, mem: &mut Vec<u8>) -> std::io::Result<()> {
+    fn emit(&self, mem: &mut Vec<u8>) {
         enum UnwindOperation {
             PushNonvolatileRegister,
             LargeStackAlloc,
@@ -34,36 +46,32 @@ impl UnwindCode {
 
         match self {
             Self::PushRegister { offset, reg } => {
-                mem.write_u8(*offset)?;
-                mem.write_u8(
-                    ((*reg as u8) << 4) | (UnwindOperation::PushNonvolatileRegister as u8),
-                )?;
+                mem.push(*offset);
+                mem.push(((*reg as u8) << 4) | (UnwindOperation::PushNonvolatileRegister as u8));
             }
             Self::StackAlloc { offset, size } => {
                 // Stack allocations on Windows must be a multiple of 8 and be at least 1 slot
                 assert!(*size >= 8);
                 assert!((*size % 8) == 0);
 
-                mem.write_u8(*offset)?;
+                mem.push(*offset);
                 if *size <= SMALL_ALLOC_MAX_SIZE {
-                    mem.write_u8(
+                    mem.push(
                         ((((*size - 8) / 8) as u8) << 4) | UnwindOperation::SmallStackAlloc as u8,
-                    )?;
+                    );
                 } else if *size <= LARGE_ALLOC_16BIT_MAX_SIZE {
-                    mem.write_u8(UnwindOperation::LargeStackAlloc as u8)?;
-                    mem.write_u16::<LittleEndian>((*size / 8) as u16)?;
+                    mem.push(UnwindOperation::LargeStackAlloc as u8);
+                    write_u16::<LittleEndian>(mem, (*size / 8) as u16);
                 } else {
-                    mem.write_u8((1 << 4) | (UnwindOperation::LargeStackAlloc as u8))?;
-                    mem.write_u32::<LittleEndian>(*size)?;
+                    mem.push((1 << 4) | (UnwindOperation::LargeStackAlloc as u8));
+                    write_u32::<LittleEndian>(mem, *size);
                 }
             }
             Self::SetFramePointer { offset, sp_offset } => {
-                mem.write_u8(*offset)?;
-                mem.write_u8((*sp_offset << 4) | (UnwindOperation::SetFramePointer as u8))?;
+                mem.push(*offset);
+                mem.push((*sp_offset << 4) | (UnwindOperation::SetFramePointer as u8));
             }
         };
-
-        Ok(())
     }
 
     fn node_count(&self) -> usize {
@@ -160,7 +168,7 @@ impl UnwindInfo {
                     match opcode {
                         Opcode::Iconst => {
                             let imm: i64 = imm.into();
-                            assert!(imm <= std::u32::MAX as i64);
+                            assert!(imm <= core::u32::MAX as i64);
                             assert!(stack_size.is_none());
 
                             // This instruction should only appear in a prologue to pass an
@@ -171,7 +179,7 @@ impl UnwindInfo {
                         }
                         Opcode::AdjustSpDownImm => {
                             let imm: i64 = imm.into();
-                            assert!(imm <= std::u32::MAX as i64);
+                            assert!(imm <= core::u32::MAX as i64);
 
                             unwind_codes.push(UnwindCode::StackAlloc {
                                 offset: unwind_offset,
@@ -223,7 +231,7 @@ impl UnwindInfo {
             .fold(0, |nodes, c| nodes + c.node_count())
     }
 
-    pub fn emit(&self, mem: &mut Vec<u8>) -> std::io::Result<()> {
+    pub fn emit(&self, mem: &mut Vec<u8>) {
         const UNWIND_INFO_VERSION: u8 = 1;
 
         let size = self.size();
@@ -237,30 +245,28 @@ impl UnwindInfo {
         let node_count = self.node_count();
         assert!(node_count <= 256);
 
-        mem.write_u8((self.flags << 3) | UNWIND_INFO_VERSION)?;
-        mem.write_u8(self.prologue_size)?;
-        mem.write_u8(node_count as u8)?;
+        mem.push((self.flags << 3) | UNWIND_INFO_VERSION);
+        mem.push(self.prologue_size);
+        mem.push(node_count as u8);
 
         if let Some(reg) = self.frame_register {
-            mem.write_u8((self.frame_register_offset << 4) | reg as u8)?;
+            mem.push((self.frame_register_offset << 4) | reg as u8);
         } else {
-            mem.write_u8(0)?;
+            mem.push(0);
         }
 
         // Unwind codes are written in reverse order (prologue offset descending)
         for code in self.unwind_codes.iter().rev() {
-            code.emit(mem)?;
+            code.emit(mem);
         }
 
         // To keep a 32-bit alignment, emit 2 bytes of padding if there's an odd number of 16-bit nodes
         if (node_count & 1) == 1 {
-            mem.write_u16::<LittleEndian>(0)?;
+            write_u16::<LittleEndian>(mem, 0);
         }
 
         // Ensure the correct number of bytes was emitted
         assert_eq!(mem.len() - offset, size);
-
-        Ok(())
     }
 }
 
@@ -331,9 +337,7 @@ mod tests {
         assert_eq!(unwind.size(), 12);
 
         let mut mem = Vec::new();
-        unwind
-            .emit(&mut mem)
-            .expect("failed to emit unwind information");
+        unwind.emit(&mut mem);
 
         assert_eq!(
             mem,
@@ -397,9 +401,7 @@ mod tests {
         assert_eq!(unwind.size(), 12);
 
         let mut mem = Vec::new();
-        unwind
-            .emit(&mut mem)
-            .expect("failed to emit unwind information");
+        unwind.emit(&mut mem);
 
         assert_eq!(
             mem,
@@ -463,9 +465,7 @@ mod tests {
         assert_eq!(unwind.size(), 16);
 
         let mut mem = Vec::new();
-        unwind
-            .emit(&mut mem)
-            .expect("failed to emit unwind information");
+        unwind.emit(&mut mem);
 
         assert_eq!(
             mem,

@@ -836,6 +836,6 @@ pub fn emit_unwind_info(func: &ir::Function, isa: &dyn TargetIsa, mem: &mut Vec<
     // Assumption: RBP is being used as the frame pointer
     // In the future, Windows fastcall codegen should usually omit the frame pointer
     if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into())) {
-        info.emit(mem).expect("failed to emit unwind information");
+        info.emit(mem);
     }
 }
