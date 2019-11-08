@@ -100,6 +100,20 @@ impl ModuleData {
         })
     }
 
+    /// Detects if WASI support is needed: returns module name that is requested.
+    pub fn find_wasi_module_name(&self) -> Option<String> {
+        self.inner.as_ref().and_then(|Inner { module }| {
+            module
+                .imports
+                .iter()
+                .find(|walrus::Import { module, .. }| match module.as_str() {
+                    "wasi" | "wasi_unstable" => true,
+                    _ => false,
+                })
+                .map(|walrus::Import { module, .. }| module.clone())
+        })
+    }
+
     /// Same as `Context::invoke` except that this works with a `&[Value]` list
     /// instead of a `&[RuntimeValue]` list. (in this case `Value` is the set of
     /// wasm interface types)

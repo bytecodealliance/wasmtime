@@ -64,6 +64,16 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
                 ..Default::default()
             });
             let data = #root::wasmtime_interface_types::ModuleData::new(&bytes)?;
+            if let Some(module_name) = data.find_wasi_module_name() {
+                let wasi_handle = wasmtime_wasi::instantiate_wasi(
+                    "",
+                    cx.get_global_exports(),
+                    &[],
+                    &[],
+                    &[],
+                )?;
+                cx.name_instance(module_name, wasi_handle);
+            }
             let handle = cx.instantiate_module(None, &bytes)?;
 
             Ok(#name { cx, handle, data })
