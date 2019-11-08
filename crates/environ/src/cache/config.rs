@@ -171,7 +171,7 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(
     let content = "\
 # Comment out certain settings to use default values.
 # For more settings, please refer to the documentation:
-# https://github.com/CraneStation/wasmtime/blob/master/docs/CACHE_CONFIGURATION.md
+# https://cranestation.github.io/wasmtime/cli-cache.html
 
 [cache]
 enabled = true
@@ -204,34 +204,34 @@ lazy_static! {
 
 // At the moment of writing, the modules couldn't depend on anothers,
 // so we have at most one module per wasmtime instance
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_WORKER_EVENT_QUEUE_SIZE: u64 = 0x10;
 const WORKER_EVENT_QUEUE_SIZE_WARNING_TRESHOLD: u64 = 3;
 // should be quick and provide good enough compression
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_BASELINE_COMPRESSION_LEVEL: i32 = zstd::DEFAULT_COMPRESSION_LEVEL;
 // should provide significantly better compression than baseline
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_OPTIMIZED_COMPRESSION_LEVEL: i32 = 20;
 // shouldn't be to low to avoid recompressing too many files
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_OPTIMIZED_COMPRESSION_USAGE_COUNTER_THRESHOLD: u64 = 0x100;
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60);
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_OPTIMIZING_COMPRESSION_TASK_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 // the default assumes problems with timezone configuration on network share + some clock drift
 // please notice 24 timezones = max 23h difference between some of them
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_FILES_FROM_FUTURE: Duration =
     Duration::from_secs(60 * 60 * 24);
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_FILE_COUNT_SOFT_LIMIT: u64 = 0x10_000;
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_FILES_TOTAL_SIZE_SOFT_LIMIT: u64 = 1024 * 1024 * 512;
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_FILE_COUNT_LIMIT_PERCENT_IF_DELETING: u8 = 70;
-// if changed, update CACHE_CONFIGURATION.md
+// if changed, update cli-cache.md
 const DEFAULT_FILES_TOTAL_SIZE_LIMIT_PERCENT_IF_DELETING: u8 = 70;
 
 // Deserializers of our custom formats
