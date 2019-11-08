@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
+      with:
+        submodules: true
     - uses: ./.github/actions/install-rust
     - run: cargo fmt --all -- --check
 
@@ -41,6 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
+      with:
+        submodules: true
     - uses: ./.github/actions/install-rust
     - run: cargo doc --no-deps -p wasmtime
     - run: cargo doc --no-deps -p wasmtime-api
@@ -52,6 +56,7 @@ jobs:
     - run: cargo doc --no-deps -p wasmtime-runtime
     - run: cargo doc --no-deps -p wasmtime-wasi
     - run: cargo doc --no-deps -p wasmtime-wast
+    - run: cargo doc --no-deps -p wasi-common
     - uses: actions/upload-artifact@v1
       with:
         name: doc-api
@@ -90,10 +95,14 @@ jobs:
       with:
         toolchain: ${{ matrix.rust }}
 
+    # Install wasm32-wasi target in order to build wasi-common's integration
+    # tests
+    - run: rustup target add wasm32-wasi
+
     - run: cargo fetch
 
     # Build and test all features except for lightbeam
-    - run: cargo test --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py -- --nocapture
+    - run: cargo test --features wasi-common/wasm_tests --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py -- --nocapture
       env:
         RUST_BACKTRACE: 1
 
@@ -119,6 +128,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
     - uses: actions/checkout@master
+      with:
+        submodules: true
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly-2019-08-15
@@ -196,6 +207,10 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
     - uses: ./.github/actions/binary-compatible-builds
+      
+    # Install wasm32-wasi target in order to build wasi-common's integration
+    # tests
+    - run: rustup target add wasm32-wasi
 
     # Build `wasmtime` and executables
     - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
@@ -204,7 +219,7 @@ jobs:
     - run: $CENTOS cargo build --release --manifest-path wasmtime-api/Cargo.toml
       shell: bash
     # Test what we just built
-    - run: $CENTOS cargo test --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime-api
+    - run: $CENTOS cargo test --features wasi-common/wasm_tests --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime-api
       shell: bash
       env:
         RUST_BACKTRACE: 1

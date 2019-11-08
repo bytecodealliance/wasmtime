@@ -25,7 +25,7 @@ wasmtime-obj = { path = "wasmtime-obj" }
 wasmtime-wast = { path = "wasmtime-wast" }
 wasmtime-wasi = { path = "wasmtime-wasi" }
 wasmtime-wasi-c = { path = "wasmtime-wasi-c", optional = true }
-wasi-common = { git = "https://github.com/CraneStation/wasi-common", rev = "2fe3530"}
+wasi-common = { path = "wasi-common" }
 docopt = "1.0.1"
 serde = { "version" = "1.0.94", features = ["derive"] }
 faerie = "0.12.0"
@@ -46,6 +46,8 @@ members = [
   "misc/wasmtime-rust",
   "misc/wasmtime-py",
 ]
+
+exclude = ["wasi-common/wasi-misc-tests"]
 
 [features]
 # Enable all supported architectures by default.

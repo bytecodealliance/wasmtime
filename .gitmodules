@@ -4,3 +4,6 @@
 [submodule "wasmtime-api/c-examples/wasm-c-api"]
 	path = wasmtime-api/c-examples/wasm-c-api
 	url = https://github.com/WebAssembly/wasm-c-api
+[submodule "wasi-common/WASI"]
+	path = wasi-common/WASI
+	url = https://github.com/WebAssembly/WASI
