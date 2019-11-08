@@ -152,11 +152,11 @@ pub type Traps = PrimaryMap<DefinedFuncIndex, Vec<TrapInformation>>;
 #[derive(Error, Debug)]
 pub enum CompileError {
     /// A wasm translation error occured.
-    #[error("WebAssembly translation error: {0}")]
+    #[error("WebAssembly translation error")]
     Wasm(#[from] WasmError),
 
     /// A compilation error occured.
-    #[error("Compilation error: {0}")]
+    #[error("Compilation error")]
     Codegen(#[from] CodegenError),
 
     /// A compilation error occured.
