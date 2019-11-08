@@ -34,6 +34,7 @@ static ARG_GPRS_WIN_FASTCALL_X64: [RU; 4] = [RU::rcx, RU::rdx, RU::r8, RU::r9];
 /// Return value registers for x86-64, when using windows fastcall
 static RET_GPRS_WIN_FASTCALL_X64: [RU; 1] = [RU::rax];
 
+#[derive(Clone)]
 struct Args {
     pointer_bytes: u8,
     pointer_bits: u8,
@@ -167,114 +168,6 @@ impl ArgAssigner for Args {
     }
 }
 
-/// Get the number of general-purpose and floating-point registers required to
-/// hold the given `AbiParam` returns.
-fn num_return_registers_required<'a>(
-    word_bit_size: u8,
-    call_conv: CallConv,
-    shared_flags: &shared_settings::Flags,
-    isa_flags: &isa_settings::Flags,
-    return_params: impl IntoIterator<Item = &'a AbiParam>,
-) -> (usize, usize) {
-    // Pretend we have "infinite" registers to give out, since we aren't
-    // actually assigning `AbiParam`s to registers yet, just seeing how many
-    // registers we would need in order to fit all the `AbiParam`s in registers.
-    let gprs = &[RU::rax; 128];
-    let fpr_limit = std::usize::MAX;
-
-    let mut assigner = Args::new(
-        word_bit_size,
-        gprs,
-        fpr_limit,
-        call_conv,
-        shared_flags,
-        isa_flags,
-    );
-
-    let mut gprs_required = 0;
-    let mut fprs_required = 0;
-
-    for param in return_params {
-        match param.location {
-            ArgumentLoc::Unassigned => {
-                // Let this fall through so that we assign it a location and
-                // account for how many registers it ends up requiring below...
-            }
-            ArgumentLoc::Reg(_) => {
-                // This is already assigned to a register. Count it.
-                if param.value_type.is_float() {
-                    fprs_required += 1;
-                } else {
-                    gprs_required += 1;
-                }
-                continue;
-            }
-            _ => {
-                // It is already assigned, but not to a register. Skip it.
-                continue;
-            }
-        }
-
-        // We're going to mutate the type as it gets converted, so make our own
-        // copy that isn't visible to the outside world.
-        let mut param = param.clone();
-
-        let mut split_factor = 1;
-
-        loop {
-            match assigner.assign(&param) {
-                ArgAction::Convert(ValueConversion::IntSplit) => {
-                    split_factor *= 2;
-                    param.value_type = param.value_type.half_width().unwrap();
-                }
-                ArgAction::Convert(ValueConversion::VectorSplit) => {
-                    split_factor *= 2;
-                    param.value_type = param.value_type.half_vector().unwrap();
-                }
-                ArgAction::Assign(ArgumentLoc::Reg(_))
-                | ArgAction::Convert(ValueConversion::IntBits)
-                | ArgAction::Convert(ValueConversion::Sext(_))
-                | ArgAction::Convert(ValueConversion::Uext(_)) => {
-                    // Ok! We can fit this (potentially split) value into a
-                    // register! Add the number of params we split the parameter
-                    // into to our current counts.
-                    if param.value_type.is_float() {
-                        fprs_required += split_factor;
-                    } else {
-                        gprs_required += split_factor;
-                    }
-
-                    // But we also have to call `assign` once for each split value, to
-                    // update `assigner`'s internal state.
-                    for _ in 1..split_factor {
-                        match assigner.assign(&param) {
-                            ArgAction::Assign(_)
-                            | ArgAction::Convert(ValueConversion::IntBits)
-                            | ArgAction::Convert(ValueConversion::Sext(_))
-                            | ArgAction::Convert(ValueConversion::Uext(_)) => {
-                                continue;
-                            }
-                            otherwise => panic!(
-                                "unexpected action after first split succeeded: {:?}",
-                                otherwise
-                            ),
-                        }
-                    }
-
-                    // Continue to the next param.
-                    break;
-                }
-                ArgAction::Assign(loc) => panic!(
-                    "unexpected location assignment, should have had enough registers: {:?}",
-                    loc
-                ),
-            }
-        }
-    }
-
-    (gprs_required, fprs_required)
-}
-
 /// Legalize `sig`.
 pub fn legalize_signature(
     sig: &mut Cow<ir::Signature>,
@@ -332,69 +225,83 @@ pub fn legalize_signature(
         isa_flags,
     );
 
-    if sig.is_multi_return() && {
-        // Even if it is multi-return, see if the return values will fit into
-        // our available return registers.
-        let (gprs_required, fprs_required) = num_return_registers_required(
-            bits,
-            sig.call_conv,
-            shared_flags,
-            isa_flags,
-            &sig.returns,
-        );
-        gprs_required > ret_regs.len() || fprs_required > ret_fpr_limit
-    } {
-        debug_assert!(!sig.uses_struct_return_param());
+    let sig_is_multi_return = sig.is_multi_return();
 
-        // We're using the first register for the return pointer parameter.
-        let mut ret_ptr_param = AbiParam {
-            value_type: args.pointer_type,
-            purpose: ArgumentPurpose::StructReturn,
-            extension: ArgumentExtension::None,
-            location: ArgumentLoc::Unassigned,
-        };
-        match args.assign(&ret_ptr_param) {
-            ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
-                ret_ptr_param.location = ArgumentLoc::Reg(reg);
-                sig.to_mut().params.push(ret_ptr_param);
+    // If this is a multi-value return and we don't have enough available return
+    // registers to fit all of the return values, we need to backtrack and start
+    // assigning locations all over again with a different strategy. In order to
+    // do that, we need a copy of the original assigner for the returns.
+    let backup_rets_for_struct_return = if sig_is_multi_return {
+        Some(rets.clone())
+    } else {
+        None
+    };
+
+    if let Some(new_returns) = legalize_args(&sig.returns, &mut rets) {
+        if sig.is_multi_return()
+            && new_returns
+                .iter()
+                .filter(|r| r.purpose == ArgumentPurpose::Normal)
+                .any(|r| !r.location.is_reg())
+        {
+            // The return values couldn't all fit into available return
+            // registers. Introduce the use of a struct-return parameter.
+            debug_assert!(!sig.uses_struct_return_param());
+
+            // We're using the first register for the return pointer parameter.
+            let mut ret_ptr_param = AbiParam {
+                value_type: args.pointer_type,
+                purpose: ArgumentPurpose::StructReturn,
+                extension: ArgumentExtension::None,
+                location: ArgumentLoc::Unassigned,
+            };
+            match args.assign(&ret_ptr_param) {
+                ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
+                    ret_ptr_param.location = ArgumentLoc::Reg(reg);
+                    sig.to_mut().params.push(ret_ptr_param);
+                }
+                _ => unreachable!("return pointer should always get a register assignment"),
             }
-            _ => unreachable!("return pointer should always get a register assignment"),
-        }
 
-        // We're using the first return register for the return pointer (like
-        // sys v does).
-        let mut ret_ptr_return = AbiParam {
-            value_type: args.pointer_type,
-            purpose: ArgumentPurpose::StructReturn,
-            extension: ArgumentExtension::None,
-            location: ArgumentLoc::Unassigned,
-        };
-        match rets.assign(&ret_ptr_return) {
-            ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
-                ret_ptr_return.location = ArgumentLoc::Reg(reg);
-                sig.to_mut().returns.push(ret_ptr_return);
+            let mut backup_rets = backup_rets_for_struct_return.unwrap();
+
+            // We're using the first return register for the return pointer (like
+            // sys v does).
+            let mut ret_ptr_return = AbiParam {
+                value_type: args.pointer_type,
+                purpose: ArgumentPurpose::StructReturn,
+                extension: ArgumentExtension::None,
+                location: ArgumentLoc::Unassigned,
+            };
+            match backup_rets.assign(&ret_ptr_return) {
+                ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
+                    ret_ptr_return.location = ArgumentLoc::Reg(reg);
+                    sig.to_mut().returns.push(ret_ptr_return);
+                }
+                _ => unreachable!("return pointer should always get a register assignment"),
             }
-            _ => unreachable!("return pointer should always get a register assignment"),
-        }
 
-        sig.to_mut().returns.retain(|ret| {
-            // Either this is the return pointer, in which case we want to keep
-            // it, or else assume that it is assigned for a reason and doesn't
-            // conflict with our return pointering legalization.
-            debug_assert_eq!(
-                ret.location.is_assigned(),
-                ret.purpose != ArgumentPurpose::Normal
-            );
-            ret.location.is_assigned()
-        });
+            sig.to_mut().returns.retain(|ret| {
+                // Either this is the return pointer, in which case we want to keep
+                // it, or else assume that it is assigned for a reason and doesn't
+                // conflict with our return pointering legalization.
+                debug_assert_eq!(
+                    ret.location.is_assigned(),
+                    ret.purpose != ArgumentPurpose::Normal
+                );
+                ret.location.is_assigned()
+            });
+
+            if let Some(new_returns) = legalize_args(&sig.returns, &mut backup_rets) {
+                sig.to_mut().returns = new_returns;
+            }
+        } else {
+            sig.to_mut().returns = new_returns;
+        }
     }
 
     if let Some(new_params) = legalize_args(&sig.params, &mut args) {
         sig.to_mut().params = new_params;
-    }
-
-    if let Some(new_returns) = legalize_args(&sig.returns, &mut rets) {
-        sig.to_mut().returns = new_returns;
     }
 }
 
