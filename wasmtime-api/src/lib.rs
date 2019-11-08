@@ -14,7 +14,6 @@ mod trap;
 mod types;
 mod values;
 
-#[cfg(feature = "wasm-c-api")]
 pub mod wasm;
 
 #[macro_use]

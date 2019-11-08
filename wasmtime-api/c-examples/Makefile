@@ -46,9 +46,9 @@ WASM_CC_LIBS = $(error unsupported C++)
 
 # Compiler config
 ifeq (${WASMTIME_API_MODE},release)
-  CARGO_BUILD_FLAGS = --features "wasm-c-api" --release
+  CARGO_BUILD_FLAGS = --release
 else
-  CARGO_BUILD_FLAGS = --features "wasm-c-api"
+  CARGO_BUILD_FLAGS =
 endif
 
 ifeq (${C_COMP},clang)
