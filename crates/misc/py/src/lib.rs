@@ -73,6 +73,19 @@ pub fn instantiate(
     }
 
     let data = Rc::new(ModuleData::new(wasm_data).map_err(err2py)?);
+
+    // If this module expects to be able to use wasi then go ahead and hook
+    // that up into the imported crates.
+    if let Some(module_name) = data.find_wasi_module_name() {
+        let wasi_handle = wasmtime_wasi::instantiate_wasi(
+            "",
+            context.get_global_exports(),
+            &[],
+            &[],
+            &[],
+        ).map_err(|e| err2py(e.into()))?;
+        context.name_instance(module_name, wasi_handle);
+    }
     let instance = context
         .instantiate_module(None, wasm_data)
         .map_err(|e| err2py(e.into()))?;
@@ -111,6 +124,14 @@ pub fn imported_modules<'p>(py: Python<'p>, buffer_source: &PyBytes) -> PyResult
         let reader = section.get_import_section_reader().unwrap();
         for import in reader {
             let import = import.unwrap();
+            // Skip over wasi-looking imports since those aren't imported from
+            // Python but rather they're implemented natively.
+            //
+            // FIXME: this should use the same detection logic for the wasi
+            // module name as exists inside of `wasmtime-interface-types`
+            if import.module.starts_with("wasi") {
+                continue;
+            }
             let set = match dict.get_item(import.module) {
                 Some(set) => set.downcast_ref::<PySet>().unwrap(),
                 None => {
