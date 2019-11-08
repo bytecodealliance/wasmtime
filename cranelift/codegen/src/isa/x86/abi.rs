@@ -34,6 +34,29 @@ static ARG_GPRS_WIN_FASTCALL_X64: [RU; 4] = [RU::rcx, RU::rdx, RU::r8, RU::r9];
 /// Return value registers for x86-64, when using windows fastcall
 static RET_GPRS_WIN_FASTCALL_X64: [RU; 1] = [RU::rax];
 
+/// The win64 fastcall ABI uses some shadow stack space, allocated by the caller, that can be used
+/// by the callee for temporary values.
+///
+/// [1] "Space is allocated on the call stack as a shadow store for callees to save" This shadow
+/// store contains the parameters which are passed through registers (ARG_GPRS) and is eventually
+/// used by the callee to save & restore the values of the arguments.
+///
+/// [2] https://blogs.msdn.microsoft.com/oldnewthing/20110302-00/?p=11333 "Although the x64 calling
+/// convention reserves spill space for parameters, you don’t have to use them as such"
+const WIN_SHADOW_STACK_SPACE: i32 = 32;
+
+/// Stack alignment requirement for functions.
+///
+/// 16 bytes is the perfect stack alignment, because:
+///
+/// - On Win64, "The primary exceptions are the stack pointer and malloc or alloca memory, which
+/// are aligned to 16 bytes in order to aid performance".
+/// - The original 32-bit x86 ELF ABI had a 4-byte aligned stack pointer, but newer versions use a
+/// 16-byte aligned stack pointer.
+/// - This allows using aligned loads and stores on SIMD vectors of 16 bytes that are located
+/// higher up in the stack.
+const STACK_ALIGNMENT: u32 = 16;
+
 #[derive(Clone)]
 struct Args {
     pointer_bytes: u8,
@@ -60,12 +83,10 @@ impl Args {
         isa_flags: &isa_settings::Flags,
     ) -> Self {
         let offset = if call_conv.extends_windows_fastcall() {
-            // [1] "The caller is responsible for allocating space for parameters to the callee,
-            // and must always allocate sufficient space to store four register parameters"
-            32
+            WIN_SHADOW_STACK_SPACE
         } else {
             0
-        };
+        } as u32;
 
         Self {
             pointer_bytes: bits / 8,
@@ -431,11 +452,9 @@ fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> 
         "baldrdash does not expect cranelift to emit stack probes"
     );
 
-    // Baldrdash on 32-bit x86 always aligns its stack pointer to 16 bytes.
-    let stack_align = 16;
     let word_size = StackSize::from(isa.pointer_bytes());
     let shadow_store_size = if func.signature.call_conv.extends_windows_fastcall() {
-        32
+        WIN_SHADOW_STACK_SPACE as u32
     } else {
         0
     };
@@ -448,7 +467,7 @@ fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> 
     func.stack_slots.push(ss);
 
     let is_leaf = func.is_leaf();
-    layout_stack(&mut func.stack_slots, is_leaf, stack_align)?;
+    layout_stack(&mut func.stack_slots, is_leaf, STACK_ALIGNMENT)?;
     Ok(())
 }
 
@@ -459,23 +478,8 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         panic!("TODO: windows-fastcall: x86-32 not implemented yet");
     }
 
-    // [1] "The primary exceptions are the stack pointer and malloc or alloca memory,
-    // which are aligned to 16 bytes in order to aid performance"
-    let stack_align = 16;
-
-    let word_size = isa.pointer_bytes() as usize;
-    let reg_type = isa.pointer_type();
-
     let csrs = callee_saved_gprs_used(isa, func);
 
-    // [1] "Space is allocated on the call stack as a shadow store for callees to save"
-    // This shadow store contains the parameters which are passed through registers (ARG_GPRS)
-    // and is eventually used by the callee to save & restore the values of the arguments.
-    //
-    // [2] https://blogs.msdn.microsoft.com/oldnewthing/20110302-00/?p=11333
-    // "Although the x64 calling convention reserves spill space for parameters,
-    //  you don’t have to use them as such"
-    //
     // The reserved stack area is composed of:
     //   return address + frame pointer + all callee-saved registers + shadow space
     //
@@ -483,7 +487,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // instruction. Each of the others we will then push explicitly. Then we
     // will adjust the stack pointer to make room for the rest of the required
     // space for this frame.
-    const SHADOW_STORE_SIZE: i32 = 32;
+    let word_size = isa.pointer_bytes() as usize;
     let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size) as i32;
 
     // TODO: eventually use the 32 bytes (shadow store) as spill slot. This currently doesn't work
@@ -492,14 +496,15 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
-        offset: Some(-(SHADOW_STORE_SIZE + csr_stack_size)),
+        offset: Some(-(WIN_SHADOW_STACK_SPACE + csr_stack_size)),
     });
 
     let is_leaf = func.is_leaf();
-    let total_stack_size = layout_stack(&mut func.stack_slots, is_leaf, stack_align)? as i32;
+    let total_stack_size = layout_stack(&mut func.stack_slots, is_leaf, STACK_ALIGNMENT)? as i32;
     let local_stack_size = i64::from(total_stack_size - csr_stack_size);
 
     // Add CSRs to function signature
+    let reg_type = isa.pointer_type();
     let fp_arg = ir::AbiParam::special_reg(
         reg_type,
         ir::ArgumentPurpose::FramePointer,
@@ -528,12 +533,8 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
 
 /// Insert a System V-compatible prologue and epilogue.
 fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> CodegenResult<()> {
-    // The original 32-bit x86 ELF ABI had a 4-byte aligned stack pointer, but
-    // newer versions use a 16-byte aligned stack pointer.
-    let stack_align = 16;
     let pointer_width = isa.triple().pointer_width().unwrap();
     let word_size = pointer_width.bytes() as usize;
-    let reg_type = ir::Type::int(u16::from(pointer_width.bits())).unwrap();
 
     let csrs = callee_saved_gprs_used(isa, func);
 
@@ -552,10 +553,11 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     });
 
     let is_leaf = func.is_leaf();
-    let total_stack_size = layout_stack(&mut func.stack_slots, is_leaf, stack_align)? as i32;
+    let total_stack_size = layout_stack(&mut func.stack_slots, is_leaf, STACK_ALIGNMENT)? as i32;
     let local_stack_size = i64::from(total_stack_size - csr_stack_size);
 
     // Add CSRs to function signature
+    let reg_type = ir::Type::int(u16::from(pointer_width.bits())).unwrap();
     let fp_arg = ir::AbiParam::special_reg(
         reg_type,
         ir::ArgumentPurpose::FramePointer,
