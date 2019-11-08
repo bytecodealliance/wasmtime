@@ -3,11 +3,11 @@ name = "wasmtime-environ"
 version = "0.2.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Standalone environment support for WebAsssembly code in Cranelift"
+license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/CraneStation/wasmtime"
 documentation = "https://docs.rs/wasmtime-environ/"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
-license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition = "2018"
 
@@ -52,5 +52,4 @@ std = ["cranelift-codegen/std", "cranelift-wasm/std"]
 core = ["cranelift-codegen/core", "cranelift-wasm/core"]
 
 [badges]
-maintenance = { status = "experimental" }
-travis-ci = { repository = "CraneStation/wasmtime" }
+maintenance = { status = "actively-developed" }

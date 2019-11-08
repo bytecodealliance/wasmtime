@@ -2,9 +2,10 @@
 name = "wasi-common-cbindgen"
 version = "0.5.0"
 authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
-edition = "2018"
-license = "Apache-2.0 WITH LLVM-exception"
 description = "Interface generator utilities used by wasi-common"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/CraneStation/wasmtime"
+edition = "2018"
 
 [lib]
 proc-macro = true
@@ -15,3 +16,6 @@ quote = "1.0.2"
 
 [dev-dependencies]
 trybuild = "1.0.4"
+
+[badges]
+maintenance = { status = "actively-developed" }

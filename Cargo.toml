@@ -1,21 +1,23 @@
 [package]
 name = "wasmtime-cli"
-authors = ["The Wasmtime Project Developers"]
 version = "0.2.0"
+authors = ["The Wasmtime Project Developers"]
 description = "Command-line interface for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
+readme = "README.md"
 edition = "2018"
 default-run = "wasmtime"
 
 [dependencies]
-cranelift-codegen = { version = "0.49", features = ["enable-serde"] }
+# Enable all supported architectures by default.
+cranelift-codegen = { version = "0.49", features = ["enable-serde", "all-arch"] }
 cranelift-entity = { version = "0.49", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
-cranelift-native = { version = "0.49" }
+cranelift-native = "0.49"
 wasmtime = { path = "crates/api" }
 wasmtime-debug = { path = "crates/debug" }
 wasmtime-environ = { path = "crates/environ" }
@@ -51,7 +53,12 @@ members = [
 exclude = ["crates/wasi-common/wasi-misc-tests"]
 
 [features]
-# Enable all supported architectures by default.
-default = ["cranelift-codegen/all-arch"]
-lightbeam = ["wasmtime-environ/lightbeam", "wasmtime-jit/lightbeam", "wasmtime-wast/lightbeam"]
+lightbeam = [
+    "wasmtime-environ/lightbeam",
+    "wasmtime-jit/lightbeam",
+    "wasmtime-wast/lightbeam"
+]
 wasi-c = ["wasmtime-wasi-c"]
+
+[badges]
+maintenance = { status = "actively-developed" }
