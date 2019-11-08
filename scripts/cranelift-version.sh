@@ -5,7 +5,7 @@ set -euo pipefail
 # dependencies versions. To use, bump the version number below, run the
 # script.
 
-topdir=$(dirname "$0")
+topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the cranelift-* crates have the same version number
