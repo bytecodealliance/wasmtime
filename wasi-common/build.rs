@@ -133,7 +133,11 @@ mod wasm_tests {
             avoid_keywords(&stemstr.replace("-", "_"))
         )?;
         writeln!(out, "        setup_log();")?;
-        write!(out, "        let path = std::path::Path::new(r#\"{}\"#);", path.display())?;
+        write!(
+            out,
+            "        let path = std::path::Path::new(r#\"{}\"#);",
+            path.display()
+        )?;
         writeln!(out, "        let data = utils::read_wasm(path)?;")?;
         writeln!(
             out,
