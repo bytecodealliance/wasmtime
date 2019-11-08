@@ -310,7 +310,7 @@ impl WastContext {
                         Ok(()) => bail!("{}\nexpected module to fail to build", context(span)),
                         Err(e) => e,
                     };
-                    let error_message = err.to_string();
+                    let error_message = format!("{:?}", err);
                     if !error_message.contains(&message) {
                         // TODO: change to bail!
                         println!(
@@ -339,7 +339,7 @@ impl WastContext {
                         }
                         Err(e) => e,
                     };
-                    let error_message = err.to_string();
+                    let error_message = format!("{:?}", err);
                     if !error_message.contains(&message) {
                         // TODO: change to bail!
                         println!(
@@ -360,7 +360,7 @@ impl WastContext {
                         Ok(()) => bail!("{}\nexpected module to fail to link", context(span)),
                         Err(e) => e,
                     };
-                    let error_message = err.to_string();
+                    let error_message = format!("{:?}", err);
                     if !error_message.contains(&message) {
                         bail!(
                             "{}\nassert_unlinkable: expected {}, got {}",
