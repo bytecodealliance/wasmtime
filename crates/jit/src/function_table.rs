@@ -101,8 +101,9 @@ impl FunctionTable {
 
         unsafe {
             // Windows heap allocations are 32-bit aligned, but assert just in case
-            assert!(
-                (self.functions.as_mut_ptr() as u64) % 4 == 0,
+            assert_eq!(
+                (self.functions.as_mut_ptr() as u64) % 4,
+                0,
                 "function table allocation was not aligned"
             );
 

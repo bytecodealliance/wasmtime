@@ -7,6 +7,8 @@ use core::ptr;
 use core::slice;
 #[cfg(not(target_os = "windows"))]
 use libc;
+use more_asserts::assert_le;
+use more_asserts::assert_lt;
 use region;
 use std::io;
 
@@ -51,7 +53,7 @@ impl Mmap {
         mapping_size: usize,
     ) -> Result<Self, String> {
         let page_size = region::page::size();
-        assert!(accessible_size <= mapping_size);
+        assert_le!(accessible_size, mapping_size);
         assert_eq!(mapping_size & (page_size - 1), 0);
         assert_eq!(accessible_size & (page_size - 1), 0);
 
@@ -123,7 +125,7 @@ impl Mmap {
         use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
 
         let page_size = region::page::size();
-        assert!(accessible_size <= mapping_size);
+        assert_le!(accessible_size, mapping_size);
         assert_eq!(mapping_size & (page_size - 1), 0);
         assert_eq!(accessible_size & (page_size - 1), 0);
 
@@ -175,8 +177,8 @@ impl Mmap {
         let page_size = region::page::size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
-        assert!(len < self.len);
-        assert!(start < self.len - len);
+        assert_lt!(len, self.len);
+        assert_lt!(start, self.len - len);
 
         // Commit the accessible size.
         unsafe { region::protect(self.ptr.add(start), len, region::Protection::ReadWrite) }
@@ -194,8 +196,8 @@ impl Mmap {
         let page_size = region::page::size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
-        assert!(len < self.len);
-        assert!(start < self.len - len);
+        assert_lt!(len, self.len);
+        assert_lt!(start, self.len - len);
 
         // Commit the accessible size.
         if unsafe {

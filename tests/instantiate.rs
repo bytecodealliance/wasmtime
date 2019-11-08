@@ -4,6 +4,7 @@ use alloc::rc::Rc;
 use core::cell::RefCell;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
+use more_asserts::assert_gt;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasmtime_jit::{instantiate, CompilationStrategy, Compiler, NullResolver};
@@ -15,7 +16,7 @@ const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"tests/wat/rs2wasm-add-func.wat";
 fn test_environ_translate() {
     let path = PathBuf::from(PATH_MODULE_RS2WASM_ADD_FUNC);
     let data = wat::parse_file(path).expect("expecting valid wat-file");
-    assert!(data.len() > 0);
+    assert_gt!(data.len(), 0);
 
     let mut flag_builder = settings::builder();
     flag_builder.enable("enable_verifier").unwrap();

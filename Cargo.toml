@@ -40,6 +40,7 @@ wat = "1.0.2"
 libc = "0.2.60"
 rayon = "1.1"
 wasm-webidl-bindings = "0.6"
+more-asserts = "0.2.1"
 
 [build-dependencies]
 anyhow = "1.0.19"

@@ -43,7 +43,7 @@ fn into_valtype(ty: &wasmparser::Type) -> ValType {
 }
 
 fn into_func_type(mt: wasmparser::FuncType) -> FuncType {
-    assert!(mt.form == wasmparser::Type::Func);
+    assert_eq!(mt.form, wasmparser::Type::Func);
     let params = mt.params.iter().map(into_valtype).collect::<Vec<_>>();
     let returns = mt.returns.iter().map(into_valtype).collect::<Vec<_>>();
     FuncType::new(params.into_boxed_slice(), returns.into_boxed_slice())

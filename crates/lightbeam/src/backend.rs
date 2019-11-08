@@ -1,5 +1,6 @@
 #![allow(clippy::float_cmp)]
 
+use self::registers::*;
 use crate::error::Error;
 use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::ModuleContext;
@@ -8,6 +9,7 @@ use dynasm::dynasm;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use either::Either;
+use more_asserts::assert_le;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
@@ -17,8 +19,6 @@ use std::{
     mem,
     ops::RangeInclusive,
 };
-
-use self::registers::*;
 
 // TODO: Get rid of this! It's a total hack.
 mod magic {
@@ -1954,7 +1954,7 @@ macro_rules! store {
                 ctx.block_state.regs.release(src);
             }
 
-            assert!(offset <= i32::max_value() as u32);
+            assert_le!(offset, i32::max_value() as u32);
 
             let mut src = self.pop();
             let base = self.pop();

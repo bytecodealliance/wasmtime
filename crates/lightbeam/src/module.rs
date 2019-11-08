@@ -7,6 +7,7 @@ use cranelift_codegen::{
     ir::{self, AbiParam, Signature as CraneliftSignature},
     isa,
 };
+use more_asserts::assert_le;
 use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, Type};
 
 pub trait AsValueType {
@@ -554,8 +555,9 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
         let memories = section.get_memory_section_reader()?;
         let mem = translate_sections::memory(memories)?;
 
-        assert!(
-            mem.len() <= 1,
+        assert_le!(
+            mem.len(),
+            1,
             "Multiple memory sections not yet unimplemented"
         );
 

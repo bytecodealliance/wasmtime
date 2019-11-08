@@ -6,6 +6,7 @@ use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
 use alloc::string::String;
 use core::convert::TryFrom;
+use more_asserts::{assert_ge, assert_le};
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A linear memory instance.
@@ -33,7 +34,7 @@ impl LinearMemory {
     /// Create a new linear memory instance with specified minimum and maximum number of wasm pages.
     pub fn new(plan: &MemoryPlan) -> Result<Self, String> {
         // `maximum` cannot be set to more than `65536` pages.
-        assert!(plan.memory.minimum <= WASM_MAX_PAGES);
+        assert_le!(plan.memory.minimum, WASM_MAX_PAGES);
         assert!(plan.memory.maximum.is_none() || plan.memory.maximum.unwrap() <= WASM_MAX_PAGES);
 
         let offset_guard_bytes = plan.offset_guard_size as usize;
@@ -50,7 +51,7 @@ impl LinearMemory {
         let minimum_pages = match plan.style {
             MemoryStyle::Dynamic => plan.memory.minimum,
             MemoryStyle::Static { bound } => {
-                assert!(bound >= plan.memory.minimum);
+                assert_ge!(bound, plan.memory.minimum);
                 bound
             }
         } as usize;

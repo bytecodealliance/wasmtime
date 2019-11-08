@@ -7,13 +7,13 @@ use alloc::vec::Vec;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl};
 use failure::Error;
-use target_lexicon::{BinaryFormat, Triple};
-use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
-
 #[cfg(not(feature = "std"))]
 use hashbrown::{hash_map, HashMap, HashSet};
+use more_asserts::assert_gt;
 #[cfg(feature = "std")]
 use std::collections::{hash_map, HashMap, HashSet};
+use target_lexicon::{BinaryFormat, Triple};
+use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
 pub use crate::transform::transform_dwarf;
@@ -77,7 +77,7 @@ pub fn emit_debugsections_image(
     let dwarf = transform_dwarf(target_config, debuginfo_data, at, vmctx_info, ranges)?;
 
     // Assuming all functions in the same code block, looking min/max of its range.
-    assert!(funcs.len() > 0);
+    assert_gt!(funcs.len(), 0);
     let mut segment_body: (usize, usize) = (!0, 0);
     for (body_ptr, body_len) in funcs {
         segment_body.0 = ::core::cmp::min(segment_body.0, *body_ptr as usize);
@@ -116,9 +116,9 @@ fn convert_faerie_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8)
         "program header table is empty"
     );
     let e_phentsize = unsafe { *(bytes.as_ptr().offset(0x36) as *const u16) };
-    assert!(e_phentsize == 0x38, "size of ph");
+    assert_eq!(e_phentsize, 0x38, "size of ph");
     let e_shentsize = unsafe { *(bytes.as_ptr().offset(0x3A) as *const u16) };
-    assert!(e_shentsize == 0x40, "size of sh");
+    assert_eq!(e_shentsize, 0x40, "size of sh");
 
     let e_shoff = unsafe { *(bytes.as_ptr().offset(0x28) as *const u64) };
     let e_shnum = unsafe { *(bytes.as_ptr().offset(0x3C) as *const u16) };

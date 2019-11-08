@@ -1,17 +1,14 @@
+use super::address_transform::AddressTransform;
+use super::DebugInputContext;
+use super::Reader;
 use alloc::vec::Vec;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::DefinedFuncIndex;
 use failure::Error;
-
 use gimli;
-
-use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset};
-
 use gimli::write;
-
-use super::address_transform::AddressTransform;
-use super::DebugInputContext;
-use super::Reader;
+use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset};
+use more_asserts::assert_lt;
 
 pub(crate) enum RangeInfoBuilder {
     Undefined,
@@ -206,7 +203,7 @@ impl RangeInfoBuilder {
         if let RangeInfoBuilder::Ranges(ranges) = self {
             let mut range_list = Vec::new();
             for (begin, end) in ranges {
-                assert!(begin < end);
+                assert_lt!(begin, end);
                 for tr in addr_tr.translate_ranges(*begin, *end) {
                     if tr.1 == 0 {
                         // Ignore empty range

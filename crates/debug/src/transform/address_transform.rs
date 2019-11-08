@@ -8,6 +8,7 @@ use cranelift_codegen::ir::SourceLoc;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;
+use more_asserts::assert_le;
 use wasmtime_environ::{FunctionAddressMap, ModuleAddressMap};
 
 pub type GeneratedAddress = usize;
@@ -87,10 +88,10 @@ fn build_function_lookup(
     ft: &FunctionAddressMap,
     code_section_offset: u64,
 ) -> (WasmAddress, WasmAddress, FuncLookup) {
-    assert!(code_section_offset <= ft.start_srcloc.bits() as u64);
+    assert_le!(code_section_offset, ft.start_srcloc.bits() as u64);
     let fn_start = get_wasm_code_offset(ft.start_srcloc, code_section_offset);
     let fn_end = get_wasm_code_offset(ft.end_srcloc, code_section_offset);
-    assert!(fn_start <= fn_end);
+    assert_le!(fn_start, fn_end);
 
     // Build ranges of continuous source locations. The new ranges starts when
     // non-descending order is interrupted. Assuming the same origin location can
@@ -107,7 +108,8 @@ fn build_function_lookup(
         }
 
         let offset = get_wasm_code_offset(t.srcloc, code_section_offset);
-        assert!(fn_start <= offset && offset <= fn_end);
+        assert_le!(fn_start, offset);
+        assert_le!(offset, fn_end);
 
         let inst_gen_start = t.code_offset;
         let inst_gen_end = t.code_offset + t.code_len;
@@ -191,7 +193,7 @@ fn build_function_addr_map(
         if cfg!(debug) {
             // fn_map is sorted by the generated field -- see FunctionAddressMap::instructions.
             for i in 1..fn_map.len() {
-                assert!(fn_map[i - 1].generated <= fn_map[i].generated);
+                assert_le!(fn_map[i - 1].generated, fn_map[i].generated);
             }
         }
 

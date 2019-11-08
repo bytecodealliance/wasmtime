@@ -68,8 +68,8 @@ fn main() -> Result<()> {
     println!("Printing result...");
     println!("> {} {}", results[0].i64(), results[1].i32());
 
-    debug_assert!(results[0].i64() == 4);
-    debug_assert!(results[1].i32() == 2);
+    debug_assert_eq!(results[0].i64(), 4);
+    debug_assert_eq!(results[1].i32(), 2);
 
     // Shut down.
     println!("Shutting down...");

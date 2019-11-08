@@ -1,18 +1,15 @@
+use super::address_transform::AddressTransform;
+use super::attr::clone_attr_string;
+use super::{Reader, TransformError};
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::iter::FromIterator;
 use cranelift_entity::EntityRef;
 use failure::Error;
-
 use gimli;
-
-use gimli::{DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit};
-
 use gimli::write;
-
-use super::address_transform::AddressTransform;
-use super::attr::clone_attr_string;
-use super::{Reader, TransformError};
+use gimli::{DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit};
+use more_asserts::assert_le;
 
 #[derive(Debug)]
 enum SavedLineProgramRow {
@@ -80,7 +77,7 @@ where
     );
     if let Ok(program) = program {
         let header = program.header();
-        assert!(header.version() <= 4, "not supported 5");
+        assert_le!(header.version(), 4, "not supported 5");
         let line_encoding = LineEncoding {
             minimum_instruction_length: header.minimum_instruction_length(),
             maximum_operations_per_instruction: header.maximum_operations_per_instruction(),

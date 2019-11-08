@@ -5,6 +5,7 @@ use crate::vmcontext::VMSharedSignatureIndex;
 use crate::{hash_map, HashMap};
 use core::convert::TryFrom;
 use cranelift_codegen::ir;
+use more_asserts::{assert_lt, debug_assert_lt};
 
 /// WebAssembly requires that the caller and callee signatures in an indirect
 /// call must match. To implement this efficiently, keep a registry of all
@@ -31,8 +32,9 @@ impl SignatureRegistry {
             hash_map::Entry::Vacant(entry) => {
                 // Keep `signature_hash` len under 2**32 -- VMSharedSignatureIndex::new(core::u32::MAX)
                 // is reserved for VMSharedSignatureIndex::default().
-                debug_assert!(
-                    len < core::u32::MAX as usize,
+                debug_assert_lt!(
+                    len,
+                    core::u32::MAX as usize,
                     "Invariant check: signature_hash.len() < core::u32::MAX"
                 );
                 let sig_id = VMSharedSignatureIndex::new(u32::try_from(len).unwrap());

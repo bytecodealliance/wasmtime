@@ -9,6 +9,7 @@ use core::{fmt, mem};
 use cranelift_codegen::binemit;
 use dynasmrt::DynasmApi;
 use either::{Either, Left, Right};
+use more_asserts::assert_ge;
 use multi_mut::HashMapMultiMut;
 use std::{collections::HashMap, hash::Hash};
 
@@ -150,26 +151,6 @@ where
                 .get_mut(&BrTarget::Label(label.clone()))
                 .expect("Label defined before being declared");
             block.is_next = true;
-        }
-
-        macro_rules! assert_ge {
-            ($left:expr, $right:expr) => ({
-                match (&$left, &$right) {
-                    (left_val, right_val) => {
-                        if !(*left_val >= *right_val) {
-                            // The reborrows below are intentional. Without them, the stack slot for the
-                            // borrow is initialized even before the values are compared, leading to a
-                            // noticeable slow down.
-                            panic!(r#"assertion failed: `(left >= right)`
-  left: `{:?}`,
- right: `{:?}`"#, &*left_val, &*right_val)
-                        }
-                    }
-                }
-            });
-            ($left:expr, $right:expr,) => ({
-                assert_ge!($left, $right)
-            });
         }
 
         // `cfg` on blocks doesn't work in the compiler right now, so we have to write a dummy macro

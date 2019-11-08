@@ -33,6 +33,7 @@ use cranelift_wasm::{
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use indexmap;
+use more_asserts::assert_lt;
 use thiserror::Error;
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
@@ -458,7 +459,7 @@ impl Instance {
                 (body, self.vmctx_mut() as *mut VMContext)
             }
             None => {
-                assert!(index.index() < self.module.imported_funcs.len());
+                assert_lt!(index.index(), self.module.imported_funcs.len());
                 let import = self.imported_function(index);
                 (import.body, import.vmctx)
             }
@@ -526,7 +527,7 @@ impl Instance {
         let index = DefinedTableIndex::new(
             (end as usize - begin as usize) / mem::size_of::<VMTableDefinition>(),
         );
-        assert!(index.index() < self.tables.len());
+        assert_lt!(index.index(), self.tables.len());
         index
     }
 
@@ -542,7 +543,7 @@ impl Instance {
         let index = DefinedMemoryIndex::new(
             (end as usize - begin as usize) / mem::size_of::<VMMemoryDefinition>(),
         );
-        assert!(index.index() < self.memories.len());
+        assert_lt!(index.index(), self.memories.len());
         index
     }
 

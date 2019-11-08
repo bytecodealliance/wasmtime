@@ -13,6 +13,7 @@ use cranelift_wasm::{
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use indexmap::IndexMap;
+use more_asserts::assert_ge;
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug, Hash)]
@@ -59,7 +60,7 @@ impl MemoryStyle {
             if maximum <= tunables.static_memory_bound {
                 // A heap with a declared maximum can be immovable, so make
                 // it static.
-                assert!(tunables.static_memory_bound >= memory.minimum);
+                assert_ge!(tunables.static_memory_bound, memory.minimum);
                 return (
                     Self::Static {
                         bound: tunables.static_memory_bound,

@@ -30,7 +30,7 @@ macro_rules! declare_vec {
             fn set_from_slice(&mut self, source: &[$elem_ty]) {
                 let mut buffer = Vec::with_capacity(source.len());
                 buffer.extend_from_slice(source);
-                assert!(buffer.len() == buffer.capacity());
+                assert_eq!(buffer.len(), buffer.capacity());
                 self.size = buffer.len();
                 self.data = buffer.as_mut_ptr();
                 mem::forget(buffer);
@@ -38,7 +38,7 @@ macro_rules! declare_vec {
 
             #[allow(dead_code)]
             fn set_buffer(&mut self, mut buffer: Vec<$elem_ty>) {
-                assert!(buffer.len() == buffer.capacity());
+                assert_eq!(buffer.len(), buffer.capacity());
                 self.size = buffer.len();
                 self.data = buffer.as_mut_ptr();
                 mem::forget(buffer);
@@ -65,7 +65,7 @@ macro_rules! declare_vec {
 
         impl From<Vec<$elem_ty>> for $name {
             fn from(mut vec: Vec<$elem_ty>) -> Self {
-                assert!(vec.len() == vec.capacity());
+                assert_eq!(vec.len(), vec.capacity());
                 let result = $name {
                     size: vec.len(),
                     data: vec.as_mut_ptr(),
@@ -95,7 +95,7 @@ macro_rules! declare_vec {
             fn set_from_slice(&mut self, source: &[*mut $elem_ty]) {
                 let mut buffer = Vec::with_capacity(source.len());
                 buffer.extend_from_slice(source);
-                assert!(buffer.len() == buffer.capacity());
+                assert_eq!(buffer.len(), buffer.capacity());
                 self.size = buffer.len();
                 self.data = buffer.as_mut_ptr();
                 mem::forget(buffer);
@@ -103,7 +103,7 @@ macro_rules! declare_vec {
 
             #[allow(dead_code)]
             fn set_buffer(&mut self, mut buffer: Vec<*mut $elem_ty>) {
-                assert!(buffer.len() == buffer.capacity());
+                assert_eq!(buffer.len(), buffer.capacity());
                 self.size = buffer.len();
                 self.data = buffer.as_mut_ptr();
                 mem::forget(buffer);
@@ -132,7 +132,7 @@ macro_rules! declare_vec {
 
         impl From<Vec<*mut $elem_ty>> for $name {
             fn from(mut vec: Vec<*mut $elem_ty>) -> Self {
-                assert!(vec.len() == vec.capacity());
+                assert_eq!(vec.len(), vec.capacity());
                 let result = $name {
                     size: vec.len(),
                     data: vec.as_mut_ptr(),

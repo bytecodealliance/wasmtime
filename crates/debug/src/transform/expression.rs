@@ -1,3 +1,4 @@
+use super::address_transform::AddressTransform;
 use crate::{HashMap, HashSet};
 use alloc::vec::Vec;
 use cranelift_codegen::ir::{StackSlots, ValueLabel, ValueLoc};
@@ -8,8 +9,7 @@ use cranelift_wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use failure::Error;
 use gimli::write;
 use gimli::{self, Expression, Operation, Reader, ReaderOffset, Register, X86_64};
-
-use super::address_transform::AddressTransform;
+use more_asserts::{assert_le, assert_lt};
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
@@ -103,7 +103,7 @@ fn translate_loc(loc: ValueLoc, frame_info: Option<&FunctionFrameInfo>) -> Optio
     match loc {
         ValueLoc::Reg(reg) => {
             let machine_reg = map_reg(reg).0 as u8;
-            assert!(machine_reg < 32); // FIXME
+            assert_lt!(machine_reg, 32); // FIXME
             Some(vec![gimli::constants::DW_OP_reg0.0 + machine_reg])
         }
         ValueLoc::Stack(ss) => {
@@ -437,7 +437,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
                     if range_start == range_end {
                         continue;
                     }
-                    assert!(range_start < range_end);
+                    assert_lt!(range_start, range_end);
                     // Find acceptable scope of ranges to intersect with.
                     let i = match ranges.binary_search_by(|s| s.start.cmp(&range_start)) {
                         Ok(i) => i,
@@ -465,7 +465,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
                             tail.start = range_end;
                             ranges.insert(i + 1, tail);
                         }
-                        assert!(ranges[i].end <= range_end);
+                        assert_le!(ranges[i].end, range_end);
                         if range_start <= ranges[i].start {
                             ranges[i].label_location.insert(label, loc);
                             continue;

@@ -185,7 +185,7 @@ impl CodeMemory {
         if previous.0.len() > 0 {
             self.mmaps.push(previous);
         } else {
-            assert!(previous.1.len() == 0);
+            assert_eq!(previous.1.len(), 0);
         }
 
         self.position = 0;
