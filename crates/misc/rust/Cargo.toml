@@ -2,21 +2,26 @@
 name = "wasmtime-rust"
 version = "0.2.0"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
-edition = "2018"
+description = "Rust extension for Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm", "rust"]
 keywords = ["webassembly", "wasm"]
-license = "Apache-2.0 WITH LLVM-exception"
-description = "Rust extension for Wasmtime"
+repository = "https://github.com/CraneStation/wasmtime"
+readme = "README.md"
+edition = "2018"
 
 [lib]
 test = false
 doctest = false
 
 [dependencies]
-cranelift-codegen = { version = "0.49" }
-cranelift-native = { version = "0.49" }
+cranelift-codegen = "0.49"
+cranelift-native = "0.49"
 wasmtime-interface-types = { path = "../../interface-types" }
 wasmtime-jit = { path = "../../jit" }
 wasmtime-rust-macro = { path = "./macro" }
 wasmtime-wasi = { path = "../../wasi" }
 anyhow = "1.0.19"
+
+[badges]
+maintenance = { status = "actively-developed" }

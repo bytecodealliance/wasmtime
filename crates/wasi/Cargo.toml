@@ -3,10 +3,10 @@ name = "wasmtime-wasi"
 version = "0.2.0"
 authors = ["The Cranelift Project Developers"]
 description = "WASI API support for Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
-license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition = "2018"
 
@@ -22,5 +22,4 @@ target-lexicon = "0.9.0"
 log = { version = "0.4.8", default-features = false }
 
 [badges]
-maintenance = { status = "experimental" }
-travis-ci = { repository = "CraneStation/wasmtime" }
+maintenance = { status = "actively-developed" }
