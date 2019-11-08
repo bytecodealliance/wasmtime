@@ -6,6 +6,7 @@ description = "Command-line interface for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
 categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
 edition = "2018"
 default-run = "wasmtime"
