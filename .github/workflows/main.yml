@@ -134,7 +134,7 @@ jobs:
       with:
         toolchain: nightly-2019-08-15
     - uses: ./.github/actions/binary-compatible-builds
-    - run: mkdir misc/wasmtime-py/wheelhouse
+    - run: mkdir crates/misc/py/wheelhouse
       shell: bash
 
     # Install Python & dependencies needed for our `setup.py` scripts
@@ -145,13 +145,13 @@ jobs:
         architecture: x64
     - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust
       shell: bash
-    - run: (cd misc/wasmtime-py && $CENTOS $python setup.py bdist_wheel)
+    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
       shell: bash
 
     # Clear the build directory between building different wheels for different
     # Python versions to ensure that we don't package dynamic libraries twice by
     # accident.
-    - run: $CENTOS rm -rf misc/wasmtime-py/build
+    - run: $CENTOS rm -rf crates/misc/py/build
       shell: bash
 
     # Set up Python 3.7 (and build it on Linux), reinstall dependencies, then
@@ -167,18 +167,18 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
     - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
       shell: bash
-    - run: (cd misc/wasmtime-py && $CENTOS $python setup.py bdist_wheel)
+    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
       shell: bash
 
     # Move `dist/*.whl` into `wheelhouse/` so we can deploy them, but on Linux we
     # need to run an `auditwheel` command as well to turn these into "manylinux"
     # wheels to run across a number of distributions.
-    - run: cp misc/wasmtime-py/dist/*.whl misc/wasmtime-py/wheelhouse/
+    - run: cp crates/misc/py/dist/*.whl crates/misc/py/wheelhouse/
       shell: bash
       if: matrix.os != 'ubuntu-latest'
     - run: |
         set -e
-        cd misc/wasmtime-py
+        cd crates/misc/py
         for whl in dist/*.whl; do
             $CENTOS auditwheel repair "$whl" -w wheelhouse/
         done
@@ -189,7 +189,7 @@ jobs:
     - uses: actions/upload-artifact@v1
       with:
         name: wheels-${{ matrix.os }}
-        path: misc/wasmtime-py/wheelhouse
+        path: crates/misc/py/wheelhouse
 
   # Perform release builds of `wasmtime` and `libwasmtime_api.so`. Builds on
   # Windows/Mac/Linux, and artifacts are uploaded after the build is finished.
