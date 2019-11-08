@@ -77,13 +77,9 @@ pub fn instantiate(
     // If this module expects to be able to use wasi then go ahead and hook
     // that up into the imported crates.
     if let Some(module_name) = data.find_wasi_module_name() {
-        let wasi_handle = wasmtime_wasi::instantiate_wasi(
-            "",
-            context.get_global_exports(),
-            &[],
-            &[],
-            &[],
-        ).map_err(|e| err2py(e.into()))?;
+        let wasi_handle =
+            wasmtime_wasi::instantiate_wasi("", context.get_global_exports(), &[], &[], &[])
+                .map_err(|e| err2py(e.into()))?;
         context.name_instance(module_name, wasi_handle);
     }
     let instance = context
