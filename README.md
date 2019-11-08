@@ -52,7 +52,7 @@ compatible with the [proposed WebAssembly C API].
 For more information, see the [Rust API embedding chapter] of the Wasmtime documentation.
 
 [high-level and safe Rust API]: https://docs.rs/wasmtime-api/
-[proposed WebAssembly C API]: https://github.com/rossberg/wasm-c-api
+[proposed WebAssembly C API]: https://github.com/WebAssembly/wasm-c-api
 [Rust API embedding chapter]: https://cranestation.github.io/wasmtime/embed-rust.html
 
 It's Wasmtime.
