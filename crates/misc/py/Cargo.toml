@@ -5,6 +5,7 @@ authors = ["The Wasmtime Project Developers"]
 description = "Python extension for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm", "python"]
+keywords = ["webassembly", "wasm"]
 edition = "2018"
 
 [lib]
