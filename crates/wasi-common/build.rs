@@ -129,8 +129,8 @@ mod wasm_tests {
         }
         writeln!(
             out,
-            "    fn {}() -> anyhow::Result<()> {{",
-            avoid_keywords(&stemstr.replace("-", "_"))
+            "    fn r#{}() -> anyhow::Result<()> {{",
+            &stemstr.replace("-", "_")
         )?;
         writeln!(out, "        setup_log();")?;
         write!(
@@ -160,18 +160,6 @@ mod wasm_tests {
         writeln!(out, "    }}")?;
         writeln!(out)?;
         Ok(())
-    }
-
-    /// Rename tests which have the same name as Rust keywords.
-    fn avoid_keywords(name: &str) -> &str {
-        match name {
-            "if" => "if_",
-            "loop" => "loop_",
-            "type" => "type_",
-            "const" => "const_",
-            "return" => "return_",
-            other => other,
-        }
     }
 
     cfg_if::cfg_if! {
