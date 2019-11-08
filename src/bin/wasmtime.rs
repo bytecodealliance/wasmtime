@@ -62,8 +62,12 @@ including calling the start function if one is present. Additional functions
 given with --invoke are then called.
 
 Usage:
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] [--lightbeam | --cranelift] <file> [<arg>...]
-    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] [--mapdir=<mapping>...] --invoke=<fn> [--lightbeam | --cranelift] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | \
+     --cache-config=<cache_config_file>] [--preload=<wasm>...] [--env=<env>...] [--dir=<dir>...] \
+     [--mapdir=<mapping>...] [--lightbeam | --cranelift] <file> [<arg>...]
+    wasmtime [-odg] [--enable-simd] [--wasi-c] [--disable-cache | \
+     --cache-config=<cache_config_file>] [--env=<env>...] [--dir=<dir>...] \
+     [--mapdir=<mapping>...] --invoke=<fn> [--lightbeam | --cranelift] <file> [<arg>...]
     wasmtime --create-cache-config [--cache-config=<cache_config_file>]
     wasmtime --help | --version
 
@@ -128,7 +132,10 @@ fn compute_preopen_dirs(flag_dir: &[String], flag_mapdir: &[String]) -> Vec<(Str
     for mapdir in flag_mapdir {
         let parts: Vec<&str> = mapdir.split("::").collect();
         if parts.len() != 2 {
-            println!("--mapdir argument must contain exactly one double colon ('::'), separating a guest directory name and a host directory name");
+            println!(
+                "--mapdir argument must contain exactly one double colon ('::'), separating a \
+                 guest directory name and a host directory name"
+            );
             exit(1);
         }
         let (key, value) = (parts[0], parts[1]);

@@ -67,7 +67,8 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] [--enable-simd] [--lightbeam | --cranelift] <file> -o <output>
+    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] \
+                     [--enable-simd] [--lightbeam | --cranelift] <file> -o <output>
     wasm2obj --create-cache-config [--cache-config=<cache_config_file>]
     wasm2obj --help | --version
 
