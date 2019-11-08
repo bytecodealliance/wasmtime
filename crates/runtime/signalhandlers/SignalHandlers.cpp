@@ -633,10 +633,16 @@ WasmTrapHandler(int signum, siginfo_t* info, void* context)
     if (!sAlreadyHandlingTrap) {
         AutoHandlingTrap aht;
         assert(signum == SIGSEGV || signum == SIGBUS || signum == SIGFPE || signum == SIGILL);
+
+        if (InstanceSignalHandler(signum, info, context)) {
+            return;
+        }
+
         if (HandleTrap(static_cast<CONTEXT*>(context), false)) {
             return;
         }
     }
+
 
     struct sigaction* previousSignal = nullptr;
     switch (signum) {

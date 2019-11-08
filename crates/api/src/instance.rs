@@ -64,6 +64,13 @@ pub struct Instance {
 }
 
 impl Instance {
+    pub fn set_signal_handler<H>(&mut self, handler: H)
+    where
+        H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
+    {
+        self.instance_handle.set_signal_handler(handler);
+    }
+
     pub fn new(
         store: &HostRef<Store>,
         module: &HostRef<Module>,

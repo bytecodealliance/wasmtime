@@ -192,11 +192,13 @@ pub fn invoke(
 
     // Call the trampoline.
     if let Err(message) = unsafe {
-        wasmtime_call_trampoline(
-            callee_vmctx,
-            exec_code_buf,
-            values_vec.as_mut_ptr() as *mut u8,
-        )
+        instance.with_signals_on(|| {
+            wasmtime_call_trampoline(
+                callee_vmctx,
+                exec_code_buf,
+                values_vec.as_mut_ptr() as *mut u8,
+            )
+        })
     } {
         return Ok(ActionOutcome::Trapped { message });
     }

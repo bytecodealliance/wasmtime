@@ -31,6 +31,12 @@ use wasmtime_environ::wasm::{
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
+use std::ptr::NonNull;
+
+thread_local! {
+    /// The currently-running `Instance`, if one exists.
+    pub(crate) static CURRENT_INSTANCE: RefCell<Option<NonNull<Instance>>> = RefCell::new(None);
+}
 
 fn signature_id(
     vmctx: &VMContext,
@@ -175,6 +181,16 @@ fn global_mut<'vmctx>(
     }
 }
 
+pub fn signal_handler_none(
+    _signum: libc::c_int,
+    _siginfo_ptr: *const libc::siginfo_t,
+    _ucontext_ptr: *const libc::c_void,
+) -> bool {
+    false
+}
+
+pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
+
 /// A WebAssembly instance.
 ///
 /// This is repr(C) to ensure that the vmctx field is last.
@@ -217,10 +233,36 @@ pub(crate) struct Instance {
     /// Optional image of JIT'ed code for debugger registration.
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
 
+    /// Handler run when `SIGBUS`, `SIGFPE`, `SIGILL`, or `SIGSEGV` are caught by the instance thread.
+    signal_handler: Box<dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool>,
+
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
+}
+
+#[doc(hidden)]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn InstanceSignalHandler(
+    signum: libc::c_int,
+    siginfo: *mut libc::siginfo_t,
+    context: *mut libc::c_void,
+) -> bool {
+    CURRENT_INSTANCE.with(|current_instance| {
+        if let Some(current_instance) = *current_instance
+            .try_borrow()
+            .expect("borrow current instance")
+        {
+            unsafe {
+                let f = &current_instance.as_ref().signal_handler;
+                f(signum, siginfo, context)
+            }
+        } else {
+            return false;
+        }
+    })
 }
 
 #[allow(clippy::cast_ptr_alignment)]
@@ -636,6 +678,39 @@ pub struct InstanceHandle {
 }
 
 impl InstanceHandle {
+    /// Set a custom signal handler
+    pub fn set_signal_handler<H>(&mut self, handler: H)
+    where
+        H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
+    {
+        self.instance_mut().signal_handler = Box::new(handler) as Box<SignalHandler>;
+    }
+
+    #[doc(hidden)]
+    pub fn with_signals_on<F, R>(&self, action: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        CURRENT_INSTANCE.with(|current_instance| {
+            let mut current_instance = current_instance.borrow_mut();
+            assert!(
+                current_instance.is_none(),
+                "no other instance is running on this thread"
+            );
+            *current_instance = Some(unsafe { NonNull::new_unchecked(self.instance) });
+        });
+
+        let result = action();
+
+        CURRENT_INSTANCE.with(|current_instance| {
+            let mut current_instance = current_instance.borrow_mut();
+            assert!(!current_instance.is_none());
+            *current_instance = None;
+        });
+
+        result
+    }
+
     /// Create a new `InstanceHandle` pointing at a new `Instance`.
     pub fn new(
         module: Rc<Module>,
@@ -688,6 +763,7 @@ impl InstanceHandle {
                 finished_functions,
                 dbg_jit_registration,
                 host_state,
+                signal_handler: Box::new(signal_handler_none) as Box<SignalHandler>,
                 vmctx: VMContext {},
             };
             unsafe {

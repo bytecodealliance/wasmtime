@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #endif
 
+#include <signal.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,6 +16,8 @@ extern "C" {
 int8_t CheckIfTrapAtAddress(const uint8_t* pc);
 // Record the Trap code and wasm bytecode offset in TLS somewhere
 void RecordTrap(const uint8_t* pc, bool reset_guard_page);
+
+bool InstanceSignalHandler(int, siginfo_t *, void *);
 
 void* EnterScope(void*);
 void LeaveScope(void*);
