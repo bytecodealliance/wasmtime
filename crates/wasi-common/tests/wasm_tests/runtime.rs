@@ -73,11 +73,11 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .imports()
         .iter()
         .map(|i| {
-            let module_name = i.module().to_string();
-            if let Some((instance, map)) = module_registry.get(&module_name) {
-                let field_name = i.name().to_string();
-                if let Some(export_index) = map.get(&field_name) {
-                    Ok(instance.exports()[*export_index].clone())
+            let module_name = i.module().as_str();
+            if let Some(instance) = module_registry.get(module_name) {
+                let field_name = i.name().as_str();
+                if let Some(export) = instance.find_export_by_name(field_name) {
+                    Ok(export.clone())
                 } else {
                     bail!(
                         "import {} was not found in module {}",

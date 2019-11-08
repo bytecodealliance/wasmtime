@@ -21,6 +21,7 @@ wasmtime-interface-types = { path = "../../interface-types" }
 wasmtime-jit = { path = "../../jit" }
 wasmtime-rust-macro = { path = "./macro" }
 wasmtime-wasi = { path = "../../wasi" }
+wasmtime = { path = "../../api" }
 anyhow = "1.0.19"
 
 [badges]

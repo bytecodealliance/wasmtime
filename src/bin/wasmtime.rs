@@ -328,7 +328,7 @@ fn main() -> Result<()> {
 
 fn instantiate_module(
     store: &HostRef<Store>,
-    module_registry: &HashMap<String, (Instance, HashMap<String, usize>)>,
+    module_registry: &HashMap<String, Instance>,
     path: &Path,
 ) -> Result<(HostRef<Instance>, HostRef<Module>, Vec<u8>)> {
     // Read the wasm module binary either as `*.wat` or a raw binary
@@ -342,11 +342,11 @@ fn instantiate_module(
         .imports()
         .iter()
         .map(|i| {
-            let module_name = i.module().to_string();
-            if let Some((instance, map)) = module_registry.get(&module_name) {
-                let field_name = i.name().to_string();
-                if let Some(export_index) = map.get(&field_name) {
-                    Ok(instance.exports()[*export_index].clone())
+            let module_name = i.module().as_str();
+            if let Some(instance) = module_registry.get(module_name) {
+                let field_name = i.name().as_str();
+                if let Some(export) = instance.find_export_by_name(field_name) {
+                    Ok(export.clone())
                 } else {
                     bail!(
                         "Import {} was not found in module {}",
@@ -367,7 +367,7 @@ fn instantiate_module(
 
 fn handle_module(
     store: &HostRef<Store>,
-    module_registry: &HashMap<String, (Instance, HashMap<String, usize>)>,
+    module_registry: &HashMap<String, Instance>,
     args: &Args,
     path: &Path,
 ) -> Result<()> {
@@ -376,14 +376,13 @@ fn handle_module(
     // If a function to invoke was given, invoke it.
     if let Some(f) = &args.flag_invoke {
         let data = ModuleData::new(&data)?;
-        invoke_export(store, instance, &data, f, args)?;
+        invoke_export(instance, &data, f, args)?;
     }
 
     Ok(())
 }
 
 fn invoke_export(
-    store: &HostRef<Store>,
     instance: HostRef<Instance>,
     data: &ModuleData,
     name: &str,
@@ -434,9 +433,8 @@ fn invoke_export(
 
     // Invoke the function and then afterwards print all the results that came
     // out, if there are any.
-    let mut context = store.borrow().engine().borrow().create_wasmtime_context();
     let results = data
-        .invoke(&mut context, &mut handle, name, &values)
+        .invoke_export(&instance, name, &values)
         .with_context(|| format!("failed to invoke `{}`", name))?;
     if results.len() > 0 {
         eprintln!(

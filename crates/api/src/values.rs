@@ -180,6 +180,34 @@ impl Into<AnyRef> for Val {
     }
 }
 
+impl From<RuntimeValue> for Val {
+    fn from(rv: RuntimeValue) -> Self {
+        match rv {
+            RuntimeValue::I32(i) => Val::I32(i),
+            RuntimeValue::I64(i) => Val::I64(i),
+            RuntimeValue::F32(u) => Val::F32(u),
+            RuntimeValue::F64(u) => Val::F64(u),
+            x => {
+                panic!("unsupported {:?}", x);
+            }
+        }
+    }
+}
+
+impl Into<RuntimeValue> for Val {
+    fn into(self) -> RuntimeValue {
+        match self {
+            Val::I32(i) => RuntimeValue::I32(i),
+            Val::I64(i) => RuntimeValue::I64(i),
+            Val::F32(u) => RuntimeValue::F32(u),
+            Val::F64(u) => RuntimeValue::F64(u),
+            x => {
+                panic!("unsupported {:?}", x);
+            }
+        }
+    }
+}
+
 pub(crate) fn into_checked_anyfunc(
     val: Val,
     store: &HostRef<Store>,
