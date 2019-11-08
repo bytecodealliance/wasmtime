@@ -1,4 +1,4 @@
-use lightbeam::{ExecutionError, translate, ExecutableModule};
+use lightbeam::{translate, ExecutableModule, ExecutionError};
 
 fn translate_wat(wat: &str) -> ExecutableModule {
     let wasm = wat::parse_str(wat).unwrap();

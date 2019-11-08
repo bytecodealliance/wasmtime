@@ -28,4 +28,6 @@ mod benches;
 
 pub use crate::backend::CodeGenSession;
 pub use crate::function_body::translate_wasm as translate_function;
-pub use crate::module::{translate, ExecutableModule, ModuleContext, Signature, TranslatedModule, ExecutionError};
+pub use crate::module::{
+    translate, ExecutableModule, ExecutionError, ModuleContext, Signature, TranslatedModule,
+};

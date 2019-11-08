@@ -72,7 +72,7 @@ mod op32 {
     macro_rules! unop_test {
         ($name:ident, $func:expr) => {
             mod $name {
-                use super::{lazy_static, translate_wat, ExecutableModule, quickcheck};
+                use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
                 use std::sync::Once;
 
                 lazy_static! {
