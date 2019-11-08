@@ -46,8 +46,8 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - run: cargo doc --no-deps -p wasmtime-cli
     - run: cargo doc --no-deps -p wasmtime
-    - run: cargo doc --no-deps -p wasmtime-api
     - run: cargo doc --no-deps -p wasmtime-debug
     - run: cargo doc --no-deps -p wasmtime-environ
     - run: cargo doc --no-deps -p wasmtime-interface-types
@@ -216,10 +216,10 @@ jobs:
     - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
       shell: bash
     # Build `libwasmtime_api.so`
-    - run: $CENTOS cargo build --release --manifest-path wasmtime-api/Cargo.toml
+    - run: $CENTOS cargo build --release --manifest-path wasmtime/Cargo.toml
       shell: bash
     # Test what we just built
-    - run: $CENTOS cargo test --features wasi-common/wasm_tests --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime-api
+    - run: $CENTOS cargo test --features wasi-common/wasm_tests --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime
       shell: bash
       env:
         RUST_BACKTRACE: 1
