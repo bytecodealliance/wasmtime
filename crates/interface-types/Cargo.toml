@@ -18,6 +18,7 @@ wasmparser = { version = "0.39.2", default-features = false }
 wasm-webidl-bindings = "0.6"
 wasmtime-jit = { path = '../jit', default-features = false }
 wasmtime-runtime = { path = '../runtime', default-features = false }
+wasmtime-wasi = { path = '../wasi' }
 
 [badges]
 maintenance = { status = "actively-developed" }

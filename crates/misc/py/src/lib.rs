@@ -122,10 +122,7 @@ pub fn imported_modules<'p>(py: Python<'p>, buffer_source: &PyBytes) -> PyResult
             let import = import.unwrap();
             // Skip over wasi-looking imports since those aren't imported from
             // Python but rather they're implemented natively.
-            //
-            // FIXME: this should use the same detection logic for the wasi
-            // module name as exists inside of `wasmtime-interface-types`
-            if import.module.starts_with("wasi") {
+            if wasmtime_wasi::is_wasi_module(import.module) {
                 continue;
             }
             let set = match dict.get_item(import.module) {

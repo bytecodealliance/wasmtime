@@ -85,11 +85,8 @@ impl ModuleData {
                     let section = section.get_import_section_reader()?;
                     for import in section {
                         let import = import?;
-                        match import.module {
-                            "wasi" | "wasi_unstable" => {
-                                wasi_module_name = Some(import.module.to_string());
-                            }
-                            _ => {}
+                        if wasmtime_wasi::is_wasi_module(import.module) {
+                            wasi_module_name = Some(import.module.to_string());
                         }
                     }
                 }
