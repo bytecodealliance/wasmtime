@@ -34,6 +34,7 @@ mod action;
 mod code_memory;
 mod compiler;
 mod context;
+mod function_table;
 mod instantiate;
 mod link;
 mod namespace;

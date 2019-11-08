@@ -35,34 +35,24 @@ of ongoing research.
 Additional goals for Wasmtime include:
  - Support a variety of host APIs (not just WASI), with fast calling sequences,
    and develop proposals for additional API modules to be part of WASI.
- - Implement the [proposed WebAssembly C API].
- - Facilitate testing, experimentation, and development around the [Cranelift] and
-   [Lightbeam] JITs.
+ - Facilitate development and testing around the [Cranelift] and [Lightbeam] JITs,
+   and other WebAssembly execution strategies.
  - Develop a native ABI used for compiling WebAssembly suitable for use in both
    JIT and AOT to native object files.
 
-[proposed WebAssembly C API]: https://github.com/rossberg/wasm-c-api
 [Cranelift]: https://github.com/CraneStation/cranelift
-[Lightbeam]: https://github.com/CraneStation/lightbeam
+[Lightbeam]: https://github.com/CraneStation/wasmtime/tree/master/lightbeam
 
 #### Including Wasmtime in your project
-Wasmtime exposes an API for JIT compilation through the `wasmtime-jit` subcrate, which depends on `wasmtime-environ` and `wasmtime-runtime` for the ABI and runtime support respectively. However, this API is not documented and subject to change. Please use at your own risk!
 
-Build the individual crates as such:
+Wasmtime exposes an API for embedding as a library through the `wasmtime-api` subcrate,
+which contains both a [high-level and safe Rust API], as well as a C-compatible API
+compatible with the [proposed WebAssembly C API].
 
-```
-cargo build --package wasmtime-jit
-```
+For more information, see the [Rust API embedding chapter] of the Wasmtime documentation.
 
-Wasmtime does not currently publish these crates on crates.io. They may be included as a git dependency, like this:
-
-```toml
-[dependencies]
-wasmtime-environ = { git = "https://github.com/CraneStation/wasmtime", rev = "somecommithash" }
-wasmtime-runtime = { git = "https://github.com/CraneStation/wasmtime", rev = "somecommithash" }
-wasmtime-jit = { git = "https://github.com/CraneStation/wasmtime", rev = "somecommithash" }
-```
-
-All three crates must be specified as dependencies for `wasmtime-jit` to build correctly, at the moment.
+[high-level and safe Rust API]: https://docs.rs/wasmtime-api/
+[proposed WebAssembly C API]: https://github.com/WebAssembly/wasm-c-api
+[Rust API embedding chapter]: https://cranestation.github.io/wasmtime/embed-rust.html
 
 It's Wasmtime.

@@ -24,8 +24,8 @@ impl Callable for Callback {
 fn main() -> Result<()> {
     // Initialize.
     println!("Initializing...");
-    let engine = HostRef::new(Engine::new(Config::default()));
-    let store = HostRef::new(Store::new(engine));
+    let engine = HostRef::new(Engine::default());
+    let store = HostRef::new(Store::new(&engine));
 
     // Load binary.
     println!("Loading binary...");
@@ -33,8 +33,7 @@ fn main() -> Result<()> {
 
     // Compile.
     println!("Compiling module...");
-    let module =
-        HostRef::new(Module::new(store.clone(), &binary).context("Error compiling module!")?);
+    let module = HostRef::new(Module::new(&store, &binary).context("Error compiling module!")?);
 
     // Create external print functions.
     println!("Creating callback...");
@@ -42,13 +41,13 @@ fn main() -> Result<()> {
         Box::new([ValType::I32, ValType::I64]),
         Box::new([ValType::I64, ValType::I32]),
     );
-    let callback_func = HostRef::new(Func::new(store.clone(), callback_type, Rc::new(Callback)));
+    let callback_func = HostRef::new(Func::new(&store, callback_type, Rc::new(Callback)));
 
     // Instantiate.
     println!("Instantiating module...");
     let imports = vec![callback_func.into()];
     let instance = HostRef::new(
-        Instance::new(store.clone(), module, imports.as_slice())
+        Instance::new(&store, &module, imports.as_slice())
             .context("Error instantiating module!")?,
     );
 

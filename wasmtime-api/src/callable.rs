@@ -34,9 +34,9 @@ pub(crate) struct WasmtimeFn {
 }
 
 impl WasmtimeFn {
-    pub fn new(store: HostRef<Store>, instance: InstanceHandle, export: Export) -> WasmtimeFn {
+    pub fn new(store: &HostRef<Store>, instance: InstanceHandle, export: Export) -> WasmtimeFn {
         WasmtimeFn {
-            store,
+            store: store.clone(),
             instance,
             export,
         }

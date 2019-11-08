@@ -25,10 +25,10 @@ fn test_import_calling_export() {
     }
 
     let engine = HostRef::new(Engine::new(Config::default()));
-    let store = HostRef::new(Store::new(engine));
+    let store = HostRef::new(Store::new(&engine));
     let module = HostRef::new(
         Module::new(
-            store.clone(),
+            &store,
             &read("tests/import_calling_export.wasm").expect("failed to read wasm file"),
         )
         .expect("failed to create module"),
@@ -39,15 +39,14 @@ fn test_import_calling_export() {
     });
 
     let callback_func = HostRef::new(Func::new(
-        store.clone(),
+        &store,
         FuncType::new(Box::new([]), Box::new([])),
         callback.clone(),
     ));
 
     let imports = vec![callback_func.into()];
     let instance = HostRef::new(
-        Instance::new(store.clone(), module, imports.as_slice())
-            .expect("failed to instantiate module"),
+        Instance::new(&store, &module, imports.as_slice()).expect("failed to instantiate module"),
     );
 
     let exports = Ref::map(instance.borrow(), |instance| instance.exports());

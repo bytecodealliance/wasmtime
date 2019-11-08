@@ -182,10 +182,10 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn new(store: HostRef<Store>, binary: &[u8]) -> Result<Module> {
+    pub fn new(store: &HostRef<Store>, binary: &[u8]) -> Result<Module> {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(Module {
-            store,
+            store: store.clone(),
             binary: binary.into(),
             imports,
             exports,

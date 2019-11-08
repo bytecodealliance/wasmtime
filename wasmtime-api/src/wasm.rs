@@ -609,7 +609,7 @@ pub unsafe extern "C" fn wasm_func_new(
     ty: *const wasm_functype_t,
     callback: wasm_func_callback_t,
 ) -> *mut wasm_func_t {
-    let store = (*store).store.clone();
+    let store = &(*store).store;
     let ty = (*ty).functype.clone();
     let callback = Rc::new(callback);
     let func = Box::new(wasm_func_t {
@@ -663,13 +663,13 @@ pub unsafe extern "C" fn wasm_instance_new(
     imports: *const *const wasm_extern_t,
     result: *mut *mut wasm_trap_t,
 ) -> *mut wasm_instance_t {
-    let store = (*store).store.clone();
+    let store = &(*store).store;
     let mut externs: Vec<Extern> = Vec::with_capacity((*module).imports.len());
     for i in 0..(*module).imports.len() {
         let import = *imports.offset(i as isize);
         externs.push((*import).ext.clone());
     }
-    let module = (*module).module.clone();
+    let module = &(*module).module;
     match Instance::new(store, module, &externs) {
         Ok(instance) => {
             let instance = Box::new(wasm_instance_t {
@@ -731,7 +731,7 @@ pub unsafe extern "C" fn wasm_module_new(
     binary: *const wasm_byte_vec_t,
 ) -> *mut wasm_module_t {
     let binary = (*binary).as_slice();
-    let store = (*store).store.clone();
+    let store = &(*store).store;
     let module = Module::new(store, binary).expect("module");
     let imports = module
         .imports()
@@ -766,9 +766,9 @@ pub unsafe extern "C" fn wasm_store_delete(store: *mut wasm_store_t) {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_store_new(engine: *mut wasm_engine_t) -> *mut wasm_store_t {
-    let engine = (*engine).engine.clone();
+    let engine = &(*engine).engine;
     let store = Box::new(wasm_store_t {
-        store: HostRef::new(Store::new(engine)),
+        store: HostRef::new(Store::new(&engine)),
     });
     Box::into_raw(store)
 }
@@ -804,7 +804,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
     env: *mut ::core::ffi::c_void,
     finalizer: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
 ) -> *mut wasm_func_t {
-    let store = (*store).store.clone();
+    let store = &(*store).store;
     let ty = (*ty).functype.clone();
     let callback = Rc::new(CallbackWithEnv {
         callback,
@@ -1327,7 +1327,7 @@ pub unsafe extern "C" fn wasm_global_new(
     val: *const wasm_val_t,
 ) -> *mut wasm_global_t {
     let global = HostRef::new(Global::new(
-        (*store).store.clone(),
+        &(*store).store,
         (*gt).globaltype.clone(),
         (*val).val(),
     ));
@@ -1446,10 +1446,7 @@ pub unsafe extern "C" fn wasm_memory_new(
     store: *mut wasm_store_t,
     mt: *const wasm_memorytype_t,
 ) -> *mut wasm_memory_t {
-    let memory = HostRef::new(Memory::new(
-        (*store).store.clone(),
-        (*mt).memorytype.clone(),
-    ));
+    let memory = HostRef::new(Memory::new(&(*store).store, (*mt).memorytype.clone()));
     let m = Box::new(wasm_memory_t { memory, ext: None });
     Box::into_raw(m)
 }
@@ -1537,11 +1534,7 @@ pub unsafe extern "C" fn wasm_table_new(
         Val::AnyRef(AnyRef::Null)
     };
     let t = Box::new(wasm_table_t {
-        table: HostRef::new(Table::new(
-            (*store).store.clone(),
-            (*tt).tabletype.clone(),
-            init,
-        )),
+        table: HostRef::new(Table::new(&(*store).store, (*tt).tabletype.clone(), init)),
         ext: None,
     });
     Box::into_raw(t)

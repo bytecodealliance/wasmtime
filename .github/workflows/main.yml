@@ -70,19 +70,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build: [stable, beta, nightly, windows, linux]
+        build: [stable, beta, nightly, windows, macos]
         include:
           - build: stable
-            os: macos-latest
+            os: ubuntu-latest
             rust: stable
           - build: beta
-            os: macos-latest
+            os: ubuntu-latest
             rust: beta
           - build: nightly
-            os: macos-latest
-            rust: nightly
-          - build: linux
             os: ubuntu-latest
+            rust: nightly
+          - build: macos
+            os: macos-latest
             rust: stable
           - build: windows
             os: windows-latest
@@ -216,7 +216,7 @@ jobs:
     - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
       shell: bash
     # Build `libwasmtime_api.so`
-    - run: $CENTOS cargo build --release --features wasm-c-api --manifest-path wasmtime-api/Cargo.toml
+    - run: $CENTOS cargo build --release --manifest-path wasmtime-api/Cargo.toml
       shell: bash
     # Test what we just built
     - run: $CENTOS cargo test --features wasi-common/wasm_tests --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime-api

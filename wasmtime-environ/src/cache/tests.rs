@@ -1,7 +1,7 @@
 use super::config::tests::test_prolog;
 use super::*;
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::compilation::{CodeAndJTOffsets, Relocation, RelocationTarget, TrapInformation};
+use crate::compilation::{CompiledFunction, Relocation, RelocationTarget, TrapInformation};
 use crate::module::{MemoryPlan, MemoryStyle, Module};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -258,9 +258,10 @@ fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
                     *v = (j as u32) * 3 / 4
                 }
             });
-            CodeAndJTOffsets {
+            CompiledFunction {
                 body: (0..(i * 3 / 2)).collect(),
                 jt_offsets: sm,
+                unwind_info: (0..(i * 3 / 2)).collect(),
             }
         })
         .collect();
