@@ -1,4 +1,6 @@
-use super::{module::ExecutionError, translate, ExecutableModule};
+use lazy_static::lazy_static;
+use lightbeam::{translate, ExecutableModule};
+use quickcheck::quickcheck;
 
 fn translate_wat(wat: &str) -> ExecutableModule {
     let wasm = wat::parse_str(wat).unwrap();
@@ -6,25 +8,13 @@ fn translate_wat(wat: &str) -> ExecutableModule {
     compiled
 }
 
-/// Execute the first function in the module.
-fn execute_wat(wat: &str, a: u32, b: u32) -> u32 {
-    let translated = translate_wat(wat);
-    translated.disassemble();
-    translated.execute_func(0, (a, b)).unwrap()
-}
-
-#[test]
-fn empty() {
-    let _ = translate_wat("(module (func))");
-}
-
 mod op32 {
-    use super::{translate_wat, ExecutableModule};
+    use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
 
     macro_rules! binop_test {
         ($op:ident, $func:expr) => {
             mod $op {
-                use super::{translate_wat, ExecutableModule};
+                use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
                 use std::sync::Once;
 
                 const OP: &str = stringify!($op);
@@ -82,7 +72,7 @@ mod op32 {
     macro_rules! unop_test {
         ($name:ident, $func:expr) => {
             mod $name {
-                use super::{translate_wat, ExecutableModule};
+                use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
                 use std::sync::Once;
 
                 lazy_static! {
@@ -143,7 +133,7 @@ mod op32 {
 }
 
 mod op64 {
-    use super::{translate_wat, ExecutableModule};
+    use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
 
     macro_rules! binop_test {
         ($op:ident, $func:expr) => {
@@ -151,7 +141,7 @@ mod op64 {
         };
         ($op:ident, $func:expr, $retty:ident) => {
             mod $op {
-                use super::{translate_wat, ExecutableModule};
+                use super::{translate_wat, ExecutableModule, quickcheck, lazy_static};
 
                 const RETTY: &str = stringify!($retty);
                 const OP: &str = stringify!($op);
@@ -211,7 +201,7 @@ mod op64 {
         };
         ($name:ident, $func:expr, $out_ty:ty) => {
             mod $name {
-                use super::{translate_wat, ExecutableModule};
+                use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
                 use std::sync::Once;
 
                 lazy_static! {
@@ -290,7 +280,7 @@ mod op64 {
 }
 
 mod opf32 {
-    use super::{translate_wat, ExecutableModule};
+    use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
 
     macro_rules! binop_test {
         ($op:ident, $func:expr) => {
@@ -298,7 +288,7 @@ mod opf32 {
         };
         ($op:ident, $func:expr, $retty:ident) => {
             mod $op {
-                use super::{translate_wat, ExecutableModule};
+                use super::{translate_wat, ExecutableModule, quickcheck, lazy_static};
 
                 const RETTY: &str = stringify!($retty);
                 const OP: &str = stringify!($op);
@@ -358,7 +348,7 @@ mod opf32 {
         };
         ($name:ident, $func:expr, $out_ty:ty) => {
             mod $name {
-                use super::{translate_wat, ExecutableModule};
+                use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
                 use std::sync::Once;
 
                 lazy_static! {
@@ -407,7 +397,7 @@ mod opf32 {
 }
 
 mod opf64 {
-    use super::{translate_wat, ExecutableModule};
+    use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
 
     macro_rules! binop_test {
         ($op:ident, $func:expr) => {
@@ -415,7 +405,7 @@ mod opf64 {
         };
         ($op:ident, $func:expr, $retty:ident) => {
             mod $op {
-                use super::{translate_wat, ExecutableModule};
+                use super::{translate_wat, ExecutableModule, quickcheck, lazy_static};
 
                 const RETTY: &str = stringify!($retty);
                 const OP: &str = stringify!($op);
@@ -475,7 +465,7 @@ mod opf64 {
         };
         ($name:ident, $func:expr, $out_ty:ty) => {
             mod $name {
-                use super::{translate_wat, ExecutableModule};
+                use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
                 use std::sync::Once;
 
                 lazy_static! {
@@ -549,107 +539,6 @@ quickcheck! {
         out == Ok(if a == b { a } else { b })
     }
 }
-#[test]
-fn if_without_result() {
-    let code = r#"
-(module
-  (func (param i32) (param i32) (result i32)
-    (if
-      (i32.eq
-        (get_local 0)
-        (get_local 1)
-      )
-      (then (unreachable))
-    )
-
-    (get_local 0)
-  )
-)
-    "#;
-
-    assert_eq!(execute_wat(code, 2, 3), 2);
-}
-
-#[test]
-fn block() {
-    let code = r#"
-(module
-  (func (param i32) (param i32) (result i32)
-    (block (result i32)
-        get_local 0
-    )
-  )
-)
-    "#;
-    assert_eq!(execute_wat(code, 10, 20), 10);
-}
-
-#[test]
-fn br_block() {
-    let code = r#"
-(module
-  (func (param i32) (param i32) (result i32)
-    get_local 1
-    (block (result i32)
-        get_local 0
-        get_local 0
-        br 0
-        unreachable
-    )
-    i32.add
-  )
-)
-    "#;
-
-    let translated = translate_wat(code);
-    translated.disassemble();
-
-    assert_eq!(
-        translated.execute_func::<(i32, i32), i32>(0, (5, 7)),
-        Ok(12)
-    );
-}
-
-// Tests discarding values on the value stack, while
-// carrying over the result using a conditional branch.
-#[test]
-fn brif_block() {
-    let code = r#"
-(module
-  (func (param i32) (param i32) (result i32)
-    get_local 1
-    (block (result i32)
-        get_local 0
-        get_local 0
-        br_if 0
-        unreachable
-    )
-    i32.add
-  )
-)
-    "#;
-    assert_eq!(execute_wat(code, 5, 7), 12);
-}
-
-// Tests that br_if keeps values in the case if the branch
-// hasn't been taken.
-#[test]
-fn brif_block_passthru() {
-    let code = r#"
-(module
-  (func (param i32) (param i32) (result i32)
-    (block (result i32)
-        get_local 1
-        get_local 0
-        br_if 0
-        get_local 1
-        i32.add
-    )
-  )
-)
-    "#;
-    assert_eq!(execute_wat(code, 0, 3), 6);
-}
 
 quickcheck! {
     #[test]
@@ -715,270 +604,11 @@ quickcheck! {
         true
     }
 }
-#[test]
-fn wrong_type() {
-    let code = r#"
-(module
-  (func (param i32) (param i64) (result i32)
-    (i32.const 228)
-  )
-)
-    "#;
-
-    let translated = translate_wat(code);
-    assert_eq!(
-        translated
-            .execute_func::<_, ()>(0, (0u32, 0u32))
-            .unwrap_err(),
-        ExecutionError::TypeMismatch
-    );
-}
-
-#[test]
-fn wrong_index() {
-    let code = r#"
-(module
-  (func (param i32) (param i64) (result i32)
-    (i32.const 228)
-  )
-)
-    "#;
-
-    let translated = translate_wat(code);
-    assert_eq!(
-        translated
-            .execute_func::<_, ()>(10, (0u32, 0u32))
-            .unwrap_err(),
-        ExecutionError::FuncIndexOutOfBounds
-    );
-}
-
-fn iterative_fib_baseline(n: u32) -> u32 {
-    let (mut a, mut b) = (1, 1);
-
-    for _ in 0..n {
-        let old_a = a;
-        a = b;
-        b += old_a;
-    }
-
-    a
-}
-
-const FIBONACCI: &str = r#"
-(module
-  (func $fib (param $n i32) (result i32)
-    (if (result i32)
-      (i32.eq
-        (i32.const 0)
-        (get_local $n)
-      )
-      (then
-        (i32.const 1)
-      )
-      (else
-        (if (result i32)
-          (i32.eq
-            (i32.const 1)
-            (get_local $n)
-          )
-          (then
-            (i32.const 1)
-          )
-          (else
-            (i32.add
-              ;; fib(n - 1)
-              (call $fib
-                (i32.add
-                  (get_local $n)
-                  (i32.const -1)
-                )
-              )
-              ;; fib(n - 2)
-              (call $fib
-                (i32.add
-                  (get_local $n)
-                  (i32.const -2)
-                )
-              )
-            )
-          )
-        )
-      )
-    )
-  )
-)
-    "#;
-
-#[test]
-fn fib_unopt() {
-    let translated = translate_wat(FIBONACCI);
-    translated.disassemble();
-
-    for x in 0..30 {
-        assert_eq!(
-            translated.execute_func::<_, u32>(0, (x,)),
-            Ok(iterative_fib_baseline(x)),
-            "Failed for x={}",
-            x
-        );
-    }
-}
-
-// Generated by Rust for the `fib` function in `bench_fibonacci_baseline`
-const FIBONACCI_OPT: &str = r"
-(module
-  (func $fib (param $p0 i32) (result i32)
-    (local $l1 i32)
-    (set_local $l1
-      (i32.const 1))
-    (block $B0
-      (br_if $B0
-        (i32.lt_u
-          (get_local $p0)
-          (i32.const 2)))
-      (set_local $l1
-        (i32.const 1))
-      (loop $L1
-        (set_local $l1
-          (i32.add
-            (call $fib
-              (i32.add
-                (get_local $p0)
-                (i32.const -1)))
-            (get_local $l1)))
-        (br_if $L1
-          (i32.gt_u
-            (tee_local $p0
-              (i32.add
-                (get_local $p0)
-                (i32.const -2)))
-            (i32.const 1)))))
-    (get_local $l1)))";
-
-#[test]
-fn fib_opt() {
-    let translated = translate_wat(FIBONACCI_OPT);
-    translated.disassemble();
-
-    for x in 0..30 {
-        assert_eq!(
-            translated.execute_func::<_, u32>(0, (x,)),
-            Ok(iterative_fib_baseline(x)),
-            "Failed for x={}",
-            x
-        );
-    }
-}
-
-#[test]
-fn i32_div() {
-    const CODE: &str = r"
-    (module
-      (func (param i32) (param i32) (result i32)
-        (i32.div_s (get_local 0) (get_local 1))
-      )
-    )";
-
-    let translated = translate_wat(CODE);
-    translated.disassemble();
-
-    assert_eq!(translated.execute_func::<_, u32>(0, (-1, -1)), Ok(1));
-}
-
-#[test]
-fn i32_rem() {
-    const CODE: &str = r"
-    (module
-      (func (param i32) (param i32) (result i32)
-        (i32.rem_s (get_local 0) (get_local 1))
-      )
-    )";
-
-    let translated = translate_wat(CODE);
-    translated.disassemble();
-
-    assert_eq!(translated.execute_func::<_, u32>(0, (123121, -1)), Ok(0));
-}
-
-#[test]
-fn i64_div() {
-    const CODE: &str = r"
-    (module
-      (func (param i64) (param i64) (result i64)
-        (i64.div_s (get_local 0) (get_local 1))
-      )
-    )";
-
-    let translated = translate_wat(CODE);
-    translated.disassemble();
-
-    assert_eq!(translated.execute_func::<_, u64>(0, (-1i64, -1i64)), Ok(1));
-}
-
-#[test]
-fn i64_rem() {
-    const CODE: &str = r"
-    (module
-      (func (param i64) (param i64) (result i64)
-        (i64.rem_s (get_local 0) (get_local 1))
-      )
-    )";
-
-    let translated = translate_wat(CODE);
-    translated.disassemble();
-
-    assert_eq!(
-        translated.execute_func::<_, u64>(0, (123121i64, -1i64)),
-        Ok(0)
-    );
-}
-
-#[test]
-fn br_table() {
-    const CODE: &str = r"
-(func (param $i i32) (result i32)
-    (return
-      (block $2 (result i32)
-        (i32.add (i32.const 10)
-          (block $1 (result i32)
-            (i32.add (i32.const 100)
-              (block $0 (result i32)
-                (i32.add (i32.const 1000)
-                  (block $default (result i32)
-                    (br_table $0 $1 $2 $default
-                      (i32.mul (i32.const 2) (get_local $i))
-                      (i32.and (i32.const 3) (get_local $i))
-                    )
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
-    )
-  )
-";
-
-    let translated = translate_wat(CODE);
-    translated.disassemble();
-
-    assert_eq!(translated.execute_func::<_, u32>(0, (0u32,)), Ok(110));
-    assert_eq!(translated.execute_func::<_, u32>(0, (1u32,)), Ok(12));
-    assert_eq!(translated.execute_func::<_, u32>(0, (2u32,)), Ok(4));
-    assert_eq!(translated.execute_func::<_, u32>(0, (3u32,)), Ok(1116));
-    assert_eq!(translated.execute_func::<_, u32>(0, (4u32,)), Ok(118));
-    assert_eq!(translated.execute_func::<_, u32>(0, (5u32,)), Ok(20));
-    assert_eq!(translated.execute_func::<_, u32>(0, (6u32,)), Ok(12));
-    assert_eq!(translated.execute_func::<_, u32>(0, (7u32,)), Ok(1124));
-    assert_eq!(translated.execute_func::<_, u32>(0, (8u32,)), Ok(126));
-}
 
 macro_rules! test_select {
     ($name:ident, $ty:ident) => {
         mod $name {
-            use super::{translate_wat, ExecutableModule};
+            use super::{lazy_static, quickcheck, translate_wat, ExecutableModule};
             use std::sync::Once;
 
             lazy_static! {
@@ -1022,45 +652,3 @@ macro_rules! test_select {
 
 test_select!(select32, i32);
 test_select!(select64, i64);
-
-#[cfg(feature = "bench")]
-mod benches {
-    extern crate test;
-
-    use super::{translate, FIBONACCI, FIBONACCI_OPT};
-
-    #[bench]
-    fn bench_fibonacci_compile(b: &mut test::Bencher) {
-        let wasm = wat::parse_str(FIBONACCI).unwrap();
-
-        b.iter(|| test::black_box(translate(&wasm).unwrap()));
-    }
-
-    #[bench]
-    fn bench_fibonacci_run(b: &mut test::Bencher) {
-        let wasm = wat::parse_str(FIBONACCI_OPT).unwrap();
-        let module = translate(&wasm).unwrap();
-
-        b.iter(|| module.execute_func::<_, u32>(0, (20,)));
-    }
-
-    #[bench]
-    fn bench_fibonacci_compile_run(b: &mut test::Bencher) {
-        let wasm = wat::parse_str(FIBONACCI).unwrap();
-
-        b.iter(|| translate(&wasm).unwrap().execute_func::<_, u32>(0, (20,)));
-    }
-
-    #[bench]
-    fn bench_fibonacci_baseline(b: &mut test::Bencher) {
-        fn fib(n: i32) -> i32 {
-            if n == 0 || n == 1 {
-                1
-            } else {
-                fib(n - 1) + fib(n - 2)
-            }
-        }
-
-        b.iter(|| test::black_box(fib(test::black_box(20))));
-    }
-}
