@@ -49,6 +49,8 @@ for crate in \
     wasmtime-obj \
     wasmtime-py \
     wasmtime-rust \
+    wasmtime-cli \
+    wasi-common \
     wasmtime
 do
     echo cargo publish --manifest-path "$crate/Cargo.toml"
