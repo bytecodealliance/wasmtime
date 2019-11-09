@@ -53,8 +53,8 @@ endif
 
 ifeq (${C_COMP},clang)
   CC_COMP = clang++
-  LD_GROUP_START = 
-  LD_GROUP_END = 
+  LD_GROUP_START =
+  LD_GROUP_END =
 else ifeq (${C_COMP},gcc)
   CC_COMP = g++
   LD_GROUP_START = -Wl,--start-group

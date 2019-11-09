@@ -7,7 +7,7 @@ use std::{ffi, io};
 ///
 /// Unlike `std::fs::DirEntry`, this API has no `DirEntry::path`, because
 /// absolute paths don't interoperate well with the capability-oriented
-/// security model.  
+/// security model.
 ///
 /// TODO: Not yet implemented.
 ///
