@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types)]
 use crate::{winerror, Result};
+use bitflags::bitflags;
 use cvt::cvt;
 use std::ffi::{c_void, OsString};
 use std::fs::File;
