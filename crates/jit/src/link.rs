@@ -412,6 +412,6 @@ extern "C" {
     pub fn __chkstk();
     // ___chkstk (note the triple underscore) is implemented in compiler-builtins/src/x86_64.rs
     // by the Rust compiler for the MinGW target
-    #[cfg(all(target_os = "windows", target_env = "gnu",))]
+    #[cfg(all(target_os = "windows", target_env = "gnu"))]
     pub fn ___chkstk();
 }

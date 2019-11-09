@@ -173,7 +173,7 @@ where
                             actual_regs.mark_used(*gpr);
                         }
                     }
-                    assert_eq!(actual_regs, ctx.block_state.regs,);
+                    assert_eq!(actual_regs, ctx.block_state.regs);
                 }
             };
         }
