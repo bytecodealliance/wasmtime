@@ -58,7 +58,7 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
         Ok(()) => {
             for i in 0..returns_len {
                 // TODO check signature.returns[i].value_type ?
-                returns[i].write_value_to(values_vec.offset(i as isize));
+                returns[i].write_value_to(values_vec.add(i));
             }
             0
         }

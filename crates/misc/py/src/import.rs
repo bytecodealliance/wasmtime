@@ -71,12 +71,7 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
             }
             result.clone_ref(py)
         };
-        write_value_to(
-            py,
-            values_vec.offset(i as isize),
-            signature.returns[i].value_type,
-            val,
-        );
+        write_value_to(py, values_vec.add(i), signature.returns[i].value_type, val);
     }
 }
 
