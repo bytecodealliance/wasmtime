@@ -1,16 +1,3 @@
-use crate::{HashMap, HashSet};
-use alloc::string::String;
-use alloc::vec::Vec;
-use cranelift_entity::EntityRef;
-use failure::Error;
-use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
-
-use gimli;
-
-use gimli::{AttributeValue, DebuggingInformationEntry, Unit, UnitOffset};
-
-use gimli::write;
-
 use super::address_transform::AddressTransform;
 use super::attr::{clone_die_attributes, FileAttributeContext};
 use super::expression::compile_expression;
@@ -18,6 +5,13 @@ use super::line_program::clone_line_program;
 use super::range_info_builder::RangeInfoBuilder;
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::{DebugInputContext, Reader, TransformError};
+use crate::{HashMap, HashSet};
+use alloc::{string::String, vec::Vec};
+use cranelift_entity::EntityRef;
+use failure::Error;
+use gimli::write;
+use gimli::{AttributeValue, DebuggingInformationEntry, Unit, UnitOffset};
+use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 pub(crate) type PendingDieRef = (write::UnitEntryId, gimli::DwAt, UnitOffset);
 

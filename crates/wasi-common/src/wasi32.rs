@@ -6,9 +6,8 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use wig::witx_wasi32_types;
-
 use crate::wasi::*;
+use wig::witx_wasi32_types;
 
 pub type uintptr_t = u32;
 pub type size_t = u32;

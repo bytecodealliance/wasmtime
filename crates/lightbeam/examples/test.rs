@@ -1,5 +1,3 @@
-extern crate lightbeam;
-
 use lightbeam::translate;
 use std::fs::File;
 use std::io;

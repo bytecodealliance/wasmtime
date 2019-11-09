@@ -7,8 +7,7 @@ use cranelift_codegen::ValueLabelsRanges;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use failure::Error;
-use gimli::write;
-use gimli::{self, Expression, Operation, Reader, ReaderOffset, Register, X86_64};
+use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, Register, X86_64};
 use more_asserts::{assert_le, assert_lt};
 
 #[derive(Debug)]

@@ -2,12 +2,12 @@
 
 extern crate alloc;
 
-use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyDict, PyTuple};
-
 use crate::function::Function;
 use crate::memory::Memory;
 use crate::value::{read_value_from, write_value_to};
+use alloc::rc::Rc;
+use core::cell::RefCell;
+use core::cmp;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind};
 use cranelift_codegen::Context;
@@ -15,15 +15,13 @@ use cranelift_codegen::{binemit, ir, isa};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex};
+use pyo3::prelude::*;
+use pyo3::types::{PyAny, PyDict, PyTuple};
+use std::collections::{HashMap, HashSet};
 use target_lexicon::HOST;
 use wasmtime_environ::{CompiledFunction, Export, Module};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{Imports, InstanceHandle, VMContext, VMFunctionBody};
-
-use alloc::rc::Rc;
-use core::cell::RefCell;
-use core::cmp;
-use std::collections::{HashMap, HashSet};
 
 struct BoundPyFunction {
     name: String,

@@ -1,17 +1,12 @@
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use wasmparser::{self, ModuleReader, SectionCode};
-
-use gimli;
-
+use alloc::{boxed::Box, string::String, vec::Vec};
 use gimli::{
     DebugAbbrev, DebugAddr, DebugInfo, DebugLine, DebugLineStr, DebugLoc, DebugLocLists,
     DebugRanges, DebugRngLists, DebugStr, DebugStrOffsets, DebugTypes, EndianSlice, LittleEndian,
     LocationLists, RangeLists,
 };
+use std::collections::HashMap;
+use std::path::PathBuf;
+use wasmparser::{self, ModuleReader, SectionCode};
 
 trait Reader: gimli::Reader<Offset = usize, Endian = LittleEndian> {}
 

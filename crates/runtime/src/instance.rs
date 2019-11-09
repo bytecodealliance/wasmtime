@@ -24,15 +24,13 @@ use core::any::Any;
 use core::borrow::Borrow;
 use core::cell::RefCell;
 use core::convert::TryFrom;
-use core::slice;
-use core::{mem, ptr};
-use cranelift_entity::EntityRef;
-use cranelift_entity::{BoxedSlice, PrimaryMap};
+use core::{mem, ptr, slice};
+use cranelift_entity::{BoxedSlice, EntityRef, PrimaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
-use indexmap;
+use memoffset::offset_of;
 use more_asserts::assert_lt;
 use thiserror::Error;
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};

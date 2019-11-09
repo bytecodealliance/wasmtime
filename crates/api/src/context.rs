@@ -1,10 +1,8 @@
 use alloc::rc::Rc;
 use core::cell::{RefCell, RefMut};
 use core::hash::{Hash, Hasher};
-
-use wasmtime_jit::{CompilationStrategy, Compiler, Features};
-
 use cranelift_codegen::settings;
+use wasmtime_jit::{CompilationStrategy, Compiler, Features};
 
 #[derive(Clone)]
 pub struct Context {

@@ -6,9 +6,9 @@ use alloc::vec::Vec;
 use core::iter::FromIterator;
 use cranelift_entity::EntityRef;
 use failure::Error;
-use gimli;
-use gimli::write;
-use gimli::{DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit};
+use gimli::{
+    write, DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit,
+};
 use more_asserts::assert_le;
 
 #[derive(Debug)]

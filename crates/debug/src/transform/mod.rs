@@ -1,23 +1,17 @@
 use crate::gc::build_dependencies;
-use crate::DebugInfoData;
-use crate::HashSet;
+use crate::{DebugInfoData, HashSet};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use failure::Error;
+use gimli::{
+    write, DebugAddr, DebugAddrBase, DebugLine, DebugStr, LocationLists, RangeLists,
+    UnitSectionOffset,
+};
 use simulate::generate_simulated_dwarf;
 use thiserror::Error;
+use unit::clone_unit;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
-use gimli;
-
-use gimli::{
-    DebugAddr, DebugAddrBase, DebugLine, DebugStr, LocationLists, RangeLists, UnitSectionOffset,
-};
-
-use gimli::write;
-
 pub use address_transform::AddressTransform;
-
-use unit::clone_unit;
 
 mod address_transform;
 mod attr;

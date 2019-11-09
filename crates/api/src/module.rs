@@ -4,11 +4,8 @@ use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
     TableType, ValType,
 };
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, string::String, vec::Vec};
 use anyhow::Result;
-
 use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {

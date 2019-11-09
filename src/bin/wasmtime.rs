@@ -34,13 +34,11 @@ use anyhow::{bail, Context as _, Result};
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use docopt::Docopt;
-use pretty_env_logger;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::path::Component;
-use std::path::Path;
+use std::path::{Component, Path};
 use std::process::exit;
 use wasi_common::preopen_dir;
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
@@ -49,10 +47,9 @@ use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 use wasmtime_wasi::instantiate_wasi;
-use wasmtime_wast::instantiate_spectest;
-
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
+use wasmtime_wast::instantiate_spectest;
 
 const USAGE: &str = "
 Wasm runner.

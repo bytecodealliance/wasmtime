@@ -12,9 +12,7 @@ use super::{
 };
 use alloc::boxed::Box;
 use alloc::rc::Rc;
-use core::mem;
-use core::ptr;
-use core::slice;
+use core::{mem, ptr, slice};
 
 macro_rules! declare_vec {
     ($name:ident, $elem_ty:path) => {

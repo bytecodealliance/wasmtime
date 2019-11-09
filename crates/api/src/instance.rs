@@ -4,14 +4,10 @@ use crate::module::Module;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::{HashMap, HashSet};
-use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
-use alloc::rc::Rc;
 use alloc::string::{String, ToString};
-use alloc::vec::Vec;
+use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use anyhow::Result;
 use core::cell::RefCell;
-
 use wasmtime_jit::{instantiate, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle};
 

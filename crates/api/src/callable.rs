@@ -1,12 +1,10 @@
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
+use crate::trampoline::generate_func_export;
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
-use alloc::rc::Rc;
-use alloc::vec::Vec;
-
-use crate::trampoline::generate_func_export;
+use alloc::{rc::Rc, vec::Vec};
 use cranelift_codegen::ir;
 use wasmtime_jit::InstanceHandle;
 use wasmtime_runtime::Export;

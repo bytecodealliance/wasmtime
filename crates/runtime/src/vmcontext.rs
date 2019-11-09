@@ -21,6 +21,7 @@ pub struct VMFunctionImport {
 mod test_vmfunction_import {
     use super::VMFunctionImport;
     use core::mem::size_of;
+    use memoffset::offset_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -76,6 +77,7 @@ pub struct VMTableImport {
 mod test_vmtable_import {
     use super::VMTableImport;
     use core::mem::size_of;
+    use memoffset::offset_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -113,6 +115,7 @@ pub struct VMMemoryImport {
 mod test_vmmemory_import {
     use super::VMMemoryImport;
     use core::mem::size_of;
+    use memoffset::offset_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -147,6 +150,7 @@ pub struct VMGlobalImport {
 mod test_vmglobal_import {
     use super::VMGlobalImport;
     use core::mem::size_of;
+    use memoffset::offset_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -181,6 +185,7 @@ pub struct VMMemoryDefinition {
 mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
     use core::mem::size_of;
+    use memoffset::offset_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -224,6 +229,7 @@ pub struct VMTableDefinition {
 mod test_vmtable_definition {
     use super::VMTableDefinition;
     use core::mem::size_of;
+    use memoffset::offset_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -480,6 +486,7 @@ pub struct VMCallerCheckedAnyfunc {
 mod test_vmcaller_checked_anyfunc {
     use super::VMCallerCheckedAnyfunc;
     use core::mem::size_of;
+    use memoffset::offset_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]

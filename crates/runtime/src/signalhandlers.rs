@@ -8,6 +8,7 @@ use crate::vmcontext::VMContext;
 use crate::RwLock;
 use core::borrow::{Borrow, BorrowMut};
 use core::cell::Cell;
+use lazy_static::lazy_static;
 
 #[derive(Default)]
 struct TrapContext {

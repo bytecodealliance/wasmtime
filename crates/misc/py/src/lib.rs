@@ -1,13 +1,12 @@
-use pyo3::exceptions::Exception;
-use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PySet};
-use pyo3::wrap_pyfunction;
-
 use crate::import::into_instance_from_obj;
 use crate::instance::Instance;
 use crate::memory::Memory;
 use crate::module::Module;
 use core::cell::RefCell;
+use pyo3::exceptions::Exception;
+use pyo3::prelude::*;
+use pyo3::types::{PyBytes, PyDict, PySet};
+use pyo3::wrap_pyfunction;
 use std::rc::Rc;
 use wasmtime_interface_types::ModuleData;
 
