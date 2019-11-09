@@ -12,9 +12,7 @@ use super::{
 };
 use alloc::boxed::Box;
 use alloc::rc::Rc;
-use core::mem;
-use core::ptr;
-use core::slice;
+use core::{mem, ptr, slice};
 
 macro_rules! declare_vec {
     ($name:ident, $elem_ty:path) => {
@@ -460,13 +458,13 @@ pub unsafe extern "C" fn wasm_func_call(
     let func = (*func).func.borrow();
     let mut params = Vec::with_capacity(func.param_arity());
     for i in 0..func.param_arity() {
-        let val = &(*args.offset(i as isize));
+        let val = &(*args.add(i));
         params.push(val.val());
     }
     match func.call(&params) {
         Ok(out) => {
             for i in 0..func.result_arity() {
-                let val = &mut (*results.offset(i as isize));
+                let val = &mut (*results.add(i));
                 *val = wasm_val_t::from_val(&out[i]);
             }
             ptr::null_mut()
@@ -666,7 +664,7 @@ pub unsafe extern "C" fn wasm_instance_new(
     let store = &(*store).store;
     let mut externs: Vec<Extern> = Vec::with_capacity((*module).imports.len());
     for i in 0..(*module).imports.len() {
-        let import = *imports.offset(i as isize);
+        let import = *imports.add(i);
         externs.push((*import).ext.clone());
     }
     let module = &(*module).module;

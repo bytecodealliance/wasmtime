@@ -21,9 +21,6 @@
 )]
 #![cfg(windows)]
 
-#[macro_use]
-extern crate bitflags;
-
 pub mod file;
 pub mod time;
 pub mod winerror;

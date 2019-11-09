@@ -181,7 +181,7 @@ pub(crate) fn enc_slice_of_wasi32_uintptr(
 }
 
 macro_rules! dec_enc_scalar {
-    ( $ty:ident, $dec_byref:ident, $enc_byref:ident) => {
+    ($ty:ident, $dec_byref:ident, $enc_byref:ident) => {
         pub(crate) fn $dec_byref(memory: &mut [u8], ptr: wasi32::uintptr_t) -> Result<wasi::$ty> {
             dec_int_byref::<wasi::$ty>(memory, ptr)
         }

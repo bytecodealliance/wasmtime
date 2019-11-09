@@ -1,19 +1,6 @@
 #![cfg_attr(test, feature(test))]
 #![feature(proc_macro_hygiene)]
 
-#[macro_use]
-extern crate smallvec;
-extern crate capstone;
-extern crate either;
-pub extern crate wasmparser;
-#[macro_use]
-extern crate memoffset;
-extern crate dynasm;
-extern crate dynasmrt;
-extern crate itertools;
-// Just so we can implement `Signature` for `cranelift_codegen::ir::Signature`
-extern crate cranelift_codegen;
-extern crate multi_mut;
 #[cfg(test)]
 extern crate test;
 

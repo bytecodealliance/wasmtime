@@ -173,7 +173,7 @@ where
                             actual_regs.mark_used(*gpr);
                         }
                     }
-                    assert_eq!(actual_regs, ctx.block_state.regs,);
+                    assert_eq!(actual_regs, ctx.block_state.regs);
                 }
             };
         }
@@ -486,7 +486,11 @@ where
 
                         if block.calling_convention.is_some() {
                             let new_cc = block.calling_convention.clone();
-                            assert!(cc.is_none() || cc == new_cc, "Can't pass different params to different elements of `br_table` yet");
+                            assert!(
+                                cc.is_none() || cc == new_cc,
+                                "Can't pass different params to different elements of `br_table` \
+                                 yet"
+                            );
                             cc = new_cc;
                         }
 
@@ -500,22 +504,22 @@ where
                                     .to_drop
                                     .as_ref()
                                     .map(|t| t.clone().count())
-                                    .unwrap_or_default() as u32
+                                    .unwrap_or_default() as u32,
                         );
                     }
 
-                    let cc = cc.map(|cc| {
-                        match cc {
+                    let cc = cc
+                        .map(|cc| match cc {
                             Left(cc) => Left(ctx.serialize_block_args(&cc, max_params)),
                             Right(cc) => Right(cc),
-                        }
-                    }).unwrap_or_else(||
-                        if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
-                            Right(ctx.virtual_calling_convention())
-                        } else {
-                            Left(ctx.serialize_args(max_params))
-                        }
-                    );
+                        })
+                        .unwrap_or_else(|| {
+                            if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
+                                Right(ctx.virtual_calling_convention())
+                            } else {
+                                Left(ctx.serialize_args(max_params))
+                            }
+                        });
 
                     for target in targets.iter().chain(std::iter::once(&default)).unique() {
                         let block = blocks.get_mut(&target.target).unwrap();

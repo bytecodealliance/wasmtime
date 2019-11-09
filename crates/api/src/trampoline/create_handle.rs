@@ -1,21 +1,18 @@
 //! Support for a calling of an imported function.
 
-use anyhow::Result;
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm::DefinedFuncIndex;
-//use target_lexicon::HOST;
-use wasmtime_environ::Module;
-use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
-
+use crate::runtime::Store;
 use crate::{HashMap, HashSet};
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
+use anyhow::Result;
 use core::any::Any;
 use core::cell::{RefCell, RefMut};
-
-use crate::runtime::Store;
+use cranelift_entity::PrimaryMap;
+use cranelift_wasm::DefinedFuncIndex;
+use wasmtime_environ::Module;
+use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 
 pub(crate) fn create_handle(
     module: Module,

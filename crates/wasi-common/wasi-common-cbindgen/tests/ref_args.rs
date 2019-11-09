@@ -1,5 +1,3 @@
-extern crate wasi_common_cbindgen;
-
 pub use wasi_common_cbindgen::wasi_common_cbindgen;
 
 #[wasi_common_cbindgen]

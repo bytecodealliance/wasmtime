@@ -7,7 +7,6 @@
 
 #![deny(missing_docs)]
 
-#[macro_use]
 extern crate alloc;
 
 use alloc::boxed::Box;

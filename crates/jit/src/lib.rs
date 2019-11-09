@@ -22,7 +22,6 @@
     )
 )]
 
-#[macro_use]
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]

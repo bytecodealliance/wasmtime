@@ -1,11 +1,10 @@
 //! Utility functions to handle values conversion between abstractions/targets.
 
+use core::ptr;
+use cranelift_codegen::ir;
 use pyo3::exceptions::Exception;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
-
-use core::ptr;
-use cranelift_codegen::ir;
 use wasmtime_interface_types::Value;
 
 pub fn pyobj_to_value(_: Python, p: &PyAny) -> PyResult<Value> {

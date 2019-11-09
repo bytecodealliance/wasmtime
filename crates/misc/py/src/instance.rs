@@ -2,16 +2,13 @@
 
 extern crate alloc;
 
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
-
 use crate::function::Function;
 use crate::memory::Memory;
 use alloc::rc::Rc;
 use core::cell::RefCell;
-
-use cranelift_codegen::ir;
-use cranelift_codegen::ir::types;
+use cranelift_codegen::ir::{self, types};
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use wasmtime_environ::Export;
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::{Context, InstanceHandle};

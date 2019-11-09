@@ -1,14 +1,9 @@
 #![no_main]
 
-#[macro_use]
 extern crate libfuzzer_sys;
-extern crate cranelift_codegen;
-extern crate cranelift_native;
-extern crate wasmparser;
-extern crate wasmtime_environ;
-extern crate wasmtime_jit;
 
 use cranelift_codegen::settings;
+use libfuzzer_sys::fuzz_target;
 use wasmparser::validate;
 use wasmtime_jit::{instantiate, CompilationStrategy, Compiler, NullResolver};
 

@@ -1,8 +1,5 @@
-use cranelift_native;
-
-use cranelift_codegen::isa;
-use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
+use cranelift_codegen::{isa, settings};
 use std::path::Path;
 use wasmtime_jit::{CompilationStrategy, Compiler, Features};
 use wasmtime_wast::WastContext;

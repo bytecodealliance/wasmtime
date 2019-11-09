@@ -29,11 +29,9 @@
     )
 )]
 
-use cranelift_codegen::isa;
-use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
+use cranelift_codegen::{isa, settings};
 use cranelift_entity::EntityRef;
-use cranelift_native;
 use cranelift_wasm::DefinedMemoryIndex;
 use docopt::Docopt;
 use faerie::Artifact;
@@ -41,21 +39,18 @@ use serde::Deserialize;
 use std::error::Error;
 use std::fmt::format;
 use std::fs::File;
-use std::io;
 use std::io::prelude::*;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process;
-use std::str;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::{io, process, str};
 use target_lexicon::Triple;
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 #[cfg(feature = "lightbeam")]
 use wasmtime_environ::Lightbeam;
-use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_environ::{
-    Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo, Tunables, VMOffsets,
+    cache_create_new_config, cache_init, Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo,
+    Tunables, VMOffsets,
 };
 use wasmtime_jit::CompilationStrategy;
 use wasmtime_obj::emit_module;
@@ -67,7 +62,8 @@ The translation is dependent on the environment chosen.
 The default is a dummy environment that produces placeholder values.
 
 Usage:
-    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] [--enable-simd] [--lightbeam | --cranelift] <file> -o <output>
+    wasm2obj [--target TARGET] [-Odg] [--disable-cache | --cache-config=<cache_config_file>] \
+                     [--enable-simd] [--lightbeam | --cranelift] <file> -o <output>
     wasm2obj --create-cache-config [--cache-config=<cache_config_file>]
     wasm2obj --help | --version
 

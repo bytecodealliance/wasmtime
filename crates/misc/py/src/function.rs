@@ -2,14 +2,12 @@
 
 extern crate alloc;
 
-use pyo3::prelude::*;
-use pyo3::types::PyTuple;
-
 use crate::value::{pyobj_to_value, value_to_pyobj};
 use alloc::rc::Rc;
 use core::cell::RefCell;
-
 use cranelift_codegen::ir;
+use pyo3::prelude::*;
+use pyo3::types::PyTuple;
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::{Context, InstanceHandle};
 use wasmtime_runtime::Export;

@@ -58,7 +58,10 @@ fn main() -> anyhow::Result<()> {
             )
             .expect("generating tests");
         } else {
-            println!("cargo:warning=The spec testsuite is disabled. To enable, run `git submodule update --remote`.");
+            println!(
+                "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
+                 update --remote`."
+            );
         }
 
         writeln!(out, "}}")?;

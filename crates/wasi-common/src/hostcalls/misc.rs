@@ -2,7 +2,6 @@
 use crate::ctx::WasiCtx;
 use crate::{wasi, wasi32};
 use log::trace;
-
 use wasi_common_cbindgen::wasi_common_cbindgen;
 
 #[wasi_common_cbindgen]

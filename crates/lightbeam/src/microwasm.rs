@@ -1,5 +1,5 @@
 use crate::module::{ModuleContext, SigType, Signature};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::{
     convert::TryInto,
     fmt,

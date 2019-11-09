@@ -1,18 +1,14 @@
-use crate::HashMap;
-use alloc::vec::Vec;
-use failure::Error;
-
-use gimli;
-
-use gimli::{AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, UnitOffset};
-
-use gimli::write;
-
 use super::address_transform::AddressTransform;
 use super::expression::{compile_expression, CompiledExpression, FunctionFrameInfo};
 use super::range_info_builder::RangeInfoBuilder;
 use super::unit::PendingDieRef;
 use super::{DebugInputContext, Reader, TransformError};
+use crate::HashMap;
+use alloc::vec::Vec;
+use failure::Error;
+use gimli::{
+    write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, UnitOffset,
+};
 
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),

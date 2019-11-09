@@ -2,9 +2,8 @@
 #![allow(clippy::use_self)]
 use crate::wasi;
 use std::convert::Infallible;
-use std::fmt;
 use std::num::TryFromIntError;
-use std::str;
+use std::{fmt, str};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]

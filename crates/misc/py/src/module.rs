@@ -2,9 +2,8 @@
 
 extern crate alloc;
 
-use pyo3::prelude::*;
-
 use alloc::rc::Rc;
+use pyo3::prelude::*;
 
 #[pyclass]
 pub struct Module {

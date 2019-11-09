@@ -1,12 +1,11 @@
+use super::create_handle::create_handle;
+use crate::MemoryType;
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use anyhow::Result;
 use cranelift_entity::PrimaryMap;
 use wasmtime_environ::Module;
 use wasmtime_runtime::InstanceHandle;
-
-use super::create_handle::create_handle;
-use crate::MemoryType;
 
 #[allow(dead_code)]
 

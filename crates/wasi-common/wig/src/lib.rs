@@ -1,7 +1,4 @@
 extern crate proc_macro;
-extern crate proc_macro2;
-extern crate quote;
-extern crate witx;
 
 mod raw_types;
 mod utils;

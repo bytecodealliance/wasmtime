@@ -1,12 +1,8 @@
-use crate::HashMap;
-use alloc::boxed::Box;
-use alloc::rc::Rc;
-use alloc::string::String;
-use core::cell::RefCell;
-
 use crate::context::{create_compiler, Context};
 use crate::r#ref::HostRef;
-
+use crate::HashMap;
+use alloc::{boxed::Box, rc::Rc, string::String};
+use core::cell::RefCell;
 use cranelift_codegen::{ir, settings};
 use wasmtime_jit::{CompilationStrategy, Features};
 

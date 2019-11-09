@@ -151,7 +151,7 @@ fib:
   lea  rsp, [rsp + 0x18]
   ja   .Lloop
 .Lreturn:
-  ret  
+  ret
 ```
 
 Now obviously I'm not advocating for replacing Firefox's optimising compiler with Lightbeam since the latter can only really produce better code when receiving optimised WebAssembly (and so debug-mode or hand-written WebAssembly may produce much worse output). However, this shows that even with the restrictions of a streaming compiler it's absolutely possible to produce high-quality assembly output. For the assembly above, the Lightbeam output runs within 15% of native speed. This is paramount for one of Lightbeam's intended usecases for real-time systems that want good runtime performance but cannot tolerate compiler bombs.
@@ -159,10 +159,10 @@ Now obviously I'm not advocating for replacing Firefox's optimising compiler wit
 ## Specification compliance
 
 Lightbeam passes 100% of the specification test suite, but that doesn't necessarily mean that it's 100% specification-compliant. Hopefully as we run a fuzzer against it we can find any issues and get Lightbeam to a state where it can be used in production.
- 
+
 ## Getting involved
 
-Our [issue tracker][issue tracker] is pretty barren right now since this is currently more-or-less a one-person project, but if you want to get involved jump into the [CraneStation Gitter room][cranestation-gitter] and someone can direct you to the right place. I wish I could say "the most useful thing you can do is play with it and open issues where you find problems" but until it passes the spec suite that won't be very helpful.
+You can file issues in the [Wasmtime issue tracker][issue tracker]. If you want to get involved jump into the [CraneStation Gitter room][cranestation-gitter] and someone can direct you to the right place. I wish I could say "the most useful thing you can do is play with it and open issues where you find problems" but until it passes the spec suite that won't be very helpful.
 
 [cranestation-gitter]: https://gitter.im/CraneStation/Lobby
-[issue tracker]: https://github.com/CraneStation/lightbeam/issues
+[Wasmtime issue tracker]: https://github.com/CraneStation/wasmtime/issues

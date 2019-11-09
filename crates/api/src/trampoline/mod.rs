@@ -6,15 +6,14 @@ mod global;
 mod memory;
 mod table;
 
-use crate::r#ref::HostRef;
-use alloc::rc::Rc;
-use anyhow::Result;
-
 use self::func::create_handle_with_function;
 use self::global::create_global;
 use self::memory::create_handle_with_memory;
 use self::table::create_handle_with_table;
 use super::{Callable, FuncType, GlobalType, MemoryType, Store, TableType, Val};
+use crate::r#ref::HostRef;
+use alloc::rc::Rc;
+use anyhow::Result;
 
 pub use self::global::GlobalState;
 

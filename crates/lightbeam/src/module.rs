@@ -7,6 +7,7 @@ use cranelift_codegen::{
     ir::{self, AbiParam, Signature as CraneliftSignature},
     isa,
 };
+use memoffset::offset_of;
 use more_asserts::assert_le;
 use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, Type};
 

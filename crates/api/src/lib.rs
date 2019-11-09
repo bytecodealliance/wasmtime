@@ -16,7 +16,6 @@ mod values;
 
 pub mod wasm;
 
-#[macro_use]
 extern crate alloc;
 
 pub use crate::callable::Callable;

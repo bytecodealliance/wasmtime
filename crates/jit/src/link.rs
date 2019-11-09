@@ -41,11 +41,11 @@ pub fn link_module(
                     if signature != *import_signature {
                         // TODO: If the difference is in the calling convention,
                         // we could emit a wrapper function to fix it up.
-                        return Err(LinkError(
-                            format!("{}/{}: incompatible import type: exported function with signature {} incompatible with function import with signature {}",
-                            module_name, field,
-                            signature, import_signature)
-                        ));
+                        return Err(LinkError(format!(
+                            "{}/{}: incompatible import type: exported function with signature {} \
+                             incompatible with function import with signature {}",
+                            module_name, field, signature, import_signature
+                        )));
                     }
                     dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
                     function_imports.push(VMFunctionImport {
@@ -81,7 +81,8 @@ pub fn link_module(
                     let import_table = &module.table_plans[index];
                     if !is_table_compatible(&table, import_table) {
                         return Err(LinkError(format!(
-                            "{}/{}: incompatible import type: exported table incompatible with table import",
+                            "{}/{}: incompatible import type: exported table incompatible with \
+                             table import",
                             module_name, field,
                         )));
                     }
@@ -119,7 +120,8 @@ pub fn link_module(
                     let import_memory = &module.memory_plans[index];
                     if !is_memory_compatible(&memory, import_memory) {
                         return Err(LinkError(format!(
-                            "{}/{}: incompatible import type: exported memory incompatible with memory import",
+                            "{}/{}: incompatible import type: exported memory incompatible with \
+                             memory import",
                             module_name, field
                         )));
                     }
@@ -167,7 +169,8 @@ pub fn link_module(
             Some(export_value) => match export_value {
                 Export::Table { .. } | Export::Memory { .. } | Export::Function { .. } => {
                     return Err(LinkError(format!(
-                        "{}/{}: incompatible import type: exported global incompatible with global import",
+                        "{}/{}: incompatible import type: exported global incompatible with \
+                         global import",
                         module_name, field
                     )));
                 }
@@ -179,7 +182,8 @@ pub fn link_module(
                     let imported_global = module.globals[index];
                     if !is_global_compatible(&global, &imported_global) {
                         return Err(LinkError(format!(
-                            "{}/{}: incompatible import type: exported global incompatible with global import",
+                            "{}/{}: incompatible import type: exported global incompatible with \
+                             global import",
                             module_name, field
                         )));
                     }
@@ -408,6 +412,6 @@ extern "C" {
     pub fn __chkstk();
     // ___chkstk (note the triple underscore) is implemented in compiler-builtins/src/x86_64.rs
     // by the Rust compiler for the MinGW target
-    #[cfg(all(target_os = "windows", target_env = "gnu",))]
+    #[cfg(all(target_os = "windows", target_env = "gnu"))]
     pub fn ___chkstk();
 }

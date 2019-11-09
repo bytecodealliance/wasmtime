@@ -68,7 +68,7 @@ The instance's exports can be used at this point. This wasm file has only one ex
 let answer_fn = instance.exports()[0].func().expect("answer function");
 ```
 
-The exported function can be called using the `call` method. Remember that in most of the cases, 
+The exported function can be called using the `call` method. Remember that in most of the cases,
 a `HostRef<_>` object will be returned, so `borrow()` or `borrow_mut()` method has to be used to refer the
 specific object. The exported "answer" function accepts no parameters and returns a single `i32` value.
 

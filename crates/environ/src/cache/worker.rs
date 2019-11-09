@@ -265,7 +265,11 @@ impl WorkerThread {
         let errno_val = errno::errno().0;
 
         if errno_val != 0 {
-            warn!("Failed to lower worker thread priority. It might affect application performance. errno: {}", errno_val);
+            warn!(
+                "Failed to lower worker thread priority. It might affect application performance. \
+                 errno: {}",
+                errno_val
+            );
         } else {
             debug!("New nice value of worker thread: {}", current_nice);
         }
@@ -333,12 +337,9 @@ impl WorkerThread {
                     .ok()
             })
             .and_then(|cache_bytes| {
-                zstd::encode_all(
-                    &cache_bytes[..],
-                    opt_compr_lvl,
-                )
-                .map_err(|err| warn!("Failed to compress cached code: {}", err))
-                .ok()
+                zstd::encode_all(&cache_bytes[..], opt_compr_lvl)
+                    .map_err(|err| warn!("Failed to compress cached code: {}", err))
+                    .ok()
             })
             .and_then(|recompressed_cache_bytes| {
                 fs::write(&lock_path, &recompressed_cache_bytes)
@@ -379,21 +380,31 @@ impl WorkerThread {
                         //    the cache file and the stats file (they are not updated together atomically)
                         // Possible solution is to use directories per cache entry, but it complicates the system
                         // and is not worth it.
-                        debug!("DETECTED task did more than once (or race with new file): recompression of {}. \
-                                Note: if optimized compression level setting has changed in the meantine, \
-                                the stats file might contain inconsistent compression level due to race.", path.display());
-                    }
-                    else {
+                        debug!(
+                            "DETECTED task did more than once (or race with new file): \
+                             recompression of {}. Note: if optimized compression level setting \
+                             has changed in the meantine, the stats file might contain \
+                             inconsistent compression level due to race.",
+                            path.display()
+                        );
+                    } else {
                         new_stats.compression_level = opt_compr_lvl;
                         let _ = write_stats_file(stats_path.as_ref(), &new_stats);
                     }
 
                     if new_stats.usages < stats.usages {
-                        debug!("DETECTED lower usage count (new file or race with counter increasing): file {}", path.display());
+                        debug!(
+                            "DETECTED lower usage count (new file or race with counter \
+                             increasing): file {}",
+                            path.display()
+                        );
                     }
-                }
-                else {
-                    debug!("Can't read stats file again to update compression level (it might got cleaned up): file {}", stats_path.display());
+                } else {
+                    debug!(
+                        "Can't read stats file again to update compression level (it might got \
+                         cleaned up): file {}",
+                        stats_path.display()
+                    );
                 }
             });
 
@@ -690,11 +701,15 @@ impl WorkerThread {
                             add_unrecognized_and!(
                                 [file: stats_path],
                                 unwrap_or!(
-                                mod_metadata.modified(),
-                                add_unrecognized_and!([file: stats_path, file: mod_path], continue),
-                                "Failed to get mtime, deleting BOTH module cache and stats files",
-                                mod_path
-                            )
+                                    mod_metadata.modified(),
+                                    add_unrecognized_and!(
+                                        [file: stats_path, file: mod_path],
+                                        continue
+                                    ),
+                                    "Failed to get mtime, deleting BOTH module cache and stats \
+                                     files",
+                                    mod_path
+                                )
                             ),
                             "Failed to get metadata/mtime, deleting the file",
                             stats_path

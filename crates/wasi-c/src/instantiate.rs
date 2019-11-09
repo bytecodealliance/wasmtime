@@ -146,11 +146,8 @@ pub fn instantiate_wasi_c(
         let mut wasm_fd = 3;
         for (dir, file) in preopened_dirs {
             assert!(fd_table_insert_existing(curfds, wasm_fd, file.as_raw_fd()));
-            assert!(fd_prestats_insert(
-                prestats,
-                CString::new(dir.as_str()).unwrap().as_ptr(),
-                wasm_fd,
-            ));
+            let dir_cstr = CString::new(dir.as_str()).unwrap();
+            assert!(fd_prestats_insert(prestats, dir_cstr.as_ptr(), wasm_fd));
             wasm_fd += 1;
         }
     }

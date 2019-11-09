@@ -1,27 +1,19 @@
 //! Support for a calling of an imported function.
 
+use super::create_handle::create_handle;
 use crate::r#ref::HostRef;
+use crate::{Callable, FuncType, Store, Trap, Val};
+use alloc::{boxed::Box, rc::Rc, string::ToString, vec::Vec};
 use anyhow::Result;
-use cranelift_codegen::ir::types;
-use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode};
-use cranelift_codegen::Context;
-use cranelift_codegen::{binemit, ir, isa};
+use core::cmp;
+use cranelift_codegen::ir::{types, InstBuilder, StackSlotData, StackSlotKind, TrapCode};
+use cranelift_codegen::{binemit, ir, isa, Context};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex};
 use wasmtime_environ::{CompiledFunction, Export, Module};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
-
-use alloc::boxed::Box;
-use alloc::rc::Rc;
-use alloc::string::ToString;
-use alloc::vec::Vec;
-use core::cmp;
-
-use crate::{Callable, FuncType, Store, Trap, Val};
-
-use super::create_handle::create_handle;
 
 struct TrampolineState {
     func: Rc<dyn Callable + 'static>,
@@ -58,7 +50,7 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
         Ok(()) => {
             for i in 0..returns_len {
                 // TODO check signature.returns[i].value_type ?
-                returns[i].write_value_to(values_vec.offset(i as isize));
+                returns[i].write_value_to(values_vec.add(i));
             }
             0
         }

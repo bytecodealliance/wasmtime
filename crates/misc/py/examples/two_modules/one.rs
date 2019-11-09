@@ -1,4 +1,3 @@
-
 extern "C" {
     fn answer() -> u32;
 }
@@ -8,8 +7,8 @@ extern "C" {
 static mut PLACE: u32 = 23;
 
 #[no_mangle]
-pub extern fn bar() -> *const u32 {
-    unsafe { 
+pub extern "C" fn bar() -> *const u32 {
+    unsafe {
         PLACE = answer();
         // Return a pointer to the exported memory.
         (&PLACE) as *const u32

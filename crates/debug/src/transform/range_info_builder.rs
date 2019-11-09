@@ -1,13 +1,10 @@
 use super::address_transform::AddressTransform;
-use super::DebugInputContext;
-use super::Reader;
+use super::{DebugInputContext, Reader};
 use alloc::vec::Vec;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::DefinedFuncIndex;
 use failure::Error;
-use gimli;
-use gimli::write;
-use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset};
+use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset};
 use more_asserts::assert_lt;
 
 pub(crate) enum RangeInfoBuilder {

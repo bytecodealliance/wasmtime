@@ -9,8 +9,8 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-wasmtime-environ = { path = "../wasmtime-environ" }
-wasmtime-jit = { path = "../wasmtime-jit" }
+wasmtime-environ = { path = "../crates/environ" }
+wasmtime-jit = { path = "../crates/jit" }
 cranelift-codegen = { version = "0.49", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
 cranelift-native = "0.49"

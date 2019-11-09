@@ -1,11 +1,10 @@
+use super::create_handle::create_handle;
+use crate::{GlobalType, Mutability, Val};
 use alloc::boxed::Box;
 use anyhow::Result;
 use cranelift_entity::PrimaryMap;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{InstanceHandle, VMGlobalDefinition};
-
-use super::create_handle::create_handle;
-use crate::{GlobalType, Mutability, Val};
 
 #[allow(dead_code)]
 pub struct GlobalState {
