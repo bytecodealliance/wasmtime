@@ -35,12 +35,12 @@ pub enum SetupError {
     Validate(String),
 
     /// A wasm translation error occured.
-    #[error("WebAssembly compilation error: {0}")]
+    #[error("WebAssembly failed to compile")]
     Compile(#[from] CompileError),
 
     /// Some runtime resource was unavailable or insufficient, or the start function
     /// trapped.
-    #[error("Instantiation error: {0}")]
+    #[error("Instantiation failed during setup")]
     Instantiate(#[from] InstantiationError),
 
     /// Debug information generation error occured.

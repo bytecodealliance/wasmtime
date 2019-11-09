@@ -114,7 +114,7 @@ pub enum ActionOutcome {
 #[derive(Error, Debug)]
 pub enum ActionError {
     /// An internal implementation error occurred.
-    #[error("{0}")]
+    #[error("Failed to setup a module")]
     Setup(#[from] SetupError),
 
     /// No field with the specified name was present.

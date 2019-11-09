@@ -1289,7 +1289,7 @@ pub enum InstantiationError {
     Resource(String),
 
     /// A wasm link error occured.
-    #[error("{0}")]
+    #[error("Failed to link module")]
     Link(#[from] LinkError),
 
     /// A compilation error occured.

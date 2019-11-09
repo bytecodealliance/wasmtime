@@ -23,10 +23,10 @@ pub struct UnknownInstance {
 #[derive(Error, Debug)]
 pub enum ContextError {
     /// An unknown instance name was used.
-    #[error("{0}")]
+    #[error("An error occured due to an unknown instance being specified")]
     Instance(#[from] UnknownInstance),
     /// An error occured while performing an action.
-    #[error("{0}")]
+    #[error("An error occurred while performing an action")]
     Action(#[from] ActionError),
 }
 
