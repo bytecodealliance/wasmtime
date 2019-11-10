@@ -1,3 +1,4 @@
+pub(crate) mod filetime;
 pub(crate) mod hostcalls_impl;
 pub(crate) mod osfile;
 
@@ -36,47 +37,5 @@ pub(crate) mod host_impl {
         entry.d_namlen = u32::from(host_entry.d_namlen);
         entry.d_type = d_type;
         Ok(entry)
-    }
-}
-
-pub(crate) mod fs_helpers {
-    use cfg_if::cfg_if;
-
-    pub(crate) fn utime_now() -> libc::c_long {
-        cfg_if! {
-            if #[cfg(any(
-                    target_os = "macos",
-                    target_os = "freebsd",
-                    target_os = "ios",
-                    target_os = "dragonfly"
-            ))] {
-                -1
-            } else if #[cfg(target_os = "openbsd")] {
-                // https://github.com/openbsd/src/blob/master/sys/sys/stat.h#L187
-                -2
-            } else if #[cfg(target_os = "netbsd" )] {
-                // http://cvsweb.netbsd.org/bsdweb.cgi/src/sys/sys/stat.h?rev=1.69&content-type=text/x-cvsweb-markup&only_with_tag=MAIN
-                1_073_741_823
-            }
-        }
-    }
-
-    pub(crate) fn utime_omit() -> libc::c_long {
-        cfg_if! {
-            if #[cfg(any(
-                    target_os = "macos",
-                    target_os = "freebsd",
-                    target_os = "ios",
-                    target_os = "dragonfly"
-            ))] {
-                -2
-            } else if #[cfg(target_os = "openbsd")] {
-                // https://github.com/openbsd/src/blob/master/sys/sys/stat.h#L187
-                -1
-            } else if #[cfg(target_os = "netbsd")] {
-                // http://cvsweb.netbsd.org/bsdweb.cgi/src/sys/sys/stat.h?rev=1.69&content-type=text/x-cvsweb-markup&only_with_tag=MAIN
-                1_073_741_822
-            }
-        }
     }
 }

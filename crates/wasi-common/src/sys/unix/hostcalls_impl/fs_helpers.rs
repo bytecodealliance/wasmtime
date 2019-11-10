@@ -4,21 +4,6 @@ use crate::sys::host_impl;
 use crate::{wasi, Result};
 use std::fs::File;
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
-        pub(crate) use super::super::linux::fs_helpers::*;
-    } else if #[cfg(any(
-            target_os = "macos",
-            target_os = "netbsd",
-            target_os = "freebsd",
-            target_os = "openbsd",
-            target_os = "ios",
-            target_os = "dragonfly"
-    ))] {
-        pub(crate) use super::super::bsd::fs_helpers::*;
-    }
-}
-
 pub(crate) fn path_open_rights(
     rights_base: wasi::__wasi_rights_t,
     rights_inheriting: wasi::__wasi_rights_t,
