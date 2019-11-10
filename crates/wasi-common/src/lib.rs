@@ -2,7 +2,8 @@
     // missing_docs,
     trivial_numeric_casts,
     unused_extern_crates,
-    unstable_features
+    unstable_features,
+    clippy::use_self
 )]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../clippy.toml")))]
