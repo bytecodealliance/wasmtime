@@ -15,12 +15,12 @@ enum PendingFdEntry {
 impl std::fmt::Debug for PendingFdEntry {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PendingFdEntry::Thunk(f) => write!(
+            Self::Thunk(f) => write!(
                 fmt,
                 "PendingFdEntry::Thunk({:p})",
                 f as *const fn() -> Result<FdEntry>
             ),
-            PendingFdEntry::File(f) => write!(fmt, "PendingFdEntry::File({:?})", f),
+            Self::File(f) => write!(fmt, "PendingFdEntry::File({:?})", f),
         }
     }
 }
@@ -46,8 +46,8 @@ impl From<OsString> for PendingCString {
 impl PendingCString {
     fn into_string(self) -> Result<String> {
         match self {
-            PendingCString::Bytes(v) => String::from_utf8(v).map_err(|_| Error::EILSEQ),
-            PendingCString::OsString(s) => s.into_string().map_err(|_| Error::EILSEQ),
+            Self::Bytes(v) => String::from_utf8(v).map_err(|_| Error::EILSEQ),
+            Self::OsString(s) => s.into_string().map_err(|_| Error::EILSEQ),
         }
     }
 
