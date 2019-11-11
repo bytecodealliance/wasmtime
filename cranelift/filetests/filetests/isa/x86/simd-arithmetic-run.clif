@@ -214,7 +214,6 @@ ebb0:
 }
 ; run
 
-
 function %fmin_f64x2() -> b1 {
 ebb0:
     v0 = vconst.f64x2 [-0x1.0 -0x1.0]
@@ -222,6 +221,19 @@ ebb0:
 
     v2 = fmin v0, v1
     v3 = fcmp eq v2, v0
+    v4 = vall_true v3
+
+    return v4
+}
+; run
+
+function %fneg_f64x2() -> b1 {
+ebb0:
+    v0 = vconst.f64x2 [0x1.0 -0x1.0]
+    v1 = fneg v0
+
+    v2 = vconst.f64x2 [-0x1.0 0x1.0]
+    v3 = fcmp eq v1, v2
     v4 = vall_true v3
 
     return v4

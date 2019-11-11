@@ -2,6 +2,7 @@ use crate::cdsl::ast::{constant, var, ExprBuilder, Literal};
 use crate::cdsl::instructions::{vector, Bindable, InstructionGroup};
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::xform::TransformGroupBuilder;
+use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I16, I32, I64, I8};
 use crate::shared::Definitions as SharedDefinitions;
 
@@ -37,6 +38,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let fcvt_to_uint_sat = insts.by_name("fcvt_to_uint_sat");
     let fmax = insts.by_name("fmax");
     let fmin = insts.by_name("fmin");
+    let fneg = insts.by_name("fneg");
+    let fsub = insts.by_name("fsub");
     let iadd = insts.by_name("iadd");
     let icmp = insts.by_name("icmp");
     let iconst = insts.by_name("iconst");
@@ -541,6 +544,14 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(def!(c = icmp_(sle, a, b)), vec![def!(c = icmp(sge, b, a))]);
         let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
         narrow.legalize(def!(c = icmp_(ule, a, b)), vec![def!(c = icmp(uge, b, a))]);
+    }
+
+    for ty in &[F32, F64] {
+        let fneg = fneg.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(
+            def!(b = fneg(a)),
+            vec![def!(c = vconst(u128_zeroes)), def!(b = fsub(c, a))],
+        );
     }
 
     narrow.custom_legalize(shuffle, "convert_shuffle");
