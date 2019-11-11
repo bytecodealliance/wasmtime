@@ -62,7 +62,7 @@ pub(crate) fn utimesat(
     path: &str,
     atime: FileTime,
     mtime: FileTime,
-    symlink: bool,
+    symlink_nofollow: bool,
 ) -> io::Result<()> {
     use std::ffi::CString;
     use std::os::unix::prelude::*;
@@ -70,7 +70,7 @@ pub(crate) fn utimesat(
     // (fd, path)
     let p = CString::new(path.as_bytes())?;
     let mut flags = libc::O_RDWR;
-    if !symlink {
+    if symlink_nofollow {
         flags |= libc::O_NOFOLLOW;
     }
     let fd = unsafe { libc::openat(dirfd.as_raw_fd(), p.as_ptr(), flags) };

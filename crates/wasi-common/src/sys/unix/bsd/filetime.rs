@@ -44,7 +44,7 @@ pub(crate) fn utimensat(
     path: &str,
     atime: FileTime,
     mtime: FileTime,
-    symlink: bool,
+    symlink_nofollow: bool,
 ) -> io::Result<()> {
     use super::super::filetime::{to_timespec, utimesat};
     use std::ffi::CString;
@@ -53,7 +53,7 @@ pub(crate) fn utimensat(
     // Attempt to use the `utimensat` syscall, but if it's not supported by the
     // current kernel then fall back to an older syscall.
     if let Some(func) = fetch_utimensat() {
-        let flags = if symlink {
+        let flags = if symlink_nofollow {
             libc::AT_SYMLINK_NOFOLLOW
         } else {
             0
@@ -69,7 +69,7 @@ pub(crate) fn utimensat(
         }
     }
 
-    utimesat(dirfd, path, atime, mtime, symlink)
+    utimesat(dirfd, path, atime, mtime, symlink_nofollow)
 }
 
 fn fetch_utimensat() -> Option<

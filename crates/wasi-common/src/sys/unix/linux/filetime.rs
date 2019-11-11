@@ -11,13 +11,13 @@ pub(crate) fn utimensat(
     path: &str,
     atime: FileTime,
     mtime: FileTime,
-    symlink: bool,
+    symlink_nofollow: bool,
 ) -> io::Result<()> {
     use super::super::filetime::{to_timespec, utimesat};
     use std::ffi::CString;
     use std::os::unix::prelude::*;
 
-    let flags = if symlink {
+    let flags = if symlink_nofollow {
         libc::AT_SYMLINK_NOFOLLOW
     } else {
         0
@@ -49,5 +49,5 @@ pub(crate) fn utimensat(
         }
     }
 
-    utimesat(dirfd, path, atime, mtime, symlink)
+    utimesat(dirfd, path, atime, mtime, symlink_nofollow)
 }

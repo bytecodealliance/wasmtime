@@ -292,7 +292,7 @@ pub(crate) fn path_filestat_set_times(
         return Err(Error::EINVAL);
     }
 
-    let symlink = wasi::__WASI_LOOKUP_SYMLINK_FOLLOW == dirflags;
+    let symlink_nofollow = wasi::__WASI_LOOKUP_SYMLINK_FOLLOW != dirflags;
     let atim = if set_atim {
         let time = UNIX_EPOCH + Duration::from_nanos(st_atim);
         FileTime::FileTime(filetime::FileTime::from_system_time(time))
@@ -310,7 +310,14 @@ pub(crate) fn path_filestat_set_times(
         FileTime::Omit
     };
 
-    utimensat(resolved.dirfd(), resolved.path(), atim, mtim, symlink).map_err(Into::into)
+    utimensat(
+        resolved.dirfd(),
+        resolved.path(),
+        atim,
+        mtim,
+        symlink_nofollow,
+    )
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
