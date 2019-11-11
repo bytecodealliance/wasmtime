@@ -49,3 +49,14 @@ ebb0:
 
     return
 }
+
+function %fabs_legalized() {
+ebb0:
+    v0 = vconst.f64x2 [0x1.0 -0x2.0]
+    v1 = fabs v0
+    ; check: v2 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    ; nextln: v3 = ushr_imm v2, 1
+    ; nextln: v4 = raw_bitcast.f64x2 v3
+    ; nextln: v1 = band v0, v4
+    return
+}

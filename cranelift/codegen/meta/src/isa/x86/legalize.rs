@@ -36,6 +36,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let fcvt_to_uint = insts.by_name("fcvt_to_uint");
     let fcvt_to_sint_sat = insts.by_name("fcvt_to_sint_sat");
     let fcvt_to_uint_sat = insts.by_name("fcvt_to_uint_sat");
+    let fabs = insts.by_name("fabs");
     let fmax = insts.by_name("fmax");
     let fmin = insts.by_name("fmin");
     let fneg = insts.by_name("fneg");
@@ -337,6 +338,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let b = var("b");
     let c = var("c");
     let d = var("d");
+    let e = var("e");
 
     // SIMD vector size: eventually multiple vector sizes may be supported but for now only SSE-sized vectors are available
     let sse_vector_size: u64 = 128;
@@ -551,6 +553,23 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(b = fneg(a)),
             vec![def!(c = vconst(u128_zeroes)), def!(b = fsub(c, a))],
+        );
+    }
+
+    // SIMD fabs
+    for ty in &[F32, F64] {
+        let fabs = fabs.bind(vector(*ty, sse_vector_size));
+        let lane_type_as_int = LaneType::int_from_bits(LaneType::from(*ty).lane_bits() as u16);
+        let vconst = vconst.bind(vector(lane_type_as_int, sse_vector_size));
+        let bitcast_to_float = raw_bitcast.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(
+            def!(b = fabs(a)),
+            vec![
+                def!(c = vconst(ones)),
+                def!(d = ushr_imm(c, uimm8_one)), // Create a mask of all 1s except the MSB.
+                def!(e = bitcast_to_float(d)),    // Cast mask to the floating-point type.
+                def!(b = band(a, e)),             // Unset the MSB.
+            ],
         );
     }
 
