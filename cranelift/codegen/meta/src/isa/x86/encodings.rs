@@ -553,6 +553,7 @@ pub(crate) fn define(
     let rec_copysp = r.template("copysp");
     let rec_div = r.template("div");
     let rec_debugtrap = r.recipe("debugtrap");
+    let rec_f_ib = r.template("f_ib");
     let rec_f32imm_z = r.template("f32imm_z");
     let rec_f64imm_z = r.template("f64imm_z");
     let rec_fa = r.template("fa");
@@ -2031,6 +2032,18 @@ pub(crate) fn define(
     for (ty, opcodes) in &[(I16, &PSRAW), (I32, &PSRAD)] {
         let x86_psra = x86_psra.bind(vector(*ty, sse_vector_size));
         e.enc_32_64(x86_psra, rec_fa.opcodes(*opcodes));
+    }
+
+    // SIMD immediate shift
+    for (ty, opcodes) in &[(I16, &PS_W_IMM), (I32, &PS_D_IMM), (I64, &PS_Q_IMM)] {
+        let ishl_imm = ishl_imm.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64(ishl_imm, rec_f_ib.opcodes(*opcodes).rrr(6));
+
+        let ushr_imm = ushr_imm.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64(ushr_imm, rec_f_ib.opcodes(*opcodes).rrr(2));
+
+        let sshr_imm = sshr_imm.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64(sshr_imm, rec_f_ib.opcodes(*opcodes).rrr(4));
     }
 
     // SIMD integer comparisons

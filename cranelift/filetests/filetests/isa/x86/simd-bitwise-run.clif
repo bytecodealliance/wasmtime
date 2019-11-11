@@ -127,3 +127,39 @@ ebb0:
     return v11
 }
 ; run
+
+function %sshr_imm_i32x4() -> b1 {
+ebb0:
+    v1 = vconst.i32x4 [1 2 4 -8]
+    v2 = sshr_imm v1, 1
+
+    v3 = vconst.i32x4 [0 1 2 -4]
+    v4 = icmp eq v2, v3
+    v5 = vall_true v4
+    return v5
+}
+; run
+
+function %sshr_imm_i16x8() -> b1 {
+ebb0:
+    v1 = vconst.i16x8 [1 2 4 -8 0 0 0 0]
+    v2 = ushr_imm v1, 1
+
+    v3 = vconst.i16x8 [0 1 2 32764 0 0 0 0] ; -4 with MSB unset == 32764
+    v4 = icmp eq v2, v3
+    v5 = vall_true v4
+    return v5
+}
+; run
+
+function %ishl_imm_i64x2() -> b1 {
+ebb0:
+    v1 = vconst.i64x2 [1 0]
+    v2 = ishl_imm v1, 1
+
+    v3 = vconst.i64x2 [2 0]
+    v4 = icmp eq v2, v3
+    v5 = vall_true v4
+    return v5
+}
+; run

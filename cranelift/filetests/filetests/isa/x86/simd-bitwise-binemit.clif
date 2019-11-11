@@ -49,3 +49,57 @@ ebb0(v0: i32x4 [%xmm4], v1: i64x2 [%xmm0]):
 [-, %xmm4]  v2 = x86_psra v0, v1      ; bin: 66 0f e2 e0
             return v2
 }
+
+function %ishl_imm_i16x8(i16x8) -> i16x8 {
+ebb0(v0: i16x8 [%xmm2]):
+[-, %xmm2]  v2 = ishl_imm v0, 3      ; bin: 66 0f 71 f2 03
+            return v2
+}
+
+function %ishl_imm_i32x4(i32x4) -> i32x4 {
+ebb0(v0: i32x4 [%xmm4]):
+[-, %xmm4]  v2 = ishl_imm v0, 10     ; bin: 66 0f 72 f4 0a
+            return v2
+}
+
+function %ishl_imm_i64x2(i64x2) -> i64x2 {
+ebb0(v0: i64x2 [%xmm6]):
+[-, %xmm6]  v2 = ishl_imm v0, 42     ; bin: 66 0f 73 f6 2a
+            return v2
+}
+
+function %ushr_imm_i16x8(i16x8) -> i16x8 {
+ebb0(v0: i16x8 [%xmm2]):
+[-, %xmm2]  v2 = ushr_imm v0, 3      ; bin: 66 0f 71 d2 03
+            return v2
+}
+
+function %ushr_imm_i32x4(i32x4) -> i32x4 {
+ebb0(v0: i32x4 [%xmm4]):
+[-, %xmm4]  v2 = ushr_imm v0, 10     ; bin: 66 0f 72 d4 0a
+            return v2
+}
+
+function %ushr_imm_i64x2(i64x2) -> i64x2 {
+ebb0(v0: i64x2 [%xmm6]):
+[-, %xmm6]  v2 = ushr_imm v0, 42     ; bin: 66 0f 73 d6 2a
+            return v2
+}
+
+function %sshr_imm_i16x8(i16x8) -> i16x8 {
+ebb0(v0: i16x8 [%xmm2]):
+[-, %xmm2]  v2 = sshr_imm v0, 3      ; bin: 66 0f 71 e2 03
+            return v2
+}
+
+function %sshr_imm_i32x4(i32x4) -> i32x4 {
+ebb0(v0: i32x4 [%xmm4]):
+[-, %xmm4]  v2 = sshr_imm v0, 10     ; bin: 66 0f 72 e4 0a
+            return v2
+}
+
+function %sshr_imm_i64x2(i64x2) -> i64x2 {
+ebb0(v0: i64x2 [%xmm6]):
+[-, %xmm6]  v2 = sshr_imm v0, 42     ; bin: 66 0f 73 e6 2a
+            return v2
+}

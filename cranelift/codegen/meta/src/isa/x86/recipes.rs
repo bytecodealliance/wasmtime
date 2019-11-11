@@ -792,6 +792,26 @@ pub(crate) fn define<'shared>(
                 ),
         );
 
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("f_ib", &formats.binary_imm, 2)
+                .operands_in(vec![fpr])
+                .operands_out(vec![0])
+                .inst_predicate(InstructionPredicate::new_is_signed_int(
+                    &*formats.binary_imm,
+                    "imm",
+                    8,
+                    0,
+                ))
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                        modrm_r_bits(in_reg0, bits, sink);
+                        let imm: i64 = imm.into();
+                        sink.put1(imm as u8);
+                    "#,
+                ),
+        );
+
         // XX /n id with 32-bit immediate sign-extended.
         recipes.add_template_recipe(
             EncodingRecipeBuilder::new("r_id", &formats.binary_imm, 5)
