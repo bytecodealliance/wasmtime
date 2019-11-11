@@ -32,6 +32,7 @@ pub use value::Value;
 /// appropriate for bound functions.
 pub struct ModuleData {
     inner: Option<Inner>,
+    wasi_module_name: Option<String>,
 }
 
 struct Inner {
@@ -65,17 +66,38 @@ impl ModuleData {
         // find the right section.
         let mut reader = wasmparser::ModuleReader::new(wasm)?;
         let mut found = false;
+        let mut wasi_module_name = None;
         while !reader.eof() {
             let section = reader.read()?;
-            if let wasmparser::SectionCode::Custom { name, .. } = section.code {
-                if name == "webidl-bindings" {
-                    found = true;
-                    break;
+
+            match section.code {
+                wasmparser::SectionCode::Custom { name, .. } => {
+                    if name == "webidl-bindings" {
+                        found = true;
+                        break;
+                    }
                 }
+
+                // If we see the import section then see if we can find a wasi
+                // module import which we can later use to register the wasi
+                // implementation automatically.
+                wasmparser::SectionCode::Import => {
+                    let section = section.get_import_section_reader()?;
+                    for import in section {
+                        let import = import?;
+                        if wasmtime_wasi::is_wasi_module(import.module) {
+                            wasi_module_name = Some(import.module.to_string());
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         if !found {
-            return Ok(ModuleData { inner: None });
+            return Ok(ModuleData {
+                inner: None,
+                wasi_module_name,
+            });
         }
 
         // Ok, perform the more expensive parsing. WebAssembly interface types
@@ -96,21 +118,13 @@ impl ModuleData {
 
         Ok(ModuleData {
             inner: Some(Inner { module }),
+            wasi_module_name,
         })
     }
 
     /// Detects if WASI support is needed: returns module name that is requested.
     pub fn find_wasi_module_name(&self) -> Option<String> {
-        self.inner.as_ref().and_then(|Inner { module }| {
-            module
-                .imports
-                .iter()
-                .find(|walrus::Import { module, .. }| match module.as_str() {
-                    "wasi" | "wasi_unstable" => true,
-                    _ => false,
-                })
-                .map(|walrus::Import { module, .. }| module.clone())
-        })
+        self.wasi_module_name.clone()
     }
 
     /// Same as `Context::invoke` except that this works with a `&[Value]` list

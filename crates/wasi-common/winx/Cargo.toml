@@ -18,12 +18,13 @@ features = [
     "errhandlingapi",
     "handleapi",
     "processthreadsapi",
+    "profileapi",
     "securitybaseapi",
     "winbase",
     "winerror",
     "ws2def",
     "fileapi",
-    "aclapi"
+    "aclapi",
 ]
 
 [badges]
