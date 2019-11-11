@@ -17,7 +17,7 @@ default-run = "wasmtime"
 cranelift-codegen = { version = "0.49", features = ["enable-serde", "all-arch"] }
 cranelift-entity = { version = "0.49", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
-cranelift-native = "0.49"
+cranelift-native = "0.50"
 wasmtime = { path = "crates/api" }
 wasmtime-debug = { path = "crates/debug" }
 wasmtime-environ = { path = "crates/environ" }
