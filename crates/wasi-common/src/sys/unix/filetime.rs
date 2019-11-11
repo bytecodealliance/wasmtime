@@ -137,6 +137,10 @@ pub(crate) fn to_timespec(ft: &FileTime) -> libc::timespec {
             tv_sec: 0,
             tv_nsec: UTIME_OMIT,
         },
+        // `filetime::FileTime`'s fields are normalised by definition. `ft.seconds()` return the number
+        // of whole seconds, while `ft.nanoseconds()` returns only fractional part expressed in
+        // nanoseconds, as underneath it uses `std::time::Duration::subsec_nanos` to populate the
+        // `filetime::FileTime::nanoseconds` field. It is, therefore, OK to do an `as` cast here.
         FileTime::FileTime(ft) => libc::timespec {
             tv_sec: ft.seconds(),
             tv_nsec: ft.nanoseconds() as _,

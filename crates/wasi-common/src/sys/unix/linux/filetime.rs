@@ -3,7 +3,7 @@
 use super::super::filetime::FileTime;
 use std::fs::File;
 use std::io;
-use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 pub(crate) const UTIME_NOW: i64 = 1_073_741_823;
 pub(crate) const UTIME_OMIT: i64 = 1_073_741_822;
@@ -34,7 +34,7 @@ pub(crate) fn utimensat(
     // Attempt to use the `utimensat` syscall, but if it's not supported by the
     // current kernel then fall back to an older syscall.
     static INVALID: AtomicBool = AtomicBool::new(false);
-    if !INVALID.load(SeqCst) {
+    if !INVALID.load(Relaxed) {
         let p = CString::new(path.as_bytes())?;
         let times = [to_timespec(&atime), to_timespec(&mtime)];
         let rc = unsafe {
@@ -51,7 +51,7 @@ pub(crate) fn utimensat(
         }
         let err = io::Error::last_os_error();
         if err.raw_os_error() == Some(libc::ENOSYS) {
-            INVALID.store(true, SeqCst);
+            INVALID.store(true, Relaxed);
         } else {
             return Err(err);
         }
