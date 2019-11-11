@@ -1,11 +1,19 @@
+//! This internal module consists of helper types and functions for dealing
+//! with setting the file times specific to Linux.
 use super::super::filetime::FileTime;
 use std::fs::File;
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
-pub(crate) const UTIME_NOW: i64 = libc::UTIME_NOW;
-pub(crate) const UTIME_OMIT: i64 = libc::UTIME_OMIT;
+pub(crate) const UTIME_NOW: i64 = 1_073_741_823;
+pub(crate) const UTIME_OMIT: i64 = 1_073_741_822;
 
+/// Wrapper for `utimensat` syscall, however, with an added twist such that `utimensat` symbol
+/// is firstly resolved (i.e., we check whether it exists on the host), and only used if that is
+/// the case. Otherwise, the syscall resorts to a less accurate `utimesat` emulated syscall.
+/// The original implementation can be found here: [filetime::unix::linux::set_times]
+///
+/// [filetime::unix::linux::set_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/linux.rs#L64
 pub(crate) fn utimensat(
     dirfd: &File,
     path: &str,

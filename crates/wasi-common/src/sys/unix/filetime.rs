@@ -1,3 +1,11 @@
+//! This internal module consists of helper types and functions for dealing
+//! with setting the file times (mainly in `path_filestat_set_times` syscall for now).
+//!
+//! The vast majority of the code contained within and in platform-specific implementations
+//! (`super::linux::filetime` and `super::bsd::filetime`) is based on the [filetime] crate.
+//! Kudos @alexcrichton!
+//!
+//! [filetime]: https://github.com/alexcrichton/filetime
 use std::fs::{self, File};
 use std::io;
 
@@ -16,6 +24,10 @@ cfg_if::cfg_if! {
     }
 }
 
+/// A wrapper `enum` around `filetime::FileTime` struct, but unlike the original, this
+/// type allows the possibility of specifying `FileTime::Now` as a valid enumeration which,
+/// in turn, if `utimensat` is available on the host, will use a special const setting
+/// `UTIME_NOW`.
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum FileTime {
     Now,
@@ -23,6 +35,14 @@ pub(crate) enum FileTime {
     FileTime(filetime::FileTime),
 }
 
+/// For a provided pair of access and modified `FileTime`s, converts the input to
+/// `filetime::FileTime` used later in `utimensat` function. For variants `FileTime::Now`
+/// and `FileTime::Omit`, this function will make two syscalls: either accessing current
+/// system time, or accessing the file's metadata.
+///
+/// The original implementation can be found here: [filetime::unix::get_times].
+///
+/// [filetime::unix::get_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/utimes.rs#L42
 fn get_times(
     atime: FileTime,
     mtime: FileTime,
@@ -57,6 +77,10 @@ fn get_times(
     Ok((atime, mtime))
 }
 
+/// Combines `openat` with `utimes` to emulate `utimensat` on platforms where it is
+/// not available. The logic for setting file times is based on [filetime::unix::set_file_handles_times].
+///
+/// [filetime::unix::set_file_handles_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/utimes.rs#L24
 pub(crate) fn utimesat(
     dirfd: &File,
     path: &str,
@@ -85,6 +109,10 @@ pub(crate) fn utimesat(
     };
 }
 
+/// Converts `filetime::FileTime` to `libc::timeval`. This function was taken directly from
+/// [filetime] crate.
+///
+/// [filetime]: https://github.com/alexcrichton/filetime/blob/master/src/unix/utimes.rs#L93
 fn to_timeval(ft: filetime::FileTime) -> libc::timeval {
     libc::timeval {
         tv_sec: ft.seconds(),
@@ -92,6 +120,13 @@ fn to_timeval(ft: filetime::FileTime) -> libc::timeval {
     }
 }
 
+/// Converts `FileTime` to `libc::timespec`. If `FileTime::Now` variant is specified, this
+/// resolves to `UTIME_NOW` special const, `FileTime::Omit` variant resolves to `UTIME_OMIT`, and
+/// `FileTime::FileTime(ft)` where `ft := filetime::FileTime` uses [filetime] crate's original
+/// implementation which can be found here: [filetime::unix::to_timespec].
+///
+/// [filetime]: https://github.com/alexcrichton/filetime
+/// [filetime::unix::to_timespec]: https://github.com/alexcrichton/filetime/blob/master/src/unix/mod.rs#L30
 pub(crate) fn to_timespec(ft: &FileTime) -> libc::timespec {
     match ft {
         FileTime::Now => libc::timespec {

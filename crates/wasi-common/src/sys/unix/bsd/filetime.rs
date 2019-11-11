@@ -1,3 +1,5 @@
+//! This internal module consists of helper types and functions for dealing
+//! with setting the file times specific to BSD-style *nixes.
 use super::super::filetime::FileTime;
 use cfg_if::cfg_if;
 use std::ffi::CStr;
@@ -39,6 +41,12 @@ cfg_if! {
     }
 }
 
+/// Wrapper for `utimensat` syscall, however, with an added twist such that `utimensat` symbol
+/// is firstly resolved (i.e., we check whether it exists on the host), and only used if that is
+/// the case. Otherwise, the syscall resorts to a less accurate `utimesat` emulated syscall.
+/// The original implementation can be found here: [filetime::unix::macos::set_times]
+///
+/// [filetime::unix::macos::set_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/macos.rs#L49
 pub(crate) fn utimensat(
     dirfd: &File,
     path: &str,
@@ -72,6 +80,8 @@ pub(crate) fn utimensat(
     utimesat(dirfd, path, atime, mtime, symlink_nofollow)
 }
 
+/// Wraps `fetch` specifically targetting `utimensat` symbol. If the symbol exists
+/// on the host, then returns an `Some(unsafe fn)`.
 fn fetch_utimensat() -> Option<
     unsafe extern "C" fn(
         libc::c_int,
@@ -87,6 +97,7 @@ fn fetch_utimensat() -> Option<
     }
 }
 
+/// Fetches a symbol by `name` and stores it in `cache`.
 fn fetch(cache: &AtomicUsize, name: &CStr) -> Option<usize> {
     match cache.load(SeqCst) {
         0 => {}
