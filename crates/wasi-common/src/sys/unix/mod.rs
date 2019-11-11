@@ -3,6 +3,7 @@ pub(crate) mod host_impl;
 pub(crate) mod hostcalls_impl;
 
 mod dir;
+mod filetime;
 
 #[cfg(any(
     target_os = "macos",

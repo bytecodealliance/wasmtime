@@ -1,3 +1,4 @@
+pub(crate) mod filetime;
 pub(crate) mod hostcalls_impl;
 pub(crate) mod osfile;
 
@@ -29,14 +30,4 @@ pub(crate) mod fdentry_impl {
 
 pub(crate) mod host_impl {
     pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
-}
-
-pub(crate) mod fs_helpers {
-    pub(crate) fn utime_now() -> libc::c_long {
-        libc::UTIME_NOW
-    }
-
-    pub(crate) fn utime_omit() -> libc::c_long {
-        libc::UTIME_OMIT
-    }
 }

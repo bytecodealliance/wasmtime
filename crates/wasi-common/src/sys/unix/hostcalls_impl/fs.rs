@@ -1,6 +1,5 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
-use super::fs_helpers::*;
 use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::{FileType, PathGet};
 use crate::sys::host_impl;
@@ -281,25 +280,8 @@ pub(crate) fn path_filestat_set_times(
     st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
 ) -> Result<()> {
-    use nix::sys::stat::{utimensat, UtimensatFlags};
-    use nix::sys::time::{TimeSpec, TimeValLike};
-
-    // FIXME this should be a part of nix
-    fn timespec_omit() -> TimeSpec {
-        let raw_ts = libc::timespec {
-            tv_sec: 0,
-            tv_nsec: utime_omit(),
-        };
-        unsafe { std::mem::transmute(raw_ts) }
-    };
-
-    fn timespec_now() -> TimeSpec {
-        let raw_ts = libc::timespec {
-            tv_sec: 0,
-            tv_nsec: utime_now(),
-        };
-        unsafe { std::mem::transmute(raw_ts) }
-    };
+    use super::super::filetime::*;
+    use std::time::{Duration, UNIX_EPOCH};
 
     let set_atim = fst_flags & wasi::__WASI_FILESTAT_SET_ATIM != 0;
     let set_atim_now = fst_flags & wasi::__WASI_FILESTAT_SET_ATIM_NOW != 0;
@@ -310,31 +292,32 @@ pub(crate) fn path_filestat_set_times(
         return Err(Error::EINVAL);
     }
 
-    let atflags = match dirflags {
-        wasi::__WASI_LOOKUP_SYMLINK_FOLLOW => UtimensatFlags::FollowSymlink,
-        _ => UtimensatFlags::NoFollowSymlink,
-    };
-
+    let symlink_nofollow = wasi::__WASI_LOOKUP_SYMLINK_FOLLOW != dirflags;
     let atim = if set_atim {
-        let st_atim = st_atim.try_into()?;
-        TimeSpec::nanoseconds(st_atim)
+        let time = UNIX_EPOCH + Duration::from_nanos(st_atim);
+        FileTime::FileTime(filetime::FileTime::from_system_time(time))
     } else if set_atim_now {
-        timespec_now()
+        FileTime::Now
     } else {
-        timespec_omit()
+        FileTime::Omit
     };
-
     let mtim = if set_mtim {
-        let st_mtim = st_mtim.try_into()?;
-        TimeSpec::nanoseconds(st_mtim)
+        let time = UNIX_EPOCH + Duration::from_nanos(st_mtim);
+        FileTime::FileTime(filetime::FileTime::from_system_time(time))
     } else if set_mtim_now {
-        timespec_now()
+        FileTime::Now
     } else {
-        timespec_omit()
+        FileTime::Omit
     };
 
-    let fd = resolved.dirfd().as_raw_fd().into();
-    utimensat(fd, resolved.path(), &atim, &mtim, atflags).map_err(Into::into)
+    utimensat(
+        resolved.dirfd(),
+        resolved.path(),
+        atim,
+        mtim,
+        symlink_nofollow,
+    )
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
