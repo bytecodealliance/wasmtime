@@ -91,7 +91,15 @@ fn map_reg(reg: RegUnit) -> Register {
             21 => X86_64::XMM5,
             22 => X86_64::XMM6,
             23 => X86_64::XMM7,
-            _ => panic!("{}", reg),
+            24 => X86_64::XMM8,
+            25 => X86_64::XMM9,
+            26 => X86_64::XMM10,
+            27 => X86_64::XMM11,
+            28 => X86_64::XMM12,
+            29 => X86_64::XMM13,
+            30 => X86_64::XMM14,
+            31 => X86_64::XMM15,
+            _ => panic!("unknown x86_64 register {}", reg),
         };
         REG_X86_MAP.as_mut().unwrap().insert(reg, result);
         result
