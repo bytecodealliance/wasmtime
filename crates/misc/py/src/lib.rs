@@ -9,6 +9,7 @@ use pyo3::types::{PyBytes, PyDict, PySet};
 use pyo3::wrap_pyfunction;
 use std::rc::Rc;
 use wasmtime_interface_types::ModuleData;
+use wasmtime_jit::Features;
 
 mod function;
 mod import;
@@ -61,7 +62,11 @@ pub fn instantiate(
         isa_builder.finish(cranelift_codegen::settings::Flags::new(flag_builder))
     };
 
-    let mut context = wasmtime_jit::Context::with_isa(isa, wasmtime_jit::CompilationStrategy::Auto);
+    let mut context = wasmtime_jit::Context::with_isa(isa, wasmtime_jit::CompilationStrategy::Auto)
+        .with_features(Features {
+            multi_value: true,
+            ..Features::default()
+        });
     context.set_debug_info(generate_debug_info);
     let global_exports = context.get_global_exports();
 
