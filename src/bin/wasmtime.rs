@@ -46,10 +46,11 @@ use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
-use wasmtime_wasi::instantiate_wasi;
+use wasmtime_wasi::instantiate_wasi2;
+use wasmtime_wast::instantiate_spectest;
+
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
-use wasmtime_wast::instantiate_spectest;
 
 const USAGE: &str = "
 Wasm runner.
@@ -300,7 +301,7 @@ fn main() -> Result<()> {
             bail!("wasi-c feature not enabled at build time")
         }
     } else {
-        instantiate_wasi("", global_exports.clone(), &preopen_dirs, &argv, &environ)?
+        instantiate_wasi2("", global_exports.clone(), &preopen_dirs, &argv, &environ)?
     };
 
     module_registry.insert(
