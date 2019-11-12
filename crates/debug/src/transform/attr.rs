@@ -5,7 +5,7 @@ use super::unit::PendingDieRef;
 use super::{DebugInputContext, Reader, TransformError};
 use crate::HashMap;
 use alloc::vec::Vec;
-use failure::Error;
+use anyhow::Error;
 use gimli::{
     write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, UnitOffset,
 };

@@ -4,9 +4,9 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use anyhow::Error;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl};
-use failure::Error;
 #[cfg(not(feature = "std"))]
 use hashbrown::{hash_map, HashMap, HashSet};
 use more_asserts::assert_gt;

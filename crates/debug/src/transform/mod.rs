@@ -1,7 +1,7 @@
 use crate::gc::build_dependencies;
 use crate::{DebugInfoData, HashSet};
+use anyhow::Error;
 use cranelift_codegen::isa::TargetFrontendConfig;
-use failure::Error;
 use gimli::{
     write, DebugAddr, DebugAddrBase, DebugLine, DebugStr, LocationLists, RangeLists,
     UnitSectionOffset,
