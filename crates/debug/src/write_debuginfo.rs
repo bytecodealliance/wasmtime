@@ -1,9 +1,8 @@
-use alloc::{string::String, vec::Vec};
-use core::result;
 use faerie::artifact::{Decl, SectionKind};
 use faerie::*;
 use gimli::write::{Address, Dwarf, EndianVec, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
+use std::result;
 
 #[derive(Clone)]
 struct DebugReloc {

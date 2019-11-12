@@ -1,6 +1,3 @@
-extern crate alloc;
-extern crate core;
-
 mod host;
 mod instantiate;
 mod syscalls;

@@ -4,7 +4,6 @@ use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
     TableType, ValType,
 };
-use alloc::{boxed::Box, string::String, vec::Vec};
 use anyhow::Result;
 use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
 
@@ -12,7 +11,7 @@ fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
     assert!(!mt.shared);
     MemoryType::new(Limits::new(
         mt.limits.initial,
-        mt.limits.maximum.unwrap_or(::core::u32::MAX),
+        mt.limits.maximum.unwrap_or(std::u32::MAX),
     ))
 }
 
@@ -53,7 +52,7 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
     let ty = into_valtype(&tt.element_type);
     let limits = Limits::new(
         tt.limits.initial,
-        tt.limits.maximum.unwrap_or(::core::u32::MAX),
+        tt.limits.maximum.unwrap_or(std::u32::MAX),
     );
     TableType::new(ty, limits)
 }

@@ -7,15 +7,10 @@
 
 #![deny(missing_docs)]
 
-extern crate alloc;
-
-use alloc::boxed::Box;
-use alloc::string::ToString;
-use alloc::vec::Vec;
 use anyhow::{bail, format_err, Result};
-use core::convert::TryFrom;
-use core::str;
 use cranelift_codegen::ir;
+use std::convert::TryFrom;
+use std::str;
 use wasm_webidl_bindings::ast;
 use wasmtime_api as api;
 use wasmtime_jit::RuntimeValue;

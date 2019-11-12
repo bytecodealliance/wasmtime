@@ -2,9 +2,8 @@
 //! to exports. This file provides one possible way to manage multiple instances
 //! and resolve imports to exports among them.
 
-use super::HashMap;
 use crate::resolver::Resolver;
-use alloc::string::String;
+use std::collections::HashMap;
 use wasmtime_runtime::{Export, InstanceHandle};
 
 /// A namespace containing instances keyed by name.

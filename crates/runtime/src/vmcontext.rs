@@ -2,8 +2,8 @@
 //! fields that compiled wasm code accesses directly.
 
 use crate::instance::Instance;
-use core::any::Any;
-use core::{ptr, u32};
+use std::any::Any;
+use std::{ptr, u32};
 use wasmtime_environ::BuiltinFunctionIndex;
 
 /// An imported function.
@@ -20,8 +20,8 @@ pub struct VMFunctionImport {
 #[cfg(test)]
 mod test_vmfunction_import {
     use super::VMFunctionImport;
-    use core::mem::size_of;
     use memoffset::offset_of;
+    use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -53,7 +53,7 @@ pub struct VMFunctionBody(u8);
 #[cfg(test)]
 mod test_vmfunction_body {
     use super::VMFunctionBody;
-    use core::mem::size_of;
+    use std::mem::size_of;
 
     #[test]
     fn check_vmfunction_body_offsets() {
@@ -76,8 +76,8 @@ pub struct VMTableImport {
 #[cfg(test)]
 mod test_vmtable_import {
     use super::VMTableImport;
-    use core::mem::size_of;
     use memoffset::offset_of;
+    use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -114,8 +114,8 @@ pub struct VMMemoryImport {
 #[cfg(test)]
 mod test_vmmemory_import {
     use super::VMMemoryImport;
-    use core::mem::size_of;
     use memoffset::offset_of;
+    use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -149,8 +149,8 @@ pub struct VMGlobalImport {
 #[cfg(test)]
 mod test_vmglobal_import {
     use super::VMGlobalImport;
-    use core::mem::size_of;
     use memoffset::offset_of;
+    use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -184,8 +184,8 @@ pub struct VMMemoryDefinition {
 #[cfg(test)]
 mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
-    use core::mem::size_of;
     use memoffset::offset_of;
+    use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -228,8 +228,8 @@ pub struct VMTableDefinition {
 #[cfg(test)]
 mod test_vmtable_definition {
     use super::VMTableDefinition;
-    use core::mem::size_of;
     use memoffset::offset_of;
+    use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -265,8 +265,8 @@ pub struct VMGlobalDefinition {
 #[cfg(test)]
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
-    use core::mem::{align_of, size_of};
     use more_asserts::assert_ge;
+    use std::mem::{align_of, size_of};
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -432,7 +432,7 @@ pub struct VMSharedSignatureIndex(u32);
 #[cfg(test)]
 mod test_vmshared_signature_index {
     use super::VMSharedSignatureIndex;
-    use core::mem::size_of;
+    use std::mem::size_of;
     use wasmtime_environ::{Module, TargetSharedSignatureIndex, VMOffsets};
 
     #[test]
@@ -485,8 +485,8 @@ pub struct VMCallerCheckedAnyfunc {
 #[cfg(test)]
 mod test_vmcaller_checked_anyfunc {
     use super::VMCallerCheckedAnyfunc;
-    use core::mem::size_of;
     use memoffset::offset_of;
+    use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]
@@ -559,7 +559,7 @@ pub struct VMInvokeArgument([u8; 16]);
 #[cfg(test)]
 mod test_vm_invoke_argument {
     use super::VMInvokeArgument;
-    use core::mem::{align_of, size_of};
+    use std::mem::{align_of, size_of};
     use wasmtime_environ::{Module, VMOffsets};
 
     #[test]

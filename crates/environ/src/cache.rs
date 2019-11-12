@@ -2,8 +2,6 @@ use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::compilation::{Compilation, Relocations, Traps};
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
-use alloc::string::{String, ToString};
-use core::hash::Hasher;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
@@ -12,6 +10,7 @@ use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
+use std::hash::Hasher;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 

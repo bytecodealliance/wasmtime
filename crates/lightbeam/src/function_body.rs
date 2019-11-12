@@ -5,13 +5,13 @@ use crate::backend::{
 use crate::error::Error;
 use crate::microwasm::*;
 use crate::module::{ModuleContext, SigType, Signature};
-use core::{fmt, mem};
 use cranelift_codegen::binemit;
 use dynasmrt::DynasmApi;
 use either::{Either, Left, Right};
 use more_asserts::assert_ge;
 use multi_mut::HashMapMultiMut;
 use std::{collections::HashMap, hash::Hash};
+use std::{fmt, mem};
 
 #[derive(Debug)]
 struct Block {

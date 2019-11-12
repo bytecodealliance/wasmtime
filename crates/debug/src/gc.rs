@@ -1,9 +1,8 @@
 use crate::transform::AddressTransform;
-use crate::{HashMap, HashSet};
-use alloc::vec::Vec;
 use gimli::constants;
 use gimli::read;
 use gimli::{Reader, UnitSectionOffset};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Dependencies {
@@ -20,7 +19,7 @@ impl Dependencies {
     }
 
     fn add_edge(&mut self, a: UnitSectionOffset, b: UnitSectionOffset) {
-        use crate::hash_map::Entry;
+        use std::collections::hash_map::Entry;
         match self.edges.entry(a) {
             Entry::Occupied(mut o) => {
                 o.get_mut().insert(b);

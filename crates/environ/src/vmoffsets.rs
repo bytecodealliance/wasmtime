@@ -3,13 +3,13 @@
 
 use crate::module::Module;
 use crate::BuiltinFunctionIndex;
-use core::convert::TryFrom;
 use cranelift_codegen::ir;
 use cranelift_wasm::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
     SignatureIndex, TableIndex,
 };
 use more_asserts::assert_lt;
+use std::convert::TryFrom;
 
 #[cfg(target_pointer_width = "32")]
 fn cast_to_u32(sz: usize) -> u32 {

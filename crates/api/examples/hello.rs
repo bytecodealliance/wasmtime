@@ -1,7 +1,7 @@
 //! Translation of hello example
 
 use anyhow::{ensure, format_err, Context as _, Result};
-use core::cell::Ref;
+use std::cell::Ref;
 use std::rc::Rc;
 use wasmtime_api::*;
 

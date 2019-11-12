@@ -22,8 +22,6 @@
     )
 )]
 
-extern crate alloc;
-
 mod spectest;
 mod wast;
 

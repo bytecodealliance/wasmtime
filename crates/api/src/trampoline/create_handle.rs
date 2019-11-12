@@ -1,16 +1,13 @@
 //! Support for a calling of an imported function.
 
 use crate::runtime::Store;
-use crate::{HashMap, HashSet};
-use alloc::boxed::Box;
-use alloc::rc::Rc;
-use alloc::string::String;
-use alloc::vec::Vec;
 use anyhow::Result;
-use core::any::Any;
-use core::cell::{RefCell, RefMut};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
+use std::any::Any;
+use std::cell::{RefCell, RefMut};
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 

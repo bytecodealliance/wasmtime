@@ -1,14 +1,12 @@
 #![no_main]
 
-extern crate alloc;
-extern crate core;
 extern crate libfuzzer_sys;
 
-use alloc::rc::Rc;
-use core::cell::RefCell;
 use cranelift_codegen::settings;
 use libfuzzer_sys::fuzz_target;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use wasmparser::validate;
 use wasmtime_jit::{CompilationStrategy, CompiledModule, Compiler, NullResolver};
 

@@ -1,7 +1,5 @@
 #![allow(improper_ctypes)]
 
-extern crate alloc;
-
 mod instantiate;
 mod syscalls;
 

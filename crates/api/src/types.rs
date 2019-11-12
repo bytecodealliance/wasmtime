@@ -1,7 +1,3 @@
-use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
 use cranelift_codegen::ir;
 
 // Type Representations
@@ -28,7 +24,7 @@ impl Limits {
     pub fn at_least(min: u32) -> Limits {
         Limits {
             min,
-            max: ::core::u32::MAX,
+            max: ::std::u32::MAX,
         }
     }
 
@@ -277,7 +273,7 @@ impl TableType {
             false
         });
         let ty = ValType::FuncRef;
-        let limits = Limits::new(table.minimum, table.maximum.unwrap_or(::core::u32::MAX));
+        let limits = Limits::new(table.minimum, table.maximum.unwrap_or(::std::u32::MAX));
         TableType::new(ty, limits)
     }
 }
@@ -300,7 +296,7 @@ impl MemoryType {
     pub(crate) fn from_cranelift_memory(memory: &cranelift_wasm::Memory) -> MemoryType {
         MemoryType::new(Limits::new(
             memory.minimum,
-            memory.maximum.unwrap_or(::core::u32::MAX),
+            memory.maximum.unwrap_or(::std::u32::MAX),
         ))
     }
 }
@@ -326,7 +322,7 @@ impl From<String> for Name {
     }
 }
 
-impl ::alloc::string::ToString for Name {
+impl ToString for Name {
     fn to_string(&self) -> String {
         self.0.to_owned()
     }

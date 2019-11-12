@@ -1,12 +1,12 @@
 use super::syscalls;
-use alloc::rc::Rc;
-use core::cell::RefCell;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
+use std::rc::Rc;
 use target_lexicon::HOST;
 use wasi_common::{WasiCtx, WasiCtxBuilder};
 use wasmtime_api as api;

@@ -1,12 +1,10 @@
 //! WebAssembly Instance API object.
 
-extern crate alloc;
-
 use crate::function::Function;
 use crate::memory::Memory;
-use alloc::rc::Rc;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use std::rc::Rc;
 use wasmtime_api as api;
 use wasmtime_interface_types::ModuleData;
 

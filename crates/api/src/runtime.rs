@@ -1,9 +1,9 @@
 use crate::context::Context;
 use crate::r#ref::HostRef;
-use crate::HashMap;
-use alloc::{rc::Rc, string::String};
-use core::cell::RefCell;
 use cranelift_codegen::{ir, settings};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 use wasmtime_jit::{CompilationStrategy, Features};
 
 // Runtime Environment
@@ -143,7 +143,7 @@ impl Store {
         &mut self,
         signature: &ir::Signature,
     ) -> wasmtime_runtime::VMSharedSignatureIndex {
-        use crate::hash_map::Entry;
+        use std::collections::hash_map::Entry;
         let index = self.context().compiler().signatures().register(signature);
         match self.signature_cache.entry(index) {
             Entry::Vacant(v) => {

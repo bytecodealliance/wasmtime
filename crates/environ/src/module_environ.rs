@@ -1,10 +1,6 @@
 use crate::func_environ::FuncEnvironment;
 use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
 use crate::tunables::Tunables;
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::convert::TryFrom;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
@@ -13,6 +9,7 @@ use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     ModuleTranslationState, SignatureIndex, Table, TableIndex, WasmResult,
 };
+use std::convert::TryFrom;
 
 /// Contains function data: byte code and its offset in the module.
 #[derive(Hash)]

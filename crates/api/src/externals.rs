@@ -5,10 +5,9 @@ use crate::trampoline::{generate_global_export, generate_memory_export, generate
 use crate::trap::Trap;
 use crate::types::{ExternType, FuncType, GlobalType, MemoryType, TableType, ValType};
 use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
-use alloc::boxed::Box;
-use alloc::rc::Rc;
-use core::result::Result;
-use core::slice;
+use std::fmt;
+use std::rc::Rc;
+use std::slice;
 use wasmtime_runtime::InstanceHandle;
 
 // Externals
@@ -172,8 +171,8 @@ impl Func {
     }
 }
 
-impl core::fmt::Debug for Func {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Debug for Func {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Func")
     }
 }

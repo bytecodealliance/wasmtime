@@ -3,9 +3,8 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
-use alloc::vec::Vec;
-use core::convert::{TryFrom, TryInto};
 use cranelift_wasm::TableElementType;
+use std::convert::{TryFrom, TryInto};
 use wasmtime_environ::{TablePlan, TableStyle};
 
 /// A table instance.

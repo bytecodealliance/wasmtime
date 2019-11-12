@@ -3,7 +3,6 @@
 #![allow(improper_ctypes)]
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", deny(unstable_features))]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
@@ -22,9 +21,6 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
-
-extern crate alloc;
 
 mod export;
 mod imports;
@@ -55,16 +51,6 @@ pub use crate::vmcontext::{
     VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
-
-#[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap, HashSet};
-#[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap, HashSet};
-
-#[cfg(not(feature = "std"))]
-use spin::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-#[cfg(feature = "std")]
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

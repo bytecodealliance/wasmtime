@@ -1,12 +1,10 @@
-extern crate alloc;
-
-use alloc::rc::Rc;
-use core::cell::RefCell;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use more_asserts::assert_gt;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 use wasmtime_jit::{instantiate, CompilationStrategy, Compiler, NullResolver};
 
 const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"tests/wat/rs2wasm-add-func.wat";

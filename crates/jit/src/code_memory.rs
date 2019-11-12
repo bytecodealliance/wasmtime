@@ -1,11 +1,8 @@
 //! Memory management for executable code.
 
 use crate::function_table::FunctionTable;
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::{cmp, mem};
 use region;
+use std::{cmp, mem};
 use wasmtime_environ::{Compilation, CompiledFunction};
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 

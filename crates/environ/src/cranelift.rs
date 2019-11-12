@@ -14,7 +14,6 @@ use crate::func_environ::{
 };
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
-use alloc::vec::Vec;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
