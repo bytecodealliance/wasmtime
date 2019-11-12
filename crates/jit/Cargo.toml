@@ -15,9 +15,9 @@ cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-frontend = "0.50.0"
-wasmtime-environ = { path = "../environ" }
-wasmtime-runtime = { path = "../runtime" }
-wasmtime-debug = { path = "../debug" }
+wasmtime-environ = { path = "../environ", version = "0.7.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.7.0" }
+wasmtime-debug = { path = "../debug", version = "0.7.0" }
 region = "2.0.0"
 thiserror = "1.0.4"
 target-lexicon = { version = "0.9.0", default-features = false }

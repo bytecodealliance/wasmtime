@@ -14,7 +14,7 @@ edition = "2018"
 cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
-wasmtime-environ = { path = "../environ" }
+wasmtime-environ = { path = "../environ", version = "0.7.0" }
 region = "2.0.0"
 lazy_static = "1.2.0"
 libc = { version = "0.2.60", default-features = false }

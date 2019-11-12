@@ -15,11 +15,11 @@ test = false
 doctest = false
 
 [dependencies]
-wasmtime-interface-types = { path = "../../interface-types" }
-wasmtime-jit = { path = "../../jit" }
-wasmtime-rust-macro = { path = "./macro" }
-wasmtime-wasi = { path = "../../wasi" }
-wasmtime = { path = "../../api" }
+wasmtime-interface-types = { path = "../../interface-types", version = "0.7.0" }
+wasmtime-jit = { path = "../../jit", version = "0.7.0" }
+wasmtime-rust-macro = { path = "./macro", version = "0.7.0" }
+wasmtime-wasi = { path = "../../wasi", version = "0.7.0" }
+wasmtime = { path = "../../api", version = "0.7.0" }
 anyhow = "1.0.19"
 
 [badges]

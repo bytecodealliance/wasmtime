@@ -14,7 +14,7 @@ edition = "2018"
 cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
-wasmtime-environ = { path = "../environ" }
+wasmtime-environ = { path = "../environ", version = "0.7.0" }
 faerie = "0.13.0"
 more-asserts = "0.2.1"
 

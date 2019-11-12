@@ -16,10 +16,10 @@ cranelift-codegen = { version = "0.50.0", default-features = false }
 walrus = "0.13"
 wasmparser = { version = "0.39.2", default-features = false }
 wasm-webidl-bindings = "0.6"
-wasmtime = { path = '../api' }
-wasmtime-jit = { path = '../jit' }
-wasmtime-runtime = { path = '../runtime' }
-wasmtime-wasi = { path = '../wasi' }
+wasmtime = { path = "../api", version = "0.7.0" }
+wasmtime-jit = { path = "../jit", version = "0.7.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.7.0" }
+wasmtime-wasi = { path = "../wasi", version = "0.7.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }
