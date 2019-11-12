@@ -1,7 +1,7 @@
 test regalloc
 target x86_64 haswell
 
-; Reported as https://github.com/CraneStation/cranelift/issues/216 from the Binaryen fuzzer.
+; Reported as https://github.com/bytecodealliance/cranelift/issues/216 from the Binaryen fuzzer.
 ;
 ; The (old) coalescer creates a virtual register with two identical values.
 function %pr216(i32 [%rdi], i64 vmctx [%rsi]) -> i64 [%rax] system_v {

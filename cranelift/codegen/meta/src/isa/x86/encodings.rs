@@ -1879,7 +1879,7 @@ pub(crate) fn define(
 
     // SIMD register movement: store, load, spill, fill, regmove. All of these use encodings of
     // MOVUPS and MOVAPS from SSE (TODO ideally all of these would either use MOVAPS when we have
-    // alignment or type-specific encodings, see https://github.com/CraneStation/cranelift/issues/1039).
+    // alignment or type-specific encodings, see https://github.com/bytecodealliance/cranelift/issues/1039).
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         // Store
         let bound_store = store.bind(vector(ty, sse_vector_size)).bind(Any);
@@ -2003,7 +2003,7 @@ pub(crate) fn define(
     // allows SIMD shifts to be legalized more easily. TODO ideally this would be typed as an
     // I128x1 but restrictions on the type builder prevent this; the general idea here is that
     // the upper bits are all zeroed and do not form parts of any separate lane. See
-    // https://github.com/CraneStation/cranelift/issues/1146.
+    // https://github.com/bytecodealliance/cranelift/issues/1146.
     e.enc_both(
         bitcast.bind(vector(I64, sse_vector_size)).bind(I32),
         rec_frurm.opcodes(&MOVD_LOAD_XMM),

@@ -3,7 +3,7 @@
 //! `FuncEnvironment`, see [wasmtime-environ] in [Wasmtime].
 //!
 //! [wasmtime-environ]: https://crates.io/crates/wasmtime-environ
-//! [Wasmtime]: https://github.com/CraneStation/wasmtime
+//! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
 use crate::environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
 use crate::func_translator::FuncTranslator;

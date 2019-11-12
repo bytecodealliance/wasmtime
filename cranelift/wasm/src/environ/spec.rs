@@ -4,7 +4,7 @@
 //! There are skeleton implementations of these traits in the `dummy` module, and complete
 //! implementations in [Wasmtime].
 //!
-//! [Wasmtime]: https://github.com/CraneStation/wasmtime
+//! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
 use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::{

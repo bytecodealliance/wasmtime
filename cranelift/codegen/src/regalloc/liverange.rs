@@ -66,7 +66,7 @@
 //! Our current implementation uses a sorted array of compressed intervals, represented by their
 //! boundaries (Ebb, Inst), sorted by Ebb. This is a simple data structure, enables coalescing of
 //! intervals easily, and shows some nice performance behavior. See
-//! https://github.com/CraneStation/cranelift/issues/1084 for benchmarks against using a
+//! https://github.com/bytecodealliance/cranelift/issues/1084 for benchmarks against using a
 //! bforest::Map<Ebb, Inst>.
 //!
 //! ## EBB ordering
@@ -112,7 +112,7 @@
 //! the necessary API to make coalescing easy, nor does it optimize for our types' sizes.
 //!
 //! Even the specialized `bforest::Map<Ebb, Inst>` implementation is slower than a plain sorted
-//! array, see https://github.com/CraneStation/cranelift/issues/1084 for details.
+//! array, see https://github.com/bytecodealliance/cranelift/issues/1084 for details.
 
 use crate::entity::SparseMapValue;
 use crate::ir::{Ebb, ExpandedProgramPoint, Inst, Layout, ProgramOrder, ProgramPoint, Value};

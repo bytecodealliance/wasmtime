@@ -13,12 +13,12 @@ is reflected in the code or documentation yet. If you see things that seem
 missing or that don't make sense, or even that just don't work the way you
 expect them to, we're interested to hear about it!
 
-We have a [CraneStation chat on Gitter], and questions are also welcome as issues
+We have a [chat room on Gitter], and questions are also welcome as issues
 in the [Cranelift issue tracker]. Some folks also hang out in the #cranelift
 IRC channel on [irc.mozilla.org].
 
-[CraneStation chat on Gitter]: https://gitter.im/CraneStation/Lobby
-[Cranelift issue tracker]: https://github.com/CraneStation/cranelift/issues/new
+[chat room on Gitter]: https://gitter.im/CraneStation/Lobby
+[Cranelift issue tracker]: https://github.com/bytecodealliance/cranelift/issues/new
 [irc.mozilla.org]: https://wiki.mozilla.org/IRC
 
 ### Mentoring
@@ -41,10 +41,10 @@ interested in. This a good time to get involved, as there aren't a lot of
 things set in stone yet.
 
 [Rust's issue tags]: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#issue-triage
-[E-easy]: https://github.com/CraneStation/cranelift/labels/E-easy
-[E-rust]: https://github.com/CraneStation/cranelift/labels/E-rust
-[E-compiler-easy]: https://github.com/CraneStation/cranelift/labels/E-compiler-easy
-[full list of labels]: https://github.com/CraneStation/cranelift/labels
+[E-easy]: https://github.com/bytecodealliance/cranelift/labels/E-easy
+[E-rust]: https://github.com/bytecodealliance/cranelift/labels/E-rust
+[E-compiler-easy]: https://github.com/bytecodealliance/cranelift/labels/E-compiler-easy
+[full list of labels]: https://github.com/bytecodealliance/cranelift/labels
 
 ### Code of Conduct
 
@@ -73,7 +73,7 @@ which may be convenient when there are multiple versions installed.
 
 [rustfmt-preview]: https://github.com/rust-lang/rustfmt
 [rustfmt quickstart]: https://github.com/rust-lang/rustfmt#quick-start
-[format-all.sh]: https://github.com/CraneStation/cranelift/blob/master/format-all.sh
+[format-all.sh]: https://github.com/bytecodealliance/cranelift/blob/master/format-all.sh
 
 ### Rustc version support
 
@@ -150,4 +150,4 @@ review, although it is always preferred to have one.
 [issues]: https://guides.github.com/features/issues/
 [pull requests]: https://help.github.com/articles/about-pull-requests/
 [issue keywords]: https://help.github.com/articles/closing-issues-using-keywords/
-[Core Team]: https://github.com/orgs/CraneStation/people/
+[Core Team]: https://github.com/orgs/bytecodealliance/people/

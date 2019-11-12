@@ -6,7 +6,7 @@ description = "Cranelift IR builder helper"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
 categories = ["no-std"]
-repository = "https://github.com/CraneStation/cranelift"
+repository = "https://github.com/bytecodealliance/cranelift"
 readme = "README.md"
 edition = "2018"
 
@@ -27,4 +27,4 @@ basic-blocks = ["cranelift-codegen/basic-blocks"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "CraneStation/cranelift" }
+travis-ci = { repository = "bytecodealliance/cranelift" }

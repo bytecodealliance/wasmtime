@@ -1,7 +1,7 @@
 test compile
 target x86_64
 
-; Filed as https://github.com/CraneStation/cranelift/issues/779
+; Filed as https://github.com/bytecodealliance/cranelift/issues/779
 ;
 ; The copy_nop optimisation to reload (see Issue 773) was creating
 ; copy_nop instructions for types for which there were no encoding.

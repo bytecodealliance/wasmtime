@@ -1,7 +1,7 @@
 test regalloc
 target x86_64 haswell
 
-; Reported as https://github.com/CraneStation/cranelift/issues/207
+; Reported as https://github.com/bytecodealliance/cranelift/issues/207
 ;
 ; The coalescer creates a virtual register with two interfering values.
 function %pr207(i64 vmctx, i32, i32) -> i32 system_v {

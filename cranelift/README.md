@@ -10,9 +10,9 @@ into executable machine code.
 
 [BA]: https://bytecodealliance.org/
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
-[![Travis Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
-[![Fuzzit Status](https://app.fuzzit.dev/badge?org_id=CraneStation)](https://app.fuzzit.dev/orgs/CraneStation/dashboard)
-[![Gitter chat](https://badges.gitter.im/CraneStation/CraneStation.svg)](https://gitter.im/CraneStation/Lobby)
+[![Travis Status](https://travis-ci.org/bytecodealliance/cranelift.svg?branch=master)](https://travis-ci.org/bytecodealliance/cranelift)
+[![Fuzzit Status](https://app.fuzzit.dev/badge?org_id=bytecodealliance)](https://app.fuzzit.dev/orgs/bytecodealliance/dashboard)
+[![Gitter chat](https://badges.gitter.im/bytecodealliance/bytecodealliance.svg)](https://gitter.im/CraneStation/Lobby)
 ![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
 
 For more information, see [the
@@ -21,12 +21,12 @@ documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
 For an example of how to use the JIT, see the [SimpleJIT Demo], which
 implements a toy language.
 
-[SimpleJIT Demo]: https://github.com/CraneStation/simplejit-demo
+[SimpleJIT Demo]: https://github.com/bytecodealliance/simplejit-demo
 
 For an example of how to use Cranelift to run WebAssembly code, see
 [Wasmtime], which implements a standalone, embeddable, VM using Cranelift.
 
-[Wasmtime]: https://github.com/CraneStation/wasmtime
+[Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
 Status
 ------
@@ -70,7 +70,7 @@ affected its design are:
  - [Backend for the IonMonkey JavaScript JIT compiler in
     Firefox](spidermonkey.md#phase-2-ionmonkey).
  - [Debug build backend for the Rust compiler](rustc.md).
- - [Wasmtime non-Web wasm engine](https://github.com/CraneStation/wasmtime).
+ - [Wasmtime non-Web wasm engine](https://github.com/bytecodealliance/wasmtime).
 
 Building Cranelift
 ------------------
@@ -173,4 +173,4 @@ Editor Support
 
 Editor support for working with Cranelift IR (clif) files:
 
- - Vim: https://github.com/CraneStation/cranelift.vim
+ - Vim: https://github.com/bytecodealliance/cranelift.vim

@@ -4,7 +4,7 @@ authors = ["The Cranelift Project Developers"]
 version = "0.49.0"
 description = "Metaprogram for cranelift-codegen code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
-repository = "https://github.com/CraneStation/cranelift"
+repository = "https://github.com/bytecodealliance/cranelift"
 readme = "README.md"
 edition = "2018"
 
@@ -14,7 +14,7 @@ cranelift-entity = { path = "../../cranelift-entity", version = "0.49.0" }
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "CraneStation/cranelift" }
+travis-ci = { repository = "bytecodealliance/cranelift" }
 
 [package.metadata.docs.rs]
 rustdoc-args = [ "--document-private-items" ]

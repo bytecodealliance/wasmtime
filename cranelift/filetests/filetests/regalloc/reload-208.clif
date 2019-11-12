@@ -4,7 +4,7 @@ feature !"basic-blocks"
 
 ; regex: V=v\d+
 
-; Filed as https://github.com/CraneStation/cranelift/issues/208
+; Filed as https://github.com/bytecodealliance/cranelift/issues/208
 ;
 ; The verifier complains about a branch argument that is not in the same virtual register as the
 ; corresponding EBB argument.
