@@ -2,7 +2,6 @@ use crate::cdsl::ast::{constant, var, ExprBuilder, Literal};
 use crate::cdsl::instructions::{vector, Bindable, InstructionGroup};
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::xform::TransformGroupBuilder;
-use crate::shared::types::Float::F64;
 use crate::shared::types::Int::{I16, I32, I64, I8};
 use crate::shared::Definitions as SharedDefinitions;
 
@@ -30,7 +29,6 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let clz = insts.by_name("clz");
     let ctz = insts.by_name("ctz");
     let extractlane = insts.by_name("extractlane");
-    let f64const = insts.by_name("f64const");
     let fcmp = insts.by_name("fcmp");
     let fcvt_from_uint = insts.by_name("fcvt_from_uint");
     let fcvt_to_sint = insts.by_name("fcvt_to_sint");
@@ -332,7 +330,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // SIMD
     let uimm8_zero = Literal::constant(&imm.uimm8, 0x00);
     let uimm8_one = Literal::constant(&imm.uimm8, 0x01);
-    let ieee64_zero = Literal::constant(&imm.ieee64, 0x00);
+    let u128_zeroes = constant(vec![0x00; 16]);
     let b = var("b");
     let c = var("c");
     let d = var("d");
@@ -344,15 +342,14 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // SIMD splat: 8-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
         let splat_any8x16 = splat.bind(vector(ty, sse_vector_size));
-        let bitcast_f64_to_any8x16 = raw_bitcast.bind(vector(ty, sse_vector_size)).bind(F64);
         narrow.legalize(
             def!(y = splat_any8x16(x)),
             vec![
                 def!(a = scalar_to_vector(x)), // move into the lowest 8 bits of an XMM register
-                // TODO replace the following two instructions with `vconst(0)` when this is possible; see https://github.com/bytecodealliance/cranelift/issues/1052
-                def!(b = f64const(ieee64_zero)), // zero out a different XMM register; the shuffle mask for moving the lowest byte to all other byte lanes is 0x0
-                def!(c = bitcast_f64_to_any8x16(b)), // no instruction emitted; informs the SSA that the 0 in b can be used as a vector of this type
-                def!(y = x86_pshufb(a, c)), // PSHUFB takes two XMM operands, one of which is a shuffle mask (i.e. b)
+                def!(b = vconst(u128_zeroes)), // zero out a different XMM register; the shuffle mask
+                // for moving the lowest byte to all other byte lanes is 0x0
+                def!(y = x86_pshufb(a, b)), // PSHUFB takes two XMM operands, one of which is a
+                                            // shuffle mask (i.e. b)
             ],
         );
     }
@@ -466,7 +463,6 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     }
 
     // SIMD vall_true
-    let zeroes = constant(vec![0x00; 16]);
     let eq = Literal::enumerator_for(&imm.intcc, "eq");
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let vall_true = vall_true.bind(vector(ty, sse_vector_size));
@@ -475,7 +471,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             narrow.legalize(
                 def!(y = vall_true(x)),
                 vec![
-                    def!(a = vconst(zeroes)),
+                    def!(a = vconst(u128_zeroes)),
                     def!(c = icmp(eq, x, a)),
                     def!(d = x86_ptest(c, c)),
                     def!(y = trueif(eq, d)),
@@ -489,7 +485,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             narrow.legalize(
                 def!(y = vall_true(x)),
                 vec![
-                    def!(a = vconst(zeroes)),
+                    def!(a = vconst(u128_zeroes)),
                     def!(b = raw_bitcast_to_int(x)),
                     def!(c = icmp(eq, b, a)),
                     def!(d = x86_ptest(c, c)),
