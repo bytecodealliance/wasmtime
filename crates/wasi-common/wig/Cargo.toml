@@ -1,6 +1,6 @@
 [package]
 name = "wig"
-version = "0.1.0"
+version = "0.7.0"
 authors = ["Dan Gohman <sunfish@mozilla.com>"]
 description = "WebAssembly Interface Generator"
 license = "Apache-2.0 WITH LLVM-exception"

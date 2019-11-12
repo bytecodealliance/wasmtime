@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-py"
-version = "0.2.0"
+version = "0.7.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Python extension for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"

@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-fuzz"
-version = "0.0.0"
+version = "0.7.0"
 authors = ["The Wasmtime Project Developers"]
 edition = "2018"
 publish = false
@@ -11,9 +11,9 @@ cargo-fuzz = true
 [dependencies]
 wasmtime-environ = { path = "../crates/environ" }
 wasmtime-jit = { path = "../crates/jit" }
-cranelift-codegen = { version = "0.49", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
-cranelift-native = "0.49"
+cranelift-codegen = "0.50"
+cranelift-wasm = "0.50"
+cranelift-native = "0.50"
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
 wasmparser = { version = "0.39.2", default-features = false, features = ["core"] }
 binaryen = "0.8.1"

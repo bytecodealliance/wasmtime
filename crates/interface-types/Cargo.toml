@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-interface-types"
-version = "0.2.0"
+version = "0.7.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Support for wasm interface types with wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"

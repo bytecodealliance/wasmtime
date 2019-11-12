@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-obj"
-version = "0.2.0"
+version = "0.7.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Native object file output for WebAsssembly code in Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
