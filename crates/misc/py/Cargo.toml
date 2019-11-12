@@ -15,11 +15,11 @@ name = "_wasmtime"
 crate-type = ["cdylib"]
 
 [dependencies]
-cranelift-codegen = "0.49"
-cranelift-native = "0.49"
-cranelift-entity = "0.49"
-cranelift-wasm = "0.49"
-cranelift-frontend = "0.49"
+cranelift-codegen = "0.50.0"
+cranelift-native = "0.50.0"
+cranelift-entity = "0.50.0"
+cranelift-wasm = "0.50.0"
+cranelift-frontend = "0.50.0"
 wasmtime-environ = { path = "../../environ" }
 wasmtime-interface-types = { path = "../../interface-types" }
 wasmtime-jit = { path = "../../jit" }

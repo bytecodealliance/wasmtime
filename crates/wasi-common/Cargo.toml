@@ -42,7 +42,7 @@ wasmtime-environ = { path = "../environ" }
 wasmtime-jit = { path = "../jit" }
 wasmtime-wasi = { path = "../wasi" }
 wasmtime = { path = "../api" }
-cranelift-codegen = "0.49.0"
+cranelift-codegen = "0.50.0"
 target-lexicon = "0.9.0"
 pretty_env_logger = "0.3.0"
 tempfile = "3.1.0"

@@ -11,9 +11,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { version = "0.49", features = ["enable-serde"] }
-cranelift-entity = { version = "0.49", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
+cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
+cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
 wasmtime-environ = { path = "../environ" }
 faerie = "0.12.0"
 more-asserts = "0.2.1"

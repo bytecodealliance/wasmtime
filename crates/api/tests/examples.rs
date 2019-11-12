@@ -32,7 +32,6 @@ fn test_run_memory_example() {
     run_example("memory");
 }
 
-#[cfg(not(target_os = "windows"))]
 #[test]
 fn test_run_multi_example() {
     run_example("multi");

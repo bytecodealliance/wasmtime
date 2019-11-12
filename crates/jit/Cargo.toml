@@ -11,10 +11,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { version = "0.49", features = ["enable-serde"] }
-cranelift-entity = { version = "0.49", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.49", features = ["enable-serde"] }
-cranelift-frontend = "0.49"
+cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
+cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
+cranelift-frontend = "0.50.0"
 wasmtime-environ = { path = "../environ", default-features = false }
 wasmtime-runtime = { path = "../runtime", default-features = false }
 wasmtime-debug = { path = "../debug", default-features = false }
