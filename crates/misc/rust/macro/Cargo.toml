@@ -4,7 +4,7 @@ version = "0.2.0"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
 description = "Macro support crate for wasmtime-rust"
 license = "Apache-2.0 WITH LLVM-exception"
-repository = "https://github.com/CraneStation/wasmtime"
+repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 

@@ -6,7 +6,7 @@ description = "WASI API support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
-repository = "https://github.com/CraneStation/wasmtime"
+repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 

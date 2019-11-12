@@ -30,7 +30,7 @@ If you think some default value should be tuned, some new settings
 should be introduced or some behavior should be changed, you are
 welcome to discuss it and contribute to [the Wasmtime repository].
 
-[the Wasmtime repository]: https://github.com/CraneStation/wasmtime
+[the Wasmtime repository]: https://github.com/bytecodealliance/wasmtime
 
 Setting `enabled`
 -----------------

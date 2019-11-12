@@ -3,7 +3,7 @@
 //! By generating a separate `#[test]` test for each file, we allow cargo test
 //! to automatically run the files in parallel.
 //!
-//! Idea adapted from: https://github.com/CraneStation/wasmtime/blob/master/build.rs
+//! Idea adapted from: https://github.com/bytecodealliance/wasmtime/blob/master/build.rs
 //! Thanks @sunfishcode
 
 fn main() {

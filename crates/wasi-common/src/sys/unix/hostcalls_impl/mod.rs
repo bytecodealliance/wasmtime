@@ -1,5 +1,5 @@
 //! Unix-specific hostcalls that implement
-//! [WASI](https://github.com/CraneStation/wasmtime-wasi/blob/wasi/docs/WASI-overview.md).
+//! [WASI](https://github.com/bytecodealliance/wasmtime-wasi/blob/wasi/docs/WASI-overview.md).
 mod fs;
 pub(crate) mod fs_helpers;
 mod misc;

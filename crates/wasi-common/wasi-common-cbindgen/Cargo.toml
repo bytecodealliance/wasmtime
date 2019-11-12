@@ -4,7 +4,7 @@ version = "0.5.0"
 authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
 description = "Interface generator utilities used by wasi-common"
 license = "Apache-2.0 WITH LLVM-exception"
-repository = "https://github.com/CraneStation/wasmtime"
+repository = "https://github.com/bytecodealliance/wasmtime"
 edition = "2018"
 
 [lib]

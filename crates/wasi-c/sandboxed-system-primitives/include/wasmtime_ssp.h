@@ -1,6 +1,6 @@
 /*
  * Part of the Wasmtime Project, under the Apache License v2.0 with LLVM Exceptions.
- * See https://github.com/CraneStation/wasmtime/blob/master/LICENSE for license information.
+ * See https://github.com/bytecodealliance/wasmtime/blob/master/LICENSE for license information.
  *
  * This file declares an interface similar to WASI, but augmented to expose
  * some implementation details such as the curfds arguments that we pass
