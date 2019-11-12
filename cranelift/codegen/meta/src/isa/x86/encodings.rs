@@ -2069,8 +2069,8 @@ pub(crate) fn define(
         (I16, x86_pminu, &PMINUW[..], Some(use_sse41_simd)),
         (I32, x86_pminu, &PMINUD[..], Some(use_sse41_simd)),
     ] {
-        let inst_ = inst.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64_maybe_isap(inst_, rec_fa.opcodes(opcodes), *isa_predicate);
+        let inst = inst.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64_maybe_isap(inst, rec_fa.opcodes(opcodes), *isa_predicate);
     }
 
     // SIMD float comparisons
@@ -2098,12 +2098,12 @@ pub(crate) fn define(
         (F32, fmax, &MAXPS[..]),
         (F64, fmax, &MAXPD[..]),
     ] {
-        let inst_ = inst.bind(vector(*ty, sse_vector_size));
-        e.enc_both(inst_, rec_fa.opcodes(opcodes));
+        let inst = inst.bind(vector(*ty, sse_vector_size));
+        e.enc_both(inst, rec_fa.opcodes(opcodes));
     }
     for (ty, inst, opcodes) in &[(F32, sqrt, &SQRTPS[..]), (F64, sqrt, &SQRTPD[..])] {
-        let inst_ = inst.bind(vector(*ty, sse_vector_size));
-        e.enc_both(inst_, rec_furm.opcodes(opcodes));
+        let inst = inst.bind(vector(*ty, sse_vector_size));
+        e.enc_both(inst, rec_furm.opcodes(opcodes));
     }
 
     // Reference type instructions
