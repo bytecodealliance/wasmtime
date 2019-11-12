@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["The Wasmtime Project Developers"]
 description = "High-level API to expose the Wasmtime runtime"
 license = "Apache-2.0 WITH LLVM-exception"
-repository = "https://github.com/CraneStation/wasmtime"
+repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 

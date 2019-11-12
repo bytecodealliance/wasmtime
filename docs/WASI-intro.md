@@ -65,7 +65,7 @@ about function signature mismatches; this is a
 Currently the options are [Wasmtime] and the [browser polyfill], though we
 intend WASI to be implementable in many wasm VMs.
 
-[Wasmtime]: https://github.com/CraneStation/wasmtime
+[Wasmtime]: https://github.com/bytecodealliance/wasmtime
 [browser polyfill]: https://wasi.dev/polyfill/
 
 ### Wasmtime
@@ -80,7 +80,7 @@ or `cargo run --bin wasmtime foo.wasm`.
 
 The polyfill is online [here](https://wasi.dev/polyfill/).
 
-The source is [here](https://github.com/CraneStation/wasmtime/tree/master/wasmtime-wasi/js-polyfill).
+The source is [here](https://github.com/bytecodealliance/wasmtime/tree/master/wasmtime-wasi/js-polyfill).
 
 ## Where can I learn more?
 

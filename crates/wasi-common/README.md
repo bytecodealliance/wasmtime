@@ -9,7 +9,7 @@ currently based on [40ae1df][lucet-wasi-tracker] git revision.
 
 Please note that the library requires Rust compiler version at least 1.37.0.
 
-[Wasmtime]: https://github.com/CraneStation/wasmtime
+[Wasmtime]: https://github.com/bytecodealliance/wasmtime
 [Lucet]: https://github.com/fastly/lucet
 [lucet-wasi]: https://github.com/fastly/lucet/tree/master/lucet-wasi
 [lucet-wasi-tracker]: https://github.com/fastly/lucet/commit/40ae1df64536250a2b6ab67e7f167d22f4aa7f94
@@ -28,7 +28,7 @@ We expect these to be implemented when network access is standardised.
 We also currently do not support the `proc_raise` hostcall, as it is expected to
 be dropped entirely from WASI.
 
-[WASI API]: https://github.com/CraneStation/wasmtime/blob/master/docs/WASI-api.md
+[WASI API]: https://github.com/bytecodealliance/wasmtime/blob/master/docs/WASI-api.md
 
 ### Windows
 In our Windows implementation, we currently support the minimal subset of [WASI API]

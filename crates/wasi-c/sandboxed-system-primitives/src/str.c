@@ -1,8 +1,8 @@
 // Part of the Wasmtime Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://github.com/CraneStation/wasmtime/blob/master/LICENSE for license information.
+// See https://github.com/bytecodealliance/wasmtime/blob/master/LICENSE for license information.
 //
 // Significant parts of this file are derived from cloudabi-utils. See
-// https://github.com/CraneStation/wasmtime/blob/master/lib/wasi/sandboxed-system-primitives/src/LICENSE
+// https://github.com/bytecodealliance/wasmtime/blob/master/lib/wasi/sandboxed-system-primitives/src/LICENSE
 // for license information.
 //
 // The upstream file contains the following copyright notice:

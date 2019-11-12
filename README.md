@@ -12,8 +12,8 @@ To get started, visit [wasmtime.dev](https://wasmtime.dev/).
 [WebAssembly]: https://webassembly.org/
 [WASI]: https://wasi.dev
 [outside of the Web]: https://webassembly.org/docs/non-web/
-[build-status]: https://github.com/CraneStation/wasmtime/workflows/CI/badge.svg
-[github-actions]: https://github.com/CraneStation/wasmtime/actions?query=workflow%3ACI
+[build-status]: https://github.com/bytecodealliance/wasmtime/workflows/CI/badge.svg
+[github-actions]: https://github.com/bytecodealliance/wasmtime/actions?query=workflow%3ACI
 [gitter-chat-badge]: https://badges.gitter.im/CraneStation/CraneStation.svg
 [gitter-chat]: https://gitter.im/CraneStation/Lobby
 [minimum-rustc]: https://img.shields.io/badge/rustc-1.37+-green.svg
@@ -48,8 +48,8 @@ Additional goals for Wasmtime include:
  - Develop a native ABI used for compiling WebAssembly suitable for use in both
    JIT and AOT to native object files.
 
-[Cranelift]: https://github.com/CraneStation/cranelift
-[Lightbeam]: https://github.com/CraneStation/wasmtime/tree/master/lightbeam
+[Cranelift]: https://github.com/bytecodealliance/cranelift
+[Lightbeam]: https://github.com/bytecodealliance/wasmtime/tree/master/lightbeam
 
 #### Including Wasmtime in your project
 

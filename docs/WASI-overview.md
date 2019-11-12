@@ -160,4 +160,4 @@ integration between .wasm modules importing WASI and the Web.
 
 WASI is currently experimental. Feedback is welcome!
 
-[Wasmtime]: https://github.com/CraneStation/wasmtime
+[Wasmtime]: https://github.com/bytecodealliance/wasmtime

@@ -5,7 +5,7 @@ To get started using WASI, see [the intro document](WASI-intro.md) and
 
 For more detail on what WASI is, see [the overview](WASI-overview.md).
 
-For specifics on the API, see the [API documentation](https://github.com/CraneStation/wasmtime/blob/master/docs/WASI-api.md).
+For specifics on the API, see the [API documentation](https://github.com/bytecodealliance/wasmtime/blob/master/docs/WASI-api.md).
 Additionally, a C header file describing the WASI API is
 [here](https://github.com/CraneStation/wasi-libc/blob/master/libc-bottom-half/headers/public/wasi/core.h).
 

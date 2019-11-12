@@ -2,7 +2,7 @@
 
 Lightbeam is an optimising one-pass streaming compiler for WebAssembly, intended for use in [Wasmtime][wasmtime].
 
-[wasmtime]: https://github.com/CraneStation/wasmtime
+[wasmtime]: https://github.com/bytecodealliance/wasmtime
 
 ## Quality of output
 
@@ -165,4 +165,4 @@ Lightbeam passes 100% of the specification test suite, but that doesn't necessar
 You can file issues in the [Wasmtime issue tracker][issue tracker]. If you want to get involved jump into the [CraneStation Gitter room][cranestation-gitter] and someone can direct you to the right place. I wish I could say "the most useful thing you can do is play with it and open issues where you find problems" but until it passes the spec suite that won't be very helpful.
 
 [cranestation-gitter]: https://gitter.im/CraneStation/Lobby
-[Wasmtime issue tracker]: https://github.com/CraneStation/wasmtime/issues
+[Wasmtime issue tracker]: https://github.com/bytecodealliance/wasmtime/issues
