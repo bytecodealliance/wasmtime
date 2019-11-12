@@ -1,11 +1,14 @@
 Cranelift Code Generator
 ========================
 
+**A [Bytecode Alliance][BA] project**
+
 Cranelift is a low-level retargetable code generator. It translates a
 [target-independent intermediate
 representation](https://cranelift.readthedocs.io/en/latest/ir.html)
 into executable machine code.
 
+[BA]: https://bytecodealliance.org/
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
 [![Travis Status](https://travis-ci.org/CraneStation/cranelift.svg?branch=master)](https://travis-ci.org/CraneStation/cranelift)
 [![Fuzzit Status](https://app.fuzzit.dev/badge?org_id=CraneStation)](https://app.fuzzit.dev/orgs/CraneStation/dashboard)
