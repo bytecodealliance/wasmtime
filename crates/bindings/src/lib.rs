@@ -53,7 +53,7 @@ cast64!(i64 u64);
 pub trait WasmMem {
     type Abi;
     fn as_ptr<T>(&self, off: Self::Abi) -> *mut T;
-    fn as_off<T>(&self, ptr: *mut T) -> Self::Abi;
+    fn as_off<T>(&self, ptr: *const T) -> Self::Abi;
 }
 
 pub struct VMContextWrapper(pub *mut VMContext);
@@ -63,7 +63,7 @@ impl WasmMem for VMContextWrapper {
     fn as_ptr<T>(&self, _off: Self::Abi) -> *mut T {
         unimplemented!();
     }
-    fn as_off<T>(&self, _ptr: *mut T) -> Self::Abi {
+    fn as_off<T>(&self, _ptr: *const T) -> Self::Abi {
         unimplemented!();
     }
 }

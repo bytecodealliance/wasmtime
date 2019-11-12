@@ -419,7 +419,7 @@ impl WasmMem for WasiMem {
         let p = &mut mem[usize::try_from(off).unwrap()];
         p as *mut u8 as *mut T
     }
-    fn as_off<T>(&self, ptr: *mut T) -> Self::Abi {
+    fn as_off<T>(&self, ptr: *const T) -> Self::Abi {
         let mem = self.require_memory();
         let ptr = ptr as usize;
         // TODO use offset from
