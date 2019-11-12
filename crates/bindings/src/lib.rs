@@ -74,6 +74,12 @@ impl IntoIRType for i32 {
     }
 }
 
+impl IntoIRType for u32 {
+    fn into_ir_type() -> codegen::ir::Type {
+        codegen::ir::types::I32
+    }
+}
+
 impl IntoIRType for i64 {
     fn into_ir_type() -> codegen::ir::Type {
         codegen::ir::types::I64

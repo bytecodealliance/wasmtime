@@ -32,5 +32,5 @@ pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
         wasmtime_environ::Export::Table(table_id),
     );
 
-    create_handle(module, None, PrimaryMap::new(), Box::new(()))
+    create_handle(module, None, PrimaryMap::new(), Box::new(()), None)
 }

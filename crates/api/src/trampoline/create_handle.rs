@@ -19,9 +19,10 @@ pub(crate) fn create_handle(
     signature_registry: Option<RefMut<Store>>,
     finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
     state: Box<dyn Any>,
+    global_exports: Option<Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>>,
 ) -> Result<InstanceHandle> {
     let global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> =
-        Rc::new(RefCell::new(HashMap::new()));
+        global_exports.unwrap_or_else(|| Rc::new(RefCell::new(HashMap::new())));
 
     let imports = Imports::new(
         HashSet::new(),

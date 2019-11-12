@@ -33,7 +33,7 @@ pub fn create_global(gt: &GlobalType, val: Val) -> Result<(wasmtime_runtime::Exp
         initializer: cranelift_wasm::GlobalInit::Import, // TODO is it right?
     };
     let mut handle =
-        create_handle(Module::new(), None, PrimaryMap::new(), Box::new(())).expect("handle");
+        create_handle(Module::new(), None, PrimaryMap::new(), Box::new(()), None).expect("handle");
     Ok((
         wasmtime_runtime::Export::Global {
             definition: definition.as_mut(),

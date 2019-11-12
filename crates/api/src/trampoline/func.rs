@@ -239,6 +239,7 @@ pub fn create_handle_with_function(
         Some(store.borrow_mut()),
         finished_functions,
         Box::new(trampoline_state),
+        None,
     )
 }
 
@@ -264,6 +265,7 @@ pub fn create_handle_for_wrapped(
         Some(store.borrow_mut()),
         finished_functions,
         Box::new(()),
+        None,
     )
 }
 
@@ -296,7 +298,14 @@ pub fn create_handle_for_trait(
 
     let state = state_builder.build_state(externs);
 
-    create_handle(module, Some(store.borrow_mut()), finished_functions, state)
+    let exports = store.borrow().global_exports().clone();
+    create_handle(
+        module,
+        Some(store.borrow_mut()),
+        finished_functions,
+        state,
+        Some(exports),
+    )
 }
 
 /// We don't expect trampoline compilation to produce any relocations, so

@@ -7,13 +7,23 @@ use wasmtime_api::*;
 #[macro_use]
 extern crate wasmtime_bindings_macro;
 
-struct Callback;
+pub struct Syscalls;
 
-#[wasmtime_impl(module(callback_mod))]
-impl Callback {
-    fn callback(&self) {
-        println!("Calling back...");
-        println!("> Hello World!");
+use wasmtime_bindings_macro::wasmtime_impl;
+#[wasmtime_impl(module(syscalls_mod), context(wasmtime_wasi::WasiMem))]
+impl Syscalls {
+    fn __print_char(&self, c: u8) {
+        print!("{}", c as char);
+    }
+
+    fn __print_string(&self, buf: *mut u8, length: i32, capacity: i32) {
+        let s =
+            //unsafe { std::string::String::from_raw_parts(buf, length as usize, capacity as usize) };
+            String::from(
+                std::str::from_utf8(unsafe { std::slice::from_raw_parts(buf, length as usize) }).unwrap()
+            );
+
+        print!("{}", s);
     }
 }
 
@@ -30,7 +40,7 @@ fn main() -> Result<()> {
 
     // Load binary.
     println!("Loading binary...");
-    let binary = read("examples/hello.wasm")?;
+    let binary = read("examples/hello4.wasm")?;
 
     // Compile.
     println!("Compiling module...");
@@ -40,15 +50,15 @@ fn main() -> Result<()> {
 
     // Create external print functions.
     println!("Creating callback...");
-    let callback_mod = HostRef::new(
+    let syscalls_mod = HostRef::new(
         wrap_wasmtime_module!(
-            &store, |_imports| Callback; module(callback_mod)
+            &store, |_imports| Syscalls; module(syscalls_mod)
         )
         .map_err(|_| format_err!("> Error compiling callback module!"))?,
     );
-    let callback_instance = Instance::new(&store, &callback_mod, &[])
+    let callback_instance = Instance::new(&store, &syscalls_mod, &[])
         .map_err(|_| format_err!("> Error instantiating callback module!"))?;
-    let hello_func = &callback_instance.exports()[0];
+    let hello_func = &callback_instance.exports()[1];
 
     // Instantiate.
     println!("Instantiating module...");
