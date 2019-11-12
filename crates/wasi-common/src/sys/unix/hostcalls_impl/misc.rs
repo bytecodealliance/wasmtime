@@ -6,16 +6,19 @@ use crate::{wasi, Error, Result};
 use nix::libc::{self, c_int};
 use std::mem::MaybeUninit;
 
-pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
+fn wasi_clock_id_to_unix(clock_id: wasi::__wasi_clockid_t) -> Result<libc::clockid_t> {
     // convert the supported clocks to the libc types, or return EINVAL
-    let clock_id = match clock_id {
-        wasi::__WASI_CLOCK_REALTIME => libc::CLOCK_REALTIME,
-        wasi::__WASI_CLOCK_MONOTONIC => libc::CLOCK_MONOTONIC,
-        wasi::__WASI_CLOCK_PROCESS_CPUTIME_ID => libc::CLOCK_PROCESS_CPUTIME_ID,
-        wasi::__WASI_CLOCK_THREAD_CPUTIME_ID => libc::CLOCK_THREAD_CPUTIME_ID,
-        _ => return Err(Error::EINVAL),
-    };
+    match clock_id {
+        wasi::__WASI_CLOCK_REALTIME => Ok(libc::CLOCK_REALTIME),
+        wasi::__WASI_CLOCK_MONOTONIC => Ok(libc::CLOCK_MONOTONIC),
+        wasi::__WASI_CLOCK_PROCESS_CPUTIME_ID => Ok(libc::CLOCK_PROCESS_CPUTIME_ID),
+        wasi::__WASI_CLOCK_THREAD_CPUTIME_ID => Ok(libc::CLOCK_THREAD_CPUTIME_ID),
+        _ => Err(Error::EINVAL),
+    }
+}
 
+pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
+    let clock_id = wasi_clock_id_to_unix(clock_id)?;
     // no `nix` wrapper for clock_getres, so we do it ourselves
     let mut timespec = MaybeUninit::<libc::timespec>::uninit();
     let res = unsafe { libc::clock_getres(clock_id, timespec.as_mut_ptr()) };
@@ -42,15 +45,7 @@ pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__
 }
 
 pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
-    // convert the supported clocks to the libc types, or return EINVAL
-    let clock_id = match clock_id {
-        wasi::__WASI_CLOCK_REALTIME => libc::CLOCK_REALTIME,
-        wasi::__WASI_CLOCK_MONOTONIC => libc::CLOCK_MONOTONIC,
-        wasi::__WASI_CLOCK_PROCESS_CPUTIME_ID => libc::CLOCK_PROCESS_CPUTIME_ID,
-        wasi::__WASI_CLOCK_THREAD_CPUTIME_ID => libc::CLOCK_THREAD_CPUTIME_ID,
-        _ => return Err(Error::EINVAL),
-    };
-
+    let clock_id = wasi_clock_id_to_unix(clock_id)?;
     // no `nix` wrapper for clock_getres, so we do it ourselves
     let mut timespec = MaybeUninit::<libc::timespec>::uninit();
     let res = unsafe { libc::clock_gettime(clock_id, timespec.as_mut_ptr()) };
