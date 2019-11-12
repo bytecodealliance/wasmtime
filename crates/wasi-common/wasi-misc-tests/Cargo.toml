@@ -1,6 +1,6 @@
 [package]
 name = "wasi-misc-tests"
-version = "0.1.0"
+version = "0.6.0"
 authors = ["The Wasmtime Project Developers"]
 readme = "README.md"
 edition = "2018"
