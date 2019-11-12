@@ -1,4 +1,6 @@
-# Wasmtime: a WebAssembly Runtime.
+# Wasmtime: a WebAssembly Runtime
+
+**A [Bytecode Alliance][BA] project**
 
 Wasmtime is a standalone wasm-only optimizing runtime for [WebAssembly] and
 [WASI]. It runs WebAssembly code [outside of the Web], and can be used both
@@ -6,6 +8,7 @@ as a command-line utility or as a library embedded in a larger application.
 
 To get started, visit [wasmtime.dev](https://wasmtime.dev/).
 
+[BA]: https://bytecodealliance.org/
 [WebAssembly]: https://webassembly.org/
 [WASI]: https://wasi.dev
 [outside of the Web]: https://webassembly.org/docs/non-web/
