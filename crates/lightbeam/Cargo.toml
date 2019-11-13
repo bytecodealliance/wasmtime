@@ -30,6 +30,7 @@ more-asserts = "0.2.1"
 lazy_static = "1.2"
 wat = "1.0.2"
 quickcheck = "0.9.0"
+anyhow = "1.0"
 
 [badges]
 maintenance = { status = "experimental" }

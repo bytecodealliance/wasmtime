@@ -54,6 +54,7 @@ wasmtime-wast = { path = "../wast" }
 wasmtime-wasi = { path = "../wasi" }
 rayon = "1.1"
 file-per-thread-logger = "0.1.1"
+wat = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }

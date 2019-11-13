@@ -9,6 +9,7 @@ use cranelift_codegen::{
 };
 use memoffset::offset_of;
 use more_asserts::assert_le;
+use thiserror::Error;
 use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, Type};
 
 pub trait AsValueType {
@@ -133,9 +134,11 @@ impl TranslatedModule {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Error)]
 pub enum ExecutionError {
+    #[error("function index out of bounds")]
     FuncIndexOutOfBounds,
+    #[error("type mismatch")]
     TypeMismatch,
 }
 

@@ -1,8 +1,7 @@
 //! Translation of the memory example
 
 use anyhow::{bail, ensure, Context as _, Error};
-use core::cell::Ref;
-use std::fs::read;
+use std::cell::Ref;
 use wasmtime_api::*;
 
 fn get_export_memory(exports: &[Extern], i: usize) -> Result<HostRef<Memory>, Error> {
@@ -69,7 +68,23 @@ fn main() -> Result<(), Error> {
 
     // Load binary.
     println!("Loading binary...");
-    let binary = read("examples/memory.wasm")?;
+    let binary = wat::parse_str(
+        r#"
+            (module
+              (memory (export "memory") 2 3)
+
+              (func (export "size") (result i32) (memory.size))
+              (func (export "load") (param i32) (result i32)
+                (i32.load8_s (local.get 0))
+              )
+              (func (export "store") (param i32 i32)
+                (i32.store8 (local.get 0) (local.get 1))
+              )
+
+              (data (i32.const 0x1000) "\01\02\03\04")
+            )
+        "#,
+    )?;
 
     // Compile.
     println!("Compiling module...");

@@ -1,12 +1,20 @@
-extern crate alloc;
-
-use alloc::rc::Rc;
-use core::cell::{Ref, RefCell};
-use std::fs::read;
+use std::cell::{Ref, RefCell};
+use std::rc::Rc;
 use wasmtime_api::*;
 
 #[test]
 fn test_import_calling_export() {
+    const WAT: &str = r#"
+    (module
+      (type $t0 (func))
+      (import "" "imp" (func $.imp (type $t0)))
+      (func $run call $.imp)
+      (func $other)
+      (export "run" (func $run))
+      (export "other" (func $other))
+    )
+    "#;
+
     struct Callback {
         pub other: RefCell<Option<HostRef<Func>>>,
     }
@@ -26,13 +34,8 @@ fn test_import_calling_export() {
 
     let engine = HostRef::new(Engine::default());
     let store = HostRef::new(Store::new(&engine));
-    let module = HostRef::new(
-        Module::new(
-            &store,
-            &read("tests/import_calling_export.wasm").expect("failed to read wasm file"),
-        )
-        .expect("failed to create module"),
-    );
+    let wasm = wat::parse_str(WAT).unwrap();
+    let module = HostRef::new(Module::new(&store, &wasm).expect("failed to create module"));
 
     let callback = Rc::new(Callback {
         other: RefCell::new(None),
