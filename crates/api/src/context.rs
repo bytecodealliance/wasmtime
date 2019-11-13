@@ -1,8 +1,8 @@
+use crate::Config;
 use alloc::rc::Rc;
 use core::cell::{RefCell, RefMut};
 use core::hash::{Hash, Hasher};
-use cranelift_codegen::settings;
-use wasmtime_jit::{CompilationStrategy, Compiler, Features};
+use wasmtime_jit::{Compiler, Features};
 
 #[derive(Clone)]
 pub struct Context {
@@ -12,21 +12,19 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(compiler: Compiler, features: Features, debug_info: bool) -> Context {
-        Context {
-            compiler: Rc::new(RefCell::new(compiler)),
-            features,
-            debug_info,
-        }
+    pub fn new(config: &Config) -> Context {
+        let isa_builder =
+            cranelift_native::builder().expect("host machine is not a supported target");
+        let isa = isa_builder.finish(config.flags.clone());
+        Context::new_with_compiler(config, Compiler::new(isa, config.strategy))
     }
 
-    pub fn create(
-        flags: settings::Flags,
-        features: Features,
-        debug_info: bool,
-        strategy: CompilationStrategy,
-    ) -> Context {
-        Context::new(create_compiler(flags, strategy), features, debug_info)
+    pub fn new_with_compiler(config: &Config, compiler: Compiler) -> Context {
+        Context {
+            compiler: Rc::new(RefCell::new(compiler)),
+            features: config.features.clone(),
+            debug_info: config.debug_info,
+        }
     }
 
     pub(crate) fn debug_info(&self) -> bool {
@@ -53,14 +51,4 @@ impl PartialEq for Context {
     fn eq(&self, other: &Context) -> bool {
         Rc::ptr_eq(&self.compiler, &other.compiler)
     }
-}
-
-pub(crate) fn create_compiler(flags: settings::Flags, strategy: CompilationStrategy) -> Compiler {
-    let isa = {
-        let isa_builder =
-            cranelift_native::builder().expect("host machine is not a supported target");
-        isa_builder.finish(flags)
-    };
-
-    Compiler::new(isa, strategy)
 }

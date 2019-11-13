@@ -51,17 +51,12 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
             use #root::wasmtime_api::{HostRef, Config, Extern, Engine, Store, Instance, Module};
             use #root::anyhow::{bail, format_err};
 
-            let config = {
-                let flag_builder = #root::cranelift_codegen::settings::builder();
-                let flags = #root::cranelift_codegen::settings::Flags::new(flag_builder);
-                let features = #root::wasmtime_jit::Features {
-                    multi_value: true,
-                    ..Default::default()
-                };
-                let strategy = #root::wasmtime_jit::CompilationStrategy::Auto;
-                Config::new(flags, features, false, strategy)
-            };
-            let engine = HostRef::new(Engine::new(config));
+            let mut config = Config::new();
+            config.features(#root::wasmtime_jit::Features {
+                multi_value: true,
+                ..Default::default()
+            });
+            let engine = HostRef::new(Engine::new(&config));
             let store = HostRef::new(Store::new(&engine));
             let global_exports = store.borrow().global_exports().clone();
 

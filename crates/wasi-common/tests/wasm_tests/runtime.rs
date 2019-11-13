@@ -3,7 +3,6 @@ use cranelift_codegen::settings::{self, Configurable};
 use std::fs::File;
 use std::{collections::HashMap, path::Path};
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
-use wasmtime_jit::{CompilationStrategy, Features};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     // Prepare runtime
@@ -14,13 +13,9 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .enable("avoid_div_traps")
         .context("error while enabling proper division trap")?;
 
-    let config = Config::new(
-        settings::Flags::new(flag_builder),
-        Features::default(),
-        false,
-        CompilationStrategy::Auto,
-    );
-    let engine = HostRef::new(Engine::new(config));
+    let mut config = Config::new();
+    config.flags(settings::Flags::new(flag_builder));
+    let engine = HostRef::new(Engine::new(&config));
     let store = HostRef::new(Store::new(&engine));
 
     let mut module_registry = HashMap::new();

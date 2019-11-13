@@ -15,15 +15,23 @@ fn default_flags() -> settings::Flags {
     settings::Flags::new(flag_builder)
 }
 
+/// Global configuration options used to create an [`Engine`] and customize its
+/// behavior.
+///
+/// This structure exposed a builder-like interface and is primarily consumed by
+/// [`Engine::new()`]
+#[derive(Clone)]
 pub struct Config {
-    flags: settings::Flags,
-    features: Features,
-    debug_info: bool,
-    strategy: CompilationStrategy,
+    pub(crate) flags: settings::Flags,
+    pub(crate) features: Features,
+    pub(crate) debug_info: bool,
+    pub(crate) strategy: CompilationStrategy,
 }
 
 impl Config {
-    pub fn default() -> Config {
+    /// Creates a new configuration object with the default configuration
+    /// specified.
+    pub fn new() -> Config {
         Config {
             debug_info: false,
             features: Default::default(),
@@ -32,54 +40,68 @@ impl Config {
         }
     }
 
-    pub fn new(
-        flags: settings::Flags,
-        features: Features,
-        debug_info: bool,
-        strategy: CompilationStrategy,
-    ) -> Config {
-        Config {
-            flags,
-            features,
-            debug_info,
-            strategy,
-        }
+    /// Configures whether DWARF debug information will be emitted during
+    /// compilation.
+    ///
+    /// By default this option is `false`.
+    pub fn debug_info(&mut self, enable: bool) -> &mut Self {
+        self.debug_info = enable;
+        self
     }
 
-    pub(crate) fn debug_info(&self) -> bool {
-        self.debug_info
+    /// Configures various flags for compilation such as optimization level and
+    /// such.
+    ///
+    /// For more information on defaults and configuration options, see the
+    /// documentation for [`Flags`](settings::Flags)
+    pub fn flags(&mut self, flags: settings::Flags) -> &mut Self {
+        self.flags = flags;
+        self
     }
 
-    pub(crate) fn flags(&self) -> &settings::Flags {
-        &self.flags
+    /// Indicates which WebAssembly features are enabled for this compilation
+    /// session.
+    ///
+    /// By default only stable features are enabled by default (and none are
+    /// fully stabilized yet at this time). If you're loading wasm modules
+    /// which may use non-MVP features you'll want to be sure to call this
+    /// method and enable the appropriate feature in the [`Features`]
+    /// structure.
+    pub fn features(&mut self, features: Features) -> &mut Self {
+        self.features = features;
+        self
     }
 
-    pub(crate) fn features(&self) -> &Features {
-        &self.features
+    /// Configures the compilation `strategy` provided, indicating which
+    /// backend will be used for compiling WebAssembly to native code.
+    ///
+    /// Currently the primary strategies are with cranelift (an optimizing
+    /// compiler) or lightbeam (a fast single-pass JIT which produces code
+    /// quickly).
+    pub fn strategy(&mut self, strategy: CompilationStrategy) -> &mut Self {
+        self.strategy = strategy;
+        self
     }
+}
 
-    pub(crate) fn strategy(&self) -> CompilationStrategy {
-        self.strategy
+impl Default for Config {
+    fn default() -> Config {
+        Config::new()
     }
 }
 
 // Engine
 
+#[derive(Default)]
 pub struct Engine {
     config: Config,
 }
 
 impl Engine {
-    pub fn new(config: Config) -> Engine {
-        Engine { config }
-    }
-
-    pub fn default() -> Engine {
-        Engine::new(Config::default())
-    }
-
-    pub(crate) fn config(&self) -> &Config {
-        &self.config
+    pub fn new(config: &Config) -> Engine {
+        Engine {
+            config: config.clone(),
+        }
     }
 }
 
@@ -94,13 +116,9 @@ pub struct Store {
 
 impl Store {
     pub fn new(engine: &HostRef<Engine>) -> Store {
-        let flags = engine.borrow().config().flags().clone();
-        let features = engine.borrow().config().features().clone();
-        let debug_info = engine.borrow().config().debug_info();
-        let strategy = engine.borrow().config().strategy();
         Store {
             engine: engine.clone(),
-            context: Context::create(flags, features, debug_info, strategy),
+            context: Context::new(&engine.borrow().config),
             global_exports: Rc::new(RefCell::new(HashMap::new())),
             signature_cache: HashMap::new(),
         }
