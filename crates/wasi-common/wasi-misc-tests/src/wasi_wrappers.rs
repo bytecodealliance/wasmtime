@@ -61,6 +61,22 @@ pub unsafe fn wasi_path_symlink(
     wasi_unstable::path_symlink(old_path.as_bytes(), dirfd, new_path.as_bytes())
 }
 
+pub unsafe fn wasi_path_link(
+    old_fd: wasi_unstable::Fd,
+    old_flags: wasi_unstable::LookupFlags,
+    old_path: &str,
+    new_fd: wasi_unstable::Fd,
+    new_path: &str,
+) -> Result<(), wasi_unstable::Error> {
+    wasi_unstable::path_link(
+        old_fd,
+        old_flags,
+        old_path.as_bytes(),
+        new_fd,
+        new_path.as_bytes(),
+    )
+}
+
 pub unsafe fn wasi_path_readlink(
     dirfd: wasi_unstable::Fd,
     path: &str,

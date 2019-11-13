@@ -180,6 +180,7 @@ mod wasm_tests {
                         "path_rename_trailing_slashes" => true,
                         "fd_readdir" => true,
                         "poll_oneoff" => true,
+                        "path_link" => true,
                         _ => false,
                     }
                 } else {
