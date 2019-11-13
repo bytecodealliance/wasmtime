@@ -1,5 +1,5 @@
-use std::rc::Rc;
 use std::cell::{Ref, RefCell};
+use std::rc::Rc;
 use wasmtime_api::*;
 
 #[test]

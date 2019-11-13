@@ -2,7 +2,6 @@ use crate::backend::TranslatedCodeSection;
 use crate::error::Error;
 use crate::microwasm;
 use crate::translate_sections;
-use thiserror::Error;
 use core::{convert::TryInto, mem};
 use cranelift_codegen::{
     ir::{self, AbiParam, Signature as CraneliftSignature},
@@ -10,6 +9,7 @@ use cranelift_codegen::{
 };
 use memoffset::offset_of;
 use more_asserts::assert_le;
+use thiserror::Error;
 use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, Type};
 
 pub trait AsValueType {
