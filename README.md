@@ -49,7 +49,7 @@ Additional goals for Wasmtime include:
    JIT and AOT to native object files.
 
 [Cranelift]: https://github.com/bytecodealliance/cranelift
-[Lightbeam]: https://github.com/bytecodealliance/wasmtime/tree/master/lightbeam
+[Lightbeam]: https://github.com/bytecodealliance/wasmtime/tree/master/crates/lightbeam
 
 #### Including Wasmtime in your project
 
