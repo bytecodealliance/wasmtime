@@ -56,7 +56,7 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
     use winx::file::AccessMode;
-    unsafe { winx::file::get_file_access_mode(fd.as_raw_handle()) }
+    unsafe { winx::file::query_access_information(fd.as_raw_handle()) }
         .map(host_impl::fdflags_from_win)
         .map_err(Into::into)
 }

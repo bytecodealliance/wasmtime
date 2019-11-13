@@ -1,4 +1,9 @@
 #![allow(non_camel_case_types)]
+
+use crate::ntdll::{
+    NtQueryInformationFile, RtlNtStatusToDosError, FILE_ACCESS_INFORMATION, FILE_INFORMATION_CLASS,
+    FILE_MODE_INFORMATION, IO_STATUS_BLOCK,
+};
 use crate::{winerror, Result};
 use bitflags::bitflags;
 use cvt::cvt;
@@ -6,7 +11,10 @@ use std::ffi::{c_void, OsString};
 use std::fs::File;
 use std::io;
 use std::os::windows::prelude::{AsRawHandle, OsStringExt, RawHandle};
-use winapi::shared::minwindef::{self, DWORD};
+use winapi::shared::{
+    minwindef::{self, DWORD},
+    ntstatus,
+};
 use winapi::um::{fileapi, fileapi::GetFileType, minwinbase, winbase, winnt};
 
 /// Maximum total path length for Unicode in Windows.
@@ -291,70 +299,39 @@ bitflags! {
         /// This is convenience flag which is translated by the OS into actual [`FILE_GENERIC_READ`] union.
         const GENERIC_READ = winnt::GENERIC_READ;
         /// Provides read access.
-        /// This flag is a union of: FILE_READ_ATTRIBUTES, FILE_READ_DATA, FILE_READ_EA, READ_CONTROL, SYNCHRONIZE
-        const FILE_GENERIC_READ = AccessMode::FILE_READ_ATTRIBUTES.bits
-            | AccessMode::FILE_READ_DATA.bits
-            | AccessMode::FILE_READ_EA.bits
-            | AccessMode::READ_CONTROL.bits
-            | AccessMode::SYNCHRONIZE.bits;
+        const FILE_GENERIC_READ = winnt::FILE_GENERIC_READ;
         /// Provides write access.
-        /// This flag is a union of: FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, READ_CONTROL, SYNCHRONIZE
-        const FILE_GENERIC_WRITE = AccessMode::FILE_WRITE_ATTRIBUTES.bits
-            | AccessMode::FILE_WRITE_DATA.bits
-            | AccessMode::FILE_WRITE_EA.bits
-            | AccessMode::READ_CONTROL.bits
-            | AccessMode::SYNCHRONIZE.bits;
+        const FILE_GENERIC_WRITE = winnt::FILE_GENERIC_WRITE;
         /// Provides execute access.
-        /// This flag is a union of: FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, READ_CONTROL, SYNCHRONIZE
-        const FILE_GENERIC_EXECUTE = AccessMode::FILE_EXECUTE.bits
-            | AccessMode::FILE_READ_ATTRIBUTES.bits
-            | AccessMode::READ_CONTROL.bits
-            | AccessMode::SYNCHRONIZE.bits;
+        const FILE_GENERIC_EXECUTE = winnt::FILE_GENERIC_EXECUTE;
         /// Provides all accesses.
-        /// This flag is a union of: FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE
-        const FILE_GENERIC_ALL = AccessMode::FILE_GENERIC_READ.bits | AccessMode::FILE_GENERIC_WRITE.bits | AccessMode::FILE_GENERIC_EXECUTE.bits;
+        const FILE_ALL_ACCESS = winnt::FILE_ALL_ACCESS;
     }
 }
 
-pub unsafe fn get_file_access_mode(handle: RawHandle) -> Result<AccessMode> {
-    use winapi::shared::minwindef::FALSE;
-    use winapi::um::accctrl;
-    use winapi::um::aclapi::GetSecurityInfo;
-    use winapi::um::securitybaseapi::{GetAce, IsValidAcl};
-    let mut dacl = 0 as winnt::PACL;
-    let mut sec_desc = 0 as winnt::PSECURITY_DESCRIPTOR;
-
-    let err = winerror::WinError::from_u32(GetSecurityInfo(
-        handle,
-        accctrl::SE_FILE_OBJECT,
-        winnt::DACL_SECURITY_INFORMATION,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        &mut dacl,
-        std::ptr::null_mut(),
-        &mut sec_desc,
-    ));
-
-    if err != winerror::WinError::ERROR_SUCCESS {
-        return Err(err);
+bitflags! {
+    // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/52df7798-8330-474b-ac31-9afe8075640c
+    pub struct FileModeInformation: minwindef::DWORD {
+        /// When set, any system services, file system drivers (FSDs), and drivers that write data to
+        /// the file are required to actually transfer the data into the file before any requested write
+        /// operation is considered complete.
+        const FILE_WRITE_THROUGH = 0x2;
+        /// This is a hint that informs the cache that it SHOULD optimize for sequential access.
+        /// Non-sequential access of the file can result in performance degradation.
+        const FILE_SEQUENTIAL_ONLY = 0x4;
+        /// When set, the file cannot be cached or buffered in a driver's internal buffers.
+        const FILE_NO_INTERMEDIATE_BUFFERING = 0x8;
+        /// When set, all operations on the file are performed synchronously.
+        /// Any wait on behalf of the caller is subject to premature termination from alerts.
+        /// This flag also causes the I/O system to maintain the file position context.
+        const FILE_SYNCHRONOUS_IO_ALERT = 0x10;
+        /// When set, all operations on the file are performed synchronously.
+        /// Wait requests in the system to synchronize I/O queuing and completion are not subject to alerts.
+        /// This flag also causes the I/O system to maintain the file position context.
+        const FILE_SYNCHRONOUS_IO_NONALERT = 0x20;
+        /// This flag is not implemented and is always returned as not set.
+        const FILE_DELETE_ON_CLOSE = 0x1000;
     }
-
-    if IsValidAcl(dacl) == FALSE {
-        return Err(winerror::WinError::last());
-    }
-
-    // let count = (*dacl).AceCount;
-    let mut ace = 0 as winnt::PVOID;
-
-    if GetAce(dacl, 0, &mut ace) == FALSE {
-        return Err(winerror::WinError::last());
-    }
-
-    // TODO: check for PACCESS_ALLOWED_ACE in Ace before accessing
-    // let header = (*(ace as winnt::PACCESS_ALLOWED_ACE)).Header.AceType;
-    Ok(AccessMode::from_bits_truncate(
-        (*(ace as winnt::PACCESS_ALLOWED_ACE)).Mask,
-    ))
 }
 
 pub fn get_file_path(file: &File) -> Result<OsString> {
@@ -414,4 +391,46 @@ pub fn change_time(file: &File) -> io::Result<i64> {
     };
 
     Ok(tm)
+}
+
+pub fn query_access_information(handle: RawHandle) -> Result<AccessMode> {
+    let mut io_status_block = IO_STATUS_BLOCK::default();
+    let mut info = FILE_ACCESS_INFORMATION::default();
+
+    unsafe {
+        let status = NtQueryInformationFile(
+            handle,
+            &mut io_status_block,
+            &mut info as *mut _ as *mut c_void,
+            std::mem::size_of::<FILE_ACCESS_INFORMATION>() as u32,
+            FILE_INFORMATION_CLASS::FileAccessInformation,
+        );
+
+        if status != ntstatus::STATUS_SUCCESS {
+            return Err(winerror::WinError::from_u32(RtlNtStatusToDosError(status)));
+        }
+    }
+
+    Ok(AccessMode::from_bits_truncate(info.AccessFlags))
+}
+
+pub fn query_mode_information(handle: RawHandle) -> Result<FileModeInformation> {
+    let mut io_status_block = IO_STATUS_BLOCK::default();
+    let mut info = FILE_MODE_INFORMATION::default();
+
+    unsafe {
+        let status = NtQueryInformationFile(
+            handle,
+            &mut io_status_block,
+            &mut info as *mut _ as *mut c_void,
+            std::mem::size_of::<FILE_MODE_INFORMATION>() as u32,
+            FILE_INFORMATION_CLASS::FileModeInformation,
+        );
+
+        if status != ntstatus::STATUS_SUCCESS {
+            return Err(winerror::WinError::from_u32(RtlNtStatusToDosError(status)));
+        }
+    }
+
+    Ok(FileModeInformation::from_bits_truncate(info.Mode))
 }
