@@ -2,6 +2,7 @@ use crate::backend::TranslatedCodeSection;
 use crate::error::Error;
 use crate::microwasm;
 use crate::translate_sections;
+use thiserror::Error;
 use core::{convert::TryInto, mem};
 use cranelift_codegen::{
     ir::{self, AbiParam, Signature as CraneliftSignature},
@@ -133,9 +134,11 @@ impl TranslatedModule {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Error)]
 pub enum ExecutionError {
+    #[error("function index out of bounds")]
     FuncIndexOutOfBounds,
+    #[error("type mismatch")]
     TypeMismatch,
 }
 
