@@ -275,6 +275,17 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         ],
     );
 
+    narrow.legalize(
+        def!(a = popcnt.I128(x)),
+        vec![
+            def!((xl, xh) = isplit(x)),
+            def!(e1 = popcnt(xl)),
+            def!(e2 = popcnt(xh)),
+            def!(e3 = iadd(e1, e2)),
+            def!(a = uextend(e3)),
+        ],
+    );
+
     // TODO(ryzokuken): benchmark this and decide if branching is a faster
     // approach than evaluating boolean expressions.
 
