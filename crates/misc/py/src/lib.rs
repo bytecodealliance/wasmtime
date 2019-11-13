@@ -1,3 +1,5 @@
+#![allow(improper_ctypes)]
+
 use crate::import::into_instance_from_obj;
 use crate::instance::Instance;
 use crate::memory::Memory;

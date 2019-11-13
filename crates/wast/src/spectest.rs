@@ -1,3 +1,5 @@
+#![allow(improper_ctypes)]
+
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use cranelift_codegen::ir::types;

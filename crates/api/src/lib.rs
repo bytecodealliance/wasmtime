@@ -1,5 +1,6 @@
 //! Wasmtime embed API. Based on wasm-c-api.
 
+#![allow(improper_ctypes)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod callable;
