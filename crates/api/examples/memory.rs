@@ -1,7 +1,7 @@
 //! Translation of the memory example
 
 use anyhow::{bail, ensure, Context as _, Error};
-use core::cell::Ref;
+use std::cell::Ref;
 use wasmtime_api::*;
 
 fn get_export_memory(exports: &[Extern], i: usize) -> Result<HostRef<Memory>, Error> {
