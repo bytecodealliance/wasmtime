@@ -4,8 +4,6 @@ pub use wasmtime_rust_macro::wasmtime;
 #[doc(hidden)]
 pub mod __rt {
     pub use anyhow;
-    pub use cranelift_codegen;
-    pub use cranelift_native;
     pub use wasmtime_api;
     pub use wasmtime_interface_types;
     pub use wasmtime_jit;

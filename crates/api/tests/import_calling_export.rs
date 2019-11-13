@@ -24,7 +24,7 @@ fn test_import_calling_export() {
         }
     }
 
-    let engine = HostRef::new(Engine::new(Config::default()));
+    let engine = HostRef::new(Engine::default());
     let store = HostRef::new(Store::new(&engine));
     let module = HostRef::new(
         Module::new(

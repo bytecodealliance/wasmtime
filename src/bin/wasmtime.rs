@@ -267,13 +267,13 @@ fn main() -> Result<()> {
     // Decide how to compile.
     let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
 
-    let config = Config::new(
-        settings::Flags::new(flag_builder),
-        features,
-        debug_info,
-        strategy,
-    );
-    let engine = HostRef::new(Engine::new(config));
+    let mut config = Config::new();
+    config
+        .features(features)
+        .flags(settings::Flags::new(flag_builder))
+        .debug_info(debug_info)
+        .strategy(strategy);
+    let engine = HostRef::new(Engine::new(&config));
     let store = HostRef::new(Store::new(&engine));
 
     let mut module_registry = HashMap::new();

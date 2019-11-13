@@ -15,8 +15,6 @@ test = false
 doctest = false
 
 [dependencies]
-cranelift-codegen = "0.50.0"
-cranelift-native = "0.50.0"
 wasmtime-interface-types = { path = "../../interface-types" }
 wasmtime-jit = { path = "../../jit" }
 wasmtime-rust-macro = { path = "./macro" }
