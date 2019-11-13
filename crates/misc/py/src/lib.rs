@@ -1,20 +1,19 @@
 #![allow(improper_ctypes)]
 
-use crate::import::into_instance_from_obj;
+use crate::function::{wrap_into_pyfunction, Function};
 use crate::instance::Instance;
 use crate::memory::Memory;
 use crate::module::Module;
-use core::cell::RefCell;
 use pyo3::exceptions::Exception;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PySet};
+use pyo3::types::{PyAny, PyBytes, PyDict, PySet};
 use pyo3::wrap_pyfunction;
 use std::rc::Rc;
+use wasmtime_api as api;
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 
 mod function;
-mod import;
 mod instance;
 mod memory;
 mod module;
@@ -47,6 +46,38 @@ impl InstantiateResultObject {
     }
 }
 
+fn find_export_in(
+    obj: &PyAny,
+    store: &api::HostRef<api::Store>,
+    name: &str,
+) -> PyResult<api::Extern> {
+    let obj = obj.cast_as::<PyDict>()?;
+
+    Ok(if let Some(item) = obj.get_item(name) {
+        if item.is_callable() {
+            if item.get_type().is_subclass::<Function>()? {
+                let wasm_fn = item.cast_as::<Function>()?;
+                wasm_fn.func().into()
+            } else {
+                wrap_into_pyfunction(store, item)?.into()
+            }
+        } else if item.get_type().is_subclass::<Memory>()? {
+            let wasm_mem = item.cast_as::<Memory>()?;
+            wasm_mem.memory.clone().into()
+        } else {
+            return Err(PyErr::new::<Exception, _>(format!(
+                "unsupported import type {}",
+                name
+            )));
+        }
+    } else {
+        return Err(PyErr::new::<Exception, _>(format!(
+            "import {} is not found",
+            name
+        )));
+    })
+}
+
 /// WebAssembly instantiate API method.
 #[pyfunction]
 pub fn instantiate(
@@ -56,58 +87,67 @@ pub fn instantiate(
 ) -> PyResult<Py<InstantiateResultObject>> {
     let wasm_data = buffer_source.as_bytes();
 
-    let generate_debug_info = false;
+    let mut config = api::Config::new();
+    config.features(Features {
+        multi_value: true,
+        ..Default::default()
+    });
 
-    let isa = {
-        let isa_builder = cranelift_native::builder().map_err(|s| PyErr::new::<Exception, _>(s))?;
-        let flag_builder = cranelift_codegen::settings::builder();
-        isa_builder.finish(cranelift_codegen::settings::Flags::new(flag_builder))
-    };
+    let engine = api::HostRef::new(api::Engine::new(&config));
+    let store = api::HostRef::new(api::Store::new(&engine));
 
-    let mut context = wasmtime_jit::Context::with_isa(isa, wasmtime_jit::CompilationStrategy::Auto)
-        .with_features(Features {
-            multi_value: true,
-            ..Features::default()
-        });
-    context.set_debug_info(generate_debug_info);
-    let global_exports = context.get_global_exports();
-
-    for (name, obj) in import_obj.iter() {
-        context.name_instance(
-            name.to_string(),
-            into_instance_from_obj(py, global_exports.clone(), obj)?,
-        )
-    }
+    let module = api::HostRef::new(api::Module::new(&store, wasm_data).map_err(err2py)?);
 
     let data = Rc::new(ModuleData::new(wasm_data).map_err(err2py)?);
 
     // If this module expects to be able to use wasi then go ahead and hook
     // that up into the imported crates.
-    if let Some(module_name) = data.find_wasi_module_name() {
-        let wasi_handle =
-            wasmtime_wasi::instantiate_wasi("", context.get_global_exports(), &[], &[], &[])
-                .map_err(|e| err2py(e.into()))?;
-        context.name_instance(module_name, wasi_handle);
+    let wasi = if let Some(module_name) = data.find_wasi_module_name() {
+        let global_exports = store.borrow().global_exports().clone();
+        let wasi_handle = wasmtime_wasi::instantiate_wasi("", global_exports, &[], &[], &[])
+            .map_err(|e| err2py(e.into()))?;
+        let instance =
+            api::Instance::from_handle(&store, wasi_handle).map_err(|e| err2py(e.into()))?;
+        Some((module_name, instance))
+    } else {
+        None
+    };
+
+    let mut imports: Vec<api::Extern> = Vec::new();
+    for i in module.borrow().imports() {
+        let module_name = i.module().as_str();
+        if let Some(m) = import_obj.get_item(module_name) {
+            let e = find_export_in(m, &store, i.name().as_str())?;
+            imports.push(e);
+        } else if wasi.is_some() && module_name == wasi.as_ref().unwrap().0 {
+            let e = wasi
+                .as_ref()
+                .unwrap()
+                .1
+                .find_export_by_name(i.name().as_str())
+                .ok_or_else(|| {
+                    PyErr::new::<Exception, _>(format!(
+                        "wasi export {} is not found",
+                        i.name().as_str()
+                    ))
+                })?;
+            imports.push(e.clone());
+        } else {
+            return Err(PyErr::new::<Exception, _>(format!(
+                "imported module {} is not found",
+                module_name
+            )));
+        }
     }
-    let instance = context
-        .instantiate_module(None, wasm_data)
-        .map_err(|e| err2py(e.into()))?;
 
-    let module = Py::new(
-        py,
-        Module {
-            module: instance.module(),
-        },
-    )?;
+    let instance = api::HostRef::new(
+        api::Instance::new(&store, &module, &imports)
+            .map_err(|t| PyErr::new::<Exception, _>(format!("instantiated with trap {:?}", t)))?,
+    );
 
-    let instance = Py::new(
-        py,
-        Instance {
-            context: Rc::new(RefCell::new(context)),
-            instance,
-            data,
-        },
-    )?;
+    let module = Py::new(py, Module { module })?;
+
+    let instance = Py::new(py, Instance { instance, data })?;
 
     Py::new(py, InstantiateResultObject { instance, module })
 }

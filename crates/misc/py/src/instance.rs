@@ -5,18 +5,14 @@ extern crate alloc;
 use crate::function::Function;
 use crate::memory::Memory;
 use alloc::rc::Rc;
-use core::cell::RefCell;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use wasmtime_environ::Export;
+use wasmtime_api as api;
 use wasmtime_interface_types::ModuleData;
-use wasmtime_jit::{Context, InstanceHandle};
-use wasmtime_runtime::Export as RuntimeExport;
 
 #[pyclass]
 pub struct Instance {
-    pub context: Rc<RefCell<Context>>,
-    pub instance: InstanceHandle,
+    pub instance: api::HostRef<api::Instance>,
     pub data: Rc<ModuleData>,
 }
 
@@ -27,53 +23,41 @@ impl Instance {
         let gil = Python::acquire_gil();
         let py = gil.python();
         let exports = PyDict::new(py);
-        let mut function_exports = Vec::new();
-        let mut memory_exports = Vec::new();
-        for (name, export) in self.instance.exports() {
-            match export {
-                Export::Function(_) => function_exports.push(name.to_string()),
-                Export::Memory(_) => memory_exports.push(name.to_string()),
+        let module = self.instance.borrow().module().clone();
+        for (i, e) in module.borrow().exports().iter().enumerate() {
+            match e.r#type() {
+                api::ExternType::ExternFunc(ft) => {
+                    let mut args_types = Vec::new();
+                    for ty in ft.params().iter() {
+                        args_types.push(ty.clone());
+                    }
+                    let f = Py::new(
+                        py,
+                        Function {
+                            instance: self.instance.clone(),
+                            data: self.data.clone(),
+                            export_name: e.name().to_string(),
+                            args_types,
+                        },
+                    )?;
+                    exports.set_item(e.name().to_string(), f)?;
+                }
+                api::ExternType::ExternMemory(_) => {
+                    let f = Py::new(
+                        py,
+                        Memory {
+                            memory: self.instance.borrow().exports()[i]
+                                .memory()
+                                .unwrap()
+                                .clone(),
+                        },
+                    )?;
+                    exports.set_item(e.name().to_string(), f)?;
+                }
                 _ => {
                     // Skip unknown export type.
                     continue;
                 }
-            }
-        }
-        for name in memory_exports {
-            if let Some(RuntimeExport::Memory { .. }) = self.instance.lookup(&name) {
-                let f = Py::new(
-                    py,
-                    Memory {
-                        context: self.context.clone(),
-                        instance: self.instance.clone(),
-                        export_name: name.clone(),
-                    },
-                )?;
-                exports.set_item(name, f)?;
-            } else {
-                panic!("memory");
-            }
-        }
-        for name in function_exports {
-            if let Some(RuntimeExport::Function { signature, .. }) = self.instance.lookup(&name) {
-                let mut args_types = Vec::new();
-                for index in 1..signature.params.len() {
-                    let ty = signature.params[index].value_type;
-                    args_types.push(ty);
-                }
-                let f = Py::new(
-                    py,
-                    Function {
-                        context: self.context.clone(),
-                        instance: self.instance.clone(),
-                        data: self.data.clone(),
-                        export_name: name.clone(),
-                        args_types,
-                    },
-                )?;
-                exports.set_item(name, f)?;
-            } else {
-                panic!("function");
             }
         }
 

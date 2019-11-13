@@ -20,6 +20,7 @@ cranelift-native = "0.50.0"
 cranelift-entity = "0.50.0"
 cranelift-wasm = "0.50.0"
 cranelift-frontend = "0.50.0"
+wasmtime = { path = "../../api" }
 wasmtime-environ = { path = "../../environ" }
 wasmtime-interface-types = { path = "../../interface-types" }
 wasmtime-jit = { path = "../../jit" }
