@@ -34,8 +34,7 @@ fn generate_struct(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
     let root = root();
     Ok(quote! {
         #vis struct #name {
-            cx: #root::wasmtime_jit::Context,
-            handle: #root::wasmtime_jit::InstanceHandle,
+            instance: #root::wasmtime_api::HostRef<#root::wasmtime_api::Instance>,
             data: #root::wasmtime_interface_types::ModuleData,
         }
     })
@@ -49,34 +48,53 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
         #vis fn load_file(path: impl AsRef<std::path::Path>) -> #root::anyhow::Result<#name> {
             let bytes = std::fs::read(path)?;
 
-            let isa = {
-                let isa_builder = #root::cranelift_native::builder()
-                    .map_err(|s| #root::anyhow::format_err!("{}", s))?;
-                let flag_builder = #root::cranelift_codegen::settings::builder();
-                isa_builder.finish(#root::cranelift_codegen::settings::Flags::new(flag_builder))
-            };
+            use #root::wasmtime_api::{HostRef, Config, Extern, Engine, Store, Instance, Module};
+            use #root::anyhow::{bail, format_err};
 
-            let mut cx = #root::wasmtime_jit::Context::with_isa(
-                isa,
-                #root::wasmtime_jit::CompilationStrategy::Auto
-            ).with_features(#root::wasmtime_jit::Features {
-                multi_value: true,
-                ..Default::default()
-            });
+            let config = {
+                let flag_builder = #root::cranelift_codegen::settings::builder();
+                let flags = #root::cranelift_codegen::settings::Flags::new(flag_builder);
+                let features = #root::wasmtime_jit::Features {
+                    multi_value: true,
+                    ..Default::default()
+                };
+                let strategy = #root::wasmtime_jit::CompilationStrategy::Auto;
+                Config::new(flags, features, false, strategy)
+            };
+            let engine = HostRef::new(Engine::new(config));
+            let store = HostRef::new(Store::new(&engine));
+            let global_exports = store.borrow().global_exports().clone();
+
             let data = #root::wasmtime_interface_types::ModuleData::new(&bytes)?;
+
+            let module = HostRef::new(Module::new(&store, &bytes)?);
+
+            let mut imports: Vec<Extern> = Vec::new();
             if let Some(module_name) = data.find_wasi_module_name() {
                 let wasi_handle = wasmtime_wasi::instantiate_wasi(
                     "",
-                    cx.get_global_exports(),
+                    global_exports,
                     &[],
                     &[],
                     &[],
                 )?;
-                cx.name_instance(module_name, wasi_handle);
+                let wasi_instance = Instance::from_handle(&store, wasi_handle)?;
+                for i in module.borrow().imports().iter() {
+                    if i.module().as_str() != module_name {
+                        bail!("unknown import module {}", i.module().as_str());
+                    }
+                    if let Some(export) = wasi_instance.find_export_by_name(i.name().as_str()) {
+                        imports.push(export.clone());
+                    } else {
+                        bail!("unknown import {}:{}", i.module().as_str(), i.name().as_str())
+                    }
+                }
             }
-            let handle = cx.instantiate_module(None, &bytes)?;
+            let instance = HostRef::new(
+                Instance::new(&store, &module, &imports).map_err(|t| format_err!("instantiation trap: {:?}", t))?
+            );
 
-            Ok(#name { cx, handle, data })
+            Ok(#name { instance, data })
         }
     })
 }
@@ -156,9 +174,8 @@ fn generate_methods(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
                 let args = [
                     #(#args),*
                 ];
-                let results = self.data.invoke(
-                    &mut self.cx,
-                    &mut self.handle,
+                let results = self.data.invoke_export(
+                    &self.instance,
                     stringify!(#name),
                     &args,
                 ).expect("wasm execution failed");

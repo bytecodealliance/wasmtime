@@ -171,9 +171,15 @@ fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[Ex
 }
 
 #[derive(Clone)]
+pub(crate) enum ModuleCodeSource {
+    Binary(Box<[u8]>),
+    Unknown,
+}
+
+#[derive(Clone)]
 pub struct Module {
     store: HostRef<Store>,
-    binary: Box<[u8]>,
+    source: ModuleCodeSource,
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
 }
@@ -183,13 +189,16 @@ impl Module {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(Module {
             store: store.clone(),
-            binary: binary.into(),
+            source: ModuleCodeSource::Binary(binary.into()),
             imports,
             exports,
         })
     }
-    pub(crate) fn binary(&self) -> &[u8] {
-        &self.binary
+    pub(crate) fn binary(&self) -> Option<&[u8]> {
+        match &self.source {
+            ModuleCodeSource::Binary(b) => Some(b),
+            _ => None,
+        }
     }
     pub fn validate(_store: &Store, binary: &[u8]) -> bool {
         validate(binary, None).is_ok()
@@ -199,5 +208,13 @@ impl Module {
     }
     pub fn exports(&self) -> &[ExportType] {
         &self.exports
+    }
+    pub fn from_exports(store: &HostRef<Store>, exports: Box<[ExportType]>) -> Self {
+        Module {
+            store: store.clone(),
+            source: ModuleCodeSource::Unknown,
+            imports: Box::new([]),
+            exports,
+        }
     }
 }

@@ -255,7 +255,7 @@ impl Global {
         } else {
             panic!("wasmtime export is not memory")
         };
-        let ty = GlobalType::from_cranelift_global(global.clone());
+        let ty = GlobalType::from_cranelift_global(&global);
         Global {
             _store: store.clone(),
             r#type: ty,
@@ -395,7 +395,7 @@ impl Table {
         } else {
             panic!("wasmtime export is not table")
         };
-        let ty = TableType::from_cranelift_table(table.table.clone());
+        let ty = TableType::from_cranelift_table(&table.table);
         Table {
             store: store.clone(),
             r#type: ty,
@@ -479,7 +479,7 @@ impl Memory {
         } else {
             panic!("wasmtime export is not memory")
         };
-        let ty = MemoryType::from_cranelift_memory(memory.memory.clone());
+        let ty = MemoryType::from_cranelift_memory(&memory.memory);
         Memory {
             _store: store.clone(),
             r#type: ty,

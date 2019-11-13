@@ -1,7 +1,7 @@
-use crate::context::{create_compiler, Context};
+use crate::context::Context;
 use crate::r#ref::HostRef;
 use crate::HashMap;
-use alloc::{boxed::Box, rc::Rc, string::String};
+use alloc::{rc::Rc, string::String};
 use core::cell::RefCell;
 use cranelift_codegen::{ir, settings};
 use wasmtime_jit::{CompilationStrategy, Features};
@@ -80,11 +80,6 @@ impl Engine {
 
     pub(crate) fn config(&self) -> &Config {
         &self.config
-    }
-
-    pub fn create_wasmtime_context(&self) -> wasmtime_jit::Context {
-        let flags = self.config.flags().clone();
-        wasmtime_jit::Context::new(Box::new(create_compiler(flags, self.config.strategy())))
     }
 }
 

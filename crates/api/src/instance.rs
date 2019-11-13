@@ -3,9 +3,10 @@ use crate::externals::Extern;
 use crate::module::Module;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
+use crate::types::{ExportType, ExternType, Name};
 use crate::{HashMap, HashSet};
 use alloc::string::{String, ToString};
-use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use anyhow::Result;
 use core::cell::RefCell;
 use wasmtime_jit::{instantiate, Resolver};
@@ -49,6 +50,8 @@ pub fn instantiate_in_context(
 pub struct Instance {
     instance_handle: InstanceHandle,
 
+    module: HostRef<Module>,
+
     // We need to keep CodeMemory alive.
     contexts: HashSet<Context>,
 
@@ -70,8 +73,12 @@ impl Instance {
             .zip(externs.iter())
             .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
             .collect::<Vec<_>>();
-        let (mut instance_handle, contexts) =
-            instantiate_in_context(module.borrow().binary(), imports, context, exports)?;
+        let (mut instance_handle, contexts) = instantiate_in_context(
+            module.borrow().binary().expect("binary"),
+            imports,
+            context,
+            exports,
+        )?;
 
         let exports = {
             let module = module.borrow();
@@ -89,6 +96,7 @@ impl Instance {
         };
         Ok(Instance {
             instance_handle,
+            module: module.clone(),
             contexts,
             exports,
         })
@@ -98,14 +106,25 @@ impl Instance {
         &self.exports
     }
 
+    pub fn find_export_by_name(&self, name: &str) -> Option<&Extern> {
+        let (i, _) = self
+            .module
+            .borrow()
+            .exports()
+            .iter()
+            .enumerate()
+            .find(|(_, e)| e.name().as_str() == name)?;
+        Some(&self.exports()[i])
+    }
+
     pub fn from_handle(
         store: &HostRef<Store>,
         instance_handle: InstanceHandle,
-    ) -> Result<(Instance, HashMap<String, usize>)> {
+    ) -> Result<Instance> {
         let contexts = HashSet::new();
 
         let mut exports = Vec::new();
-        let mut export_names_map = HashMap::new();
+        let mut exports_types = Vec::new();
         let mut mutable = instance_handle.clone();
         for (name, _) in instance_handle.clone().exports() {
             let export = mutable.lookup(name).expect("export");
@@ -115,7 +134,8 @@ impl Instance {
                 // imported into this store using the from_handle() method.
                 let _ = store.borrow_mut().register_cranelift_signature(signature);
             }
-            export_names_map.insert(name.to_owned(), exports.len());
+            let extern_type = ExternType::from_wasmtime_export(&export);
+            exports_types.push(ExportType::new(Name::new(name), extern_type));
             exports.push(Extern::from_wasmtime_export(
                 store,
                 instance_handle.clone(),
@@ -123,14 +143,17 @@ impl Instance {
             ));
         }
 
-        Ok((
-            Instance {
-                instance_handle,
-                contexts,
-                exports: exports.into_boxed_slice(),
-            },
-            export_names_map,
-        ))
+        let module = HostRef::new(Module::from_exports(
+            store,
+            exports_types.into_boxed_slice(),
+        ));
+
+        Ok(Instance {
+            instance_handle,
+            module,
+            contexts,
+            exports: exports.into_boxed_slice(),
+        })
     }
 
     pub fn handle(&self) -> &InstanceHandle {

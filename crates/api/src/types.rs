@@ -127,6 +127,22 @@ impl ExternType {
             _ => panic!("ExternType::ExternMemory expected"),
         }
     }
+    pub(crate) fn from_wasmtime_export(export: &wasmtime_runtime::Export) -> Self {
+        match export {
+            wasmtime_runtime::Export::Function { signature, .. } => {
+                ExternType::ExternFunc(FuncType::from_cranelift_signature(signature.clone()))
+            }
+            wasmtime_runtime::Export::Memory { memory, .. } => {
+                ExternType::ExternMemory(MemoryType::from_cranelift_memory(&memory.memory))
+            }
+            wasmtime_runtime::Export::Global { global, .. } => {
+                ExternType::ExternGlobal(GlobalType::from_cranelift_global(&global))
+            }
+            wasmtime_runtime::Export::Table { table, .. } => {
+                ExternType::ExternTable(TableType::from_cranelift_table(&table.table))
+            }
+        }
+    }
 }
 
 // Function Types
@@ -224,7 +240,7 @@ impl GlobalType {
         self.mutability
     }
 
-    pub(crate) fn from_cranelift_global(global: cranelift_wasm::Global) -> GlobalType {
+    pub(crate) fn from_cranelift_global(global: &cranelift_wasm::Global) -> GlobalType {
         let ty = ValType::from_cranelift_type(global.ty);
         let mutability = if global.mutability {
             Mutability::Var
@@ -254,7 +270,7 @@ impl TableType {
         &self.limits
     }
 
-    pub(crate) fn from_cranelift_table(table: cranelift_wasm::Table) -> TableType {
+    pub(crate) fn from_cranelift_table(table: &cranelift_wasm::Table) -> TableType {
         assert!(if let cranelift_wasm::TableElementType::Func = table.ty {
             true
         } else {
@@ -281,7 +297,7 @@ impl MemoryType {
         &self.limits
     }
 
-    pub(crate) fn from_cranelift_memory(memory: cranelift_wasm::Memory) -> MemoryType {
+    pub(crate) fn from_cranelift_memory(memory: &cranelift_wasm::Memory) -> MemoryType {
         MemoryType::new(Limits::new(
             memory.minimum,
             memory.maximum.unwrap_or(::core::u32::MAX),
@@ -293,6 +309,16 @@ impl MemoryType {
 
 #[derive(Debug, Clone)]
 pub struct Name(String);
+
+impl Name {
+    pub fn new(value: &str) -> Self {
+        Name(value.to_owned())
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
 
 impl From<String> for Name {
     fn from(s: String) -> Name {
