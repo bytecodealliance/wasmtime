@@ -53,13 +53,13 @@ pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
     wasi::__wasi_rights_t,
     wasi::__wasi_rights_t,
 )> {
-    use winx::file::{get_file_access_mode, AccessMode};
+    use winx::file::{query_access_information, AccessMode};
 
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(handle)?;
 
     match file_type {
         wasi::__WASI_FILETYPE_DIRECTORY | wasi::__WASI_FILETYPE_REGULAR_FILE => {
-            let mode = get_file_access_mode(handle.as_raw_handle())?;
+            let mode = query_access_information(handle.as_raw_handle())?;
             if mode.contains(AccessMode::FILE_GENERIC_READ) {
                 rights_base |= wasi::__WASI_RIGHTS_FD_READ;
             }

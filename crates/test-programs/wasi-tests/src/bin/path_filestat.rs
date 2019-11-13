@@ -35,7 +35,8 @@ unsafe fn test_path_filestat(dir_fd: wasi_unstable::Fd) {
             | wasi_unstable::RIGHT_FD_WRITE
             | wasi_unstable::RIGHT_PATH_FILESTAT_GET,
         0,
-        0,
+        // Pass some flags for later retrieval
+        wasi_unstable::FDFLAG_APPEND | wasi_unstable::FDFLAG_SYNC,
         &mut file_fd,
     );
     assert_eq!(
@@ -61,6 +62,11 @@ unsafe fn test_path_filestat(dir_fd: wasi_unstable::Fd) {
         fdstat.fs_rights_inheriting & wasi_unstable::RIGHT_PATH_FILESTAT_GET,
         0,
         "files shouldn't have rights for path_* syscalls even if manually given",
+    );
+    assert_ne!(
+        fdstat.fs_flags & (wasi_unstable::FDFLAG_APPEND | wasi_unstable::FDFLAG_SYNC),
+        0,
+        "file should have the same flags used to create the file"
     );
 
     // Check file size
