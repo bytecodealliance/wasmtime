@@ -61,6 +61,6 @@ For more information, see the [Rust API embedding chapter] of the Wasmtime docum
 
 [high-level and safe Rust API]: https://docs.rs/wasmtime/
 [proposed WebAssembly C API]: https://github.com/WebAssembly/wasm-c-api
-[Rust API embedding chapter]: https://cranestation.github.io/wasmtime/embed-rust.html
+[Rust API embedding chapter]: https://bytecodealliance.github.io/wasmtime/embed-rust.html
 
 It's Wasmtime.

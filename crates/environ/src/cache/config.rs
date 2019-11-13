@@ -171,7 +171,7 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(
     let content = "\
 # Comment out certain settings to use default values.
 # For more settings, please refer to the documentation:
-# https://cranestation.github.io/wasmtime/cli-cache.html
+# https://bytecodealliance.github.io/wasmtime/cli-cache.html
 
 [cache]
 enabled = true
@@ -192,7 +192,7 @@ enabled = true
 const ZSTD_COMPRESSION_LEVELS: std::ops::RangeInclusive<i32> = 0..=21;
 lazy_static! {
     static ref PROJECT_DIRS: Option<ProjectDirs> =
-        ProjectDirs::from("", "CraneStation", "wasmtime");
+        ProjectDirs::from("", "BytecodeAlliance", "wasmtime");
     static ref DEFAULT_CONFIG_PATH: Result<PathBuf, String> = PROJECT_DIRS
         .as_ref()
         .map(|proj_dirs| proj_dirs.config_dir().join("wasmtime-cache-config.toml"))
