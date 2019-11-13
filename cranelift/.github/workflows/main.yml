@@ -109,12 +109,13 @@ jobs:
         cargo fuzz run fuzz_translate_module fuzz/corpus/fuzz_translate_module/$fuzz_module
       env:
         RUST_BACKTRACE: 1
-      if: matrix.rust == 'nightly'
+      if: false && matrix.rust == 'nightly' # Temporarily disable fuzz tests until https://github.com/bytecodealliance/cranelift/issues/1216 is resolved
       continue-on-error: true
 
   fuzz:
     name: Fuzz Regression
     runs-on: ubuntu-latest
+    if: false # Temporarily disable fuzz tests until https://github.com/bytecodealliance/cranelift/issues/1216 is resolved
     steps:
     - uses: actions/checkout@master
     - name: Install Rust
@@ -125,7 +126,7 @@ jobs:
   fuzz_push:
     name: Fuzz (push)
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: false && github.event_name == 'push' # Temporarily disable fuzz tests until https://github.com/bytecodealliance/cranelift/issues/1216 is resolved
     steps:
     - uses: actions/checkout@master
     - name: Install Rust
