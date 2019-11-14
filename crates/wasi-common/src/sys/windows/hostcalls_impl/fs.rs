@@ -88,7 +88,10 @@ pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
 }
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
-    unimplemented!("path_link")
+    use std::fs;
+    let old_path = resolved_old.concatenate()?;
+    let new_path = resolved_new.concatenate()?;
+    fs::hard_link(old_path, new_path).map_err(Into::into)
 }
 
 pub(crate) fn path_open(

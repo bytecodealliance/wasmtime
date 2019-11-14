@@ -178,7 +178,6 @@ mod wasm_tests {
                         "symlink_loop" => true,
                         "truncation_rights" => true,
                         "poll_oneoff" => true,
-                        "path_link" => true,
                         _ => false,
                     }
                 } else {
