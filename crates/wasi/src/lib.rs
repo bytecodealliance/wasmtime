@@ -5,7 +5,7 @@ extern crate alloc;
 mod instantiate;
 mod syscalls;
 
-pub use instantiate::{instantiate_wasi, instantiate_wasi_with_context};
+pub use instantiate::{create_wasi_instance, instantiate_wasi, instantiate_wasi_with_context};
 
 pub fn is_wasi_module(name: &str) -> bool {
     // FIXME: this should be more conservative, but while WASI is in flux and

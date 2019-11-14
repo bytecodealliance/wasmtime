@@ -66,14 +66,8 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
 
             let mut imports: Vec<Extern> = Vec::new();
             if let Some(module_name) = data.find_wasi_module_name() {
-                let wasi_handle = wasmtime_wasi::instantiate_wasi(
-                    "",
-                    global_exports,
-                    &[],
-                    &[],
-                    &[],
-                )?;
-                let wasi_instance = Instance::from_handle(&store, wasi_handle)?;
+                let wasi_instance = wasmtime_wasi::create_wasi_instance(&store, &[], &[], &[])
+                    .map_err(|e| format_err!("wasm instantiation error: {:?}", e))?;
                 for i in module.borrow().imports().iter() {
                     if i.module().as_str() != module_name {
                         bail!("unknown import module {}", i.module().as_str());
