@@ -4,13 +4,12 @@
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
 
 use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{ByteOrder, LittleEndian};
 use cranelift_codegen;
 use cranelift_codegen::ir;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 use std::fmt::Write;
-use std::io::Cursor;
 
 struct TestUnwind;
 
@@ -57,7 +56,7 @@ impl SubTest for TestUnwind {
 }
 
 fn print_unwind_info(text: &mut String, mem: &[u8]) {
-    let info = UnwindInfo::from_cursor(&mut Cursor::new(mem)).expect("failed to read unwind info");
+    let info = UnwindInfo::from_slice(mem);
 
     // Assert correct alignment and padding of the unwind information
     assert!(mem.len() % 4 == 0);
@@ -86,16 +85,16 @@ struct UnwindInfo {
 }
 
 impl UnwindInfo {
-    fn from_cursor(cursor: &mut Cursor<&[u8]>) -> std::io::Result<Self> {
-        let version_and_flags = cursor.read_u8()?;
-        let prologue_size = cursor.read_u8()?;
-        let unwind_code_count_raw = cursor.read_u8()?;
-        let frame_register_and_offset = cursor.read_u8()?;
+    fn from_slice(mem: &[u8]) -> Self {
+        let version_and_flags = mem[0];
+        let prologue_size = mem[1];
+        let unwind_code_count_raw = mem[2];
+        let frame_register_and_offset = mem[3];
         let mut unwind_codes = Vec::new();
 
         let mut i = 0;
         while i < unwind_code_count_raw {
-            let code = UnwindCode::from_cursor(cursor)?;
+            let code = UnwindCode::from_slice(&mem[(4 + (i * 2) as usize)..]);
 
             i += match &code.value {
                 UnwindValue::None => 1,
@@ -106,7 +105,7 @@ impl UnwindInfo {
             unwind_codes.push(code);
         }
 
-        Ok(Self {
+        Self {
             version: version_and_flags & 0x3,
             flags: (version_and_flags & 0xF8) >> 3,
             prologue_size,
@@ -114,7 +113,7 @@ impl UnwindInfo {
             frame_register: frame_register_and_offset & 0xF,
             frame_register_offset: (frame_register_and_offset & 0xF0) >> 4,
             unwind_codes,
-        })
+        }
     }
 }
 
@@ -127,35 +126,35 @@ struct UnwindCode {
 }
 
 impl UnwindCode {
-    fn from_cursor(cursor: &mut Cursor<&[u8]>) -> std::io::Result<Self> {
-        let offset = cursor.read_u8()?;
-        let op_and_info = cursor.read_u8()?;
+    fn from_slice(mem: &[u8]) -> Self {
+        let offset = mem[0];
+        let op_and_info = mem[1];
         let op = UnwindOperation::from(op_and_info & 0xF);
         let info = (op_and_info & 0xF0) >> 4;
 
         let value = match op {
             UnwindOperation::LargeStackAlloc => match info {
-                0 => UnwindValue::U16(cursor.read_u16::<LittleEndian>()?),
-                1 => UnwindValue::U32(cursor.read_u32::<LittleEndian>()?),
+                0 => UnwindValue::U16(LittleEndian::read_u16(&mem[2..])),
+                1 => UnwindValue::U32(LittleEndian::read_u32(&mem[2..])),
                 _ => panic!("unexpected stack alloc info value"),
             },
             UnwindOperation::SaveNonvolatileRegister => {
-                UnwindValue::U16(cursor.read_u16::<LittleEndian>()?)
+                UnwindValue::U16(LittleEndian::read_u16(&mem[2..]))
             }
             UnwindOperation::SaveNonvolatileRegisterFar => {
-                UnwindValue::U32(cursor.read_u32::<LittleEndian>()?)
+                UnwindValue::U32(LittleEndian::read_u32(&mem[2..]))
             }
-            UnwindOperation::SaveXmm128 => UnwindValue::U16(cursor.read_u16::<LittleEndian>()?),
-            UnwindOperation::SaveXmm128Far => UnwindValue::U32(cursor.read_u32::<LittleEndian>()?),
+            UnwindOperation::SaveXmm128 => UnwindValue::U16(LittleEndian::read_u16(&mem[2..])),
+            UnwindOperation::SaveXmm128Far => UnwindValue::U32(LittleEndian::read_u32(&mem[2..])),
             _ => UnwindValue::None,
         };
 
-        Ok(Self {
+        Self {
             offset,
             op,
             info,
             value,
-        })
+        }
     }
 }
 
