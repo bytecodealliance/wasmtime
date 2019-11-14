@@ -2,7 +2,7 @@
 //! crate.
 //!
 //! Reads Wasm binary files (one Wasm module per file), translates the functions' code to Cranelift
-//! IL. Can also executes the `start` function of the module by laying out the memories, globals
+//! IL. Can also execute the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
 #![deny(
