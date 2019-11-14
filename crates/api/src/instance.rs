@@ -106,6 +106,10 @@ impl Instance {
         &self.exports
     }
 
+    pub fn module(&self) -> &HostRef<Module> {
+        &self.module
+    }
+
     pub fn find_export_by_name(&self, name: &str) -> Option<&Extern> {
         let (i, _) = self
             .module

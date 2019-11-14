@@ -2,8 +2,6 @@
 
 extern crate alloc;
 
-use alloc::rc::Rc;
-use core::cell::RefCell;
 use core::ptr;
 use pyo3::class::PyBufferProtocol;
 use pyo3::exceptions::BufferError;
@@ -11,60 +9,18 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 use std::ffi::CStr;
 use std::os::raw::{c_int, c_void};
-use wasmtime_environ::MemoryPlan;
-use wasmtime_jit::{Context, InstanceHandle};
-use wasmtime_runtime::{Export, VMMemoryDefinition, VMMemoryImport};
+use wasmtime_api as api;
 
 #[pyclass]
 pub struct Memory {
-    pub context: Rc<RefCell<Context>>,
-    pub instance: InstanceHandle,
-    pub export_name: String,
-}
-
-impl Memory {
-    fn descriptor(&self) -> *mut VMMemoryDefinition {
-        let mut instance = self.instance.clone();
-        if let Some(Export::Memory { definition, .. }) = instance.lookup(&self.export_name) {
-            definition
-        } else {
-            panic!("memory is expected");
-        }
-    }
-}
-
-impl Memory {
-    pub fn get_plan(&self) -> MemoryPlan {
-        let mut instance = self.instance.clone();
-        if let Some(Export::Memory { memory, .. }) = instance.lookup(&self.export_name) {
-            memory
-        } else {
-            panic!()
-        }
-    }
-
-    pub fn into_import(&self) -> VMMemoryImport {
-        let mut instance = self.instance.clone();
-        if let Some(Export::Memory {
-            definition, vmctx, ..
-        }) = instance.lookup(&self.export_name)
-        {
-            VMMemoryImport {
-                from: definition,
-                vmctx,
-            }
-        } else {
-            panic!()
-        }
-    }
+    pub memory: api::HostRef<api::Memory>,
 }
 
 #[pymethods]
 impl Memory {
     #[getter(current)]
     pub fn current(&self) -> u32 {
-        let current_length = unsafe { (*self.descriptor()).current_length };
-        (current_length >> 16) as u32
+        self.memory.borrow().size()
     }
 
     pub fn grow(&self, _number: u32) -> u32 {
@@ -94,12 +50,10 @@ impl PyBufferProtocol for Memory {
             1
         };
 
-        let VMMemoryDefinition {
-            base,
-            current_length,
-        } = unsafe { *self.descriptor() };
-
         unsafe {
+            let base = self.memory.borrow().data_ptr();
+            let current_length = self.memory.borrow().data_size();
+
             (*view).buf = base as *mut c_void;
             (*view).len = current_length as isize;
             (*view).readonly = readonly;
