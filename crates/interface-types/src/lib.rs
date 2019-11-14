@@ -14,12 +14,11 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use anyhow::{bail, format_err, Result};
 use core::convert::TryFrom;
-use core::slice;
 use core::str;
 use cranelift_codegen::ir;
 use wasm_webidl_bindings::ast;
 use wasmtime_api as api;
-use wasmtime_jit::{ActionOutcome, Context, RuntimeValue};
+use wasmtime_jit::RuntimeValue;
 use wasmtime_runtime::{Export, InstanceHandle};
 
 mod value;
@@ -126,33 +125,6 @@ impl ModuleData {
     /// Detects if WASI support is needed: returns module name that is requested.
     pub fn find_wasi_module_name(&self) -> Option<String> {
         self.wasi_module_name.clone()
-    }
-
-    /// Same as `Context::invoke` except that this works with a `&[Value]` list
-    /// instead of a `&[RuntimeValue]` list. (in this case `Value` is the set of
-    /// wasm interface types)
-    pub fn invoke(
-        &self,
-        cx: &mut Context,
-        handle: &mut InstanceHandle,
-        export: &str,
-        args: &[Value],
-    ) -> Result<Vec<Value>> {
-        let binding = self.binding_for_export(handle, export)?;
-        let incoming = binding.param_bindings()?;
-        let outgoing = binding.result_bindings()?;
-
-        let wasm_args =
-            translate_incoming(&mut RawTranslateContext::new(cx, handle), &incoming, args)?;
-        let wasm_results = match cx.invoke(handle, export, &wasm_args)? {
-            ActionOutcome::Returned { values } => values,
-            ActionOutcome::Trapped { message } => bail!("trapped: {}", message),
-        };
-        translate_outgoing(
-            &mut RawTranslateContext::new(cx, handle),
-            &outgoing,
-            &wasm_results,
-        )
     }
 
     /// Invokes wasmtime function with a `&[Value]` list. `Value` the set of
@@ -347,48 +319,6 @@ fn abi2ast(param: &ir::AbiParam) -> Result<ast::WebidlScalarType> {
 trait TranslateContext {
     fn invoke_alloc(&mut self, alloc_func_name: &str, len: i32) -> Result<i32>;
     unsafe fn get_memory(&mut self) -> Result<&mut [u8]>;
-}
-
-struct RawTranslateContext<'a> {
-    cx: &'a mut Context,
-    handle: &'a mut InstanceHandle,
-}
-
-impl<'a> RawTranslateContext<'a> {
-    fn new(cx: &'a mut Context, handle: &'a mut InstanceHandle) -> Self {
-        RawTranslateContext { cx, handle }
-    }
-}
-
-impl TranslateContext for RawTranslateContext<'_> {
-    fn invoke_alloc(&mut self, alloc_func_name: &str, len: i32) -> Result<i32> {
-        let alloc_args = vec![RuntimeValue::I32(len)];
-        let results = match self.cx.invoke(self.handle, alloc_func_name, &alloc_args)? {
-            ActionOutcome::Returned { values } => values,
-            ActionOutcome::Trapped { message } => bail!("trapped: {}", message),
-        };
-        if results.len() != 1 {
-            bail!("allocator function wrong number of results");
-        }
-        Ok(match results[0] {
-            RuntimeValue::I32(i) => i,
-            _ => bail!("allocator function bad return type"),
-        })
-    }
-    unsafe fn get_memory(&mut self) -> Result<&mut [u8]> {
-        let memory = self
-            .handle
-            .lookup("memory")
-            .ok_or_else(|| format_err!("no exported `memory`"))?;
-        let definition = match memory {
-            wasmtime_runtime::Export::Memory { definition, .. } => definition,
-            _ => bail!("export `memory` wasn't a `Memory`"),
-        };
-        Ok(slice::from_raw_parts_mut(
-            (*definition).base,
-            (*definition).current_length,
-        ))
-    }
 }
 
 struct InstanceTranslateContext(pub api::HostRef<api::Instance>);
