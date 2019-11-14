@@ -9,3 +9,5 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
+packed_struct = "0.3"
+packed_struct_codegen = "0.3"

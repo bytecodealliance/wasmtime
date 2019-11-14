@@ -20,9 +20,14 @@
     )
 )]
 
+use packed_struct;
+#[macro_use]
+extern crate packed_struct_codegen;
+
 pub mod condcodes;
 pub mod constant_hash;
 pub mod constants;
+pub mod isa;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

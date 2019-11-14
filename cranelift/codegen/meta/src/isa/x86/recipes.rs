@@ -1,4 +1,7 @@
+//! Encoding recipes for x86/x86_64.
 use std::rc::Rc;
+
+use cranelift_codegen_shared::isa::x86::EncodingBits;
 
 use crate::cdsl::ast::Literal;
 use crate::cdsl::formats::InstructionFormat;
@@ -96,33 +99,8 @@ impl<'builder> RecipeGroup<'builder> {
 
 /// Given a sequence of opcode bytes, compute the recipe name prefix and encoding bits.
 fn decode_opcodes(op_bytes: &[u8], rrr: u16, w: u16) -> (&'static str, u16) {
-    assert!(!op_bytes.is_empty(), "at least one opcode byte");
-
-    let prefix_bytes = &op_bytes[..op_bytes.len() - 1];
-    let (name, mmpp) = match prefix_bytes {
-        [] => ("Op1", 0b000),
-        [0x66] => ("Mp1", 0b0001),
-        [0xf3] => ("Mp1", 0b0010),
-        [0xf2] => ("Mp1", 0b0011),
-        [0x0f] => ("Op2", 0b0100),
-        [0x66, 0x0f] => ("Mp2", 0b0101),
-        [0xf3, 0x0f] => ("Mp2", 0b0110),
-        [0xf2, 0x0f] => ("Mp2", 0b0111),
-        [0x0f, 0x38] => ("Op3", 0b1000),
-        [0x66, 0x0f, 0x38] => ("Mp3", 0b1001),
-        [0xf3, 0x0f, 0x38] => ("Mp3", 0b1010),
-        [0xf2, 0x0f, 0x38] => ("Mp3", 0b1011),
-        [0x0f, 0x3a] => ("Op3", 0b1100),
-        [0x66, 0x0f, 0x3a] => ("Mp3", 0b1101),
-        [0xf3, 0x0f, 0x3a] => ("Mp3", 0b1110),
-        [0xf2, 0x0f, 0x3a] => ("Mp3", 0b1111),
-        _ => {
-            panic!("unexpected opcode sequence: {:?}", op_bytes);
-        }
-    };
-
-    let opcode_byte = u16::from(op_bytes[op_bytes.len() - 1]);
-    (name, opcode_byte | (mmpp << 8) | (rrr << 12) | w << 15)
+    let enc = EncodingBits::new(op_bytes, rrr, w);
+    (enc.prefix.recipe_name_prefix(), enc.bits())
 }
 
 /// Given a snippet of Rust code (or None), replace the `PUT_OP` macro with the
