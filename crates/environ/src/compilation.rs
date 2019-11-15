@@ -5,7 +5,7 @@ use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::module;
 use crate::module_environ::FunctionBodyData;
 use alloc::vec::Vec;
-use cranelift_codegen::{binemit, ir, isa, CodegenError};
+use cranelift_codegen::{binemit, ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, ModuleTranslationState, WasmError};
 use serde::{Deserialize, Serialize};
@@ -156,8 +156,8 @@ pub enum CompileError {
     Wasm(#[from] WasmError),
 
     /// A compilation error occured.
-    #[error("Compilation error")]
-    Codegen(#[from] CodegenError),
+    #[error("Compilation error: {0}")]
+    Codegen(String),
 
     /// A compilation error occured.
     #[error("Debug info is not supported with this configuration")]

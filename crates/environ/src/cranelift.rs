@@ -19,6 +19,7 @@ use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::isa;
+use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
@@ -239,13 +240,21 @@ impl crate::compilation::Compiler for Cranelift {
                             let mut reloc_sink = RelocSink::new(func_index);
                             let mut trap_sink = TrapSink::new();
                             let mut stackmap_sink = binemit::NullStackmapSink {};
-                            context.compile_and_emit(
-                                isa,
-                                &mut code_buf,
-                                &mut reloc_sink,
-                                &mut trap_sink,
-                                &mut stackmap_sink,
-                            )?;
+                            context
+                                .compile_and_emit(
+                                    isa,
+                                    &mut code_buf,
+                                    &mut reloc_sink,
+                                    &mut trap_sink,
+                                    &mut stackmap_sink,
+                                )
+                                .map_err(|error| {
+                                    CompileError::Codegen(pretty_error(
+                                        &context.func,
+                                        Some(isa),
+                                        error,
+                                    ))
+                                })?;
 
                             context.emit_unwind_info(isa, &mut unwind_info);
 
@@ -257,7 +266,15 @@ impl crate::compilation::Compiler for Cranelift {
                             };
 
                             let ranges = if generate_debug_info {
-                                Some(context.build_value_labels_ranges(isa)?)
+                                let ranges =
+                                    context.build_value_labels_ranges(isa).map_err(|error| {
+                                        CompileError::Codegen(pretty_error(
+                                            &context.func,
+                                            Some(isa),
+                                            error,
+                                        ))
+                                    })?;
+                                Some(ranges)
                             } else {
                                 None
                             };
