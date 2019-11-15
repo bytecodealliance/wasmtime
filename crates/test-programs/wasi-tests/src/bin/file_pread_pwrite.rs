@@ -14,7 +14,7 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi_unstable::Fd) {
         0,
         "file",
         wasi_unstable::O_CREAT,
-        wasi_unstable::RIGHT_FD_READ | wasi_unstable::RIGHT_FD_WRITE,
+        wasi_unstable::RIGHT_FD_READ | wasi_unstable::RIGHT_FD_SEEK | wasi_unstable::RIGHT_FD_WRITE,
         0,
         0,
         &mut file_fd,
