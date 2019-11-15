@@ -102,7 +102,7 @@ jobs:
     - run: cargo fetch
 
     # Build and test all features except for lightbeam
-    - run: cargo test --features wasi-common/wasm_tests --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py -- --nocapture
+    - run: cargo test --features test-programs --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py -- --nocapture
       env:
         RUST_BACKTRACE: 1
 
@@ -219,7 +219,7 @@ jobs:
     - run: $CENTOS cargo build --release --manifest-path crates/api/Cargo.toml
       shell: bash
     # Test what we just built
-    - run: $CENTOS cargo test --features wasi-common/wasm_tests --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime
+    - run: $CENTOS cargo test --features test-programs --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime
       shell: bash
       env:
         RUST_BACKTRACE: 1

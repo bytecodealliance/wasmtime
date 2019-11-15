@@ -10,11 +10,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 
-[features]
-# this feature requires wasm32-wasi target installed, and it enables wasm32
-# integration tests when run with `cargo test --features wasm_tests`
-wasm_tests = []
-
 [dependencies]
 wasi-common-cbindgen = { path = "wasi-common-cbindgen" }
 anyhow = "1.0"
@@ -35,21 +30,6 @@ nix = "0.15"
 winx = { path = "winx" }
 winapi = "0.3"
 cpu-time = "1.0"
-
-[dev-dependencies]
-wasmtime-runtime = { path = "../runtime" }
-wasmtime-environ = { path = "../environ" }
-wasmtime-jit = { path = "../jit" }
-wasmtime-wasi = { path = "../wasi" }
-wasmtime = { path = "../api" }
-cranelift-codegen = "0.50.0"
-target-lexicon = "0.9.0"
-pretty_env_logger = "0.3.0"
-tempfile = "3.1.0"
-os_pipe = "0.9"
-
-[build-dependencies]
-cfg-if = "0.1.9"
 
 [lib]
 name = "wasi_common"
