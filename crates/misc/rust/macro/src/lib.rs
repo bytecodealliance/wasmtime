@@ -102,6 +102,7 @@ fn generate_methods(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
     }
     let mut result = TokenStream::new();
     let root = root();
+    let vis = &item.vis;
 
     for item in item.items.iter() {
         let method = match item {
@@ -165,7 +166,7 @@ fn generate_methods(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
 
         result.extend(quote! {
             #(#attrs)*
-            #sig {
+            #vis #sig {
                 let args = [
                     #(#args),*
                 ];
