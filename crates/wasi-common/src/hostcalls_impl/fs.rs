@@ -61,7 +61,7 @@ pub(crate) unsafe fn fd_pread(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_READ, 0)?
+        .as_descriptor(wasi::__WASI_RIGHT_FD_READ | wasi::__WASI_RIGHT_FD_SEEK, 0)?
         .as_file()?;
 
     let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
@@ -110,7 +110,7 @@ pub(crate) unsafe fn fd_pwrite(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_WRITE, 0)?
+        .as_descriptor(wasi::__WASI_RIGHT_FD_WRITE | wasi::__WASI_RIGHT_FD_SEEK, 0)?
         .as_file()?;
     let iovs = dec_ciovec_slice(memory, iovs_ptr, iovs_len)?;
 
