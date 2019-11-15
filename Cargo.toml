@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-cli"
-version = "0.2.0"
+version = "0.7.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Command-line interface for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,6 +11,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 default-run = "wasmtime"
+publish = false
 
 [dependencies]
 # Enable all supported architectures by default.

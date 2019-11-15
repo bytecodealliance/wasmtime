@@ -1,6 +1,6 @@
 [package]
 name = "winx"
-version = "0.5.0"
+version = "0.7.0"
 authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
 description = "Windows API helper library"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,7 +12,7 @@ bitflags = "1.0"
 cvt = "0.1"
 
 [dependencies.winapi]
-version = "0.3"
+version = "^0.3"
 features = [
     "std",
     "errhandlingapi",

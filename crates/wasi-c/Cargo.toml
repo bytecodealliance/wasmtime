@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wasi-c"
-version = "0.2.0"
+version = "0.7.0"
 authors = ["The Cranelift Project Developers"]
 description = "WASI API support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"

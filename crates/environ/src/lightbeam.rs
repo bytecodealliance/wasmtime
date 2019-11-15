@@ -10,7 +10,6 @@ use crate::cranelift::RelocSink;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::{PrimaryMap, SecondaryMap};
 use cranelift_wasm::{DefinedFuncIndex, ModuleTranslationState};
-use lightbeam;
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
 pub struct Lightbeam;
@@ -53,7 +52,7 @@ impl crate::compilation::Compiler for Lightbeam {
                 &mut codegen_session,
                 &mut reloc_sink,
                 i.as_u32(),
-                &lightbeam::wasmparser::FunctionBody::new(0, function_body.data),
+                &wasmparser::FunctionBody::new(0, function_body.data),
             )
             .expect("Failed to translate function. TODO: Stop this from panicking");
             relocations.push(reloc_sink.func_relocs);

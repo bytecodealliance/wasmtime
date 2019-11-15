@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-environ"
-version = "0.2.0"
+version = "0.7.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Standalone environment support for WebAsssembly code in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -15,6 +15,7 @@ edition = "2018"
 cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
+wasmparser = "0.39.2"
 lightbeam = { path = "../lightbeam", optional = true }
 indexmap = "1.0.2"
 rayon = "1.2"

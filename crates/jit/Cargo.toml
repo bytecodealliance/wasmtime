@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-jit"
-version = "0.2.0"
+version = "0.7.0"
 authors = ["The Wasmtime Project Developers"]
 description = "JIT-style execution for WebAsssembly code in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
