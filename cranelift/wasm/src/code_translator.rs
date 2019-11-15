@@ -786,15 +786,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().iadd(arg1, arg2));
         }
-        Operator::I32And | Operator::I64And => {
+        Operator::I32And | Operator::I64And | Operator::V128And => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().band(arg1, arg2));
         }
-        Operator::I32Or | Operator::I64Or => {
+        Operator::I32Or | Operator::I64Or | Operator::V128Or => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().bor(arg1, arg2));
         }
-        Operator::I32Xor | Operator::I64Xor => {
+        Operator::I32Xor | Operator::I64Xor | Operator::V128Xor => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().bxor(arg1, arg2));
         }
@@ -1099,18 +1099,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::V128Not => {
             let a = state.pop1();
             state.push1(builder.ins().bnot(a));
-        }
-        Operator::V128And => {
-            let (a, b) = state.pop2();
-            state.push1(builder.ins().band(a, b));
-        }
-        Operator::V128Or => {
-            let (a, b) = state.pop2();
-            state.push1(builder.ins().bor(a, b));
-        }
-        Operator::V128Xor => {
-            let (a, b) = state.pop2();
-            state.push1(builder.ins().bxor(a, b));
         }
         Operator::I16x8Shl | Operator::I32x4Shl | Operator::I64x2Shl => {
             let (a, b) = state.pop2();
