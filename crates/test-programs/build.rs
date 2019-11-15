@@ -122,7 +122,7 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
         &stemstr.replace("-", "_")
     )?;
     writeln!(out, "        setup_log();")?;
-    write!(
+    writeln!(
         out,
         "        let path = std::path::Path::new(r#\"{}\"#);",
         path.display()
