@@ -22,7 +22,7 @@ pub fn create_wasi_instance(
 ) -> Result<api::Instance, InstantiationError> {
     let global_exports = store.borrow().global_exports().clone();
     let wasi = instantiate_wasi("", global_exports, preopened_dirs, argv, environ)?;
-    let instance = api::Instance::from_handle(&store, wasi).expect("wasi instance");
+    let instance = api::Instance::from_handle(&store, wasi);
     Ok(instance)
 }
 

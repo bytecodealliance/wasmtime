@@ -121,10 +121,7 @@ impl Instance {
         Some(&self.exports()[i])
     }
 
-    pub fn from_handle(
-        store: &HostRef<Store>,
-        instance_handle: InstanceHandle,
-    ) -> Result<Instance> {
+    pub fn from_handle(store: &HostRef<Store>, instance_handle: InstanceHandle) -> Instance {
         let contexts = HashSet::new();
 
         let mut exports = Vec::new();
@@ -152,12 +149,12 @@ impl Instance {
             exports_types.into_boxed_slice(),
         ));
 
-        Ok(Instance {
+        Instance {
             instance_handle,
             module,
             contexts,
             exports: exports.into_boxed_slice(),
-        })
+        }
     }
 
     pub fn handle(&self) -> &InstanceHandle {

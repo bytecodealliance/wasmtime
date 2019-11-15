@@ -281,7 +281,7 @@ fn main() -> Result<()> {
     // Make spectest available by default.
     module_registry.insert(
         "spectest".to_owned(),
-        HostRef::new(Instance::from_handle(&store, instantiate_spectest()?)?),
+        HostRef::new(Instance::from_handle(&store, instantiate_spectest()?)),
     );
 
     // Make wasi available by default.
@@ -294,7 +294,7 @@ fn main() -> Result<()> {
         {
             let global_exports = store.borrow().global_exports().clone();
             let handle = instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)?;
-            Instance::from_handle(&store, handle)?
+            Instance::from_handle(&store, handle)
         }
         #[cfg(not(feature = "wasi-c"))]
         {
