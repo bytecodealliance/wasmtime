@@ -11,6 +11,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 default-run = "wasmtime"
+publish = false
 
 [dependencies]
 # Enable all supported architectures by default.
