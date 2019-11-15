@@ -168,6 +168,7 @@ cfg_if::cfg_if! {
                     "truncation_rights" => true,
                     "poll_oneoff" => true,
                     "path_link" => true,
+                    "dangling_fd" => true,
                     _ => false,
                 }
             } else {
