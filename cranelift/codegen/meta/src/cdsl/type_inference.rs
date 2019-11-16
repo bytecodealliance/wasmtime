@@ -161,8 +161,16 @@ impl TypeEnvironment {
 
         // Check extra conditions for InTypeset constraints.
         if let Constraint::InTypeset(tv, _) = &constraint {
-            assert!(tv.base.is_none());
-            assert!(tv.name.starts_with("typeof_"));
+            assert!(
+                tv.base.is_none(),
+                "type variable is {:?}, while expecting none",
+                tv
+            );
+            assert!(
+                tv.name.starts_with("typeof_"),
+                "Name \"{}\" should start with \"typeof_\"",
+                tv.name
+            );
         }
 
         self.constraints.push(constraint);

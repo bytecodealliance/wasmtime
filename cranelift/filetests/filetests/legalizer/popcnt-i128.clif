@@ -24,8 +24,8 @@ ebb0:
 ; check: v16, v17 = iadd_ifcout v12, v14
 ; check: v18 = iadd_ifcin v13, v15, v17
 ; check: v11 = iconcat v16, v18
-; check: v4 = uextend.i128 v11
-; check: v19, v20 = isplit v4
-; check: v21, v22 = isplit v19
-; check: v23, v24 = isplit v20
-; check: return v21, v22, v23, v24
+; check: v20 = iconst.i32 0
+; check: v21 = iconst.i32 0
+; check: v19 = iconcat v20, v21
+; check: v4 = iconcat v11, v19
+; check: return v16, v18, v20, v21
