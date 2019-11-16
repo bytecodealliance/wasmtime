@@ -53,7 +53,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         Instance::from_handle(
             &store,
             wasmtime_wasi::instantiate_wasi_with_context(
-                "",
                 global_exports.clone(),
                 builder.build().context("failed to build wasi context")?,
             )

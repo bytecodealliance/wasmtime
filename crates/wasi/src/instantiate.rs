@@ -21,14 +21,13 @@ pub fn create_wasi_instance(
     environ: &[(String, String)],
 ) -> Result<api::Instance, InstantiationError> {
     let global_exports = store.borrow().global_exports().clone();
-    let wasi = instantiate_wasi("", global_exports, preopened_dirs, argv, environ)?;
+    let wasi = instantiate_wasi(global_exports, preopened_dirs, argv, environ)?;
     let instance = api::Instance::from_handle(&store, wasi);
     Ok(instance)
 }
 
 /// Return an instance implementing the "wasi" interface.
 pub fn instantiate_wasi(
-    prefix: &str,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     preopened_dirs: &[(String, File)],
     argv: &[String],
@@ -54,14 +53,13 @@ pub fn instantiate_wasi(
     let wasi_ctx = wasi_ctx_builder.build().map_err(|err| {
         InstantiationError::Resource(format!("couldn't assemble WASI context object: {}", err))
     })?;
-    instantiate_wasi_with_context(prefix, global_exports, wasi_ctx)
+    instantiate_wasi_with_context(global_exports, wasi_ctx)
 }
 
 /// Return an instance implementing the "wasi" interface.
 ///
 /// The wasi context is configured by
 pub fn instantiate_wasi_with_context(
-    prefix: &str,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     wasi_ctx: WasiCtx,
 ) -> Result<InstanceHandle, InstantiationError> {
@@ -88,10 +86,9 @@ pub fn instantiate_wasi_with_context(
                 pointer_type,
             ));
             let func = module.functions.push(sig);
-            module.exports.insert(
-                prefix.to_owned() + stringify!($name),
-                Export::Function(func),
-            );
+            module
+                .exports
+                .insert(stringify!($name).to_owned(), Export::Function(func));
             finished_functions.push(syscalls::$name::SHIM as *const VMFunctionBody);
         }};
     }

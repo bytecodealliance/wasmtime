@@ -289,7 +289,7 @@ fn main() -> Result<()> {
         #[cfg(feature = "wasi-c")]
         {
             let global_exports = store.borrow().global_exports().clone();
-            let handle = instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)?;
+            let handle = instantiate_wasi_c(global_exports, &preopen_dirs, &argv, &environ)?;
             Instance::from_handle(&store, handle)
         }
         #[cfg(not(feature = "wasi-c"))]
