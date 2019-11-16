@@ -11,6 +11,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
+wasmtime = { path = "../api" }
 wasmtime-runtime = { path = "../runtime" }
 wasmtime-environ = { path = "../environ" }
 wasmtime-jit = { path = "../jit" }

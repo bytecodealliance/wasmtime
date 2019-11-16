@@ -46,7 +46,7 @@ use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
-use wasmtime_wasi::instantiate_wasi;
+use wasmtime_wasi::create_wasi_instance;
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
 use wasmtime_wast::instantiate_spectest;
@@ -281,36 +281,31 @@ fn main() -> Result<()> {
     // Make spectest available by default.
     module_registry.insert(
         "spectest".to_owned(),
-        Instance::from_handle(&store, instantiate_spectest()?)?,
+        HostRef::new(Instance::from_handle(&store, instantiate_spectest()?)),
     );
 
     // Make wasi available by default.
-    let global_exports = store.borrow().global_exports().clone();
     let preopen_dirs = compute_preopen_dirs(&args.flag_dir, &args.flag_mapdir);
     let argv = compute_argv(&args.arg_file, &args.arg_arg);
     let environ = compute_environ(&args.flag_env);
 
-    let wasi = if args.flag_wasi_c {
+    let wasi = HostRef::new(if args.flag_wasi_c {
         #[cfg(feature = "wasi-c")]
         {
-            instantiate_wasi_c("", global_exports.clone(), &preopen_dirs, &argv, &environ)?
+            let global_exports = store.borrow().global_exports().clone();
+            let handle = instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &environ)?;
+            Instance::from_handle(&store, handle)
         }
         #[cfg(not(feature = "wasi-c"))]
         {
             bail!("wasi-c feature not enabled at build time")
         }
     } else {
-        instantiate_wasi("", global_exports.clone(), &preopen_dirs, &argv, &environ)?
-    };
+        create_wasi_instance(&store, &preopen_dirs, &argv, &environ)?
+    });
 
-    module_registry.insert(
-        "wasi_unstable".to_owned(),
-        Instance::from_handle(&store, wasi.clone())?,
-    );
-    module_registry.insert(
-        "wasi_unstable_preview0".to_owned(),
-        Instance::from_handle(&store, wasi)?,
-    );
+    module_registry.insert("wasi_unstable".to_owned(), wasi.clone());
+    module_registry.insert("wasi_unstable_preview0".to_owned(), wasi);
 
     // Load the preload wasm modules.
     for filename in &args.flag_preload {
@@ -328,7 +323,7 @@ fn main() -> Result<()> {
 
 fn instantiate_module(
     store: &HostRef<Store>,
-    module_registry: &HashMap<String, Instance>,
+    module_registry: &HashMap<String, HostRef<Instance>>,
     path: &Path,
 ) -> Result<(HostRef<Instance>, HostRef<Module>, Vec<u8>)> {
     // Read the wasm module binary either as `*.wat` or a raw binary
@@ -345,7 +340,7 @@ fn instantiate_module(
             let module_name = i.module().as_str();
             if let Some(instance) = module_registry.get(module_name) {
                 let field_name = i.name().as_str();
-                if let Some(export) = instance.find_export_by_name(field_name) {
+                if let Some(export) = instance.borrow().find_export_by_name(field_name) {
                     Ok(export.clone())
                 } else {
                     bail!(
@@ -367,7 +362,7 @@ fn instantiate_module(
 
 fn handle_module(
     store: &HostRef<Store>,
-    module_registry: &HashMap<String, Instance>,
+    module_registry: &HashMap<String, HostRef<Instance>>,
     args: &Args,
     path: &Path,
 ) -> Result<()> {

@@ -58,8 +58,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
                 builder.build().context("failed to build wasi context")?,
             )
             .context("failed to instantiate wasi")?,
-        )
-        .context("failed to create instance from handle")?,
+        ),
     );
 
     let module = HostRef::new(Module::new(&store, &data).context("failed to create wasm module")?);
