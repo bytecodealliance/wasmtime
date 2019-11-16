@@ -31,15 +31,11 @@
 )]
 
 use anyhow::{bail, Context as _, Result};
-use cranelift_codegen::settings;
-use cranelift_codegen::settings::Configurable;
+use cranelift_codegen::{settings, settings::Configurable};
 use docopt::Docopt;
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::fs::File;
 use std::path::{Component, Path};
-use std::process::exit;
+use std::{collections::HashMap, ffi::OsStr, fs::File, process::exit};
 use wasi_common::preopen_dir;
 use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_cli::pick_compilation_strategy;
