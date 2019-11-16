@@ -45,16 +45,11 @@ rustup target add wasm32-wasi
 
 [rustup]: https://rustup.rs
 
-Next initiate submodules containing the integration testsuite
+Now, you should be able to run the integration testsuite by running `cargo test` on the
+`test-programs` package:
 
 ```
-git submodule update --init
-```
-
-Now, you should be able to run the integration testsuite by enabling the `wasm_tests` feature
-
-```
-cargo test --features wasm_tests
+cargo test --package test-programs
 ```
 
 ## Third-Party Code
