@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_entity::{EntityRef, PrimaryMap};
@@ -336,7 +337,13 @@ fn make_trampoline(
             &mut trap_sink,
             &mut stackmap_sink,
         )
-        .map_err(|error| SetupError::Compile(CompileError::Codegen(error)))?;
+        .map_err(|error| {
+            SetupError::Compile(CompileError::Codegen(pretty_error(
+                &context.func,
+                Some(isa),
+                error,
+            )))
+        })?;
 
     context.emit_unwind_info(isa, &mut unwind_info);
 

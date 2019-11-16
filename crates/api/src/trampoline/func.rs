@@ -7,6 +7,7 @@ use alloc::{boxed::Box, rc::Rc, string::ToString, vec::Vec};
 use anyhow::Result;
 use core::cmp;
 use cranelift_codegen::ir::{types, InstBuilder, StackSlotData, StackSlotKind, TrapCode};
+use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, ir, isa, Context};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
@@ -174,6 +175,7 @@ fn make_trampoline(
             &mut trap_sink,
             &mut stackmap_sink,
         )
+        .map_err(|error| pretty_error(&context.func, Some(isa), error))
         .expect("compile_and_emit");
 
     let mut unwind_info = Vec::new();
