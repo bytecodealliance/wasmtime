@@ -13,25 +13,25 @@ pub(crate) fn path_open_rights(
     use nix::fcntl::OFlag;
 
     // which rights are needed on the dirfd?
-    let mut needed_base = wasi::__WASI_RIGHT_PATH_OPEN;
+    let mut needed_base = wasi::__WASI_RIGHTS_PATH_OPEN;
     let mut needed_inheriting = rights_base | rights_inheriting;
 
     // convert open flags
     let oflags = host_impl::nix_from_oflags(oflags);
     if oflags.contains(OFlag::O_CREAT) {
-        needed_base |= wasi::__WASI_RIGHT_PATH_CREATE_FILE;
+        needed_base |= wasi::__WASI_RIGHTS_PATH_CREATE_FILE;
     }
     if oflags.contains(OFlag::O_TRUNC) {
-        needed_base |= wasi::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+        needed_base |= wasi::__WASI_RIGHTS_PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
     let fdflags = host_impl::nix_from_fdflags(fs_flags);
     if fdflags.contains(OFlag::O_DSYNC) {
-        needed_inheriting |= wasi::__WASI_RIGHT_FD_DATASYNC;
+        needed_inheriting |= wasi::__WASI_RIGHTS_FD_DATASYNC;
     }
     if fdflags.intersects(host_impl::O_RSYNC | OFlag::O_SYNC) {
-        needed_inheriting |= wasi::__WASI_RIGHT_FD_SYNC;
+        needed_inheriting |= wasi::__WASI_RIGHTS_FD_SYNC;
     }
 
     (needed_base, needed_inheriting)

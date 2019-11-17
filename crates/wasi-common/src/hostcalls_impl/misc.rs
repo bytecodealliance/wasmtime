@@ -240,9 +240,9 @@ pub(crate) fn poll_oneoff(
             {
                 let wasi_fd = unsafe { subscription.u.fd_readwrite.file_descriptor };
                 let rights = if r#type == wasi::__WASI_EVENTTYPE_FD_READ {
-                    wasi::__WASI_RIGHT_FD_READ
+                    wasi::__WASI_RIGHTS_FD_READ
                 } else {
-                    wasi::__WASI_RIGHT_FD_WRITE
+                    wasi::__WASI_RIGHTS_FD_WRITE
                 };
 
                 match unsafe {
@@ -260,7 +260,7 @@ pub(crate) fn poll_oneoff(
                             userdata: subscription.userdata,
                             r#type,
                             error: err.as_wasi_errno(),
-                            u: wasi::__wasi_event_u {
+                            u: wasi::__wasi_event_u_t {
                                 fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                                     nbytes: 0,
                                     flags: 0,
@@ -292,7 +292,7 @@ pub(crate) fn poll_oneoff(
 fn wasi_clock_to_relative_ns_delay(wasi_clock: wasi::__wasi_subscription_clock_t) -> Result<u128> {
     use std::time::SystemTime;
 
-    if wasi_clock.flags != wasi::__WASI_SUBSCRIPTION_CLOCK_ABSTIME {
+    if wasi_clock.flags != wasi::__WASI_SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME {
         return Ok(u128::from(wasi_clock.timeout));
     }
     let now: u128 = SystemTime::now()

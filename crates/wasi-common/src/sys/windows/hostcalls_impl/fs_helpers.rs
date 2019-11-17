@@ -23,23 +23,23 @@ pub(crate) fn path_open_rights(
     fdflags: wasi::__wasi_fdflags_t,
 ) -> (wasi::__wasi_rights_t, wasi::__wasi_rights_t) {
     // which rights are needed on the dirfd?
-    let mut needed_base = wasi::__WASI_RIGHT_PATH_OPEN;
+    let mut needed_base = wasi::__WASI_RIGHTS_PATH_OPEN;
     let mut needed_inheriting = rights_base | rights_inheriting;
 
     // convert open flags
-    if oflags & wasi::__WASI_O_CREAT != 0 {
-        needed_base |= wasi::__WASI_RIGHT_PATH_CREATE_FILE;
-    } else if oflags & wasi::__WASI_O_TRUNC != 0 {
-        needed_base |= wasi::__WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+    if oflags & wasi::__WASI_OFLAGS_CREAT != 0 {
+        needed_base |= wasi::__WASI_RIGHTS_PATH_CREATE_FILE;
+    } else if oflags & wasi::__WASI_OFLAGS_TRUNC != 0 {
+        needed_base |= wasi::__WASI_RIGHTS_PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
-    if fdflags & wasi::__WASI_FDFLAG_DSYNC != 0
-        || fdflags & wasi::__WASI_FDFLAG_RSYNC != 0
-        || fdflags & wasi::__WASI_FDFLAG_SYNC != 0
+    if fdflags & wasi::__WASI_FDFLAGS_DSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAGS_RSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAGS_SYNC != 0
     {
-        needed_inheriting |= wasi::__WASI_RIGHT_FD_DATASYNC;
-        needed_inheriting |= wasi::__WASI_RIGHT_FD_SYNC;
+        needed_inheriting |= wasi::__WASI_RIGHTS_FD_DATASYNC;
+        needed_inheriting |= wasi::__WASI_RIGHTS_FD_SYNC;
     }
 
     (needed_base, needed_inheriting)

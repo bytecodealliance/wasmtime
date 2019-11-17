@@ -217,14 +217,14 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_
 
     let metadata = file.metadata()?;
     Ok(wasi::__wasi_filestat_t {
-        st_dev: metadata.dev(),
-        st_ino: metadata.ino(),
-        st_nlink: metadata.nlink().try_into()?, // u64 doesn't fit into u32
-        st_size: metadata.len(),
-        st_atim: systemtime_to_timestamp(metadata.accessed()?)?,
-        st_ctim: metadata.ctime().try_into()?, // i64 doesn't fit into u64
-        st_mtim: systemtime_to_timestamp(metadata.modified()?)?,
-        st_filetype: filetype(file, &metadata)?.to_wasi(),
+        dev: metadata.dev(),
+        ino: metadata.ino(),
+        nlink: metadata.nlink().try_into()?, // u64 doesn't fit into u32
+        size: metadata.len(),
+        atim: systemtime_to_timestamp(metadata.accessed()?)?,
+        ctim: metadata.ctime().try_into()?, // i64 doesn't fit into u64
+        mtim: systemtime_to_timestamp(metadata.modified()?)?,
+        filetype: filetype(file, &metadata)?.to_wasi(),
     })
 }
 
@@ -283,16 +283,16 @@ pub(crate) fn path_filestat_set_times(
     use super::super::filetime::*;
     use std::time::{Duration, UNIX_EPOCH};
 
-    let set_atim = fst_flags & wasi::__WASI_FILESTAT_SET_ATIM != 0;
-    let set_atim_now = fst_flags & wasi::__WASI_FILESTAT_SET_ATIM_NOW != 0;
-    let set_mtim = fst_flags & wasi::__WASI_FILESTAT_SET_MTIM != 0;
-    let set_mtim_now = fst_flags & wasi::__WASI_FILESTAT_SET_MTIM_NOW != 0;
+    let set_atim = fst_flags & wasi::__WASI_FSTFLAGS_ATIM != 0;
+    let set_atim_now = fst_flags & wasi::__WASI_FSTFLAGS_ATIM_NOW != 0;
+    let set_mtim = fst_flags & wasi::__WASI_FSTFLAGS_MTIM != 0;
+    let set_mtim_now = fst_flags & wasi::__WASI_FSTFLAGS_MTIM_NOW != 0;
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
         return Err(Error::EINVAL);
     }
 
-    let symlink_nofollow = wasi::__WASI_LOOKUP_SYMLINK_FOLLOW != dirflags;
+    let symlink_nofollow = wasi::__WASI_LOOKUPFLAGS_SYMLINK_FOLLOW != dirflags;
     let atim = if set_atim {
         let time = UNIX_EPOCH + Duration::from_nanos(st_atim);
         FileTime::FileTime(filetime::FileTime::from_system_time(time))

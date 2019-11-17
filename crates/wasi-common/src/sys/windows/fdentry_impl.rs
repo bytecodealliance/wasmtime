@@ -61,10 +61,10 @@ pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
         wasi::__WASI_FILETYPE_DIRECTORY | wasi::__WASI_FILETYPE_REGULAR_FILE => {
             let mode = get_file_access_mode(handle.as_raw_handle())?;
             if mode.contains(AccessMode::FILE_GENERIC_READ) {
-                rights_base |= wasi::__WASI_RIGHT_FD_READ;
+                rights_base |= wasi::__WASI_RIGHTS_FD_READ;
             }
             if mode.contains(AccessMode::FILE_GENERIC_WRITE) {
-                rights_base |= wasi::__WASI_RIGHT_FD_WRITE;
+                rights_base |= wasi::__WASI_RIGHTS_FD_WRITE;
             }
         }
         _ => {

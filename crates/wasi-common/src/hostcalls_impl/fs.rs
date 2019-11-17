@@ -35,7 +35,7 @@ pub(crate) unsafe fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasi::__wasi_fd_t) -> R
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_DATASYNC, 0)?
+        .as_descriptor(wasi::__WASI_RIGHTS_FD_DATASYNC, 0)?
         .as_file()?;
 
     fd.sync_data().map_err(Into::into)
@@ -61,7 +61,7 @@ pub(crate) unsafe fn fd_pread(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_READ | wasi::__WASI_RIGHT_FD_SEEK, 0)?
+        .as_descriptor(wasi::__WASI_RIGHTS_FD_READ | wasi::__WASI_RIGHTS_FD_SEEK, 0)?
         .as_file()?;
 
     let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
@@ -110,7 +110,10 @@ pub(crate) unsafe fn fd_pwrite(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_WRITE | wasi::__WASI_RIGHT_FD_SEEK, 0)?
+        .as_descriptor(
+            wasi::__WASI_RIGHTS_FD_WRITE | wasi::__WASI_RIGHTS_FD_SEEK,
+            0,
+        )?
         .as_file()?;
     let iovs = dec_ciovec_slice(memory, iovs_ptr, iovs_len)?;
 
@@ -156,7 +159,7 @@ pub(crate) unsafe fn fd_read(
 
     let maybe_host_nread = match wasi_ctx
         .get_fd_entry_mut(fd)?
-        .as_descriptor_mut(wasi::__WASI_RIGHT_FD_READ, 0)?
+        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READ, 0)?
     {
         Descriptor::OsFile(file) => file.read_vectored(&mut iovs),
         Descriptor::Stdin => io::stdin().lock().read_vectored(&mut iovs),
@@ -225,9 +228,9 @@ pub(crate) unsafe fn fd_seek(
     );
 
     let rights = if offset == 0 && whence == wasi::__WASI_WHENCE_CUR {
-        wasi::__WASI_RIGHT_FD_TELL
+        wasi::__WASI_RIGHTS_FD_TELL
     } else {
-        wasi::__WASI_RIGHT_FD_SEEK | wasi::__WASI_RIGHT_FD_TELL
+        wasi::__WASI_RIGHTS_FD_SEEK | wasi::__WASI_RIGHTS_FD_TELL
     };
     let fd = wasi_ctx
         .get_fd_entry_mut(fd)?
@@ -257,7 +260,7 @@ pub(crate) unsafe fn fd_tell(
 
     let fd = wasi_ctx
         .get_fd_entry_mut(fd)?
-        .as_descriptor_mut(wasi::__WASI_RIGHT_FD_TELL, 0)?
+        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_TELL, 0)?
         .as_file_mut()?;
 
     let host_offset = fd.seek(SeekFrom::Current(0))?;
@@ -333,7 +336,7 @@ pub(crate) unsafe fn fd_sync(wasi_ctx: &WasiCtx, fd: wasi::__wasi_fd_t) -> Resul
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_SYNC, 0)?
+        .as_descriptor(wasi::__WASI_RIGHTS_FD_SYNC, 0)?
         .as_file()?;
     fd.sync_all().map_err(Into::into)
 }
@@ -360,7 +363,7 @@ pub(crate) unsafe fn fd_write(
     // perform unbuffered writes
     let host_nwritten = match wasi_ctx
         .get_fd_entry_mut(fd)?
-        .as_descriptor_mut(wasi::__WASI_RIGHT_FD_WRITE, 0)?
+        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_WRITE, 0)?
     {
         Descriptor::OsFile(file) => file.write_vectored(&iovs)?,
         Descriptor::Stdin => return Err(Error::EBADF),
@@ -397,7 +400,7 @@ pub(crate) unsafe fn fd_advise(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_ADVISE, 0)?
+        .as_descriptor(wasi::__WASI_RIGHTS_FD_ADVISE, 0)?
         .as_file()?;
 
     hostcalls_impl::fd_advise(fd, advice, offset, len)
@@ -413,7 +416,7 @@ pub(crate) unsafe fn fd_allocate(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_ALLOCATE, 0)?
+        .as_descriptor(wasi::__WASI_RIGHTS_FD_ALLOCATE, 0)?
         .as_file()?;
 
     let metadata = fd.metadata()?;
@@ -450,7 +453,7 @@ pub(crate) unsafe fn path_create_directory(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let rights = wasi::__WASI_RIGHT_PATH_OPEN | wasi::__WASI_RIGHT_PATH_CREATE_DIRECTORY;
+    let rights = wasi::__WASI_RIGHTS_PATH_OPEN | wasi::__WASI_RIGHTS_PATH_CREATE_DIRECTORY;
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(fe, rights, 0, 0, path, false)?;
 
@@ -489,7 +492,7 @@ pub(crate) unsafe fn path_link(
     let new_fe = wasi_ctx.get_fd_entry(new_dirfd)?;
     let resolved_old = path_get(
         old_fe,
-        wasi::__WASI_RIGHT_PATH_LINK_SOURCE,
+        wasi::__WASI_RIGHTS_PATH_LINK_SOURCE,
         0,
         0,
         old_path,
@@ -497,7 +500,7 @@ pub(crate) unsafe fn path_link(
     )?;
     let resolved_new = path_get(
         new_fe,
-        wasi::__WASI_RIGHT_PATH_LINK_TARGET,
+        wasi::__WASI_RIGHTS_PATH_LINK_TARGET,
         0,
         0,
         new_path,
@@ -549,16 +552,16 @@ pub(crate) unsafe fn path_open(
         needed_inheriting,
         dirflags,
         path,
-        oflags & wasi::__WASI_O_CREAT != 0,
+        oflags & wasi::__WASI_OFLAGS_CREAT != 0,
     )?;
 
     // which open mode do we need?
-    let read = fs_rights_base & (wasi::__WASI_RIGHT_FD_READ | wasi::__WASI_RIGHT_FD_READDIR) != 0;
+    let read = fs_rights_base & (wasi::__WASI_RIGHTS_FD_READ | wasi::__WASI_RIGHTS_FD_READDIR) != 0;
     let write = fs_rights_base
-        & (wasi::__WASI_RIGHT_FD_DATASYNC
-            | wasi::__WASI_RIGHT_FD_WRITE
-            | wasi::__WASI_RIGHT_FD_ALLOCATE
-            | wasi::__WASI_RIGHT_FD_FILESTAT_SET_SIZE)
+        & (wasi::__WASI_RIGHTS_FD_DATASYNC
+            | wasi::__WASI_RIGHTS_FD_WRITE
+            | wasi::__WASI_RIGHTS_FD_ALLOCATE
+            | wasi::__WASI_RIGHTS_FD_FILESTAT_SET_SIZE)
         != 0;
 
     let fd = hostcalls_impl::path_open(resolved, read, write, oflags, fs_flags)?;
@@ -597,7 +600,7 @@ pub(crate) unsafe fn fd_readdir(
 
     let file = wasi_ctx
         .get_fd_entry_mut(fd)?
-        .as_descriptor_mut(wasi::__WASI_RIGHT_FD_READDIR, 0)?
+        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READDIR, 0)?
         .as_file_mut()?;
     let host_buf = dec_slice_of_mut_u8(memory, buf, buf_len)?;
 
@@ -637,7 +640,7 @@ pub(crate) unsafe fn path_readlink(
     trace!("     | (path_ptr,path_len)='{}'", &path);
 
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
-    let resolved = path_get(fe, wasi::__WASI_RIGHT_PATH_READLINK, 0, 0, &path, false)?;
+    let resolved = path_get(fe, wasi::__WASI_RIGHTS_PATH_READLINK, 0, 0, &path, false)?;
 
     let mut buf = dec_slice_of_mut_u8(memory, buf_ptr, buf_len)?;
 
@@ -679,7 +682,7 @@ pub(crate) unsafe fn path_rename(
     let new_fe = wasi_ctx.get_fd_entry(new_dirfd)?;
     let resolved_old = path_get(
         old_fe,
-        wasi::__WASI_RIGHT_PATH_RENAME_SOURCE,
+        wasi::__WASI_RIGHTS_PATH_RENAME_SOURCE,
         0,
         0,
         old_path,
@@ -687,7 +690,7 @@ pub(crate) unsafe fn path_rename(
     )?;
     let resolved_new = path_get(
         new_fe,
-        wasi::__WASI_RIGHT_PATH_RENAME_TARGET,
+        wasi::__WASI_RIGHTS_PATH_RENAME_TARGET,
         0,
         0,
         new_path,
@@ -738,7 +741,7 @@ pub(crate) unsafe fn fd_filestat_set_times(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_FILESTAT_SET_TIMES, 0)?
+        .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_SET_TIMES, 0)?
         .as_file()?;
 
     fd_filestat_set_times_impl(fd, st_atim, st_mtim, fst_flags)
@@ -750,10 +753,10 @@ pub(crate) fn fd_filestat_set_times_impl(
     st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
 ) -> Result<()> {
-    let set_atim = fst_flags & wasi::__WASI_FILESTAT_SET_ATIM != 0;
-    let set_atim_now = fst_flags & wasi::__WASI_FILESTAT_SET_ATIM_NOW != 0;
-    let set_mtim = fst_flags & wasi::__WASI_FILESTAT_SET_MTIM != 0;
-    let set_mtim_now = fst_flags & wasi::__WASI_FILESTAT_SET_MTIM_NOW != 0;
+    let set_atim = fst_flags & wasi::__WASI_FSTFLAGS_ATIM != 0;
+    let set_atim_now = fst_flags & wasi::__WASI_FSTFLAGS_ATIM_NOW != 0;
+    let set_mtim = fst_flags & wasi::__WASI_FSTFLAGS_MTIM != 0;
+    let set_mtim_now = fst_flags & wasi::__WASI_FSTFLAGS_MTIM_NOW != 0;
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
         return Err(Error::EINVAL);
@@ -789,7 +792,7 @@ pub(crate) unsafe fn fd_filestat_set_size(
 
     let fd = wasi_ctx
         .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHT_FD_FILESTAT_SET_SIZE, 0)?
+        .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_SET_SIZE, 0)?
         .as_file()?;
 
     // This check will be unnecessary when rust-lang/rust#63326 is fixed
@@ -824,7 +827,7 @@ pub(crate) unsafe fn path_filestat_get(
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(
         fe,
-        wasi::__WASI_RIGHT_PATH_FILESTAT_GET,
+        wasi::__WASI_RIGHTS_PATH_FILESTAT_GET,
         0,
         dirflags,
         path,
@@ -865,7 +868,7 @@ pub(crate) unsafe fn path_filestat_set_times(
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(
         fe,
-        wasi::__WASI_RIGHT_PATH_FILESTAT_SET_TIMES,
+        wasi::__WASI_RIGHTS_PATH_FILESTAT_SET_TIMES,
         0,
         dirflags,
         path,
@@ -900,7 +903,7 @@ pub(crate) unsafe fn path_symlink(
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
-    let resolved_new = path_get(fe, wasi::__WASI_RIGHT_PATH_SYMLINK, 0, 0, new_path, true)?;
+    let resolved_new = path_get(fe, wasi::__WASI_RIGHTS_PATH_SYMLINK, 0, 0, new_path, true)?;
 
     hostcalls_impl::path_symlink(old_path, resolved_new)
 }
@@ -924,7 +927,7 @@ pub(crate) unsafe fn path_unlink_file(
     trace!("     | (path_ptr,path_len)='{}'", path);
 
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
-    let resolved = path_get(fe, wasi::__WASI_RIGHT_PATH_UNLINK_FILE, 0, 0, path, false)?;
+    let resolved = path_get(fe, wasi::__WASI_RIGHTS_PATH_UNLINK_FILE, 0, 0, path, false)?;
 
     hostcalls_impl::path_unlink_file(resolved)
 }
@@ -950,7 +953,7 @@ pub(crate) unsafe fn path_remove_directory(
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(
         fe,
-        wasi::__WASI_RIGHT_PATH_REMOVE_DIRECTORY,
+        wasi::__WASI_RIGHTS_PATH_REMOVE_DIRECTORY,
         0,
         0,
         path,
@@ -988,8 +991,8 @@ pub(crate) unsafe fn fd_prestat_get(
         prestat_ptr,
         host::__wasi_prestat_t {
             pr_type: wasi::__WASI_PREOPENTYPE_DIR,
-            u: host::__wasi_prestat_u {
-                dir: host::__wasi_prestat_dir {
+            u: host::__wasi_prestat_u_t {
+                dir: host::__wasi_prestat_dir_t {
                     pr_name_len: path.len(),
                 },
             },

@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 use crate::ctx::WasiCtx;
-use crate::{wasi, wasi32};
+use crate::{hostcalls_impl, wasi, wasi32};
 use log::trace;
 use wasi_common_cbindgen::wasi_common_cbindgen;
 

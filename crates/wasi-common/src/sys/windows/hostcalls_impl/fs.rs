@@ -139,7 +139,7 @@ pub(crate) fn path_open(
                 return Err(Error::ELOOP);
             }
             // check if we are trying to open a file as a dir
-            if file_type.is_file() && oflags & wasi::__WASI_O_DIRECTORY != 0 {
+            if file_type.is_file() && oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
                 return Err(Error::ENOTDIR);
             }
         }

@@ -99,7 +99,7 @@ fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasi::__wasi_errno_t> 
                     "no export named \"memory\", or the export isn't a mem: {:?}",
                     x
                 );
-                Err(wasi::__WASI_EINVAL)
+                Err(wasi::__WASI_ERRNO_INVAL)
             }
         }
     }

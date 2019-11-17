@@ -43,6 +43,7 @@ use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 use wasmtime_wasi::create_wasi_instance;
+use wasmtime_wasi::old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0;
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
 use wasmtime_wast::instantiate_spectest;
@@ -80,7 +81,7 @@ Options:
     --lightbeam         use Lightbeam for all compilation
     --cranelift         use Cranelift for all compilation
     --enable-simd       enable proposed SIMD instructions
-    --wasi-c            enable the wasi-c implementation of WASI
+    --wasi-c            enable the wasi-c implementation of `wasi_unstable`
     --preload=<wasm>    load an additional wasm module before loading the main module
     --env=<env>         pass an environment variable (\"key=value\") to the program
     --dir=<dir>         grant access to the given host directory
@@ -285,7 +286,7 @@ fn main() -> Result<()> {
     let argv = compute_argv(&args.arg_file, &args.arg_arg);
     let environ = compute_environ(&args.flag_env);
 
-    let wasi = HostRef::new(if args.flag_wasi_c {
+    let wasi_unstable = HostRef::new(if args.flag_wasi_c {
         #[cfg(feature = "wasi-c")]
         {
             let global_exports = store.borrow().global_exports().clone();
@@ -297,11 +298,18 @@ fn main() -> Result<()> {
             bail!("wasi-c feature not enabled at build time")
         }
     } else {
-        create_wasi_instance(&store, &preopen_dirs, &argv, &environ)?
+        create_wasi_instance_snapshot_0(&store, &preopen_dirs, &argv, &environ)?
     });
 
-    module_registry.insert("wasi_unstable".to_owned(), wasi.clone());
-    module_registry.insert("wasi_unstable_preview0".to_owned(), wasi);
+    let wasi_snapshot_preview1 = HostRef::new(create_wasi_instance(
+        &store,
+        &preopen_dirs,
+        &argv,
+        &environ,
+    )?);
+
+    module_registry.insert("wasi_unstable".to_owned(), wasi_unstable);
+    module_registry.insert("wasi_snapshot_preview1".to_owned(), wasi_snapshot_preview1);
 
     // Load the preload wasm modules.
     for filename in &args.flag_preload {

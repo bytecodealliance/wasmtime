@@ -4,21 +4,13 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{FnArg, Pat, PatType, Type, TypeReference, TypeSlice};
 
-#[proc_macro_attribute]
-pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenStream {
-    assert!(attr.is_empty());
-
-    let function = syn::parse_macro_input!(function as syn::ItemFn);
-
-    // capture visibility
-    let vis = &function.vis;
-
-    // generate C fn name prefixed with __wasi_
-    let fn_ident = &function.sig.ident;
-    let concatenated = format!("wasi_common_{}", fn_ident);
-    let c_fn_ident = syn::Ident::new(&concatenated, fn_ident.span());
-
-    // capture input args
+fn capture_input_args(
+    function: &syn::ItemFn,
+) -> (
+    Vec<proc_macro2::TokenStream>,
+    Vec<proc_macro2::TokenStream>,
+    Vec<proc_macro2::TokenStream>,
+) {
     let mut arg_ident = Vec::new();
     let mut arg_type = Vec::new();
     let mut call_arg_ident = Vec::new();
@@ -85,6 +77,26 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
         }
     }
 
+    (arg_ident, arg_type, call_arg_ident)
+}
+
+#[proc_macro_attribute]
+pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenStream {
+    assert!(attr.is_empty());
+
+    let function = syn::parse_macro_input!(function as syn::ItemFn);
+
+    // capture visibility
+    let vis = &function.vis;
+
+    // generate C fn name prefixed with wasi_common_
+    let fn_ident = &function.sig.ident;
+    let concatenated = format!("wasi_common_{}", fn_ident);
+    let c_fn_ident = syn::Ident::new(&concatenated, fn_ident.span());
+
+    // capture input args
+    let (arg_ident, arg_type, call_arg_ident) = capture_input_args(&function);
+
     // capture output arg
     let output = &function.sig.output;
 
@@ -92,6 +104,43 @@ pub fn wasi_common_cbindgen(attr: TokenStream, function: TokenStream) -> TokenSt
         #function
 
         #[no_mangle]
+        #vis unsafe extern "C" fn #c_fn_ident(
+            #(
+                #arg_ident: #arg_type,
+            )*
+        ) #output {
+            #fn_ident(#(
+                #call_arg_ident,
+            )*)
+        }
+    };
+
+    result.into()
+}
+
+#[proc_macro_attribute]
+pub fn wasi_common_cbindgen_old(attr: TokenStream, function: TokenStream) -> TokenStream {
+    assert!(attr.is_empty());
+
+    let function = syn::parse_macro_input!(function as syn::ItemFn);
+
+    // capture visibility
+    let vis = &function.vis;
+
+    // generate C fn name prefixed with old_wasi_common_
+    let fn_ident = &function.sig.ident;
+    let concatenated = format!("old_wasi_common_{}", fn_ident);
+    let c_fn_ident = syn::Ident::new(&concatenated, fn_ident.span());
+
+    // capture input args
+    let (arg_ident, arg_type, call_arg_ident) = capture_input_args(&function);
+
+    // capture output arg
+    let output = &function.sig.output;
+
+    let result = quote! {
+        #function
+
         #vis unsafe extern "C" fn #c_fn_ident(
             #(
                 #arg_ident: #arg_type,

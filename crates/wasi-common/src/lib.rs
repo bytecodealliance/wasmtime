@@ -33,6 +33,7 @@ pub mod fs;
 mod host;
 pub mod hostcalls;
 mod memory;
+pub mod old;
 pub mod wasi;
 pub mod wasi32;
 
