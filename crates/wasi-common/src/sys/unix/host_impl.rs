@@ -205,7 +205,7 @@ pub(crate) fn filestat_from_nix(
     Ok(wasi::__wasi_filestat_t {
         dev,
         ino,
-        nlink: filestat.st_nlink,
+        nlink: wasi::__wasi_linkcount_t::from(filestat.st_nlink),
         size: filestat.st_size as wasi::__wasi_filesize_t,
         atim,
         ctim,
