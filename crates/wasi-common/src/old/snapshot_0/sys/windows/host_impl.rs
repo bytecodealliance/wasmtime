@@ -44,12 +44,12 @@ pub(crate) fn fdflags_from_win(mode: AccessMode) -> wasi::__wasi_fdflags_t {
     let mut fdflags = 0;
     // TODO verify this!
     if mode.contains(AccessMode::FILE_APPEND_DATA) {
-        fdflags |= wasi::__WASI_FDFLAG_APPEND;
+        fdflags |= wasi::__WASI_FDFLAGS_APPEND;
     }
     if mode.contains(AccessMode::SYNCHRONIZE) {
-        fdflags |= wasi::__WASI_FDFLAG_DSYNC;
-        fdflags |= wasi::__WASI_FDFLAG_RSYNC;
-        fdflags |= wasi::__WASI_FDFLAG_SYNC;
+        fdflags |= wasi::__WASI_FDFLAGS_DSYNC;
+        fdflags |= wasi::__WASI_FDFLAGS_RSYNC;
+        fdflags |= wasi::__WASI_FDFLAGS_SYNC;
     }
     // The NONBLOCK equivalent is FILE_FLAG_OVERLAPPED
     // but it seems winapi doesn't provide a mechanism
@@ -68,15 +68,15 @@ pub(crate) fn win_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> (AccessMode, 
     let mut flags = Flags::empty();
 
     // TODO verify this!
-    if fdflags & wasi::__WASI_FDFLAG_NONBLOCK != 0 {
+    if fdflags & wasi::__WASI_FDFLAGS_NONBLOCK != 0 {
         flags.insert(Flags::FILE_FLAG_OVERLAPPED);
     }
-    if fdflags & wasi::__WASI_FDFLAG_APPEND != 0 {
+    if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
         access_mode.insert(AccessMode::FILE_APPEND_DATA);
     }
-    if fdflags & wasi::__WASI_FDFLAG_DSYNC != 0
-        || fdflags & wasi::__WASI_FDFLAG_RSYNC != 0
-        || fdflags & wasi::__WASI_FDFLAG_SYNC != 0
+    if fdflags & wasi::__WASI_FDFLAGS_DSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAGS_RSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAGS_SYNC != 0
     {
         access_mode.insert(AccessMode::SYNCHRONIZE);
     }
