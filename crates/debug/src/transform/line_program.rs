@@ -3,9 +3,9 @@ use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use anyhow::Error;
 use core::iter::FromIterator;
 use cranelift_entity::EntityRef;
-use failure::Error;
 use gimli::{
     write, DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit,
 };

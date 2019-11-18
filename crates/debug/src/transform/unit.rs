@@ -7,8 +7,8 @@ use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_inf
 use super::{DebugInputContext, Reader, TransformError};
 use crate::{HashMap, HashSet};
 use alloc::{string::String, vec::Vec};
+use anyhow::Error;
 use cranelift_entity::EntityRef;
-use failure::Error;
 use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, Unit, UnitOffset};
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
