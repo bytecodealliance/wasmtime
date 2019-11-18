@@ -7,6 +7,7 @@ pub mod __rt {
     pub use wasmtime_api;
     pub use wasmtime_interface_types;
     pub use wasmtime_jit;
+    pub use wasmtime_wasi;
 
     use std::convert::{TryFrom, TryInto};
     use wasmtime_interface_types::Value;

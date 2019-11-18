@@ -66,7 +66,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
 
             let mut imports: Vec<Extern> = Vec::new();
             if let Some(module_name) = data.find_wasi_module_name() {
-                let wasi_instance = wasmtime_wasi::create_wasi_instance(&store, &[], &[], &[])
+                let wasi_instance = #root::wasmtime_wasi::create_wasi_instance(&store, &[], &[], &[])
                     .map_err(|e| format_err!("wasm instantiation error: {:?}", e))?;
                 for i in module.borrow().imports().iter() {
                     if i.module().as_str() != module_name {
@@ -111,6 +111,14 @@ fn generate_methods(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
         }
         if let Some(t) = &method.sig.asyncness {
             bail!(t, "cannot be `async`");
+        }
+        match &method.sig.inputs.first() {
+            Some(syn::FnArg::Receiver(_)) => {}
+            Some(t) => bail!(t, "first arugment needs to be \"self\""),
+            None => bail!(
+                method.sig,
+                "trait method requires at least one argument which needs to be \"self\""
+            ),
         }
 
         let mut args = Vec::new();
