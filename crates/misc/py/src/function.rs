@@ -5,20 +5,19 @@ use pyo3::exceptions::Exception;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyTuple};
 use std::rc::Rc;
-use wasmtime_api as api;
 use wasmtime_interface_types::ModuleData;
 
 // TODO support non-export functions
 #[pyclass]
 pub struct Function {
-    pub instance: api::HostRef<api::Instance>,
+    pub instance: wasmtime::HostRef<wasmtime::Instance>,
     pub export_name: String,
-    pub args_types: Vec<api::ValType>,
+    pub args_types: Vec<wasmtime::ValType>,
     pub data: Rc<ModuleData>,
 }
 
 impl Function {
-    pub fn func(&self) -> api::HostRef<api::Func> {
+    pub fn func(&self) -> wasmtime::HostRef<wasmtime::Func> {
         let e = self
             .instance
             .borrow()
@@ -54,23 +53,23 @@ impl Function {
     }
 }
 
-fn parse_annotation_type(s: &str) -> api::ValType {
+fn parse_annotation_type(s: &str) -> wasmtime::ValType {
     match s {
-        "I32" | "i32" => api::ValType::I32,
-        "I64" | "i64" => api::ValType::I64,
-        "F32" | "f32" => api::ValType::F32,
-        "F64" | "f64" => api::ValType::F64,
+        "I32" | "i32" => wasmtime::ValType::I32,
+        "I64" | "i64" => wasmtime::ValType::I64,
+        "F32" | "f32" => wasmtime::ValType::F32,
+        "F64" | "f64" => wasmtime::ValType::F64,
         _ => panic!("unknown type in annotations"),
     }
 }
 
 struct WrappedFn {
     func: PyObject,
-    returns_types: Vec<api::ValType>,
+    returns_types: Vec<wasmtime::ValType>,
 }
 
 impl WrappedFn {
-    pub fn new(func: PyObject, returns_types: Vec<api::ValType>) -> Self {
+    pub fn new(func: PyObject, returns_types: Vec<wasmtime::ValType>) -> Self {
         WrappedFn {
             func,
             returns_types,
@@ -78,20 +77,20 @@ impl WrappedFn {
     }
 }
 
-impl api::Callable for WrappedFn {
+impl wasmtime::Callable for WrappedFn {
     fn call(
         &self,
-        params: &[api::Val],
-        returns: &mut [api::Val],
-    ) -> Result<(), api::HostRef<api::Trap>> {
+        params: &[wasmtime::Val],
+        returns: &mut [wasmtime::Val],
+    ) -> Result<(), wasmtime::HostRef<wasmtime::Trap>> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
         let params = params
             .iter()
             .map(|p| match p {
-                api::Val::I32(i) => i.clone().into_py(py),
-                api::Val::I64(i) => i.clone().into_py(py),
+                wasmtime::Val::I32(i) => i.clone().into_py(py),
+                wasmtime::Val::I64(i) => i.clone().into_py(py),
                 _ => {
                     panic!();
                 }
@@ -115,8 +114,8 @@ impl api::Callable for WrappedFn {
         for (i, ty) in self.returns_types.iter().enumerate() {
             let result_item = result.get_item(i);
             returns[i] = match ty {
-                api::ValType::I32 => api::Val::I32(result_item.extract::<i32>().unwrap()),
-                api::ValType::I64 => api::Val::I64(result_item.extract::<i64>().unwrap()),
+                wasmtime::ValType::I32 => wasmtime::Val::I32(result_item.extract::<i32>().unwrap()),
+                wasmtime::ValType::I64 => wasmtime::Val::I64(result_item.extract::<i64>().unwrap()),
                 _ => {
                     panic!();
                 }
@@ -127,9 +126,9 @@ impl api::Callable for WrappedFn {
 }
 
 pub fn wrap_into_pyfunction(
-    store: &api::HostRef<api::Store>,
+    store: &wasmtime::HostRef<wasmtime::Store>,
     callable: &PyAny,
-) -> PyResult<api::HostRef<api::Func>> {
+) -> PyResult<wasmtime::HostRef<wasmtime::Func>> {
     if !callable.hasattr("__annotations__")? {
         // TODO support calls without annotations?
         return Err(PyErr::new::<Exception, _>(
@@ -148,13 +147,13 @@ pub fn wrap_into_pyfunction(
         }
     }
 
-    let ft = api::FuncType::new(
+    let ft = wasmtime::FuncType::new(
         params.into_boxed_slice(),
         returns.clone().into_boxed_slice(),
     );
 
     let gil = Python::acquire_gil();
     let wrapped = WrappedFn::new(callable.to_object(gil.python()), returns);
-    let f = api::Func::new(store, ft, Rc::new(wrapped));
-    Ok(api::HostRef::new(f))
+    let f = wasmtime::Func::new(store, ft, Rc::new(wrapped));
+    Ok(wasmtime::HostRef::new(f))
 }

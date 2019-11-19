@@ -12,7 +12,6 @@ use cranelift_codegen::ir;
 use std::convert::TryFrom;
 use std::str;
 use wasm_webidl_bindings::ast;
-use wasmtime_api as api;
 use wasmtime_jit::RuntimeValue;
 use wasmtime_runtime::{Export, InstanceHandle};
 
@@ -126,7 +125,7 @@ impl ModuleData {
     /// wasm interface types.
     pub fn invoke_export(
         &self,
-        instance: &api::HostRef<api::Instance>,
+        instance: &wasmtime::HostRef<wasmtime::Instance>,
         export: &str,
         args: &[Value],
     ) -> Result<Vec<Value>> {
@@ -153,7 +152,7 @@ impl ModuleData {
             Ok(values) => values
                 .to_vec()
                 .into_iter()
-                .map(|v: api::Val| v.into())
+                .map(|v: wasmtime::Val| v.into())
                 .collect::<Vec<RuntimeValue>>(),
             Err(trap) => bail!("trapped: {:?}", trap),
         };
@@ -316,7 +315,7 @@ trait TranslateContext {
     unsafe fn get_memory(&mut self) -> Result<&mut [u8]>;
 }
 
-struct InstanceTranslateContext(pub api::HostRef<api::Instance>);
+struct InstanceTranslateContext(pub wasmtime::HostRef<wasmtime::Instance>);
 
 impl TranslateContext for InstanceTranslateContext {
     fn invoke_alloc(&mut self, alloc_func_name: &str, len: i32) -> Result<i32> {
@@ -328,7 +327,7 @@ impl TranslateContext for InstanceTranslateContext {
             .func()
             .ok_or_else(|| format_err!("`{}` is not a (alloc) function", alloc_func_name))?
             .clone();
-        let alloc_args = vec![api::Val::I32(len)];
+        let alloc_args = vec![wasmtime::Val::I32(len)];
         let results = match alloc.borrow().call(&alloc_args) {
             Ok(values) => values,
             Err(trap) => bail!("trapped: {:?}", trap),
@@ -337,7 +336,7 @@ impl TranslateContext for InstanceTranslateContext {
             bail!("allocator function wrong number of results");
         }
         Ok(match results[0] {
-            api::Val::I32(i) => i,
+            wasmtime::Val::I32(i) => i,
             _ => bail!("allocator function bad return type"),
         })
     }

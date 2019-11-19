@@ -191,7 +191,7 @@ jobs:
         name: wheels-${{ matrix.os }}
         path: crates/misc/py/wheelhouse
 
-  # Perform release builds of `wasmtime` and `libwasmtime_api.so`. Builds on
+  # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds on
   # Windows/Mac/Linux, and artifacts are uploaded after the build is finished.
   # Note that we also run tests here to test exactly what we're deploying.
   build:
@@ -215,7 +215,7 @@ jobs:
     # Build `wasmtime` and executables
     - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
       shell: bash
-    # Build `libwasmtime_api.so`
+    # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/api/Cargo.toml
       shell: bash
     # Test what we just built
@@ -237,12 +237,12 @@ jobs:
       shell: bash
       if: matrix.os == 'windows-latest'
 
-    # Move libwasmtime_api dylib to dist folder
-    - run: cp target/release/libwasmtime_api.{so,a} dist
+    # Move libwasmtime dylib to dist folder
+    - run: cp target/release/libwasmtime.{so,a} dist
       if: matrix.os == 'ubuntu-latest'
-    - run: cp target/release/libwasmtime_api.{dylib,a} dist
+    - run: cp target/release/libwasmtime.{dylib,a} dist
       if: matrix.os == 'macos-latest'
-    - run: cp target/release/wasmtime_api.{dll,lib} dist
+    - run: cp target/release/wasmtime.{dll,lib} dist
       shell: bash
       if: matrix.os == 'windows-latest'
 

@@ -9,20 +9,19 @@ use std::fs::File;
 use std::rc::Rc;
 use target_lexicon::HOST;
 use wasi_common::old::snapshot_0::{WasiCtx, WasiCtxBuilder};
-use wasmtime_api as api;
 use wasmtime_environ::{translate_signature, Export, Module};
 use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMFunctionBody};
 
-/// Creates `api::Instance` object implementing the "wasi" interface.
+/// Creates `wasmtime::Instance` object implementing the "wasi" interface.
 pub fn create_wasi_instance(
-    store: &api::HostRef<api::Store>,
+    store: &wasmtime::HostRef<wasmtime::Store>,
     preopened_dirs: &[(String, File)],
     argv: &[String],
     environ: &[(String, String)],
-) -> Result<api::Instance, InstantiationError> {
+) -> Result<wasmtime::Instance, InstantiationError> {
     let global_exports = store.borrow().global_exports().clone();
     let wasi = instantiate_wasi(global_exports, preopened_dirs, argv, environ)?;
-    let instance = api::Instance::from_handle(&store, wasi);
+    let instance = wasmtime::Instance::from_handle(&store, wasi);
     Ok(instance)
 }
 

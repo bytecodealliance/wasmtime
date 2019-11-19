@@ -9,7 +9,6 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyDict, PySet};
 use pyo3::wrap_pyfunction;
 use std::rc::Rc;
-use wasmtime_api as api;
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 
@@ -48,9 +47,9 @@ impl InstantiateResultObject {
 
 fn find_export_in(
     obj: &PyAny,
-    store: &api::HostRef<api::Store>,
+    store: &wasmtime::HostRef<wasmtime::Store>,
     name: &str,
-) -> PyResult<api::Extern> {
+) -> PyResult<wasmtime::Extern> {
     let obj = obj.cast_as::<PyDict>()?;
 
     Ok(if let Some(item) = obj.get_item(name) {
@@ -87,16 +86,16 @@ pub fn instantiate(
 ) -> PyResult<Py<InstantiateResultObject>> {
     let wasm_data = buffer_source.as_bytes();
 
-    let mut config = api::Config::new();
+    let mut config = wasmtime::Config::new();
     config.features(Features {
         multi_value: true,
         ..Default::default()
     });
 
-    let engine = api::HostRef::new(api::Engine::new(&config));
-    let store = api::HostRef::new(api::Store::new(&engine));
+    let engine = wasmtime::HostRef::new(wasmtime::Engine::new(&config));
+    let store = wasmtime::HostRef::new(wasmtime::Store::new(&engine));
 
-    let module = api::HostRef::new(api::Module::new(&store, wasm_data).map_err(err2py)?);
+    let module = wasmtime::HostRef::new(wasmtime::Module::new(&store, wasm_data).map_err(err2py)?);
 
     let data = Rc::new(ModuleData::new(wasm_data).map_err(err2py)?);
 
@@ -110,7 +109,7 @@ pub fn instantiate(
         None
     };
 
-    let mut imports: Vec<api::Extern> = Vec::new();
+    let mut imports: Vec<wasmtime::Extern> = Vec::new();
     for i in module.borrow().imports() {
         let module_name = i.module().as_str();
         if let Some(m) = import_obj.get_item(module_name) {
@@ -137,8 +136,8 @@ pub fn instantiate(
         }
     }
 
-    let instance = api::HostRef::new(
-        api::Instance::new(&store, &module, &imports)
+    let instance = wasmtime::HostRef::new(
+        wasmtime::Instance::new(&store, &module, &imports)
             .map_err(|t| PyErr::new::<Exception, _>(format!("instantiated with trap {:?}", t)))?,
     );
 

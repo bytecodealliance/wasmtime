@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use cranelift_codegen::settings::{self, Configurable};
 use std::fs::File;
 use std::{collections::HashMap, path::Path};
-use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
+use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     // Prepare runtime

@@ -2,7 +2,7 @@
 
 use anyhow::{bail, ensure, Context as _, Error};
 use std::cell::Ref;
-use wasmtime_api::*;
+use wasmtime::*;
 
 fn get_export_memory(exports: &[Extern], i: usize) -> Result<HostRef<Memory>, Error> {
     if exports.len() <= i {

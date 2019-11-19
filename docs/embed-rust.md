@@ -36,7 +36,7 @@ where "<current version>" is the current version number of the `wasmtime` crate.
 It is time to add code to the `src/main.rs`. First, the engine and storage need to be activated:
 
 ```rust
-use wasmtime_api::*;
+use wasmtime::*;
 
 let engine = HostRef::new(Engine::default());
 let store = HostRef::new(Store::new(&engine));
@@ -83,7 +83,7 @@ The names of the WebAssembly module's imports and exports can be discovered by m
 
 ```rust
 use std::fs::read;
-use wasmtime_api::*;
+use wasmtime::*;
 
 fn main() {
     let engine = HostRef::new(Engine::default());

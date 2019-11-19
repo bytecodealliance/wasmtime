@@ -5,12 +5,11 @@ use crate::memory::Memory;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::rc::Rc;
-use wasmtime_api as api;
 use wasmtime_interface_types::ModuleData;
 
 #[pyclass]
 pub struct Instance {
-    pub instance: api::HostRef<api::Instance>,
+    pub instance: wasmtime::HostRef<wasmtime::Instance>,
     pub data: Rc<ModuleData>,
 }
 
@@ -24,7 +23,7 @@ impl Instance {
         let module = self.instance.borrow().module().clone();
         for (i, e) in module.borrow().exports().iter().enumerate() {
             match e.r#type() {
-                api::ExternType::ExternFunc(ft) => {
+                wasmtime::ExternType::ExternFunc(ft) => {
                     let mut args_types = Vec::new();
                     for ty in ft.params().iter() {
                         args_types.push(ty.clone());
@@ -40,7 +39,7 @@ impl Instance {
                     )?;
                     exports.set_item(e.name().to_string(), f)?;
                 }
-                api::ExternType::ExternMemory(_) => {
+                wasmtime::ExternType::ExternMemory(_) => {
                     let f = Py::new(
                         py,
                         Memory {

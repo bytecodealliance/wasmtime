@@ -1,6 +1,6 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
-use wasmtime_api::*;
+use wasmtime::*;
 
 #[test]
 fn test_import_calling_export() {

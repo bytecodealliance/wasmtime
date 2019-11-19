@@ -2,7 +2,7 @@
 //! invoking its exported function.
 
 use anyhow::{format_err, Result};
-use wasmtime_api::*;
+use wasmtime::*;
 
 const WAT: &str = r#"
 (module

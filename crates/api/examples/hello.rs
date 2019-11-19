@@ -3,7 +3,7 @@
 use anyhow::{ensure, format_err, Context as _, Result};
 use std::cell::Ref;
 use std::rc::Rc;
-use wasmtime_api::*;
+use wasmtime::*;
 
 struct HelloCallback;
 
