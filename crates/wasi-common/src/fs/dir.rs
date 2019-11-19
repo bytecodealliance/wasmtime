@@ -52,7 +52,7 @@ impl<'ctx> Dir<'ctx> {
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
-            wasi::__WASI_LOOKUP_SYMLINK_FOLLOW,
+            wasi::__WASI_LOOKUPFLAGS_SYMLINK_FOLLOW,
             path.as_os_str().as_bytes(),
             path.as_os_str().len(),
             0,
@@ -98,9 +98,9 @@ impl<'ctx> Dir<'ctx> {
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
-            wasi::__WASI_LOOKUP_SYMLINK_FOLLOW,
+            wasi::__WASI_LOOKUPFLAGS_SYMLINK_FOLLOW,
             path.as_os_str().as_bytes(),
-            wasi::__WASI_O_DIRECTORY,
+            wasi::__WASI_OFLAGS_DIRECTORY,
             !0,
             !0,
             0,
@@ -132,10 +132,10 @@ impl<'ctx> Dir<'ctx> {
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
-            wasi::__WASI_LOOKUP_SYMLINK_FOLLOW,
+            wasi::__WASI_LOOKUPFLAGS_SYMLINK_FOLLOW,
             path.as_os_str().as_bytes(),
             path.as_os_str().len(),
-            wasi::__WASI_O_CREAT | wasi::__WASI_O_TRUNC,
+            wasi::__WASI_OFLAGS_CREAT | wasi::__WASI_OFLAGS_TRUNC,
             !0,
             !0,
             0,

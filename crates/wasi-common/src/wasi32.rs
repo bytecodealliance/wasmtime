@@ -12,7 +12,7 @@ use wig::witx_wasi32_types;
 pub type uintptr_t = u32;
 pub type size_t = u32;
 
-witx_wasi32_types!("unstable" "wasi_unstable_preview0");
+witx_wasi32_types!("snapshot" "wasi_snapshot_preview1");
 
 #[cfg(test)]
 mod test {
@@ -89,23 +89,23 @@ mod test {
     #[test]
     fn bindgen_test_layout___wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t() {
         assert_eq!(
-            ::std::mem::size_of::<__wasi_prestat_dir>(),
+            ::std::mem::size_of::<__wasi_prestat_dir_t>(),
             4usize,
-            concat!("Size of: ", stringify!(__wasi_prestat_dir))
+            concat!("Size of: ", stringify!(__wasi_prestat_dir_t))
         );
         assert_eq!(
-            ::std::mem::align_of::<__wasi_prestat_dir>(),
+            ::std::mem::align_of::<__wasi_prestat_dir_t>(),
             4usize,
-            concat!("Alignment of ", stringify!(__wasi_prestat_dir))
+            concat!("Alignment of ", stringify!(__wasi_prestat_dir_t))
         );
         assert_eq!(
             unsafe {
-                &(*(::std::ptr::null::<__wasi_prestat_dir>())).pr_name_len as *const _ as usize
+                &(*(::std::ptr::null::<__wasi_prestat_dir_t>())).pr_name_len as *const _ as usize
             },
             0usize,
             concat!(
                 "Offset of field: ",
-                stringify!(__wasi_prestat_dir),
+                stringify!(__wasi_prestat_dir_t),
                 "::",
                 stringify!(pr_name_len)
             )
@@ -115,21 +115,21 @@ mod test {
     #[test]
     fn bindgen_test_layout___wasi_prestat_t___wasi_prestat_u() {
         assert_eq!(
-            ::std::mem::size_of::<__wasi_prestat_u>(),
+            ::std::mem::size_of::<__wasi_prestat_u_t>(),
             4usize,
-            concat!("Size of: ", stringify!(__wasi_prestat_u))
+            concat!("Size of: ", stringify!(__wasi_prestat_u_t))
         );
         assert_eq!(
-            ::std::mem::align_of::<__wasi_prestat_u>(),
+            ::std::mem::align_of::<__wasi_prestat_u_t>(),
             4usize,
-            concat!("Alignment of ", stringify!(__wasi_prestat_u))
+            concat!("Alignment of ", stringify!(__wasi_prestat_u_t))
         );
         assert_eq!(
-            unsafe { &(*(::std::ptr::null::<__wasi_prestat_u>())).dir as *const _ as usize },
+            unsafe { &(*(::std::ptr::null::<__wasi_prestat_u_t>())).dir as *const _ as usize },
             0usize,
             concat!(
                 "Offset of field: ",
-                stringify!(__wasi_prestat_u),
+                stringify!(__wasi_prestat_u_t),
                 "::",
                 stringify!(dir)
             )

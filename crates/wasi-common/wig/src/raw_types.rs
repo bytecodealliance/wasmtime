@@ -1,6 +1,7 @@
 //! Translate witx types to Rust.
 
 use crate::utils;
+use heck::ShoutySnakeCase;
 use proc_macro2::{Delimiter, Group, Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use std::convert::TryFrom;
@@ -25,7 +26,7 @@ pub fn gen(args: TokenStream, mode: Mode) -> TokenStream {
     let mut output = TokenStream::new();
 
     let (path, _phase) = utils::witx_path_from_args(args);
-    let doc = match witx::load(&path) {
+    let doc = match witx::load(&[&path]) {
         Ok(doc) => doc,
         Err(e) => {
             panic!("error opening file {}: {}", path, e);
@@ -55,35 +56,43 @@ fn gen_datatype(
 ) {
     match &datatype.variant {
         witx::DatatypeVariant::Alias(a) => {
-            if a.name.as_str() == "size_t" {
-                let wasi_name = format_ident!("__wasi_{}", a.name.as_str());
+            if a.name.as_str() == "size" {
+                let wasi_name = format_ident!("__wasi_{}_t", a.name.as_str());
                 match mode {
                     Mode::Host => output.extend(quote!(pub type #wasi_name = usize;)),
-                    Mode::Wasi => panic!("size_t has target-specific size"),
+                    Mode::Wasi => panic!("size has target-specific size"),
                     Mode::Wasi32 => output.extend(quote!(pub type #wasi_name = u32;)),
                 }
             } else {
-                let wasi_name = format_ident!("__wasi_{}", a.name.as_str());
+                let wasi_name = format_ident!("__wasi_{}_t", a.name.as_str());
                 let to = ident_tokens(mode, &a.to);
                 output.extend(quote!(pub type #wasi_name = #to;));
             }
         }
         witx::DatatypeVariant::Enum(e) => {
-            let wasi_name = format_ident!("__wasi_{}", e.name.as_str());
+            let wasi_name = format_ident!("__wasi_{}_t", e.name.as_str());
             let repr = int_repr_tokens(e.repr);
             output.extend(quote!(pub type #wasi_name = #repr;));
             for (index, variant) in e.variants.iter().enumerate() {
-                let value_name = format_ident!("__WASI_{}", variant.as_str());
+                let value_name = format_ident!(
+                    "__WASI_{}_{}",
+                    e.name.as_str().to_shouty_snake_case(),
+                    variant.name.as_str().to_shouty_snake_case()
+                );
                 let index_name = Literal::usize_unsuffixed(index);
                 output.extend(quote!(pub const #value_name: #wasi_name = #index_name;));
             }
         }
         witx::DatatypeVariant::Flags(f) => {
-            let wasi_name = format_ident!("__wasi_{}", f.name.as_str());
+            let wasi_name = format_ident!("__wasi_{}_t", f.name.as_str());
             let repr = int_repr_tokens(f.repr);
             output.extend(quote!(pub type #wasi_name = #repr;));
             for (index, flag) in f.flags.iter().enumerate() {
-                let value_name = format_ident!("__WASI_{}", flag.as_str());
+                let value_name = format_ident!(
+                    "__WASI_{}_{}",
+                    f.name.as_str().to_shouty_snake_case(),
+                    flag.name.as_str().to_shouty_snake_case()
+                );
                 let flag_value = Literal::u128_unsuffixed(
                     1u128
                         .checked_shl(u32::try_from(index).expect("flag value overflow"))
@@ -105,7 +114,7 @@ fn gen_datatype(
                 output.extend(quote!(#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]));
             }
 
-            let wasi_name = format_ident!("__wasi_{}", s.name.as_str());
+            let wasi_name = format_ident!("__wasi_{}_t", s.name.as_str());
             output.extend(quote!(pub struct #wasi_name));
 
             let mut inner = TokenStream::new();
@@ -122,7 +131,7 @@ fn gen_datatype(
             output.extend(quote!(#[derive(Copy, Clone)]));
             output.extend(quote!(#[allow(missing_debug_implementations)]));
 
-            let wasi_name = format_ident!("__wasi_{}", u.name.as_str());
+            let wasi_name = format_ident!("__wasi_{}_t", u.name.as_str());
             output.extend(quote!(pub union #wasi_name));
 
             let mut inner = TokenStream::new();
@@ -133,6 +142,10 @@ fn gen_datatype(
             }
             let braced = Group::new(Delimiter::Brace, inner);
             output.extend(TokenStream::from(TokenTree::Group(braced)));
+        }
+        witx::DatatypeVariant::Handle(a) => {
+            let wasi_name = format_ident!("__wasi_{}_t", a.name.as_str());
+            output.extend(quote!(pub type #wasi_name = u32;));
         }
     }
 }
@@ -170,7 +183,7 @@ fn ident_tokens(mode: Mode, ident: &witx::DatatypeIdent) -> TokenStream {
     match ident {
         witx::DatatypeIdent::Builtin(builtin) => builtin_tokens(mode, *builtin),
         witx::DatatypeIdent::Ident(ident) => TokenStream::from(TokenTree::Ident(format_ident!(
-            "__wasi_{}",
+            "__wasi_{}_t",
             ident.name.as_str()
         ))),
         witx::DatatypeIdent::Pointer(pointee) => {
@@ -216,7 +229,7 @@ fn struct_has_union(doc: &witx::Document, s: &witx::StructDatatype) -> bool {
 fn type_has_target_size(doc: &witx::Document, type_: &witx::Datatype) -> bool {
     match &type_.variant {
         witx::DatatypeVariant::Alias(a) => {
-            a.name.as_str() == "size_t" || ident_has_target_size(doc, &a.to)
+            a.name.as_str() == "size" || ident_has_target_size(doc, &a.to)
         }
         witx::DatatypeVariant::Enum(_) => false,
         witx::DatatypeVariant::Flags(_) => false,
@@ -228,6 +241,7 @@ fn type_has_target_size(doc: &witx::Document, type_: &witx::Datatype) -> bool {
             .variants
             .iter()
             .any(|v| ident_has_target_size(doc, &v.type_)),
+        witx::DatatypeVariant::Handle(_) => false,
     }
 }
 

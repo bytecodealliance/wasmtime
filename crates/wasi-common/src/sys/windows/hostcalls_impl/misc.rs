@@ -53,25 +53,25 @@ pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__
         // [4] https://www.codeproject.com/Tips/1011902/High-Resolution-Time-For-Windows
         // [5] https://stackoverflow.com/questions/7685762/windows-7-timing-functions-how-to-use-getsystemtimeadjustment-correctly
         // [6] https://bugs.python.org/issue19007
-        wasi::__WASI_CLOCK_REALTIME => 55_000_000,
+        wasi::__WASI_CLOCKID_REALTIME => 55_000_000,
         // std::time::Instant uses QueryPerformanceCounter & QueryPerformanceFrequency internally
-        wasi::__WASI_CLOCK_MONOTONIC => *PERF_COUNTER_RES,
+        wasi::__WASI_CLOCKID_MONOTONIC => *PERF_COUNTER_RES,
         // The best we can do is to hardcode the value from the docs.
         // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes
-        wasi::__WASI_CLOCK_PROCESS_CPUTIME_ID => 100,
+        wasi::__WASI_CLOCKID_PROCESS_CPUTIME_ID => 100,
         // The best we can do is to hardcode the value from the docs.
         // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getthreadtimes
-        wasi::__WASI_CLOCK_THREAD_CPUTIME_ID => 100,
+        wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => 100,
         _ => return Err(Error::EINVAL),
     })
 }
 
 pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
     let duration = match clock_id {
-        wasi::__WASI_CLOCK_REALTIME => get_monotonic_time(),
-        wasi::__WASI_CLOCK_MONOTONIC => get_realtime_time()?,
-        wasi::__WASI_CLOCK_PROCESS_CPUTIME_ID => get_proc_cputime()?,
-        wasi::__WASI_CLOCK_THREAD_CPUTIME_ID => get_thread_cputime()?,
+        wasi::__WASI_CLOCKID_REALTIME => get_monotonic_time(),
+        wasi::__WASI_CLOCKID_MONOTONIC => get_realtime_time()?,
+        wasi::__WASI_CLOCKID_PROCESS_CPUTIME_ID => get_proc_cputime()?,
+        wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => get_thread_cputime()?,
         _ => return Err(Error::EINVAL),
     };
     duration.as_nanos().try_into().map_err(Into::into)
@@ -87,7 +87,7 @@ pub(crate) fn poll_oneoff(
 
 fn get_monotonic_time() -> Duration {
     // We're circumventing the fact that we can't get a Duration from an Instant
-    // The epoch of __WASI_CLOCK_MONOTONIC is undefined, so we fix a time point once
+    // The epoch of __WASI_CLOCKID_MONOTONIC is undefined, so we fix a time point once
     // and count relative to this time point.
     //
     // The alternative would be to copy over the implementation of std::time::Instant

@@ -109,19 +109,19 @@ pub(crate) fn errno_from_nix(errno: nix::errno::Errno) -> Error {
 pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> nix::fcntl::OFlag {
     use nix::fcntl::OFlag;
     let mut nix_flags = OFlag::empty();
-    if fdflags & wasi::__WASI_FDFLAG_APPEND != 0 {
+    if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
         nix_flags.insert(OFlag::O_APPEND);
     }
-    if fdflags & wasi::__WASI_FDFLAG_DSYNC != 0 {
+    if fdflags & wasi::__WASI_FDFLAGS_DSYNC != 0 {
         nix_flags.insert(OFlag::O_DSYNC);
     }
-    if fdflags & wasi::__WASI_FDFLAG_NONBLOCK != 0 {
+    if fdflags & wasi::__WASI_FDFLAGS_NONBLOCK != 0 {
         nix_flags.insert(OFlag::O_NONBLOCK);
     }
-    if fdflags & wasi::__WASI_FDFLAG_RSYNC != 0 {
+    if fdflags & wasi::__WASI_FDFLAGS_RSYNC != 0 {
         nix_flags.insert(O_RSYNC);
     }
-    if fdflags & wasi::__WASI_FDFLAG_SYNC != 0 {
+    if fdflags & wasi::__WASI_FDFLAGS_SYNC != 0 {
         nix_flags.insert(OFlag::O_SYNC);
     }
     nix_flags
@@ -131,19 +131,19 @@ pub(crate) fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> wasi::__wasi_fdflag
     use nix::fcntl::OFlag;
     let mut fdflags = 0;
     if oflags.contains(OFlag::O_APPEND) {
-        fdflags |= wasi::__WASI_FDFLAG_APPEND;
+        fdflags |= wasi::__WASI_FDFLAGS_APPEND;
     }
     if oflags.contains(OFlag::O_DSYNC) {
-        fdflags |= wasi::__WASI_FDFLAG_DSYNC;
+        fdflags |= wasi::__WASI_FDFLAGS_DSYNC;
     }
     if oflags.contains(OFlag::O_NONBLOCK) {
-        fdflags |= wasi::__WASI_FDFLAG_NONBLOCK;
+        fdflags |= wasi::__WASI_FDFLAGS_NONBLOCK;
     }
     if oflags.contains(O_RSYNC) {
-        fdflags |= wasi::__WASI_FDFLAG_RSYNC;
+        fdflags |= wasi::__WASI_FDFLAGS_RSYNC;
     }
     if oflags.contains(OFlag::O_SYNC) {
-        fdflags |= wasi::__WASI_FDFLAG_SYNC;
+        fdflags |= wasi::__WASI_FDFLAGS_SYNC;
     }
     fdflags
 }
@@ -151,16 +151,16 @@ pub(crate) fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> wasi::__wasi_fdflag
 pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> nix::fcntl::OFlag {
     use nix::fcntl::OFlag;
     let mut nix_flags = OFlag::empty();
-    if oflags & wasi::__WASI_O_CREAT != 0 {
+    if oflags & wasi::__WASI_OFLAGS_CREAT != 0 {
         nix_flags.insert(OFlag::O_CREAT);
     }
-    if oflags & wasi::__WASI_O_DIRECTORY != 0 {
+    if oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
         nix_flags.insert(OFlag::O_DIRECTORY);
     }
-    if oflags & wasi::__WASI_O_EXCL != 0 {
+    if oflags & wasi::__WASI_OFLAGS_EXCL != 0 {
         nix_flags.insert(OFlag::O_EXCL);
     }
-    if oflags & wasi::__WASI_O_TRUNC != 0 {
+    if oflags & wasi::__WASI_OFLAGS_TRUNC != 0 {
         nix_flags.insert(OFlag::O_TRUNC);
     }
     nix_flags
@@ -198,19 +198,19 @@ pub(crate) fn filestat_from_nix(
     let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
     let dev = wasi::__wasi_device_t::try_from(filestat.st_dev)?;
     let ino = wasi::__wasi_inode_t::try_from(filestat.st_ino)?;
-    let st_atim = filestat_to_timestamp(filestat.st_atime as u64, filestat.st_atime_nsec as u64)?;
-    let st_ctim = filestat_to_timestamp(filestat.st_ctime as u64, filestat.st_ctime_nsec as u64)?;
-    let st_mtim = filestat_to_timestamp(filestat.st_mtime as u64, filestat.st_mtime_nsec as u64)?;
+    let atim = filestat_to_timestamp(filestat.st_atime as u64, filestat.st_atime_nsec as u64)?;
+    let ctim = filestat_to_timestamp(filestat.st_ctime as u64, filestat.st_ctime_nsec as u64)?;
+    let mtim = filestat_to_timestamp(filestat.st_mtime as u64, filestat.st_mtime_nsec as u64)?;
 
     Ok(wasi::__wasi_filestat_t {
-        st_dev: dev,
-        st_ino: ino,
-        st_nlink: filestat.st_nlink as wasi::__wasi_linkcount_t,
-        st_size: filestat.st_size as wasi::__wasi_filesize_t,
-        st_atim,
-        st_ctim,
-        st_mtim,
-        st_filetype: filetype_from_nix(filetype).to_wasi(),
+        dev,
+        ino,
+        nlink: wasi::__wasi_linkcount_t::from(filestat.st_nlink),
+        size: filestat.st_size as wasi::__wasi_filesize_t,
+        atim,
+        ctim,
+        mtim,
+        filetype: filetype_from_nix(filetype).to_wasi(),
     })
 }
 
@@ -240,7 +240,7 @@ pub(crate) fn dirent_filetype_from_host(
 /// Creates owned WASI path from OS string.
 ///
 /// NB WASI spec requires OS string to be valid UTF-8. Otherwise,
-/// `__WASI_EILSEQ` error is returned.
+/// `__WASI_ERRNO_ILSEQ` error is returned.
 pub(crate) fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
     helpers::path_from_slice(s.as_ref().as_bytes()).map(String::from)
 }

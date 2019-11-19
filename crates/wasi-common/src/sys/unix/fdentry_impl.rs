@@ -46,9 +46,9 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
     let flags = OFlag::from_bits_truncate(flags_bits);
     let accmode = flags & OFlag::O_ACCMODE;
     if accmode == OFlag::O_RDONLY {
-        rights_base &= !wasi::__WASI_RIGHT_FD_WRITE;
+        rights_base &= !wasi::__WASI_RIGHTS_FD_WRITE;
     } else if accmode == OFlag::O_WRONLY {
-        rights_base &= !wasi::__WASI_RIGHT_FD_READ;
+        rights_base &= !wasi::__WASI_RIGHTS_FD_READ;
     }
 
     Ok((file_type, rights_base, rights_inheriting))

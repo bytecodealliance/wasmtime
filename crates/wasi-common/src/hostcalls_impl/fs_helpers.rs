@@ -118,9 +118,9 @@ pub(crate) fn path_get(
                                 }
                                 Err(e) => {
                                     match e.as_wasi_errno() {
-                                        wasi::__WASI_ELOOP
-                                        | wasi::__WASI_EMLINK
-                                        | wasi::__WASI_ENOTDIR =>
+                                        wasi::__WASI_ERRNO_LOOP
+                                        | wasi::__WASI_ERRNO_MLINK
+                                        | wasi::__WASI_ERRNO_NOTDIR =>
                                         // Check to see if it was a symlink. Linux indicates
                                         // this with ENOTDIR because of the O_DIRECTORY flag.
                                         {
@@ -155,7 +155,7 @@ pub(crate) fn path_get(
 
                             continue;
                         } else if ends_with_slash
-                            || (dirflags & wasi::__WASI_LOOKUP_SYMLINK_FOLLOW) != 0
+                            || (dirflags & wasi::__WASI_LOOKUPFLAGS_SYMLINK_FOLLOW) != 0
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion
@@ -179,12 +179,12 @@ pub(crate) fn path_get(
                                     continue;
                                 }
                                 Err(e) => {
-                                    if e.as_wasi_errno() != wasi::__WASI_EINVAL
-                                        && e.as_wasi_errno() != wasi::__WASI_ENOENT
+                                    if e.as_wasi_errno() != wasi::__WASI_ERRNO_INVAL
+                                        && e.as_wasi_errno() != wasi::__WASI_ERRNO_NOENT
                                         // this handles the cases when trying to link to
                                         // a destination that already exists, and the target
                                         // path contains a slash
-                                        && e.as_wasi_errno() != wasi::__WASI_ENOTDIR
+                                        && e.as_wasi_errno() != wasi::__WASI_ERRNO_NOTDIR
                                     {
                                         return Err(e);
                                     }

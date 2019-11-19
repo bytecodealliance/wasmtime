@@ -139,7 +139,7 @@ pub(crate) fn path_open(
                 return Err(Error::ELOOP);
             }
             // check if we are trying to open a file as a dir
-            if file_type.is_file() && oflags & wasi::__WASI_O_DIRECTORY != 0 {
+            if file_type.is_file() && oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
                 return Err(Error::ENOTDIR);
             }
         }
@@ -410,14 +410,14 @@ pub(crate) fn change_time(file: &File, _metadata: &Metadata) -> io::Result<i64> 
 pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
     let metadata = file.metadata()?;
     Ok(wasi::__wasi_filestat_t {
-        st_dev: device_id(file, &metadata)?,
-        st_ino: file_serial_no(file)?,
-        st_nlink: num_hardlinks(file, &metadata)?.try_into()?, // u64 doesn't fit into u32
-        st_size: metadata.len(),
-        st_atim: systemtime_to_timestamp(metadata.accessed()?)?,
-        st_ctim: change_time(file, &metadata)?.try_into()?, // i64 doesn't fit into u64
-        st_mtim: systemtime_to_timestamp(metadata.modified()?)?,
-        st_filetype: filetype_from_std(&metadata.file_type()).to_wasi(),
+        dev: device_id(file, &metadata)?,
+        ino: file_serial_no(file)?,
+        nlink: num_hardlinks(file, &metadata)?.try_into()?, // u64 doesn't fit into u32
+        size: metadata.len(),
+        atim: systemtime_to_timestamp(metadata.accessed()?)?,
+        ctim: change_time(file, &metadata)?.try_into()?, // i64 doesn't fit into u64
+        mtim: systemtime_to_timestamp(metadata.modified()?)?,
+        filetype: filetype_from_std(&metadata.file_type()).to_wasi(),
     })
 }
 

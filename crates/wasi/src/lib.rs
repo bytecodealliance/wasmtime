@@ -1,6 +1,7 @@
 #![allow(improper_ctypes)]
 
 mod instantiate;
+pub mod old;
 mod syscalls;
 
 pub use instantiate::{create_wasi_instance, instantiate_wasi, instantiate_wasi_with_context};

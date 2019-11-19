@@ -9,10 +9,10 @@ use std::mem::MaybeUninit;
 fn wasi_clock_id_to_unix(clock_id: wasi::__wasi_clockid_t) -> Result<libc::clockid_t> {
     // convert the supported clocks to the libc types, or return EINVAL
     match clock_id {
-        wasi::__WASI_CLOCK_REALTIME => Ok(libc::CLOCK_REALTIME),
-        wasi::__WASI_CLOCK_MONOTONIC => Ok(libc::CLOCK_MONOTONIC),
-        wasi::__WASI_CLOCK_PROCESS_CPUTIME_ID => Ok(libc::CLOCK_PROCESS_CPUTIME_ID),
-        wasi::__WASI_CLOCK_THREAD_CPUTIME_ID => Ok(libc::CLOCK_THREAD_CPUTIME_ID),
+        wasi::__WASI_CLOCKID_REALTIME => Ok(libc::CLOCK_REALTIME),
+        wasi::__WASI_CLOCKID_MONOTONIC => Ok(libc::CLOCK_MONOTONIC),
+        wasi::__WASI_CLOCKID_PROCESS_CPUTIME_ID => Ok(libc::CLOCK_PROCESS_CPUTIME_ID),
+        wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => Ok(libc::CLOCK_THREAD_CPUTIME_ID),
         _ => Err(Error::EINVAL),
     }
 }
@@ -129,8 +129,8 @@ fn poll_oneoff_handle_timeout_event(
     events.push(wasi::__wasi_event_t {
         userdata: timeout.userdata,
         r#type: wasi::__WASI_EVENTTYPE_CLOCK,
-        error: wasi::__WASI_ESUCCESS,
-        u: wasi::__wasi_event_u {
+        error: wasi::__WASI_ERRNO_SUCCESS,
+        u: wasi::__wasi_event_u_t {
             fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                 nbytes: 0,
                 flags: 0,
@@ -166,11 +166,11 @@ fn poll_oneoff_handle_fd_event<'a>(
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
                 r#type: fd_event.r#type,
-                error: wasi::__WASI_EBADF,
-                u: wasi::__wasi_event_u {
+                error: wasi::__WASI_ERRNO_BADF,
+                u: wasi::__wasi_event_u_t {
                     fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                         nbytes: 0,
-                        flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                        flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
                     },
                 },
             }
@@ -178,11 +178,11 @@ fn poll_oneoff_handle_fd_event<'a>(
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
                 r#type: fd_event.r#type,
-                error: wasi::__WASI_EIO,
-                u: wasi::__wasi_event_u {
+                error: wasi::__WASI_ERRNO_IO,
+                u: wasi::__wasi_event_u_t {
                     fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                         nbytes: 0,
-                        flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                        flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
                     },
                 },
             }
@@ -190,11 +190,11 @@ fn poll_oneoff_handle_fd_event<'a>(
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
                 r#type: fd_event.r#type,
-                error: wasi::__WASI_ESUCCESS,
-                u: wasi::__wasi_event_u {
+                error: wasi::__WASI_ERRNO_SUCCESS,
+                u: wasi::__wasi_event_u_t {
                     fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                         nbytes: 0,
-                        flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                        flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
                     },
                 },
             }
@@ -202,8 +202,8 @@ fn poll_oneoff_handle_fd_event<'a>(
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
                 r#type: fd_event.r#type,
-                error: wasi::__WASI_ESUCCESS,
-                u: wasi::__wasi_event_u {
+                error: wasi::__WASI_ERRNO_SUCCESS,
+                u: wasi::__wasi_event_u_t {
                     fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                         nbytes: nbytes.try_into()?,
                         flags: 0,
