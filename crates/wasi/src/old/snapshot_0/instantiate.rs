@@ -1,3 +1,4 @@
+extern crate alloc;
 use super::syscalls;
 use alloc::rc::Rc;
 use core::cell::RefCell;
