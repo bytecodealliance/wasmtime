@@ -15,7 +15,8 @@ version="0.7.0"
 echo "Updating crate versions to $version"
 find -name Cargo.toml \
     -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
-    -exec sed -i.bk -e "s/^version = \"[[:digit:]].*/version = \"$version\"/" {} \;
+    -exec sed -i.bk -e "s/^version = \"[[:digit:].]*\"/version = \"$version\"/" {} \; \
+    -exec sed -i.bk -e "s/\( path = \"[[:alnum:]./-]*\", version =\) \"[[:digit:].]*\"/\1 \"$version\"/" {} \;
 
 # Update our local Cargo.lock (not checked in).
 cargo update
