@@ -58,6 +58,13 @@ Cranelift's APIs are not yet stable.
 
 Cranelift currently requires Rust 1.37 or later to build.
 
+Contributing
+------------
+
+If you're interested in contributing to Cranelift: thank you! We have a
+[contributing guide](CONTRIBUTING.md) which will help you getting involved in
+the Cranelift project.
+
 Planned uses
 ------------
 
