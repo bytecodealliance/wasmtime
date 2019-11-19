@@ -1,3 +1,4 @@
+#![cfg(features = "test-programs")]
 mod runtime;
 mod utils;
 
