@@ -4,7 +4,7 @@ pub use wasmtime_rust_macro::wasmtime;
 #[doc(hidden)]
 pub mod __rt {
     pub use anyhow;
-    pub use wasmtime_api;
+    pub use wasmtime;
     pub use wasmtime_interface_types;
     pub use wasmtime_jit;
     pub use wasmtime_wasi;

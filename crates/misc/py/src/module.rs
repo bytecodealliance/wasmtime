@@ -1,7 +1,7 @@
 //! WebAssembly Module API object.
 
 use pyo3::prelude::*;
-use wasmtime_api as api;
+use wasmtime as api;
 
 #[pyclass]
 pub struct Module {

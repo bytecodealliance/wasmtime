@@ -34,7 +34,7 @@ fn generate_struct(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
     let root = root();
     Ok(quote! {
         #vis struct #name {
-            instance: #root::wasmtime_api::HostRef<#root::wasmtime_api::Instance>,
+            instance: #root::wasmtime::HostRef<#root::wasmtime::Instance>,
             data: #root::wasmtime_interface_types::ModuleData,
         }
     })
@@ -48,7 +48,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
         #vis fn load_file(path: impl AsRef<std::path::Path>) -> #root::anyhow::Result<#name> {
             let bytes = std::fs::read(path)?;
 
-            use #root::wasmtime_api::{HostRef, Config, Extern, Engine, Store, Instance, Module};
+            use #root::wasmtime::{HostRef, Config, Extern, Engine, Store, Instance, Module};
             use #root::anyhow::{bail, format_err};
 
             let mut config = Config::new();

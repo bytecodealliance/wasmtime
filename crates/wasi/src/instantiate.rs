@@ -9,7 +9,7 @@ use std::fs::File;
 use std::rc::Rc;
 use target_lexicon::HOST;
 use wasi_common::{WasiCtx, WasiCtxBuilder};
-use wasmtime_api as api;
+use wasmtime as api;
 use wasmtime_environ::{translate_signature, Export, Module};
 use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMFunctionBody};
 

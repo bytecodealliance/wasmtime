@@ -37,7 +37,7 @@ use serde::Deserialize;
 use std::path::{Component, Path};
 use std::{collections::HashMap, ffi::OsStr, fs::File, process::exit};
 use wasi_common::preopen_dir;
-use wasmtime_api::{Config, Engine, HostRef, Instance, Module, Store};
+use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_interface_types::ModuleData;

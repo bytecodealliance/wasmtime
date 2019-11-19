@@ -9,7 +9,7 @@ readme = "README.md"
 edition = "2018"
 
 [lib]
-name = "wasmtime_api"
+name = "wasmtime"
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [dependencies]

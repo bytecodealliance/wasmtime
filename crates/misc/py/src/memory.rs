@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use std::ffi::CStr;
 use std::os::raw::{c_int, c_void};
 use std::ptr;
-use wasmtime_api as api;
+use wasmtime as api;
 
 #[pyclass]
 pub struct Memory {

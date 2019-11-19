@@ -5,7 +5,7 @@ use crate::memory::Memory;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::rc::Rc;
-use wasmtime_api as api;
+use wasmtime as api;
 use wasmtime_interface_types::ModuleData;
 
 #[pyclass]

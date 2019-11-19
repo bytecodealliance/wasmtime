@@ -5,7 +5,7 @@ use pyo3::exceptions::Exception;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyTuple};
 use std::rc::Rc;
-use wasmtime_api as api;
+use wasmtime as api;
 use wasmtime_interface_types::ModuleData;
 
 // TODO support non-export functions
