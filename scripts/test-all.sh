@@ -95,8 +95,9 @@ if rustup toolchain list | grep -q nightly; then
     cargo +nightly test --features lightbeam
 
     # Also run wasmtime-py and wasmtime-rust's tests.
+    # Temporarily disable wasmtime-py due to https://github.com/bytecodealliance/wasmtime/issues/468
+    #  --package wasmtime-py
     RUST_BACKTRACE=1 cargo +nightly test \
-      --package wasmtime-py \
       --package wasmtime-rust
 else
     echo "nightly toolchain not found, skipping fuzz target integration test"
