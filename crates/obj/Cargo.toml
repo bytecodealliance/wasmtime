@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-obj"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Native object file output for WebAsssembly code in Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -14,7 +14,7 @@ edition = "2018"
 cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
-wasmtime-environ = { path = "../environ", version = "0.7.0" }
+wasmtime-environ = { path = "../environ", version = "0.8.0" }
 faerie = "0.13.0"
 more-asserts = "0.2.1"
 
