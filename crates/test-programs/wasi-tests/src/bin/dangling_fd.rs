@@ -1,9 +1,9 @@
 use more_asserts::assert_gt;
 use std::{env, process};
 use wasi::wasi_unstable;
-use wasi_misc_tests::open_scratch_directory;
-use wasi_misc_tests::utils::{cleanup_dir, cleanup_file, create_dir, create_file};
-use wasi_misc_tests::wasi_wrappers::wasi_path_open;
+use wasi_tests::open_scratch_directory;
+use wasi_tests::utils::{cleanup_dir, cleanup_file, create_dir, create_file};
+use wasi_tests::wasi_wrappers::wasi_path_open;
 
 unsafe fn create_or_open(
     dir_fd: wasi_unstable::Fd,
