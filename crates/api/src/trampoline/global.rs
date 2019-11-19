@@ -1,6 +1,5 @@
 use super::create_handle::create_handle;
 use crate::{GlobalType, Mutability, Val};
-use alloc::boxed::Box;
 use anyhow::Result;
 use cranelift_entity::PrimaryMap;
 use wasmtime_environ::Module;

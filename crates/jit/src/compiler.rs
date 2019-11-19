@@ -1,13 +1,8 @@
 //! JIT compilation.
 
-use super::HashMap;
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
 use crate::target_tunables::target_tunables;
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::convert::TryFrom;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::print_errors::pretty_error;
@@ -16,6 +11,8 @@ use cranelift_codegen::{binemit, ir};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, DefinedMemoryIndex, ModuleTranslationState};
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::{
     Compilation, CompileError, CompiledFunction, Compiler as _C, FunctionBodyData, Module,
@@ -202,7 +199,7 @@ impl Compiler {
         signature: &ir::Signature,
         value_size: usize,
     ) -> Result<*const VMFunctionBody, SetupError> {
-        use super::hash_map::Entry::{Occupied, Vacant};
+        use std::collections::hash_map::Entry::{Occupied, Vacant};
         Ok(match self.trampoline_park.entry(callee_address) {
             Occupied(entry) => *entry.get(),
             Vacant(entry) => {

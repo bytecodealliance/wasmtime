@@ -48,10 +48,5 @@ rand = { version = "0.7.0", features = ["small_rng"] }
 cranelift-codegen = { version = "0.50.0", features = ["enable-serde", "all-arch"] }
 filetime = "0.2.7"
 
-[features]
-default = ["std"]
-std = ["cranelift-codegen/std", "cranelift-wasm/std"]
-core = ["cranelift-codegen/core", "cranelift-wasm/core"]
-
 [badges]
 maintenance = { status = "actively-developed" }

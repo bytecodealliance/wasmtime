@@ -1,14 +1,12 @@
-use crate::HashMap;
 use crate::WasmFileInfo;
-use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
-use core::iter::FromIterator;
 use cranelift_codegen::ir::SourceLoc;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;
 use more_asserts::assert_le;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::iter::FromIterator;
 use wasmtime_environ::{FunctionAddressMap, ModuleAddressMap};
 
 pub type GeneratedAddress = usize;
@@ -163,7 +161,7 @@ fn build_function_lookup(
                 active_ranges.clone().into_boxed_slice(),
             );
         }
-        active_ranges.retain(|r| ranges[*r].wasm_end.cmp(&wasm_start) != core::cmp::Ordering::Less);
+        active_ranges.retain(|r| ranges[*r].wasm_end.cmp(&wasm_start) != std::cmp::Ordering::Less);
         active_ranges.push(range_index);
         last_wasm_pos = Some(wasm_start);
     }
@@ -494,10 +492,10 @@ impl AddressTransform {
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
     use crate::read_debuginfo::WasmFileInfo;
-    use core::iter::FromIterator;
     use cranelift_codegen::ir::SourceLoc;
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
+    use std::iter::FromIterator;
     use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
 
     #[test]

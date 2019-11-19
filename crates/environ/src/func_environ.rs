@@ -1,9 +1,6 @@
 use crate::module::{MemoryPlan, MemoryStyle, Module, TableStyle};
 use crate::vmoffsets::VMOffsets;
 use crate::WASM_PAGE_SIZE;
-use alloc::vec::Vec;
-use core::clone::Clone;
-use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
@@ -18,6 +15,7 @@ use cranelift_wasm::{
 };
 #[cfg(feature = "lightbeam")]
 use cranelift_wasm::{DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex};
+use std::convert::TryFrom;
 
 /// Compute an `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {

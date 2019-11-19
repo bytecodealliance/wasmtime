@@ -1,14 +1,12 @@
 //! WebAssembly Memory API object.
 
-extern crate alloc;
-
-use core::ptr;
 use pyo3::class::PyBufferProtocol;
 use pyo3::exceptions::BufferError;
 use pyo3::ffi;
 use pyo3::prelude::*;
 use std::ffi::CStr;
 use std::os::raw::{c_int, c_void};
+use std::ptr;
 use wasmtime_api as api;
 
 #[pyclass]

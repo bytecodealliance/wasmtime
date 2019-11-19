@@ -1,15 +1,14 @@
 use super::address_transform::AddressTransform;
 use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
-use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
 use anyhow::Error;
-use core::iter::FromIterator;
 use cranelift_entity::EntityRef;
 use gimli::{
     write, DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit,
 };
 use more_asserts::assert_le;
+use std::collections::BTreeMap;
+use std::iter::FromIterator;
 
 #[derive(Debug)]
 enum SavedLineProgramRow {

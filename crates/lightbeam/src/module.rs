@@ -2,13 +2,13 @@ use crate::backend::TranslatedCodeSection;
 use crate::error::Error;
 use crate::microwasm;
 use crate::translate_sections;
-use core::{convert::TryInto, mem};
 use cranelift_codegen::{
     ir::{self, AbiParam, Signature as CraneliftSignature},
     isa,
 };
 use memoffset::offset_of;
 use more_asserts::assert_le;
+use std::{convert::TryInto, mem};
 use thiserror::Error;
 use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, Type};
 
@@ -167,7 +167,7 @@ impl ExecutableModule {
             self.context
                 .as_ref()
                 .map(|ctx| (&**ctx) as *const VmCtx as *const u8)
-                .unwrap_or(core::ptr::null()),
+                .unwrap_or(std::ptr::null()),
         )
     }
 

@@ -1,4 +1,3 @@
-use alloc::string::String;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_entity::EntityRef;

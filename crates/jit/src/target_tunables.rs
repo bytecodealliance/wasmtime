@@ -1,4 +1,4 @@
-use core::cmp::min;
+use std::cmp::min;
 use target_lexicon::{OperatingSystem, Triple};
 use wasmtime_environ::Tunables;
 

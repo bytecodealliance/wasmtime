@@ -1,7 +1,7 @@
 use crate::{host, wasm32};
-use core::convert::TryFrom;
 use log::{debug, error};
 use more_asserts::assert_le;
+use std::convert::TryFrom;
 use std::mem::{align_of, size_of, zeroed};
 use std::slice;
 use wasmtime_runtime::{Export, VMContext};

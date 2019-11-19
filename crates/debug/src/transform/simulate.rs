@@ -2,14 +2,12 @@ use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::AddressTransform;
 use crate::read_debuginfo::WasmFileInfo;
-use crate::{HashMap, HashSet};
-use alloc::string::String;
-use alloc::vec::Vec;
 use anyhow::Error;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::get_vmctx_value_label;
 use gimli::write;
 use gimli::{self, LineEncoding};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 

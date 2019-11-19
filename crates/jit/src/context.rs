@@ -1,14 +1,12 @@
 use crate::action::{get, inspect_memory, invoke};
-use crate::HashMap;
 use crate::{
     instantiate, ActionError, ActionOutcome, CompilationStrategy, CompiledModule, Compiler,
     InstanceHandle, Namespace, RuntimeValue, SetupError,
 };
-use alloc::boxed::Box;
-use alloc::rc::Rc;
-use alloc::string::{String, ToString};
-use core::cell::RefCell;
 use cranelift_codegen::isa::TargetIsa;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 use thiserror::Error;
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
 

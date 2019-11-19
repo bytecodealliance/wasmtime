@@ -2,16 +2,10 @@
 
 #![allow(clippy::cast_ptr_alignment)]
 
-use alloc::string::String;
-use alloc::vec::Vec;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl};
-#[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap, HashSet};
 use more_asserts::assert_gt;
-#[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap, HashSet};
 use target_lexicon::{BinaryFormat, Triple};
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
@@ -23,8 +17,6 @@ mod gc;
 mod read_debuginfo;
 mod transform;
 mod write_debuginfo;
-
-extern crate alloc;
 
 struct FunctionRelocResolver {}
 impl SymbolResolver for FunctionRelocResolver {
@@ -80,12 +72,12 @@ pub fn emit_debugsections_image(
     assert_gt!(funcs.len(), 0);
     let mut segment_body: (usize, usize) = (!0, 0);
     for (body_ptr, body_len) in funcs {
-        segment_body.0 = ::core::cmp::min(segment_body.0, *body_ptr as usize);
-        segment_body.1 = ::core::cmp::max(segment_body.1, *body_ptr as usize + body_len);
+        segment_body.0 = std::cmp::min(segment_body.0, *body_ptr as usize);
+        segment_body.1 = std::cmp::max(segment_body.1, *body_ptr as usize + body_len);
     }
     let segment_body = (segment_body.0 as *const u8, segment_body.1 - segment_body.0);
 
-    let body = unsafe { ::core::slice::from_raw_parts(segment_body.0, segment_body.1) };
+    let body = unsafe { std::slice::from_raw_parts(segment_body.0, segment_body.1) };
     obj.declare_with("all", Decl::function(), body.to_vec())?;
 
     emit_dwarf(&mut obj, dwarf, &resolver)?;

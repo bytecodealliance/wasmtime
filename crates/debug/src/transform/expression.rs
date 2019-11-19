@@ -1,6 +1,4 @@
 use super::address_transform::AddressTransform;
-use crate::{HashMap, HashSet};
-use alloc::vec::Vec;
 use anyhow::Error;
 use cranelift_codegen::ir::{StackSlots, ValueLabel, ValueLoc};
 use cranelift_codegen::isa::RegUnit;
@@ -9,6 +7,7 @@ use cranelift_entity::EntityRef;
 use cranelift_wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, Register, X86_64};
 use more_asserts::{assert_le, assert_lt};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
@@ -201,7 +200,7 @@ impl CompiledExpression {
         addr_tr: &AddressTransform,
         frame_info: Option<&FunctionFrameInfo>,
         endian: gimli::RunTimeEndian,
-    ) -> alloc::vec::Vec<(write::Address, u64, write::Expression)> {
+    ) -> Vec<(write::Address, u64, write::Expression)> {
         if scope.is_empty() {
             return vec![];
         }

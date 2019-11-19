@@ -1,6 +1,5 @@
 use super::address_transform::AddressTransform;
 use super::{DebugInputContext, Reader};
-use alloc::vec::Vec;
 use anyhow::Error;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::DefinedFuncIndex;

@@ -2,10 +2,6 @@
 
 use crate::module_environ::FunctionBodyData;
 use crate::tunables::Tunables;
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::hash::{Hash, Hasher};
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
@@ -14,6 +10,7 @@ use cranelift_wasm::{
 };
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
+use std::hash::{Hash, Hasher};
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug, Hash)]

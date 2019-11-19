@@ -2,9 +2,9 @@ use crate::host::{argv_environ_values, fd_prestats, fd_table};
 use crate::instantiate::WASIState;
 use crate::translate::*;
 use crate::{host, wasm32};
-use core::convert::TryFrom;
 use cranelift_codegen::ir::types::{Type, I32, I64};
 use log::{log_enabled, trace};
+use std::convert::TryFrom;
 use std::{mem, ptr, slice, str};
 use wasmtime_runtime::VMContext;
 

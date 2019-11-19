@@ -1,7 +1,7 @@
 use crate::Config;
-use alloc::rc::Rc;
-use core::cell::{RefCell, RefMut};
-use core::hash::{Hash, Hasher};
+use std::cell::{RefCell, RefMut};
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use wasmtime_jit::{Compiler, Features};
 
 #[derive(Clone)]

@@ -5,7 +5,6 @@
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "std", deny(unstable_features))]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
@@ -24,8 +23,6 @@
         clippy::use_self
     )
 )]
-
-extern crate alloc;
 
 mod address_map;
 mod compilation;

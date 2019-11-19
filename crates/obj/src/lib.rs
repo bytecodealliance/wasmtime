@@ -26,8 +26,6 @@
     )
 )]
 
-extern crate alloc;
-
 mod context;
 mod data_segment;
 mod function;

@@ -1,12 +1,12 @@
 #![allow(improper_ctypes)]
 
-use alloc::rc::Rc;
-use core::cell::RefCell;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
+use std::cell::RefCell;
 use std::collections::hash_map::HashMap;
+use std::rc::Rc;
 use target_lexicon::HOST;
 use wasmtime_environ::{translate_signature, Export, MemoryPlan, Module, TablePlan};
 use wasmtime_jit::target_tunables;

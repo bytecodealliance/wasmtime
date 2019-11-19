@@ -1,7 +1,6 @@
 //! Wasmtime embed API. Based on wasm-c-api.
 
 #![allow(improper_ctypes)]
-#![cfg_attr(not(feature = "std"), no_std)]
 
 mod callable;
 mod context;
@@ -17,8 +16,6 @@ mod values;
 
 pub mod wasm;
 
-extern crate alloc;
-
 pub use crate::callable::Callable;
 pub use crate::externals::*;
 pub use crate::instance::Instance;
@@ -28,8 +25,3 @@ pub use crate::runtime::{Config, Engine, Store};
 pub use crate::trap::Trap;
 pub use crate::types::*;
 pub use crate::values::*;
-
-#[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap, HashSet};
-#[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap, HashSet};

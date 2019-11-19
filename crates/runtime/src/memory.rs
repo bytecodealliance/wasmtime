@@ -4,9 +4,8 @@
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
-use alloc::string::String;
-use core::convert::TryFrom;
 use more_asserts::{assert_ge, assert_le};
+use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A linear memory instance.

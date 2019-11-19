@@ -4,7 +4,6 @@
 use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::module;
 use crate::module_environ::FunctionBodyData;
-use alloc::vec::Vec;
 use cranelift_codegen::{binemit, ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, ModuleTranslationState, WasmError};

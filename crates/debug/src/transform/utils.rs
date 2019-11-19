@@ -1,6 +1,5 @@
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
-use alloc::vec::Vec;
 use anyhow::Error;
 use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;

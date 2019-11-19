@@ -4,11 +4,10 @@ use crate::module::Module;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::types::{ExportType, ExternType, Name};
-use crate::{HashMap, HashSet};
-use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use anyhow::Result;
-use core::cell::RefCell;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use wasmtime_jit::{instantiate, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle};
 

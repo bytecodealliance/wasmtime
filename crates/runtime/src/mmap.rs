@@ -1,16 +1,14 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
-use core::ptr;
-use core::slice;
 #[cfg(not(target_os = "windows"))]
 use libc;
 use more_asserts::assert_le;
 use more_asserts::assert_lt;
 use region;
 use std::io;
+use std::ptr;
+use std::slice;
 
 /// Round `size` up to the nearest multiple of `page_size`.
 fn round_up_to_page_size(size: usize, page_size: usize) -> usize {

@@ -3,15 +3,15 @@
 use super::create_handle::create_handle;
 use crate::r#ref::HostRef;
 use crate::{Callable, FuncType, Store, Trap, Val};
-use alloc::{boxed::Box, rc::Rc, string::ToString, vec::Vec};
 use anyhow::Result;
-use core::cmp;
 use cranelift_codegen::ir::{types, InstBuilder, StackSlotData, StackSlotKind, TrapCode};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, ir, isa, Context};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex};
+use std::cmp;
+use std::rc::Rc;
 use wasmtime_environ::{CompiledFunction, Export, Module};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};

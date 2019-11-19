@@ -1,5 +1,3 @@
-use alloc::string::String;
-use alloc::vec::Vec;
 use faerie::{Artifact, Decl};
 
 /// Declares data segment symbol

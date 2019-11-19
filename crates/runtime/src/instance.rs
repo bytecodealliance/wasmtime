@@ -15,16 +15,6 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
-use crate::{HashMap, HashSet};
-use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
-use alloc::rc::Rc;
-use alloc::string::{String, ToString};
-use core::any::Any;
-use core::borrow::Borrow;
-use core::cell::RefCell;
-use core::convert::TryFrom;
-use core::{mem, ptr, slice};
 use cranelift_entity::{BoxedSlice, EntityRef, PrimaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
@@ -32,6 +22,13 @@ use cranelift_wasm::{
 };
 use memoffset::offset_of;
 use more_asserts::assert_lt;
+use std::any::Any;
+use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
+use std::rc::Rc;
+use std::{mem, ptr, slice};
 use thiserror::Error;
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
@@ -613,10 +610,8 @@ impl Instance {
     }
 
     pub(crate) fn lookup_global_export(&self, field: &str) -> Option<Export> {
-        let cell: &RefCell<HashMap<alloc::string::String, core::option::Option<Export>>> =
-            self.global_exports.borrow();
-        let map: &mut HashMap<alloc::string::String, core::option::Option<Export>> =
-            &mut cell.borrow_mut();
+        let cell: &RefCell<HashMap<String, Option<Export>>> = self.global_exports.borrow();
+        let map: &mut HashMap<String, Option<Export>> = &mut cell.borrow_mut();
         if let Some(Some(export)) = map.get(field) {
             return Some(export.clone());
         }
@@ -790,11 +785,9 @@ impl InstanceHandle {
 
         // Collect the exports for the global export map.
         for (field, decl) in &instance.module.exports {
-            use crate::hash_map::Entry::*;
-            let cell: &RefCell<HashMap<alloc::string::String, core::option::Option<Export>>> =
-                instance.global_exports.borrow();
-            let map: &mut HashMap<alloc::string::String, core::option::Option<Export>> =
-                &mut cell.borrow_mut();
+            use std::collections::hash_map::Entry::*;
+            let cell: &RefCell<HashMap<String, Option<Export>>> = instance.global_exports.borrow();
+            let map: &mut HashMap<String, Option<Export>> = &mut cell.borrow_mut();
             match map.entry(field.to_string()) {
                 Vacant(entry) => {
                     entry.insert(Some(lookup_by_declaration(

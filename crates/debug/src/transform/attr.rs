@@ -3,12 +3,11 @@ use super::expression::{compile_expression, CompiledExpression, FunctionFrameInf
 use super::range_info_builder::RangeInfoBuilder;
 use super::unit::PendingDieRef;
 use super::{DebugInputContext, Reader, TransformError};
-use crate::HashMap;
-use alloc::vec::Vec;
 use anyhow::Error;
 use gimli::{
     write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, UnitOffset,
 };
+use std::collections::HashMap;
 
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),

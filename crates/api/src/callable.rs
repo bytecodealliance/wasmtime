@@ -4,8 +4,8 @@ use crate::trampoline::generate_func_export;
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
-use alloc::{rc::Rc, vec::Vec};
 use cranelift_codegen::ir;
+use std::rc::Rc;
 use wasmtime_jit::InstanceHandle;
 use wasmtime_runtime::Export;
 
@@ -43,8 +43,8 @@ impl WasmtimeFn {
 
 impl WrappedCallable for WasmtimeFn {
     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
-        use core::cmp::max;
-        use core::{mem, ptr};
+        use std::cmp::max;
+        use std::{mem, ptr};
 
         let (vmctx, body, signature) = match self.wasmtime_export() {
             Export::Function {
