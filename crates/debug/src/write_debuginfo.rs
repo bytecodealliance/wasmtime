@@ -25,19 +25,19 @@ pub fn emit_dwarf(
     artifact: &mut Artifact,
     mut dwarf: Dwarf,
     symbol_resolver: &dyn SymbolResolver,
-) -> result::Result<(), failure::Error> {
+) -> anyhow::Result<()> {
     let endian = RunTimeEndian::Little;
 
     let mut sections = Sections::new(WriterRelocate::new(endian, symbol_resolver));
     dwarf.write(&mut sections)?;
-    sections.for_each_mut(|id, s| -> result::Result<(), failure::Error> {
+    sections.for_each_mut(|id, s| -> anyhow::Result<()> {
         artifact.declare_with(
             id.name(),
             Decl::section(SectionKind::Debug),
             s.writer.take(),
         )
     })?;
-    sections.for_each_mut(|id, s| -> result::Result<(), failure::Error> {
+    sections.for_each_mut(|id, s| -> anyhow::Result<()> {
         for reloc in &s.relocs {
             artifact.link_with(
                 faerie::Link {

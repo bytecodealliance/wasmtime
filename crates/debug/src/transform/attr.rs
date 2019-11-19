@@ -3,7 +3,7 @@ use super::expression::{compile_expression, CompiledExpression, FunctionFrameInf
 use super::range_info_builder::RangeInfoBuilder;
 use super::unit::PendingDieRef;
 use super::{DebugInputContext, Reader, TransformError};
-use failure::Error;
+use anyhow::Error;
 use gimli::{
     write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, UnitOffset,
 };

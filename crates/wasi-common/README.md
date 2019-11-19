@@ -1,4 +1,18 @@
-# wasi-common
+<div align="center">
+  <h1><code>wasi-common</code></h1>
+
+<strong>A <a href="https://bytecodealliance.org/">Bytecode Alliance</a> project</strong>
+
+  <p>
+    <strong>A library providing a common implementation of WASI hostcalls for re-use in any WASI-enabled runtime.</strong>
+  </p>
+
+  <p>
+    <a href="https://crates.io/crates/wasi-common"><img src="https://img.shields.io/crates/v/wasi-common.svg?style=flat-square" alt="Crates.io version" /></a>
+    <a href="https://crates.io/crates/wasi-common"><img src="https://img.shields.io/crates/d/wasi-common.svg?style=flat-square" alt="Download" /></a>
+    <a href="https://docs.rs/wasi-common/"><img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square" alt="docs.rs docs" /></a>
+  </p>
+</div>
 
 The `wasi-common` crate will ultimately serve as a library providing a common implementation of
 WASI hostcalls for re-use in any WASI (and potentially non-WASI) runtimes

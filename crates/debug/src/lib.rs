@@ -2,9 +2,9 @@
 
 #![allow(clippy::cast_ptr_alignment)]
 
+use anyhow::Error;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl};
-use failure::Error;
 use more_asserts::assert_gt;
 use target_lexicon::{BinaryFormat, Triple};
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};

@@ -1,10 +1,10 @@
 use super::address_transform::AddressTransform;
+use anyhow::Error;
 use cranelift_codegen::ir::{StackSlots, ValueLabel, ValueLoc};
 use cranelift_codegen::isa::RegUnit;
 use cranelift_codegen::ValueLabelsRanges;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{get_vmctx_value_label, DefinedFuncIndex};
-use failure::Error;
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, Register, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::collections::{HashMap, HashSet};

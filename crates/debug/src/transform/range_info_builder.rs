@@ -1,8 +1,8 @@
 use super::address_transform::AddressTransform;
 use super::{DebugInputContext, Reader};
+use anyhow::Error;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::DefinedFuncIndex;
-use failure::Error;
 use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset};
 use more_asserts::assert_lt;
 

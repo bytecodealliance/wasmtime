@@ -1,8 +1,8 @@
 use super::address_transform::AddressTransform;
 use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
+use anyhow::Error;
 use cranelift_entity::EntityRef;
-use failure::Error;
 use gimli::{
     write, DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit,
 };

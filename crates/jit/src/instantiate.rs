@@ -40,8 +40,8 @@ pub enum SetupError {
     Instantiate(#[from] InstantiationError),
 
     /// Debug information generation error occured.
-    #[error("Debug information error: {0}")]
-    DebugInfo(failure::Error),
+    #[error("Debug information error")]
+    DebugInfo(#[from] anyhow::Error),
 }
 
 /// This is similar to `CompiledModule`, but references the data initializers
