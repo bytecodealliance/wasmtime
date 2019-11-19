@@ -127,7 +127,7 @@ fn write_testsuite_tests(out: &mut File, dir_entry: DirEntry, testsuite: &str) -
         "        let path = std::path::Path::new(r#\"{}\"#);",
         path.display()
     )?;
-    writeln!(out, "        let data = utils::read_wasm(path)?;")?;
+    writeln!(out, "        let data = wat::parse_file(path)?;")?;
     writeln!(
         out,
         "        let bin_name = utils::extract_exec_name_from_path(path)?;"

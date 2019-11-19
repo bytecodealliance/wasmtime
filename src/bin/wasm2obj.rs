@@ -38,11 +38,9 @@ use faerie::Artifact;
 use serde::Deserialize;
 use std::error::Error;
 use std::fmt::format;
-use std::fs::File;
-use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::{io, process, str};
+use std::{process, str};
 use target_lexicon::Triple;
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
@@ -102,13 +100,6 @@ struct Args {
     flag_lightbeam: bool,
     flag_cranelift: bool,
     flag_optimize: bool,
-}
-
-fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
-    let mut buf: Vec<u8> = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
-    Ok(buf)
 }
 
 fn main() {
@@ -189,7 +180,7 @@ fn handle_module(
     cranelift: bool,
     lightbeam: bool,
 ) -> Result<(), String> {
-    let data = match read_wasm_file(path) {
+    let data = match wat::parse_file(path) {
         Ok(data) => data,
         Err(err) => {
             return Err(String::from(err.description()));

@@ -1,15 +1,5 @@
-use std::fs;
 use std::path::Path;
 use tempfile::{Builder, TempDir};
-
-pub fn read_wasm(path: &Path) -> anyhow::Result<Vec<u8>> {
-    let data = fs::read(path)?;
-    if data.starts_with(&[b'\0', b'a', b's', b'm']) {
-        Ok(data)
-    } else {
-        anyhow::bail!("Invalid Wasm file encountered")
-    }
-}
 
 pub fn prepare_workspace(exe_name: &str) -> anyhow::Result<TempDir> {
     let prefix = format!("wasi_common_{}", exe_name);
