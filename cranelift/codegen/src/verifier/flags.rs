@@ -67,13 +67,10 @@ impl<'a> FlagsVerifier<'a> {
                         }
                     }
                     Some(old) if old != value => {
-                        return fatal!(
-                            errors,
+                        return errors.fatal((
                             ebb,
-                            "conflicting live-in CPU flags: {} and {}",
-                            old,
-                            value
-                        );
+                            format!("conflicting live-in CPU flags: {} and {}", old, value),
+                        ));
                     }
                     x => assert_eq!(x, Some(value)),
                 }
@@ -104,7 +101,9 @@ impl<'a> FlagsVerifier<'a> {
                         // We've reached the def of `live_flags`, so it is no longer live above.
                         live_val = None;
                     } else if self.func.dfg.value_type(res).is_flags() {
-                        return fatal!(errors, inst, "{} clobbers live CPU flags in {}", res, live);
+                        errors
+                            .report((inst, format!("{} clobbers live CPU flags in {}", res, live)));
+                        return Err(());
                     }
                 }
 
@@ -116,7 +115,11 @@ impl<'a> FlagsVerifier<'a> {
                     .map_or(false, |c| c.clobbers_flags)
                     && live_val.is_some()
                 {
-                    return fatal!(errors, inst, "encoding clobbers live CPU flags in {}", live);
+                    errors.report((
+                        inst,
+                        format!("encoding clobbers live CPU flags in {}", live),
+                    ));
+                    return Err(());
                 }
             }
 
@@ -164,7 +167,10 @@ fn merge(
 ) -> VerifierStepResult<()> {
     if let Some(va) = *a {
         if b != va {
-            return fatal!(errors, inst, "conflicting live CPU flags: {} and {}", va, b);
+            return errors.fatal((
+                inst,
+                format!("conflicting live CPU flags: {} and {}", va, b),
+            ));
         }
     } else {
         *a = Some(b);

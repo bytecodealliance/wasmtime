@@ -65,13 +65,13 @@ impl<'a> CssaVerifier<'a> {
 
             for (idx, &val) in values.iter().enumerate() {
                 if !self.func.dfg.value_is_valid(val) {
-                    return fatal!(errors, val, "Invalid value in {}", vreg);
+                    return errors.fatal((val, format!("Invalid value in {}", vreg)));
                 }
                 if !self.func.dfg.value_is_attached(val) {
-                    return fatal!(errors, val, "Detached value in {}", vreg);
+                    return errors.fatal((val, format!("Detached value in {}", vreg)));
                 }
                 if self.liveness.get(val).is_none() {
-                    return fatal!(errors, val, "Value in {} has no live range", vreg);
+                    return errors.fatal((val, format!("Value in {} has no live range", vreg)));
                 };
 
                 // Check topological ordering with the previous values in the virtual register.
@@ -82,29 +82,31 @@ impl<'a> CssaVerifier<'a> {
                     let prev_ebb = self.func.layout.pp_ebb(prev_def);
 
                     if prev_def == def {
-                        return fatal!(
-                            errors,
+                        return errors.fatal((
                             val,
-                            "Values {} and {} in {} = {} defined at the same program point",
-                            prev_val,
-                            val,
-                            vreg,
-                            DisplayList(values)
-                        );
+                            format!(
+                                "Values {} and {} in {} = {} defined at the same program point",
+                                prev_val,
+                                val,
+                                vreg,
+                                DisplayList(values)
+                            ),
+                        ));
                     }
 
                     // Enforce topological ordering of defs in the virtual register.
                     if self.preorder.dominates(def_ebb, prev_ebb)
                         && self.domtree.dominates(def, prev_def, &self.func.layout)
                     {
-                        return fatal!(
-                            errors,
+                        return errors.fatal((
                             val,
-                            "Value in {} = {} def dominates previous {}",
-                            vreg,
-                            DisplayList(values),
-                            prev_val
-                        );
+                            format!(
+                                "Value in {} = {} def dominates previous {}",
+                                vreg,
+                                DisplayList(values),
+                                prev_val
+                            ),
+                        ));
                     }
                 }
 
@@ -119,14 +121,15 @@ impl<'a> CssaVerifier<'a> {
                         && self.domtree.dominates(prev_def, def, &self.func.layout)
                     {
                         if self.liveness[prev_val].overlaps_def(def, def_ebb, &self.func.layout) {
-                            return fatal!(
-                                errors,
+                            return errors.fatal((
                                 val,
-                                "Value def in {} = {} interferes with {}",
-                                vreg,
-                                DisplayList(values),
-                                prev_val
-                            );
+                                format!(
+                                    "Value def in {} = {} interferes with {}",
+                                    vreg,
+                                    DisplayList(values),
+                                    prev_val
+                                ),
+                            ));
                         } else {
                             break;
                         }
@@ -152,13 +155,13 @@ impl<'a> CssaVerifier<'a> {
 
                 for (&ebb_param, &pred_arg) in ebb_params.iter().zip(pred_args) {
                     if !self.virtregs.same_class(ebb_param, pred_arg) {
-                        return fatal!(
-                            errors,
+                        return errors.fatal((
                             pred,
-                            "{} and {} must be in the same virtual register",
-                            ebb_param,
-                            pred_arg
-                        );
+                            format!(
+                                "{} and {} must be in the same virtual register",
+                                ebb_param, pred_arg
+                            ),
+                        ));
                     }
                 }
             }
