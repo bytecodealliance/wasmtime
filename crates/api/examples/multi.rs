@@ -1,7 +1,6 @@
 //! Translation of multi example
 
 use anyhow::{ensure, format_err, Context as _, Result};
-use std::cell::Ref;
 use std::rc::Rc;
 use wasmtime::*;
 
@@ -68,14 +67,12 @@ fn main() -> Result<()> {
     // Instantiate.
     println!("Instantiating module...");
     let imports = vec![callback_func.into()];
-    let instance = HostRef::new(
-        Instance::new(&store, &module, imports.as_slice())
-            .context("Error instantiating module!")?,
-    );
+    let instance = Instance::new(&store, &module, imports.as_slice())
+        .context("Error instantiating module!")?;
 
     // Extract exports.
     println!("Extracting export...");
-    let exports = Ref::map(instance.borrow(), |instance| instance.exports());
+    let exports = instance.exports();
     ensure!(!exports.is_empty(), "Error accessing exports!");
     let g = exports[0].func().context("> Error accessing export $g!")?;
     let round_trip_many = exports[1]

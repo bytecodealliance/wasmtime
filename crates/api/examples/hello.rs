@@ -1,7 +1,6 @@
 //! Translation of hello example
 
 use anyhow::{ensure, format_err, Context as _, Result};
-use std::cell::Ref;
 use std::rc::Rc;
 use wasmtime::*;
 
@@ -49,14 +48,12 @@ fn main() -> Result<()> {
     // Note that this is where the wasm `start` function, if any, would run.
     println!("Instantiating module...");
     let imports = vec![hello_func.into()];
-    let instance = HostRef::new(
-        Instance::new(&store, &module, imports.as_slice())
-            .context("> Error instantiating module!")?,
-    );
+    let instance = Instance::new(&store, &module, imports.as_slice())
+        .context("> Error instantiating module!")?;
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");
-    let exports = Ref::map(instance.borrow(), |instance| instance.exports());
+    let exports = instance.exports();
     ensure!(!exports.is_empty(), "> Error accessing exports!");
     let run_func = exports[0].func().context("> Error accessing exports!")?;
 

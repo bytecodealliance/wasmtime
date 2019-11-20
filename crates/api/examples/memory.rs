@@ -1,7 +1,6 @@
 //! Translation of the memory example
 
 use anyhow::{bail, ensure, Context as _, Error};
-use std::cell::Ref;
 use wasmtime::*;
 
 fn get_export_memory(exports: &[Extern], i: usize) -> Result<HostRef<Memory>, Error> {
@@ -92,12 +91,11 @@ fn main() -> Result<(), Error> {
 
     // Instantiate.
     println!("Instantiating module...");
-    let instance =
-        HostRef::new(Instance::new(&store, &module, &[]).context("> Error instantiating module!")?);
+    let instance = Instance::new(&store, &module, &[]).context("> Error instantiating module!")?;
 
     // Extract export.
     println!("Extracting export...");
-    let exports = Ref::map(instance.borrow(), |instance| instance.exports());
+    let exports = instance.exports();
     ensure!(!exports.is_empty(), "> Error accessing exports!");
     let memory = get_export_memory(&exports, 0)?;
     let size_func = get_export_func(&exports, 1)?;
