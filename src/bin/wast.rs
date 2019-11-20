@@ -25,14 +25,12 @@
     )
 )]
 
-use cranelift_codegen::settings;
-use cranelift_codegen::settings::Configurable;
+use cranelift_codegen::{settings, settings::Configurable};
 use cranelift_native;
 use docopt::Docopt;
 use pretty_env_logger;
 use serde::Deserialize;
-use std::path::Path;
-use std::process;
+use std::{path::Path, process};
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_jit::{Compiler, Features};

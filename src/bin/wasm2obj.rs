@@ -29,18 +29,19 @@
     )
 )]
 
-use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{isa, settings};
+use cranelift_codegen::{isa, settings, settings::Configurable};
 use cranelift_entity::EntityRef;
 use cranelift_wasm::DefinedMemoryIndex;
 use docopt::Docopt;
 use faerie::Artifact;
 use serde::Deserialize;
-use std::error::Error;
-use std::fmt::format;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::{process, str};
+use std::{
+    error::Error,
+    fmt::format,
+    path::{Path, PathBuf},
+    process, str,
+    str::FromStr,
+};
 use target_lexicon::Triple;
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
