@@ -70,13 +70,15 @@ use crate::ir::{
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
+use crate::print_errors::pretty_verifier_error;
 use crate::settings::FlagsOrIsa;
 use crate::timing;
 use alloc::collections::BTreeSet;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter, Write};
+use log::debug;
 use thiserror::Error;
 
 pub use self::cssa::verify_cssa;
@@ -93,6 +95,7 @@ macro_rules! report {
     ( $errors: expr, $loc: expr, $msg: tt ) => {
         $errors.0.push(crate::verifier::VerifierError {
             location: $loc.into(),
+            context: None,
             message: String::from($msg),
         })
     };
@@ -100,6 +103,7 @@ macro_rules! report {
     ( $errors: expr, $loc: expr, $fmt: tt, $( $arg: expr ),+ ) => {
         $errors.0.push(crate::verifier::VerifierError {
             location: $loc.into(),
+            context: None,
             message: format!( $fmt, $( $arg ),+ ),
         })
     };
@@ -127,13 +131,24 @@ mod liveness;
 mod locations;
 
 /// A verifier error.
-#[derive(Error, Debug, PartialEq, Eq)]
-#[error("{location}: {message}")]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+#[error("{}{}: {}", .location, format_context(.context), .message)]
 pub struct VerifierError {
     /// The entity causing the verifier error.
     pub location: AnyEntity,
+    /// Optionally provide some context for the given location; e.g., for `inst42` provide
+    /// `Some("v3 = iconst.i32 0")` for more comprehensible errors.
+    pub context: Option<String>,
     /// The error message.
     pub message: String,
+}
+
+/// Helper for formatting Verifier::Error context.
+fn format_context(context: &Option<String>) -> String {
+    match context {
+        None => "".to_string(),
+        Some(c) => format!(" ({})", c).to_string(),
+    }
 }
 
 /// Result of a step in the verification process.
@@ -155,7 +170,7 @@ pub type VerifierStepResult<T> = Result<T, ()>;
 pub type VerifierResult<T> = Result<T, VerifierErrors>;
 
 /// List of verifier errors.
-#[derive(Error, Debug, Default, PartialEq, Eq)]
+#[derive(Error, Debug, Default, PartialEq, Eq, Clone)]
 pub struct VerifierErrors(pub Vec<VerifierError>);
 
 impl VerifierErrors {
@@ -274,6 +289,41 @@ impl<'a> Verifier<'a> {
             expected_domtree,
             isa: fisa.isa,
         }
+    }
+
+    /// Helper for appending a contextual error to the verifier error list.
+    #[inline]
+    fn append_error(&self, inst: Inst, errors: &mut VerifierErrors, message: impl Into<String>) {
+        let location = inst.into();
+        let context = Some(self.func.dfg.display_inst(inst, self.isa).to_string());
+        let message = message.into();
+        errors.0.push(VerifierError {
+            location,
+            context,
+            message,
+        });
+    }
+
+    /// Diagnose a fatal error, and return `Err`.
+    fn fatal(
+        &self,
+        errors: &mut VerifierErrors,
+        inst: Inst,
+        message: impl Into<String>,
+    ) -> VerifierStepResult<()> {
+        self.append_error(inst, errors, message);
+        Err(())
+    }
+
+    /// Diagnose a non-fatal error, and return `Ok`.
+    fn nonfatal(
+        &self,
+        errors: &mut VerifierErrors,
+        inst: Inst,
+        message: impl Into<String>,
+    ) -> VerifierStepResult<()> {
+        self.append_error(inst, errors, message);
+        Ok(())
     }
 
     // Check for:
@@ -469,7 +519,7 @@ impl<'a> Verifier<'a> {
     fn encodable_as_bb(&self, ebb: Ebb, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         match self.func.is_ebb_basic(ebb) {
             Ok(()) => Ok(()),
-            Err((inst, message)) => fatal!(errors, inst, message),
+            Err((inst, message)) => self.fatal(errors, inst, message),
         }
     }
 
@@ -484,11 +534,13 @@ impl<'a> Verifier<'a> {
 
         if is_terminator && !is_last_inst {
             // Terminating instructions only occur at the end of blocks.
-            return fatal!(
+            return self.fatal(
                 errors,
                 inst,
-                "a terminator instruction was encountered before the end of {}",
-                ebb
+                format!(
+                    "a terminator instruction was encountered before the end of {}",
+                    ebb
+                ),
             );
         }
         if is_last_inst && !is_terminator {
@@ -502,7 +554,11 @@ impl<'a> Verifier<'a> {
         // Instructions belong to the correct ebb.
         let inst_ebb = self.func.layout.inst_ebb(inst);
         if inst_ebb != Some(ebb) {
-            return fatal!(errors, inst, "should belong to {} not {:?}", ebb, inst_ebb);
+            return self.fatal(
+                errors,
+                inst,
+                format!("should belong to {} not {:?}", ebb, inst_ebb),
+            );
         }
 
         // Parameters belong to the correct ebb.
@@ -532,10 +588,10 @@ impl<'a> Verifier<'a> {
 
         // The instruction format matches the opcode
         if inst_data.opcode().format() != InstructionFormat::from(inst_data) {
-            return fatal!(
+            return self.fatal(
                 errors,
                 inst,
-                "instruction opcode doesn't match instruction format"
+                "instruction opcode doesn't match instruction format",
             );
         }
 
@@ -549,12 +605,13 @@ impl<'a> Verifier<'a> {
         // All result values for multi-valued instructions are created
         let got_results = dfg.inst_results(inst).len();
         if got_results != total_results {
-            return fatal!(
+            return self.fatal(
                 errors,
                 inst,
-                "expected {} result values, found {}",
-                total_results,
-                got_results
+                format!(
+                    "expected {} result values, found {}",
+                    total_results, got_results,
+                ),
             );
         }
 
@@ -680,14 +737,14 @@ impl<'a> Verifier<'a> {
             } => {
                 if let Some(isa) = &self.isa {
                     if !isa.flags().enable_pinned_reg() {
-                        return fatal!(
+                        return self.fatal(
                             errors,
                             inst,
-                            "GetPinnedReg/SetPinnedReg cannot be used without enable_pinned_reg"
+                            "GetPinnedReg/SetPinnedReg cannot be used without enable_pinned_reg",
                         );
                     }
                 } else {
-                    return fatal!(errors, inst, "GetPinnedReg/SetPinnedReg need an ISA!");
+                    return self.fatal(errors, inst, "GetPinnedReg/SetPinnedReg need an ISA!");
                 }
             }
 
@@ -756,7 +813,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.dfg.signatures.is_valid(s) {
-            fatal!(errors, inst, "invalid signature reference {}", s)
+            self.fatal(errors, inst, format!("invalid signature reference {}", s))
         } else {
             Ok(())
         }
@@ -769,7 +826,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.dfg.ext_funcs.is_valid(f) {
-            nonfatal!(errors, inst, "invalid function reference {}", f)
+            self.nonfatal(errors, inst, format!("invalid function reference {}", f))
         } else {
             Ok(())
         }
@@ -782,7 +839,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.stack_slots.is_valid(ss) {
-            nonfatal!(errors, inst, "invalid stack slot {}", ss)
+            self.nonfatal(errors, inst, format!("invalid stack slot {}", ss))
         } else {
             Ok(())
         }
@@ -795,7 +852,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.global_values.is_valid(gv) {
-            nonfatal!(errors, inst, "invalid global value {}", gv)
+            self.nonfatal(errors, inst, format!("invalid global value {}", gv))
         } else {
             Ok(())
         }
@@ -808,7 +865,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.heaps.is_valid(heap) {
-            nonfatal!(errors, inst, "invalid heap {}", heap)
+            self.nonfatal(errors, inst, format!("invalid heap {}", heap))
         } else {
             Ok(())
         }
@@ -821,7 +878,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.tables.is_valid(table) {
-            nonfatal!(errors, inst, "invalid table {}", table)
+            self.nonfatal(errors, inst, format!("invalid table {}", table))
         } else {
             Ok(())
         }
@@ -834,7 +891,11 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !l.is_valid(&self.func.dfg.value_lists) {
-            nonfatal!(errors, inst, "invalid value list reference {:?}", l)
+            self.nonfatal(
+                errors,
+                inst,
+                format!("invalid value list reference {:?}", l),
+            )
         } else {
             Ok(())
         }
@@ -847,7 +908,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.jump_tables.is_valid(j) {
-            nonfatal!(errors, inst, "invalid jump table reference {}", j)
+            self.nonfatal(errors, inst, format!("invalid jump table reference {}", j))
         } else {
             Ok(())
         }
@@ -861,7 +922,7 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult<()> {
         let dfg = &self.func.dfg;
         if !dfg.value_is_valid(v) {
-            nonfatal!(errors, loc_inst, "invalid value reference {}", v)
+            self.nonfatal(errors, loc_inst, format!("invalid value reference {}", v))
         } else {
             Ok(())
         }
@@ -917,23 +978,29 @@ impl<'a> Verifier<'a> {
                         );
                     }
                     if def_inst == loc_inst {
-                        return fatal!(errors, loc_inst, "uses value {} from itself", v);
+                        return self.fatal(
+                            errors,
+                            loc_inst,
+                            format!("uses value {} from itself", v),
+                        );
                     }
                 }
             }
             ValueDef::Param(ebb, _) => {
                 // Value is defined by an existing EBB.
                 if !dfg.ebb_is_valid(ebb) {
-                    return fatal!(errors, loc_inst, "{} is defined by invalid EBB {}", v, ebb);
+                    return self.fatal(
+                        errors,
+                        loc_inst,
+                        format!("{} is defined by invalid EBB {}", v, ebb),
+                    );
                 }
                 // Defining EBB is inserted in the layout
                 if !self.func.layout.is_ebb_inserted(ebb) {
-                    return fatal!(
+                    return self.fatal(
                         errors,
                         loc_inst,
-                        "{} is defined by {} which is not in the layout",
-                        v,
-                        ebb
+                        format!("{} is defined by {} which is not in the layout", v, ebb),
                     );
                 }
                 // The defining EBB dominates the instruction using this value.
@@ -942,11 +1009,10 @@ impl<'a> Verifier<'a> {
                         .expected_domtree
                         .dominates(ebb, loc_inst, &self.func.layout)
                 {
-                    return fatal!(
+                    return self.fatal(
                         errors,
                         loc_inst,
-                        "uses value arg from non-dominating {}",
-                        ebb
+                        format!("uses value arg from non-dominating {}", ebb),
                     );
                 }
             }
@@ -994,12 +1060,14 @@ impl<'a> Verifier<'a> {
         let value_type = self.func.dfg.value_type(arg);
 
         if typ.lane_bits() < value_type.lane_bits() {
-            fatal!(
+            self.fatal(
                 errors,
                 inst,
-                "The bitcast argument {} doesn't fit in a type of {} bits",
-                arg,
-                typ.lane_bits()
+                format!(
+                    "The bitcast argument {} doesn't fit in a type of {} bits",
+                    arg,
+                    typ.lane_bits(),
+                ),
             )
         } else {
             Ok(())
@@ -1165,14 +1233,14 @@ impl<'a> Verifier<'a> {
                     );
                 }
             } else {
-                return nonfatal!(errors, inst, "has more result values than expected");
+                return self.nonfatal(errors, inst, "has more result values than expected");
             }
             i += 1;
         }
 
         // There aren't any more result types left.
         if self.func.dfg.compute_result_type(inst, i, ctrl_type) != None {
-            return nonfatal!(errors, inst, "has fewer result values than expected");
+            return self.nonfatal(errors, inst, "has fewer result values than expected");
         }
         Ok(())
     }
@@ -1238,24 +1306,26 @@ impl<'a> Verifier<'a> {
                 if let Some(ebb) = ebb {
                     let arg_count = self.func.dfg.num_ebb_params(ebb);
                     if arg_count != 0 {
-                        return nonfatal!(
+                        return self.nonfatal(
                             errors,
                             inst,
-                            "takes no arguments, but had target {} with {} arguments",
-                            ebb,
-                            arg_count
+                            format!(
+                                "takes no arguments, but had target {} with {} arguments",
+                                ebb, arg_count,
+                            ),
                         );
                     }
                 }
                 for ebb in self.func.jump_tables[table].iter() {
                     let arg_count = self.func.dfg.num_ebb_params(*ebb);
                     if arg_count != 0 {
-                        return nonfatal!(
+                        return self.nonfatal(
                             errors,
                             inst,
-                            "takes no arguments, but had target {} with {} arguments",
-                            ebb,
-                            arg_count
+                            format!(
+                                "takes no arguments, but had target {} with {} arguments",
+                                ebb, arg_count,
+                            ),
                         );
                     }
                 }
@@ -1317,13 +1387,15 @@ impl<'a> Verifier<'a> {
             i += 1;
         }
         if i != variable_args.len() {
-            return nonfatal!(
+            return self.nonfatal(
                 errors,
                 inst,
-                "mismatched argument count for `{}`: got {}, expected {}",
-                self.func.dfg.display_inst(inst, None),
-                variable_args.len(),
-                i
+                format!(
+                    "mismatched argument count for `{}`: got {}, expected {}",
+                    self.func.dfg.display_inst(inst, None),
+                    variable_args.len(),
+                    i,
+                ),
             );
         }
         Ok(())
@@ -1353,45 +1425,45 @@ impl<'a> Verifier<'a> {
                     self.verify_stack_slot(inst, ss, errors)?;
                     let slot = &self.func.stack_slots[ss];
                     if slot.kind != StackSlotKind::OutgoingArg {
-                        return fatal!(
+                        return self.fatal(
                             errors,
                             inst,
-                            "Outgoing stack argument {} in wrong stack slot: {} = {}",
-                            arg,
-                            ss,
-                            slot
+                            format!(
+                                "Outgoing stack argument {} in wrong stack slot: {} = {}",
+                                arg, ss, slot,
+                            ),
                         );
                     }
                     if slot.offset != Some(offset) {
-                        return fatal!(
+                        return self.fatal(
                             errors,
                             inst,
-                            "Outgoing stack argument {} should have offset {}: {} = {}",
-                            arg,
-                            offset,
-                            ss,
-                            slot
+                            format!(
+                                "Outgoing stack argument {} should have offset {}: {} = {}",
+                                arg, offset, ss, slot,
+                            ),
                         );
                     }
                     if slot.size != abi.value_type.bytes() {
-                        return fatal!(
+                        return self.fatal(
                             errors,
                             inst,
-                            "Outgoing stack argument {} wrong size for {}: {} = {}",
-                            arg,
-                            abi.value_type,
-                            ss,
-                            slot
+                            format!(
+                                "Outgoing stack argument {} wrong size for {}: {} = {}",
+                                arg, abi.value_type, ss, slot,
+                            ),
                         );
                     }
                 } else {
                     let reginfo = self.isa.map(|i| i.register_info());
-                    return fatal!(
+                    return self.fatal(
                         errors,
                         inst,
-                        "Outgoing stack argument {} in wrong location: {}",
-                        arg,
-                        arg_loc.display(reginfo.as_ref())
+                        format!(
+                            "Outgoing stack argument {} in wrong location: {}",
+                            arg,
+                            arg_loc.display(reginfo.as_ref()),
+                        ),
                     );
                 }
             }
@@ -1404,10 +1476,10 @@ impl<'a> Verifier<'a> {
             let args = self.func.dfg.inst_variable_args(inst);
             let expected_types = &self.func.signature.returns;
             if args.len() != expected_types.len() {
-                return nonfatal!(
+                return self.nonfatal(
                     errors,
                     inst,
-                    "arguments of return must match function signature"
+                    "arguments of return must match function signature",
                 );
             }
             for (i, (&arg, &expected_type)) in args.iter().zip(expected_types).enumerate() {
@@ -1442,41 +1514,45 @@ impl<'a> Verifier<'a> {
                 match opcode {
                     Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
                         if arg_type.lane_count() != ctrl_type.lane_count() {
-                            return nonfatal!(
+                            return self.nonfatal(
                                 errors,
                                 inst,
-                                "input {} and output {} must have same number of lanes",
-                                arg_type,
-                                ctrl_type
+                                format!(
+                                    "input {} and output {} must have same number of lanes",
+                                    arg_type, ctrl_type,
+                                ),
                             );
                         }
                         if arg_type.lane_bits() >= ctrl_type.lane_bits() {
-                            return nonfatal!(
+                            return self.nonfatal(
                                 errors,
                                 inst,
-                                "input {} must be smaller than output {}",
-                                arg_type,
-                                ctrl_type
+                                format!(
+                                    "input {} must be smaller than output {}",
+                                    arg_type, ctrl_type,
+                                ),
                             );
                         }
                     }
                     Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
                         if arg_type.lane_count() != ctrl_type.lane_count() {
-                            return nonfatal!(
+                            return self.nonfatal(
                                 errors,
                                 inst,
-                                "input {} and output {} must have same number of lanes",
-                                arg_type,
-                                ctrl_type
+                                format!(
+                                    "input {} and output {} must have same number of lanes",
+                                    arg_type, ctrl_type,
+                                ),
                             );
                         }
                         if arg_type.lane_bits() <= ctrl_type.lane_bits() {
-                            return nonfatal!(
+                            return self.nonfatal(
                                 errors,
                                 inst,
-                                "input {} must be larger than output {}",
-                                arg_type,
-                                ctrl_type
+                                format!(
+                                    "input {} must be larger than output {}",
+                                    arg_type, ctrl_type,
+                                ),
                             );
                         }
                     }
@@ -1487,12 +1563,13 @@ impl<'a> Verifier<'a> {
                 let index_type = self.func.dfg.value_type(arg);
                 let heap_index_type = self.func.heaps[heap].index_type;
                 if index_type != heap_index_type {
-                    return nonfatal!(
+                    return self.nonfatal(
                         errors,
                         inst,
-                        "index type {} differs from heap index type {}",
-                        index_type,
-                        heap_index_type
+                        format!(
+                            "index type {} differs from heap index type {}",
+                            index_type, heap_index_type,
+                        ),
                     );
                 }
             }
@@ -1500,12 +1577,13 @@ impl<'a> Verifier<'a> {
                 let index_type = self.func.dfg.value_type(arg);
                 let table_index_type = self.func.tables[table].index_type;
                 if index_type != table_index_type {
-                    return nonfatal!(
+                    return self.nonfatal(
                         errors,
                         inst,
-                        "index type {} differs from table index type {}",
-                        index_type,
-                        table_index_type
+                        format!(
+                            "index type {} differs from table index type {}",
+                            index_type, table_index_type,
+                        ),
                     );
                 }
             }
@@ -1514,13 +1592,14 @@ impl<'a> Verifier<'a> {
                     let inst_type = self.func.dfg.value_type(self.func.dfg.first_result(inst));
                     let global_type = self.func.global_values[global_value].global_type(isa);
                     if inst_type != global_type {
-                        return nonfatal!(
-                        errors,
-                        inst,
-                        "global_value instruction with type {} references global value with type {}",
-                        inst_type,
-                        global_type
-                    );
+                        return self.nonfatal(
+                            errors,
+                            inst,
+                            format!(
+                                "global_value instruction with type {} references global value with type {}",
+                                inst_type, global_type
+                            ),
+                        );
                     }
                 }
             }
@@ -1541,11 +1620,11 @@ impl<'a> Verifier<'a> {
         {
             let dst_vals = self.func.dfg.inst_results(inst);
             if dst_vals.len() != 1 {
-                return fatal!(errors, inst, "copy_nop must produce exactly one result");
+                return self.fatal(errors, inst, "copy_nop must produce exactly one result");
             }
             let dst_val = dst_vals[0];
             if self.func.dfg.value_type(dst_val) != self.func.dfg.value_type(arg) {
-                return fatal!(errors, inst, "copy_nop src and dst types must be the same");
+                return self.fatal(errors, inst, "copy_nop src and dst types must be the same");
             }
             let src_loc = self.func.locations[arg];
             let dst_loc = self.func.locations[dst_val];
@@ -1554,12 +1633,13 @@ impl<'a> Verifier<'a> {
                 _ => false,
             };
             if !locs_ok {
-                return fatal!(
+                return self.fatal(
                     errors,
                     inst,
-                    "copy_nop must refer to identical stack slots, but found {:?} vs {:?}",
-                    src_loc,
-                    dst_loc
+                    format!(
+                        "copy_nop must refer to identical stack slots, but found {:?} vs {:?}",
+                        src_loc, dst_loc,
+                    ),
                 );
             }
         }
@@ -1658,11 +1738,13 @@ impl<'a> Verifier<'a> {
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
             if self.func.dfg[inst].opcode().is_ghost() {
-                return nonfatal!(
+                return self.nonfatal(
                     errors,
                     inst,
-                    "Ghost instruction has an encoding: {}",
-                    isa.encoding_info().display(encoding)
+                    format!(
+                        "Ghost instruction has an encoding: {}",
+                        isa.encoding_info().display(encoding),
+                    ),
                 );
             }
 
@@ -1675,11 +1757,13 @@ impl<'a> Verifier<'a> {
                 .peekable();
 
             if encodings.peek().is_none() {
-                return nonfatal!(
+                return self.nonfatal(
                     errors,
                     inst,
-                    "Instruction failed to re-encode {}",
-                    isa.encoding_info().display(encoding)
+                    format!(
+                        "Instruction failed to re-encode {}",
+                        isa.encoding_info().display(encoding),
+                    ),
                 );
             }
 
@@ -1703,13 +1787,15 @@ impl<'a> Verifier<'a> {
                         .unwrap();
                 }
 
-                return nonfatal!(
+                return self.nonfatal(
                     errors,
                     inst,
-                    "encoding {} should be {}{}",
-                    isa.encoding_info().display(encoding),
-                    if multiple_encodings { "one of: " } else { "" },
-                    possible_encodings
+                    format!(
+                        "encoding {} should be {}{}",
+                        isa.encoding_info().display(encoding),
+                        if multiple_encodings { "one of: " } else { "" },
+                        possible_encodings,
+                    ),
                 );
             }
             return Ok(());
@@ -1749,15 +1835,19 @@ impl<'a> Verifier<'a> {
             // Provide the ISA default encoding as a hint.
             match self.func.encode(inst, isa) {
                 Ok(enc) => {
-                    return nonfatal!(
+                    return self.nonfatal(
                         errors,
                         inst,
-                        "{} must have an encoding (e.g., {})",
-                        text,
-                        isa.encoding_info().display(enc)
+                        format!(
+                            "{} must have an encoding (e.g., {})",
+                            text,
+                            isa.encoding_info().display(enc),
+                        ),
                     );
                 }
-                Err(_) => return nonfatal!(errors, inst, "{} must have an encoding", text),
+                Err(_) => {
+                    return self.nonfatal(errors, inst, format!("{} must have an encoding", text))
+                }
             }
         }
 
@@ -1775,10 +1865,10 @@ impl<'a> Verifier<'a> {
             ir::InstructionData::Store { flags, .. }
             | ir::InstructionData::StoreComplex { flags, .. } => {
                 if flags.readonly() {
-                    fatal!(
+                    self.fatal(
                         errors,
                         inst,
-                        "A store instruction cannot have the `readonly` MemFlag"
+                        "A store instruction cannot have the `readonly` MemFlag",
                     )
                 } else {
                     Ok(())
@@ -1800,12 +1890,10 @@ impl<'a> Verifier<'a> {
                 // the ExtractLane/InsertLane formats.
                 let ty = self.func.dfg.value_type(arg);
                 if u16::from(lane) >= ty.lane_count() {
-                    fatal!(
+                    self.fatal(
                         errors,
                         inst,
-                        "The lane {} does not index into the type {}",
-                        lane,
-                        ty
+                        format!("The lane {} does not index into the type {}", lane, ty,),
                     )
                 } else {
                     Ok(())
@@ -1823,10 +1911,10 @@ impl<'a> Verifier<'a> {
         if let Some(isa) = self.isa {
             if !isa.flags().enable_safepoints() && self.func.dfg[inst].opcode() == Opcode::Safepoint
             {
-                return fatal!(
+                return self.fatal(
                     errors,
                     inst,
-                    "safepoint instruction cannot be used when it is not enabled."
+                    "safepoint instruction cannot be used when it is not enabled.",
                 );
             }
         }
@@ -1894,6 +1982,13 @@ impl<'a> Verifier<'a> {
         }
 
         verify_flags(self.func, &self.expected_cfg, self.isa, errors)?;
+
+        if !errors.is_empty() {
+            debug!(
+                "Found verifier errors in function:\n{}",
+                pretty_verifier_error(self.func, None, None, errors.clone())
+            );
+        }
 
         Ok(())
     }
@@ -1988,5 +2083,35 @@ mod tests {
 
         let _ = verifier.typecheck_function_signature(&mut errors);
         assert_err_with_msg!(errors, "Return value at position 0 has an invalid type");
+    }
+
+    #[test]
+    fn test_printing_contextual_errors() {
+        // Build function.
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        func.layout.append_ebb(ebb0);
+
+        // Build instruction: v0, v1 = iconst 42
+        let inst = func.dfg.make_inst(InstructionData::UnaryImm {
+            opcode: Opcode::Iconst,
+            imm: 42.into(),
+        });
+        func.dfg.append_result(inst, types::I32);
+        func.dfg.append_result(inst, types::I32);
+        func.layout.append_inst(inst, ebb0);
+
+        // Setup verifier.
+        let mut errors = VerifierErrors::default();
+        let flags = &settings::Flags::new(settings::builder());
+        let verifier = Verifier::new(&func, flags.into());
+
+        // Now the error message, when printed, should contain the instruction sequence causing the
+        // error (i.e. v0, v1 = iconst.i32 42) and not only its entity value (i.e. inst0)
+        let _ = verifier.typecheck_results(inst, types::I32, &mut errors);
+        assert_eq!(
+            format!("{}", errors.0[0]),
+            "inst0 (v0, v1 = iconst.i32 42): has more result values than expected"
+        )
     }
 }
