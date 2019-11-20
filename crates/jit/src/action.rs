@@ -162,7 +162,7 @@ pub fn invoke(
 
     // TODO: Support values larger than v128. And pack the values into memory
     // instead of just using fixed-sized slots.
-    // Subtract one becase we don't pass the vmctx argument in `values_vec`.
+    // Subtract one because we don't pass the vmctx argument in `values_vec`.
     let value_size = mem::size_of::<VMInvokeArgument>();
     let mut values_vec: Vec<VMInvokeArgument> =
         vec![VMInvokeArgument::new(); max(signature.params.len() - 1, signature.returns.len())];
