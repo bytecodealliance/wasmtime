@@ -45,8 +45,8 @@ for cargo_toml in \
     crates/jit/Cargo.toml \
     crates/wast/Cargo.toml \
     crates/wasi-c/Cargo.toml \
-    crates/wasi/Cargo.toml \
     crates/api/Cargo.toml \
+    crates/wasi/Cargo.toml \
     crates/interface-types/Cargo.toml \
     crates/misc/py/Cargo.toml \
     crates/misc/rust/macro/Cargo.toml \
