@@ -55,7 +55,7 @@ let hello_wasm = read("hello.wasm").expect("wasm file");
 let module = HostRef::new(Module::new(&store, &hello_wasm).expect("wasm module"));
 ```
 
-The module instance can now be created. Normally, you would provide exports, but in this case, there is none required:
+The module instance can now be created. Normally, you would provide exports, but in this case, there are none required:
 
 ```rust
 let instance = Instance::new(&store, &module, &[]).expect("wasm instance");
