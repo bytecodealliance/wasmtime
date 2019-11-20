@@ -62,10 +62,11 @@ let instance = Instance::new(&store, &module, &[]).expect("wasm instance");
 ```
 
 Everything is set. If a WebAssembly module has a start function -- it was run.
-The instance's exports can be used at this point. This wasm file has only one export, so we can index it directly:
+The instance's exports can be used at this point. wasmtime provides functions
+to look up an export by name, and ensure that it's a function:
 
 ```rust
-let answer_fn = instance.exports()[0].func().expect("answer function");
+let answer = instance.find_export_by_name("answer").expect("answer").func().expect("function");
 ```
 
 The exported function can be called using the `call` method. Remember that in most of the cases,
@@ -73,7 +74,7 @@ a `HostRef<_>` object will be returned, so `borrow()` or `borrow_mut()` method h
 specific object. The exported "answer" function accepts no parameters and returns a single `i32` value.
 
 ```rust
-let result = answer_fn.borrow().call(&[]).expect("success");
+let result = answer.borrow().call(&[]).expect("success");
 println!("Answer: {}", result[0].i32());
 ```
 
@@ -94,8 +95,8 @@ fn main() {
     let module = HostRef::new(Module::new(&store, &wasm).expect("wasm module"));
     let instance = Instance::new(&store, &module, &[]).expect("wasm instance");
 
-    let answer_fn = instance.exports()[0].func().expect("answer function");
-    let result = answer_fn.borrow().call(&[]).expect("success");
+    let answer = instance.find_export_by_name("answer").expect("answer").func().expect("function");
+    let result = answer.borrow().call(&[]).expect("success");
     println!("Answer: {}", result[0].i32());
 }
 ```
