@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-object"
-version = "0.49.0"
+version = "0.51.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/cranelift"
@@ -10,13 +10,13 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-module = { path = "../cranelift-module", version = "0.49.0" }
+cranelift-module = { path = "../cranelift-module", version = "0.51.0" }
 object = { git = "https://github.com/gimli-rs/object", rev = "cba3ed4932e4c594c5eab4f5ef6c51838f4a5056", default-features = false, features = ["write"] }
 target-lexicon = "0.9"
 
 [dependencies.cranelift-codegen]
 path = "../cranelift-codegen"
-version = "0.49.0"
+version = "0.51.0"
 default-features = false
 features = ["std"]
 

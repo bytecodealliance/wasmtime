@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-module"
-version = "0.49.0"
+version = "0.51.0"
 authors = ["The Cranelift Project Developers"]
 description = "Support for linking functions and data with Cranelift"
 repository = "https://github.com/bytecodealliance/cranelift"
@@ -11,8 +11,8 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.49.0", default-features = false }
-cranelift-entity = { path = "../cranelift-entity", version = "0.49.0" }
+cranelift-codegen = { path = "../cranelift-codegen", version = "0.51.0", default-features = false }
+cranelift-entity = { path = "../cranelift-entity", version = "0.51.0" }
 hashbrown = { version = "0.6", optional = true }
 log = { version = "0.4.6", default-features = false }
 thiserror = "1.0.4"
