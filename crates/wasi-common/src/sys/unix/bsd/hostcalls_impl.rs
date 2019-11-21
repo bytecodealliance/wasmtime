@@ -224,19 +224,20 @@ pub(crate) fn fd_readdir<'a>(
             os_file.dir.get_or_insert(Mutex::new(dir))
         }
     };
+    let mut dir = dir.lock().unwrap();
 
     // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
     // new items may not be returned to the caller.
     if cookie == wasi::__WASI_DIRCOOKIE_START {
         log::trace!("     | fd_readdir: doing rewinddir");
-        dir.lock().unwrap().rewind();
+        dir.rewind();
     } else {
         log::trace!("     | fd_readdir: doing seekdir to {}", cookie);
         let loc = unsafe { SeekLoc::from_raw(cookie as i64) };
-        dir.lock().unwrap().seek(loc);
+        dir.seek(loc);
     }
 
-    Ok(DirIter(dir.lock().unwrap()).map(|entry| {
+    Ok(DirIter(dir).map(|entry| {
         let (entry, loc): (Entry, SeekLoc) = entry?;
         Ok(Dirent {
             name: entry

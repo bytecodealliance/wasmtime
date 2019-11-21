@@ -7,6 +7,11 @@ use std::sync::Mutex;
 #[derive(Debug)]
 pub(crate) struct OsFile {
     pub(crate) file: fs::File,
+    // In case that this `OsFile` actually refers to a directory,
+    // when the client makes a `fd_readdir` syscall on this descriptor,
+    // we will need to cache the `libc::DIR` pointer manually in order
+    // to be able to seek on it later. While on Linux, this is handled
+    // by the OS, BSD Unixes require the client to do this caching.
     pub(crate) dir: Option<Mutex<Dir>>,
 }
 
