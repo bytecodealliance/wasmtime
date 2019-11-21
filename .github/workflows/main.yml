@@ -144,6 +144,7 @@ jobs:
     - run: cargo test --features test_programs --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py -- --nocapture
       env:
         RUST_BACKTRACE: 1
+        RUSTFLAGS: "-D warnings"
 
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
