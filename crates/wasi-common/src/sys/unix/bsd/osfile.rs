@@ -12,6 +12,12 @@ pub(crate) struct OsFile {
     // we will need to cache the `libc::DIR` pointer manually in order
     // to be able to seek on it later. While on Linux, this is handled
     // by the OS, BSD Unixes require the client to do this caching.
+    //
+    // This comes directly from the BSD man pages on `readdir`:
+    //   > Values returned by telldir() are good only for the lifetime
+    //   > of the DIR pointer, dirp, from which they are derived.
+    //   > If the directory is closed and then reopened, prior values
+    //   > returned by telldir() will no longer be valid.
     pub(crate) dir: Option<Mutex<Dir>>,
 }
 

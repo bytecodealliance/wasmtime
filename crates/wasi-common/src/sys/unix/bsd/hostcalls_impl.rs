@@ -270,9 +270,11 @@ impl<'a> Iterator for DirIter<'a> {
             let ent = readdir((self.0).0.as_ptr());
             if ent.is_null() {
                 if errno != Errno::last() {
-                    // According to POSIX man (for Linux though!), there was an error
+                    // TODO This should be verified on different BSD-flavours.
+                    //
+                    // According to 4.3BSD/POSIX.1-2001 man pages, there was an error
                     // if the errno value has changed at some point during the sequence
-                    // of readdir calls
+                    // of readdir calls.
                     Some(Err(Error::last()))
                 } else {
                     // Not an error. We've simply reached the end of the stream.
