@@ -4,11 +4,11 @@
 //! to automatically run the files in parallel.
 
 fn main() {
-    #[cfg(features = "test-programs")]
+    #[cfg(feature = "test_programs")]
     wasi_tests::build_and_generate_tests()
 }
 
-#[cfg(features = "test-programs")]
+#[cfg(feature = "test_programs")]
 mod wasi_tests {
     use std::env;
     use std::fs::{read_dir, DirEntry, File};
@@ -16,7 +16,7 @@ mod wasi_tests {
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
 
-    fn build_and_generate_tests() {
+    pub(super) fn build_and_generate_tests() {
         // Validate if any of test sources are present and if they changed
         // This should always work since there is no submodule to init anymore
         let bin_tests = std::fs::read_dir("wasi-tests/src/bin").unwrap();

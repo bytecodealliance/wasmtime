@@ -41,11 +41,13 @@ wat = "1.0.2"
 libc = "0.2.60"
 rayon = "1.1"
 wasm-webidl-bindings = "0.6"
+
+[dev-dependencies]
 more-asserts = "0.2.1"
 # This feature requires the wasm32-wasi target be installed. It enables
 # wasm32-wasi integration tests. To enable, run
 # `cargo test --features test-programs`.
-test-programs = { path = "crates/test-programs", optional = true }
+test-programs = { path = "crates/test-programs" }
 
 [build-dependencies]
 anyhow = "1.0.19"
@@ -63,6 +65,7 @@ lightbeam = [
     "wasmtime-wast/lightbeam"
 ]
 wasi-c = ["wasmtime-wasi-c"]
+test_programs = ["test-programs/test_programs"]
 
 [badges]
 maintenance = { status = "actively-developed" }
