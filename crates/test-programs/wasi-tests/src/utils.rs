@@ -52,3 +52,32 @@ pub unsafe fn cleanup_file(dir_fd: wasi_unstable::Fd, file_name: &str) {
 pub unsafe fn close_fd(fd: wasi_unstable::Fd) {
     assert!(wasi_unstable::fd_close(fd).is_ok(), "closing a file");
 }
+
+// Returns: (rights_base, rights_inheriting)
+pub unsafe fn fd_get_rights(fd: wasi_unstable::Fd) -> (wasi_unstable::Rights, wasi_unstable::Rights) {
+    let mut fdstat: wasi_unstable::FdStat = std::mem::zeroed();
+    let status = wasi_fd_fdstat_get(fd, &mut fdstat);
+    assert_eq!(
+        status,
+        wasi_unstable::raw::__WASI_ESUCCESS,
+        "calling fd_fdstat_get"
+    );
+
+    (fdstat.fs_rights_base, fdstat.fs_rights_inheriting)
+}
+
+pub unsafe fn drop_rights(
+    fd: wasi_unstable::Fd,
+    drop_base: wasi_unstable::Rights,
+    drop_inheriting: wasi_unstable::Rights,
+) {
+    let (current_base, current_inheriting) = fd_get_rights(fd);
+
+    let new_base = current_base & !drop_base;
+    let new_inheriting = current_inheriting & !drop_inheriting;
+
+    assert!(
+        wasi_unstable::fd_fdstat_set_rights(fd, new_base, new_inheriting).is_ok(),
+        "dropping fd rights",
+    );
+}
