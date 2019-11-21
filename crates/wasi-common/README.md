@@ -60,10 +60,10 @@ rustup target add wasm32-wasi
 [rustup]: https://rustup.rs
 
 Now, you should be able to run the integration testsuite by running `cargo test` on the
-`test-programs` package:
+`test-programs` package with `test_programs` feature enabled:
 
 ```
-cargo test --package test-programs
+cargo test --features test_programs --package test-programs
 ```
 
 ## Third-Party Code
