@@ -36,7 +36,7 @@ impl<'a> Iterator for ReadDir<'a> {
 
             // Read the data
             let dirent_ptr = self.buf.as_ptr() as *const wasi_unstable::Dirent;
-            let dirent = *dirent_ptr;
+            let dirent = dirent_ptr.read_unaligned();
             let name_ptr = dirent_ptr.offset(1) as *const u8;
             // NOTE Linux syscall returns a NULL-terminated name, but WASI doesn't
             let namelen = dirent.d_namlen as usize;
