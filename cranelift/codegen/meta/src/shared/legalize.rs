@@ -877,6 +877,16 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         ],
     );
 
+    narrow.legalize(
+        def!(a = bitrev.I128(x)),
+        vec![
+            def!((xl, xh) = isplit(x)),
+            def!(yh = bitrev(xl)),
+            def!(yl = bitrev(xh)),
+            def!(a = iconcat(yl, yh)),
+        ],
+    );
+
     // Floating-point sign manipulations.
     for &(ty, const_inst, minus_zero) in &[
         (F32, f32const, &Literal::bits(&imm.ieee32, 0x8000_0000)),

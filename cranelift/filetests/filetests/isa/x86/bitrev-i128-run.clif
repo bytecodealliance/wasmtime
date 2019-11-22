@@ -1,0 +1,46 @@
+test run
+target x86_64
+
+function %reverse_bits_zero() -> b1 {
+ebb0:
+    v0 = iconst.i64 0
+    v1 = iconcat v0, v0
+    v2 = bitrev.i128 v1
+    v3 = icmp eq v2, v1
+    return v3
+}
+; run
+
+function %reverse_bits_one() -> b1 {
+ebb0:
+    v0 = iconst.i64 0
+    v1 = iconst.i64 1
+    v2 = iconcat v0, v1
+
+    v3 = bitrev.i128 v2
+
+    v4 = iconst.i64 0x8000_0000_0000_0000
+    v5 = iconst.i64 0
+    v6 = iconcat v4, v5
+
+    v7 = icmp eq v3, v6
+    return v7
+}
+; run
+
+function %reverse_bits() -> b1 {
+ebb0:
+    v0 = iconst.i64 0x06AD_8667_69EC_41BA
+    v1 = iconst.i64 0x6C83_D81A_6E28_83AB
+    v2 = iconcat v0, v1
+
+    v3 = bitrev.i128 v2
+
+    v4 = iconst.i64 0xD5C11476581BC136
+    v5 = iconst.i64 0x5D823796E661B560
+    v6 = iconcat v4, v5
+
+    v7 = icmp eq v3, v6
+    return v7
+}
+; run
