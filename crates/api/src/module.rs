@@ -5,7 +5,10 @@ use crate::types::{
     TableType, ValType,
 };
 use anyhow::{Error, Result};
-use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
+use wasmparser::{
+    validate, ExternalKind, ImportSectionEntryType, ModuleReader, OperatorValidatorConfig,
+    SectionCode, ValidatingParserConfig,
+};
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
     assert!(!mt.shared);
@@ -208,7 +211,16 @@ impl Module {
         }
     }
     pub fn validate(_store: &HostRef<Store>, binary: &[u8]) -> Result<()> {
-        validate(binary, None).map_err(|e| Error::new(e))
+        let config = ValidatingParserConfig {
+            operator_config: OperatorValidatorConfig {
+                enable_threads: false,
+                enable_reference_types: false,
+                enable_bulk_memory: false,
+                enable_simd: false,
+                enable_multi_value: true,
+            },
+        };
+        validate(binary, Some(config)).map_err(Error::new)
     }
     pub fn imports(&self) -> &[ImportType] {
         &self.imports
