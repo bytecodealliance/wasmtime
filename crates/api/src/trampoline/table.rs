@@ -17,7 +17,7 @@ pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
         },
         ty: match table.element() {
             ValType::FuncRef => wasm::TableElementType::Func,
-            _ => wasm::TableElementType::Val(table.element().get_cranelift_type()),
+            _ => wasm::TableElementType::Val(table.element().get_wasmtime_type()),
         },
     };
     let tunable = Default::default();

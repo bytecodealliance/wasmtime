@@ -24,7 +24,7 @@ pub fn create_global(gt: &GlobalType, val: Val) -> Result<(wasmtime_runtime::Exp
     }
 
     let global = wasm::Global {
-        ty: gt.content().get_cranelift_type(),
+        ty: gt.content().get_wasmtime_type(),
         mutability: match gt.mutability() {
             Mutability::Const => false,
             Mutability::Var => true,

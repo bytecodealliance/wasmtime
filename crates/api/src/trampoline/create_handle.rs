@@ -36,7 +36,7 @@ pub(crate) fn create_handle(
                 module
                     .signatures
                     .values()
-                    .map(|sig| signature_registry.register_cranelift_signature(sig))
+                    .map(|sig| signature_registry.register_wasmtime_signature(sig))
                     .collect::<PrimaryMap<_, _>>(),
             )
         })

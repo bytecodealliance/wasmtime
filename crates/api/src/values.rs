@@ -228,7 +228,7 @@ pub(crate) fn into_checked_anyfunc(
                 } => (*vmctx, *address, signature),
                 _ => panic!("expected function export"),
             };
-            let type_index = store.borrow_mut().register_cranelift_signature(signature);
+            let type_index = store.borrow_mut().register_wasmtime_signature(signature);
             wasmtime_runtime::VMCallerCheckedAnyfunc {
                 func_ptr,
                 type_index,
@@ -248,7 +248,7 @@ pub(crate) fn from_checked_anyfunc(
     }
     let signature = store
         .borrow()
-        .lookup_cranelift_signature(item.type_index)
+        .lookup_wasmtime_signature(item.type_index)
         .expect("signature")
         .clone();
     let instance_handle = unsafe { wasmtime_runtime::InstanceHandle::from_vmctx(item.vmctx) };

@@ -163,7 +163,7 @@ impl Func {
         instance_handle: InstanceHandle,
     ) -> Self {
         let ty = if let wasmtime_runtime::Export::Function { signature, .. } = &export {
-            FuncType::from_cranelift_signature(signature.clone())
+            FuncType::from_wasmtime_signature(signature.clone())
         } else {
             panic!("expected function export")
         };
@@ -255,7 +255,7 @@ impl Global {
         } else {
             panic!("wasmtime export is not memory")
         };
-        let ty = GlobalType::from_cranelift_global(&global);
+        let ty = GlobalType::from_wasmtime_global(&global);
         Global {
             _store: store.clone(),
             r#type: ty,
@@ -395,7 +395,7 @@ impl Table {
         } else {
             panic!("wasmtime export is not table")
         };
-        let ty = TableType::from_cranelift_table(&table.table);
+        let ty = TableType::from_wasmtime_table(&table.table);
         Table {
             store: store.clone(),
             r#type: ty,
@@ -479,7 +479,7 @@ impl Memory {
         } else {
             panic!("wasmtime export is not memory")
         };
-        let ty = MemoryType::from_cranelift_memory(&memory.memory);
+        let ty = MemoryType::from_wasmtime_memory(&memory.memory);
         Memory {
             _store: store.clone(),
             r#type: ty,

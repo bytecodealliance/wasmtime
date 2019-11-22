@@ -132,7 +132,7 @@ impl Instance {
                 // HACK ensure all handles, instantiated outside Store, present in
                 // the store's SignatureRegistry, e.g. WASI instances that are
                 // imported into this store using the from_handle() method.
-                let _ = store.borrow_mut().register_cranelift_signature(signature);
+                let _ = store.borrow_mut().register_wasmtime_signature(signature);
             }
             let extern_type = ExternType::from_wasmtime_export(&export);
             exports_types.push(ExportType::new(Name::new(name), extern_type));

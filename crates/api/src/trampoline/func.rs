@@ -198,7 +198,7 @@ pub fn create_handle_with_function(
     func: &Rc<dyn Callable + 'static>,
     store: &HostRef<Store>,
 ) -> Result<InstanceHandle> {
-    let sig = ft.get_cranelift_signature().clone();
+    let sig = ft.get_wasmtime_signature().clone();
 
     let isa = {
         let isa_builder = native_isa_builder();
