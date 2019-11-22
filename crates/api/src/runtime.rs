@@ -1,6 +1,6 @@
 use crate::context::Context;
+use crate::data_structures::{ir, settings};
 use crate::r#ref::HostRef;
-use cranelift_codegen::{ir, settings};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

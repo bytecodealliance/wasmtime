@@ -1,4 +1,5 @@
 use crate::callable::{Callable, NativeCallable, WasmtimeFn, WrappedCallable};
+use crate::data_structures::wasm;
 use crate::r#ref::{AnyRef, HostRef};
 use crate::runtime::Store;
 use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
@@ -274,7 +275,7 @@ pub struct Table {
 fn get_table_item(
     handle: &InstanceHandle,
     store: &HostRef<Store>,
-    table_index: cranelift_wasm::DefinedTableIndex,
+    table_index: wasm::DefinedTableIndex,
     item_index: u32,
 ) -> Val {
     if let Some(item) = handle.table_get(table_index, item_index) {
@@ -287,7 +288,7 @@ fn get_table_item(
 fn set_table_item(
     handle: &mut InstanceHandle,
     store: &HostRef<Store>,
-    table_index: cranelift_wasm::DefinedTableIndex,
+    table_index: wasm::DefinedTableIndex,
     item_index: u32,
     val: Val,
 ) -> bool {
@@ -335,7 +336,7 @@ impl Table {
         &self.r#type
     }
 
-    fn wasmtime_table_index(&self) -> cranelift_wasm::DefinedTableIndex {
+    fn wasmtime_table_index(&self) -> wasm::DefinedTableIndex {
         match self.wasmtime_export {
             wasmtime_runtime::Export::Table { definition, .. } => {
                 self.wasmtime_handle.table_index(unsafe { &*definition })

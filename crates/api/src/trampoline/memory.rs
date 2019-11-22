@@ -1,7 +1,7 @@
 use super::create_handle::create_handle;
+use crate::data_structures::{wasm, PrimaryMap};
 use crate::MemoryType;
 use anyhow::Result;
-use cranelift_entity::PrimaryMap;
 use wasmtime_environ::Module;
 use wasmtime_runtime::InstanceHandle;
 
@@ -10,7 +10,7 @@ use wasmtime_runtime::InstanceHandle;
 pub fn create_handle_with_memory(memory: &MemoryType) -> Result<InstanceHandle> {
     let mut module = Module::new();
 
-    let memory = cranelift_wasm::Memory {
+    let memory = wasm::Memory {
         minimum: memory.limits().min(),
         maximum: if memory.limits().max() == std::u32::MAX {
             None

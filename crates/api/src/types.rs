@@ -1,4 +1,4 @@
-use cranelift_codegen::ir;
+use crate::data_structures::{ir, wasm};
 
 // Type Representations
 
@@ -156,8 +156,8 @@ pub struct FuncType {
 
 impl FuncType {
     pub fn new(params: Box<[ValType]>, results: Box<[ValType]>) -> FuncType {
-        use cranelift_codegen::ir::*;
-        use cranelift_codegen::isa::CallConv;
+        use crate::data_structures::ir::*;
+        use crate::data_structures::CallConv;
         use target_lexicon::HOST;
         let call_conv = CallConv::triple_default(&HOST);
         let signature: Signature = {
@@ -236,7 +236,7 @@ impl GlobalType {
         self.mutability
     }
 
-    pub(crate) fn from_cranelift_global(global: &cranelift_wasm::Global) -> GlobalType {
+    pub(crate) fn from_cranelift_global(global: &wasm::Global) -> GlobalType {
         let ty = ValType::from_cranelift_type(global.ty);
         let mutability = if global.mutability {
             Mutability::Var
@@ -266,8 +266,8 @@ impl TableType {
         &self.limits
     }
 
-    pub(crate) fn from_cranelift_table(table: &cranelift_wasm::Table) -> TableType {
-        assert!(if let cranelift_wasm::TableElementType::Func = table.ty {
+    pub(crate) fn from_cranelift_table(table: &wasm::Table) -> TableType {
+        assert!(if let wasm::TableElementType::Func = table.ty {
             true
         } else {
             false
@@ -293,7 +293,7 @@ impl MemoryType {
         &self.limits
     }
 
-    pub(crate) fn from_cranelift_memory(memory: &cranelift_wasm::Memory) -> MemoryType {
+    pub(crate) fn from_cranelift_memory(memory: &wasm::Memory) -> MemoryType {
         MemoryType::new(Limits::new(
             memory.minimum,
             memory.maximum.unwrap_or(::std::u32::MAX),

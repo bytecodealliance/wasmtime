@@ -1,15 +1,17 @@
 //! Support for a calling of an imported function.
 
 use super::create_handle::create_handle;
+use crate::data_structures::ir::{
+    self, types, InstBuilder, StackSlotData, StackSlotKind, TrapCode,
+};
+use crate::data_structures::wasm::{DefinedFuncIndex, FuncIndex};
+use crate::data_structures::{
+    binemit, native_isa_builder, pretty_error, settings, Context, EntityRef, FunctionBuilder,
+    FunctionBuilderContext, PrimaryMap, TargetIsa,
+};
 use crate::r#ref::HostRef;
 use crate::{Callable, FuncType, Store, Trap, Val};
 use anyhow::Result;
-use cranelift_codegen::ir::{types, InstBuilder, StackSlotData, StackSlotKind, TrapCode};
-use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::{binemit, ir, isa, Context};
-use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex};
 use std::cmp;
 use std::rc::Rc;
 use wasmtime_environ::{CompiledFunction, Export, Module};
@@ -69,7 +71,7 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
 
 /// Create a trampoline for invoking a Callable.
 fn make_trampoline(
-    isa: &dyn isa::TargetIsa,
+    isa: &dyn TargetIsa,
     code_memory: &mut CodeMemory,
     fn_builder_ctx: &mut FunctionBuilderContext,
     call_id: u32,
@@ -164,7 +166,7 @@ fn make_trampoline(
     }
 
     let mut code_buf: Vec<u8> = Vec::new();
-    let mut reloc_sink = RelocSink {};
+    let mut reloc_sink = binemit::TrampolineRelocSink {};
     let mut trap_sink = binemit::NullTrapSink {};
     let mut stackmap_sink = binemit::NullStackmapSink {};
     context
@@ -199,10 +201,9 @@ pub fn create_handle_with_function(
     let sig = ft.get_cranelift_signature().clone();
 
     let isa = {
-        let isa_builder =
-            cranelift_native::builder().expect("host machine is not a supported target");
-        let flag_builder = cranelift_codegen::settings::builder();
-        isa_builder.finish(cranelift_codegen::settings::Flags::new(flag_builder))
+        let isa_builder = native_isa_builder();
+        let flag_builder = settings::builder();
+        isa_builder.finish(settings::Flags::new(flag_builder))
     };
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
@@ -242,44 +243,4 @@ pub fn create_handle_with_function(
         finished_functions,
         Box::new(trampoline_state),
     )
-}
-
-/// We don't expect trampoline compilation to produce any relocations, so
-/// this `RelocSink` just asserts that it doesn't recieve any.
-struct RelocSink {}
-
-impl binemit::RelocSink for RelocSink {
-    fn reloc_ebb(
-        &mut self,
-        _offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _ebb_offset: binemit::CodeOffset,
-    ) {
-        panic!("trampoline compilation should not produce ebb relocs");
-    }
-    fn reloc_external(
-        &mut self,
-        _offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _name: &ir::ExternalName,
-        _addend: binemit::Addend,
-    ) {
-        panic!("trampoline compilation should not produce external symbol relocs");
-    }
-    fn reloc_constant(
-        &mut self,
-        _code_offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _constant_offset: ir::ConstantOffset,
-    ) {
-        panic!("trampoline compilation should not produce constant relocs");
-    }
-    fn reloc_jt(
-        &mut self,
-        _offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _jt: ir::JumpTable,
-    ) {
-        panic!("trampoline compilation should not produce jump table relocs");
-    }
 }

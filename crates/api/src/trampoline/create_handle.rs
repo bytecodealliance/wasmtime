@@ -1,9 +1,9 @@
 //! Support for a calling of an imported function.
 
+use crate::data_structures::wasm::DefinedFuncIndex;
+use crate::data_structures::PrimaryMap;
 use crate::runtime::Store;
 use anyhow::Result;
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm::DefinedFuncIndex;
 use std::any::Any;
 use std::cell::{RefCell, RefMut};
 use std::collections::{HashMap, HashSet};

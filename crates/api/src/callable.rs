@@ -1,10 +1,10 @@
+use crate::data_structures::ir;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trampoline::generate_func_export;
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
-use cranelift_codegen::ir;
 use std::rc::Rc;
 use wasmtime_jit::InstanceHandle;
 use wasmtime_runtime::Export;

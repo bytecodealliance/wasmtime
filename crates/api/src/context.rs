@@ -1,3 +1,4 @@
+use crate::data_structures::native_isa_builder;
 use crate::Config;
 use std::cell::{RefCell, RefMut};
 use std::hash::{Hash, Hasher};
@@ -13,8 +14,7 @@ pub struct Context {
 
 impl Context {
     pub fn new(config: &Config) -> Context {
-        let isa_builder =
-            cranelift_native::builder().expect("host machine is not a supported target");
+        let isa_builder = native_isa_builder();
         let isa = isa_builder.finish(config.flags.clone());
         Context::new_with_compiler(config, Compiler::new(isa, config.strategy))
     }

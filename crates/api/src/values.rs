@@ -1,8 +1,8 @@
+use crate::data_structures::ir;
 use crate::externals::Func;
 use crate::r#ref::{AnyRef, HostRef};
 use crate::runtime::Store;
 use crate::types::ValType;
-use cranelift_codegen::ir;
 use std::ptr;
 use wasmtime_jit::RuntimeValue;
 
