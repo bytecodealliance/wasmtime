@@ -156,10 +156,9 @@ pub struct FuncType {
 
 impl FuncType {
     pub fn new(params: Box<[ValType]>, results: Box<[ValType]>) -> FuncType {
-        use crate::data_structures::ir::*;
-        use crate::data_structures::CallConv;
-        use target_lexicon::HOST;
-        let call_conv = CallConv::triple_default(&HOST);
+        use crate::data_structures::ir::{types, AbiParam, ArgumentPurpose, Signature};
+        use crate::data_structures::native_isa_call_conv;
+        let call_conv = native_isa_call_conv();
         let signature: Signature = {
             let mut params = params
                 .iter()

@@ -1,14 +1,14 @@
 //! Support for a calling of an imported function.
 
 use super::create_handle::create_handle;
-use crate::data_structures::ir::{
-    self, types, InstBuilder, StackSlotData, StackSlotKind, TrapCode,
+use super::ir::{
+    ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind, TrapCode,
 };
+use super::{binemit, pretty_error, TargetIsa};
+use super::{Context, FunctionBuilder, FunctionBuilderContext};
+use crate::data_structures::ir::{self, types};
 use crate::data_structures::wasm::{DefinedFuncIndex, FuncIndex};
-use crate::data_structures::{
-    binemit, native_isa_builder, pretty_error, settings, Context, EntityRef, FunctionBuilder,
-    FunctionBuilderContext, PrimaryMap, TargetIsa,
-};
+use crate::data_structures::{native_isa_builder, settings, EntityRef, PrimaryMap};
 use crate::r#ref::HostRef;
 use crate::{Callable, FuncType, Store, Trap, Val};
 use anyhow::Result;
@@ -100,8 +100,7 @@ fn make_trampoline(
     let values_vec_len = 8 * cmp::max(signature.params.len() - 1, signature.returns.len()) as u32;
 
     let mut context = Context::new();
-    context.func =
-        ir::Function::with_name_signature(ir::ExternalName::user(0, 0), signature.clone());
+    context.func = Function::with_name_signature(ExternalName::user(0, 0), signature.clone());
 
     let ss = context.func.create_stack_slot(StackSlotData::new(
         StackSlotKind::ExplicitSlot,
@@ -118,7 +117,7 @@ fn make_trampoline(
         builder.seal_block(block0);
 
         let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
-        let mflags = ir::MemFlags::trusted();
+        let mflags = MemFlags::trusted();
         for i in 1..signature.params.len() {
             if i == 0 {
                 continue;
@@ -150,7 +149,7 @@ fn make_trampoline(
         let call_result = builder.func.dfg.inst_results(call)[0];
         builder.ins().trapnz(call_result, TrapCode::User(0));
 
-        let mflags = ir::MemFlags::trusted();
+        let mflags = MemFlags::trusted();
         let mut results = Vec::new();
         for (i, r) in signature.returns.iter().enumerate() {
             let load = builder.ins().load(
@@ -211,9 +210,6 @@ pub fn create_handle_with_function(
     let mut finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody> =
         PrimaryMap::new();
     let mut code_memory = CodeMemory::new();
-
-    //let pointer_type = types::Type::triple_pointer_type(&HOST);
-    //let call_conv = isa::CallConv::triple_default(&HOST);
 
     let sig_id = module.signatures.push(sig.clone());
     let func_id = module.functions.push(sig_id);
