@@ -10,7 +10,7 @@ version = "0.1.0"
 
 [dependencies]
 arbitrary = "0.2.0"
-binaryen = "0.8.1"
+binaryen = "0.8.2"
 cranelift-codegen = "0.50.0"
 cranelift-native = "0.50.0"
 wasmparser = "0.42.1"
