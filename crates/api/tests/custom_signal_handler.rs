@@ -75,6 +75,7 @@ fn test_custom_signal_handler() {
     let exports = Ref::map(instance.borrow(), |instance| instance.exports());
     assert!(!exports.is_empty());
 
+    // these invoke wasmtime_call_trampoline from action.rs
     {
         println!("calling read...");
         let result = invoke_export(&store, &instance, &data, "read").expect("read succeeded");
@@ -88,5 +89,29 @@ fn test_custom_signal_handler() {
             .find_root_cause()
             .to_string()
             .starts_with("trapped: wasm trap: out of bounds memory access"));
+    }
+
+    // these invoke wasmtime_call_trampoline from callable.rs
+    {
+        let read_func = exports[0]
+            .func()
+            .expect("expected a 'read' func in the module");
+        println!("calling read...");
+        let result = read_func
+            .borrow()
+            .call(&[])
+            .expect("expected function not to trap");
+        assert_eq!(123i32, result[0].clone().into());
+    }
+
+    {
+        let read_out_of_bounds_func = exports[1]
+            .func()
+            .expect("expected a 'read_out_of_bounds' func in the module");
+        println!("calling read_out_of_bounds...");
+        let trap = read_out_of_bounds_func
+            .borrow()
+            .call(&[]).unwrap_err();
+        assert!(trap.borrow().message().starts_with("wasm trap: out of bounds memory access"));
     }
 }
