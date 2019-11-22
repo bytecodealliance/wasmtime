@@ -765,7 +765,7 @@ pub unsafe extern "C" fn wasm_module_validate(
 ) -> bool {
     let binary = (*binary).as_slice();
     let store = &(*store).store;
-    Module::validate(&store.borrow(), binary).is_ok()
+    Module::validate(store, binary).is_ok()
 }
 
 #[no_mangle]

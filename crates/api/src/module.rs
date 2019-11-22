@@ -187,7 +187,7 @@ impl Module {
     /// Validate and decode the raw wasm data in `binary` and create a new
     /// `Module` in the given `store`.
     pub fn new(store: &HostRef<Store>, binary: &[u8]) -> Result<Module> {
-        Self::validate(&store.borrow(), binary)?;
+        Self::validate(store, binary)?;
         Self::new_unchecked(store, binary)
     }
     /// Similar to `new`, but does not perform any validation. Only use this
@@ -207,7 +207,7 @@ impl Module {
             _ => None,
         }
     }
-    pub fn validate(_store: &Store, binary: &[u8]) -> Result<()> {
+    pub fn validate(_store: &HostRef<Store>, binary: &[u8]) -> Result<()> {
         validate(binary, None).map_err(|e| Error::new(e))
     }
     pub fn imports(&self) -> &[ImportType] {
