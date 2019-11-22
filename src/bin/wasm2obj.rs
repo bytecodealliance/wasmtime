@@ -29,7 +29,10 @@
     )
 )]
 
-use cranelift_codegen::{isa, settings, settings::Configurable};
+use cranelift_codegen::{
+    isa,
+    settings::{self, Configurable},
+};
 use cranelift_entity::EntityRef;
 use cranelift_wasm::DefinedMemoryIndex;
 use docopt::Docopt;
@@ -39,8 +42,8 @@ use std::{
     error::Error,
     fmt::format,
     path::{Path, PathBuf},
-    process, str,
-    str::FromStr,
+    process,
+    str::{self, FromStr},
 };
 use target_lexicon::Triple;
 use wasmtime_cli::pick_compilation_strategy;

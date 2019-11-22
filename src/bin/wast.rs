@@ -25,7 +25,7 @@
     )
 )]
 
-use cranelift_codegen::{settings, settings::Configurable};
+use cranelift_codegen::settings::{self, Configurable};
 use cranelift_native;
 use docopt::Docopt;
 use pretty_env_logger;
