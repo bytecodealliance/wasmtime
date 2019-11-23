@@ -44,7 +44,7 @@ errno = "0.2.4"
 tempfile = "3"
 target-lexicon = { version = "0.9.0", default-features = false }
 pretty_env_logger = "0.3.0"
-rand = { version = "0.7.0", features = ["small_rng"] }
+rand = { version = "0.7.0", default-features = false, features = ["small_rng"] }
 cranelift-codegen = { version = "0.50.0", features = ["enable-serde", "all-arch"] }
 filetime = "0.2.7"
 
