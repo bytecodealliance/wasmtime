@@ -4,7 +4,7 @@ use crate::fdentry::Descriptor;
 use crate::memory::*;
 use crate::sys::hostcalls_impl;
 use crate::{wasi, wasi32, Error, Result};
-use log::{trace, error};
+use log::{error, trace};
 use std::convert::TryFrom;
 
 pub(crate) fn args_get(
