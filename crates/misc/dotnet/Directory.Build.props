@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <WasmtimeVersion>0.8.0</WasmtimeVersion>    
+    <WasmtimeLibraryName>wasmtime</WasmtimeLibraryName>
+  </PropertyGroup>
+</Project>
