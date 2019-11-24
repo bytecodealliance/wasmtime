@@ -218,7 +218,7 @@ fn dirent_from_path<P: AsRef<Path>>(
 // .        gets cookie = 1
 // ..       gets cookie = 2
 // other entries, in order they were returned by FindNextFileW get subsequent integers as their cookies
-pub(crate) fn fd_readdir_impl(
+pub(crate) fn fd_readdir(
     fd: &File,
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<impl Iterator<Item = Result<Dirent>>> {
@@ -255,30 +255,6 @@ pub(crate) fn fd_readdir_impl(
     //
     // See https://github.com/WebAssembly/WASI/issues/61 for more details.
     Ok(iter.skip(cookie))
-}
-
-// This should actually be common code with Linux
-pub(crate) fn fd_readdir(
-    os_file: &mut OsFile,
-    mut host_buf: &mut [u8],
-    cookie: wasi::__wasi_dircookie_t,
-) -> Result<usize> {
-    let iter = fd_readdir_impl(os_file, cookie)?;
-    let mut used = 0;
-    for dirent in iter {
-        let dirent_raw = dirent?.to_wasi_raw()?;
-        let offset = dirent_raw.len();
-        if host_buf.len() < offset {
-            break;
-        } else {
-            host_buf[0..offset].copy_from_slice(&dirent_raw);
-            used += offset;
-            host_buf = &mut host_buf[offset..];
-        }
-    }
-
-    trace!("     | *buf_used={:?}", used);
-    Ok(used)
 }
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
