@@ -136,7 +136,7 @@ pub(crate) fn random_get(
 
     let buf = dec_slice_of_mut_u8(memory, buf_ptr, buf_len)?;
 
-    getrandom(buf).map_err(|err| {
+    getrandom::getrandom(buf).map_err(|err| {
         error!("getrandom failure: {:?}", err);
         Error::EIO
     })
