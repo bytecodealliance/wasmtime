@@ -4,7 +4,7 @@ use crate::fdentry::Descriptor;
 use crate::memory::*;
 use crate::sys::hostcalls_impl;
 use crate::{wasi, wasi32, Error, Result};
-use log::trace;
+use log::{error, trace};
 use std::convert::TryFrom;
 
 pub(crate) fn args_get(
@@ -132,15 +132,14 @@ pub(crate) fn random_get(
     buf_ptr: wasi32::uintptr_t,
     buf_len: wasi32::size_t,
 ) -> Result<()> {
-    use rand::{thread_rng, RngCore};
-
     trace!("random_get(buf_ptr={:#x?}, buf_len={:?})", buf_ptr, buf_len);
 
     let buf = dec_slice_of_mut_u8(memory, buf_ptr, buf_len)?;
 
-    thread_rng().fill_bytes(buf);
-
-    Ok(())
+    getrandom::getrandom(buf).map_err(|err| {
+        error!("getrandom failure: {:?}", err);
+        Error::EIO
+    })
 }
 
 pub(crate) fn clock_res_get(
