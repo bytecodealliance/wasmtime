@@ -2,6 +2,7 @@ use crate::old::snapshot_0::fdentry::Descriptor;
 use crate::old::snapshot_0::{wasi, Error, Result};
 use std::fs::File;
 use std::io;
+use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, RawHandle};
 
@@ -43,6 +44,12 @@ impl AsRawHandle for Descriptor {
             Self::Stderr => io::stderr().as_raw_handle(),
         }
     }
+}
+
+pub(crate) fn descriptor_as_osfile(desc: &Descriptor) -> ManuallyDrop<OsFile> {
+    ManuallyDrop::new(OsFile::from(unsafe {
+        File::from_raw_handle(desc.as_raw_handle())
+    }))
 }
 
 /// This function is unsafe because it operates on a raw file handle.

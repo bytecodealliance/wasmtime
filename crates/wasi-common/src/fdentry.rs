@@ -1,6 +1,7 @@
 use crate::sys::dev_null;
-use crate::sys::fdentry_impl::{determine_type_and_access_rights, OsFile};
+use crate::sys::fdentry_impl::{descriptor_as_osfile, determine_type_and_access_rights, OsFile};
 use crate::{wasi, Error, Result};
+use std::mem::ManuallyDrop;
 use std::path::PathBuf;
 use std::{fs, io};
 
@@ -13,18 +14,26 @@ pub(crate) enum Descriptor {
 }
 
 impl Descriptor {
-    pub(crate) fn as_file(&self) -> Result<&OsFile> {
+    /// Return a reference to the actual `OsFile`, allowing operations which
+    /// require an actual file and not just a stream or socket file descriptor.
+    pub(crate) fn as_actual_file(&self) -> Result<&OsFile> {
         match self {
             Self::OsFile(file) => Ok(file),
             _ => Err(Error::EBADF),
         }
     }
 
-    pub(crate) fn as_file_mut(&mut self) -> Result<&mut OsFile> {
+    /// Like `as_actual_file`, but return a mutable reference.
+    pub(crate) fn as_actual_file_mut(&mut self) -> Result<&mut OsFile> {
         match self {
             Self::OsFile(file) => Ok(file),
             _ => Err(Error::EBADF),
         }
+    }
+
+    /// Return an `OsFile`, which may be a stream or socket file descriptor.
+    pub(crate) fn as_file(&self) -> ManuallyDrop<OsFile> {
+        descriptor_as_osfile(self)
     }
 }
 

@@ -46,7 +46,7 @@ pub(crate) fn path_get(
 
     let dirfd = fe
         .as_descriptor(rights_base, rights_inheriting)?
-        .as_file()?
+        .as_actual_file()?
         .try_clone()?;
 
     // Stack of directory file descriptors. Index 0 always corresponds with the directory provided

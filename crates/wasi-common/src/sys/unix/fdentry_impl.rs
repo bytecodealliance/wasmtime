@@ -1,6 +1,8 @@
 use crate::fdentry::Descriptor;
 use crate::{wasi, Error, Result};
+use std::fs::File;
 use std::io;
+use std::mem::ManuallyDrop;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
 cfg_if::cfg_if! {
@@ -29,6 +31,10 @@ impl AsRawFd for Descriptor {
             Self::Stderr => io::stderr().as_raw_fd(),
         }
     }
+}
+
+pub(crate) fn descriptor_as_osfile(desc: &Descriptor) -> ManuallyDrop<OsFile> {
+    ManuallyDrop::new(OsFile::from(unsafe { File::from_raw_fd(desc.as_raw_fd()) }))
 }
 
 /// This function is unsafe because it operates on a raw file descriptor.
