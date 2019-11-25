@@ -1,7 +1,7 @@
 use super::create_handle::create_handle;
+use crate::data_structures::{wasm, PrimaryMap};
 use crate::{GlobalType, Mutability, Val};
 use anyhow::Result;
-use cranelift_entity::PrimaryMap;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{InstanceHandle, VMGlobalDefinition};
 
@@ -23,13 +23,13 @@ pub fn create_global(gt: &GlobalType, val: Val) -> Result<(wasmtime_runtime::Exp
         }
     }
 
-    let global = cranelift_wasm::Global {
-        ty: gt.content().get_cranelift_type(),
+    let global = wasm::Global {
+        ty: gt.content().get_wasmtime_type(),
         mutability: match gt.mutability() {
             Mutability::Const => false,
             Mutability::Var => true,
         },
-        initializer: cranelift_wasm::GlobalInit::Import, // TODO is it right?
+        initializer: wasm::GlobalInit::Import, // TODO is it right?
     };
     let mut handle =
         create_handle(Module::new(), None, PrimaryMap::new(), Box::new(())).expect("handle");

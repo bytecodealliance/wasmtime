@@ -1,15 +1,14 @@
 use super::create_handle::create_handle;
+use crate::data_structures::{wasm, PrimaryMap};
 use crate::{TableType, ValType};
 use anyhow::Result;
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm::TableElementType;
 use wasmtime_environ::Module;
 use wasmtime_runtime::InstanceHandle;
 
 pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
     let mut module = Module::new();
 
-    let table = cranelift_wasm::Table {
+    let table = wasm::Table {
         minimum: table.limits().min(),
         maximum: if table.limits().max() == std::u32::MAX {
             None
@@ -17,8 +16,8 @@ pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
             Some(table.limits().max())
         },
         ty: match table.element() {
-            ValType::FuncRef => TableElementType::Func,
-            _ => TableElementType::Val(table.element().get_cranelift_type()),
+            ValType::FuncRef => wasm::TableElementType::Func,
+            _ => wasm::TableElementType::Val(table.element().get_wasmtime_type()),
         },
     };
     let tunable = Default::default();

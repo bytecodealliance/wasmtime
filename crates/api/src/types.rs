@@ -1,4 +1,4 @@
-use cranelift_codegen::ir;
+use crate::data_structures::{ir, wasm};
 
 // Type Representations
 
@@ -65,25 +65,25 @@ impl ValType {
         }
     }
 
-    pub(crate) fn get_cranelift_type(&self) -> ir::Type {
+    pub(crate) fn get_wasmtime_type(&self) -> ir::Type {
         match self {
             ValType::I32 => ir::types::I32,
             ValType::I64 => ir::types::I64,
             ValType::F32 => ir::types::F32,
             ValType::F64 => ir::types::F64,
             ValType::V128 => ir::types::I8X16,
-            _ => unimplemented!("get_cranelift_type other"),
+            _ => unimplemented!("get_wasmtime_type other"),
         }
     }
 
-    pub(crate) fn from_cranelift_type(ty: ir::Type) -> ValType {
+    pub(crate) fn from_wasmtime_type(ty: ir::Type) -> ValType {
         match ty {
             ir::types::I32 => ValType::I32,
             ir::types::I64 => ValType::I64,
             ir::types::F32 => ValType::F32,
             ir::types::F64 => ValType::F64,
             ir::types::I8X16 => ValType::V128,
-            _ => unimplemented!("from_cranelift_type other"),
+            _ => unimplemented!("from_wasmtime_type other"),
         }
     }
 }
@@ -126,25 +126,25 @@ impl ExternType {
     pub(crate) fn from_wasmtime_export(export: &wasmtime_runtime::Export) -> Self {
         match export {
             wasmtime_runtime::Export::Function { signature, .. } => {
-                ExternType::ExternFunc(FuncType::from_cranelift_signature(signature.clone()))
+                ExternType::ExternFunc(FuncType::from_wasmtime_signature(signature.clone()))
             }
             wasmtime_runtime::Export::Memory { memory, .. } => {
-                ExternType::ExternMemory(MemoryType::from_cranelift_memory(&memory.memory))
+                ExternType::ExternMemory(MemoryType::from_wasmtime_memory(&memory.memory))
             }
             wasmtime_runtime::Export::Global { global, .. } => {
-                ExternType::ExternGlobal(GlobalType::from_cranelift_global(&global))
+                ExternType::ExternGlobal(GlobalType::from_wasmtime_global(&global))
             }
             wasmtime_runtime::Export::Table { table, .. } => {
-                ExternType::ExternTable(TableType::from_cranelift_table(&table.table))
+                ExternType::ExternTable(TableType::from_wasmtime_table(&table.table))
             }
         }
     }
 }
 
 // Function Types
-fn from_cranelift_abiparam(param: &ir::AbiParam) -> ValType {
+fn from_wasmtime_abiparam(param: &ir::AbiParam) -> ValType {
     assert_eq!(param.purpose, ir::ArgumentPurpose::Normal);
-    ValType::from_cranelift_type(param.value_type)
+    ValType::from_wasmtime_type(param.value_type)
 }
 
 #[derive(Debug, Clone)]
@@ -156,18 +156,17 @@ pub struct FuncType {
 
 impl FuncType {
     pub fn new(params: Box<[ValType]>, results: Box<[ValType]>) -> FuncType {
-        use cranelift_codegen::ir::*;
-        use cranelift_codegen::isa::CallConv;
-        use target_lexicon::HOST;
-        let call_conv = CallConv::triple_default(&HOST);
+        use crate::data_structures::ir::{types, AbiParam, ArgumentPurpose, Signature};
+        use crate::data_structures::native_isa_call_conv;
+        let call_conv = native_isa_call_conv();
         let signature: Signature = {
             let mut params = params
                 .iter()
-                .map(|p| AbiParam::new(p.get_cranelift_type()))
+                .map(|p| AbiParam::new(p.get_wasmtime_type()))
                 .collect::<Vec<_>>();
             let returns = results
                 .iter()
-                .map(|p| AbiParam::new(p.get_cranelift_type()))
+                .map(|p| AbiParam::new(p.get_wasmtime_type()))
                 .collect::<Vec<_>>();
             params.insert(0, AbiParam::special(types::I64, ArgumentPurpose::VMContext));
 
@@ -190,21 +189,21 @@ impl FuncType {
         &self.results
     }
 
-    pub(crate) fn get_cranelift_signature(&self) -> &ir::Signature {
+    pub(crate) fn get_wasmtime_signature(&self) -> &ir::Signature {
         &self.signature
     }
 
-    pub(crate) fn from_cranelift_signature(signature: ir::Signature) -> FuncType {
+    pub(crate) fn from_wasmtime_signature(signature: ir::Signature) -> FuncType {
         let params = signature
             .params
             .iter()
             .filter(|p| p.purpose == ir::ArgumentPurpose::Normal)
-            .map(|p| from_cranelift_abiparam(p))
+            .map(|p| from_wasmtime_abiparam(p))
             .collect::<Vec<_>>();
         let results = signature
             .returns
             .iter()
-            .map(|p| from_cranelift_abiparam(p))
+            .map(|p| from_wasmtime_abiparam(p))
             .collect::<Vec<_>>();
         FuncType {
             params: params.into_boxed_slice(),
@@ -236,8 +235,8 @@ impl GlobalType {
         self.mutability
     }
 
-    pub(crate) fn from_cranelift_global(global: &cranelift_wasm::Global) -> GlobalType {
-        let ty = ValType::from_cranelift_type(global.ty);
+    pub(crate) fn from_wasmtime_global(global: &wasm::Global) -> GlobalType {
+        let ty = ValType::from_wasmtime_type(global.ty);
         let mutability = if global.mutability {
             Mutability::Var
         } else {
@@ -266,8 +265,8 @@ impl TableType {
         &self.limits
     }
 
-    pub(crate) fn from_cranelift_table(table: &cranelift_wasm::Table) -> TableType {
-        assert!(if let cranelift_wasm::TableElementType::Func = table.ty {
+    pub(crate) fn from_wasmtime_table(table: &wasm::Table) -> TableType {
+        assert!(if let wasm::TableElementType::Func = table.ty {
             true
         } else {
             false
@@ -293,7 +292,7 @@ impl MemoryType {
         &self.limits
     }
 
-    pub(crate) fn from_cranelift_memory(memory: &cranelift_wasm::Memory) -> MemoryType {
+    pub(crate) fn from_wasmtime_memory(memory: &wasm::Memory) -> MemoryType {
         MemoryType::new(Limits::new(
             memory.minimum,
             memory.maximum.unwrap_or(::std::u32::MAX),

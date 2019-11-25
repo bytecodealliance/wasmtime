@@ -49,3 +49,60 @@ pub fn generate_table_export(
     let export = instance.lookup("table").expect("table export");
     Ok((instance, export))
 }
+
+pub(crate) use cranelift_codegen::print_errors::pretty_error;
+
+pub(crate) mod binemit {
+    pub(crate) use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink};
+
+    pub use cranelift_codegen::{binemit, ir};
+
+    /// We don't expect trampoline compilation to produce any relocations, so
+    /// this `RelocSink` just asserts that it doesn't recieve any.
+    pub(crate) struct TrampolineRelocSink {}
+
+    impl binemit::RelocSink for TrampolineRelocSink {
+        fn reloc_ebb(
+            &mut self,
+            _offset: binemit::CodeOffset,
+            _reloc: binemit::Reloc,
+            _ebb_offset: binemit::CodeOffset,
+        ) {
+            panic!("trampoline compilation should not produce ebb relocs");
+        }
+        fn reloc_external(
+            &mut self,
+            _offset: binemit::CodeOffset,
+            _reloc: binemit::Reloc,
+            _name: &ir::ExternalName,
+            _addend: binemit::Addend,
+        ) {
+            panic!("trampoline compilation should not produce external symbol relocs");
+        }
+        fn reloc_constant(
+            &mut self,
+            _code_offset: binemit::CodeOffset,
+            _reloc: binemit::Reloc,
+            _constant_offset: ir::ConstantOffset,
+        ) {
+            panic!("trampoline compilation should not produce constant relocs");
+        }
+        fn reloc_jt(
+            &mut self,
+            _offset: binemit::CodeOffset,
+            _reloc: binemit::Reloc,
+            _jt: ir::JumpTable,
+        ) {
+            panic!("trampoline compilation should not produce jump table relocs");
+        }
+    }
+}
+
+pub(crate) mod ir {
+    pub(crate) use cranelift_codegen::ir::{
+        ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind, TrapCode,
+    };
+}
+pub(crate) use cranelift_codegen::isa::TargetIsa;
+pub(crate) use cranelift_codegen::Context;
+pub(crate) use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};

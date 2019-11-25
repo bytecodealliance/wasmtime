@@ -1,6 +1,6 @@
 use crate::context::Context;
+use crate::data_structures::{ir, settings};
 use crate::r#ref::HostRef;
-use cranelift_codegen::{ir, settings};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -139,7 +139,7 @@ impl Store {
         &self.global_exports
     }
 
-    pub(crate) fn register_cranelift_signature(
+    pub(crate) fn register_wasmtime_signature(
         &mut self,
         signature: &ir::Signature,
     ) -> wasmtime_runtime::VMSharedSignatureIndex {
@@ -154,7 +154,7 @@ impl Store {
         index
     }
 
-    pub(crate) fn lookup_cranelift_signature(
+    pub(crate) fn lookup_wasmtime_signature(
         &self,
         type_index: wasmtime_runtime::VMSharedSignatureIndex,
     ) -> Option<&ir::Signature> {
