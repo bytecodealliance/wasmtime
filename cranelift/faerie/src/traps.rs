@@ -4,6 +4,7 @@
 use cranelift_codegen::{binemit, ir};
 
 /// Record of the arguments cranelift passes to `TrapSink::trap`
+#[derive(Debug)]
 pub struct FaerieTrapSite {
     /// Offset into function
     pub offset: binemit::CodeOffset,
@@ -14,6 +15,7 @@ pub struct FaerieTrapSite {
 }
 
 /// Record of the trap sites for a given function
+#[derive(Debug)]
 pub struct FaerieTrapSink {
     /// Name of function
     pub name: String,
@@ -45,6 +47,7 @@ impl binemit::TrapSink for FaerieTrapSink {
 }
 
 /// Collection of all `FaerieTrapSink`s for the module
+#[derive(Debug)]
 pub struct FaerieTrapManifest {
     /// All `FaerieTrapSink` for the module
     pub sinks: Vec<FaerieTrapSink>,

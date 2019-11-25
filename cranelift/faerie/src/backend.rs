@@ -322,6 +322,7 @@ impl Backend for FaerieBackend {
 /// This is the output of `Module`'s
 /// [`finish`](../cranelift_module/struct.Module.html#method.finish) function.
 /// It provides functions for writing out the object file to memory or a file.
+#[derive(Debug)]
 pub struct FaerieProduct {
     /// Faerie artifact with all functions, data, and links from the module defined
     pub artifact: faerie::Artifact,
