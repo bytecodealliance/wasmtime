@@ -234,7 +234,7 @@ jobs:
     - run: $CENTOS cargo build --release --manifest-path crates/api/Cargo.toml
       shell: bash
     # Test what we just built
-    - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime
+    - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py --exclude wasmtime --exclude wasmtime-fuzzing
       shell: bash
       env:
         RUST_BACKTRACE: 1
