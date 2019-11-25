@@ -29,5 +29,15 @@ pub(crate) mod fdentry_impl {
 }
 
 pub(crate) mod host_impl {
+    use crate::{wasi, Result};
+
     pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_RSYNC;
+
+    pub(crate) fn stdev_from_nix(dev: nix::libc::dev_t) -> Result<wasi::__wasi_device_t> {
+        Ok(wasi::__wasi_device_t::from(dev))
+    }
+
+    pub(crate) fn stino_from_nix(ino: nix::libc::ino_t) -> Result<wasi::__wasi_inode_t> {
+        Ok(wasi::__wasi_device_t::from(ino))
+    }
 }

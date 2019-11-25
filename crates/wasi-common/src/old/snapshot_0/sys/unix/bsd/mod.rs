@@ -24,6 +24,7 @@ pub(crate) mod fdentry_impl {
 pub(crate) mod host_impl {
     use super::super::host_impl::dirent_filetype_from_host;
     use crate::old::snapshot_0::{wasi, Result};
+    use std::convert::TryFrom;
 
     pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_SYNC;
 
@@ -37,5 +38,13 @@ pub(crate) mod host_impl {
         entry.d_namlen = u32::from(host_entry.d_namlen);
         entry.d_type = d_type;
         Ok(entry)
+    }
+
+    pub(crate) fn stdev_from_nix(dev: nix::libc::dev_t) -> Result<wasi::__wasi_device_t> {
+        wasi::__wasi_device_t::try_from(dev).map_err(Into::into)
+    }
+
+    pub(crate) fn stino_from_nix(ino: nix::libc::ino_t) -> Result<wasi::__wasi_inode_t> {
+        wasi::__wasi_device_t::try_from(ino).map_err(Into::into)
     }
 }
