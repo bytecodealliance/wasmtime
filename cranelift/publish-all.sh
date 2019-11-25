@@ -43,7 +43,7 @@ for crate in \
     entity bforest codegen/shared codegen/meta codegen frontend native \
     preopt \
     reader wasm module \
-    faerie umbrella simplejit
+    faerie umbrella simplejit object
 do
     echo cargo publish --manifest-path "cranelift-$crate/Cargo.toml"
 
