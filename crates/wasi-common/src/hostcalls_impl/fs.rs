@@ -180,33 +180,25 @@ pub(crate) unsafe fn fd_renumber(
 ) -> Result<()> {
     trace!("fd_renumber(from={:?}, to={:?})", from, to);
 
-    if !wasi_ctx.contains_fd_entry(from) || !wasi_ctx.contains_fd_entry(to) {
+    if !wasi_ctx.contains_fd_entry(from) {
         return Err(Error::EBADF);
     }
-
-    let from_fe = wasi_ctx.get_fd_entry(from)?;
-    let to_fe = wasi_ctx.get_fd_entry(to)?;
 
     // Don't allow renumbering over a pre-opened resource.
     // TODO: Eventually, we do want to permit this, once libpreopen in
     // userspace is capable of removing entries from its tables as well.
-    if from_fe.preopen_path.is_some() || to_fe.preopen_path.is_some() {
+    let from_fe = wasi_ctx.get_fd_entry(from)?;
+    if from_fe.preopen_path.is_some() {
         return Err(Error::ENOTSUP);
     }
-
-    // check if stdio fds
-    // TODO should we renumber stdio fds?
-    if !from_fe.as_descriptor(0, 0)?.is_file() || !to_fe.as_descriptor(0, 0)?.is_file() {
-        return Err(Error::EBADF);
+    if let Ok(to_fe) = wasi_ctx.get_fd_entry(to) {
+        if to_fe.preopen_path.is_some() {
+            return Err(Error::ENOTSUP);
+        }
     }
 
-    let fe_from_dup = from_fe
-        .as_descriptor(0, 0)?
-        .as_file()
-        .and_then(|file| FdEntry::duplicate(file))?;
-
-    wasi_ctx.insert_fd_entry_at(to, fe_from_dup);
-    wasi_ctx.remove_fd_entry(from)?;
+    let fe = wasi_ctx.remove_fd_entry(from)?;
+    wasi_ctx.insert_fd_entry_at(to, fe);
 
     Ok(())
 }

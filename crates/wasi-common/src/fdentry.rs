@@ -26,37 +26,6 @@ impl Descriptor {
             _ => Err(Error::EBADF),
         }
     }
-
-    pub(crate) fn is_file(&self) -> bool {
-        match self {
-            Self::OsFile(_) => true,
-            _ => false,
-        }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn is_stdin(&self) -> bool {
-        match self {
-            Self::Stdin => true,
-            _ => false,
-        }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn is_stdout(&self) -> bool {
-        match self {
-            Self::Stdout => true,
-            _ => false,
-        }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn is_stderr(&self) -> bool {
-        match self {
-            Self::Stderr => true,
-            _ => false,
-        }
-    }
 }
 
 /// An abstraction struct serving as a wrapper for a host `Descriptor` object which requires
@@ -88,10 +57,6 @@ impl FdEntry {
                 preopen_path: None,
             },
         )
-    }
-
-    pub(crate) fn duplicate(file: &fs::File) -> Result<Self> {
-        Self::from(file.try_clone()?)
     }
 
     pub(crate) fn duplicate_stdin() -> Result<Self> {
