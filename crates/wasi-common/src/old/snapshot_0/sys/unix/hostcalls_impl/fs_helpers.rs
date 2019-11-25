@@ -10,7 +10,7 @@ pub(crate) fn path_open_rights(
     oflags: wasi::__wasi_oflags_t,
     fs_flags: wasi::__wasi_fdflags_t,
 ) -> (wasi::__wasi_rights_t, wasi::__wasi_rights_t) {
-    use nix::fcntl::OFlag;
+    use yanix::file::OFlag;
 
     // which rights are needed on the dirfd?
     let mut needed_base = wasi::__WASI_RIGHTS_PATH_OPEN;
@@ -38,13 +38,12 @@ pub(crate) fn path_open_rights(
 }
 
 pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
-    use nix::fcntl::{self, OFlag};
-    use nix::sys::stat::Mode;
     use std::os::unix::prelude::{AsRawFd, FromRawFd};
+    use yanix::file::{self, Mode, OFlag};
 
     log::debug!("path_get openat path = {:?}", path);
 
-    fcntl::openat(
+    file::openat(
         dirfd.as_raw_fd(),
         path,
         OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW,
@@ -55,14 +54,12 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
 }
 
 pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
-    use nix::fcntl;
     use std::os::unix::prelude::AsRawFd;
+    use yanix::file;
 
     log::debug!("path_get readlinkat path = {:?}", path);
 
-    let readlink_buf = &mut [0u8; libc::PATH_MAX as usize + 1];
-
-    fcntl::readlinkat(dirfd.as_raw_fd(), path, readlink_buf)
+    file::readlinkat(dirfd.as_raw_fd(), path)
         .map_err(Into::into)
         .and_then(host_impl::path_from_host)
 }

@@ -3,29 +3,24 @@
 use crate::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::sys::host_impl;
 use crate::{wasi, Error, Result};
-use nix::libc::{self, c_int};
-use std::mem::MaybeUninit;
+use libc::{self, c_int};
+use yanix::clock::ClockId;
 
-fn wasi_clock_id_to_unix(clock_id: wasi::__wasi_clockid_t) -> Result<libc::clockid_t> {
-    // convert the supported clocks to the libc types, or return EINVAL
+fn wasi_clock_id_to_nix(clock_id: wasi::__wasi_clockid_t) -> Result<ClockId> {
+    // convert the supported clocks to the nix type, or return EINVAL
     match clock_id {
-        wasi::__WASI_CLOCKID_REALTIME => Ok(libc::CLOCK_REALTIME),
-        wasi::__WASI_CLOCKID_MONOTONIC => Ok(libc::CLOCK_MONOTONIC),
-        wasi::__WASI_CLOCKID_PROCESS_CPUTIME_ID => Ok(libc::CLOCK_PROCESS_CPUTIME_ID),
-        wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => Ok(libc::CLOCK_THREAD_CPUTIME_ID),
+        wasi::__WASI_CLOCKID_REALTIME => Ok(ClockId::Realtime),
+        wasi::__WASI_CLOCKID_MONOTONIC => Ok(ClockId::Monotonic),
+        wasi::__WASI_CLOCKID_PROCESS_CPUTIME_ID => Ok(ClockId::ProcessCPUTime),
+        wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => Ok(ClockId::ThreadCPUTime),
         _ => Err(Error::EINVAL),
     }
 }
 
 pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
-    let clock_id = wasi_clock_id_to_unix(clock_id)?;
-    // no `nix` wrapper for clock_getres, so we do it ourselves
-    let mut timespec = MaybeUninit::<libc::timespec>::uninit();
-    let res = unsafe { libc::clock_getres(clock_id, timespec.as_mut_ptr()) };
-    if res != 0 {
-        return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
-    }
-    let timespec = unsafe { timespec.assume_init() };
+    use yanix::clock::clock_getres;
+    let clock_id = wasi_clock_id_to_nix(clock_id)?;
+    let timespec = clock_getres(clock_id)?;
 
     // convert to nanoseconds, returning EOVERFLOW in case of overflow;
     // this is freelancing a bit from the spec but seems like it'll
@@ -45,14 +40,9 @@ pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__
 }
 
 pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
-    let clock_id = wasi_clock_id_to_unix(clock_id)?;
-    // no `nix` wrapper for clock_getres, so we do it ourselves
-    let mut timespec = MaybeUninit::<libc::timespec>::uninit();
-    let res = unsafe { libc::clock_gettime(clock_id, timespec.as_mut_ptr()) };
-    if res != 0 {
-        return Err(host_impl::errno_from_nix(nix::errno::Errno::last()));
-    }
-    let timespec = unsafe { timespec.assume_init() };
+    use yanix::clock::clock_getres;
+    let clock_id = wasi_clock_id_to_nix(clock_id)?;
+    let timespec = clock_getres(clock_id)?;
 
     // convert to nanoseconds, returning EOVERFLOW in case of overflow; this is freelancing a bit
     // from the spec but seems like it'll be an unusual situation to hit
@@ -67,11 +57,11 @@ pub(crate) fn poll_oneoff(
     fd_events: Vec<FdEventData>,
     events: &mut Vec<wasi::__wasi_event_t>,
 ) -> Result<()> {
-    use nix::{
+    use std::{convert::TryInto, os::unix::prelude::AsRawFd};
+    use yanix::{
         errno::Errno,
         poll::{poll, PollFd, PollFlags},
     };
-    use std::{convert::TryInto, os::unix::prelude::AsRawFd};
 
     if fd_events.is_empty() && timeout.is_none() {
         return Ok(());
@@ -119,9 +109,6 @@ pub(crate) fn poll_oneoff(
     })
 }
 
-// define the `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`
-nix::ioctl_read_bad!(fionread, nix::libc::FIONREAD, c_int);
-
 fn poll_oneoff_handle_timeout_event(
     timeout: ClockEventData,
     events: &mut Vec<wasi::__wasi_event_t>,
@@ -140,11 +127,11 @@ fn poll_oneoff_handle_timeout_event(
 }
 
 fn poll_oneoff_handle_fd_event<'a>(
-    ready_events: impl Iterator<Item = (FdEventData<'a>, nix::poll::PollFd)>,
+    ready_events: impl Iterator<Item = (FdEventData<'a>, yanix::poll::PollFd)>,
     events: &mut Vec<wasi::__wasi_event_t>,
 ) -> Result<()> {
-    use nix::poll::PollFlags;
     use std::{convert::TryInto, os::unix::prelude::AsRawFd};
+    use yanix::{poll::PollFlags, sys::fionread};
 
     for (fd_event, poll_fd) in ready_events {
         log::debug!("poll_oneoff_handle_fd_event fd_event = {:?}", fd_event);
@@ -159,7 +146,7 @@ fn poll_oneoff_handle_fd_event<'a>(
 
         let mut nbytes = 0;
         if fd_event.r#type == wasi::__WASI_EVENTTYPE_FD_READ {
-            let _ = unsafe { fionread(fd_event.descriptor.as_raw_fd(), &mut nbytes) };
+            nbytes = fionread(fd_event.descriptor.as_raw_fd())?;
         }
 
         let output_event = if revents.contains(PollFlags::POLLNVAL) {

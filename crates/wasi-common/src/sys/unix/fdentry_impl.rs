@@ -4,9 +4,10 @@ use std::io;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
+    if #[cfg(any(target_os = "linux",
+                 target_os = "android",
+                 target_os = "emscripten"))] {
         pub(crate) use super::linux::osfile::*;
-        pub(crate) use super::linux::fdentry_impl::*;
     } else if #[cfg(any(
             target_os = "macos",
             target_os = "netbsd",
@@ -16,7 +17,6 @@ cfg_if::cfg_if! {
             target_os = "dragonfly"
     ))] {
         pub(crate) use super::bsd::osfile::*;
-        pub(crate) use super::bsd::fdentry_impl::*;
     }
 }
 
@@ -41,7 +41,10 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
 )> {
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(fd)?;
 
-    use nix::fcntl::{fcntl, OFlag, F_GETFL};
+    use yanix::{
+        file::OFlag,
+        sys::{fcntl, F_GETFL},
+    };
     let flags_bits = fcntl(fd.as_raw_fd(), F_GETFL)?;
     let flags = OFlag::from_bits_truncate(flags_bits);
     let accmode = flags & OFlag::O_ACCMODE;
@@ -75,7 +78,7 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
             )
         } else if ft.is_char_device() {
             log::debug!("Host fd {:?} is a char device", fd.as_raw_fd());
-            if isatty(fd)? {
+            if yanix::sys::isatty(fd.as_raw_fd())? {
                 (
                     wasi::__WASI_FILETYPE_CHARACTER_DEVICE,
                     wasi::RIGHTS_TTY_BASE,
@@ -104,14 +107,14 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
             )
         } else if ft.is_socket() {
             log::debug!("Host fd {:?} is a socket", fd.as_raw_fd());
-            use nix::sys::socket;
-            match socket::getsockopt(fd.as_raw_fd(), socket::sockopt::SockType)? {
-                socket::SockType::Datagram => (
+            use yanix::socket::{get_socket_type, SockType};
+            match get_socket_type(fd.as_raw_fd())? {
+                SockType::Datagram => (
                     wasi::__WASI_FILETYPE_SOCKET_DGRAM,
                     wasi::RIGHTS_SOCKET_BASE,
                     wasi::RIGHTS_SOCKET_INHERITING,
                 ),
-                socket::SockType::Stream => (
+                SockType::Stream => (
                     wasi::__WASI_FILETYPE_SOCKET_STREAM,
                     wasi::RIGHTS_SOCKET_BASE,
                     wasi::RIGHTS_SOCKET_INHERITING,

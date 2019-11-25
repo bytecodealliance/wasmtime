@@ -4,110 +4,119 @@
 #![allow(dead_code)]
 use crate::old::snapshot_0::hostcalls_impl::FileType;
 use crate::old::snapshot_0::{helpers, wasi, Error, Result};
-use log::warn;
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
+use yanix::{errno, file::OFlag, sys::SFlag};
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
-        pub(crate) use super::linux::host_impl::*;
-    } else if #[cfg(any(
-            target_os = "macos",
-            target_os = "netbsd",
-            target_os = "freebsd",
-            target_os = "openbsd",
-            target_os = "ios",
-            target_os = "dragonfly"
-    ))] {
-        pub(crate) use super::bsd::host_impl::*;
-    }
-}
+    if #[cfg(any(target_os = "macos",
+                 target_os = "ios",
+                 target_os = "dragonfly",
+                 target_os = "freebsd"))] {
+        pub(crate) const O_RSYNC: OFlag = OFlag::O_SYNC;
 
-pub(crate) fn errno_from_nix(errno: nix::errno::Errno) -> Error {
-    match errno {
-        nix::errno::Errno::EPERM => Error::EPERM,
-        nix::errno::Errno::ENOENT => Error::ENOENT,
-        nix::errno::Errno::ESRCH => Error::ESRCH,
-        nix::errno::Errno::EINTR => Error::EINTR,
-        nix::errno::Errno::EIO => Error::EIO,
-        nix::errno::Errno::ENXIO => Error::ENXIO,
-        nix::errno::Errno::E2BIG => Error::E2BIG,
-        nix::errno::Errno::ENOEXEC => Error::ENOEXEC,
-        nix::errno::Errno::EBADF => Error::EBADF,
-        nix::errno::Errno::ECHILD => Error::ECHILD,
-        nix::errno::Errno::EAGAIN => Error::EAGAIN,
-        nix::errno::Errno::ENOMEM => Error::ENOMEM,
-        nix::errno::Errno::EACCES => Error::EACCES,
-        nix::errno::Errno::EFAULT => Error::EFAULT,
-        nix::errno::Errno::EBUSY => Error::EBUSY,
-        nix::errno::Errno::EEXIST => Error::EEXIST,
-        nix::errno::Errno::EXDEV => Error::EXDEV,
-        nix::errno::Errno::ENODEV => Error::ENODEV,
-        nix::errno::Errno::ENOTDIR => Error::ENOTDIR,
-        nix::errno::Errno::EISDIR => Error::EISDIR,
-        nix::errno::Errno::EINVAL => Error::EINVAL,
-        nix::errno::Errno::ENFILE => Error::ENFILE,
-        nix::errno::Errno::EMFILE => Error::EMFILE,
-        nix::errno::Errno::ENOTTY => Error::ENOTTY,
-        nix::errno::Errno::ETXTBSY => Error::ETXTBSY,
-        nix::errno::Errno::EFBIG => Error::EFBIG,
-        nix::errno::Errno::ENOSPC => Error::ENOSPC,
-        nix::errno::Errno::ESPIPE => Error::ESPIPE,
-        nix::errno::Errno::EROFS => Error::EROFS,
-        nix::errno::Errno::EMLINK => Error::EMLINK,
-        nix::errno::Errno::EPIPE => Error::EPIPE,
-        nix::errno::Errno::EDOM => Error::EDOM,
-        nix::errno::Errno::ERANGE => Error::ERANGE,
-        nix::errno::Errno::EDEADLK => Error::EDEADLK,
-        nix::errno::Errno::ENAMETOOLONG => Error::ENAMETOOLONG,
-        nix::errno::Errno::ENOLCK => Error::ENOLCK,
-        nix::errno::Errno::ENOSYS => Error::ENOSYS,
-        nix::errno::Errno::ENOTEMPTY => Error::ENOTEMPTY,
-        nix::errno::Errno::ELOOP => Error::ELOOP,
-        nix::errno::Errno::ENOMSG => Error::ENOMSG,
-        nix::errno::Errno::EIDRM => Error::EIDRM,
-        nix::errno::Errno::ENOLINK => Error::ENOLINK,
-        nix::errno::Errno::EPROTO => Error::EPROTO,
-        nix::errno::Errno::EMULTIHOP => Error::EMULTIHOP,
-        nix::errno::Errno::EBADMSG => Error::EBADMSG,
-        nix::errno::Errno::EOVERFLOW => Error::EOVERFLOW,
-        nix::errno::Errno::EILSEQ => Error::EILSEQ,
-        nix::errno::Errno::ENOTSOCK => Error::ENOTSOCK,
-        nix::errno::Errno::EDESTADDRREQ => Error::EDESTADDRREQ,
-        nix::errno::Errno::EMSGSIZE => Error::EMSGSIZE,
-        nix::errno::Errno::EPROTOTYPE => Error::EPROTOTYPE,
-        nix::errno::Errno::ENOPROTOOPT => Error::ENOPROTOOPT,
-        nix::errno::Errno::EPROTONOSUPPORT => Error::EPROTONOSUPPORT,
-        nix::errno::Errno::EAFNOSUPPORT => Error::EAFNOSUPPORT,
-        nix::errno::Errno::EADDRINUSE => Error::EADDRINUSE,
-        nix::errno::Errno::EADDRNOTAVAIL => Error::EADDRNOTAVAIL,
-        nix::errno::Errno::ENETDOWN => Error::ENETDOWN,
-        nix::errno::Errno::ENETUNREACH => Error::ENETUNREACH,
-        nix::errno::Errno::ENETRESET => Error::ENETRESET,
-        nix::errno::Errno::ECONNABORTED => Error::ECONNABORTED,
-        nix::errno::Errno::ECONNRESET => Error::ECONNRESET,
-        nix::errno::Errno::ENOBUFS => Error::ENOBUFS,
-        nix::errno::Errno::EISCONN => Error::EISCONN,
-        nix::errno::Errno::ENOTCONN => Error::ENOTCONN,
-        nix::errno::Errno::ETIMEDOUT => Error::ETIMEDOUT,
-        nix::errno::Errno::ECONNREFUSED => Error::ECONNREFUSED,
-        nix::errno::Errno::EHOSTUNREACH => Error::EHOSTUNREACH,
-        nix::errno::Errno::EALREADY => Error::EALREADY,
-        nix::errno::Errno::EINPROGRESS => Error::EINPROGRESS,
-        nix::errno::Errno::ESTALE => Error::ESTALE,
-        nix::errno::Errno::EDQUOT => Error::EDQUOT,
-        nix::errno::Errno::ECANCELED => Error::ECANCELED,
-        nix::errno::Errno::EOWNERDEAD => Error::EOWNERDEAD,
-        nix::errno::Errno::ENOTRECOVERABLE => Error::ENOTRECOVERABLE,
-        other => {
-            warn!("Unknown error from nix: {}", other);
-            Error::ENOSYS
+        use std::convert::TryFrom;
+
+        pub(crate) fn stdev_from_nix(dev: libc::dev_t) -> Result<wasi::__wasi_device_t> {
+            wasi::__wasi_device_t::try_from(dev).map_err(Into::into)
+        }
+
+        pub(crate) fn stino_from_nix(ino: libc::ino_t) -> Result<wasi::__wasi_inode_t> {
+            wasi::__wasi_device_t::try_from(ino).map_err(Into::into)
+        }
+    } else {
+        pub(crate) const O_RSYNC: OFlag = OFlag::O_RSYNC;
+
+        pub(crate) fn stdev_from_nix(dev: libc::dev_t) -> Result<wasi::__wasi_device_t> {
+            Ok(wasi::__wasi_device_t::from(dev))
+        }
+
+        pub(crate) fn stino_from_nix(ino: libc::ino_t) -> Result<wasi::__wasi_inode_t> {
+            Ok(wasi::__wasi_device_t::from(ino))
         }
     }
 }
 
-pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> nix::fcntl::OFlag {
-    use nix::fcntl::OFlag;
+pub(crate) fn errno_from_nix(errno: errno::Errno) -> Error {
+    match errno {
+        errno::Errno::EPERM => Error::EPERM,
+        errno::Errno::ENOENT => Error::ENOENT,
+        errno::Errno::ESRCH => Error::ESRCH,
+        errno::Errno::EINTR => Error::EINTR,
+        errno::Errno::EIO => Error::EIO,
+        errno::Errno::ENXIO => Error::ENXIO,
+        errno::Errno::E2BIG => Error::E2BIG,
+        errno::Errno::ENOEXEC => Error::ENOEXEC,
+        errno::Errno::EBADF => Error::EBADF,
+        errno::Errno::ECHILD => Error::ECHILD,
+        errno::Errno::EAGAIN => Error::EAGAIN,
+        errno::Errno::ENOMEM => Error::ENOMEM,
+        errno::Errno::EACCES => Error::EACCES,
+        errno::Errno::EFAULT => Error::EFAULT,
+        errno::Errno::EBUSY => Error::EBUSY,
+        errno::Errno::EEXIST => Error::EEXIST,
+        errno::Errno::EXDEV => Error::EXDEV,
+        errno::Errno::ENODEV => Error::ENODEV,
+        errno::Errno::ENOTDIR => Error::ENOTDIR,
+        errno::Errno::EISDIR => Error::EISDIR,
+        errno::Errno::EINVAL => Error::EINVAL,
+        errno::Errno::ENFILE => Error::ENFILE,
+        errno::Errno::EMFILE => Error::EMFILE,
+        errno::Errno::ENOTTY => Error::ENOTTY,
+        errno::Errno::ETXTBSY => Error::ETXTBSY,
+        errno::Errno::EFBIG => Error::EFBIG,
+        errno::Errno::ENOSPC => Error::ENOSPC,
+        errno::Errno::ESPIPE => Error::ESPIPE,
+        errno::Errno::EROFS => Error::EROFS,
+        errno::Errno::EMLINK => Error::EMLINK,
+        errno::Errno::EPIPE => Error::EPIPE,
+        errno::Errno::EDOM => Error::EDOM,
+        errno::Errno::ERANGE => Error::ERANGE,
+        errno::Errno::EDEADLK => Error::EDEADLK,
+        errno::Errno::ENAMETOOLONG => Error::ENAMETOOLONG,
+        errno::Errno::ENOLCK => Error::ENOLCK,
+        errno::Errno::ENOSYS => Error::ENOSYS,
+        errno::Errno::ENOTEMPTY => Error::ENOTEMPTY,
+        errno::Errno::ELOOP => Error::ELOOP,
+        errno::Errno::ENOMSG => Error::ENOMSG,
+        errno::Errno::EIDRM => Error::EIDRM,
+        errno::Errno::ENOLINK => Error::ENOLINK,
+        errno::Errno::EPROTO => Error::EPROTO,
+        errno::Errno::EMULTIHOP => Error::EMULTIHOP,
+        errno::Errno::EBADMSG => Error::EBADMSG,
+        errno::Errno::EOVERFLOW => Error::EOVERFLOW,
+        errno::Errno::EILSEQ => Error::EILSEQ,
+        errno::Errno::ENOTSOCK => Error::ENOTSOCK,
+        errno::Errno::EDESTADDRREQ => Error::EDESTADDRREQ,
+        errno::Errno::EMSGSIZE => Error::EMSGSIZE,
+        errno::Errno::EPROTOTYPE => Error::EPROTOTYPE,
+        errno::Errno::ENOPROTOOPT => Error::ENOPROTOOPT,
+        errno::Errno::EPROTONOSUPPORT => Error::EPROTONOSUPPORT,
+        errno::Errno::EAFNOSUPPORT => Error::EAFNOSUPPORT,
+        errno::Errno::EADDRINUSE => Error::EADDRINUSE,
+        errno::Errno::EADDRNOTAVAIL => Error::EADDRNOTAVAIL,
+        errno::Errno::ENETDOWN => Error::ENETDOWN,
+        errno::Errno::ENETUNREACH => Error::ENETUNREACH,
+        errno::Errno::ENETRESET => Error::ENETRESET,
+        errno::Errno::ECONNABORTED => Error::ECONNABORTED,
+        errno::Errno::ECONNRESET => Error::ECONNRESET,
+        errno::Errno::ENOBUFS => Error::ENOBUFS,
+        errno::Errno::EISCONN => Error::EISCONN,
+        errno::Errno::ENOTCONN => Error::ENOTCONN,
+        errno::Errno::ETIMEDOUT => Error::ETIMEDOUT,
+        errno::Errno::ECONNREFUSED => Error::ECONNREFUSED,
+        errno::Errno::EHOSTUNREACH => Error::EHOSTUNREACH,
+        errno::Errno::EALREADY => Error::EALREADY,
+        errno::Errno::EINPROGRESS => Error::EINPROGRESS,
+        errno::Errno::ESTALE => Error::ESTALE,
+        errno::Errno::EDQUOT => Error::EDQUOT,
+        errno::Errno::ECANCELED => Error::ECANCELED,
+        errno::Errno::EOWNERDEAD => Error::EOWNERDEAD,
+        errno::Errno::ENOTRECOVERABLE => Error::ENOTRECOVERABLE,
+    }
+}
+
+pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> OFlag {
     let mut nix_flags = OFlag::empty();
     if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
         nix_flags.insert(OFlag::O_APPEND);
@@ -127,8 +136,7 @@ pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> nix::fcntl::O
     nix_flags
 }
 
-pub(crate) fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> wasi::__wasi_fdflags_t {
-    use nix::fcntl::OFlag;
+pub(crate) fn fdflags_from_nix(oflags: OFlag) -> wasi::__wasi_fdflags_t {
     let mut fdflags = 0;
     if oflags.contains(OFlag::O_APPEND) {
         fdflags |= wasi::__WASI_FDFLAGS_APPEND;
@@ -148,8 +156,7 @@ pub(crate) fn fdflags_from_nix(oflags: nix::fcntl::OFlag) -> wasi::__wasi_fdflag
     fdflags
 }
 
-pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> nix::fcntl::OFlag {
-    use nix::fcntl::OFlag;
+pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> OFlag {
     let mut nix_flags = OFlag::empty();
     if oflags & wasi::__WASI_OFLAGS_CREAT != 0 {
         nix_flags.insert(OFlag::O_CREAT);
@@ -166,8 +173,7 @@ pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> nix::fcntl::OFla
     nix_flags
 }
 
-pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> FileType {
-    use nix::sys::stat::SFlag;
+pub(crate) fn filetype_from_nix(sflags: SFlag) -> FileType {
     if sflags.contains(SFlag::S_IFCHR) {
         FileType::CharacterDevice
     } else if sflags.contains(SFlag::S_IFBLK) {
@@ -185,16 +191,14 @@ pub(crate) fn filetype_from_nix(sflags: nix::sys::stat::SFlag) -> FileType {
     }
 }
 
-pub(crate) fn filestat_from_nix(
-    filestat: nix::sys::stat::FileStat,
-) -> Result<wasi::__wasi_filestat_t> {
+pub(crate) fn filestat_from_nix(filestat: libc::stat) -> Result<wasi::__wasi_filestat_t> {
     fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<wasi::__wasi_timestamp_t> {
         secs.checked_mul(1_000_000_000)
             .and_then(|sec_nsec| sec_nsec.checked_add(nsecs))
             .ok_or(Error::EOVERFLOW)
     }
 
-    let filetype = nix::sys::stat::SFlag::from_bits_truncate(filestat.st_mode);
+    let filetype = SFlag::from_bits_truncate(filestat.st_mode);
     let dev = stdev_from_nix(filestat.st_dev)?;
     let ino = stino_from_nix(filestat.st_ino)?;
     let atim = filestat_to_timestamp(filestat.st_atime as u64, filestat.st_atime_nsec as u64)?;
@@ -214,7 +218,7 @@ pub(crate) fn filestat_from_nix(
 }
 
 pub(crate) fn dirent_filetype_from_host(
-    host_entry: &nix::libc::dirent,
+    host_entry: &libc::dirent,
 ) -> Result<wasi::__wasi_filetype_t> {
     match host_entry.d_type {
         libc::DT_FIFO => Ok(wasi::__WASI_FILETYPE_UNKNOWN),
