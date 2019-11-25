@@ -54,6 +54,7 @@ anyhow = "1.0.19"
 
 [workspace]
 members = [
+  "crates/fuzzing",
   "crates/misc/rust",
   "crates/misc/py",
 ]

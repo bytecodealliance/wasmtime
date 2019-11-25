@@ -9,14 +9,10 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-wasmtime-environ = { path = "../crates/environ" }
+arbitrary = "0.2.0"
+wasmtime-fuzzing = { path = "../crates/fuzzing" }
 wasmtime-jit = { path = "../crates/jit" }
-cranelift-codegen = "0.50"
-cranelift-wasm = "0.50"
-cranelift-native = "0.50"
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
-wasmparser = { version = "0.39.2", default-features = false, features = ["core"] }
-binaryen = "0.8.1"
 
 # Prevent this from interfering with workspaces
 [workspace]
