@@ -93,8 +93,8 @@ fn generate_method_wrapper(
 }
 
 pub(crate) fn wrap_impl(tr: ItemImpl, attr: TransformAttributes) -> TokenStream {
-    // TODO review visibility for module, add visibility attr??
-    let vis = &Visibility::Inherited;
+    let vis = attr.visibility.as_ref().unwrap_or(&Visibility::Inherited);
+
     let ident = if let Type::Path(tp) = tr.self_ty.as_ref() {
         tp
     } else {
@@ -135,11 +135,13 @@ pub(crate) fn wrap_impl(tr: ItemImpl, attr: TransformAttributes) -> TokenStream 
     }
 
     let mod_item_vis = match vis {
+        Visibility::Public(p) => quote! { #p },
+        Visibility::Crate(c) => quote! { #c },
+        Visibility::Restricted(r) => quote! { #r },
         Visibility::Inherited => quote! { pub(super) },
-        vis => quote! { #vis },
     };
     let mod_content = quote! {
-        #vis mod #mod_name {
+        #mod_item_vis mod #mod_name {
             use super::*;
             use #wasmtime_bindings :: {
                 VMContext, InstanceHandle, InstanceHandleExport,
