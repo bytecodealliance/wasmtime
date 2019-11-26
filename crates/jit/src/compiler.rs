@@ -163,26 +163,30 @@ impl Compiler {
                 let body_len = compilation.get(i).body.len();
                 funcs.push((ptr, body_len));
             }
-            let module_vmctx_info = {
-                let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
-                let memory_offset =
-                    ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)) as i64;
-                ModuleVmctxInfo {
-                    memory_offset,
-                    stack_slots,
-                }
-            };
-            let bytes = emit_debugsections_image(
-                triple,
-                &target_config,
-                &debug_data,
-                &module_vmctx_info,
-                &address_transform,
-                &value_ranges,
-                &funcs,
-            )
-            .map_err(|e| SetupError::DebugInfo(e))?;
-            Some(bytes)
+            let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
+            if ofs.num_defined_memories > 0 {
+                let module_vmctx_info = {
+                    let memory_offset =
+                        ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)) as i64;
+                    ModuleVmctxInfo {
+                        memory_offset,
+                        stack_slots,
+                    }
+                };
+                let bytes = emit_debugsections_image(
+                    triple,
+                    &target_config,
+                    &debug_data,
+                    &module_vmctx_info,
+                    &address_transform,
+                    &value_ranges,
+                    &funcs,
+                )
+                .map_err(|e| SetupError::DebugInfo(e))?;
+                Some(bytes)
+            } else {
+                None
+            }
         } else {
             None
         };
