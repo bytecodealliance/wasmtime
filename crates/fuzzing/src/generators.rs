@@ -11,6 +11,7 @@
 use arbitrary::{Arbitrary, Unstructured};
 
 /// A Wasm test case generator that is powered by Binaryen's `wasm-opt -ttf`.
+#[derive(Debug)]
 pub struct WasmOptTtf {
     /// The raw, encoded Wasm bytes.
     pub wasm: Vec<u8>,
