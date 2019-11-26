@@ -60,6 +60,7 @@ const exec = s => {
 exec('yum install -y centos-release-scl cmake xz epel-release');
 exec('yum install -y rh-python36 patchelf unzip');
 exec('yum install -y devtoolset-8-gcc devtoolset-8-binutils devtoolset-8-gcc-c++');
+exec('yum install -y git');
 
 // Delete `libstdc++.so` to force gcc to link against `libstdc++.a` instead.
 // This is a hack and not the right way to do this, but it ends up doing the
