@@ -6,6 +6,8 @@
 //!
 //! [nix]: https://github.com/nix-rust/nix
 //! [wasi-common]: https://github.com/bytecodealliance/wasmtime/tree/master/crates/wasi-common
+#![cfg(unix)]
+
 pub mod clock;
 pub mod errno;
 pub mod file;
