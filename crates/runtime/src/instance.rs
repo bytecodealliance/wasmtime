@@ -34,8 +34,8 @@ use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 use std::ptr::NonNull;
 
 thread_local! {
-    /// The currently-running `Instance`, if one exists.
-    pub(crate) static CURRENT_INSTANCE: RefCell<Option<NonNull<Instance>>> = RefCell::new(None);
+    /// A stack of currently-running `Instance`s, if any.
+    pub(crate) static CURRENT_INSTANCE: RefCell<Vec<NonNull<Instance>>> = RefCell::new(Vec::new());
 }
 
 fn signature_id(
@@ -251,16 +251,16 @@ pub extern "C" fn InstanceSignalHandler(
     context: *mut libc::c_void,
 ) -> bool {
     CURRENT_INSTANCE.with(|current_instance| {
-        if let Some(current_instance) = *current_instance
+        let current_instance = current_instance
             .try_borrow()
-            .expect("borrow current instance")
-        {
+            .expect("borrow current instance");
+        if current_instance.is_empty() {
+            return false;
+        } else {
             unsafe {
-                let f = &current_instance.as_ref().signal_handler;
+                let f = &current_instance[0].as_ref().signal_handler;
                 f(signum, siginfo, context)
             }
-        } else {
-            return false;
         }
     })
 }
@@ -692,20 +692,17 @@ impl InstanceHandle {
         F: FnOnce() -> R,
     {
         CURRENT_INSTANCE.with(|current_instance| {
-            let mut current_instance = current_instance.borrow_mut();
-            assert!(
-                current_instance.is_none(),
-                "no other instance is running on this thread"
-            );
-            *current_instance = Some(unsafe { NonNull::new_unchecked(self.instance) });
+            current_instance
+                .borrow_mut()
+                .push(unsafe { NonNull::new_unchecked(self.instance) });
         });
 
         let result = action();
 
         CURRENT_INSTANCE.with(|current_instance| {
             let mut current_instance = current_instance.borrow_mut();
-            assert!(!current_instance.is_none());
-            *current_instance = None;
+            assert!(!current_instance.is_empty());
+            current_instance.pop();
         });
 
         result
