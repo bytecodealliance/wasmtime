@@ -1,7 +1,10 @@
 [package]
 name = "yanix"
 version = "0.1.0"
-authors = ["Jakub Konka <jakub.konka@golem.network>"]
+authors = [
+    "The nix-rust Project Developers",
+    "Jakub Konka <jakub.konka@golem.network>"
+]
 description = "Yet Another Nix crate: a Unix API helper library"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
