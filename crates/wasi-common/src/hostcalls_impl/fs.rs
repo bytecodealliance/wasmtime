@@ -1015,7 +1015,7 @@ pub(crate) unsafe fn fd_readdir(
     let file = wasi_ctx
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READDIR, 0)?
-        .as_actual_file()?;
+        .as_actual_file_mut()?;
     let mut host_buf = dec_slice_of_mut_u8(memory, buf, buf_len)?;
 
     trace!("     | (buf,buf_len)={:?}", host_buf);
