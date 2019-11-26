@@ -1,14 +1,20 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use wasmtime_fuzzing::oracles;
+use wasmtime_fuzzing::{oracles, with_log_wasm_test_case};
 use wasmtime_jit::CompilationStrategy;
 
 fuzz_target!(|data: &[u8]| {
-    oracles::compile(data, CompilationStrategy::Cranelift);
+    with_log_wasm_test_case!(data, |data| oracles::compile(
+        data,
+        CompilationStrategy::Cranelift
+    ));
 });
 
 #[cfg(feature = "lightbeam")]
 fuzz_target!(|data: &[u8]| {
-    oracles::compile(data, CompilationStrategy::Lightbeam);
+    with_log_wasm_test_case!(data, |data| oracles::compile(
+        data,
+        CompilationStrategy::Lightbeam
+    ));
 });

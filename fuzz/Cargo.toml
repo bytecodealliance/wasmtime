@@ -10,7 +10,7 @@ cargo-fuzz = true
 
 [dependencies]
 arbitrary = "0.2.0"
-wasmtime-fuzzing = { path = "../crates/fuzzing" }
+wasmtime-fuzzing = { path = "../crates/fuzzing", features = ["env_logger"] }
 wasmtime-jit = { path = "../crates/jit" }
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
 
