@@ -7,3 +7,9 @@
 
 #[allow(unused_imports)] // Until we actually have some regression tests...
 use wasmtime_fuzzing::*;
+
+#[test]
+fn instantiate_empty_module() {
+    let data = wat::parse_str(include_str!("./regressions/empty.wat")).unwrap();
+    oracles::instantiate(&data, wasmtime_jit::CompilationStrategy::Auto);
+}

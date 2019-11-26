@@ -19,3 +19,6 @@ log = "0.4.8"
 wasmparser = "0.42.1"
 wasmprinter = "0.2.0"
 wasmtime-jit = { path = "../jit" }
+
+[dev-dependencies]
+wat = "1.0"
