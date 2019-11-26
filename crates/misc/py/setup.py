@@ -5,7 +5,7 @@ from setuptools_rust import Binding, RustExtension
 def no_tag_default_to_dev(version):
     if version.exact:
         return version.format_with("{tag}")
-    return "dev"
+    return "0.0.1"
 
 
 setup(name='wasmtime',
