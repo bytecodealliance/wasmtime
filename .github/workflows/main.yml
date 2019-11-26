@@ -275,6 +275,31 @@ jobs:
         name: bins-${{ matrix.os }}
         path: dist
 
+  # Build and test the .NET bindings
+  dotnet:
+    name: Test Wasmtime for .NET bindings
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/binary-compatible-builds
+    - run: rustup target add wasm32-wasi
+    - uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: '3.0.101'
+    - run: |
+        cd crates/misc/dotnet/tests
+        dotnet test
+    - run: |
+        cd crates/misc/dotnet/src
+        dotnet pack
+      if: matrix.os == 'macos-latest' # Currently the pack target only supports macOS
+
   # Consumes all published artifacts from all the previous build steps, creates
   # a bunch of tarballs for all of them, and then publishes the tarballs
   # themselves as an artifact (for inspection) and then optionally creates

@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <LibraryPrefix Condition="'$(LibraryPrefix)' == '' and !$(NETCoreSdkRuntimeIdentifier.StartsWith('win'))">lib</LibraryPrefix>
+    <LibraryExtension Condition="'$(LibraryExtension)' == '' and $(NETCoreSdkRuntimeIdentifier.StartsWith('win'))">.dll</LibraryExtension>
+    <LibraryExtension Condition="'$(LibraryExtension)' == '' and $(NETCoreSdkRuntimeIdentifier.StartsWith('osx'))">.dylib</LibraryExtension>
+    <LibraryExtension Condition="'$(LibraryExtension)' == ''">.so</LibraryExtension>
+    <WasmtimeLibraryFilename>$(LibraryPrefix)$(WasmtimeLibraryName)$(LibraryExtension)</WasmtimeLibraryFilename>
+    <WasmtimeOutputPath>$(MSBuildThisFileDirectory)../../../target/$(Configuration.ToLower())</WasmtimeOutputPath>
+    <BuildWasmtimeCommand Condition="'$(Configuration)' == 'Release'">cargo build --release -p $(WasmtimeLibraryName)</BuildWasmtimeCommand> 
+    <BuildWasmtimeCommand Condition="'$(BuildWasmtimeCommand)' == ''">cargo build -p $(WasmtimeLibraryName)</BuildWasmtimeCommand> 
+  </PropertyGroup>
+</Project>
