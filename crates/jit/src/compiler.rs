@@ -158,13 +158,13 @@ impl Compiler {
             let target_config = self.isa.frontend_config();
             let triple = self.isa.triple().clone();
             let mut funcs = Vec::new();
-            for (i, allocated) in allocated_functions.into_iter() {
-                let ptr = (*allocated) as *const u8;
-                let body_len = compilation.get(i).body.len();
-                funcs.push((ptr, body_len));
-            }
             let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
             if ofs.num_defined_memories > 0 {
+                for (i, allocated) in allocated_functions.into_iter() {
+                    let ptr = (*allocated) as *const u8;
+                    let body_len = compilation.get(i).body.len();
+                    funcs.push((ptr, body_len));
+                }
                 let module_vmctx_info = {
                     let memory_offset =
                         ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)) as i64;
