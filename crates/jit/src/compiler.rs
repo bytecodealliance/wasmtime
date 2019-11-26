@@ -156,10 +156,9 @@ impl Compiler {
 
         let dbg = if let Some(debug_data) = debug_data {
             let target_config = self.isa.frontend_config();
-            let triple = self.isa.triple().clone();
-            let mut funcs = Vec::new();
             let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
             if ofs.num_defined_memories > 0 {
+                let mut funcs = Vec::new();
                 for (i, allocated) in allocated_functions.into_iter() {
                     let ptr = (*allocated) as *const u8;
                     let body_len = compilation.get(i).body.len();
@@ -174,7 +173,7 @@ impl Compiler {
                     }
                 };
                 let bytes = emit_debugsections_image(
-                    triple,
+                    self.isa.triple().clone(),
                     &target_config,
                     &debug_data,
                     &module_vmctx_info,
