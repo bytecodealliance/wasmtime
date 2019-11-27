@@ -1,12 +1,14 @@
+use super::super::dir::{Dir, Entry, SeekLoc};
 use super::oshandle::OsHandle;
-use crate::old::snapshot_0::hostcalls_impl::PathGet;
+use crate::old::snapshot_0::hostcalls_impl::{Dirent, PathGet};
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::sys::unix::str_to_cstring;
 use crate::old::snapshot_0::{wasi, Error, Result};
-use nix::libc::{self, c_long, c_void};
+use nix::libc;
 use std::convert::TryInto;
 use std::fs::File;
 use std::os::unix::prelude::AsRawFd;
+use std::sync::MutexGuard;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use nix::errno;
@@ -139,101 +141,6 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
     }
 }
 
-pub(crate) fn fd_readdir(
-    os_handle: &mut OsHandle,
-    host_buf: &mut [u8],
-    cookie: wasi::__wasi_dircookie_t,
-) -> Result<usize> {
-    use crate::old::snapshot_0::sys::unix::bsd::oshandle::DirStream;
-    use libc::{fdopendir, readdir, rewinddir, seekdir, telldir};
-    use nix::errno::Errno;
-    use std::ffi::CStr;
-    use std::mem::ManuallyDrop;
-    use std::sync::Mutex;
-
-    let dir_stream = match os_handle.dir_stream {
-        Some(ref mut dir_stream) => dir_stream,
-        None => {
-            let file = os_handle.file.try_clone()?;
-            let dir_ptr = unsafe { fdopendir(file.as_raw_fd()) };
-            os_handle.dir_stream.get_or_insert(Mutex::new(DirStream {
-                file: ManuallyDrop::new(file),
-                dir_ptr,
-            }))
-        }
-    };
-    let dir_stream = dir_stream.lock().unwrap();
-
-    let host_buf_ptr = host_buf.as_mut_ptr();
-    let host_buf_len = host_buf.len();
-
-    if cookie != wasi::__WASI_DIRCOOKIE_START {
-        unsafe { seekdir(dir_stream.dir_ptr, cookie as c_long) };
-    } else {
-        unsafe { rewinddir(dir_stream.dir_ptr) };
-    }
-
-    let mut left = host_buf_len;
-    let mut host_buf_offset: usize = 0;
-
-    loop {
-        let errno = Errno::last();
-        let host_entry_ptr = unsafe { readdir(dir_stream.dir_ptr) };
-        if host_entry_ptr.is_null() {
-            if errno != Errno::last() {
-                // TODO Is this correct?
-                // According to POSIX man (for Linux though!), there was an error
-                // if the errno value has changed at some point during the sequence
-                // of readdir calls
-                return Err(host_impl::errno_from_nix(Errno::last()));
-            } else {
-                // Not an error
-                break;
-            }
-        }
-
-        let host_entry = unsafe { *host_entry_ptr };
-        let mut wasi_entry: wasi::__wasi_dirent_t = host_impl::dirent_from_host(&host_entry)?;
-        // Set d_next manually:
-        // * on macOS d_seekoff is not set for some reason
-        // * on FreeBSD d_seekoff doesn't exist; there is d_off but it is
-        //   not equivalent to the value read from telldir call
-        wasi_entry.d_next = unsafe { telldir(dir_stream.dir_ptr) } as wasi::__wasi_dircookie_t;
-
-        log::debug!("fd_readdir host_entry = {:?}", host_entry);
-        log::debug!("fd_readdir wasi_entry = {:?}", wasi_entry);
-
-        let name_len = host_entry.d_namlen.try_into()?;
-        let required_space = std::mem::size_of_val(&wasi_entry) + name_len;
-
-        if required_space > left {
-            break;
-        }
-
-        let name = unsafe { CStr::from_ptr(host_entry.d_name.as_ptr()) }.to_str()?;
-        log::debug!("fd_readdir entry name = {}", name);
-
-        unsafe {
-            let ptr = host_buf_ptr.offset(host_buf_offset.try_into()?) as *mut c_void
-                as *mut wasi::__wasi_dirent_t;
-            *ptr = wasi_entry;
-        }
-        host_buf_offset += std::mem::size_of_val(&wasi_entry);
-
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                name.as_ptr(),
-                host_buf_ptr.offset(host_buf_offset.try_into()?),
-                name_len,
-            )
-        };
-        host_buf_offset += name_len;
-        left -= required_space;
-    }
-
-    Ok(host_buf_len - left)
-}
-
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) fn fd_advise(
     file: &File,
@@ -295,4 +202,89 @@ pub(crate) fn fd_advise(
     }
 
     Ok(())
+}
+
+pub(crate) fn fd_readdir<'a>(
+    os_handle: &'a mut OsHandle,
+    cookie: wasi::__wasi_dircookie_t,
+) -> Result<impl Iterator<Item = Result<Dirent>> + 'a> {
+    use std::sync::Mutex;
+
+    let dir = match os_handle.dir {
+        Some(ref mut dir) => dir,
+        None => {
+            // We need to duplicate the fd, because `opendir(3)`:
+            //     Upon successful return from fdopendir(), the file descriptor is under
+            //     control of the system, and if any attempt is made to close the file
+            //     descriptor, or to modify the state of the associated description other
+            //     than by means of closedir(), readdir(), readdir_r(), or rewinddir(),
+            //     the behaviour is undefined.
+            let fd = (*os_handle).try_clone()?;
+            let dir = Dir::from(fd)?;
+            os_handle.dir.get_or_insert(Mutex::new(dir))
+        }
+    };
+    let mut dir = dir.lock().unwrap();
+
+    // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
+    // new items may not be returned to the caller.
+    if cookie == wasi::__WASI_DIRCOOKIE_START {
+        log::trace!("     | fd_readdir: doing rewinddir");
+        dir.rewind();
+    } else {
+        log::trace!("     | fd_readdir: doing seekdir to {}", cookie);
+        let loc = unsafe { SeekLoc::from_raw(cookie as i64) };
+        dir.seek(loc);
+    }
+
+    Ok(DirIter(dir).map(|entry| {
+        let (entry, loc): (Entry, SeekLoc) = entry?;
+        Ok(Dirent {
+            name: entry
+                // TODO can we reuse path_from_host for CStr?
+                .file_name()
+                .to_str()?
+                .to_owned(),
+            ino: entry.ino(),
+            ftype: entry.file_type().into(),
+            // Set cookie manually:
+            // * on macOS d_seekoff is not set for some reason
+            // * on FreeBSD d_seekoff doesn't exist; there is d_off but it is
+            //   not equivalent to the value read from telldir call
+            cookie: loc.to_raw().try_into()?,
+        })
+    }))
+}
+
+struct DirIter<'a>(MutexGuard<'a, Dir>);
+
+impl<'a> Iterator for DirIter<'a> {
+    type Item = nix::Result<(Entry, SeekLoc)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        use libc::readdir;
+        use nix::{errno::Errno, Error};
+
+        unsafe {
+            let errno = Errno::last();
+            let ent = readdir((self.0).0.as_ptr());
+            if ent.is_null() {
+                if errno != Errno::last() {
+                    // TODO This should be verified on different BSD-flavours.
+                    //
+                    // According to 4.3BSD/POSIX.1-2001 man pages, there was an error
+                    // if the errno value has changed at some point during the sequence
+                    // of readdir calls.
+                    Some(Err(Error::last()))
+                } else {
+                    // Not an error. We've simply reached the end of the stream.
+                    None
+                }
+            } else {
+                let entry = Entry(*ent);
+                let loc = self.0.tell();
+                Some(Ok((entry, loc)))
+            }
+        }
+    }
 }
