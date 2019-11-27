@@ -1,5 +1,7 @@
 use crate::sys::dev_null;
-use crate::sys::fdentry_impl::{descriptor_as_osfile, determine_type_and_access_rights, OsFile};
+use crate::sys::fdentry_impl::{
+    descriptor_as_oshandle, determine_type_and_access_rights, OsHandle,
+};
 use crate::{wasi, Error, Result};
 use std::mem::ManuallyDrop;
 use std::path::PathBuf;
@@ -7,33 +9,34 @@ use std::{fs, io};
 
 #[derive(Debug)]
 pub(crate) enum Descriptor {
-    OsFile(OsFile),
+    OsHandle(OsHandle),
     Stdin,
     Stdout,
     Stderr,
 }
 
 impl Descriptor {
-    /// Return a reference to the actual `OsFile`, allowing operations which
-    /// require an actual file and not just a stream or socket file descriptor.
-    pub(crate) fn as_actual_file(&self) -> Result<&OsFile> {
+    /// Return a reference to the `OsHandle` treating it as an actual file/dir, and
+    /// allowing operations which require an actual file and not just a stream or
+    /// socket file descriptor.
+    pub(crate) fn as_file(&self) -> Result<&OsHandle> {
         match self {
-            Self::OsFile(file) => Ok(file),
+            Self::OsHandle(file) => Ok(file),
             _ => Err(Error::EBADF),
         }
     }
 
-    /// Like `as_actual_file`, but return a mutable reference.
-    pub(crate) fn as_actual_file_mut(&mut self) -> Result<&mut OsFile> {
+    /// Like `as_file`, but return a mutable reference.
+    pub(crate) fn as_file_mut(&mut self) -> Result<&mut OsHandle> {
         match self {
-            Self::OsFile(file) => Ok(file),
+            Self::OsHandle(file) => Ok(file),
             _ => Err(Error::EBADF),
         }
     }
 
-    /// Return an `OsFile`, which may be a stream or socket file descriptor.
-    pub(crate) fn as_file(&self) -> ManuallyDrop<OsFile> {
-        descriptor_as_osfile(self)
+    /// Return an `OsHandle`, which may be a stream or socket file descriptor.
+    pub(crate) fn as_os_handle(&self) -> ManuallyDrop<OsHandle> {
+        descriptor_as_oshandle(self)
     }
 }
 
@@ -60,7 +63,7 @@ impl FdEntry {
         unsafe { determine_type_and_access_rights(&file) }.map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 file_type,
-                descriptor: Descriptor::OsFile(OsFile::from(file)),
+                descriptor: Descriptor::OsHandle(OsHandle::from(file)),
                 rights_base,
                 rights_inheriting,
                 preopen_path: None,

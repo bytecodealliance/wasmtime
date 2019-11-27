@@ -7,7 +7,7 @@ use crate::old::snapshot_0::helpers::systemtime_to_timestamp;
 use crate::old::snapshot_0::hostcalls_impl::{
     fd_filestat_set_times_impl, Dirent, FileType, PathGet,
 };
-use crate::old::snapshot_0::sys::fdentry_impl::{determine_type_rights, OsFile};
+use crate::old::snapshot_0::sys::fdentry_impl::{determine_type_rights, OsHandle};
 use crate::old::snapshot_0::sys::host_impl::{self, path_from_host};
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::PathGetExt;
 use crate::old::snapshot_0::{wasi, Error, Result};
@@ -261,11 +261,11 @@ pub(crate) fn fd_readdir_impl(
 
 // This should actually be common code with Linux
 pub(crate) fn fd_readdir(
-    os_file: &mut OsFile,
+    os_handle: &mut OsHandle,
     mut host_buf: &mut [u8],
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<usize> {
-    let iter = fd_readdir_impl(os_file, cookie)?;
+    let iter = fd_readdir_impl(os_handle, cookie)?;
     let mut used = 0;
     for dirent in iter {
         let dirent_raw = dirent?.to_wasi_raw()?;

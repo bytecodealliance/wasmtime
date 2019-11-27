@@ -1,4 +1,4 @@
-use super::osfile::OsFile;
+use super::oshandle::OsHandle;
 use crate::old::snapshot_0::hostcalls_impl::PathGet;
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::sys::unix::str_to_cstring;
@@ -140,23 +140,23 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
 }
 
 pub(crate) fn fd_readdir(
-    os_file: &mut OsFile,
+    os_handle: &mut OsHandle,
     host_buf: &mut [u8],
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<usize> {
-    use crate::old::snapshot_0::sys::unix::bsd::osfile::DirStream;
+    use crate::old::snapshot_0::sys::unix::bsd::oshandle::DirStream;
     use libc::{fdopendir, readdir, rewinddir, seekdir, telldir};
     use nix::errno::Errno;
     use std::ffi::CStr;
     use std::mem::ManuallyDrop;
     use std::sync::Mutex;
 
-    let dir_stream = match os_file.dir_stream {
+    let dir_stream = match os_handle.dir_stream {
         Some(ref mut dir_stream) => dir_stream,
         None => {
-            let file = os_file.file.try_clone()?;
+            let file = os_handle.file.try_clone()?;
             let dir_ptr = unsafe { fdopendir(file.as_raw_fd()) };
-            os_file.dir_stream.get_or_insert(Mutex::new(DirStream {
+            os_handle.dir_stream.get_or_insert(Mutex::new(DirStream {
                 file: ManuallyDrop::new(file),
                 dir_ptr,
             }))

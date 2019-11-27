@@ -1,6 +1,6 @@
 pub(crate) mod filetime;
 pub(crate) mod hostcalls_impl;
-pub(crate) mod osfile;
+pub(crate) mod oshandle;
 
 pub(crate) mod fdentry_impl {
     use crate::old::snapshot_0::{sys::host_impl, Result};

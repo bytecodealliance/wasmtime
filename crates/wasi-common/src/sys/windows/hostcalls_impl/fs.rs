@@ -5,7 +5,7 @@ use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
 use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::{fd_filestat_set_times_impl, Dirent, FileType, PathGet};
-use crate::sys::fdentry_impl::{determine_type_rights, OsFile};
+use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::host_impl::{self, path_from_host};
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
 use crate::{wasi, Error, Result};

@@ -7,21 +7,21 @@ use std::ops::{Deref, DerefMut};
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, RawHandle};
 
 #[derive(Debug)]
-pub(crate) struct OsFile(File);
+pub(crate) struct OsHandle(File);
 
-impl From<File> for OsFile {
+impl From<File> for OsHandle {
     fn from(file: File) -> Self {
         Self(file)
     }
 }
 
-impl AsRawHandle for OsFile {
+impl AsRawHandle for OsHandle {
     fn as_raw_handle(&self) -> RawHandle {
         self.0.as_raw_handle()
     }
 }
 
-impl Deref for OsFile {
+impl Deref for OsHandle {
     type Target = File;
 
     fn deref(&self) -> &Self::Target {
@@ -29,7 +29,7 @@ impl Deref for OsFile {
     }
 }
 
-impl DerefMut for OsFile {
+impl DerefMut for OsHandle {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -38,7 +38,7 @@ impl DerefMut for OsFile {
 impl AsRawHandle for Descriptor {
     fn as_raw_handle(&self) -> RawHandle {
         match self {
-            Self::OsFile(file) => file.as_raw_handle(),
+            Self::OsHandle(file) => file.as_raw_handle(),
             Self::Stdin => io::stdin().as_raw_handle(),
             Self::Stdout => io::stdout().as_raw_handle(),
             Self::Stderr => io::stderr().as_raw_handle(),
@@ -46,8 +46,8 @@ impl AsRawHandle for Descriptor {
     }
 }
 
-pub(crate) fn descriptor_as_osfile(desc: &Descriptor) -> ManuallyDrop<OsFile> {
-    ManuallyDrop::new(OsFile::from(unsafe {
+pub(crate) fn descriptor_as_oshandle(desc: &Descriptor) -> ManuallyDrop<OsHandle> {
+    ManuallyDrop::new(OsHandle::from(unsafe {
         File::from_raw_handle(desc.as_raw_handle())
     }))
 }
