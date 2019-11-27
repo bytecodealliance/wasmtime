@@ -333,7 +333,7 @@ pub fn legalize_signature(
 
 /// Get register class for a type appearing in a legalized signature.
 pub fn regclass_for_abi_type(ty: ir::Type) -> RegClass {
-    if ty.is_int() || ty.is_bool() {
+    if ty.is_int() || ty.is_bool() || ty.is_ref() {
         GPR
     } else {
         FPR
