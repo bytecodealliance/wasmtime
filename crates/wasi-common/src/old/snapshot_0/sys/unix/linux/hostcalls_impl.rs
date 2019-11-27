@@ -1,5 +1,5 @@
 use super::super::dir::{Dir, Entry, SeekLoc};
-use super::osfile::OsFile;
+use super::oshandle::OsHandle;
 use crate::old::snapshot_0::hostcalls_impl::{Dirent, PathGet};
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::sys::unix::str_to_cstring;
@@ -115,11 +115,11 @@ pub(crate) fn fd_readdir_impl(
 // This should actually be common code with Windows,
 // but there's BSD stuff remaining
 pub(crate) fn fd_readdir(
-    os_file: &mut OsFile,
+    os_handle: &mut OsHandle,
     mut host_buf: &mut [u8],
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<usize> {
-    let iter = fd_readdir_impl(os_file, cookie)?;
+    let iter = fd_readdir_impl(os_handle, cookie)?;
     let mut used = 0;
     for dirent in iter {
         let dirent_raw = dirent?.to_wasi_raw()?;
