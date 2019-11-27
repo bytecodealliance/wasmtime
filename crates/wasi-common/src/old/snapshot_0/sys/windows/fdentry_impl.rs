@@ -1,4 +1,4 @@
-use crate::old::snapshot_0::fdentry::Descriptor;
+use crate::old::snapshot_0::fdentry::{Descriptor, OsHandleRef};
 use crate::old::snapshot_0::{wasi, Error, Result};
 use std::fs::File;
 use std::io;
@@ -46,10 +46,12 @@ impl AsRawHandle for Descriptor {
     }
 }
 
-pub(crate) fn descriptor_as_oshandle(desc: &Descriptor) -> ManuallyDrop<OsHandle> {
-    ManuallyDrop::new(OsHandle::from(unsafe {
+pub(crate) fn descriptor_as_oshandle<'lifetime>(
+    desc: &'lifetime Descriptor,
+) -> OsHandleRef<'lifetime> {
+    OsHandleRef::new(ManuallyDrop::new(OsHandle::from(unsafe {
         File::from_raw_handle(desc.as_raw_handle())
-    }))
+    })))
 }
 
 /// This function is unsafe because it operates on a raw file handle.

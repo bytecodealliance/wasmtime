@@ -3,7 +3,9 @@ use crate::old::snapshot_0::sys::fdentry_impl::{
     descriptor_as_oshandle, determine_type_and_access_rights, OsHandle,
 };
 use crate::old::snapshot_0::{wasi, Error, Result};
+use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
+use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::{fs, io};
 
@@ -35,7 +37,7 @@ impl Descriptor {
     }
 
     /// Return an `OsHandle`, which may be a stream or socket file descriptor.
-    pub(crate) fn as_os_handle(&self) -> ManuallyDrop<OsHandle> {
+    pub(crate) fn as_os_handle<'descriptor>(&'descriptor self) -> OsHandleRef<'descriptor> {
         descriptor_as_oshandle(self)
     }
 }
@@ -159,5 +161,37 @@ impl FdEntry {
         } else {
             Ok(())
         }
+    }
+}
+
+/// This allows an `OsHandle` to be temporarily borrowed from a
+/// `Descriptor`. The `Descriptor` continues to own the resource,
+/// and `OsHandleRef`'s lifetime parameter ensures that it doesn't
+/// outlive the `Descriptor`.
+pub(crate) struct OsHandleRef<'descriptor> {
+    handle: ManuallyDrop<OsHandle>,
+    _ref: PhantomData<&'descriptor Descriptor>,
+}
+
+impl<'descriptor> OsHandleRef<'descriptor> {
+    pub(crate) fn new(handle: ManuallyDrop<OsHandle>) -> Self {
+        OsHandleRef {
+            handle,
+            _ref: PhantomData,
+        }
+    }
+}
+
+impl<'descriptor> Deref for OsHandleRef<'descriptor> {
+    type Target = fs::File;
+
+    fn deref(&self) -> &Self::Target {
+        &self.handle
+    }
+}
+
+impl<'descriptor> DerefMut for OsHandleRef<'descriptor> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.handle
     }
 }

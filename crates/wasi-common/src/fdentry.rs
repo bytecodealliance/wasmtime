@@ -174,7 +174,7 @@ pub(crate) struct OsHandleRef<'descriptor> {
 }
 
 impl<'descriptor> OsHandleRef<'descriptor> {
-    pub fn new(handle: ManuallyDrop<OsHandle>) -> Self {
+    pub(crate) fn new(handle: ManuallyDrop<OsHandle>) -> Self {
         OsHandleRef {
             handle,
             _ref: PhantomData,
