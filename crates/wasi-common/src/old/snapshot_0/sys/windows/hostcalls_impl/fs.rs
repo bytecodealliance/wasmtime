@@ -7,7 +7,7 @@ use crate::old::snapshot_0::helpers::systemtime_to_timestamp;
 use crate::old::snapshot_0::hostcalls_impl::{
     fd_filestat_set_times_impl, Dirent, FileType, PathGet,
 };
-use crate::old::snapshot_0::sys::fdentry_impl::{determine_type_rights, OsHandle};
+use crate::old::snapshot_0::sys::fdentry_impl::determine_type_rights;
 use crate::old::snapshot_0::sys::host_impl::{self, path_from_host};
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::PathGetExt;
 use crate::old::snapshot_0::{wasi, Error, Result};
@@ -18,7 +18,7 @@ use std::io::{self, Seek, SeekFrom};
 use std::os::windows::fs::{FileExt, OpenOptionsExt};
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::{Path, PathBuf};
-use winx::file::{AccessMode, Flags};
+use winx::file::{AccessMode, CreationDisposition, FileModeInformation, Flags};
 
 fn read_at(mut file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
     // get current cursor position
@@ -55,10 +55,29 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
-    use winx::file::AccessMode;
-    unsafe { winx::file::query_access_information(fd.as_raw_handle()) }
-        .map(host_impl::fdflags_from_win)
-        .map_err(Into::into)
+    let mut fdflags = 0;
+
+    let handle = unsafe { fd.as_raw_handle() };
+
+    let access_mode = winx::file::query_access_information(handle)?;
+    let mode = winx::file::query_mode_information(handle)?;
+
+    // Append without write implies append-only (__WASI_FDFLAGS_APPEND)
+    if access_mode.contains(AccessMode::FILE_APPEND_DATA)
+        && !access_mode.contains(AccessMode::FILE_WRITE_DATA)
+    {
+        fdflags |= wasi::__WASI_FDFLAGS_APPEND;
+    }
+
+    if mode.contains(FileModeInformation::FILE_WRITE_THROUGH) {
+        // Only report __WASI_FDFLAGS_SYNC
+        // This is technically the only one of the O_?SYNC flags Windows supports.
+        fdflags |= wasi::__WASI_FDFLAGS_SYNC;
+    }
+
+    // Files do not support the `__WASI_FDFLAGS_NONBLOCK` flag
+
+    Ok(fdflags)
 }
 
 pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
@@ -102,35 +121,22 @@ pub(crate) fn path_open(
 ) -> Result<File> {
     use winx::file::{AccessMode, CreationDisposition, Flags};
 
-    let mut access_mode = AccessMode::READ_CONTROL;
-    if read {
-        access_mode.insert(AccessMode::FILE_GENERIC_READ);
-    }
-    if write {
-        access_mode.insert(AccessMode::FILE_GENERIC_WRITE);
-    }
-
-    let mut flags = Flags::FILE_FLAG_BACKUP_SEMANTICS;
-
     // convert open flags
+    // note: the calls to `write(true)` are to bypass an internal OpenOption check
+    // the write flag will ultimately be ignored when `access_mode` is called below.
     let mut opts = OpenOptions::new();
-    match host_impl::win_from_oflags(oflags) {
+    match creation_disposition_from_oflags(oflags) {
         CreationDisposition::CREATE_ALWAYS => {
-            opts.create(true).append(true);
+            opts.create(true).write(true);
         }
         CreationDisposition::CREATE_NEW => {
             opts.create_new(true).write(true);
         }
         CreationDisposition::TRUNCATE_EXISTING => {
-            opts.truncate(true);
+            opts.truncate(true).write(true);
         }
         _ => {}
     }
-
-    // convert file descriptor flags
-    let (add_access_mode, add_flags) = host_impl::win_from_fdflags(fdflags);
-    access_mode.insert(add_access_mode);
-    flags.insert(add_flags);
 
     let path = resolved.concatenate()?;
 
@@ -164,10 +170,69 @@ pub(crate) fn path_open(
         },
     }
 
-    opts.access_mode(access_mode.bits())
-        .custom_flags(flags.bits())
+    opts.access_mode(file_access_mode_from_fdflags(fdflags, read, write).bits())
+        .custom_flags(file_flags_from_fdflags(fdflags).bits())
         .open(&path)
         .map_err(Into::into)
+}
+
+fn creation_disposition_from_oflags(oflags: wasi::__wasi_oflags_t) -> CreationDisposition {
+    if oflags & wasi::__WASI_OFLAGS_CREAT != 0 {
+        if oflags & wasi::__WASI_OFLAGS_EXCL != 0 {
+            CreationDisposition::CREATE_NEW
+        } else {
+            CreationDisposition::CREATE_ALWAYS
+        }
+    } else if oflags & wasi::__WASI_OFLAGS_TRUNC != 0 {
+        CreationDisposition::TRUNCATE_EXISTING
+    } else {
+        CreationDisposition::OPEN_EXISTING
+    }
+}
+
+fn file_access_mode_from_fdflags(
+    fdflags: wasi::__wasi_fdflags_t,
+    read: bool,
+    write: bool,
+) -> AccessMode {
+    let mut access_mode = AccessMode::READ_CONTROL;
+
+    if read {
+        access_mode.insert(AccessMode::GENERIC_READ);
+    }
+
+    if write {
+        access_mode.insert(AccessMode::GENERIC_WRITE);
+    }
+
+    // For append, grant the handle FILE_APPEND_DATA access but *not* FILE_WRITE_DATA.
+    // This makes the handle "append only".
+    // Changes to the file pointer will be ignored (like POSIX's O_APPEND behavior).
+    if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
+        access_mode.insert(AccessMode::FILE_APPEND_DATA);
+        access_mode.remove(AccessMode::FILE_WRITE_DATA);
+    }
+
+    access_mode
+}
+
+fn file_flags_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> Flags {
+    // Enable backup semantics so directories can be opened as files
+    let mut flags = Flags::FILE_FLAG_BACKUP_SEMANTICS;
+
+    // Note: __WASI_FDFLAGS_NONBLOCK is purposely being ignored for files
+    // While Windows does inherently support a non-blocking mode on files, the WASI API will
+    // treat I/O operations on files as synchronous. WASI might have an async-io API in the future.
+
+    // Technically, Windows only supports __WASI_FDFLAGS_SYNC, but treat all the flags as the same.
+    if fdflags & wasi::__WASI_FDFLAGS_DSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAGS_RSYNC != 0
+        || fdflags & wasi::__WASI_FDFLAGS_SYNC != 0
+    {
+        flags.insert(Flags::FILE_FLAG_WRITE_THROUGH);
+    }
+
+    flags
 }
 
 fn dirent_from_path<P: AsRef<Path>>(
@@ -220,7 +285,7 @@ fn dirent_from_path<P: AsRef<Path>>(
 // .        gets cookie = 1
 // ..       gets cookie = 2
 // other entries, in order they were returned by FindNextFileW get subsequent integers as their cookies
-pub(crate) fn fd_readdir_impl(
+pub(crate) fn fd_readdir(
     fd: &File,
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<impl Iterator<Item = Result<Dirent>>> {
@@ -257,30 +322,6 @@ pub(crate) fn fd_readdir_impl(
     //
     // See https://github.com/WebAssembly/WASI/issues/61 for more details.
     Ok(iter.skip(cookie))
-}
-
-// This should actually be common code with Linux
-pub(crate) fn fd_readdir(
-    os_handle: &mut OsHandle,
-    mut host_buf: &mut [u8],
-    cookie: wasi::__wasi_dircookie_t,
-) -> Result<usize> {
-    let iter = fd_readdir_impl(os_handle, cookie)?;
-    let mut used = 0;
-    for dirent in iter {
-        let dirent_raw = dirent?.to_wasi_raw()?;
-        let offset = dirent_raw.len();
-        if host_buf.len() < offset {
-            break;
-        } else {
-            host_buf[0..offset].copy_from_slice(&dirent_raw);
-            used += offset;
-            host_buf = &mut host_buf[offset..];
-        }
-    }
-
-    trace!("     | *buf_used={:?}", used);
-    Ok(used)
 }
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
