@@ -10,7 +10,7 @@ use core::slice::{Iter, IterMut};
 
 /// Contents of a jump table.
 ///
-/// All jump tables use 0-based indexing and densely populated.
+/// All jump tables use 0-based indexing and are densely populated.
 #[derive(Clone)]
 pub struct JumpTableData {
     // Table entries.
