@@ -227,3 +227,35 @@ fn test_custom_signal_handler_multiple_instances() {
         );
     }
 }
+
+#[test]
+fn test_custom_signal_handler_instance_calling_another_instance() {
+    let engine = HostRef::new(Engine::new(Config::default()));
+    let store = HostRef::new(Store::new(engine));
+
+    // instance1 which defines 'read'
+    let data1 =
+        std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
+    let module1 =
+        HostRef::new(Module::new(store.clone(), &data1).expect("failed to create module"));
+    let instance1 = HostRef::new(
+        Instance::new(store.clone(), module1.clone(), &[]).expect("failed to instantiate module"),
+    );
+
+    let instance1_exports = Ref::map(instance1.borrow(), |i| i.exports());
+    assert!(!instance1_exports.is_empty());
+    let instance1_read = instance1_exports[0].clone();
+
+    // instance2 wich calls 'instance1.read'
+    let data2 =
+        std::fs::read("tests/custom_signal_handler_2.wasm").expect("failed to read wasm file");
+    let module2 =
+        HostRef::new(Module::new(store.clone(), &data2).expect("failed to create module"));
+    let instance2 = HostRef::new(
+        Instance::new(store.clone(), module2.clone(), &[instance1_read])
+            .expect("failed to instantiate module"),
+    );
+
+    let result = invoke_export(&store, &instance2, &data2, "run").expect("instance1.run succeeded");
+    assert_eq!("123", result[0].clone().to_string());
+}
