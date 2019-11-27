@@ -975,7 +975,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::RefIsNull => {
             let arg = state.pop1();
             let val = builder.ins().is_null(arg);
-            state.push1(val);
+            let val_int = builder.ins().bint(I32, val);
+            state.push1(val_int);
         }
         Operator::RefFunc { function_index } => {
             state.push1(environ.translate_ref_func(builder.cursor(), *function_index)?);
