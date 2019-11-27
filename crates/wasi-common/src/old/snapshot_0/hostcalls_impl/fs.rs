@@ -576,41 +576,6 @@ pub(crate) unsafe fn path_open(
     enc_fd_byref(memory, fd_out_ptr, guest_fd)
 }
 
-pub(crate) unsafe fn fd_readdir(
-    wasi_ctx: &mut WasiCtx,
-    memory: &mut [u8],
-    fd: wasi::__wasi_fd_t,
-    buf: wasi32::uintptr_t,
-    buf_len: wasi32::size_t,
-    cookie: wasi::__wasi_dircookie_t,
-    buf_used: wasi32::uintptr_t,
-) -> Result<()> {
-    trace!(
-        "fd_readdir(fd={:?}, buf={:#x?}, buf_len={}, cookie={:#x?}, buf_used={:#x?})",
-        fd,
-        buf,
-        buf_len,
-        cookie,
-        buf_used,
-    );
-
-    enc_usize_byref(memory, buf_used, 0)?;
-
-    let file = wasi_ctx
-        .get_fd_entry_mut(fd)?
-        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READDIR, 0)?
-        .as_file_mut()?;
-    let host_buf = dec_slice_of_mut_u8(memory, buf, buf_len)?;
-
-    trace!("     | (buf,buf_len)={:?}", host_buf);
-
-    let host_bufused = hostcalls_impl::fd_readdir(file, host_buf, cookie)?;
-
-    trace!("     | *buf_used={:?}", host_bufused);
-
-    enc_usize_byref(memory, buf_used, host_bufused)
-}
-
 pub(crate) unsafe fn path_readlink(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
@@ -1030,6 +995,53 @@ pub(crate) unsafe fn fd_prestat_dir_name(
     enc_slice_of_u8(memory, path.as_bytes(), path_ptr)
 }
 
+pub(crate) unsafe fn fd_readdir(
+    wasi_ctx: &mut WasiCtx,
+    memory: &mut [u8],
+    fd: wasi::__wasi_fd_t,
+    buf: wasi32::uintptr_t,
+    buf_len: wasi32::size_t,
+    cookie: wasi::__wasi_dircookie_t,
+    buf_used: wasi32::uintptr_t,
+) -> Result<()> {
+    trace!(
+        "fd_readdir(fd={:?}, buf={:#x?}, buf_len={}, cookie={:#x?}, buf_used={:#x?})",
+        fd,
+        buf,
+        buf_len,
+        cookie,
+        buf_used,
+    );
+
+    enc_usize_byref(memory, buf_used, 0)?;
+
+    let file = wasi_ctx
+        .get_fd_entry_mut(fd)?
+        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READDIR, 0)?
+        .as_file_mut()?;
+    let mut host_buf = dec_slice_of_mut_u8(memory, buf, buf_len)?;
+
+    trace!("     | (buf,buf_len)={:?}", host_buf);
+
+    let iter = hostcalls_impl::fd_readdir(file, cookie)?;
+    let mut host_bufused = 0;
+    for dirent in iter {
+        let dirent_raw = dirent?.to_wasi_raw()?;
+        let offset = dirent_raw.len();
+        if host_buf.len() < offset {
+            break;
+        } else {
+            host_buf[0..offset].copy_from_slice(&dirent_raw);
+            host_bufused += offset;
+            host_buf = &mut host_buf[offset..];
+        }
+    }
+
+    trace!("     | *buf_used={:?}", host_bufused);
+
+    enc_usize_byref(memory, buf_used, host_bufused)
+}
+
 #[allow(dead_code)] // trouble with sockets
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
@@ -1059,7 +1071,6 @@ pub(crate) struct Dirent {
 }
 
 impl Dirent {
-    #![allow(unused)] // temporarily, until BSD catches up with this change
     /// Serialize the directory entry to the format define by `__wasi_fd_readdir`,
     /// so that the serialized entries can be concatenated by the implementation.
     pub fn to_wasi_raw(&self) -> Result<Vec<u8>> {

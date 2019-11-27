@@ -22,23 +22,10 @@ pub(crate) mod fdentry_impl {
 }
 
 pub(crate) mod host_impl {
-    use super::super::host_impl::dirent_filetype_from_host;
     use crate::old::snapshot_0::{wasi, Result};
     use std::convert::TryFrom;
 
     pub(crate) const O_RSYNC: nix::fcntl::OFlag = nix::fcntl::OFlag::O_SYNC;
-
-    pub(crate) fn dirent_from_host(
-        host_entry: &nix::libc::dirent,
-    ) -> Result<wasi::__wasi_dirent_t> {
-        let mut entry = unsafe { std::mem::zeroed::<wasi::__wasi_dirent_t>() };
-        let d_type = dirent_filetype_from_host(host_entry)?;
-        entry.d_ino = host_entry.d_ino;
-        entry.d_next = host_entry.d_seekoff;
-        entry.d_namlen = u32::from(host_entry.d_namlen);
-        entry.d_type = d_type;
-        Ok(entry)
-    }
 
     pub(crate) fn stdev_from_nix(dev: nix::libc::dev_t) -> Result<wasi::__wasi_device_t> {
         wasi::__wasi_device_t::try_from(dev).map_err(Into::into)
