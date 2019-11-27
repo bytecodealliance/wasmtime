@@ -4,8 +4,11 @@ use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
     TableType, ValType,
 };
-use anyhow::Result;
-use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
+use anyhow::{Error, Result};
+use wasmparser::{
+    validate, ExternalKind, ImportSectionEntryType, ModuleReader, OperatorValidatorConfig,
+    SectionCode, ValidatingParserConfig,
+};
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
     assert!(!mt.shared);
@@ -184,7 +187,15 @@ pub struct Module {
 }
 
 impl Module {
+    /// Validate and decode the raw wasm data in `binary` and create a new
+    /// `Module` in the given `store`.
     pub fn new(store: &HostRef<Store>, binary: &[u8]) -> Result<Module> {
+        Self::validate(store, binary)?;
+        Self::new_unchecked(store, binary)
+    }
+    /// Similar to `new`, but does not perform any validation. Only use this
+    /// on modules which are known to have been validated already!
+    pub fn new_unchecked(store: &HostRef<Store>, binary: &[u8]) -> Result<Module> {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(Module {
             store: store.clone(),
@@ -199,8 +210,17 @@ impl Module {
             _ => None,
         }
     }
-    pub fn validate(_store: &Store, binary: &[u8]) -> bool {
-        validate(binary, None).is_ok()
+    pub fn validate(_store: &HostRef<Store>, binary: &[u8]) -> Result<()> {
+        let config = ValidatingParserConfig {
+            operator_config: OperatorValidatorConfig {
+                enable_threads: false,
+                enable_reference_types: false,
+                enable_bulk_memory: false,
+                enable_simd: false,
+                enable_multi_value: true,
+            },
+        };
+        validate(binary, Some(config)).map_err(Error::new)
     }
     pub fn imports(&self) -> &[ImportType] {
         &self.imports
