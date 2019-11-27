@@ -2329,10 +2329,12 @@ fn define_reftypes(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions,
     let shared = &shared_defs.instructions;
 
     let is_null = shared.by_name("is_null");
+    let is_invalid = shared.by_name("is_invalid");
     let null = shared.by_name("null");
     let safepoint = shared.by_name("safepoint");
 
     let rec_is_zero = r.template("is_zero");
+    let rec_is_invalid = r.template("is_invalid");
     let rec_pu_id_ref = r.template("pu_id_ref");
     let rec_safepoint = r.recipe("safepoint");
 
@@ -2344,6 +2346,9 @@ fn define_reftypes(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions,
 
     // is_null, implemented by testing whether the value is 0.
     e.enc_r32_r64_rex_only(is_null, rec_is_zero.opcodes(&TEST_REG));
+
+    // is_invalid, implemented by testing whether the value is -1.
+    e.enc_r32_r64_rex_only(is_invalid, rec_is_invalid.opcodes(&CMP_IMM8).rrr(7));
 
     // safepoint instruction calls sink, no actual encoding.
     e.enc32_rec(safepoint, rec_safepoint, 0);

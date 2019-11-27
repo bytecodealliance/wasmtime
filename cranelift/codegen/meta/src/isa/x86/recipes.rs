@@ -3222,6 +3222,26 @@ pub(crate) fn define<'shared>(
             ),
     );
 
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("is_invalid", &formats.unary, 2 + 3)
+            .operands_in(vec![gpr])
+            .operands_out(vec![abcd])
+            .emit(
+                r#"
+                    // Comparison instruction.
+                    {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                    modrm_r_bits(in_reg0, bits, sink);
+                    sink.put1(0xff);
+                    // `setCC` instruction, no REX.
+                    use crate::ir::condcodes::IntCC::*;
+                    let setcc = 0x90 | icc2opc(Equal);
+                    sink.put1(0x0f);
+                    sink.put1(setcc as u8);
+                    modrm_rr(out_reg0, 0, sink);
+                "#,
+            ),
+    );
+
     recipes.add_recipe(
         EncodingRecipeBuilder::new("safepoint", &formats.multiary, 0).emit(
             r#"
