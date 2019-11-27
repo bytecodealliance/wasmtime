@@ -13,7 +13,7 @@ use more_asserts::assert_le;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     fmt::Display,
     iter::{self, FromIterator},
     mem,
@@ -1198,7 +1198,7 @@ macro_rules! cmp_i64 {
                 match right {
                     ValueLocation::Stack(offset) => {
                         let offset = self.adjusted_offset(offset);
-                        if let Some(i) = i.try_into() {
+                        if let Some(i) = i.try_into().ok() {
                             dynasm!(self.asm
                                 ; cmp QWORD [rsp + offset], i
                             );
@@ -1212,7 +1212,7 @@ macro_rules! cmp_i64 {
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                         let rreg = self.into_reg(I32, &mut right).unwrap();
-                        if let Some(i) = i.try_into() {
+                        if let Some(i) = i.try_into().ok() {
                             dynasm!(self.asm
                                 ; cmp Rq(rreg.rq().unwrap()), i
                             );
@@ -1252,7 +1252,7 @@ macro_rules! cmp_i64 {
                     }
                     ValueLocation::Immediate(i) => {
                         let i = i.as_i64().unwrap();
-                        if let Some(i) = i.try_into() {
+                        if let Some(i) = i.try_into().ok() {
                             dynasm!(self.asm
                                     ; cmp Rq(lreg.rq().unwrap()), i
                             );
@@ -1559,7 +1559,7 @@ macro_rules! binop_f32 {
             rx,
             F32,
             imm_f32,
-            |_, _, _| unreachable!()
+            |_, _, _: i32| unreachable!()
         );
     };
 }
@@ -1576,7 +1576,7 @@ macro_rules! commutative_binop_f32 {
             rx,
             F32,
             imm_f32,
-            |_, _, _| unreachable!()
+            |_, _, _: i32| unreachable!()
         );
     };
 }
@@ -1593,7 +1593,7 @@ macro_rules! binop_f64 {
             rx,
             F64,
             imm_f64,
-            |_, _, _| unreachable!()
+            |_, _, _: i32| unreachable!()
         );
     };
 }
@@ -1610,7 +1610,7 @@ macro_rules! commutative_binop_f64 {
             rx,
             F64,
             imm_f64,
-            |_, _, _| unreachable!()
+            |_, _, _: i32| unreachable!()
         );
     };
 }
@@ -1673,7 +1673,7 @@ macro_rules! binop {
                     );
                 }
                 ValueLocation::Immediate(i) => {
-                    if let Some(i) = i.as_int().and_then(|i| i.try_into()) {
+                    if let Some(i) = i.as_int().and_then(|i| i.try_into().ok()) {
                         $direct_imm(&mut *self, lreg, i);
                     } else {
                         let scratch = self.take_reg($ty).unwrap();
@@ -2033,35 +2033,6 @@ macro_rules! store {
             $size
         );
     };
-}
-
-trait TryInto<O> {
-    fn try_into(self) -> Option<O>;
-}
-
-impl TryInto<i64> for u64 {
-    fn try_into(self) -> Option<i64> {
-        let max = i64::max_value() as u64;
-
-        if self <= max {
-            Some(self as i64)
-        } else {
-            None
-        }
-    }
-}
-
-impl TryInto<i32> for i64 {
-    fn try_into(self) -> Option<i32> {
-        let min = i32::min_value() as i64;
-        let max = i32::max_value() as i64;
-
-        if self >= min && self <= max {
-            Some(self as i32)
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4726,7 +4697,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
             ValueLocation::Immediate(i) => {
                 let i = i.as_i64().unwrap();
-                if let Some(i) = i.try_into() {
+                if let Some(i) = i.try_into().ok() {
                     let new_reg = self.take_reg(I64).unwrap();
                     let lreg = self.into_reg(I64, &mut left).unwrap();
 
