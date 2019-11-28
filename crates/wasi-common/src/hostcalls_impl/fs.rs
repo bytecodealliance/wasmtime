@@ -1088,12 +1088,12 @@ impl Dirent {
 
         let sys_dirent = raw.as_mut_ptr() as *mut wasi::__wasi_dirent_t;
         unsafe {
-            *sys_dirent = wasi::__wasi_dirent_t {
+            sys_dirent.write_unaligned(wasi::__wasi_dirent_t {
                 d_namlen: namlen.try_into()?,
                 d_ino: self.ino,
                 d_next: self.cookie,
                 d_type: self.ftype.to_wasi(),
-            };
+            });
         }
 
         let sys_name = unsafe { sys_dirent.offset(1) as *mut u8 };
