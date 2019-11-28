@@ -3,7 +3,7 @@
 use crate::wasi;
 use std::convert::Infallible;
 use std::num::TryFromIntError;
-use std::{fmt, str};
+use std::{ffi, fmt, str};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
@@ -107,7 +107,7 @@ pub enum Error {
     Wasi(WasiError),
     Io(std::io::Error),
     #[cfg(unix)]
-    Nix(nix::Error),
+    Nix(yanix::YanixError),
     #[cfg(windows)]
     Win(winx::winerror::WinError),
 }
@@ -119,8 +119,8 @@ impl From<WasiError> for Error {
 }
 
 #[cfg(unix)]
-impl From<nix::Error> for Error {
-    fn from(err: nix::Error) -> Self {
+impl From<yanix::YanixError> for Error {
+    fn from(err: yanix::YanixError) -> Self {
         Self::Nix(err)
     }
 }
@@ -149,6 +149,12 @@ impl From<str::Utf8Error> for Error {
     }
 }
 
+impl From<&ffi::NulError> for Error {
+    fn from(_: &ffi::NulError) -> Self {
+        Self::Wasi(WasiError::EILSEQ)
+    }
+}
+
 #[cfg(windows)]
 impl From<winx::winerror::WinError> for Error {
     fn from(err: winx::winerror::WinError) -> Self {
@@ -162,16 +168,15 @@ impl Error {
             Self::Wasi(no) => no.as_raw_errno(),
             Self::Io(e) => errno_from_ioerror(e.to_owned()),
             #[cfg(unix)]
-            Self::Nix(err) => err
-                .as_errno()
-                .map_or_else(
-                    || {
-                        log::debug!("Unknown nix errno: {}", err);
-                        Self::ENOSYS
-                    },
-                    crate::sys::host_impl::errno_from_nix,
-                )
-                .as_wasi_errno(),
+            Self::Nix(err) => {
+                use yanix::YanixError::*;
+                let err = match err {
+                    Errno(errno) => crate::sys::host_impl::errno_from_nix(*errno),
+                    NulError(err) => err.into(),
+                    TryFromIntError(err) => (*err).into(),
+                };
+                err.as_wasi_errno()
+            }
             #[cfg(windows)]
             Self::Win(err) => crate::sys::host_impl::errno_from_win(*err),
         }

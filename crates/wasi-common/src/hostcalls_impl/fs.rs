@@ -10,10 +10,8 @@ use crate::sys::{host_impl, hostcalls_impl};
 use crate::{helpers, host, wasi, wasi32, Error, Result};
 use filetime::{set_file_handle_times, FileTime};
 use log::trace;
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::mem;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) unsafe fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasi::__wasi_fd_t) -> Result<()> {
@@ -1040,64 +1038,4 @@ pub(crate) unsafe fn fd_readdir(
     trace!("     | *buf_used={:?}", host_bufused);
 
     enc_usize_byref(memory, buf_used, host_bufused)
-}
-
-#[allow(dead_code)] // trouble with sockets
-#[derive(Clone, Copy, Debug)]
-#[repr(u8)]
-pub(crate) enum FileType {
-    Unknown = wasi::__WASI_FILETYPE_UNKNOWN,
-    BlockDevice = wasi::__WASI_FILETYPE_BLOCK_DEVICE,
-    CharacterDevice = wasi::__WASI_FILETYPE_CHARACTER_DEVICE,
-    Directory = wasi::__WASI_FILETYPE_DIRECTORY,
-    RegularFile = wasi::__WASI_FILETYPE_REGULAR_FILE,
-    SocketDgram = wasi::__WASI_FILETYPE_SOCKET_DGRAM,
-    SocketStream = wasi::__WASI_FILETYPE_SOCKET_STREAM,
-    Symlink = wasi::__WASI_FILETYPE_SYMBOLIC_LINK,
-}
-
-impl FileType {
-    pub(crate) fn to_wasi(&self) -> wasi::__wasi_filetype_t {
-        *self as wasi::__wasi_filetype_t
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Dirent {
-    pub name: String,
-    pub ftype: FileType,
-    pub ino: u64,
-    pub cookie: wasi::__wasi_dircookie_t,
-}
-
-impl Dirent {
-    /// Serialize the directory entry to the format define by `__wasi_fd_readdir`,
-    /// so that the serialized entries can be concatenated by the implementation.
-    pub fn to_wasi_raw(&self) -> Result<Vec<u8>> {
-        use std::slice;
-
-        let name = self.name.as_bytes();
-        let namlen = name.len();
-        let dirent_size = mem::size_of::<wasi::__wasi_dirent_t>();
-        let offset = dirent_size.checked_add(namlen).ok_or(Error::EOVERFLOW)?;
-
-        let mut raw = Vec::<u8>::with_capacity(offset);
-        raw.resize(offset, 0);
-
-        let sys_dirent = raw.as_mut_ptr() as *mut wasi::__wasi_dirent_t;
-        unsafe {
-            sys_dirent.write_unaligned(wasi::__wasi_dirent_t {
-                d_namlen: namlen.try_into()?,
-                d_ino: self.ino,
-                d_next: self.cookie,
-                d_type: self.ftype.to_wasi(),
-            });
-        }
-
-        let sys_name = unsafe { sys_dirent.offset(1) as *mut u8 };
-        let sys_name = unsafe { slice::from_raw_parts_mut(sys_name, namlen) };
-        sys_name.copy_from_slice(&name);
-
-        Ok(raw)
-    }
 }

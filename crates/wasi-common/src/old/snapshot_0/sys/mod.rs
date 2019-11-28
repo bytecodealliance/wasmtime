@@ -7,7 +7,7 @@ cfg_if! {
         pub(crate) use self::unix::*;
 
         pub(crate) fn errno_from_host(err: i32) -> wasi::__wasi_errno_t {
-            host_impl::errno_from_nix(nix::errno::from_i32(err)).as_wasi_errno()
+            host_impl::errno_from_nix(yanix::Errno::from_i32(err)).as_wasi_errno()
         }
     } else if #[cfg(windows)] {
         mod windows;
