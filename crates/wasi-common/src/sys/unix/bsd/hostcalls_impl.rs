@@ -2,26 +2,25 @@ use super::super::dir::{Dir, Entry, SeekLoc};
 use super::oshandle::OsHandle;
 use crate::hostcalls_impl::{Dirent, PathGet};
 use crate::sys::host_impl;
-use crate::sys::unix::str_to_cstring;
 use crate::{wasi, Error, Result};
-use nix::libc;
 use std::convert::TryInto;
 use std::fs::File;
 use std::os::unix::prelude::AsRawFd;
 use std::sync::MutexGuard;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
-    use nix::errno;
-    use nix::libc::unlinkat;
-
-    let path_cstr = str_to_cstring(resolved.path())?;
-
-    // nix doesn't expose unlinkat() yet
-    match unsafe { unlinkat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0) } {
-        0 => Ok(()),
-        _ => {
-            let mut e = errno::Errno::last();
-
+    use yanix::{
+        errno::Errno,
+        file::{unlinkat, AtFlag},
+        Error,
+    };
+    unlinkat(
+        resolved.dirfd().as_raw_fd(),
+        resolved.path(),
+        AtFlag::empty(),
+    )
+    .map_err(|err| {
+        if let Error::Errno(mut errno) = err {
             // Non-Linux implementations may return EPERM when attempting to remove a
             // directory without REMOVEDIR. While that's what POSIX specifies, it's
             // less useful. Adjust this to EISDIR. It doesn't matter that this is not
@@ -29,84 +28,80 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
             // is created before fstatat sees it, we're racing with that change anyway
             // and unlinkat could have legitimately seen the directory if the race had
             // turned out differently.
-            use nix::fcntl::AtFlags;
-            use nix::sys::stat::{fstatat, SFlag};
+            use yanix::{file::SFlag, sys::fstatat};
 
-            if e == errno::Errno::EPERM {
+            if errno == Errno::EPERM {
                 if let Ok(stat) = fstatat(
                     resolved.dirfd().as_raw_fd(),
                     resolved.path(),
-                    AtFlags::AT_SYMLINK_NOFOLLOW,
+                    AtFlag::SYMLINK_NOFOLLOW,
                 ) {
-                    if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFDIR) {
-                        e = errno::Errno::EISDIR;
+                    if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFDIR) {
+                        errno = Errno::EISDIR;
                     }
                 } else {
-                    e = errno::Errno::last();
+                    errno = Errno::last();
                 }
             }
-
-            Err(host_impl::errno_from_nix(e))
+            Error::Errno(errno)
+        } else {
+            err
         }
-    }
+    })
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
-    use nix::{errno::Errno, fcntl::AtFlags, libc::symlinkat, sys::stat::fstatat};
-
-    let old_path_cstr = str_to_cstring(old_path)?;
-    let new_path_cstr = str_to_cstring(resolved.path())?;
+    use yanix::{
+        errno::Errno,
+        file::{symlinkat, AtFlag},
+        sys::fstatat,
+    };
 
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
 
-    let res = unsafe {
-        symlinkat(
-            old_path_cstr.as_ptr(),
-            resolved.dirfd().as_raw_fd(),
-            new_path_cstr.as_ptr(),
-        )
-    };
-    if res != 0 {
-        match Errno::last() {
-            Errno::ENOTDIR => {
-                // On BSD, symlinkat returns ENOTDIR when it should in fact
-                // return a EEXIST. It seems that it gets confused with by
-                // the trailing slash in the target path. Thus, we strip
-                // the trailing slash and check if the path exists, and
-                // adjust the error code appropriately.
-                let new_path = resolved.path().trim_end_matches('/');
-                if let Ok(_) = fstatat(
-                    resolved.dirfd().as_raw_fd(),
-                    new_path,
-                    AtFlags::AT_SYMLINK_NOFOLLOW,
-                ) {
-                    Err(Error::EEXIST)
-                } else {
-                    Err(Error::ENOTDIR)
+    symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()).or_else(|err| {
+        if let yanix::Error::Errno(errno) = err {
+            match errno {
+                Errno::ENOTDIR => {
+                    // On BSD, symlinkat returns ENOTDIR when it should in fact
+                    // return a EEXIST. It seems that it gets confused with by
+                    // the trailing slash in the target path. Thus, we strip
+                    // the trailing slash and check if the path exists, and
+                    // adjust the error code appropriately.
+                    let new_path = resolved.path().trim_end_matches('/');
+                    if let Ok(_) = fstatat(
+                        resolved.dirfd().as_raw_fd(),
+                        new_path,
+                        AtFlag::SYMLINK_NOFOLLOW,
+                    ) {
+                        Err(Error::EEXIST)
+                    } else {
+                        Err(Error::ENOTDIR)
+                    }
                 }
+                x => Err(host_impl::errno_from_nix(x)),
             }
-            x => Err(host_impl::errno_from_nix(x)),
+        } else {
+            Err(err.into())
         }
-    } else {
-        Ok(())
-    }
+    })
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
-    use nix::{errno::Errno, fcntl::AtFlags, libc::renameat, sys::stat::fstatat};
-    let old_path_cstr = str_to_cstring(resolved_old.path())?;
-    let new_path_cstr = str_to_cstring(resolved_new.path())?;
-
-    let res = unsafe {
-        renameat(
-            resolved_old.dirfd().as_raw_fd(),
-            old_path_cstr.as_ptr(),
-            resolved_new.dirfd().as_raw_fd(),
-            new_path_cstr.as_ptr(),
-        )
+    use yanix::{
+        errno::Errno,
+        file::{renameat, AtFlag},
+        sys::fstatat,
     };
-    if res != 0 {
+    renameat(
+        resolved_old.dirfd().as_raw_fd(),
+        resolved_old.path(),
+        resolved_new.dirfd().as_raw_fd(),
+        resolved_new.path(),
+    )
+    .or_else(|err| {
         // Currently, this is verified to be correct on macOS, where
         // ENOENT can be returned in case when we try to rename a file
         // into a name with a trailing slash. On macOS, if the latter does
@@ -116,29 +111,31 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
         //
         // TODO
         // Verify on other BSD-based OSes.
-        match Errno::last() {
-            Errno::ENOENT => {
-                // check if the source path exists
-                if let Ok(_) = fstatat(
-                    resolved_old.dirfd().as_raw_fd(),
-                    resolved_old.path(),
-                    AtFlags::AT_SYMLINK_NOFOLLOW,
-                ) {
-                    // check if destination contains a trailing slash
-                    if resolved_new.path().contains('/') {
-                        Err(Error::ENOTDIR)
+        if let yanix::Error::Errno(errno) = err {
+            match errno {
+                Errno::ENOENT => {
+                    // check if the source path exists
+                    if let Ok(_) = fstatat(
+                        resolved_old.dirfd().as_raw_fd(),
+                        resolved_old.path(),
+                        AtFlag::SYMLINK_NOFOLLOW,
+                    ) {
+                        // check if destination contains a trailing slash
+                        if resolved_new.path().contains('/') {
+                            Err(Error::ENOTDIR)
+                        } else {
+                            Err(Error::ENOENT)
+                        }
                     } else {
                         Err(Error::ENOENT)
                     }
-                } else {
-                    Err(Error::ENOENT)
                 }
+                x => Err(host_impl::errno_from_nix(x)),
             }
-            x => Err(host_impl::errno_from_nix(x)),
+        } else {
+            Err(err.into())
         }
-    } else {
-        Ok(())
-    }
+    })
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -148,8 +145,6 @@ pub(crate) fn fd_advise(
     offset: wasi::__wasi_filesize_t,
     len: wasi::__wasi_filesize_t,
 ) -> Result<()> {
-    use nix::errno::Errno;
-
     match advice {
         wasi::__WASI_ADVICE_DONTNEED => return Ok(()),
         // unfortunately, the advisory syscall in macOS doesn't take any flags of this
@@ -164,21 +159,8 @@ pub(crate) fn fd_advise(
 
     // From macOS man pages:
     // F_RDADVISE   Issue an advisory read async with no copy to user.
-    //
-    // The F_RDADVISE command operates on the following structure which holds information passed from
-    // the user to the system:
-    //
-    // struct radvisory {
-    //      off_t   ra_offset;  /* offset into the file */
-    //      int     ra_count;   /* size of the read     */
-    // };
-    let advisory = libc::radvisory {
-        ra_offset: offset.try_into()?,
-        ra_count: len.try_into()?,
-    };
-
-    let res = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_RDADVISE, &advisory) };
-    Errno::result(res).map(|_| ()).map_err(Error::from)
+    use yanix::sys::fcntl;
+    fcntl::rd_advise(file.as_raw_fd(), offset.try_into()?, len.try_into()?).map_err(Into::into)
 }
 
 // TODO
@@ -259,11 +241,11 @@ pub(crate) fn fd_readdir<'a>(
 struct DirIter<'a>(MutexGuard<'a, Dir>);
 
 impl<'a> Iterator for DirIter<'a> {
-    type Item = nix::Result<(Entry, SeekLoc)>;
+    type Item = yanix::Result<(Entry, SeekLoc)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         use libc::readdir;
-        use nix::{errno::Errno, Error};
+        use yanix::{errno::Errno, Error};
 
         unsafe {
             let errno = Errno::last();
@@ -275,7 +257,7 @@ impl<'a> Iterator for DirIter<'a> {
                     // According to 4.3BSD/POSIX.1-2001 man pages, there was an error
                     // if the errno value has changed at some point during the sequence
                     // of readdir calls.
-                    Some(Err(Error::last()))
+                    Some(Err(Error::Errno(Errno::last())))
                 } else {
                     // Not an error. We've simply reached the end of the stream.
                     None

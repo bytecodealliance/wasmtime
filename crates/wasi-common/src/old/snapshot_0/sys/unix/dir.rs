@@ -1,9 +1,9 @@
 // Based on src/dir.rs from nix
 use crate::old::snapshot_0::hostcalls_impl::FileType;
 use libc;
-use nix::{Error, Result};
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 use std::{ffi, ptr};
+use yanix::{errno::Errno, Error, Result};
 
 #[cfg(target_os = "linux")]
 use libc::dirent64 as dirent;
@@ -38,9 +38,9 @@ impl Dir {
     unsafe fn from_fd(fd: RawFd) -> Result<Self> {
         let d = libc::fdopendir(fd);
         if d.is_null() {
-            let e = Error::last();
+            let e = Errno::last();
             libc::close(fd);
-            return Err(e);
+            return Err(Error::Errno(e));
         };
         // Always guaranteed to be non-null by the previous check
         Ok(Self(ptr::NonNull::new(d).unwrap()))

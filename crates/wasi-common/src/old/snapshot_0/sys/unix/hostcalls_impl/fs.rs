@@ -3,9 +3,7 @@
 use crate::old::snapshot_0::helpers::systemtime_to_timestamp;
 use crate::old::snapshot_0::hostcalls_impl::{FileType, PathGet};
 use crate::old::snapshot_0::sys::host_impl;
-use crate::old::snapshot_0::sys::unix::str_to_cstring;
 use crate::old::snapshot_0::{wasi, Error, Result};
-use nix::libc;
 use std::convert::TryInto;
 use std::fs::{File, Metadata};
 use std::os::unix::fs::FileExt;
@@ -39,53 +37,38 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
-    use nix::fcntl::{fcntl, OFlag, F_GETFL};
-    match fcntl(fd.as_raw_fd(), F_GETFL).map(OFlag::from_bits_truncate) {
-        Ok(flags) => Ok(host_impl::fdflags_from_nix(flags)),
-        Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
-    }
+    use yanix::sys::fcntl;
+    fcntl::get_fl(fd.as_raw_fd())
+        .map(host_impl::fdflags_from_nix)
+        .map_err(Into::into)
 }
 
 pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
-    use nix::fcntl::{fcntl, F_SETFL};
+    use yanix::sys::fcntl;
     let nix_flags = host_impl::nix_from_fdflags(fdflags);
-    match fcntl(fd.as_raw_fd(), F_SETFL(nix_flags)) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(host_impl::errno_from_nix(e.as_errno().unwrap())),
-    }
+    fcntl::set_fl(fd.as_raw_fd(), nix_flags).map_err(Into::into)
 }
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
-    use nix::libc::mkdirat;
-    let path_cstr = str_to_cstring(resolved.path())?;
-    // nix doesn't expose mkdirat() yet
-    match unsafe { mkdirat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0o777) } {
-        0 => Ok(()),
-        _ => Err(host_impl::errno_from_nix(nix::errno::Errno::last())),
-    }
+    use yanix::file::{mkdirat, Mode};
+    mkdirat(
+        resolved.dirfd().as_raw_fd(),
+        resolved.path(),
+        Mode::from_bits_truncate(0o777),
+    )
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
-    use nix::libc::linkat;
-    let old_path_cstr = str_to_cstring(resolved_old.path())?;
-    let new_path_cstr = str_to_cstring(resolved_new.path())?;
-
-    // Not setting AT_SYMLINK_FOLLOW fails on most filesystems
-    let atflags = libc::AT_SYMLINK_FOLLOW;
-    let res = unsafe {
-        linkat(
-            resolved_old.dirfd().as_raw_fd(),
-            old_path_cstr.as_ptr(),
-            resolved_new.dirfd().as_raw_fd(),
-            new_path_cstr.as_ptr(),
-            atflags,
-        )
-    };
-    if res != 0 {
-        Err(host_impl::errno_from_nix(nix::errno::Errno::last()))
-    } else {
-        Ok(())
-    }
+    use yanix::file::{linkat, AtFlag};
+    linkat(
+        resolved_old.dirfd().as_raw_fd(),
+        resolved_old.path(),
+        resolved_new.dirfd().as_raw_fd(),
+        resolved_new.path(),
+        AtFlag::SYMLINK_FOLLOW,
+    )
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_open(
@@ -95,20 +78,22 @@ pub(crate) fn path_open(
     oflags: wasi::__wasi_oflags_t,
     fs_flags: wasi::__wasi_fdflags_t,
 ) -> Result<File> {
-    use nix::errno::Errno;
-    use nix::fcntl::{openat, AtFlags, OFlag};
-    use nix::sys::stat::{fstatat, Mode, SFlag};
+    use yanix::{
+        errno::Errno,
+        file::{openat, AtFlag, Mode, OFlag, SFlag},
+        sys::fstatat,
+    };
 
     let mut nix_all_oflags = if read && write {
-        OFlag::O_RDWR
+        OFlag::RDWR
     } else if write {
-        OFlag::O_WRONLY
+        OFlag::WRONLY
     } else {
-        OFlag::O_RDONLY
+        OFlag::RDONLY
     };
 
     // on non-Capsicum systems, we always want nofollow
-    nix_all_oflags.insert(OFlag::O_NOFOLLOW);
+    nix_all_oflags.insert(OFlag::NOFOLLOW);
 
     // convert open flags
     nix_all_oflags.insert(host_impl::nix_from_oflags(oflags));
@@ -131,46 +116,49 @@ pub(crate) fn path_open(
     ) {
         Ok(fd) => fd,
         Err(e) => {
-            match e.as_errno() {
-                // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
-                Some(Errno::ENXIO) => {
-                    if let Ok(stat) = fstatat(
-                        resolved.dirfd().as_raw_fd(),
-                        resolved.path(),
-                        AtFlags::AT_SYMLINK_NOFOLLOW,
-                    ) {
-                        if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFSOCK) {
-                            return Err(Error::ENOTSUP);
+            if let yanix::Error::Errno(errno) = e {
+                match errno {
+                    // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
+                    Errno::ENXIO => {
+                        if let Ok(stat) = fstatat(
+                            resolved.dirfd().as_raw_fd(),
+                            resolved.path(),
+                            AtFlag::SYMLINK_NOFOLLOW,
+                        ) {
+                            if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFSOCK) {
+                                return Err(Error::ENOTSUP);
+                            } else {
+                                return Err(Error::ENXIO);
+                            }
                         } else {
                             return Err(Error::ENXIO);
                         }
-                    } else {
-                        return Err(Error::ENXIO);
                     }
-                }
-                // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
-                // on a symlink.
-                Some(Errno::ENOTDIR)
-                    if !(nix_all_oflags & (OFlag::O_NOFOLLOW | OFlag::O_DIRECTORY)).is_empty() =>
-                {
-                    if let Ok(stat) = fstatat(
-                        resolved.dirfd().as_raw_fd(),
-                        resolved.path(),
-                        AtFlags::AT_SYMLINK_NOFOLLOW,
-                    ) {
-                        if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::S_IFLNK) {
-                            return Err(Error::ELOOP);
+                    // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
+                    // on a symlink.
+                    Errno::ENOTDIR
+                        if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
+                    {
+                        if let Ok(stat) = fstatat(
+                            resolved.dirfd().as_raw_fd(),
+                            resolved.path(),
+                            AtFlag::SYMLINK_NOFOLLOW,
+                        ) {
+                            if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFLNK) {
+                                return Err(Error::ELOOP);
+                            }
                         }
+                        return Err(Error::ENOTDIR);
                     }
-                    return Err(Error::ENOTDIR);
+                    // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
+                    // a symlink.
+                    Errno::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
+                        return Err(Error::ELOOP);
+                    }
+                    errno => return Err(host_impl::errno_from_nix(errno)),
                 }
-                // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
-                // a symlink.
-                Some(Errno::EMLINK) if !(nix_all_oflags & OFlag::O_NOFOLLOW).is_empty() => {
-                    return Err(Error::ELOOP);
-                }
-                Some(e) => return Err(host_impl::errno_from_nix(e)),
-                None => return Err(Error::ENOSYS),
+            } else {
+                return Err(e.into());
             }
         }
     };
@@ -182,34 +170,16 @@ pub(crate) fn path_open(
 }
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
-    use nix::errno::Errno;
-    let path_cstr = str_to_cstring(resolved.path())?;
-
-    // Linux requires that the buffer size is positive, whereas POSIX does not.
-    // Use a fake buffer to store the results if the size is zero.
-    // TODO: instead of using raw libc::readlinkat call here, this should really
-    // be fixed in `nix` crate
-    let fakebuf: &mut [u8] = &mut [0];
-    let buf_len = buf.len();
-    let len = unsafe {
-        libc::readlinkat(
-            resolved.dirfd().as_raw_fd(),
-            path_cstr.as_ptr() as *const libc::c_char,
-            if buf_len == 0 {
-                fakebuf.as_mut_ptr()
-            } else {
-                buf.as_mut_ptr()
-            } as *mut libc::c_char,
-            if buf_len == 0 { fakebuf.len() } else { buf_len },
-        )
-    };
-
-    if len < 0 {
-        Err(host_impl::errno_from_nix(Errno::last()))
-    } else {
-        let len = len as usize;
-        Ok(if len < buf_len { len } else { buf_len })
+    use std::cmp::min;
+    use yanix::file::readlinkat;
+    let read_link = readlinkat(resolved.dirfd().as_raw_fd(), resolved.path())
+        .map_err(Into::into)
+        .and_then(host_impl::path_from_host)?;
+    let copy_len = min(read_link.len(), buf.len());
+    if copy_len > 0 {
+        buf[..copy_len].copy_from_slice(&read_link.as_bytes()[..copy_len]);
     }
+    Ok(copy_len)
 }
 
 pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
@@ -229,8 +199,8 @@ pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_
 }
 
 fn filetype(file: &File, metadata: &Metadata) -> Result<FileType> {
-    use nix::sys::socket::{self, SockType};
     use std::os::unix::fs::FileTypeExt;
+    use yanix::socket::{get_socket_type, SockType};
     let ftype = metadata.file_type();
     if ftype.is_file() {
         Ok(FileType::RegularFile)
@@ -243,10 +213,7 @@ fn filetype(file: &File, metadata: &Metadata) -> Result<FileType> {
     } else if ftype.is_block_device() {
         Ok(FileType::BlockDevice)
     } else if ftype.is_socket() {
-        match socket::getsockopt(file.as_raw_fd(), socket::sockopt::SockType)
-            .map_err(|err| err.as_errno().unwrap())
-            .map_err(host_impl::errno_from_nix)?
-        {
+        match get_socket_type(file.as_raw_fd())? {
             SockType::Datagram => Ok(FileType::SocketDgram),
             SockType::Stream => Ok(FileType::SocketStream),
             _ => Ok(FileType::Unknown),
@@ -260,17 +227,14 @@ pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: wasi::__wasi_lookupflags_t,
 ) -> Result<wasi::__wasi_filestat_t> {
-    use nix::fcntl::AtFlags;
-    use nix::sys::stat::fstatat;
-
+    use yanix::{file::AtFlag, sys::fstatat};
     let atflags = match dirflags {
-        0 => AtFlags::empty(),
-        _ => AtFlags::AT_SYMLINK_NOFOLLOW,
+        0 => AtFlag::empty(),
+        _ => AtFlag::SYMLINK_NOFOLLOW,
     };
-
-    let filestat = fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), atflags)
-        .map_err(|err| host_impl::errno_from_nix(err.as_errno().unwrap()))?;
-    host_impl::filestat_from_nix(filestat)
+    fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), atflags)
+        .map_err(Into::into)
+        .and_then(host_impl::filestat_from_nix)
 }
 
 pub(crate) fn path_filestat_set_times(
@@ -321,20 +285,11 @@ pub(crate) fn path_filestat_set_times(
 }
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
-    use nix::errno;
-    use nix::libc::{unlinkat, AT_REMOVEDIR};
-
-    let path_cstr = str_to_cstring(resolved.path())?;
-
-    // nix doesn't expose unlinkat() yet
-    match unsafe {
-        unlinkat(
-            resolved.dirfd().as_raw_fd(),
-            path_cstr.as_ptr(),
-            AT_REMOVEDIR,
-        )
-    } {
-        0 => Ok(()),
-        _ => Err(host_impl::errno_from_nix(errno::Errno::last())),
-    }
+    use yanix::file::{unlinkat, AtFlag};
+    unlinkat(
+        resolved.dirfd().as_raw_fd(),
+        resolved.path(),
+        AtFlag::REMOVEDIR,
+    )
+    .map_err(Into::into)
 }

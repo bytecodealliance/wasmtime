@@ -1,7 +1,5 @@
 use super::super::dir::{Dir, Entry, SeekLoc};
 use crate::old::snapshot_0::hostcalls_impl::{Dirent, PathGet};
-use crate::old::snapshot_0::sys::host_impl;
-use crate::old::snapshot_0::sys::unix::str_to_cstring;
 use crate::old::snapshot_0::{wasi, Error, Result};
 use log::trace;
 use std::convert::TryInto;
@@ -9,61 +7,33 @@ use std::fs::File;
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
-    use nix::errno;
-    use nix::libc::unlinkat;
-
-    let path_cstr = str_to_cstring(resolved.path())?;
-
-    // nix doesn't expose unlinkat() yet
-    let res = unsafe { unlinkat(resolved.dirfd().as_raw_fd(), path_cstr.as_ptr(), 0) };
-    if res == 0 {
-        Ok(())
-    } else {
-        Err(host_impl::errno_from_nix(errno::Errno::last()))
-    }
+    use yanix::file::{unlinkat, AtFlag};
+    unlinkat(
+        resolved.dirfd().as_raw_fd(),
+        resolved.path(),
+        AtFlag::empty(),
+    )
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
-    use nix::{errno::Errno, libc::symlinkat};
-
-    let old_path_cstr = str_to_cstring(old_path)?;
-    let new_path_cstr = str_to_cstring(resolved.path())?;
+    use yanix::file::symlinkat;
 
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
 
-    let res = unsafe {
-        symlinkat(
-            old_path_cstr.as_ptr(),
-            resolved.dirfd().as_raw_fd(),
-            new_path_cstr.as_ptr(),
-        )
-    };
-    if res != 0 {
-        Err(host_impl::errno_from_nix(Errno::last()))
-    } else {
-        Ok(())
-    }
+    symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()).map_err(Into::into)
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
-    use nix::libc::renameat;
-    let old_path_cstr = str_to_cstring(resolved_old.path())?;
-    let new_path_cstr = str_to_cstring(resolved_new.path())?;
-
-    let res = unsafe {
-        renameat(
-            resolved_old.dirfd().as_raw_fd(),
-            old_path_cstr.as_ptr(),
-            resolved_new.dirfd().as_raw_fd(),
-            new_path_cstr.as_ptr(),
-        )
-    };
-    if res != 0 {
-        Err(host_impl::errno_from_nix(nix::errno::Errno::last()))
-    } else {
-        Ok(())
-    }
+    use yanix::file::renameat;
+    renameat(
+        resolved_old.dirfd().as_raw_fd(),
+        resolved_old.path(),
+        resolved_new.dirfd().as_raw_fd(),
+        resolved_new.path(),
+    )
+    .map_err(Into::into)
 }
 
 pub(crate) fn fd_readdir(
@@ -114,11 +84,11 @@ pub(crate) fn fd_readdir(
 struct DirIter(Dir);
 
 impl Iterator for DirIter {
-    type Item = nix::Result<Entry>;
+    type Item = yanix::Result<Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
         use libc::{dirent64, readdir64_r};
-        use nix::errno::Errno;
+        use yanix::errno::Errno;
 
         unsafe {
             // Note: POSIX specifies that portable applications should dynamically allocate a
@@ -131,7 +101,7 @@ impl Iterator for DirIter {
             // [1] https://github.com/rust-lang/rust/blob/master/src/libstd/sys/unix/fs.rs
             let mut ent = std::mem::MaybeUninit::<dirent64>::uninit();
             let mut result = std::ptr::null_mut();
-            if let Err(e) = Errno::result(readdir64_r(
+            if let Err(e) = Errno::from_result(readdir64_r(
                 (self.0).0.as_ptr(),
                 ent.as_mut_ptr(),
                 &mut result,
@@ -154,23 +124,17 @@ pub(crate) fn fd_advise(
     offset: wasi::__wasi_filesize_t,
     len: wasi::__wasi_filesize_t,
 ) -> Result<()> {
-    {
-        use nix::fcntl::{posix_fadvise, PosixFadviseAdvice};
-
-        let offset = offset.try_into()?;
-        let len = len.try_into()?;
-        let host_advice = match advice {
-            wasi::__WASI_ADVICE_DONTNEED => PosixFadviseAdvice::POSIX_FADV_DONTNEED,
-            wasi::__WASI_ADVICE_SEQUENTIAL => PosixFadviseAdvice::POSIX_FADV_SEQUENTIAL,
-            wasi::__WASI_ADVICE_WILLNEED => PosixFadviseAdvice::POSIX_FADV_WILLNEED,
-            wasi::__WASI_ADVICE_NOREUSE => PosixFadviseAdvice::POSIX_FADV_NOREUSE,
-            wasi::__WASI_ADVICE_RANDOM => PosixFadviseAdvice::POSIX_FADV_RANDOM,
-            wasi::__WASI_ADVICE_NORMAL => PosixFadviseAdvice::POSIX_FADV_NORMAL,
-            _ => return Err(Error::EINVAL),
-        };
-
-        posix_fadvise(file.as_raw_fd(), offset, len, host_advice)?;
-    }
-
-    Ok(())
+    use yanix::sys::{posix_fadvise, PosixFadviseAdvice};
+    let offset = offset.try_into()?;
+    let len = len.try_into()?;
+    let host_advice = match advice {
+        wasi::__WASI_ADVICE_DONTNEED => PosixFadviseAdvice::DontNeed,
+        wasi::__WASI_ADVICE_SEQUENTIAL => PosixFadviseAdvice::Sequential,
+        wasi::__WASI_ADVICE_WILLNEED => PosixFadviseAdvice::WillNeed,
+        wasi::__WASI_ADVICE_NOREUSE => PosixFadviseAdvice::NoReuse,
+        wasi::__WASI_ADVICE_RANDOM => PosixFadviseAdvice::Random,
+        wasi::__WASI_ADVICE_NORMAL => PosixFadviseAdvice::Normal,
+        _ => return Err(Error::EINVAL),
+    };
+    posix_fadvise(file.as_raw_fd(), offset, len, host_advice).map_err(Into::into)
 }
