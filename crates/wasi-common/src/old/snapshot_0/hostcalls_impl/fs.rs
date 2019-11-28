@@ -4,7 +4,6 @@ use crate::old::snapshot_0::ctx::WasiCtx;
 use crate::old::snapshot_0::fdentry::{Descriptor, FdEntry};
 use crate::old::snapshot_0::helpers::*;
 use crate::old::snapshot_0::memory::*;
-use crate::old::snapshot_0::sys::fdentry_impl::determine_type_rights;
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::path_open_rights;
 use crate::old::snapshot_0::sys::{host_impl, hostcalls_impl};
 use crate::old::snapshot_0::{helpers, host, wasi, wasi32, Error, Result};
@@ -544,6 +543,7 @@ pub(crate) unsafe fn path_open(
     let (needed_base, needed_inheriting) =
         path_open_rights(fs_rights_base, fs_rights_inheriting, oflags, fs_flags);
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let parent_inheriting = fe.rights_inheriting;
     let resolved = path_get(
         fe,
         needed_base,
@@ -563,12 +563,16 @@ pub(crate) unsafe fn path_open(
         != 0;
 
     let fd = hostcalls_impl::path_open(resolved, read, write, oflags, fs_flags)?;
-
-    // Determine the type of the new file descriptor and which rights contradict with this type
-    let (_ty, max_base, max_inheriting) = determine_type_rights(&fd)?;
     let mut fe = FdEntry::from(fd)?;
-    fe.rights_base &= max_base;
-    fe.rights_inheriting &= max_inheriting;
+    // We need to manually deny the rights which are not parent's inheriting rights.
+    // This should not be needed, but currently determine_type_and_access_rights,
+    // which is used by FdEntry::from, may grant more rights than requested.
+    //
+    // This is a hotfix. It needs to be discussed whether or not `path_open`
+    // returning a descriptor with more rights than specified
+    // in `rights_base` and `rights_inheriting` violates the WASI spec.
+    fe.rights_base &= parent_inheriting;
+    fe.rights_inheriting &= parent_inheriting;
     let guest_fd = wasi_ctx.insert_fd_entry(fe)?;
 
     trace!("     | *fd={:?}", guest_fd);
