@@ -22,6 +22,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::ptr::NonNull;
 use std::rc::Rc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
@@ -31,7 +32,6 @@ use wasmtime_environ::wasm::{
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
-use std::ptr::NonNull;
 
 thread_local! {
     /// A stack of currently-running `Instance`s, if any.
