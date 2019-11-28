@@ -1,61 +1,44 @@
 use crate::old::snapshot_0::sys::dev_null;
-use crate::old::snapshot_0::sys::fdentry_impl::{determine_type_and_access_rights, OsFile};
+use crate::old::snapshot_0::sys::fdentry_impl::{
+    descriptor_as_oshandle, determine_type_and_access_rights, OsHandle,
+};
 use crate::old::snapshot_0::{wasi, Error, Result};
+use std::marker::PhantomData;
+use std::mem::ManuallyDrop;
+use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::{fs, io};
 
 #[derive(Debug)]
 pub(crate) enum Descriptor {
-    OsFile(OsFile),
+    OsHandle(OsHandle),
     Stdin,
     Stdout,
     Stderr,
 }
 
 impl Descriptor {
-    pub(crate) fn as_file(&self) -> Result<&OsFile> {
+    /// Return a reference to the `OsHandle` treating it as an actual file/dir, and
+    /// allowing operations which require an actual file and not just a stream or
+    /// socket file descriptor.
+    pub(crate) fn as_file(&self) -> Result<&OsHandle> {
         match self {
-            Self::OsFile(file) => Ok(file),
+            Self::OsHandle(file) => Ok(file),
             _ => Err(Error::EBADF),
         }
     }
 
-    pub(crate) fn as_file_mut(&mut self) -> Result<&mut OsFile> {
+    /// Like `as_file`, but return a mutable reference.
+    pub(crate) fn as_file_mut(&mut self) -> Result<&mut OsHandle> {
         match self {
-            Self::OsFile(file) => Ok(file),
+            Self::OsHandle(file) => Ok(file),
             _ => Err(Error::EBADF),
         }
     }
 
-    pub(crate) fn is_file(&self) -> bool {
-        match self {
-            Self::OsFile(_) => true,
-            _ => false,
-        }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn is_stdin(&self) -> bool {
-        match self {
-            Self::Stdin => true,
-            _ => false,
-        }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn is_stdout(&self) -> bool {
-        match self {
-            Self::Stdout => true,
-            _ => false,
-        }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn is_stderr(&self) -> bool {
-        match self {
-            Self::Stderr => true,
-            _ => false,
-        }
+    /// Return an `OsHandle`, which may be a stream or socket file descriptor.
+    pub(crate) fn as_os_handle<'descriptor>(&'descriptor self) -> OsHandleRef<'descriptor> {
+        descriptor_as_oshandle(self)
     }
 }
 
@@ -82,16 +65,12 @@ impl FdEntry {
         unsafe { determine_type_and_access_rights(&file) }.map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 file_type,
-                descriptor: Descriptor::OsFile(OsFile::from(file)),
+                descriptor: Descriptor::OsHandle(OsHandle::from(file)),
                 rights_base,
                 rights_inheriting,
                 preopen_path: None,
             },
         )
-    }
-
-    pub(crate) fn duplicate(file: &fs::File) -> Result<Self> {
-        Self::from(file.try_clone()?)
     }
 
     pub(crate) fn duplicate_stdin() -> Result<Self> {
@@ -182,5 +161,37 @@ impl FdEntry {
         } else {
             Ok(())
         }
+    }
+}
+
+/// This allows an `OsHandle` to be temporarily borrowed from a
+/// `Descriptor`. The `Descriptor` continues to own the resource,
+/// and `OsHandleRef`'s lifetime parameter ensures that it doesn't
+/// outlive the `Descriptor`.
+pub(crate) struct OsHandleRef<'descriptor> {
+    handle: ManuallyDrop<OsHandle>,
+    _ref: PhantomData<&'descriptor Descriptor>,
+}
+
+impl<'descriptor> OsHandleRef<'descriptor> {
+    pub(crate) fn new(handle: ManuallyDrop<OsHandle>) -> Self {
+        OsHandleRef {
+            handle,
+            _ref: PhantomData,
+        }
+    }
+}
+
+impl<'descriptor> Deref for OsHandleRef<'descriptor> {
+    type Target = fs::File;
+
+    fn deref(&self) -> &Self::Target {
+        &self.handle
+    }
+}
+
+impl<'descriptor> DerefMut for OsHandleRef<'descriptor> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.handle
     }
 }

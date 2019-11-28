@@ -1,5 +1,5 @@
 use super::super::dir::{Dir, Entry, SeekLoc};
-use super::osfile::OsFile;
+use super::oshandle::OsHandle;
 use crate::hostcalls_impl::{Dirent, PathGet};
 use crate::sys::host_impl;
 use crate::sys::unix::str_to_cstring;
@@ -205,12 +205,12 @@ pub(crate) fn fd_advise(
 }
 
 pub(crate) fn fd_readdir<'a>(
-    os_file: &'a mut OsFile,
+    os_handle: &'a mut OsHandle,
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<impl Iterator<Item = Result<Dirent>> + 'a> {
     use std::sync::Mutex;
 
-    let dir = match os_file.dir {
+    let dir = match os_handle.dir {
         Some(ref mut dir) => dir,
         None => {
             // We need to duplicate the fd, because `opendir(3)`:
@@ -219,9 +219,9 @@ pub(crate) fn fd_readdir<'a>(
             //     descriptor, or to modify the state of the associated description other
             //     than by means of closedir(), readdir(), readdir_r(), or rewinddir(),
             //     the behaviour is undefined.
-            let fd = (*os_file).try_clone()?;
+            let fd = (*os_handle).try_clone()?;
             let dir = Dir::from(fd)?;
-            os_file.dir.get_or_insert(Mutex::new(dir))
+            os_handle.dir.get_or_insert(Mutex::new(dir))
         }
     };
     let mut dir = dir.lock().unwrap();

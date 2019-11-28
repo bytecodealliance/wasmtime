@@ -161,7 +161,7 @@ pub(crate) unsafe fn fd_read(
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READ, 0)?
     {
-        Descriptor::OsFile(file) => file.read_vectored(&mut iovs),
+        Descriptor::OsHandle(file) => file.read_vectored(&mut iovs),
         Descriptor::Stdin => io::stdin().lock().read_vectored(&mut iovs),
         _ => return Err(Error::EBADF),
     };
@@ -180,33 +180,25 @@ pub(crate) unsafe fn fd_renumber(
 ) -> Result<()> {
     trace!("fd_renumber(from={:?}, to={:?})", from, to);
 
-    if !wasi_ctx.contains_fd_entry(from) || !wasi_ctx.contains_fd_entry(to) {
+    if !wasi_ctx.contains_fd_entry(from) {
         return Err(Error::EBADF);
     }
-
-    let from_fe = wasi_ctx.get_fd_entry(from)?;
-    let to_fe = wasi_ctx.get_fd_entry(to)?;
 
     // Don't allow renumbering over a pre-opened resource.
     // TODO: Eventually, we do want to permit this, once libpreopen in
     // userspace is capable of removing entries from its tables as well.
-    if from_fe.preopen_path.is_some() || to_fe.preopen_path.is_some() {
+    let from_fe = wasi_ctx.get_fd_entry(from)?;
+    if from_fe.preopen_path.is_some() {
         return Err(Error::ENOTSUP);
     }
-
-    // check if stdio fds
-    // TODO should we renumber stdio fds?
-    if !from_fe.as_descriptor(0, 0)?.is_file() || !to_fe.as_descriptor(0, 0)?.is_file() {
-        return Err(Error::EBADF);
+    if let Ok(to_fe) = wasi_ctx.get_fd_entry(to) {
+        if to_fe.preopen_path.is_some() {
+            return Err(Error::ENOTSUP);
+        }
     }
 
-    let fe_from_dup = from_fe
-        .as_descriptor(0, 0)?
-        .as_file()
-        .and_then(|file| FdEntry::duplicate(file))?;
-
-    wasi_ctx.insert_fd_entry_at(to, fe_from_dup);
-    wasi_ctx.remove_fd_entry(from)?;
+    let fe = wasi_ctx.remove_fd_entry(from)?;
+    wasi_ctx.insert_fd_entry_at(to, fe);
 
     Ok(())
 }
@@ -279,9 +271,12 @@ pub(crate) unsafe fn fd_fdstat_get(
     trace!("fd_fdstat_get(fd={:?}, fdstat_ptr={:#x?})", fd, fdstat_ptr);
 
     let mut fdstat = dec_fdstat_byref(memory, fdstat_ptr)?;
-    let wasi_fd = wasi_ctx.get_fd_entry(fd)?.as_descriptor(0, 0)?.as_file()?;
+    let host_fd = wasi_ctx
+        .get_fd_entry(fd)?
+        .as_descriptor(0, 0)?
+        .as_os_handle();
 
-    let fs_flags = hostcalls_impl::fd_fdstat_get(wasi_fd)?;
+    let fs_flags = hostcalls_impl::fd_fdstat_get(&host_fd)?;
 
     let fe = wasi_ctx.get_fd_entry(fd)?;
     fdstat.fs_filetype = fe.file_type;
@@ -301,9 +296,12 @@ pub(crate) unsafe fn fd_fdstat_set_flags(
 ) -> Result<()> {
     trace!("fd_fdstat_set_flags(fd={:?}, fdflags={:#x?})", fd, fdflags);
 
-    let fd = wasi_ctx.get_fd_entry(fd)?.as_descriptor(0, 0)?.as_file()?;
+    let fd = wasi_ctx
+        .get_fd_entry(fd)?
+        .as_descriptor(0, 0)?
+        .as_os_handle();
 
-    hostcalls_impl::fd_fdstat_set_flags(fd, fdflags)
+    hostcalls_impl::fd_fdstat_set_flags(&fd, fdflags)
 }
 
 pub(crate) unsafe fn fd_fdstat_set_rights(
@@ -365,7 +363,7 @@ pub(crate) unsafe fn fd_write(
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_WRITE, 0)?
     {
-        Descriptor::OsFile(file) => file.write_vectored(&iovs)?,
+        Descriptor::OsHandle(file) => file.write_vectored(&iovs)?,
         Descriptor::Stdin => return Err(Error::EBADF),
         Descriptor::Stdout => {
             // lock for the duration of the scope

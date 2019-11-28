@@ -5,9 +5,9 @@ use std::os::unix::prelude::{AsRawFd, RawFd};
 use std::sync::Mutex;
 
 #[derive(Debug)]
-pub(crate) struct OsFile {
+pub(crate) struct OsHandle {
     pub(crate) file: fs::File,
-    // In case that this `OsFile` actually refers to a directory,
+    // In case that this `OsHandle` actually refers to a directory,
     // when the client makes a `fd_readdir` syscall on this descriptor,
     // we will need to cache the `libc::DIR` pointer manually in order
     // to be able to seek on it later. While on Linux, this is handled
@@ -21,19 +21,19 @@ pub(crate) struct OsFile {
     pub(crate) dir: Option<Mutex<Dir>>,
 }
 
-impl From<fs::File> for OsFile {
+impl From<fs::File> for OsHandle {
     fn from(file: fs::File) -> Self {
         Self { file, dir: None }
     }
 }
 
-impl AsRawFd for OsFile {
+impl AsRawFd for OsHandle {
     fn as_raw_fd(&self) -> RawFd {
         self.file.as_raw_fd()
     }
 }
 
-impl Deref for OsFile {
+impl Deref for OsHandle {
     type Target = fs::File;
 
     fn deref(&self) -> &Self::Target {
@@ -41,7 +41,7 @@ impl Deref for OsFile {
     }
 }
 
-impl DerefMut for OsFile {
+impl DerefMut for OsHandle {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.file
     }

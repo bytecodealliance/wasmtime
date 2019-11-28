@@ -1,11 +1,13 @@
-use crate::fdentry::Descriptor;
+use crate::fdentry::{Descriptor, OsHandleRef};
 use crate::{wasi, Error, Result};
+use std::fs::File;
 use std::io;
+use std::mem::ManuallyDrop;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
-        pub(crate) use super::linux::osfile::*;
+        pub(crate) use super::linux::oshandle::*;
         pub(crate) use super::linux::fdentry_impl::*;
     } else if #[cfg(any(
             target_os = "macos",
@@ -15,7 +17,7 @@ cfg_if::cfg_if! {
             target_os = "ios",
             target_os = "dragonfly"
     ))] {
-        pub(crate) use super::bsd::osfile::*;
+        pub(crate) use super::bsd::oshandle::*;
         pub(crate) use super::bsd::fdentry_impl::*;
     }
 }
@@ -23,12 +25,20 @@ cfg_if::cfg_if! {
 impl AsRawFd for Descriptor {
     fn as_raw_fd(&self) -> RawFd {
         match self {
-            Self::OsFile(file) => file.as_raw_fd(),
+            Self::OsHandle(file) => file.as_raw_fd(),
             Self::Stdin => io::stdin().as_raw_fd(),
             Self::Stdout => io::stdout().as_raw_fd(),
             Self::Stderr => io::stderr().as_raw_fd(),
         }
     }
+}
+
+pub(crate) fn descriptor_as_oshandle<'lifetime>(
+    desc: &'lifetime Descriptor,
+) -> OsHandleRef<'lifetime> {
+    OsHandleRef::new(ManuallyDrop::new(OsHandle::from(unsafe {
+        File::from_raw_fd(desc.as_raw_fd())
+    })))
 }
 
 /// This function is unsafe because it operates on a raw file descriptor.

@@ -3,21 +3,21 @@ use std::ops::{Deref, DerefMut};
 use std::os::unix::prelude::{AsRawFd, RawFd};
 
 #[derive(Debug)]
-pub(crate) struct OsFile(fs::File);
+pub(crate) struct OsHandle(fs::File);
 
-impl From<fs::File> for OsFile {
+impl From<fs::File> for OsHandle {
     fn from(file: fs::File) -> Self {
         Self(file)
     }
 }
 
-impl AsRawFd for OsFile {
+impl AsRawFd for OsHandle {
     fn as_raw_fd(&self) -> RawFd {
         self.0.as_raw_fd()
     }
 }
 
-impl Deref for OsFile {
+impl Deref for OsHandle {
     type Target = fs::File;
 
     fn deref(&self) -> &Self::Target {
@@ -25,7 +25,7 @@ impl Deref for OsFile {
     }
 }
 
-impl DerefMut for OsFile {
+impl DerefMut for OsHandle {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
