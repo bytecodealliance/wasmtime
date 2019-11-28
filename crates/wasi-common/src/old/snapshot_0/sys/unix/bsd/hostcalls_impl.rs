@@ -1,12 +1,11 @@
-use super::super::dir::{Dir, Entry, SeekLoc};
 use super::oshandle::OsHandle;
-use crate::old::snapshot_0::hostcalls_impl::{Dirent, PathGet};
+use crate::old::snapshot_0::host::Dirent;
+use crate::old::snapshot_0::hostcalls_impl::PathGet;
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::{wasi, Error, Result};
 use std::convert::TryInto;
 use std::fs::File;
 use std::os::unix::prelude::AsRawFd;
-use std::sync::MutexGuard;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use yanix::{
@@ -191,6 +190,7 @@ pub(crate) fn fd_readdir<'a>(
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<impl Iterator<Item = Result<Dirent>> + 'a> {
     use std::sync::Mutex;
+    use yanix::dir::{Dir, DirIter, Entry, SeekLoc};
 
     let dir = match os_handle.dir {
         Some(ref mut dir) => dir,
@@ -219,7 +219,7 @@ pub(crate) fn fd_readdir<'a>(
         dir.seek(loc);
     }
 
-    Ok(DirIter(dir).map(|entry| {
+    Ok(DirIter::new(dir).map(|entry| {
         let (entry, loc): (Entry, SeekLoc) = entry?;
         Ok(Dirent {
             name: entry
@@ -236,37 +236,4 @@ pub(crate) fn fd_readdir<'a>(
             cookie: loc.to_raw().try_into()?,
         })
     }))
-}
-
-struct DirIter<'a>(MutexGuard<'a, Dir>);
-
-impl<'a> Iterator for DirIter<'a> {
-    type Item = yanix::Result<(Entry, SeekLoc)>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        use libc::readdir;
-        use yanix::{errno::Errno, Error};
-
-        unsafe {
-            let errno = Errno::last();
-            let ent = readdir((self.0).0.as_ptr());
-            if ent.is_null() {
-                if errno != Errno::last() {
-                    // TODO This should be verified on different BSD-flavours.
-                    //
-                    // According to 4.3BSD/POSIX.1-2001 man pages, there was an error
-                    // if the errno value has changed at some point during the sequence
-                    // of readdir calls.
-                    Some(Err(Error::Errno(Errno::last())))
-                } else {
-                    // Not an error. We've simply reached the end of the stream.
-                    None
-                }
-            } else {
-                let entry = Entry(*ent);
-                let loc = self.0.tell();
-                Some(Ok((entry, loc)))
-            }
-        }
-    }
 }

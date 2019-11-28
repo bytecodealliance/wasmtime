@@ -1,7 +1,8 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 use crate::old::snapshot_0::helpers::systemtime_to_timestamp;
-use crate::old::snapshot_0::hostcalls_impl::{FileType, PathGet};
+use crate::old::snapshot_0::host::FileType;
+use crate::old::snapshot_0::hostcalls_impl::PathGet;
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::{wasi, Error, Result};
 use std::convert::TryInto;

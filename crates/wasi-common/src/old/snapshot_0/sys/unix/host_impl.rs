@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-use crate::old::snapshot_0::hostcalls_impl::FileType;
+use crate::old::snapshot_0::host::FileType;
 use crate::old::snapshot_0::{helpers, wasi, Error, Result};
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
@@ -235,4 +235,18 @@ pub(crate) fn dirent_filetype_from_host(
 /// `__WASI_ERRNO_ILSEQ` error is returned.
 pub(crate) fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
     helpers::path_from_slice(s.as_ref().as_bytes()).map(String::from)
+}
+
+impl From<yanix::dir::FileType> for FileType {
+    fn from(ft: yanix::dir::FileType) -> Self {
+        use yanix::dir::FileType::*;
+        match ft {
+            RegularFile => Self::RegularFile,
+            Symlink => Self::Symlink,
+            Directory => Self::Directory,
+            BlockDevice => Self::BlockDevice,
+            CharacterDevice => Self::CharacterDevice,
+            /* Unknown | Socket | Fifo */ _ => Self::Unknown,
+        }
+    }
 }

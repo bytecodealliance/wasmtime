@@ -1,5 +1,5 @@
-use super::super::dir::{Dir, Entry, SeekLoc};
-use crate::old::snapshot_0::hostcalls_impl::{Dirent, PathGet};
+use crate::old::snapshot_0::host::Dirent;
+use crate::old::snapshot_0::hostcalls_impl::PathGet;
 use crate::old::snapshot_0::{wasi, Error, Result};
 use log::trace;
 use std::convert::TryInto;
@@ -40,6 +40,8 @@ pub(crate) fn fd_readdir(
     fd: &File,
     cookie: wasi::__wasi_dircookie_t,
 ) -> Result<impl Iterator<Item = Result<Dirent>>> {
+    use yanix::dir::{Dir, DirIter, Entry, SeekLoc};
+
     // We need to duplicate the fd, because `opendir(3)`:
     //     After a successful call to fdopendir(), fd is used internally by the implementation,
     //     and should not otherwise be used by the application.
@@ -49,7 +51,7 @@ pub(crate) fn fd_readdir(
     // Still, rewinddir will be needed because the two file descriptors
     // share progress. But we can safely execute closedir now.
     let fd = fd.try_clone()?;
-    let mut dir = Dir::from(fd)?;
+    let mut dir = Box::new(Dir::from(fd)?);
 
     // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
     // new items may not be returned to the caller.
@@ -67,7 +69,7 @@ pub(crate) fn fd_readdir(
         dir.seek(loc);
     }
 
-    Ok(DirIter(dir).map(|entry| {
+    Ok(DirIter::new(dir).map(|entry| {
         let entry: Entry = entry?;
         Ok(Dirent {
             name: entry // TODO can we reuse path_from_host for CStr?
@@ -79,43 +81,6 @@ pub(crate) fn fd_readdir(
             cookie: entry.seek_loc().to_raw().try_into()?,
         })
     }))
-}
-
-struct DirIter(Dir);
-
-impl Iterator for DirIter {
-    type Item = yanix::Result<Entry>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        use libc::{dirent64, readdir64_r};
-        use yanix::errno::Errno;
-
-        unsafe {
-            // Note: POSIX specifies that portable applications should dynamically allocate a
-            // buffer with room for a `d_name` field of size `pathconf(..., _PC_NAME_MAX)` plus 1
-            // for the NUL byte. It doesn't look like the std library does this; it just uses
-            // fixed-sized buffers (and libc's dirent seems to be sized so this is appropriate).
-            // Probably fine here too then.
-            //
-            // See `impl Iterator for ReadDir` [1] for more details.
-            // [1] https://github.com/rust-lang/rust/blob/master/src/libstd/sys/unix/fs.rs
-            let mut ent = std::mem::MaybeUninit::<dirent64>::uninit();
-            let mut result = std::ptr::null_mut();
-            if let Err(e) = Errno::from_result(readdir64_r(
-                (self.0).0.as_ptr(),
-                ent.as_mut_ptr(),
-                &mut result,
-            )) {
-                return Some(Err(e));
-            }
-            if result.is_null() {
-                None
-            } else {
-                assert_eq!(result, ent.as_mut_ptr(), "readdir_r specification violated");
-                Some(Ok(Entry(ent.assume_init())))
-            }
-        }
-    }
 }
 
 pub(crate) fn fd_advise(

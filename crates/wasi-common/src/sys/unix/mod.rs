@@ -2,7 +2,6 @@ pub(crate) mod fdentry_impl;
 pub(crate) mod host_impl;
 pub(crate) mod hostcalls_impl;
 
-mod dir;
 mod filetime;
 
 #[cfg(any(

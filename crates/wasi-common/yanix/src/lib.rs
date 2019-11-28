@@ -10,6 +10,7 @@
 #![cfg(unix)]
 
 pub mod clock;
+pub mod dir;
 pub mod errno;
 pub mod file;
 pub mod poll;

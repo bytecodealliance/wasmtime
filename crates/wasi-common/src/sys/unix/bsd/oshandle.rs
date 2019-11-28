@@ -1,8 +1,8 @@
-use super::super::dir::Dir;
 use std::fs;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::prelude::{AsRawFd, RawFd};
 use std::sync::Mutex;
+use yanix::dir::Dir;
 
 #[derive(Debug)]
 pub(crate) struct OsHandle {
