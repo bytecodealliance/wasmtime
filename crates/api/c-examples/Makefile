@@ -63,7 +63,7 @@ else
   $(error C_COMP set to unknown compiler, must be clang or gcc)
 endif
 
-WASMTIME_BIN_DIR = ${WASMTIME_API_DIR}/../target/${WASMTIME_API_MODE}
+WASMTIME_BIN_DIR = ${WASMTIME_API_DIR}/../../target/${WASMTIME_API_MODE}
 WASMTIME_C_LIB_DIR = ${WASMTIME_BIN_DIR}
 WASMTIME_C_LIBS = wasmtime
 WASMTIME_CC_LIBS = $(error unsupported c++)

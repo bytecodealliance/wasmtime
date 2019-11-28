@@ -722,6 +722,8 @@ impl wasm_name_t {
     }
 }
 
+/// Note that this function does not perform validation on the wasm
+/// binary. To perform validation, use `wasm_module_validate`.
 #[no_mangle]
 pub unsafe extern "C" fn wasm_module_new(
     store: *mut wasm_store_t,
@@ -729,7 +731,7 @@ pub unsafe extern "C" fn wasm_module_new(
 ) -> *mut wasm_module_t {
     let binary = (*binary).as_slice();
     let store = &(*store).store;
-    let module = Module::new(store, binary).expect("module");
+    let module = Module::new_unchecked(store, binary).expect("module");
     let imports = module
         .imports()
         .iter()
@@ -754,6 +756,16 @@ pub unsafe extern "C" fn wasm_module_new(
         exports,
     });
     Box::into_raw(module)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_module_validate(
+    store: *mut wasm_store_t,
+    binary: *const wasm_byte_vec_t,
+) -> bool {
+    let binary = (*binary).as_slice();
+    let store = &(*store).store;
+    Module::validate(store, binary).is_ok()
 }
 
 #[no_mangle]
