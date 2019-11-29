@@ -7,9 +7,9 @@ cfg_if::cfg_if! {
     if #[cfg(any(target_os = "linux",
                  target_os = "android",
                  target_os = "emscripten"))] {
-        use libc::dirent64 as dirent;
+        use libc::{dirent64 as dirent, readdir64 as readdir};
     } else {
-        use libc::dirent;
+        use libc::{dirent, readdir};
     }
 }
 
@@ -102,7 +102,8 @@ pub struct Entry {
         target_os = "ios",
         target_os = "freebsd",
         target_os = "openbsd",
-        target_os = "netbsd"
+        target_os = "netbsd",
+        target_os = "dragonfly"
     ))]
     loc: SeekLoc,
 }
@@ -164,7 +165,8 @@ impl Entry {
         target_os = "ios",
         target_os = "freebsd",
         target_os = "openbsd",
-        target_os = "netbsd"
+        target_os = "netbsd",
+        target_os = "dragonfly"
     ))]
     pub fn seek_loc(&self) -> SeekLoc {
         self.loc
@@ -246,83 +248,35 @@ where
     type Item = Result<Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe { iter_impl::get_next_entry(&self.0) }
-    }
-}
-
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd"
-))]
-mod iter_impl {
-    use super::super::{errno::Errno, Error, Result};
-    use super::{Dir, Entry};
-    use std::ops::Deref;
-
-    pub(super) unsafe fn get_next_entry<T: Deref<Target = Dir>>(dir: &T) -> Option<Result<Entry>> {
-        let errno = Errno::last();
-        let dirent = libc::readdir(dir.0.as_ptr());
-        if dirent.is_null() {
-            if errno != Errno::last() {
-                // TODO This should be verified on different BSD-flavours.
-                //
-                // According to 4.3BSD/POSIX.1-2001 man pages, there was an error
-                // if the errno value has changed at some point during the sequence
-                // of readdir calls.
-                Some(Err(Error::Errno(Errno::last())))
+        unsafe {
+            let errno = Errno::last();
+            let dirent = readdir((self.0).0.as_ptr());
+            if dirent.is_null() {
+                if errno != Errno::last() {
+                    // TODO This should be verified on different BSD-flavours.
+                    //
+                    // According to 4.3BSD/POSIX.1-2001 man pages, there was an error
+                    // if the errno value has changed at some point during the sequence
+                    // of readdir calls.
+                    Some(Err(Error::Errno(Errno::last())))
+                } else {
+                    // Not an error. We've simply reached the end of the stream.
+                    None
+                }
             } else {
-                // Not an error. We've simply reached the end of the stream.
-                None
+                Some(Ok(Entry {
+                    dirent: *dirent,
+                    #[cfg(any(
+                        target_os = "macos",
+                        target_os = "ios",
+                        target_os = "freebsd",
+                        target_os = "openbsd",
+                        target_os = "netbsd",
+                        target_os = "dragonfly"
+                    ))]
+                    loc: (self.0).tell(),
+                }))
             }
-        } else {
-            let loc = dir.tell();
-            Some(Ok(Entry {
-                dirent: *dirent,
-                loc,
-            }))
-        }
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "emscripten"))]
-mod iter_impl {
-    use super::super::{errno::Errno, Result};
-    use super::{Dir, Entry};
-    use std::ops::Deref;
-
-    pub(super) unsafe fn get_next_entry<T: Deref<Target = Dir>>(dir: &T) -> Option<Result<Entry>> {
-        use libc::{dirent64, readdir64_r};
-        // Note: POSIX specifies that portable applications should dynamically allocate a
-        // buffer with room for a `d_name` field of size `pathconf(..., _PC_NAME_MAX)` plus 1
-        // for the NUL byte. It doesn't look like the std library does this; it just uses
-        // fixed-sized buffers (and libc's dirent seems to be sized so this is appropriate).
-        // Probably fine here too then.
-        //
-        // See `impl Iterator for ReadDir` [1] for more details.
-        // [1] https://github.com/rust-lang/rust/blob/master/src/libstd/sys/unix/fs.rs
-        let mut dirent = std::mem::MaybeUninit::<dirent64>::uninit();
-        let mut result = std::ptr::null_mut();
-        if let Err(e) = Errno::from_success_code(readdir64_r(
-            dir.0.as_ptr(),
-            dirent.as_mut_ptr(),
-            &mut result,
-        )) {
-            return Some(Err(e));
-        }
-        if result.is_null() {
-            None
-        } else {
-            assert_eq!(
-                result,
-                dirent.as_mut_ptr(),
-                "readdir_r specification violated"
-            );
-            Some(Ok(Entry {
-                dirent: dirent.assume_init(),
-            }))
         }
     }
 }
