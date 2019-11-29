@@ -1,5 +1,3 @@
-use super::oshandle::OsHandle;
-use crate::old::snapshot_0::host::Dirent;
 use crate::old::snapshot_0::hostcalls_impl::PathGet;
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::{wasi, Error, Result};
@@ -185,55 +183,31 @@ pub(crate) fn fd_advise(
     Ok(())
 }
 
-pub(crate) fn fd_readdir<'a>(
-    os_handle: &'a mut OsHandle,
-    cookie: wasi::__wasi_dircookie_t,
-) -> Result<impl Iterator<Item = Result<Dirent>> + 'a> {
-    use std::sync::Mutex;
-    use yanix::dir::{Dir, DirIter, Entry, SeekLoc};
+pub(crate) mod fd_readdir_impl {
+    use crate::old::snapshot_0::sys::fdentry_impl::OsHandle;
+    use crate::old::snapshot_0::Result;
+    use std::sync::{Mutex, MutexGuard};
+    use yanix::dir::Dir;
 
-    let dir = match os_handle.dir {
-        Some(ref mut dir) => dir,
-        None => {
-            // We need to duplicate the fd, because `opendir(3)`:
-            //     Upon successful return from fdopendir(), the file descriptor is under
-            //     control of the system, and if any attempt is made to close the file
-            //     descriptor, or to modify the state of the associated description other
-            //     than by means of closedir(), readdir(), readdir_r(), or rewinddir(),
-            //     the behaviour is undefined.
-            let fd = (*os_handle).try_clone()?;
-            let dir = Dir::from(fd)?;
-            os_handle.dir.get_or_insert(Mutex::new(dir))
-        }
-    };
-    let mut dir = dir.lock().unwrap();
-
-    // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
-    // new items may not be returned to the caller.
-    if cookie == wasi::__WASI_DIRCOOKIE_START {
-        log::trace!("     | fd_readdir: doing rewinddir");
-        dir.rewind();
-    } else {
-        log::trace!("     | fd_readdir: doing seekdir to {}", cookie);
-        let loc = unsafe { SeekLoc::from_raw(cookie as i64) };
-        dir.seek(loc);
+    pub(crate) fn get_dir_from_os_handle<'a>(
+        os_handle: &'a mut OsHandle,
+    ) -> Result<MutexGuard<'a, Dir>> {
+        let dir = match os_handle.dir {
+            Some(ref mut dir) => dir,
+            None => {
+                // We need to duplicate the fd, because `opendir(3)`:
+                //     Upon successful return from fdopendir(), the file descriptor is under
+                //     control of the system, and if any attempt is made to close the file
+                //     descriptor, or to modify the state of the associated description other
+                //     than by means of closedir(), readdir(), readdir_r(), or rewinddir(),
+                //     the behaviour is undefined.
+                let fd = (*os_handle).try_clone()?;
+                let dir = Dir::from(fd)?;
+                os_handle.dir.get_or_insert(Mutex::new(dir))
+            }
+        };
+        // Note that from this point on, until the end of the parent scope (i.e., enclosing this
+        // function), we're locking the `Dir` member of this `OsHandle`.
+        Ok(dir.lock().unwrap())
     }
-
-    Ok(DirIter::new(dir).map(|entry| {
-        let (entry, loc): (Entry, SeekLoc) = entry?;
-        Ok(Dirent {
-            name: entry
-                // TODO can we reuse path_from_host for CStr?
-                .file_name()
-                .to_str()?
-                .to_owned(),
-            ino: entry.ino(),
-            ftype: entry.file_type().into(),
-            // Set cookie manually:
-            // * on macOS d_seekoff is not set for some reason
-            // * on FreeBSD d_seekoff doesn't exist; there is d_off but it is
-            //   not equivalent to the value read from telldir call
-            cookie: loc.to_raw().try_into()?,
-        })
-    }))
 }

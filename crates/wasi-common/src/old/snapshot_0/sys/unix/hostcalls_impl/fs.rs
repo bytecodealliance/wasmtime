@@ -1,9 +1,9 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 use crate::old::snapshot_0::helpers::systemtime_to_timestamp;
-use crate::old::snapshot_0::host::FileType;
+use crate::old::snapshot_0::host::{Dirent, FileType};
 use crate::old::snapshot_0::hostcalls_impl::PathGet;
-use crate::old::snapshot_0::sys::host_impl;
+use crate::old::snapshot_0::sys::{fdentry_impl::OsHandle, host_impl};
 use crate::old::snapshot_0::{wasi, Error, Result};
 use std::convert::TryInto;
 use std::fs::{File, Metadata};
@@ -293,4 +293,40 @@ pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
         AtFlag::REMOVEDIR,
     )
     .map_err(Into::into)
+}
+
+pub(crate) fn fd_readdir<'a>(
+    os_handle: &'a mut OsHandle,
+    cookie: wasi::__wasi_dircookie_t,
+) -> Result<impl Iterator<Item = Result<Dirent>> + 'a> {
+    use yanix::dir::{DirIter, Entry, SeekLoc};
+
+    // Get an instance of `Dir`; this is host-specific due to intricasies
+    // of managing a dir stream between Linux and BSD *nixes
+    let mut dir = fd_readdir_impl::get_dir_from_os_handle(os_handle)?;
+
+    // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
+    // new items may not be returned to the caller.
+    if cookie == wasi::__WASI_DIRCOOKIE_START {
+        log::trace!("     | fd_readdir: doing rewinddir");
+        dir.rewind();
+    } else {
+        log::trace!("     | fd_readdir: doing seekdir to {}", cookie);
+        let loc = unsafe { SeekLoc::from_raw(cookie as i64) };
+        dir.seek(loc);
+    }
+
+    Ok(DirIter::new(dir).map(|entry| {
+        let entry: Entry = entry?;
+        Ok(Dirent {
+            name: entry
+                // TODO can we reuse path_from_host for CStr?
+                .file_name()
+                .to_str()?
+                .to_owned(),
+            ino: entry.ino(),
+            ftype: entry.file_type().into(),
+            cookie: entry.seek_loc().to_raw().try_into()?,
+        })
+    }))
 }
