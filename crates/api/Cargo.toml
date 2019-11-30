@@ -35,7 +35,7 @@ serde = { "version" = "1.0.94", features = ["derive"] }
 pretty_env_logger = "0.3.0"
 wasmtime-wast = { path = "../wast" }
 wasmtime-wasi = { path = "../wasi" }
-rayon = "1.1"
+rayon = "1.2.1"
 file-per-thread-logger = "0.1.1"
 wat = "1.0"
 
