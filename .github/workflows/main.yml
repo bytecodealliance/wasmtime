@@ -133,7 +133,7 @@ jobs:
 
   # Builds a Python wheel (package) for Windows/Mac/Linux. Note that we're
   # careful to create binary-compatible releases here to old releases of
-  # Windows/Mac/Linux. This will also build wheels for Python 3.6 and 3.7.
+  # Windows/Mac/Linux. This will also build wheels for Python 3.6, 3.7 and 3.8.
   wheels:
     name: Python Wheel
     runs-on: ${{ matrix.os }}
@@ -178,7 +178,29 @@ jobs:
         architecture: x64
       if: matrix.os != 'ubuntu-latest'
     - name: Build Python 3.7
-      run: $CENTOS sh ci/setup_centos6_python37.sh
+      run: $CENTOS sh ci/setup_centos6_python3.sh 3.7.3
+      if: matrix.os == 'ubuntu-latest'
+    - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
+      shell: bash
+    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
+      shell: bash
+
+    # Clear the build directory between building different wheels for different
+    # Python versions to ensure that we don't package dynamic libraries twice by
+    # accident.
+    - run: $CENTOS rm -rf crates/misc/py/build
+      shell: bash
+
+    # Set up Python 3.8 (and build it on Linux), reinstall dependencies, then
+    # rebuild our wheels
+    - name: Setup Python 3.8
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.8'
+        architecture: x64
+      if: matrix.os != 'ubuntu-latest'
+    - name: Build Python 3.8
+      run: $CENTOS sh ci/setup_centos6_python3.sh 3.8.0
       if: matrix.os == 'ubuntu-latest'
     - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
       shell: bash
