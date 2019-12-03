@@ -62,6 +62,30 @@ jobs:
         name: doc-api
         path: target/doc
 
+  # Download our libFuzzer corpus and make sure that we can still handle all the
+  # inputs.
+  fuzz_corpora:
+    name: Fuzz Corpora
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v1
+      with:
+        repository: bytecodealliance/wasmtime-libfuzzer-corpus
+        path: ./wasmtime/fuzz/corpus
+        ref: refs/heads/master
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: nightly
+    - run: cargo install cargo-fuzz
+    - run: cargo fetch
+      working-directory: ./fuzz
+    # NB: the `-runs=0` means that libFuzzer won't generate new inputs, only run
+    # the seeds from the corpus.
+    - run: cargo fuzz run compile -- -runs=0
+    - run: cargo fuzz run instantiate -- -runs=0
+    - run: cargo fuzz run instantiate_translated -- -runs=0
+
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
   test:
