@@ -1,13 +1,16 @@
 use crate::backend::{
-    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, Registers, ValueLocation,
+    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label,
     VirtualCallingConvention,
 };
+#[cfg(debug_assertions)]
+use crate::backend::{Registers, ValueLocation};
 use crate::error::Error;
 use crate::microwasm::*;
 use crate::module::{ModuleContext, SigType, Signature};
 use cranelift_codegen::binemit;
 use dynasmrt::DynasmApi;
 use either::{Either, Left, Right};
+#[cfg(debug_assertions)]
 use more_asserts::assert_ge;
 use multi_mut::HashMapMultiMut;
 use std::{collections::HashMap, hash::Hash};
