@@ -22,7 +22,7 @@ wasmtime-runtime = { path = '../runtime' }
 wasmtime-wasi = { path = '../wasi' }
 
 [dev-dependencies]
-libc = "*"
+libc = "0.2"
 
 [badges]
 maintenance = { status = "actively-developed" }

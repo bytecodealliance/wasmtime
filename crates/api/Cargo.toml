@@ -21,7 +21,7 @@ target-lexicon = { version = "0.9.0", default-features = false }
 anyhow = "1.0.19"
 thiserror = "1.0.4"
 region = "2.0.0"
-libc = "*"
+libc = "0.2"
 
 [dev-dependencies]
 # for wasmtime.rs
