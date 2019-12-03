@@ -1,6 +1,5 @@
 use crate::backend::{
-    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label,
-    VirtualCallingConvention,
+    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, VirtualCallingConvention,
 };
 #[cfg(debug_assertions)]
 use crate::backend::{Registers, ValueLocation};

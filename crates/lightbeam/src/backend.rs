@@ -12,13 +12,13 @@ use either::Either;
 use more_asserts::assert_le;
 use std::{
     any::{Any, TypeId},
+    cmp::Ordering,
     collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt::Display,
     iter::{self, FromIterator},
     mem,
     ops::RangeInclusive,
-    cmp::Ordering,
 };
 
 // TODO: Get rid of this! It's a total hack.
@@ -2451,7 +2451,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn set_stack_depth(&mut self, depth: StackDepth) {
         if self.block_state.depth.0 != depth.0 {
             let diff = depth.0 as i32 - self.block_state.depth.0 as i32;
-            let emit_lea = if diff.abs() != 1 { true } else {
+            let emit_lea = if diff.abs() != 1 {
+                true
+            } else {
                 match self.block_state.depth.0.cmp(&depth.0) {
                     Ordering::Less => {
                         for _ in 0..diff {
@@ -3008,7 +3010,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     /// Puts this value into a register so that it can be efficiently read
-    fn put_into_register(&mut self, ty: impl Into<Option<GPRType>>, val: &mut ValueLocation) -> Option<GPR> {
+    fn put_into_register(
+        &mut self,
+        ty: impl Into<Option<GPRType>>,
+        val: &mut ValueLocation,
+    ) -> Option<GPR> {
         let out = self.clone_to_register(ty, *val)?;
         self.free_value(*val);
         *val = ValueLocation::Reg(out);
@@ -3016,7 +3022,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     /// Clones this value into a register so that it can be efficiently read
-    fn clone_to_register(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> Option<GPR> {
+    fn clone_to_register(
+        &mut self,
+        ty: impl Into<Option<GPRType>>,
+        val: ValueLocation,
+    ) -> Option<GPR> {
         let ty = ty.into();
         match val {
             ValueLocation::Reg(r) if ty.map(|t| t == r.type_()).unwrap_or(true) => {
@@ -3046,7 +3056,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Some(out)
     }
 
-    fn put_into_temp_location(&mut self, ty: impl Into<Option<GPRType>>, val: &mut ValueLocation) -> CCLoc {
+    fn put_into_temp_location(
+        &mut self,
+        ty: impl Into<Option<GPRType>>,
+        val: &mut ValueLocation,
+    ) -> CCLoc {
         match val {
             _ => {
                 if let Some(gpr) = self.put_into_temp_register(ty, val) {
@@ -3062,7 +3076,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     /// Clones this value into a temporary register so that operations
     /// on that register don't write to a local.
-    fn clone_to_temp_register(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> Option<GPR> {
+    fn clone_to_temp_register(
+        &mut self,
+        ty: impl Into<Option<GPRType>>,
+        val: ValueLocation,
+    ) -> Option<GPR> {
         // If we have `None` as the type then it always matches (`.unwrap_or(true)`)
         match val {
             ValueLocation::Reg(r) => {
@@ -3595,7 +3613,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
-                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xCF00_0000_u32 as i32));
+                let float_cmp_mask =
+                    self.aligned_label(16, LabelValue::I32(0xCF00_0000_u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I32(0));
                 let trap_label = self.trap_label();
 
@@ -3633,7 +3652,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
-                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0x4F00_0000_u32 as i32));
+                let float_cmp_mask =
+                    self.aligned_label(16, LabelValue::I32(0x4F00_0000_u32 as i32));
                 let trap_label = self.trap_label();
 
                 dynasm!(self.asm
@@ -3804,7 +3824,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
-                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xDF00_0000_u32 as i32));
+                let float_cmp_mask =
+                    self.aligned_label(16, LabelValue::I32(0xDF00_0000_u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
                 let trap_label = self.trap_label();
 
