@@ -18,6 +18,7 @@ use std::{
     iter::{self, FromIterator},
     mem,
     ops::RangeInclusive,
+    cmp::Ordering,
 };
 
 // TODO: Get rid of this! It's a total hack.
@@ -2450,41 +2451,37 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn set_stack_depth(&mut self, depth: StackDepth) {
         if self.block_state.depth.0 != depth.0 {
             let diff = depth.0 as i32 - self.block_state.depth.0 as i32;
-            let emit_lea = if diff.abs() == 1 {
-                if self.block_state.depth.0 < depth.0 {
-                    for _ in 0..diff {
-                        dynasm!(self.asm
-                            ; push rax
-                        );
-                    }
-
-                    false
-                } else if self.block_state.depth.0 > depth.0 {
-                    if let Some(trash) = self.take_reg(I64) {
-                        for _ in 0..self.block_state.depth.0 - depth.0 {
+            let emit_lea = if diff.abs() != 1 { true } else {
+                match self.block_state.depth.0.cmp(&depth.0) {
+                    Ordering::Less => {
+                        for _ in 0..diff {
                             dynasm!(self.asm
-                                ; pop Rq(trash.rq().unwrap())
+                                ; push rax
                             );
                         }
-                        self.block_state.regs.release(trash);
-
                         false
-                    } else {
-                        true
                     }
-                } else {
-                    false
+                    Ordering::Greater => {
+                        if let Some(trash) = self.take_reg(I64) {
+                            for _ in 0..self.block_state.depth.0 - depth.0 {
+                                dynasm!(self.asm
+                                    ; pop Rq(trash.rq().unwrap())
+                                );
+                            }
+                            self.block_state.regs.release(trash);
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    Ordering::Equal => false,
                 }
-            } else {
-                true
             };
-
             if emit_lea {
                 dynasm!(self.asm
                     ; lea rsp, [rsp + (self.block_state.depth.0 as i32 - depth.0 as i32) * WORD_SIZE as i32]
                 );
             }
-
             self.block_state.depth = depth;
         }
     }
