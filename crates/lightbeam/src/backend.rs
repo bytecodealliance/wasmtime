@@ -872,7 +872,7 @@ macro_rules! int_div {
                     false
                 }
                 ValueLocation::Reg(_) => {
-                    let reg = self.into_reg(GPRType::Rq, &mut divisor).unwrap();
+                    let reg = self.put_into_register(GPRType::Rq, &mut divisor).unwrap();
                     dynasm!(self.asm
                         ; cmp $reg_ty(reg.rq().unwrap()), -1
                     );
@@ -966,7 +966,7 @@ macro_rules! unop {
                     ValueLocation::Reg(temp)
                 }
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                    let reg = self.into_reg(GPRType::Rq, &mut val).unwrap();
+                    let reg = self.put_into_register(GPRType::Rq, &mut val).unwrap();
                     let temp = self.take_reg(Type::for_::<$typ>()).unwrap();
                     dynasm!(self.asm
                         ; $instr $reg_ty(temp.rq().unwrap()), $reg_ty(reg.rq().unwrap())
@@ -1012,7 +1012,7 @@ macro_rules! conversion {
                     ValueLocation::Reg(temp)
                 }
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                    let reg = self.into_reg(Type::for_::<$in_typ>(), &mut val).unwrap();
+                    let reg = self.put_into_register(Type::for_::<$in_typ>(), &mut val).unwrap();
                     let temp = self.take_reg(Type::for_::<$out_typ>()).unwrap();
 
                     dynasm!(self.asm
@@ -1076,7 +1076,7 @@ macro_rules! shift {
 
                     match other {
                         ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                            let gpr = self.into_reg(I32, &mut count).unwrap();
+                            let gpr = self.put_into_register(I32, &mut count).unwrap();
                             dynasm!(self.asm
                                 ; mov cl, Rb(gpr.rq().unwrap())
                             );
@@ -1139,7 +1139,7 @@ macro_rules! cmp_i32 {
                         ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = self.into_reg(I32, &mut right).unwrap();
+                        let rreg = self.put_into_register(I32, &mut right).unwrap();
                         dynasm!(self.asm
                             ; cmp Rd(rreg.rq().unwrap()), i
                         );
@@ -1156,7 +1156,7 @@ macro_rules! cmp_i32 {
                     }
                 }
             } else {
-                let lreg = self.into_reg(I32, &mut left).unwrap();
+                let lreg = self.put_into_register(I32, &mut left).unwrap();
 
                 match right {
                     ValueLocation::Stack(offset) => {
@@ -1166,7 +1166,7 @@ macro_rules! cmp_i32 {
                         );
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = self.into_reg(I32, &mut right).unwrap();
+                        let rreg = self.put_into_register(I32, &mut right).unwrap();
                         dynasm!(self.asm
                             ; cmp Rd(lreg.rq().unwrap()), Rd(rreg.rq().unwrap())
                         );
@@ -1204,7 +1204,7 @@ macro_rules! cmp_i64 {
                                 ; cmp QWORD [rsp + offset], i
                             );
                         } else {
-                            let lreg = self.into_reg(I32, &mut left).unwrap();
+                            let lreg = self.put_into_register(I32, &mut left).unwrap();
                             dynasm!(self.asm
                                 ; cmp QWORD [rsp + offset], Rq(lreg.rq().unwrap())
                             );
@@ -1212,13 +1212,13 @@ macro_rules! cmp_i64 {
                         ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = self.into_reg(I32, &mut right).unwrap();
+                        let rreg = self.put_into_register(I32, &mut right).unwrap();
                         if let Some(i) = i.try_into().ok() {
                             dynasm!(self.asm
                                 ; cmp Rq(rreg.rq().unwrap()), i
                             );
                         } else {
-                            let lreg = self.into_reg(I32, &mut left).unwrap();
+                            let lreg = self.put_into_register(I32, &mut left).unwrap();
                             dynasm!(self.asm
                                 ; cmp Rq(rreg.rq().unwrap()), Rq(lreg.rq().unwrap())
                             );
@@ -1236,7 +1236,7 @@ macro_rules! cmp_i64 {
                     }
                 }
             } else {
-                let lreg = self.into_reg(I64, &mut left).unwrap();
+                let lreg = self.put_into_register(I64, &mut left).unwrap();
 
                 match right {
                     ValueLocation::Stack(offset) => {
@@ -1246,7 +1246,7 @@ macro_rules! cmp_i64 {
                         );
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = self.into_reg(I32, &mut right).unwrap();
+                        let rreg = self.put_into_register(I32, &mut right).unwrap();
                         dynasm!(self.asm
                             ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
                         );
@@ -1258,7 +1258,7 @@ macro_rules! cmp_i64 {
                                     ; cmp Rq(lreg.rq().unwrap()), i
                             );
                         } else {
-                            let rreg = self.into_reg(I32, &mut right).unwrap();
+                            let rreg = self.put_into_register(I32, &mut right).unwrap();
                             dynasm!(self.asm
                                 ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
                             );
@@ -1315,7 +1315,7 @@ macro_rules! eq_float {
             };
 
             let lreg = self.put_into_temp_register(GPRType::Rx, &mut left).unwrap();
-            let rreg = self.into_reg(GPRType::Rx, &mut right).unwrap();
+            let rreg = self.put_into_register(GPRType::Rx, &mut right).unwrap();
             let out = self.take_reg(I32).unwrap();
 
             dynasm!(self.asm
@@ -1361,7 +1361,7 @@ macro_rules! minmax_float {
             };
 
             let lreg = self.put_into_temp_register(GPRType::Rx, &mut left).unwrap();
-            let rreg = self.into_reg(GPRType::Rx, &mut right).unwrap();
+            let rreg = self.put_into_register(GPRType::Rx, &mut right).unwrap();
 
             dynasm!(self.asm
                 ; $cmpinstr Rx(lreg.rx().unwrap()), Rx(rreg.rx().unwrap())
@@ -1408,7 +1408,7 @@ macro_rules! cmp_float {
                 ValueLocation::Immediate(0i32.into())
             }
         } else {
-            let lreg = this.into_reg(GPRType::Rx, left).unwrap();
+            let lreg = this.put_into_register(GPRType::Rx, left).unwrap();
             let result = this.take_reg(I32).unwrap();
 
             match right {
@@ -1422,7 +1422,7 @@ macro_rules! cmp_float {
                     );
                 }
                 right => {
-                    let rreg = this.into_reg(GPRType::Rx, right).unwrap();
+                    let rreg = this.put_into_register(GPRType::Rx, right).unwrap();
 
                     dynasm!(this.asm
                         ; xor Rq(result.rq().unwrap()), Rq(result.rq().unwrap())
@@ -1662,7 +1662,7 @@ macro_rules! binop {
             match right {
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                     // This handles the case where we (for example) have a float in an `Rq` reg
-                    let right_reg = self.into_reg($ty, &mut right).unwrap();
+                    let right_reg = self.put_into_register($ty, &mut right).unwrap();
                     dynasm!(self.asm
                         ; $instr $reg_ty(lreg.$reg_fn().unwrap()), $reg_ty(right_reg.$reg_fn().unwrap())
                     );
@@ -1791,7 +1791,7 @@ macro_rules! load {
                     load_to_reg(self, temp, (offset as _, Ok(i.as_i32().unwrap())));
                 }
                 mut base => {
-                    let gpr = self.into_reg(I32, &mut base).unwrap();
+                    let gpr = self.put_into_register(I32, &mut base).unwrap();
                     load_to_reg(self, temp, (offset as _, Err(gpr)));
                     self.free_value(base);
                 }
@@ -1962,14 +1962,14 @@ macro_rules! store {
 
             // `store_from_reg` frees `src`
             // TODO: Would it be better to free it outside `store_from_reg`?
-            let src_reg = self.into_reg(None, &mut src).unwrap();
+            let src_reg = self.put_into_register(None, &mut src).unwrap();
 
             match base {
                 ValueLocation::Immediate(i) => {
                     store_from_reg(self, src_reg, (offset as i32, Ok(i.as_i32().unwrap())));
                 }
                 mut base => {
-                    let gpr = self.into_reg(I32, &mut base).unwrap();
+                    let gpr = self.put_into_register(I32, &mut base).unwrap();
                     store_from_reg(self, src_reg, (offset as i32, Err(gpr)));
                     self.free_value(base);
                 }
@@ -2185,7 +2185,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             return;
         }
 
-        let reg = self.into_reg(I32, &mut val).unwrap();
+        let reg = self.put_into_register(I32, &mut val).unwrap();
         let out = self.take_reg(I32).unwrap();
 
         dynasm!(self.asm
@@ -2214,7 +2214,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             return;
         }
 
-        let reg = self.into_reg(I64, &mut val).unwrap();
+        let reg = self.put_into_register(I64, &mut val).unwrap();
         let out = self.take_reg(I64).unwrap();
 
         dynasm!(self.asm
@@ -2280,7 +2280,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let cond = match val {
             ValueLocation::Cond(cc) => !cc,
             _ => {
-                let predicate = self.into_reg(I32, &mut val).unwrap();
+                let predicate = self.put_into_register(I32, &mut val).unwrap();
                 dynasm!(self.asm
                     ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
                 );
@@ -2313,7 +2313,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let cond = match val {
             ValueLocation::Cond(cc) => cc,
             _ => {
-                let predicate = self.into_reg(I32, &mut val).unwrap();
+                let predicate = self.put_into_register(I32, &mut val).unwrap();
                 dynasm!(self.asm
                     ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
                 );
@@ -2625,7 +2625,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 (Some(reg), 0)
             });
 
-        let val_reg = self.into_reg(GPRType::Rq, &mut val).unwrap();
+        let val_reg = self.put_into_register(GPRType::Rq, &mut val).unwrap();
         let vmctx = GPR::Rq(VMCTX);
 
         // We always use `Rq` (even for floats) since the globals are not necessarily aligned to 128 bits
@@ -2935,7 +2935,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let out_offset = -(self.block_state.depth.0 as i32 + 1);
         match value {
             ValueLocation::Reg(_) | ValueLocation::Immediate(_) | ValueLocation::Cond(_) => {
-                if let Some(gpr) = self.into_reg(GPRType::Rq, &mut value) {
+                if let Some(gpr) = self.put_into_register(GPRType::Rq, &mut value) {
                     dynasm!(self.asm
                         ; push Rq(gpr.rq().unwrap())
                     );
@@ -2965,7 +2965,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn push(&mut self, value: ValueLocation) {
         if let Some(mut top) = self.block_state.stack.pop() {
             if let ValueLocation::Cond(_) = top {
-                self.into_reg(I32, &mut top).unwrap();
+                self.put_into_register(I32, &mut top).unwrap();
             }
 
             self.block_state.stack.push(top);
@@ -3008,7 +3008,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     /// Puts this value into a register so that it can be efficiently read
-    fn into_reg(&mut self, ty: impl Into<Option<GPRType>>, val: &mut ValueLocation) -> Option<GPR> {
+    fn put_into_register(&mut self, ty: impl Into<Option<GPRType>>, val: &mut ValueLocation) -> Option<GPR> {
         let out = self.to_reg(ty, *val)?;
         self.free_value(*val);
         *val = ValueLocation::Reg(out);
@@ -3221,7 +3221,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             )
         } else {
             let lreg = self.put_into_temp_register(GPRType::Rx, &mut left).unwrap();
-            let rreg = self.into_reg(GPRType::Rx, &mut right).unwrap();
+            let rreg = self.put_into_register(GPRType::Rx, &mut right).unwrap();
             let sign_mask = self.aligned_label(16, LabelValue::I32(SIGN_MASK_F32 as i32));
             let rest_mask = self.aligned_label(16, LabelValue::I32(REST_MASK_F32 as i32));
 
@@ -3252,7 +3252,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             )
         } else {
             let lreg = self.put_into_temp_register(GPRType::Rx, &mut left).unwrap();
-            let rreg = self.into_reg(GPRType::Rx, &mut right).unwrap();
+            let rreg = self.put_into_register(GPRType::Rx, &mut right).unwrap();
             let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
             let rest_mask = self.aligned_label(16, LabelValue::I64(REST_MASK_F64 as i64));
 
@@ -3301,7 +3301,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let reg = self.into_reg(GPRType::Rq, &mut val).unwrap();
+                let reg = self.put_into_register(GPRType::Rq, &mut val).unwrap();
                 let temp = self.take_reg(I32).unwrap();
 
                 if is_x86_feature_detected!("lzcnt") {
@@ -3357,7 +3357,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let reg = self.into_reg(GPRType::Rq, &mut val).unwrap();
+                let reg = self.put_into_register(GPRType::Rq, &mut val).unwrap();
                 let temp = self.take_reg(I64).unwrap();
 
                 if is_x86_feature_detected!("lzcnt") {
@@ -3411,7 +3411,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let reg = self.into_reg(GPRType::Rq, &mut val).unwrap();
+                let reg = self.put_into_register(GPRType::Rq, &mut val).unwrap();
                 let temp = self.take_reg(I32).unwrap();
 
                 if is_x86_feature_detected!("lzcnt") {
@@ -3463,7 +3463,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let reg = self.into_reg(GPRType::Rq, &mut val).unwrap();
+                let reg = self.put_into_register(GPRType::Rq, &mut val).unwrap();
                 let temp = self.take_reg(I64).unwrap();
 
                 dynasm!(self.asm
@@ -3591,7 +3591,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 (f32::from_bits(imm.as_f32().unwrap().to_bits()) as i32).into(),
             ),
             _ => {
-                let reg = self.into_reg(F32, &mut val).unwrap();
+                let reg = self.put_into_register(F32, &mut val).unwrap();
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
@@ -3670,7 +3670,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 (f64::from_bits(imm.as_f64().unwrap().to_bits()) as i32).into(),
             ),
             _ => {
-                let reg = self.into_reg(F32, &mut val).unwrap();
+                let reg = self.put_into_register(F32, &mut val).unwrap();
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
@@ -3838,7 +3838,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 (f64::from_bits(imm.as_f64().unwrap().to_bits()) as i64).into(),
             ),
             _ => {
-                let reg = self.into_reg(F32, &mut val).unwrap();
+                let reg = self.put_into_register(F32, &mut val).unwrap();
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(8, LabelValue::I64(SIGN_MASK_F64 as i64));
@@ -3877,7 +3877,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 (f32::from_bits(imm.as_f32().unwrap().to_bits()) as u64).into(),
             ),
             _ => {
-                let reg = self.into_reg(F32, &mut val).unwrap();
+                let reg = self.put_into_register(F32, &mut val).unwrap();
 
                 let temp = self.take_reg(I64).unwrap();
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
@@ -3918,7 +3918,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 (f64::from_bits(imm.as_f64().unwrap().to_bits()) as u64).into(),
             ),
             _ => {
-                let reg = self.into_reg(F64, &mut val).unwrap();
+                let reg = self.put_into_register(F64, &mut val).unwrap();
                 let temp = self.take_reg(I64).unwrap();
 
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
@@ -3960,7 +3960,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 Ieee32::from_bits((imm.as_i32().unwrap() as u32 as f32).to_bits()).into(),
             ),
             _ => {
-                let reg = self.into_reg(I32, &mut val).unwrap();
+                let reg = self.put_into_register(I32, &mut val).unwrap();
 
                 let temp = self.take_reg(F32).unwrap();
 
@@ -3986,7 +3986,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 Ieee64::from_bits((imm.as_i32().unwrap() as u32 as f64).to_bits()).into(),
             ),
             _ => {
-                let reg = self.into_reg(I32, &mut val).unwrap();
+                let reg = self.put_into_register(I32, &mut val).unwrap();
                 let temp = self.take_reg(F64).unwrap();
 
                 dynasm!(self.asm
@@ -4011,7 +4011,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 Ieee32::from_bits((imm.as_i64().unwrap() as u64 as f32).to_bits()).into(),
             ),
             _ => {
-                let reg = self.into_reg(I64, &mut val).unwrap();
+                let reg = self.put_into_register(I64, &mut val).unwrap();
                 let out = self.take_reg(F32).unwrap();
                 let temp = self.take_reg(I64).unwrap();
 
@@ -4049,7 +4049,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 Ieee64::from_bits((imm.as_i64().unwrap() as u64 as f64).to_bits()).into(),
             ),
             _ => {
-                let reg = self.into_reg(I64, &mut val).unwrap();
+                let reg = self.put_into_register(I64, &mut val).unwrap();
 
                 let out = self.take_reg(F32).unwrap();
                 let temp = self.take_reg(I64).unwrap();
@@ -4495,7 +4495,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 );
             }
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let r = this.into_reg(I32, divisor).unwrap();
+                let r = this.put_into_register(I32, divisor).unwrap();
                 dynasm!(this.asm
                     ; xor edx, edx
                     ; div Rd(r.rq().unwrap())
@@ -4522,7 +4522,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 );
             }
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let r = this.into_reg(I32, divisor).unwrap();
+                let r = this.put_into_register(I32, divisor).unwrap();
                 dynasm!(this.asm
                     ; cdq
                     ; idiv Rd(r.rq().unwrap())
@@ -4549,7 +4549,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 );
             }
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let r = this.into_reg(I64, divisor).unwrap();
+                let r = this.put_into_register(I64, divisor).unwrap();
                 dynasm!(this.asm
                     ; xor rdx, rdx
                     ; div Rq(r.rq().unwrap())
@@ -4576,7 +4576,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 );
             }
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let r = this.into_reg(I64, divisor).unwrap();
+                let r = this.put_into_register(I64, divisor).unwrap();
                 dynasm!(this.asm
                     ; cqo
                     ; idiv Rq(r.rq().unwrap())
@@ -4613,7 +4613,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = match right {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let rreg = self.into_reg(I32, &mut right).unwrap();
+                let rreg = self.put_into_register(I32, &mut right).unwrap();
                 let lreg = self.put_into_temp_register(I32, &mut left).unwrap();
                 dynasm!(self.asm
                     ; imul Rd(lreg.rq().unwrap()), Rd(rreg.rq().unwrap())
@@ -4630,7 +4630,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 left
             }
             ValueLocation::Immediate(i) => {
-                let lreg = self.into_reg(I32, &mut left).unwrap();
+                let lreg = self.put_into_register(I32, &mut left).unwrap();
                 let new_reg = self.take_reg(I32).unwrap();
                 dynasm!(self.asm
                     ; imul Rd(new_reg.rq().unwrap()), Rd(lreg.rq().unwrap()), i.as_i32().unwrap()
@@ -4672,7 +4672,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let out = match right {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                let rreg = self.into_reg(I64, &mut right).unwrap();
+                let rreg = self.put_into_register(I64, &mut right).unwrap();
                 let lreg = self.put_into_temp_register(I64, &mut left).unwrap();
                 dynasm!(self.asm
                     ; imul Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
@@ -4692,7 +4692,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let i = i.as_i64().unwrap();
                 if let Ok(i) = i.try_into() {
                     let new_reg = self.take_reg(I64).unwrap();
-                    let lreg = self.into_reg(I64, &mut left).unwrap();
+                    let lreg = self.put_into_register(I64, &mut left).unwrap();
 
                     dynasm!(self.asm
                         ; imul Rq(new_reg.rq().unwrap()), Rq(lreg.rq().unwrap()), i
@@ -4702,7 +4702,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                     ValueLocation::Reg(new_reg)
                 } else {
-                    let rreg = self.into_reg(I64, &mut right).unwrap();
+                    let rreg = self.put_into_register(I64, &mut right).unwrap();
                     let lreg = self.put_into_temp_register(I64, &mut left).unwrap();
                     dynasm!(self.asm
                         ; imul Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
@@ -4849,7 +4849,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let cond_code = match cond {
             ValueLocation::Cond(cc) => cc,
             _ => {
-                let cond_reg = self.into_reg(I32, &mut cond).unwrap();
+                let cond_reg = self.put_into_register(I32, &mut cond).unwrap();
                 dynasm!(self.asm
                     ; test Rd(cond_reg.rq().unwrap()), Rd(cond_reg.rq().unwrap())
                 );
@@ -4862,13 +4862,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let else_ = if let ValueLocation::Stack(offset) = else_ {
             CCLoc::Stack(offset)
         } else {
-            CCLoc::Reg(self.into_reg(I32, &mut else_).unwrap())
+            CCLoc::Reg(self.put_into_register(I32, &mut else_).unwrap())
         };
 
         let then = if let ValueLocation::Stack(offset) = then {
             CCLoc::Stack(offset)
         } else {
-            CCLoc::Reg(self.into_reg(I32, &mut then).unwrap())
+            CCLoc::Reg(self.put_into_register(I32, &mut then).unwrap())
         };
 
         let out_gpr = match (then, else_) {
