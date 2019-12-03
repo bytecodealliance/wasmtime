@@ -4909,14 +4909,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     pub fn pick(&mut self, depth: u32) {
         let idx = self.block_state.stack.len() - 1 - depth as usize;
         let v = self.block_state.stack[idx];
-
-        match v {
-            ValueLocation::Reg(r) => {
-                self.block_state.regs.mark_used(r);
-            }
-            _ => {}
+        if let ValueLocation::Reg(r) = v {
+            self.block_state.regs.mark_used(r);
         }
-
         self.block_state.stack.push(v);
     }
 
