@@ -3602,7 +3602,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
-                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xcf000000u32 as i32));
+                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xCF00_0000_u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I32(0));
                 let trap_label = self.trap_label();
 
@@ -3640,7 +3640,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
-                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0x4f000000u32 as i32));
+                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0x4F00_0000_u32 as i32));
                 let trap_label = self.trap_label();
 
                 dynasm!(self.asm
@@ -3682,7 +3682,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask =
-                    self.aligned_label(16, LabelValue::I64(0xc1e0000000200000u64 as i64));
+                    self.aligned_label(16, LabelValue::I64(0xC1E0_0000_0020_0000_u64 as i64));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
                 let trap_label = self.trap_label();
 
@@ -3721,7 +3721,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask =
-                    self.aligned_label(16, LabelValue::I64(0x41e0000000000000u64 as i64));
+                    self.aligned_label(16, LabelValue::I64(0x41E0_0000_0000_0000_u64 as i64));
                 let trap_label = self.trap_label();
 
                 dynasm!(self.asm
@@ -3811,7 +3811,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let temp = self.take_reg(I32).unwrap();
 
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
-                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xdf000000u32 as i32));
+                let float_cmp_mask = self.aligned_label(16, LabelValue::I32(0xDF00_0000_u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
                 let trap_label = self.trap_label();
 
@@ -3850,7 +3850,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let sign_mask = self.aligned_label(8, LabelValue::I64(SIGN_MASK_F64 as i64));
                 let float_cmp_mask =
-                    self.aligned_label(16, LabelValue::I64(0xc3e0000000000000u64 as i64));
+                    self.aligned_label(16, LabelValue::I64(0xC3E0_0000_0000_0000_u64 as i64));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
                 let trap_label = self.trap_label();
 
@@ -3888,7 +3888,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let temp = self.take_reg(I64).unwrap();
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
-                let u64_trunc_f32_const = self.aligned_label(16, LabelValue::I32(0x5F000000));
+                let u64_trunc_f32_const = self.aligned_label(16, LabelValue::I32(0x5F00_0000_i32));
                 let trap_label = self.trap_label();
 
                 dynasm!(self.asm
@@ -3930,7 +3930,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
                 let u64_trunc_f64_const =
-                    self.aligned_label(16, LabelValue::I64(0x43e0000000000000));
+                    self.aligned_label(16, LabelValue::I64(0x43E0_0000_0000_0000_i64));
                 let trap_label = self.trap_label();
 
                 dynasm!(self.asm
@@ -4954,7 +4954,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
         let temp = self.take_reg(I64).unwrap();
         dynasm!(self.asm
-            ; mov Rq(temp.rq().unwrap()), QWORD 0xdeadbeefdeadbeefu64 as i64
+            ; mov Rq(temp.rq().unwrap()), QWORD 0xDEAD_BEEF_DEAD_BEEF_u64 as i64
             ; call Rq(temp.rq().unwrap())
         );
         self.block_state.regs.release(temp);
