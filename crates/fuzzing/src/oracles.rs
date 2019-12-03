@@ -10,10 +10,14 @@
 //! When an oracle finds a bug, it should report it to the fuzzing engine by
 //! panicking.
 
+pub mod dummy;
+
 use cranelift_codegen::settings;
+use dummy::dummy_imports;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_jit::{CompilationStrategy, CompiledModule, Compiler, NullResolver};
 
 fn host_isa() -> Box<dyn cranelift_codegen::isa::TargetIsa> {
@@ -33,18 +37,33 @@ pub fn instantiate(wasm: &[u8], compilation_strategy: CompilationStrategy) {
         return;
     }
 
-    let isa = host_isa();
-    let mut compiler = Compiler::new(isa, compilation_strategy);
-    let mut imports_resolver = NullResolver {};
+    let mut config = Config::new();
+    config.strategy(compilation_strategy);
 
-    wasmtime_jit::instantiate(
-        &mut compiler,
-        wasm,
-        &mut imports_resolver,
-        Default::default(),
-        true,
-    )
-    .expect("failed to instantiate valid Wasm!");
+    let engine = HostRef::new(Engine::new(&config));
+    let store = HostRef::new(Store::new(&engine));
+
+    let module =
+        HostRef::new(Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!"));
+
+    let imports = {
+        let module = module.borrow();
+        match dummy_imports(&store, module.imports()) {
+            Ok(imps) => imps,
+            Err(_) => {
+                // There are some value types that we can't synthesize a
+                // dummy value for (e.g. anyrefs) and for modules that
+                // import things of these types we skip instantiation.
+                return;
+            }
+        }
+    };
+
+    // Don't unwrap this: there can be instantiation-/link-time errors that
+    // aren't caught during validation or compilation. For example, an imported
+    // table might not have room for an element segment that we want to
+    // initialize into it.
+    let _result = Instance::new(&store, &module, &imports);
 }
 
 /// Compile the Wasm buffer, and implicitly fail if we have an unexpected
