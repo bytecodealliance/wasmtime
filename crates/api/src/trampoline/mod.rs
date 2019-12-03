@@ -55,7 +55,7 @@ pub fn generate_table_export(
 pub(crate) use cranelift_codegen::print_errors::pretty_error;
 
 pub(crate) mod binemit {
-    pub(crate) use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink};
+    pub(crate) use cranelift_codegen::binemit::{CodeOffset, NullStackmapSink, TrapSink};
 
     pub use cranelift_codegen::{binemit, ir};
 
@@ -102,7 +102,8 @@ pub(crate) mod binemit {
 
 pub(crate) mod ir {
     pub(crate) use cranelift_codegen::ir::{
-        ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind, TrapCode,
+        ExternalName, Function, InstBuilder, MemFlags, SourceLoc, StackSlotData, StackSlotKind,
+        TrapCode,
     };
 }
 pub(crate) use cranelift_codegen::isa::TargetIsa;
