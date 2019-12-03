@@ -782,8 +782,8 @@ where
             Operator::Load { ty: F32, memarg } => ctx.f32_load(memarg.offset),
             Operator::Load { ty: I64, memarg } => ctx.i64_load(memarg.offset),
             Operator::Load { ty: F64, memarg } => ctx.f64_load(memarg.offset),
-            Operator::Store8 { ty: _, memarg } => ctx.store8(memarg.offset),
-            Operator::Store16 { ty: _, memarg } => ctx.store16(memarg.offset),
+            Operator::Store8 { memarg, .. } => ctx.store8(memarg.offset),
+            Operator::Store16 { memarg, .. } => ctx.store16(memarg.offset),
             Operator::Store32 { memarg }
             | Operator::Store { ty: I32, memarg }
             | Operator::Store { ty: F32, memarg } => ctx.store32(memarg.offset),
@@ -795,10 +795,10 @@ where
             Operator::Select => {
                 ctx.select();
             }
-            Operator::MemorySize { reserved: _ } => {
+            Operator::MemorySize { .. } => {
                 ctx.memory_size();
             }
-            Operator::MemoryGrow { reserved: _ } => {
+            Operator::MemoryGrow { .. } => {
                 ctx.memory_grow();
             }
             Operator::Call { function_index } => {
