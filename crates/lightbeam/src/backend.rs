@@ -3040,7 +3040,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         ty: impl Into<Option<GPRType>>,
         val: &mut ValueLocation,
     ) -> Option<GPR> {
-        let out = self.to_temp_reg(ty, *val)?;
+        let out = self.clone_to_temp_register(ty, *val)?;
         self.free_value(*val);
         *val = ValueLocation::Reg(out);
         Some(out)
@@ -3062,7 +3062,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     /// Clones this value into a temporary register so that operations
     /// on that register don't write to a local.
-    fn to_temp_reg(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> Option<GPR> {
+    fn clone_to_temp_register(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> Option<GPR> {
         // If we have `None` as the type then it always matches (`.unwrap_or(true)`)
         match val {
             ValueLocation::Reg(r) => {
