@@ -12,7 +12,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -24,7 +24,7 @@ jobs:
     name: Doc - build the book
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
     - run: |
         set -e
         curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.3.1/mdbook-v0.3.1-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
@@ -42,7 +42,7 @@ jobs:
     name: Doc - build the API documentation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -88,7 +88,7 @@ jobs:
             os: windows-latest
             rust: stable
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -142,7 +142,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -239,7 +239,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -305,7 +305,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -331,7 +331,7 @@ jobs:
     needs: [doc_book, doc_api, wheels, build]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - run: rustup update stable && rustup default stable
