@@ -54,13 +54,13 @@ impl crate::compilation::Compiler for Lightbeam {
                 i.as_u32(),
                 &wasmparser::FunctionBody::new(0, function_body.data),
             )
-            .expect("Failed to translate function. TODO: Stop this from panicking");
+            .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
             relocations.push(reloc_sink.func_relocs);
         }
 
         let code_section = codegen_session
             .into_translated_code_section()
-            .expect("Failed to generate output code. TODO: Stop this from panicking");
+            .map_err(|e| CompileError::Codegen(format!("Failed to generate output code: {}", e)))?;
 
         // TODO pass jump table offsets to Compilation::from_buffer() when they
         // are implemented in lightbeam -- using empty set of offsets for now.

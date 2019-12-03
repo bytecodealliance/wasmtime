@@ -53,7 +53,7 @@ where
             ty.params().iter().map(SigType::to_microwasm_type),
             ty.returns().iter().map(SigType::to_microwasm_type),
             body,
-        );
+        )?;
 
         let _ = crate::microwasm::dis(
             std::io::stdout(),
@@ -67,14 +67,18 @@ where
         ty.params().iter().map(SigType::to_microwasm_type),
         ty.returns().iter().map(SigType::to_microwasm_type),
         body,
-    );
+    )?;
 
-    translate(
-        session,
-        reloc_sink,
-        func_idx,
-        microwasm_conv.flat_map(|i| i.expect("TODO: Make this not panic")),
-    )
+    let mut body = Vec::new();
+    for i in microwasm_conv {
+        match i {
+            Ok(v) => body.extend(v),
+            Err(e) => return Err(Error::Microwasm(e.message.to_string())),
+        };
+    }
+
+    translate(session, reloc_sink, func_idx, body)?;
+    Ok(())
 }
 
 pub fn translate<M, I, L: Send + Sync + 'static>(
@@ -283,7 +287,9 @@ where
                         entry.remove_entry();
                     }
                 } else {
-                    panic!("Label defined before being declared");
+                    return Err(Error::Microwasm(
+                        "Label defined before being declared".to_string(),
+                    ));
                 }
             }
             Operator::Block {

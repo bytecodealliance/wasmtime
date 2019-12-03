@@ -12,6 +12,9 @@ pub enum Error {
 
     #[error("Input error: {0}")]
     Input(String),
+
+    #[error("Microwasm error: {0}")]
+    Microwasm(String),
 }
 
 impl From<BinaryReaderError> for Error {
