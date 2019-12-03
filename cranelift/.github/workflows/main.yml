@@ -10,7 +10,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - name: Install Rust
@@ -21,7 +21,7 @@ jobs:
     name: Build API Docs
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - name: Install Rust
@@ -81,7 +81,7 @@ jobs:
           rust: stable
           release: --release
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
 
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     if: false # Temporarily disable fuzz tests until https://github.com/bytecodealliance/cranelift/issues/1216 is resolved
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
     - name: Install Rust
       run: rustup update nightly && rustup default nightly
     - run: cargo install cargo-fuzz
@@ -128,7 +128,7 @@ jobs:
     runs-on: ubuntu-latest
     if: false && github.event_name == 'push' # Temporarily disable fuzz tests until https://github.com/bytecodealliance/cranelift/issues/1216 is resolved
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
     - name: Install Rust
       run: rustup update nightly && rustup default nightly
     - run: cargo install cargo-fuzz
