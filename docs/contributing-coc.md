@@ -1,3 +1,1 @@
-# Code of Conduct
-
-... more coming soon
+{{#include ../CODE_OF_CONDUCT.md }}
