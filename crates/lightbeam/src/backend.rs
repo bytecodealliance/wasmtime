@@ -3002,12 +3002,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     fn free_value(&mut self, val: ValueLocation) {
-        match val {
-            ValueLocation::Reg(r) => {
-                self.block_state.regs.release(r);
-            }
-            // TODO: Refcounted stack slots
-            _ => {}
+        if let ValueLocation::Reg(r) = val {
+            self.block_state.regs.release(r);
         }
     }
 
@@ -4694,7 +4690,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
             ValueLocation::Immediate(i) => {
                 let i = i.as_i64().unwrap();
-                if let Some(i) = i.try_into().ok() {
+                if let Ok(i) = i.try_into() {
                     let new_reg = self.take_reg(I64).unwrap();
                     let lreg = self.into_reg(I64, &mut left).unwrap();
 
