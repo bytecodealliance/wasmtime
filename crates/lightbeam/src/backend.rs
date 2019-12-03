@@ -1736,7 +1736,7 @@ macro_rules! load {
                         }
                         Err(gpr) => {
                             if offset == 0 {
-                                ctx.to_reg(I32, ValueLocation::Reg(gpr)).unwrap()
+                                ctx.clone_to_register(I32, ValueLocation::Reg(gpr)).unwrap()
                             } else if offset > 0 {
                                 let addr_reg = ctx.take_reg(I64).unwrap();
                                 dynasm!(ctx.asm
@@ -1908,7 +1908,7 @@ macro_rules! store {
                         }
                         Err(gpr) => {
                             if offset == 0 {
-                                ctx.to_reg(I32, ValueLocation::Reg(gpr)).unwrap()
+                                ctx.clone_to_register(I32, ValueLocation::Reg(gpr)).unwrap()
                             } else if offset > 0 {
                                 let addr_reg = ctx.take_reg(I64).unwrap();
                                 dynasm!(ctx.asm
@@ -3009,14 +3009,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     /// Puts this value into a register so that it can be efficiently read
     fn put_into_register(&mut self, ty: impl Into<Option<GPRType>>, val: &mut ValueLocation) -> Option<GPR> {
-        let out = self.to_reg(ty, *val)?;
+        let out = self.clone_to_register(ty, *val)?;
         self.free_value(*val);
         *val = ValueLocation::Reg(out);
         Some(out)
     }
 
     /// Clones this value into a register so that it can be efficiently read
-    fn to_reg(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> Option<GPR> {
+    fn clone_to_register(&mut self, ty: impl Into<Option<GPRType>>, val: ValueLocation) -> Option<GPR> {
         let ty = ty.into();
         match val {
             ValueLocation::Reg(r) if ty.map(|t| t == r.type_()).unwrap_or(true) => {
@@ -3080,7 +3080,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     Some(scratch)
                 }
             }
-            val => self.to_reg(ty, val),
+            val => self.clone_to_register(ty, val),
         }
     }
 
