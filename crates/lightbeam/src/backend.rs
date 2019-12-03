@@ -2525,7 +2525,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
             // TODO: We can use stack slots for values already on the stack but we
             //       don't refcount stack slots right now
-            out_args.push(self.into_temp_loc(None, &mut val));
+            out_args.push(self.put_into_temp_location(None, &mut val));
         }
 
         out_args.reverse();
@@ -2548,7 +2548,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             let mut val = self.pop();
             // TODO: We can use stack slots for values already on the stack but we
             //       don't refcount stack slots right now
-            let loc = self.into_temp_loc(None, &mut val);
+            let loc = self.put_into_temp_location(None, &mut val);
 
             out.push(loc);
         }
@@ -3046,7 +3046,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Some(out)
     }
 
-    fn into_temp_loc(&mut self, ty: impl Into<Option<GPRType>>, val: &mut ValueLocation) -> CCLoc {
+    fn put_into_temp_location(&mut self, ty: impl Into<Option<GPRType>>, val: &mut ValueLocation) -> CCLoc {
         match val {
             _ => {
                 if let Some(gpr) = self.put_into_temp_register(ty, val) {
