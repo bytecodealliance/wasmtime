@@ -4,13 +4,14 @@ use super::create_handle::create_handle;
 use super::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind, TrapCode,
 };
+use super::trap::record_api_trap;
 use super::{binemit, pretty_error, TargetIsa};
 use super::{Context, FunctionBuilder, FunctionBuilderContext};
 use crate::data_structures::ir::{self, types};
 use crate::data_structures::wasm::{DefinedFuncIndex, FuncIndex};
 use crate::data_structures::{native_isa_builder, settings, EntityRef, PrimaryMap};
 use crate::r#ref::HostRef;
-use crate::{Callable, FuncType, Store, Trap, Val};
+use crate::{Callable, FuncType, Store, Val};
 use anyhow::Result;
 use std::cmp;
 use std::rc::Rc;
@@ -20,7 +21,6 @@ use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
 
 struct TrampolineState {
     func: Rc<dyn Callable + 'static>,
-    trap: Option<HostRef<Trap>>,
     #[allow(dead_code)]
     code_memory: CodeMemory,
 }
@@ -58,12 +58,8 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
             0
         }
         Err(trap) => {
-            // TODO read custom exception
-            InstanceHandle::from_vmctx(vmctx)
-                .host_state()
-                .downcast_mut::<TrampolineState>()
-                .expect("state")
-                .trap = Some(trap);
+            // TODO did we record it already?
+            record_api_trap(trap);
             1
         }
     }
@@ -229,7 +225,6 @@ pub fn create_handle_with_function(
 
     let trampoline_state = TrampolineState {
         func: func.clone(),
-        trap: None,
         code_memory,
     };
 

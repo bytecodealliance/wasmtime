@@ -1,7 +1,7 @@
 use crate::data_structures::ir;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
-use crate::trampoline::generate_func_export;
+use crate::trampoline::{generate_func_export, take_api_trap};
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
@@ -90,7 +90,8 @@ impl WrappedCallable for WasmtimeFn {
                 values_vec.as_mut_ptr() as *mut u8,
             )
         } {
-            return Err(HostRef::new(Trap::new(message)));
+            let trap = take_api_trap().unwrap_or_else(|| HostRef::new(Trap::new(message)));
+            return Err(trap);
         }
 
         // Load the return values out of `values_vec`.

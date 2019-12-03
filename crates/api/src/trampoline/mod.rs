@@ -5,6 +5,7 @@ mod func;
 mod global;
 mod memory;
 mod table;
+mod trap;
 
 use self::func::create_handle_with_function;
 use self::global::create_global;
@@ -16,6 +17,7 @@ use anyhow::Result;
 use std::rc::Rc;
 
 pub use self::global::GlobalState;
+pub use self::trap::take_api_trap;
 
 pub fn generate_func_export(
     ft: &FuncType,
