@@ -6,6 +6,7 @@ use crate::r#ref::HostRef;
 use crate::Trap;
 use wasmtime_environ::TrapInformation;
 
+// Randomly selected user TrapCode magic number 13.
 pub const API_TRAP_CODE: TrapCode = TrapCode::User(13);
 
 thread_local! {
