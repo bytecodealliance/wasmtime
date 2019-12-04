@@ -152,7 +152,7 @@ impl WastContext {
         };
         let context = |sp: wast::Span| {
             let (line, col) = sp.linecol_in(wast);
-            format!("for directive on {}:{}:{}", filename, line, col)
+            format!("for directive on {}:{}:{}", filename, line + 1, col)
         };
 
         let buf = wast::parser::ParseBuffer::new(wast).map_err(adjust_wast)?;
