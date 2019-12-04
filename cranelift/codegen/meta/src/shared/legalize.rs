@@ -139,6 +139,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     expand.custom_legalize(trapnz, "expand_cond_trap");
     expand.custom_legalize(br_table, "expand_br_table");
     expand.custom_legalize(select, "expand_select");
+    widen.custom_legalize(select, "expand_select"); // small ints
 
     // Custom expansions for floating point constants.
     // These expansions require bit-casting or creating constant pool entries.
@@ -148,6 +149,10 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     // Custom expansions for stack memory accesses.
     expand.custom_legalize(insts.by_name("stack_load"), "expand_stack_load");
     expand.custom_legalize(insts.by_name("stack_store"), "expand_stack_store");
+
+    // Custom expansions for small stack memory acccess.
+    widen.custom_legalize(insts.by_name("stack_load"), "expand_stack_load");
+    widen.custom_legalize(insts.by_name("stack_store"), "expand_stack_store");
 
     // List of variables to reuse in patterns.
     let x = var("x");
@@ -610,6 +615,18 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
                 ],
             );
         }
+    }
+
+    for &ty in &[I8, I16] {
+        widen.legalize(
+            def!(brz.ty(x, ebb, vararg)),
+            vec![def!(a = uextend.I32(x)), def!(brz(a, ebb, vararg))],
+        );
+
+        widen.legalize(
+            def!(brnz.ty(x, ebb, vararg)),
+            vec![def!(a = uextend.I32(x)), def!(brnz(a, ebb, vararg))],
+        );
     }
 
     // Expand integer operations with carry for RISC architectures that don't have
