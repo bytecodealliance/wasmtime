@@ -112,6 +112,18 @@ jobs:
       if: false && matrix.rust == 'nightly' # Temporarily disable fuzz tests until https://github.com/bytecodealliance/cranelift/issues/1216 is resolved
       continue-on-error: true
 
+  meta_determinist_check:
+    name: Meta deterministic check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - name: Install Rust
+      run: rustup update stable && rustup default stable
+    - run: cargo build
+    - run: ci/ensure_deterministic_build.sh
+
   fuzz:
     name: Fuzz Regression
     runs-on: ubuntu-latest
