@@ -44,6 +44,6 @@ Project maintainers who do not follow or enforce the Code of Conduct in good fai
 
 This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 1.4, available at [http://contributor-covenant.org/version/1/4][version]
 
-[OCoC]: ORG_CODE_OF_CONDUCT.md
+[OCoC]: https://github.com/bytecodealliance/wasmtime/blob/master/ORG_CODE_OF_CONDUCT.md
 [homepage]: https://www.contributor-covenant.org
 [version]: https://www.contributor-covenant.org/version/1/4/
