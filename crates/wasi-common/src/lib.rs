@@ -26,6 +26,7 @@ mod error;
 mod fdentry;
 mod helpers;
 mod hostcalls_impl;
+mod sandboxed_tty_writer;
 mod sys;
 #[macro_use]
 mod macros;
