@@ -5,27 +5,6 @@ use wasi_tests::open_scratch_directory;
 use wasi_tests::utils::{cleanup_dir, cleanup_file, create_dir, create_file};
 use wasi_tests::wasi_wrappers::wasi_path_open;
 
-unsafe fn create_or_open(
-    dir_fd: wasi_unstable::Fd,
-    name: &str,
-    flags: wasi_unstable::OFlags,
-) -> wasi_unstable::Fd {
-    let mut file_fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(dir_fd, 0, name, flags, 0, 0, 0, &mut file_fd);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening '{}'",
-        name
-    );
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
-        "file descriptor range check",
-    );
-    file_fd
-}
-
 unsafe fn test_dangling_fd(dir_fd: wasi_unstable::Fd) {
     // Create a file, open it, delete it without closing the handle,
     // and then try creating it again
@@ -48,7 +27,7 @@ unsafe fn test_dangling_fd(dir_fd: wasi_unstable::Fd) {
     // Now, repeat the same process but for a directory
     create_dir(dir_fd, "subdir");
     let mut subdir_fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(
+    status = wasi_path_open(
         dir_fd,
         0,
         "subdir",

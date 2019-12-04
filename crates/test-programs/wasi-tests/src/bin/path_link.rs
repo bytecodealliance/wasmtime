@@ -13,7 +13,7 @@ unsafe fn create_or_open(
     flags: wasi_unstable::OFlags,
 ) -> wasi_unstable::Fd {
     let mut file_fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(dir_fd, 0, name, flags, 0, 0, 0, &mut file_fd);
+    let status = wasi_path_open(dir_fd, 0, name, flags, 0, 0, 0, &mut file_fd);
     assert_eq!(
         status,
         wasi_unstable::raw::__WASI_ESUCCESS,
@@ -30,7 +30,7 @@ unsafe fn create_or_open(
 
 unsafe fn open_link(dir_fd: wasi_unstable::Fd, name: &str) -> wasi_unstable::Fd {
     let mut file_fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(dir_fd, 0, name, 0, 0, 0, 0, &mut file_fd);
+    let status = wasi_path_open(dir_fd, 0, name, 0, 0, 0, 0, &mut file_fd);
     assert_eq!(
         status,
         wasi_unstable::raw::__WASI_ESUCCESS,
@@ -135,7 +135,7 @@ unsafe fn test_path_link(dir_fd: wasi_unstable::Fd) {
 
     // Create a link to a directory
     create_dir(dir_fd, "subdir");
-    let subdir_fd = create_or_open(dir_fd, "subdir", wasi_unstable::O_DIRECTORY);
+    create_or_open(dir_fd, "subdir", wasi_unstable::O_DIRECTORY);
     assert_eq!(
         wasi_path_link(dir_fd, 0, "subdir", dir_fd, "link"),
         Err(wasi_unstable::EPERM),
