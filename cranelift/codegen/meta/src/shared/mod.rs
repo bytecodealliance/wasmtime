@@ -92,6 +92,8 @@ impl Definitions {
             }
         }
 
-        Vec::from_iter(format_structures.into_iter().map(|(_, v)| v))
+        let mut result = Vec::from_iter(format_structures.into_iter().map(|(_, v)| v));
+        result.sort_by_key(|format| format.name);
+        result
     }
 }
