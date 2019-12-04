@@ -91,16 +91,19 @@ aren't any existing tests.
 ### Adding Specification-Style Wast Tests
 
 We use the spec testsuite as-is and without custom patches or a forked
-version. If you have a new test that you want to add to it, make sure it makes
-sense for every Wasm implementation to run your test (i.e. it isn't
-Wasmtime-specific) and send a pull request
+version. This probably isn't what you want to modify when adding a new Wasmtime
+test!
+
+When you have a Wasmtime-specific test that you'd like to write in Wast and use
+the Wast-style assertions, you can add it to our "misc testsuite". The misc
+testsuite uses the same syntax and assertions as the spec testsuite, but lives
+in `tests/misc_testsuite`. Feel free to add new tests to existing
+`tests/misc_testsuite/*.wast` files or create new ones as needed. These tests
+are run as part of the `wasmtime-cli` crate's tests.
+
+If you have a new test that you think really belongs in the spec testsuite, make
+sure it makes sense for every Wasm implementation to run your test (i.e. it
+isn't Wasmtime-specific) and send a pull request
 [upstream](https://github.com/WebAssembly/testsuite/). Once it is accepted in
 the upstream repo, we can update our git submodule and we'll start running the
 new tests.
-
-Alternatively, if you have a Wasmtime-specific test that you'd like to write in
-Wast and use the Wast-style assertions, you can add it to our "misc
-testsuite". The misc testsuite uses the same syntax and assertions as the spec
-testsuite, but lives in `tests/misc_testsuite`. Feel free to add new tests to
-existing `tests/misc_testsuite/*.wast` files or create new ones as needed. These
-tests are run as part of the `wasmtime-cli` crate.
