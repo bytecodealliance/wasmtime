@@ -1,6 +1,4 @@
-use libc;
 use std::mem::MaybeUninit;
-use std::{env, process};
 use wasi::wasi_unstable;
 use wasi_tests::wasi_wrappers::wasi_fd_fdstat_get;
 
