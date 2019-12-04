@@ -31,6 +31,7 @@
 - [Contributing](contributing.md)
   - [Building](./contributing-building.md)
   - [Testing](./contributing-testing.md)
+  - [Fuzzing](./contributing-fuzzing.md)
   - [CI](./contributing-ci.md)
   - [Governance](./contributing-governance.md)
   - [Code of Conduct](./contributing-coc.md)
