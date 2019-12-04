@@ -1,28 +1,62 @@
 //! Support for a calling of an imported function.
 
 use super::create_handle::create_handle;
-use super::ir::{
-    ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind, TrapCode,
-};
+use super::ir::{ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind};
+use super::trap::{record_api_trap, TrapSink, API_TRAP_CODE};
 use super::{binemit, pretty_error, TargetIsa};
 use super::{Context, FunctionBuilder, FunctionBuilderContext};
 use crate::data_structures::ir::{self, types};
 use crate::data_structures::wasm::{DefinedFuncIndex, FuncIndex};
 use crate::data_structures::{native_isa_builder, settings, EntityRef, PrimaryMap};
 use crate::r#ref::HostRef;
-use crate::{Callable, FuncType, Store, Trap, Val};
+use crate::{Callable, FuncType, Store, Val};
 use anyhow::Result;
 use std::cmp;
+use std::convert::TryFrom;
 use std::rc::Rc;
-use wasmtime_environ::{CompiledFunction, Export, Module};
+use wasmtime_environ::{CompiledFunction, Export, Module, TrapInformation};
 use wasmtime_jit::CodeMemory;
-use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
+use wasmtime_runtime::{
+    get_mut_trap_registry, InstanceHandle, TrapRegistrationGuard, VMContext, VMFunctionBody,
+};
 
 struct TrampolineState {
     func: Rc<dyn Callable + 'static>,
-    trap: Option<HostRef<Trap>>,
     #[allow(dead_code)]
     code_memory: CodeMemory,
+    trap_registration_guards: Vec<TrapRegistrationGuard>,
+}
+
+impl TrampolineState {
+    fn new(
+        func: Rc<dyn Callable + 'static>,
+        code_memory: CodeMemory,
+        func_addr: *const VMFunctionBody,
+        func_traps: &[TrapInformation],
+    ) -> Self {
+        let mut trap_registry = get_mut_trap_registry();
+        let mut trap_registration_guards = Vec::new();
+        for trap_desc in func_traps.iter() {
+            let func_addr = func_addr as *const u8 as usize;
+            let offset = usize::try_from(trap_desc.code_offset).unwrap();
+            let trap_addr = func_addr + offset;
+            let guard =
+                trap_registry.register_trap(trap_addr, trap_desc.source_loc, trap_desc.trap_code);
+            trap_registration_guards.push(guard);
+        }
+        TrampolineState {
+            func,
+            code_memory,
+            trap_registration_guards,
+        }
+    }
+}
+
+impl Drop for TrampolineState {
+    fn drop(&mut self) {
+        // We must deregister traps before freeing the code memory.
+        self.trap_registration_guards.clear();
+    }
 }
 
 unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *mut i64) -> u32 {
@@ -58,12 +92,7 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
             0
         }
         Err(trap) => {
-            // TODO read custom exception
-            InstanceHandle::from_vmctx(vmctx)
-                .host_state()
-                .downcast_mut::<TrampolineState>()
-                .expect("state")
-                .trap = Some(trap);
+            record_api_trap(trap);
             1
         }
     }
@@ -76,7 +105,7 @@ fn make_trampoline(
     fn_builder_ctx: &mut FunctionBuilderContext,
     call_id: u32,
     signature: &ir::Signature,
-) -> *const VMFunctionBody {
+) -> (*const VMFunctionBody, Vec<TrapInformation>) {
     // Mostly reverse copy of the similar method from wasmtime's
     // wasmtime-jit/src/compiler.rs.
     let pointer_type = isa.pointer_type();
@@ -147,7 +176,7 @@ fn make_trampoline(
             .call_indirect(new_sig, callee_value, &callee_args);
 
         let call_result = builder.func.dfg.inst_results(call)[0];
-        builder.ins().trapnz(call_result, TrapCode::User(0));
+        builder.ins().trapnz(call_result, API_TRAP_CODE);
 
         let mflags = MemFlags::trusted();
         let mut results = Vec::new();
@@ -166,7 +195,7 @@ fn make_trampoline(
 
     let mut code_buf: Vec<u8> = Vec::new();
     let mut reloc_sink = binemit::TrampolineRelocSink {};
-    let mut trap_sink = binemit::NullTrapSink {};
+    let mut trap_sink = TrapSink::new();
     let mut stackmap_sink = binemit::NullStackmapSink {};
     context
         .compile_and_emit(
@@ -182,14 +211,17 @@ fn make_trampoline(
     let mut unwind_info = Vec::new();
     context.emit_unwind_info(isa, &mut unwind_info);
 
-    code_memory
+    let traps = trap_sink.traps;
+
+    let addr = code_memory
         .allocate_for_function(&CompiledFunction {
             body: code_buf,
             jt_offsets: context.func.jt_offsets,
             unwind_info,
         })
         .expect("allocate_for_function")
-        .as_ptr()
+        .as_ptr();
+    (addr, traps)
 }
 
 pub fn create_handle_with_function(
@@ -216,7 +248,7 @@ pub fn create_handle_with_function(
     module
         .exports
         .insert("trampoline".to_string(), Export::Function(func_id));
-    let trampoline = make_trampoline(
+    let (trampoline, traps) = make_trampoline(
         isa.as_ref(),
         &mut code_memory,
         &mut fn_builder_ctx,
@@ -227,11 +259,7 @@ pub fn create_handle_with_function(
 
     finished_functions.push(trampoline);
 
-    let trampoline_state = TrampolineState {
-        func: func.clone(),
-        trap: None,
-        code_memory,
-    };
+    let trampoline_state = TrampolineState::new(func.clone(), code_memory, trampoline, &traps);
 
     create_handle(
         module,

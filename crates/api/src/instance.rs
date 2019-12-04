@@ -3,6 +3,7 @@ use crate::externals::Extern;
 use crate::module::Module;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
+use crate::trampoline::take_api_trap;
 use crate::types::{ExportType, ExternType, Name};
 use anyhow::Result;
 use std::cell::RefCell;
@@ -40,7 +41,12 @@ pub fn instantiate_in_context(
         &mut resolver,
         exports,
         debug_info,
-    )?;
+    )
+    .map_err(|e| {
+        // TODO wrap HostRef<Trap> into Error
+        drop(take_api_trap());
+        e
+    })?;
     contexts.insert(context);
     Ok((instance, contexts))
 }
