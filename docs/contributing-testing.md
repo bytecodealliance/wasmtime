@@ -8,10 +8,24 @@ can't build it!
 
 ## Running All Tests
 
-To run all of Wasmtime's tests, execute this command:
+To run all of Wasmtime's tests (excluding WASI integration tests), execute this command:
 
 ```shell
 cargo test --all
+```
+
+To include WASI integration tests, you'll need `wasm32-wasi` target installed, which,
+assuming you're using [rustup.rs](https://rustup.rs) to manage your Rust versions,
+can be done as follows:
+
+```shell
+rustup target add wasm32-wasi
+```
+
+Next, to run all tests including the WASI integration tests, execute this command:
+
+```shell
+cargo test --features test_programs --all
 ```
 
 You can also exclude a particular crate from testing with `--exclude`. For
@@ -55,6 +69,16 @@ of testing the `wasmtime-cli` crate:
 
 ```shell
 cargo test -p wasmtime-cli
+```
+
+## Running WASI Integration Tests Only
+
+WASI integration tests can be run separately from all other tests which
+can be useful when working on the `wasi-common` crate. This can be done by
+executing this command:
+
+```shell
+cargo test --features test_programs -p test-programs
 ```
 
 ## Adding New Tests
@@ -107,3 +131,17 @@ isn't Wasmtime-specific) and send a pull request
 [upstream](https://github.com/WebAssembly/testsuite/). Once it is accepted in
 the upstream repo, we can update our git submodule and we'll start running the
 new tests.
+
+### Adding WASI Integration Tests
+
+When you have a WASI-specific test program that you'd like to include as a 
+test case to run against our WASI implementation, you can add it to our
+`test-programs` crate. In particular, you should drop a main-style Rust source
+file into `crates/test-programs/wasi-tests/src/bin/some_new_test.rs` with a
+name of your choice. And that's it! The build script included in the
+`test-programs` crate will automatically generate the necessary boilerplate
+code for your test program so that it's run on all supported hosts.
+
+If you would like to tweak which host to run the test program against however
+(for instance, only on Unix but on Windows), you can tweak that in the build
+script located under `crates/test-programs/build.rs`.
