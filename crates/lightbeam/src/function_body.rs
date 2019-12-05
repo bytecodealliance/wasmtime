@@ -515,8 +515,9 @@ where
                             let new_cc = block.calling_convention.clone();
 
                             if !(cc.is_none() || cc == new_cc) {
-                                return Err(Error::Microwasm("Can't pass different params to different elements of `br_table` \
-                                 yet".to_string()));
+                                return Err(Error::Microwasm(
+                                    "Can't pass different params to different elements of `br_table` yet"
+                                    .to_string()));
                             }
                             cc = new_cc;
                         }
