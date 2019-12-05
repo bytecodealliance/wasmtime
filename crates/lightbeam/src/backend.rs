@@ -3064,7 +3064,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    pub fn apply_cc(&mut self, cc: &BlockCallingConvention) -> Result<(), Error>{
+    pub fn apply_cc(&mut self, cc: &BlockCallingConvention) -> Result<(), Error> {
         let stack = cc.arguments.iter();
 
         self.block_state.stack = Vec::with_capacity(stack.size_hint().0);
@@ -3779,7 +3779,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     );
                 }
                 ValueLocation::Cond(_) => self.copy_value(val, CCLoc::Reg(new_reg))?,
-                ValueLocation::Immediate(_) => unreachable!(),
+                ValueLocation::Immediate(_) => {
+                    return Err(Error::Microwasm(
+                        "i32_extend_u unreachable code".to_string(),
+                    ))
+                }
             }
 
             ValueLocation::Reg(new_reg)
@@ -5575,7 +5579,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    fn push_function_returns(&mut self, returns: impl IntoIterator<Item = SignlessType>) -> Result<(), Error>{
+    fn push_function_returns(
+        &mut self,
+        returns: impl IntoIterator<Item = SignlessType>,
+    ) -> Result<(), Error> {
         for loc in ret_locs(returns) {
             if let CCLoc::Reg(reg) = loc {
                 self.block_state.regs.mark_used(reg);
@@ -5810,7 +5817,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // TODO: Reserve space to store RBX, RBP, and R12..R15 so we can use them
     //       as scratch registers
     /// Writes the function prologue and stores the arguments as locals
-    pub fn start_function(&mut self, params: impl IntoIterator<Item = SignlessType>) -> Result<(), Error> {
+    pub fn start_function(
+        &mut self,
+        params: impl IntoIterator<Item = SignlessType>,
+    ) -> Result<(), Error> {
         let locs = Vec::from_iter(arg_locs(params));
 
         self.apply_cc(&BlockCallingConvention::function_start(locs))?;
