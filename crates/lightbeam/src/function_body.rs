@@ -173,15 +173,18 @@ where
                         Right(cc) => cc.stack.len(),
                     });
                     if let Some(num_cc_params) = num_cc_params {
+                        // we can use assert here bc we are in debug mode
                         assert_ge!(num_cc_params, block.params as usize);
                     }
                 } else {
                     let mut actual_regs = Registers::new();
+                    actual_regs.release_scratch_register()?;
                     for val in &ctx.block_state.stack {
                         if let ValueLocation::Reg(gpr) = val {
                             actual_regs.mark_used(*gpr);
                         }
                     }
+                    // we can use assert here bc we are in debug mode
                     assert_eq!(actual_regs, ctx.block_state.regs);
                 }
             };
@@ -279,7 +282,13 @@ where
                             Some(Right(virt)) => {
                                 ctx.set_state(virt.clone())?;
                             }
-                            _ => assert_eq!(block.params as usize, ctx.block_state.stack.len()),
+                            _ => {
+                                if block.params as usize != ctx.block_state.stack.len() {
+                                    return Err(Error::Microwasm(
+                                        "Not enough block params on the stack".to_string(),
+                                    ));
+                                }
+                            }
                         }
 
                         ctx.define_label(block.label.label().unwrap().clone());
@@ -504,11 +513,11 @@ where
 
                         if block.calling_convention.is_some() {
                             let new_cc = block.calling_convention.clone();
-                            assert!(
-                                cc.is_none() || cc == new_cc,
-                                "Can't pass different params to different elements of `br_table` \
-                                 yet"
-                            );
+
+                            if !(cc.is_none() || cc == new_cc) {
+                                return Err(Error::Microwasm("Can't pass different params to different elements of `br_table` \
+                                 yet".to_string()));
+                            }
                             cc = new_cc;
                         }
 
@@ -851,7 +860,9 @@ where
                 type_index,
                 table_index,
             } => {
-                assert_eq!(table_index, 0);
+                if table_index != 0 {
+                    return Err(Error::Microwasm("table_index not equal to 0".to_string()));
+                }
 
                 let callee_ty = module_context.signature(type_index);
 
