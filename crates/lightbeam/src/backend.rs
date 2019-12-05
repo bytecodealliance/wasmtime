@@ -4825,10 +4825,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.free_value(divisor)?;
 
         if self.block_state.regs.is_free(RAX) {
-            return Err(Error::Microwasm("full_div: RAX is not free".to_string()))
+            return Err(Error::Microwasm("full_div: RAX is not free".to_string()));
         }
         if self.block_state.regs.is_free(RDX) {
-            return Err(Error::Microwasm("full_div: RDX is not free".to_string()))
+            return Err(Error::Microwasm("full_div: RDX is not free".to_string()));
         }
 
         Ok((ValueLocation::Reg(RAX), ValueLocation::Reg(RDX), saved))
