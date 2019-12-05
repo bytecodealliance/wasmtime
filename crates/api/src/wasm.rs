@@ -56,7 +56,7 @@ macro_rules! declare_vec {
 
             #[allow(dead_code)]
             fn as_slice(&self) -> &[$elem_ty] {
-                unsafe { slice::from_raw_parts(self.data as *const $elem_ty, self.size) }
+                unsafe { slice::from_raw_parts(self.data, self.size) }
             }
         }
 
@@ -122,8 +122,8 @@ macro_rules! declare_vec {
             }
 
             #[allow(dead_code)]
-            fn as_slice(&self) -> &[$elem_ty] {
-                unsafe { slice::from_raw_parts(self.data as *const $elem_ty, self.size) }
+            fn as_slice(&self) -> &[*mut $elem_ty] {
+                unsafe { slice::from_raw_parts(self.data, self.size) }
             }
         }
 
