@@ -5,7 +5,7 @@ namespace Wasmtime
     /// <summary>
     /// Represents the possible kinds of WebAssembly values.
     /// </summary>
-    public enum ValueKind
+    public enum ValueKind : byte
     {
         /// <summary>
         /// The value is a 32-bit integer.

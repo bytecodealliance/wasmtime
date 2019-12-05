@@ -330,7 +330,26 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        build: [linux-debug, linux-release, macos-debug, macos-release, windows-debug, windows-release]
+        include:
+          - build: linux-debug
+            os: ubuntu-latest
+            config: debug
+          - build: linux-release
+            os: ubuntu-latest
+            config: release
+          - build: macos-debug
+            os: macos-latest
+            config: debug
+          - build: macos-release
+            os: macos-latest
+            config: release
+          - build: windows-debug
+            os: windows-latest
+            config: debug
+          - build: windows-release
+            os: windows-latest
+            config: release
     steps:
     - uses: actions/checkout@v1
       with:
@@ -341,12 +360,14 @@ jobs:
     - uses: actions/setup-dotnet@v1
       with:
         dotnet-version: '3.0.101'
-    - run: |
+    - name: Test
+      run: |
         cd crates/misc/dotnet/tests
-        dotnet test
-    - run: |
+        dotnet test -c ${{ matrix.config }}
+    - name: Create package
+      run: |
         cd crates/misc/dotnet/src
-        dotnet pack
+        dotnet pack -c ${{ matrix.config }}
       if: matrix.os == 'macos-latest' # Currently the pack target only supports macOS
 
   # Consumes all published artifacts from all the previous build steps, creates
