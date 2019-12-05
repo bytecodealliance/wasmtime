@@ -136,17 +136,18 @@ pub struct Module {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
     pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
 
-    /// Names of imported functions.
-    pub imported_funcs: PrimaryMap<FuncIndex, (String, String)>,
+    /// Names of imported functions, as well as the index of the import that
+    /// performed this import.
+    pub imported_funcs: PrimaryMap<FuncIndex, (String, String, u32)>,
 
     /// Names of imported tables.
-    pub imported_tables: PrimaryMap<TableIndex, (String, String)>,
+    pub imported_tables: PrimaryMap<TableIndex, (String, String, u32)>,
 
     /// Names of imported memories.
-    pub imported_memories: PrimaryMap<MemoryIndex, (String, String)>,
+    pub imported_memories: PrimaryMap<MemoryIndex, (String, String, u32)>,
 
     /// Names of imported globals.
-    pub imported_globals: PrimaryMap<GlobalIndex, (String, String)>,
+    pub imported_globals: PrimaryMap<GlobalIndex, (String, String, u32)>,
 
     /// Types of functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
