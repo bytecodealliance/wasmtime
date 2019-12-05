@@ -120,6 +120,10 @@ struct CommonOptions {
     #[structopt(long)]
     enable_bulk_memory: bool,
 
+    /// Enable support for interface types
+    #[structopt(long)]
+    enable_interface_types: bool,
+
     /// Enable all experimental Wasm features
     #[structopt(long)]
     enable_all: bool,
@@ -157,6 +161,7 @@ impl CommonOptions {
             .wasm_reference_types(self.enable_reference_types || self.enable_all)
             .wasm_multi_value(self.enable_multi_value || self.enable_all)
             .wasm_threads(self.enable_threads || self.enable_all)
+            .wasm_interface_types(self.enable_interface_types || self.enable_all)
             .cranelift_opt_level(self.opt_level())
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .profiler(pick_profiling_strategy(self.jitdump)?)?;

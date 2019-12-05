@@ -36,6 +36,33 @@ pub enum Val {
 
     /// A 128-bit number
     V128(u128),
+
+    /// A signed 8-bit integer, part of the WebAssembly Interface Types proposal
+    S8(i8),
+    /// A signed 16-bit integer, part of the WebAssembly Interface Types proposal
+    S16(i16),
+    /// A signed 32-bit integer, part of the WebAssembly Interface Types proposal
+    ///
+    /// Note that this is distinct from `I32` which does not have a signedness
+    /// representation. This type is not the same as the `I32` type.
+    S32(i32),
+    /// A signed 64-bit integer, part of the WebAssembly Interface Types proposal
+    ///
+    /// Note that this is distinct from `I64` which does not have a signedness
+    /// representation. This type is not the same as the `I64` type.
+    S64(i64),
+
+    /// An unsigned 8-bit integer, part of the WebAssembly Interface Types proposal
+    U8(u8),
+    /// An unsigned 16-bit integer, part of the WebAssembly Interface Types proposal
+    U16(u16),
+    /// An unsigned 32-bit integer, part of the WebAssembly Interface Types proposal
+    U32(u32),
+    /// An unsigned 64-bit integer, part of the WebAssembly Interface Types proposal
+    U64(u64),
+
+    /// A utf-8 string, part of the WebAssembly Interface Types proposal
+    String(String),
 }
 
 macro_rules! accessors {
@@ -78,6 +105,15 @@ impl Val {
             Val::AnyRef(_) => ValType::AnyRef,
             Val::FuncRef(_) => ValType::FuncRef,
             Val::V128(_) => ValType::V128,
+            Val::S8(_) => ValType::S8,
+            Val::S16(_) => ValType::S16,
+            Val::S32(_) => ValType::S32,
+            Val::S64(_) => ValType::S64,
+            Val::U8(_) => ValType::U8,
+            Val::U16(_) => ValType::U16,
+            Val::U32(_) => ValType::U32,
+            Val::U64(_) => ValType::U64,
+            Val::String(_) => ValType::String,
         }
     }
 
@@ -111,6 +147,17 @@ impl Val {
         (F64(f64) f64 unwrap_f64 f64::from_bits(*e))
         (FuncRef(&Func) funcref unwrap_funcref e)
         (V128(u128) v128 unwrap_v128 *e)
+
+        (S8(i8) s8 unwrap_s8 *e)
+        (S16(i16) s16 unwrap_s16 *e)
+        (S32(i32) s32 unwrap_s32 *e)
+        (S64(i64) s64 unwrap_s64 *e)
+        (U8(u8) u8 unwrap_u8 *e)
+        (U16(u16) u16 unwrap_u16 *e)
+        (U32(u32) u32 unwrap_u32 *e)
+        (U64(u64) u64 unwrap_u64 *e)
+
+        (String(&str) string unwrap_string e)
     }
 
     /// Attempt to access the underlying value of this `Val`, returning
@@ -146,8 +193,34 @@ impl Val {
 
             // Integers have no association with any particular store, so
             // they're always considered as "yes I came from that store",
-            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => true,
+            Val::I32(_)
+            | Val::I64(_)
+            | Val::F32(_)
+            | Val::F64(_)
+            | Val::V128(_)
+            | Val::S8(_)
+            | Val::S16(_)
+            | Val::S32(_)
+            | Val::S64(_)
+            | Val::U8(_)
+            | Val::U16(_)
+            | Val::U32(_)
+            | Val::U64(_) => true,
+
+            | Val::String(_) => unimplemented!(),
         }
+    }
+}
+
+impl From<i8> for Val {
+    fn from(val: i8) -> Val {
+        Val::S8(val)
+    }
+}
+
+impl From<i16> for Val {
+    fn from(val: i16) -> Val {
+        Val::S16(val)
     }
 }
 
@@ -163,6 +236,30 @@ impl From<i64> for Val {
     }
 }
 
+impl From<u8> for Val {
+    fn from(val: u8) -> Val {
+        Val::U8(val)
+    }
+}
+
+impl From<u16> for Val {
+    fn from(val: u16) -> Val {
+        Val::U16(val)
+    }
+}
+
+impl From<u32> for Val {
+    fn from(val: u32) -> Val {
+        Val::U32(val)
+    }
+}
+
+impl From<u64> for Val {
+    fn from(val: u64) -> Val {
+        Val::U64(val)
+    }
+}
+
 impl From<f32> for Val {
     fn from(val: f32) -> Val {
         Val::F32(val.to_bits())
@@ -172,6 +269,12 @@ impl From<f32> for Val {
 impl From<f64> for Val {
     fn from(val: f64) -> Val {
         Val::F64(val.to_bits())
+    }
+}
+
+impl From<String> for Val {
+    fn from(val: String) -> Val {
+        Val::String(val)
     }
 }
 

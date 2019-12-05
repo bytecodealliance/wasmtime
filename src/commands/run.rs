@@ -282,6 +282,15 @@ impl RunCommand {
                 ValType::I64 => Val::I64(val.parse()?),
                 ValType::F32 => Val::F32(val.parse()?),
                 ValType::F64 => Val::F64(val.parse()?),
+                ValType::S8 => Val::S8(val.parse()?),
+                ValType::S16 => Val::S16(val.parse()?),
+                ValType::S32 => Val::S32(val.parse()?),
+                ValType::S64 => Val::S64(val.parse()?),
+                ValType::U8 => Val::U8(val.parse()?),
+                ValType::U16 => Val::U16(val.parse()?),
+                ValType::U32 => Val::U32(val.parse()?),
+                ValType::U64 => Val::U64(val.parse()?),
+                ValType::String => Val::String(val.to_string()),
                 t => bail!("unsupported argument type {:?}", t),
             });
         }
@@ -307,6 +316,15 @@ impl RunCommand {
                 Val::AnyRef(_) => println!("<anyref>"),
                 Val::FuncRef(_) => println!("<anyref>"),
                 Val::V128(i) => println!("{}", i),
+                Val::S8(i) => println!("{}", i),
+                Val::S16(i) => println!("{}", i),
+                Val::S32(i) => println!("{}", i),
+                Val::S64(i) => println!("{}", i),
+                Val::U8(i) => println!("{}", i),
+                Val::U16(i) => println!("{}", i),
+                Val::U32(i) => println!("{}", i),
+                Val::U64(i) => println!("{}", i),
+                Val::String(s) => println!("{}", s),
             }
         }
 
