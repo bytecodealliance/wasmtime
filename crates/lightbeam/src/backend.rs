@@ -3215,13 +3215,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         ty: impl Into<Option<GPRType>>,
         val: &mut ValueLocation,
     ) -> Result<Option<GPR>, Error> {
-        let out = match self.to_reg(ty, *val) {
-            Err(e) => return Err(e),
-            Ok(o) => o.unwrap(),
-        };
-        self.free_value(*val)?;
-        *val = ValueLocation::Reg(out);
-        Ok(Some(out))
+        if let Some(out) = self.to_reg(ty, *val)? {
+            self.free_value(*val)?;
+            *val = ValueLocation::Reg(out);
+            Ok(Some(out))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Clones this value into a register so that it can be efficiently read
@@ -3236,13 +3236,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 self.block_state.regs.mark_used(r);
                 Ok(Some(r))
             }
-            val => {
-                let scratch = self.take_reg(ty.unwrap_or(GPRType::Rq)).unwrap();
-
-                self.copy_value(val, CCLoc::Reg(scratch))?;
-
-                Ok(Some(scratch))
-            }
+            val => match self.take_reg(ty.unwrap_or(GPRType::Rq)) {
+                Some(scratch) => {
+                    self.copy_value(val, CCLoc::Reg(scratch))?;
+                    Ok(Some(scratch))
+                }
+                None => Ok(None),
+            },
         }
     }
 
@@ -3253,13 +3253,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         ty: impl Into<Option<GPRType>>,
         val: &mut ValueLocation,
     ) -> Result<Option<GPR>, Error> {
-        let out = match self.to_temp_reg(ty, *val) {
-            Err(e) => return Err(e),
-            Ok(o) => o.unwrap(),
-        };
-        self.free_value(*val)?;
-        *val = ValueLocation::Reg(out);
-        Ok(Some(out))
+        let out = self.to_temp_reg(ty, *val)?;
+        if let Some(o) = out {
+            self.free_value(*val)?;
+            *val = ValueLocation::Reg(o);
+            Ok(Some(o))
+        } else {
+            return Ok(None);
+        }
     }
 
     fn into_temp_loc(
@@ -3288,25 +3289,25 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         val: ValueLocation,
     ) -> Result<Option<GPR>, Error> {
         // If we have `None` as the type then it always matches (`.unwrap_or(true)`)
-        let res = match val {
+        match val {
             ValueLocation::Reg(r) => {
                 let ty = ty.into();
                 let type_matches = ty.map(|t| t == r.type_()).unwrap_or(true);
 
                 if self.block_state.regs.num_usages(r) <= 1 && type_matches {
                     self.block_state.regs.mark_used(r);
-                    Some(r)
+                    Ok(Some(r))
                 } else {
-                    let scratch = self.take_reg(ty.unwrap_or(GPRType::Rq)).unwrap();
-
-                    self.copy_value(val, CCLoc::Reg(scratch))?;
-
-                    Some(scratch)
+                    if let Some(scratch) = self.take_reg(ty.unwrap_or(GPRType::Rq)) {
+                        self.copy_value(val, CCLoc::Reg(scratch))?;
+                        Ok(Some(scratch))
+                    } else {
+                        Ok(None)
+                    }
                 }
             }
-            val => self.to_reg(ty, val)?,
-        };
-        Ok(res)
+            val => self.to_reg(ty, val),
+        }
     }
 
     pub fn f32_neg(&mut self) -> Result<(), Error> {
