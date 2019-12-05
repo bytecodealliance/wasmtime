@@ -102,9 +102,11 @@ jobs:
           - build: beta
             os: ubuntu-latest
             rust: beta
+          # FIXME need to wait for rust-lang/rust#67065 to get into nightlies,
+          # and then this can be updated to `nightly` again.
           - build: nightly
             os: ubuntu-latest
-            rust: nightly
+            rust: nightly-2019-12-03
           - build: macos
             os: macos-latest
             rust: stable
