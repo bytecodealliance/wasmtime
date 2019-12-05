@@ -15,11 +15,6 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
-use cranelift_entity::{BoxedSlice, EntityRef, PrimaryMap};
-use cranelift_wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
-};
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::any::Any;
@@ -30,6 +25,11 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
+use wasmtime_environ::entity::{BoxedSlice, EntityRef, PrimaryMap};
+use wasmtime_environ::wasm::{
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
+};
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 fn signature_id(

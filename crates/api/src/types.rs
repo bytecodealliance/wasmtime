@@ -1,4 +1,4 @@
-use crate::data_structures::{ir, wasm};
+use wasmtime_environ::{ir, wasm};
 
 // Type Representations
 
@@ -156,9 +156,9 @@ pub struct FuncType {
 
 impl FuncType {
     pub fn new(params: Box<[ValType]>, results: Box<[ValType]>) -> FuncType {
-        use crate::data_structures::ir::{types, AbiParam, ArgumentPurpose, Signature};
-        use crate::data_structures::native_isa_call_conv;
-        let call_conv = native_isa_call_conv();
+        use wasmtime_environ::ir::{types, AbiParam, ArgumentPurpose, Signature};
+        use wasmtime_jit::native;
+        let call_conv = native::call_conv();
         let signature: Signature = {
             let mut params = params
                 .iter()

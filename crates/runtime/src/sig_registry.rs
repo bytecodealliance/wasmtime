@@ -2,10 +2,10 @@
 //! signature checking.
 
 use crate::vmcontext::VMSharedSignatureIndex;
-use cranelift_codegen::ir;
 use more_asserts::{assert_lt, debug_assert_lt};
 use std::collections::{hash_map, HashMap};
 use std::convert::TryFrom;
+use wasmtime_environ::ir;
 
 /// WebAssembly requires that the caller and callee signatures in an indirect
 /// call must match. To implement this efficiently, keep a registry of all

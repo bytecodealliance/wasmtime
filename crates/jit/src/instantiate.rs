@@ -6,14 +6,14 @@
 use crate::compiler::Compiler;
 use crate::link::link_module;
 use crate::resolver::Resolver;
-use cranelift_entity::{BoxedSlice, PrimaryMap};
-use cranelift_wasm::{DefinedFuncIndex, SignatureIndex};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 use thiserror::Error;
 use wasmtime_debug::read_debuginfo;
+use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
+use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
 };

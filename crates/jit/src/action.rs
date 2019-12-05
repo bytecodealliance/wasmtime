@@ -2,10 +2,10 @@
 
 use crate::compiler::Compiler;
 use crate::instantiate::SetupError;
-use cranelift_codegen::ir;
 use std::cmp::max;
 use std::{fmt, mem, ptr, slice};
 use thiserror::Error;
+use wasmtime_environ::ir;
 use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle, VMInvokeArgument};
 
 /// A runtime value.

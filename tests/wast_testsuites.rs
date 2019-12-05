@@ -1,7 +1,7 @@
-use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{isa, settings};
 use std::path::Path;
-use wasmtime_jit::{CompilationStrategy, Compiler, Features};
+use wasmtime_environ::settings::Configurable;
+use wasmtime_environ::{isa, settings};
+use wasmtime_jit::{native, CompilationStrategy, Compiler, Features};
 use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
@@ -30,9 +30,7 @@ fn native_isa() -> Box<dyn isa::TargetIsa> {
     flag_builder.enable("avoid_div_traps").unwrap();
     flag_builder.enable("enable_simd").unwrap();
 
-    let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
-        panic!("host machine is not a supported target");
-    });
+    let isa_builder = native::builder();
 
     isa_builder.finish(settings::Flags::new(flag_builder))
 }

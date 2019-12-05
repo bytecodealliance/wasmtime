@@ -12,12 +12,12 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.19"
-cranelift-codegen = { version = "0.50.0", default-features = false }
 walrus = "0.13"
 wasmparser = { version = "0.44.0", default-features = false }
 wasm-webidl-bindings = "0.6"
 wasmtime = { path = '../api' }
 wasmtime-jit = { path = '../jit' }
+wasmtime-environ = { path = '../environ' }
 wasmtime-runtime = { path = '../runtime' }
 wasmtime-wasi = { path = '../wasi' }
 

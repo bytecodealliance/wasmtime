@@ -1,7 +1,6 @@
 use crate::gc::build_dependencies;
 use crate::DebugInfoData;
 use anyhow::Error;
-use cranelift_codegen::isa::TargetFrontendConfig;
 use gimli::{
     write, DebugAddr, DebugAddrBase, DebugLine, DebugStr, LocationLists, RangeLists,
     UnitSectionOffset,
@@ -10,6 +9,7 @@ use simulate::generate_simulated_dwarf;
 use std::collections::HashSet;
 use thiserror::Error;
 use unit::clone_unit;
+use wasmtime_environ::isa::TargetFrontendConfig;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use address_transform::AddressTransform;

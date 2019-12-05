@@ -4,9 +4,9 @@
 use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
-use cranelift_codegen::ir;
 use std::cell::Cell;
 use std::ptr;
+use wasmtime_environ::ir;
 
 extern "C" {
     fn WasmtimeCallTrampoline(

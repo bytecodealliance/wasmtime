@@ -3,12 +3,12 @@ use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_inf
 use super::AddressTransform;
 use crate::read_debuginfo::WasmFileInfo;
 use anyhow::Error;
-use cranelift_entity::EntityRef;
-use cranelift_wasm::get_vmctx_value_label;
 use gimli::write;
 use gimli::{self, LineEncoding};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::wasm::get_vmctx_value_label;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use crate::read_debuginfo::{DebugInfoData, FunctionMetadata, WasmType};

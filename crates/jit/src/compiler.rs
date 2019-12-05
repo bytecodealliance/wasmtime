@@ -4,16 +4,17 @@ use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
 use crate::target_tunables::target_tunables;
 use cranelift_codegen::ir::InstBuilder;
-use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
-use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_wasm::{DefinedFuncIndex, DefinedMemoryIndex, ModuleTranslationState};
+use cranelift_wasm::ModuleTranslationState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
+use wasmtime_environ::entity::{EntityRef, PrimaryMap};
+use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
+use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex};
 use wasmtime_environ::{
     Compilation, CompileError, CompiledFunction, Compiler as _C, FunctionBodyData, Module,
     ModuleVmctxInfo, Relocations, Traps, Tunables, VMOffsets,

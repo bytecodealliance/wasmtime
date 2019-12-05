@@ -1,11 +1,11 @@
-use cranelift_codegen::settings;
-use cranelift_codegen::settings::Configurable;
 use more_asserts::assert_gt;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
-use wasmtime_jit::{instantiate, CompilationStrategy, Compiler, NullResolver};
+use wasmtime_environ::settings;
+use wasmtime_environ::settings::Configurable;
+use wasmtime_jit::{instantiate, native, CompilationStrategy, Compiler, NullResolver};
 
 const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"tests/wat/rs2wasm-add-func.wat";
 
@@ -19,9 +19,7 @@ fn test_environ_translate() {
     let mut flag_builder = settings::builder();
     flag_builder.enable("enable_verifier").unwrap();
 
-    let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
-        panic!("host machine is not a supported target");
-    });
+    let isa_builder = native::builder();
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut resolver = NullResolver {};

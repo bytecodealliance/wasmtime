@@ -14,6 +14,7 @@ edition = "2018"
 cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
+cranelift-native = "0.50.0"
 cranelift-frontend = "0.50.0"
 wasmtime-environ = { path = "../environ" }
 wasmtime-runtime = { path = "../runtime" }

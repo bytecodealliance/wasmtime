@@ -25,16 +25,16 @@
     )
 )]
 
-use cranelift_codegen::settings;
-use cranelift_codegen::settings::Configurable;
-use cranelift_native;
 use docopt::Docopt;
 use pretty_env_logger;
 use serde::Deserialize;
 use std::path::Path;
 use std::process;
 use wasmtime_cli::pick_compilation_strategy;
+use wasmtime_environ::settings;
+use wasmtime_environ::settings::Configurable;
 use wasmtime_environ::{cache_create_new_config, cache_init};
+use wasmtime_jit::native;
 use wasmtime_jit::{Compiler, Features};
 use wasmtime_wast::WastContext;
 
@@ -128,9 +128,7 @@ fn main() {
         process::exit(1);
     }
 
-    let isa_builder = cranelift_native::builder().unwrap_or_else(|_| {
-        panic!("host machine is not a supported target");
-    });
+    let isa_builder = native::builder();
     let mut flag_builder = settings::builder();
     let mut features: Features = Default::default();
 

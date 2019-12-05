@@ -1,8 +1,8 @@
 use super::create_handle::create_handle;
-use crate::data_structures::{wasm, PrimaryMap};
 use crate::{GlobalType, Mutability, Val};
 use anyhow::Result;
-use wasmtime_environ::Module;
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::{wasm, Module};
 use wasmtime_runtime::{InstanceHandle, VMGlobalDefinition};
 
 #[allow(dead_code)]
