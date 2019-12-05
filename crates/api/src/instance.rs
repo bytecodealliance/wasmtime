@@ -114,24 +114,25 @@ impl Instance {
         let config = store.engine().config();
         let instance_handle = instantiate(config, module.compiled_module(), imports)?;
 
-        let exports = {
-            let mut exports = Vec::with_capacity(module.exports().len());
-            for export in module.exports() {
-                let name = export.name().to_string();
-                let export = instance_handle.lookup(&name).expect("export");
-                exports.push(Extern::from_wasmtime_export(
-                    store,
-                    instance_handle.clone(),
-                    export,
-                ));
-            }
-            exports.into_boxed_slice()
-        };
+        let mut exports = Vec::with_capacity(module.exports().len());
+        for export in module.exports() {
+            let export = match module.inner.export_map[export.name()] {
+                crate::module::Export::Core => {
+                    let export = instance_handle.lookup(export.name()).expect("export");
+                    Extern::from_wasmtime_export(store, instance_handle.clone(), export)
+                }
+                crate::module::Export::Adapter(idx) => {
+                    let func = Module::adapter(module, instance_handle.clone(), idx);
+                    Extern::Func(func)
+                }
+            };
+            exports.push(export);
+        }
         module.register_frame_info();
         Ok(Instance {
             instance_handle,
             module: module.clone(),
-            exports,
+            exports: exports.into(),
         })
     }
 

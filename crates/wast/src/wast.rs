@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::str;
 use wasmtime::*;
+use wast::parser::{Parse, Parser};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
 fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
@@ -185,10 +186,13 @@ impl WastContext {
         Ok(Outcome::Ok(vec![global.get()]))
     }
 
-    fn assert_return(&self, result: Outcome, results: &[wast::AssertExpression]) -> Result<()> {
+    fn assert_return(&self, result: Outcome, results: &[impl MatchesVal]) -> Result<()> {
         let values = result.into_result()?;
+        if values.len() != results.len() {
+            bail!("expected {} results, got {}", results.len(), values.len());
+        }
         for (v, e) in values.iter().zip(results) {
-            if val_matches(v, e)? {
+            if e.matches(v)? {
                 continue;
             }
             bail!("expected {:?}, got {:?}", e, v)
@@ -222,7 +226,7 @@ impl WastContext {
         };
 
         let buf = wast::parser::ParseBuffer::new(wast).map_err(adjust_wast)?;
-        let ast = wast::parser::parse::<wast::Wast>(&buf).map_err(adjust_wast)?;
+        let ast = wast::parser::parse::<Wast>(&buf).map_err(adjust_wast)?;
 
         for directive in ast.directives {
             let sp = directive.span();
@@ -234,7 +238,46 @@ impl WastContext {
         Ok(())
     }
 
-    fn run_directive(&mut self, directive: wast::WastDirective) -> Result<()> {
+    fn run_directive(&mut self, directive: WastDirective) -> Result<()> {
+        use WastDirective::*;
+
+        match directive {
+            WitModule(mut module) => {
+                let binary = module.encode()?;
+                self.module(module.core.id.map(|s| s.name()), &binary)?;
+            }
+            WitAssertReturn {
+                exec,
+                results,
+                span: _,
+            } => {
+                let values = exec
+                    .args
+                    .iter()
+                    .map(|e| e.to_val())
+                    .collect::<Result<Vec<_>>>()?;
+                let actual = self.invoke(None, exec.name, &values)?;
+                self.assert_return(actual, &results)?;
+            }
+            WitAssertTrap {
+                exec,
+                message,
+                span: _,
+            } => {
+                let values = exec
+                    .args
+                    .iter()
+                    .map(|e| e.to_val())
+                    .collect::<Result<Vec<_>>>()?;
+                let actual = self.invoke(None, exec.name, &values)?;
+                self.assert_trap(actual, message)?;
+            }
+            Standard(d) => self.run_standard_directive(d)?,
+        }
+
+        Ok(())
+    }
+    fn run_standard_directive(&mut self, directive: wast::WastDirective) -> Result<()> {
         use wast::WastDirective::*;
 
         match directive {
@@ -387,21 +430,23 @@ fn is_arithmetic_f64_nan(bits: u64) -> bool {
     (bits & AF64_NAN) == AF64_NAN
 }
 
-fn val_matches(actual: &Val, expected: &wast::AssertExpression) -> Result<bool> {
-    Ok(match (actual, expected) {
-        (Val::I32(a), wast::AssertExpression::I32(b)) => a == b,
-        (Val::I64(a), wast::AssertExpression::I64(b)) => a == b,
-        // Note that these float comparisons are comparing bits, not float
-        // values, so we're testing for bit-for-bit equivalence
-        (Val::F32(a), wast::AssertExpression::F32(b)) => f32_matches(*a, b),
-        (Val::F64(a), wast::AssertExpression::F64(b)) => f64_matches(*a, b),
-        (Val::V128(a), wast::AssertExpression::V128(b)) => v128_matches(*a, b),
-        _ => bail!(
-            "don't know how to compare {:?} and {:?} yet",
-            actual,
-            expected
-        ),
-    })
+trait MatchesVal: std::fmt::Debug {
+    fn matches(&self, val: &Val) -> Result<bool>;
+}
+
+impl MatchesVal for wast::AssertExpression<'_> {
+    fn matches(&self, val: &Val) -> Result<bool> {
+        Ok(match (val, self) {
+            (Val::I32(a), wast::AssertExpression::I32(b)) => a == b,
+            (Val::I64(a), wast::AssertExpression::I64(b)) => a == b,
+            // Note that these float comparisons are comparing bits, not float
+            // values, so we're testing for bit-for-bit equivalence
+            (Val::F32(a), wast::AssertExpression::F32(b)) => f32_matches(*a, b),
+            (Val::F64(a), wast::AssertExpression::F64(b)) => f64_matches(*a, b),
+            (Val::V128(a), wast::AssertExpression::V128(b)) => v128_matches(*a, b),
+            _ => bail!("don't know how to compare {:?} and {:?} yet", self, val,),
+        })
+    }
 }
 
 fn f32_matches(actual: u32, expected: &wast::NanPattern<wast::Float32>) -> bool {
@@ -447,4 +492,197 @@ fn v128_matches(actual: u128, expected: &wast::V128Pattern) -> bool {
             f64_matches(a, b)
         }),
     }
+}
+
+struct Wast<'a> {
+    directives: Vec<WastDirective<'a>>,
+}
+
+impl<'a> Parse<'a> for Wast<'a> {
+    fn parse(parser: Parser<'a>) -> wast::parser::Result<Self> {
+        let _r = parser.register_annotation("interface");
+
+        // All `*.wast` files that use interface types will currently be
+        // required to start with `(@interface)` at the top, so see if that's
+        // there. If not we parse as a normal wast file.
+        if !parser.peek2::<annotation::interface>() {
+            let wast::Wast { directives } = parser.parse()?;
+            return Ok(Wast {
+                directives: directives
+                    .into_iter()
+                    .map(WastDirective::Standard)
+                    .collect(),
+            });
+        }
+
+        // Consume `(@interface)` ...
+        parser.parens(|p| p.parse::<annotation::interface>())?;
+
+        // ... then parse a bunch of our custom directives
+        let mut directives = Vec::new();
+        while !parser.is_empty() {
+            directives.push(parser.parens(|p| p.parse())?);
+        }
+        Ok(Wast { directives })
+    }
+}
+
+/// Extension of the standard wast directives with a few directives that can
+/// have wasm interface types in them as well.
+enum WastDirective<'a> {
+    WitModule(wit_text::Module<'a>),
+    WitAssertReturn {
+        span: wast::Span,
+        exec: Invoke<'a>,
+        results: Vec<AssertExpression<'a>>,
+    },
+    WitAssertTrap {
+        span: wast::Span,
+        exec: Invoke<'a>,
+        message: &'a str,
+    },
+    Standard(wast::WastDirective<'a>),
+}
+
+impl WastDirective<'_> {
+    fn span(&self) -> wast::Span {
+        match self {
+            WastDirective::WitModule(m) => m.core.span,
+            WastDirective::WitAssertReturn { span, .. } => *span,
+            WastDirective::WitAssertTrap { span, .. } => *span,
+            WastDirective::Standard(e) => e.span(),
+        }
+    }
+}
+
+impl<'a> Parse<'a> for WastDirective<'a> {
+    fn parse(parser: Parser<'a>) -> wast::parser::Result<Self> {
+        if parser.peek::<wast::kw::module>() {
+            Ok(WastDirective::WitModule(parser.parse()?))
+        } else if parser.peek::<wast::kw::assert_return>() {
+            let span = parser.parse::<wast::kw::assert_return>()?.0;
+            let exec = parser.parens(|p| p.parse())?;
+            let mut results = Vec::new();
+            while !parser.is_empty() {
+                results.push(parser.parens(|p| p.parse())?);
+            }
+            Ok(WastDirective::WitAssertReturn {
+                span,
+                exec,
+                results,
+            })
+        } else if parser.peek::<wast::kw::assert_trap>() {
+            let span = parser.parse::<wast::kw::assert_trap>()?.0;
+            Ok(WastDirective::WitAssertTrap {
+                span,
+                exec: parser.parens(|p| p.parse())?,
+                message: parser.parse()?,
+            })
+        } else {
+            Err(parser.error("failed to parse interface types directive"))
+        }
+    }
+}
+
+struct Invoke<'a> {
+    pub span: wast::Span,
+    pub name: &'a str,
+    pub args: Vec<AssertExpression<'a>>,
+}
+
+impl<'a> Parse<'a> for Invoke<'a> {
+    fn parse(parser: Parser<'a>) -> wast::parser::Result<Self> {
+        let span = parser.parse::<wast::kw::invoke>()?.0;
+        let name = parser.parse()?;
+        let mut args = Vec::new();
+        while !parser.is_empty() {
+            args.push(parser.parens(|p| p.parse())?);
+        }
+        Ok(Invoke { span, name, args })
+    }
+}
+
+#[derive(Debug)]
+enum AssertExpression<'a> {
+    S8(i8),
+    S16(i16),
+    S32(i32),
+    S64(i64),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    String(&'a str),
+    Other(wast::AssertExpression<'a>),
+}
+
+impl AssertExpression<'_> {
+    fn to_val(&self) -> Result<Val> {
+        Ok(match self {
+            AssertExpression::S8(v) => Val::S8(*v),
+            AssertExpression::S16(v) => Val::S16(*v),
+            AssertExpression::S32(v) => Val::S32(*v),
+            AssertExpression::S64(v) => Val::S64(*v),
+            AssertExpression::U8(v) => Val::U8(*v),
+            AssertExpression::U16(v) => Val::U16(*v),
+            AssertExpression::U32(v) => Val::U32(*v),
+            AssertExpression::U64(v) => Val::U64(*v),
+            AssertExpression::String(s) => Val::String(s.to_string()),
+            AssertExpression::Other(e) => match e {
+                wast::AssertExpression::I32(v) => Val::I32(*v),
+                wast::AssertExpression::I64(v) => Val::I64(*v),
+                other => bail!("unsupported constant in wast {:?}", other),
+            },
+        })
+    }
+}
+
+impl MatchesVal for AssertExpression<'_> {
+    fn matches(&self, val: &Val) -> Result<bool> {
+        Ok(match (val, self) {
+            (Val::S8(a), AssertExpression::S8(b)) => a == b,
+            (Val::S16(a), AssertExpression::S16(b)) => a == b,
+            (Val::S32(a), AssertExpression::S32(b)) => a == b,
+            (Val::S64(a), AssertExpression::S64(b)) => a == b,
+            (Val::U8(a), AssertExpression::U8(b)) => a == b,
+            (Val::U16(a), AssertExpression::U16(b)) => a == b,
+            (Val::U32(a), AssertExpression::U32(b)) => a == b,
+            (Val::U64(a), AssertExpression::U64(b)) => a == b,
+            (Val::String(a), AssertExpression::String(b)) => a == b,
+            (_, AssertExpression::Other(m)) => return m.matches(val),
+            _ => bail!("don't know how to compare {:?} and {:?} yet", self, val,),
+        })
+    }
+}
+
+impl<'a> Parse<'a> for AssertExpression<'a> {
+    fn parse(parser: Parser<'a>) -> wast::parser::Result<Self> {
+        macro_rules! parse {
+            ($($variant:ident = $kw:ident)*) => ($(
+                wast::custom_keyword!($kw = concat!(stringify!($kw), ".const"));
+                if parser.peek::<$kw>() {
+                    parser.parse::<$kw>()?;
+                    return Ok(AssertExpression::$variant(parser.parse()?));
+                }
+            )*)
+        }
+
+        parse! {
+            S8 = s8
+            S16 = s16
+            S32 = s32
+            S64 = s64
+            U8 = u8
+            U16 = u16
+            U32 = u32
+            U64 = u64
+            String = string
+        }
+
+        Ok(AssertExpression::Other(parser.parse()?))
+    }
+}
+
+mod annotation {
+    wast::annotation!(interface);
 }

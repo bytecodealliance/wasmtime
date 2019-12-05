@@ -1,17 +1,23 @@
+use crate::callable::{WasmtimeFn, WrappedCallable};
 use crate::frame_info::{GlobalFrameInfoRegistration, FRAME_INFO};
-use crate::runtime::Store;
 use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
     TableType, ValType,
 };
-use anyhow::{bail, Error, Result};
+use crate::{Callable, Func, Store, Trap, Val};
+use anyhow::{bail, Result};
+use std::collections::HashMap;
+use std::convert::TryInto;
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use wasmparser::{
     validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
     SectionCode,
 };
+use wasmtime_environ::wasm::FuncIndex;
 use wasmtime_jit::CompiledModule;
+use wasmtime_runtime::InstanceHandle;
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> Result<MemoryType> {
     if mt.shared {
@@ -80,21 +86,70 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
 /// In other words it's a shallow copy, not a deep copy.
 #[derive(Clone)]
 pub struct Module {
-    inner: Arc<ModuleInner>,
+    pub(crate) inner: Arc<ModuleInner>,
 }
 
-struct ModuleInner {
+pub(crate) struct ModuleInner {
     store: Store,
+
+    /// List of imports that are expected to be provided to `Instance::new`.
     imports: Box<[ImportType]>,
+
+    /// List of exports that will be available from `Instance::exports`.
     exports: Box<[ExportType]>,
+
     compiled: CompiledModule,
     frame_info_registration: Mutex<Option<Option<GlobalFrameInfoRegistration>>>,
     names: Arc<Names>,
+
+    /// Adapter functions in this module defined in the wasm interface types
+    /// section.
+    adapters: Box<[(FuncType, Adapter)]>,
+
+    /// Map from index of import in the core module to where that import is
+    /// going to be satisfied.
+    core_import_sources: Box<[ImportSource]>,
+
+    /// Map of export name to what is being exported,
+    pub(crate) export_map: HashMap<String, Export>,
 }
 
 pub struct Names {
     pub module: Arc<wasmtime_environ::Module>,
     pub module_name: Option<String>,
+}
+
+enum Adapter {
+    /// This adapter is an imported function, and imports the nth function in
+    /// the user-provided imports array
+    Import(usize),
+    /// This adapter is locally defined and has a list of instructions.
+    Local(Vec<wit_parser::Instruction>),
+}
+
+pub(crate) enum Export {
+    /// This export is from the core wasm module's exports with the same name.
+    Core,
+    /// This export is the nth adapter function.
+    Adapter(usize),
+}
+
+pub(crate) enum ImportSource {
+    /// This import is going to be satisfied by the nth entry in the imports
+    /// provided by the user.
+    UserProvided(usize),
+    /// This import is going to be provided by the nth adapter function.
+    Adapter(usize),
+}
+
+enum ImportKind {
+    /// An import in the core wasm module, optionally implemented with an
+    /// adapter function.
+    Core {
+        implemented_with_adapter: Option<usize>,
+    },
+    /// An import from the interface types section.
+    Adapter,
 }
 
 impl Module {
@@ -244,8 +299,12 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn validate(store: &Store, binary: &[u8]) -> Result<()> {
-        let config = store.engine().config().validating_config.clone();
-        validate(binary, Some(config)).map_err(Error::new)
+        let config = store.engine().config();
+        validate(binary, Some(config.validating_config.clone()))?;
+        if config.interface_types {
+            wit_validator::validate(binary)?;
+        }
+        Ok(())
     }
 
     unsafe fn compile(store: &Store, binary: &[u8]) -> Result<Self> {
@@ -268,6 +327,9 @@ impl Module {
                 names,
                 compiled,
                 frame_info_registration: Mutex::new(None),
+                adapters: Default::default(),
+                core_import_sources: Default::default(),
+                export_map: Default::default(),
             }),
         })
     }
@@ -299,10 +361,21 @@ impl Module {
         &self.inner.store
     }
 
+    /// Register this module's stack frame information into the global scope.
+    ///
+    /// This is required to ensure that any traps can be properly symbolicated.
+    pub(crate) fn register_frame_info(&self) {
+        let mut info = self.inner.frame_info_registration.lock().unwrap();
+        if info.is_some() {
+            return;
+        }
+        *info = Some(FRAME_INFO.register(&self.inner.names, &self.inner.compiled));
+    }
+
     fn read_imports_and_exports(&mut self, binary: &[u8]) -> Result<()> {
-        let inner = Arc::get_mut(&mut self.inner).unwrap();
+        let mut inner = Arc::get_mut(&mut self.inner).unwrap();
         let mut reader = ModuleReader::new(binary)?;
-        let mut imports = Vec::new();
+        let mut imports = Vec::<(ImportType, ImportKind)>::new();
         let mut exports = Vec::new();
         let mut memories = Vec::new();
         let mut tables = Vec::new();
@@ -352,7 +425,7 @@ impl Module {
                     imports.reserve_exact(section.get_count() as usize);
                     for entry in section {
                         let entry = entry?;
-                        let r#type = match entry.ty {
+                        let ty = match entry.ty {
                             ImportSectionEntryType::Function(index) => {
                                 func_sig.push(index);
                                 let sig = &sigs[index as usize];
@@ -374,7 +447,12 @@ impl Module {
                                 ExternType::Global(global)
                             }
                         };
-                        imports.push(ImportType::new(entry.module, entry.field, r#type));
+                        imports.push((
+                            ImportType::new(entry.module, entry.field, ty),
+                            ImportKind::Core {
+                                implemented_with_adapter: None,
+                            },
+                        ));
                     }
                 }
                 SectionCode::Export => {
@@ -382,7 +460,7 @@ impl Module {
                     exports.reserve_exact(section.get_count() as usize);
                     for entry in section {
                         let entry = entry?;
-                        let r#type = match entry.kind {
+                        let ty = match entry.kind {
                             ExternalKind::Function => {
                                 let sig_index = func_sig[entry.index as usize] as usize;
                                 let sig = &sigs[sig_index];
@@ -398,8 +476,25 @@ impl Module {
                                 ExternType::Global(globals[entry.index as usize].clone())
                             }
                         };
-                        exports.push(ExportType::new(entry.field, r#type));
+                        exports.push(ExportType::new(entry.field, ty));
+                        inner
+                            .export_map
+                            .insert(entry.field.to_string(), Export::Core);
                     }
+                }
+                SectionCode::Custom {
+                    name: wit_schema_version::SECTION_NAME,
+                    ..
+                } => {
+                    let range = section.range();
+                    let bytes = &binary[range.start..range.end];
+                    self.parse_wasm_interface_types_section(
+                        range.start,
+                        bytes,
+                        &mut imports,
+                        &mut exports,
+                    )?;
+                    inner = Arc::get_mut(&mut self.inner).unwrap();
                 }
                 SectionCode::Custom {
                     kind: CustomSectionKind::Name,
@@ -424,19 +519,282 @@ impl Module {
             }
         }
 
-        inner.imports = imports.into();
         inner.exports = exports.into();
+
+        // Given our list of imports, as well as any adapters which implement
+        // those imports, build up the necessary metadata in our module.
+        let mut import_list = Vec::new();
+        let mut core_import_sources = Vec::new();
+        for (import, kind) in imports {
+            match kind {
+                // If our core import has been implemented with an adapter, then
+                // we record that it was implemented, and we don't add this to
+                // the list of imports we expect the user to provide.
+                ImportKind::Core {
+                    implemented_with_adapter: Some(idx),
+                } => core_import_sources.push(ImportSource::Adapter(idx)),
+
+                // If the core import wasn't implemented with an adapter, then
+                // it's expected to be user-provided.
+                ImportKind::Core {
+                    implemented_with_adapter: None,
+                } => {
+                    core_import_sources.push(ImportSource::UserProvided(import_list.len()));
+                    import_list.push(import);
+                }
+
+                // .. and finally imports in the interface types section are
+                // always expected to be imported.
+                ImportKind::Adapter => import_list.push(import),
+            }
+        }
+        inner.imports = import_list.into();
+        inner.core_import_sources = core_import_sources.into();
+
         Ok(())
     }
 
-    /// Register this module's stack frame information into the global scope.
-    ///
-    /// This is required to ensure that any traps can be properly symbolicated.
-    pub(crate) fn register_frame_info(&self) {
-        let mut info = self.inner.frame_info_registration.lock().unwrap();
-        if info.is_some() {
-            return;
+    fn parse_wasm_interface_types_section(
+        &mut self,
+        offset: usize,
+        section: &[u8],
+        imports: &mut Vec<(ImportType, ImportKind)>,
+        exports: &mut Vec<ExportType>,
+    ) -> Result<()> {
+        // If interface types aren't enabled then we treat this as an unknown
+        // custom section, which like all others means we just skip over it.
+        if !self.store().engine().config().interface_types {
+            return Ok(());
         }
-        *info = Some(FRAME_INFO.register(&self.inner.names, &self.inner.compiled));
+
+        let inner = Arc::get_mut(&mut self.inner).unwrap();
+        let mut parser = wit_parser::Parser::new(offset, section)?;
+        let mut types = Vec::new();
+        let mut adapters = Vec::new();
+
+        // With the presence of a wasm interface types section the list of
+        // exports for a module are the interface types exports, not the core
+        // module exports.
+        exports.truncate(0);
+        inner.export_map.drain();
+
+        while !parser.is_empty() {
+            match parser.section()? {
+                wit_parser::Section::Type(list) => {
+                    for ty in list {
+                        let ty = ty?;
+                        let params = ty.params.iter().map(cvt_ty).collect();
+                        let results = ty.params.iter().map(cvt_ty).collect();
+                        let ty = FuncType::new(params, results);
+                        types.push(ty);
+                    }
+                }
+                wit_parser::Section::Import(list) => {
+                    for import in list {
+                        let import = import?;
+                        let ty = &types[import.ty as usize];
+                        imports.push((
+                            ImportType::new(
+                                import.module,
+                                import.name,
+                                ExternType::Func(ty.clone()),
+                            ),
+                            ImportKind::Adapter,
+                        ));
+                        let idx = adapters.len();
+                        adapters.push((ty.clone(), Adapter::Import(idx)));
+                    }
+                }
+                wit_parser::Section::Func(list) => {
+                    for func in list {
+                        let func = func?;
+                        let ty = types[func.ty as usize].clone();
+                        let instrs = func.instrs().collect::<Result<Vec<_>, _>>()?;
+                        adapters.push((ty, Adapter::Local(instrs)));
+                    }
+                }
+                wit_parser::Section::Export(list) => {
+                    for export in list {
+                        let export = export?;
+                        let ty = adapters[export.func as usize].0.clone();
+                        exports.push(ExportType::new(export.name, ExternType::Func(ty)));
+                        inner.export_map.insert(
+                            export.name.to_string(),
+                            Export::Adapter(export.func as usize),
+                        );
+                    }
+                }
+                wit_parser::Section::Implement(list) => {
+                    let mut func_idx_to_import_idx = HashMap::new();
+                    for (i, (import, _)) in imports.iter().enumerate() {
+                        let func_idx = func_idx_to_import_idx.len() as u32;
+                        if let ExternType::Func(_) = import.ty() {
+                            func_idx_to_import_idx.insert(func_idx, i);
+                        }
+                    }
+
+                    for implement in list {
+                        let implement = implement?;
+                        let import_idx = func_idx_to_import_idx[&implement.core_func];
+                        match &mut imports[import_idx].1 {
+                            ImportKind::Core {
+                                implemented_with_adapter,
+                            } => {
+                                assert!(implemented_with_adapter.is_none());
+                                *implemented_with_adapter = Some(implement.adapter_func as usize);
+                            }
+                            ImportKind::Adapter => panic!("invalid implement section"),
+                        }
+                    }
+                }
+            }
+        }
+
+        inner.adapters = adapters.into();
+
+        return Ok(());
+
+        fn cvt_ty(ty: &wit_parser::ValType) -> ValType {
+            match ty {
+                wit_parser::ValType::S8 => ValType::S8,
+                wit_parser::ValType::S16 => ValType::S16,
+                wit_parser::ValType::S32 => ValType::S32,
+                wit_parser::ValType::S64 => ValType::S64,
+                wit_parser::ValType::U8 => ValType::U8,
+                wit_parser::ValType::U16 => ValType::U16,
+                wit_parser::ValType::U32 => ValType::U32,
+                wit_parser::ValType::U64 => ValType::U64,
+                wit_parser::ValType::I32 => ValType::I32,
+                wit_parser::ValType::I64 => ValType::I64,
+                wit_parser::ValType::F32 => ValType::F32,
+                wit_parser::ValType::F64 => ValType::F64,
+                wit_parser::ValType::String => ValType::String,
+                wit_parser::ValType::Anyref => ValType::AnyRef,
+            }
+        }
+    }
+
+    pub(crate) fn adapter(module: &Self, instance: InstanceHandle, idx: usize) -> Func {
+        let ty = module.inner.adapters[idx].0.clone();
+        let callable = Rc::new(CallAdapter {
+            module: module.clone(),
+            idx,
+            instance,
+        });
+        Func::new(&module.inner.store, ty, callable)
+    }
+}
+
+struct CallAdapter {
+    module: Module,
+    instance: InstanceHandle,
+    idx: usize,
+}
+
+impl Callable for CallAdapter {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
+        let (ty, adapter) = &self.module.inner.adapters[self.idx];
+        let ty_params = ty.params();
+        if params.len() != ty_params.len() {
+            return Err(Trap::new(format!(
+                "expected {} parameters, got {}",
+                ty_params.len(),
+                params.len()
+            )));
+        }
+        if results.len() != ty.results().len() {
+            return Err(Trap::new(format!(
+                "expected {} results, got {}",
+                ty.results().len(),
+                params.len()
+            )));
+        }
+
+        for ((i, param), expected) in params.iter().enumerate().zip(ty_params) {
+            if param.ty() != *expected {
+                return Err(Trap::new(format!(
+                    "expected {:?} for parameter {}, got {:?}",
+                    param.ty(),
+                    i,
+                    expected
+                )));
+            }
+        }
+
+        let mut stack = Vec::new();
+
+        match adapter {
+            Adapter::Local(instrs) => {
+                for instr in instrs {
+                    self.execute(&mut stack, params, instr)?;
+                }
+            }
+            Adapter::Import(_) => panic!("unimplemented import"),
+        }
+
+        // should be true because of validation
+        assert_eq!(stack.len(), results.len());
+        for (item, slot) in stack.into_iter().zip(results) {
+            *slot = item;
+        }
+        Ok(())
+    }
+}
+
+impl CallAdapter {
+    fn execute(
+        &self,
+        stack: &mut Vec<Val>,
+        args: &[Val],
+        instr: &wit_parser::Instruction,
+    ) -> Result<(), Trap> {
+        use wit_parser::Instruction::*;
+
+        fn pop(stack: &mut Vec<Val>, ty: ValType) -> Val {
+            let ret = stack.pop().unwrap();
+            assert_eq!(ret.ty(), ty);
+            return ret;
+        }
+
+        match instr {
+            ArgGet(arg) => stack.push(args[*arg as usize].clone()),
+
+            // Create a `FuncIndex` from the functin that we're calling and
+            // then run through our other infrastructure to call into this
+            // function.
+            CallCore(f) => {
+                let idx = FuncIndex::from_u32(*f);
+                let sigidx = self.instance.module().local.functions[idx];
+                let sig = &self.instance.module().local.signatures[sigidx];
+                let export = wasmtime_environ::Export::Function(idx);
+                let export = self.instance.clone().lookup_by_declaration(&export);
+                let mut ret = vec![Val::I32(0); sig.returns.len()];
+                // offset 1 here for the vmctx parameter
+                let params_start = stack.len() + 1 - sig.params.len();
+                WasmtimeFn::new(&self.module.inner.store, self.instance.clone(), export)
+                    .call(&stack[params_start..], &mut ret)?;
+                stack.truncate(params_start);
+                stack.extend(ret);
+            }
+
+            I32ToS8 => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                stack.push(Val::S8(val as i8));
+            }
+            I32ToS8X => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                match val.try_into() {
+                    Ok(v) => stack.push(Val::S8(v)),
+                    Err(_) => return Err(Trap::new("integer overflow")),
+                }
+            }
+            I32ToU8 => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                stack.push(Val::U8(val as u8));
+            }
+            i => return Err(Trap::new(format!("unimplemented instruction {:?}", i))),
+        }
+
+        Ok(())
     }
 }

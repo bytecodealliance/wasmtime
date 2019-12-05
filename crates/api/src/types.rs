@@ -64,6 +64,26 @@ pub enum ValType {
     AnyRef, /* = 128 */
     /// A reference to a Wasm function.
     FuncRef,
+
+    // Types included in the WebAssembly Interface Types proposal
+    /// A string type from the interface types proposal.
+    String,
+    /// A signed 8-bit integer from the interface types proposal.
+    S8,
+    /// A signed 16-bit integer from the interface types proposal.
+    S16,
+    /// A signed 32-bit integer from the interface types proposal.
+    S32,
+    /// A signed 64-bit integer from the interface types proposal.
+    S64,
+    /// An unsigned 8-bit integer from the interface types proposal.
+    U8,
+    /// An unsigned 16-bit integer from the interface types proposal.
+    U16,
+    /// An unsigned 32-bit integer from the interface types proposal.
+    U32,
+    /// An unsigned 64-bit integer from the interface types proposal.
+    U64,
 }
 
 impl ValType {

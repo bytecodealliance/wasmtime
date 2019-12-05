@@ -67,6 +67,19 @@ pub fn dummy_value(val_ty: &ValType) -> Result<Val, Trap> {
                 "dummy_value: unsupported function return type: funcref".to_string(),
             ))
         }
+        ValType::S8 => Val::S8(0),
+        ValType::U8 => Val::U8(0),
+        ValType::S16 => Val::S16(0),
+        ValType::U16 => Val::U16(0),
+        ValType::S32 => Val::S32(0),
+        ValType::U32 => Val::U32(0),
+        ValType::S64 => Val::S64(0),
+        ValType::U64 => Val::U64(0),
+        ValType::String => {
+            return Err(Trap::new(
+                "dummy_value: unsupported function return type: string".to_string(),
+            ))
+        }
     })
 }
 

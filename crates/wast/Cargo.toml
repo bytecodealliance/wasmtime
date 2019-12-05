@@ -14,6 +14,7 @@ edition = "2018"
 anyhow = "1.0.19"
 wasmtime = { path = "../api", version = "0.12.0" }
 wast = "9.0.0"
+wit-text = "0.5"
 
 [badges]
 maintenance = { status = "actively-developed" }

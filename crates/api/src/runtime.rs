@@ -24,6 +24,7 @@ pub struct Config {
     pub(crate) flags: settings::Builder,
     pub(crate) validating_config: ValidatingParserConfig,
     pub(crate) debug_info: bool,
+    pub(crate) interface_types: bool,
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Option<Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
@@ -65,6 +66,7 @@ impl Config {
             flags,
             strategy: CompilationStrategy::Auto,
             cache_config: CacheConfig::new_cache_disabled(),
+            interface_types: false,
             profiler: None,
         }
     }
@@ -190,6 +192,32 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/multi-value
     pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
         self.validating_config.operator_config.enable_multi_value = enable;
+        self
+    }
+
+    /// Configures whether the WebAssembly interface proposal will
+    /// be enabled for compilation.
+    ///
+    /// The [WebAssembly interface proposal][proposal] is not
+    /// currently fully standardized and is undergoing development.
+    /// Additionally the support in wasmtime itself is still being worked on.
+    /// Support for this feature can be enabled through this method for
+    /// appropriate wasm modules.
+    ///
+    /// This feature gates exports and imports from using the richer type system
+    /// of the interface types proposal, for example. Note that enabling the
+    /// interface types feature will also enable the multi-value and reference
+    /// types features.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/inetface-types
+    pub fn wasm_interface_types(&mut self, enable: bool) -> &mut Self {
+        self.interface_types = enable;
+        if enable {
+            self.wasm_reference_types(true);
+            self.wasm_multi_value(true);
+        }
         self
     }
 
