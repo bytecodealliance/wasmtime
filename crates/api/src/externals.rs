@@ -56,7 +56,7 @@ impl Extern {
         }
     }
 
-    pub(crate) fn get_wasmtime_export(&mut self) -> wasmtime_runtime::Export {
+    pub(crate) fn get_wasmtime_export(&self) -> wasmtime_runtime::Export {
         match self {
             Extern::Func(f) => f.borrow().wasmtime_export().clone(),
             Extern::Global(g) => g.borrow().wasmtime_export().clone(),

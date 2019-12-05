@@ -12,23 +12,21 @@ use std::rc::Rc;
 use wasmtime_jit::{instantiate, Resolver, SetupError};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
-struct SimpleResolver {
-    imports: Vec<(String, String, Extern)>,
+struct SimpleResolver<'a> {
+    imports: &'a [Extern],
 }
 
-impl Resolver for SimpleResolver {
-    fn resolve(&mut self, name: &str, field: &str) -> Option<Export> {
-        // TODO speedup lookup
+impl Resolver for SimpleResolver<'_> {
+    fn resolve(&mut self, idx: u32, _name: &str, _field: &str) -> Option<Export> {
         self.imports
-            .iter_mut()
-            .find(|(n, f, _)| name == n && field == f)
-            .map(|(_, _, e)| e.get_wasmtime_export())
+            .get(idx as usize)
+            .map(|i| i.get_wasmtime_export())
     }
 }
 
 pub fn instantiate_in_context(
     data: &[u8],
-    imports: Vec<(String, String, Extern)>,
+    imports: &[Extern],
     module_name: Option<String>,
     context: Context,
     exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
@@ -73,15 +71,9 @@ impl Instance {
     pub fn new(store: &Store, module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
         let context = store.context().clone();
         let exports = store.global_exports().clone();
-        let imports = module
-            .imports()
-            .iter()
-            .zip(externs.iter())
-            .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
-            .collect::<Vec<_>>();
         let (mut instance_handle, contexts) = instantiate_in_context(
             module.binary().expect("binary"),
-            imports,
+            externs,
             module.name().cloned(),
             context,
             exports,
