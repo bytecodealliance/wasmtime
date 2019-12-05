@@ -33,7 +33,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
 
     // Create our wasi context with pretty standard arguments/inheritance/etc.
     // Additionally register andy preopened directories if we have them.
-    let mut builder = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
+    let mut builder = wasi_common::WasiCtxBuilder::new()
         .arg(bin_name)
         .arg(".")
         .inherit_stdio();
@@ -50,6 +50,29 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
 
     // The current stable Rust toolchain uses the old `wasi_unstable` ABI,
     // aka `snapshot_0`.
+    module_registry.insert(
+        "wasi_snapshot_preview1".to_owned(),
+        Instance::from_handle(
+            &store,
+            wasmtime_wasi::instantiate_wasi_with_context(
+                global_exports.clone(),
+                builder.build().context("failed to build wasi context")?,
+            )
+            .context("failed to instantiate wasi")?,
+        ),
+    );
+
+    // ... and then do the same as above but for the old snapshot of wasi, since
+    // a few tests still test that
+    let mut builder = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
+        .arg(bin_name)
+        .arg(".")
+        .inherit_stdio();
+    for (dir, file) in get_preopens(workspace)? {
+        builder = builder.preopened_dir(file, dir);
+    }
+    let (reader, _writer) = os_pipe::pipe()?;
+    builder = builder.stdin(reader_to_file(reader));
     module_registry.insert(
         "wasi_unstable".to_owned(),
         Instance::from_handle(
