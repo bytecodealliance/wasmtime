@@ -721,8 +721,8 @@ macro_rules! int_div {
         // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
         //       emitting Wasm.
         pub fn $div_u(&mut self) -> Result<(), Error>{
-            let divisor = self.pop();
-            let dividend = self.pop();
+            let divisor = self.pop()?;
+            let dividend = self.pop()?;
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
@@ -766,8 +766,8 @@ macro_rules! int_div {
         // TODO: Fast div using mul for constant divisor? It looks like LLVM doesn't do that for us when
         //       emitting Wasm.
         pub fn $div_s(&mut self) -> Result<(), Error>{
-            let divisor = self.pop();
-            let dividend = self.pop();
+            let divisor = self.pop()?;
+            let dividend = self.pop()?;
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
@@ -809,8 +809,8 @@ macro_rules! int_div {
         }
 
         pub fn $rem_u(&mut self) -> Result<(), Error>{
-            let divisor = self.pop();
-            let dividend = self.pop();
+            let divisor = self.pop()?;
+            let dividend = self.pop()?;
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
@@ -851,8 +851,8 @@ macro_rules! int_div {
         }
 
         pub fn $rem_s(&mut self) -> Result<(), Error>{
-            let mut divisor = self.pop();
-            let dividend = self.pop();
+            let mut divisor = self.pop()?;
+            let dividend = self.pop()?;
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
@@ -968,7 +968,7 @@ macro_rules! int_div {
 macro_rules! unop {
     ($name:ident, $instr:ident, $reg_ty:tt, $typ:ty, $const_fallback:expr) => {
         pub fn $name(&mut self) -> Result<(), Error>{
-            let mut val = self.pop();
+            let mut val = self.pop()?;
 
             let out_val = match val {
                 ValueLocation::Immediate(imm) =>
@@ -1014,7 +1014,7 @@ macro_rules! conversion {
         $const_fallback:expr
     ) => {
         pub fn $name(&mut self) -> Result<(), Error>{
-            let mut val = self.pop();
+            let mut val = self.pop()?;
 
             let out_val = match val {
                 ValueLocation::Immediate(imm) =>
@@ -1054,8 +1054,8 @@ macro_rules! conversion {
 macro_rules! shift {
     ($name:ident, $reg_ty:tt, $instr:ident, $const_fallback:expr, $ty:expr) => {
         pub fn $name(&mut self) -> Result<(), Error>{
-            let mut count = self.pop();
-            let mut val = self.pop();
+            let mut count = self.pop()?;
+            let mut val = self.pop()?;
 
             if let Some(imm) = count.immediate() {
                 if let Some(imm) = imm.as_int() {
@@ -1146,8 +1146,8 @@ macro_rules! shift {
 macro_rules! cmp_i32 {
     ($name:ident, $flags:expr, $reverse_flags:expr, $const_fallback:expr) => {
         pub fn $name(&mut self) -> Result<(), Error>{
-            let mut right = self.pop();
-            let mut left = self.pop();
+            let mut right = self.pop()?;
+            let mut left = self.pop()?;
 
             let out = if let Some(i) = left.imm_i32() {
                 match right {
@@ -1214,8 +1214,8 @@ macro_rules! cmp_i32 {
 macro_rules! cmp_i64 {
     ($name:ident, $flags:expr, $reverse_flags:expr, $const_fallback:expr) => {
         pub fn $name(&mut self) -> Result<(), Error> {
-            let mut right = self.pop();
-            let mut left = self.pop();
+            let mut right = self.pop()?;
+            let mut left = self.pop()?;
 
             let out = if let Some(i) = left.imm_i64() {
                 match right {
@@ -1316,8 +1316,8 @@ macro_rules! cmp_f32 {
 macro_rules! eq_float {
     ($name:ident, $instr:ident, $imm_fn:ident, $const_fallback:expr) => {
         pub fn $name(&mut self) -> Result<(), Error>{
-            let right = self.pop();
-            let left = self.pop();
+            let right = self.pop()?;
+            let left = self.pop()?;
 
             if let Some(right) = right.immediate() {
                 if let Some(left) = left.immediate() {
@@ -1367,8 +1367,8 @@ macro_rules! minmax_float {
         $const_fallback:expr
     ) => {
         pub fn $name(&mut self) -> Result<(), Error>{
-            let right = self.pop();
-            let left = self.pop();
+            let right = self.pop()?;
+            let left = self.pop()?;
 
             if let Some(right) = right.immediate() {
                 if let Some(left) = left.immediate() {
@@ -1462,8 +1462,8 @@ macro_rules! cmp_float {
     }};
     ($cmp_instr:ident, $ty:ty, $imm_fn:ident, $name:ident, $reverse_name:ident, $instr:ident, $const_fallback:expr) => {
         pub fn $name(&mut self) -> Result<(), Error> {
-            let mut right = self.pop();
-            let mut left = self.pop();
+            let mut right = self.pop()?;
+            let mut left = self.pop()?;
 
             let out = cmp_float!(@helper
                 $cmp_instr,
@@ -1484,8 +1484,8 @@ macro_rules! cmp_float {
         }
 
         pub fn $reverse_name(&mut self) -> Result<(), Error> {
-            let mut right = self.pop();
-            let mut left = self.pop();
+            let mut right = self.pop()?;
+            let mut left = self.pop()?;
 
             let out = cmp_float!(@helper
                 $cmp_instr,
@@ -1673,8 +1673,8 @@ macro_rules! binop {
     };
     ($name:ident, $instr:ident, $const_fallback:expr, $reg_ty:tt, $reg_fn:ident, $ty:expr, $imm_fn:ident, $direct_imm:expr, $map_op:expr) => {
         pub fn $name(&mut self) -> Result<(), Error> {
-            let right = self.pop();
-            let left = self.pop();
+            let right = self.pop()?;
+            let left = self.pop()?;
 
             if let Some(i1) = left.$imm_fn() {
                 if let Some(i0) = right.$imm_fn() {
@@ -1811,7 +1811,7 @@ macro_rules! load {
                 Ok(())
             }
 
-            let base = self.pop();
+            let base = self.pop()?;
 
             let temp = self.take_reg($rtype).unwrap();
 
@@ -1988,8 +1988,8 @@ macro_rules! store {
 
             assert_le!(offset, i32::max_value() as u32);
 
-            let mut src = self.pop();
-            let base = self.pop();
+            let mut src = self.pop()?;
+            let base = self.pop()?;
 
             // `store_from_reg` frees `src`
             // TODO: Would it be better to free it outside `store_from_reg`?
@@ -2203,7 +2203,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     //       result in different code. It would also allow us to generate better
     //       code for `neq` and `gt_u` with const 0 operand
     pub fn i32_eqz(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         if let ValueLocation::Immediate(Value::I32(i)) = val {
             self.push(ValueLocation::Immediate(
@@ -2233,7 +2233,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i64_eqz(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         if let ValueLocation::Immediate(Value::I64(i)) = val {
             self.push(ValueLocation::Immediate(
@@ -2304,7 +2304,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         target: impl Into<BrTarget<Label>>,
         pass_args: impl FnOnce(&mut Self) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
         let label = target
             .into()
             .label()
@@ -2338,7 +2338,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         target: impl Into<BrTarget<Label>>,
         pass_args: impl FnOnce(&mut Self) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
         let label = target
             .into()
             .label()
@@ -2389,7 +2389,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let mut targets = targets.into_iter();
         let count = targets.len();
 
-        let mut selector = self.pop();
+        let mut selector = self.pop()?;
 
         pass_args(self)?;
 
@@ -2571,7 +2571,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         out_args.reverse();
 
         while out_args.len() < params as usize {
-            let mut val = self.pop();
+            let mut val = self.pop()?;
 
             // TODO: We can use stack slots for values already on the stack but we
             //       don't refcount stack slots right now
@@ -2596,7 +2596,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         // TODO: We can make this more efficient now that `pop` isn't so complicated
         for _ in 0..count {
-            let mut val = self.pop();
+            let mut val = self.pop()?;
             // TODO: We can use stack slots for values already on the stack but we
             //       don't refcount stack slots right now
             let loc = self.into_temp_loc(None, &mut val)?;
@@ -2653,7 +2653,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn set_global(&mut self, global_idx: u32) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
         let (reg, offset) = self
             .module_context
             .defined_global_index(global_idx)
@@ -3028,19 +3028,25 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.block_state.stack.push(value);
     }
 
-    fn pop(&mut self) -> ValueLocation {
-        self.block_state.stack.pop().expect("Stack is empty")
+    fn pop(&mut self) -> Result<ValueLocation, Error> {
+        match self.block_state.stack.pop() {
+            Some(v) => Ok(v),
+            None => return Err(Error::Microwasm(
+                        "Stack is empty - pop impossible".to_string(),
+                    )),
+        }
     }
 
     pub fn drop(&mut self, range: RangeInclusive<u32>) -> Result<(), Error> {
         let mut repush = Vec::with_capacity(*range.start() as _);
 
         for _ in 0..*range.start() {
-            repush.push(self.pop());
+            let v = self.pop()?;
+            repush.push(v);
         }
 
         for _ in range {
-            let val = self.pop();
+            let val = self.pop()?;
             self.free_value(val)?;
         }
 
@@ -3051,7 +3057,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     fn pop_into(&mut self, dst: CCLoc) -> Result<(), Error> {
-        let val = self.pop();
+        let val = self.pop()?;
         self.copy_value(val, dst)?;
         self.free_value(val)?;
         Ok(())
@@ -3149,8 +3155,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
     }
 
-    pub fn f32_neg(&mut self) {
-        let mut val = self.pop();
+    pub fn f32_neg(&mut self) -> Result<(), Error> {
+        let mut val = self.pop()?;
 
         let out = if let Some(i) = val.imm_f32() {
             ValueLocation::Immediate(
@@ -3168,10 +3174,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.push(out);
+        Ok(())
     }
 
-    pub fn f64_neg(&mut self) {
-        let mut val = self.pop();
+    pub fn f64_neg(&mut self) -> Result<(), Error> {
+        let mut val = self.pop()?;
 
         let out = if let Some(i) = val.imm_f64() {
             ValueLocation::Immediate(
@@ -3189,10 +3196,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.push(out);
+        Ok(())
     }
 
-    pub fn f32_abs(&mut self) {
-        let mut val = self.pop();
+    pub fn f32_abs(&mut self) -> Result<(), Error> {
+        let mut val = self.pop()?;
 
         let out = if let Some(i) = val.imm_f32() {
             ValueLocation::Immediate(
@@ -3210,10 +3218,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.push(out);
+        Ok(())
     }
 
-    pub fn f64_abs(&mut self) {
-        let mut val = self.pop();
+    pub fn f64_abs(&mut self) -> Result<(), Error> {
+        let mut val = self.pop()?;
 
         let out = if let Some(i) = val.imm_f64() {
             ValueLocation::Immediate(
@@ -3231,10 +3240,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.push(out);
+        Ok(())
     }
 
-    pub fn f32_sqrt(&mut self) {
-        let mut val = self.pop();
+    pub fn f32_sqrt(&mut self) -> Result<(), Error> {
+        let mut val = self.pop()?;
 
         let out = if let Some(i) = val.imm_f32() {
             ValueLocation::Immediate(
@@ -3251,10 +3261,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.push(out);
+        Ok(())
     }
 
-    pub fn f64_sqrt(&mut self) {
-        let mut val = self.pop();
+    pub fn f64_sqrt(&mut self) -> Result<(), Error> {
+        let mut val = self.pop()?;
 
         let out = if let Some(i) = val.imm_f64() {
             ValueLocation::Immediate(
@@ -3271,11 +3282,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.push(out);
+        Ok(())
     }
 
     pub fn f32_copysign(&mut self) -> Result<(), Error> {
-        let mut right = self.pop();
-        let mut left = self.pop();
+        let mut right = self.pop()?;
+        let mut left = self.pop()?;
 
         let out = if let (Some(left), Some(right)) = (left.imm_f32(), right.imm_f32()) {
             ValueLocation::Immediate(
@@ -3306,8 +3318,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn f64_copysign(&mut self) -> Result<(), Error> {
-        let mut right = self.pop();
-        let mut left = self.pop();
+        let mut right = self.pop()?;
+        let mut left = self.pop()?;
 
         let out = if let (Some(left), Some(right)) = (left.imm_f64(), right.imm_f64()) {
             ValueLocation::Immediate(
@@ -3338,7 +3350,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_clz(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => {
@@ -3395,7 +3407,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i64_clz(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => {
@@ -3452,7 +3464,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_ctz(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => {
@@ -3505,7 +3517,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i64_ctz(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => {
@@ -3551,7 +3563,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_extend_u(&mut self) -> Result<(), Error> {
-        let val = self.pop();
+        let val = self.pop()?;
 
         let out = if let ValueLocation::Immediate(imm) = val {
             ValueLocation::Immediate((imm.as_i32().unwrap() as u32 as u64).into())
@@ -3593,7 +3605,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_extend_s(&mut self) -> Result<(), Error> {
-        let val = self.pop();
+        let val = self.pop()?;
 
         self.free_value(val)?;
         let new_reg = self.take_reg(I64).unwrap();
@@ -3661,7 +3673,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         |a: Ieee64| Ieee32::from_bits((f64::from_bits(a.to_bits()) as f32).to_bits())
     );
     pub fn i32_truncate_f32_s(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -3700,7 +3712,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_truncate_f32_u(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -3742,7 +3754,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_truncate_f64_s(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -3782,7 +3794,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_truncate_f64_u(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -3874,7 +3886,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     );
 
     pub fn i64_truncate_f32_s(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -3913,7 +3925,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i64_truncate_f64_s(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -3953,7 +3965,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i64_truncate_f32_u(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -3995,7 +4007,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i64_truncate_f64_u(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -4038,7 +4050,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn f32_convert_from_i32_u(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -4065,7 +4077,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn f64_convert_from_i32_u(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -4091,7 +4103,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn f32_convert_from_i64_u(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -4130,7 +4142,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn f64_convert_from_i64_u(&mut self) -> Result<(), Error> {
-        let mut val = self.pop();
+        let mut val = self.pop()?;
 
         let out_val = match val {
             ValueLocation::Immediate(imm) => ValueLocation::Immediate(
@@ -4170,7 +4182,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_wrap_from_i64(&mut self) -> Result<(), Error> {
-        let val = self.pop();
+        let val = self.pop()?;
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
@@ -4184,7 +4196,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i32_reinterpret_from_f32(&mut self) -> Result<(), Error> {
-        let val = self.pop();
+        let val = self.pop()?;
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
@@ -4198,7 +4210,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn i64_reinterpret_from_f64(&mut self) -> Result<(), Error> {
-        let val = self.pop();
+        let val = self.pop()?;
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
@@ -4212,7 +4224,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn f32_reinterpret_from_i32(&mut self) -> Result<(), Error> {
-        let val = self.pop();
+        let val = self.pop()?;
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
@@ -4226,7 +4238,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn f64_reinterpret_from_i64(&mut self) -> Result<(), Error> {
-        let val = self.pop();
+        let val = self.pop()?;
 
         let out = match val {
             ValueLocation::Immediate(imm) => {
@@ -4705,8 +4717,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // `i32_mul` needs to be separate because the immediate form of the instruction
     // has a different syntax to the immediate form of the other instructions.
     pub fn i32_mul(&mut self) -> Result<(), Error> {
-        let right = self.pop();
-        let left = self.pop();
+        let right = self.pop()?;
+        let left = self.pop()?;
 
         if let Some(right) = right.immediate() {
             if let Some(left) = left.immediate() {
@@ -4765,8 +4777,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // `i64_mul` needs to be separate because the immediate form of the instruction
     // has a different syntax to the immediate form of the other instructions.
     pub fn i64_mul(&mut self) -> Result<(), Error> {
-        let right = self.pop();
-        let left = self.pop();
+        let right = self.pop()?;
+        let left = self.pop()?;
 
         if let Some(right) = right.immediate() {
             if let Some(left) = left.immediate() {
@@ -4949,9 +4961,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn select(&mut self) -> Result<(), Error> {
-        let mut cond = self.pop();
-        let mut else_ = self.pop();
-        let mut then = self.pop();
+        let mut cond = self.pop()?;
+        let mut else_ = self.pop()?;
+        let mut then = self.pop()?;
 
         if let ValueLocation::Immediate(i) = cond {
             if i.as_i32().unwrap() == 0 {
@@ -5226,7 +5238,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let mut pending = Vec::<(ValueLocation, CCLoc)>::with_capacity(out_locs.len());
 
         for &loc in out_locs.iter().rev() {
-            let val = self.pop();
+            let val = self.pop()?;
 
             pending.push((val, loc));
         }
@@ -5302,7 +5314,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
-        let mut callee = self.pop();
+        let mut callee = self.pop()?;
         let callee_reg = self.into_temp_reg(I32, &mut callee).unwrap();
 
         for &loc in &locs {
