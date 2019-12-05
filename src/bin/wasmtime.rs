@@ -370,12 +370,27 @@ fn handle_module(
     args: &Args,
     path: &Path,
 ) -> Result<()> {
-    let (instance, _module, data) = instantiate_module(store, module_registry, path)?;
+    let (instance, module, data) = instantiate_module(store, module_registry, path)?;
 
     // If a function to invoke was given, invoke it.
     if let Some(f) = &args.flag_invoke {
         let data = ModuleData::new(&data)?;
         invoke_export(instance, &data, f, args)?;
+    } else if module
+        .borrow()
+        .exports()
+        .iter()
+        .find(|export| export.name().as_str().is_empty())
+        .is_some()
+    {
+        // Launch the default command export.
+        let data = ModuleData::new(&data)?;
+        invoke_export(instance, &data, "", args)?;
+    } else {
+        // If the module doesn't have a default command export, launch the
+        // _start function if one is present, as a compatibility measure.
+        let data = ModuleData::new(&data)?;
+        invoke_export(instance, &data, "_start", args)?;
     }
 
     Ok(())
