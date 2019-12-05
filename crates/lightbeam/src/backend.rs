@@ -104,7 +104,7 @@ impl GPR {
     }
 }
 
-pub fn arg_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
+pub fn arg_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCLoc>, Error> {
     let types = types.into_iter();
     let mut out = Vec::with_capacity(types.size_hint().0);
     // TODO: VmCtx is in the first register
@@ -121,19 +121,21 @@ pub fn arg_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
                     out
                 },
             )),
-            F32 | F64 => out.push(
-                float_gpr_iter
-                    .next()
-                    .map(|&r| CCLoc::Reg(r))
-                    .expect("Float args on stack not yet supported"),
-            ),
+            F32 | F64 => match float_gpr_iter.next() {
+                None => {
+                    return Err(Error::Microwasm(
+                        "Float args on stack not yet supported".to_string(),
+                    ))
+                }
+                Some(val) => out.push(CCLoc::Reg(*val)),
+            },
         }
     }
 
-    out
+    Ok(out)
 }
 
-pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
+pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCLoc>, Error> {
     let types = types.into_iter();
     let mut out = Vec::with_capacity(types.size_hint().0);
     // TODO: VmCtx is in the first register
@@ -142,20 +144,26 @@ pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Vec<CCLoc> {
 
     for ty in types {
         match ty {
-            I32 | I64 => out.push(CCLoc::Reg(
-                *int_gpr_iter
-                    .next()
-                    .expect("We don't support stack returns yet"),
-            )),
-            F32 | F64 => out.push(CCLoc::Reg(
-                *float_gpr_iter
-                    .next()
-                    .expect("We don't support stack returns yet"),
-            )),
+            I32 | I64 => match int_gpr_iter.next() {
+                None => {
+                    return Err(Error::Microwasm(
+                        "We don't support stack returns yet".to_string(),
+                    ))
+                }
+                Some(val) => out.push(CCLoc::Reg(*val)),
+            },
+            F32 | F64 => match float_gpr_iter.next() {
+                None => {
+                    return Err(Error::Microwasm(
+                        "We don't support stack returns yet".to_string(),
+                    ))
+                }
+                Some(val) => out.push(CCLoc::Reg(*val)),
+            },
         }
     }
 
-    out
+    Ok(out)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -279,7 +287,6 @@ impl Default for Registers {
         Self::new()
     }
 }
-
 
 impl Registers {
     pub fn new() -> Self {
@@ -5345,7 +5352,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         rets: impl IntoIterator<Item = SignlessType>,
         preserve_vmctx: bool,
     ) -> Result<(), Error> {
-        let locs = arg_locs(args);
+        let locs = arg_locs(args)?;
 
         self.save_volatile(..locs.len())?;
 
@@ -5552,20 +5559,25 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
 
             if pending.len() == start_len {
-                let src = *pending
-                    .iter()
-                    .filter_map(|(src, _)| {
-                        if let ValueLocation::Reg(reg) = src {
-                            Some(reg)
-                        } else {
-                            None
-                        }
-                    })
-                    .next()
-                    .expect(
-                        "Programmer error: We shouldn't need to push \
-                         intermediate args if we don't have any argument sources in registers",
-                    );
+                let src =
+                    match pending
+                        .iter()
+                        .filter_map(|(src, _)| {
+                            if let ValueLocation::Reg(reg) = src {
+                                Some(reg)
+                            } else {
+                                None
+                            }
+                        })
+                        .next()
+                    {
+                        None => return Err(Error::Microwasm(
+                            "Programmer error: We shouldn't need to push \
+                             intermediate args if we don't have any argument sources in registers"
+                                .to_string(),
+                        )),
+                        Some(val) => *val,
+                    };
                 let new_src = self.push_physical(ValueLocation::Reg(src))?;
                 for (old_src, _) in pending.iter_mut() {
                     if *old_src == ValueLocation::Reg(src) {
@@ -5583,7 +5595,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         &mut self,
         returns: impl IntoIterator<Item = SignlessType>,
     ) -> Result<(), Error> {
-        for loc in ret_locs(returns) {
+        for loc in ret_locs(returns)? {
             if let CCLoc::Reg(reg) = loc {
                 self.block_state.regs.mark_used(reg);
             }
@@ -5599,7 +5611,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         arg_types: impl IntoIterator<Item = SignlessType>,
         return_types: impl IntoIterator<Item = SignlessType>,
     ) -> Result<(), Error> {
-        let locs = arg_locs(arg_types);
+        let locs = arg_locs(arg_types)?;
 
         for &loc in &locs {
             if let CCLoc::Reg(r) = loc {
@@ -5749,7 +5761,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         arg_types: impl IntoIterator<Item = SignlessType>,
         return_types: impl IntoIterator<Item = SignlessType>,
     ) -> Result<(), Error> {
-        let locs = arg_locs(arg_types);
+        let locs = arg_locs(arg_types)?;
 
         self.save_volatile(..locs.len())?;
 
@@ -5775,7 +5787,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         arg_types: impl IntoIterator<Item = SignlessType>,
         return_types: impl IntoIterator<Item = SignlessType>,
     ) -> Result<(), Error> {
-        let locs = arg_locs(arg_types);
+        let locs = arg_locs(arg_types)?;
 
         dynasm!(self.asm
             ; push Rq(VMCTX)
@@ -5821,7 +5833,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         &mut self,
         params: impl IntoIterator<Item = SignlessType>,
     ) -> Result<(), Error> {
-        let locs = Vec::from_iter(arg_locs(params));
+        let i_locs = arg_locs(params)?;
+        let locs = Vec::from_iter(i_locs);
 
         self.apply_cc(&BlockCallingConvention::function_start(locs))?;
         Ok(())

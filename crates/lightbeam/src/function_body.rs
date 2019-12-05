@@ -134,14 +134,14 @@ where
 
     let num_returns = func_type.returns().len();
 
+    let loc = ret_locs(func_type.returns().iter().map(|t| t.to_microwasm_type()))?;
+
     blocks.insert(
         BrTarget::Return,
         Block {
             label: BrTarget::Return,
             params: num_returns as u32,
-            calling_convention: Some(Left(BlockCallingConvention::function_start(ret_locs(
-                func_type.returns().iter().map(|t| t.to_microwasm_type()),
-            )))),
+            calling_convention: Some(Left(BlockCallingConvention::function_start(loc))),
             is_next: false,
             has_backwards_callers: false,
             actual_num_callers: 0,
