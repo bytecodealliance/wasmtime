@@ -128,7 +128,7 @@ where
         .map(|t| t.to_microwasm_type())
         .collect::<Vec<_>>();
 
-    ctx.start_function(params.iter().cloned());
+    ctx.start_function(params.iter().cloned())?;
 
     let mut blocks = HashMap::<BrTarget<L>, Block>::new();
 
@@ -274,10 +274,10 @@ where
                         // TODO: We can `take` this if it's a `Right`
                         match block.calling_convention.as_ref() {
                             Some(Left(cc)) => {
-                                ctx.apply_cc(cc);
+                                ctx.apply_cc(cc)?;
                             }
                             Some(Right(virt)) => {
-                                ctx.set_state(virt.clone());
+                                ctx.set_state(virt.clone())?;
                             }
                             _ => assert_eq!(block.params as usize, ctx.block_state.stack.len()),
                         }
@@ -665,7 +665,7 @@ where
             Operator::Lt(SF64) => ctx.f64_lt()?,
             Operator::Le(SF64) => ctx.f64_le()?,
             Operator::Drop(range) => ctx.drop(range)?,
-            Operator::Const(val) => ctx.const_(val),
+            Operator::Const(val) => ctx.const_(val)?,
             Operator::I32WrapFromI64 => ctx.i32_wrap_from_i64()?,
             Operator::I32ReinterpretFromF32 => ctx.i32_reinterpret_from_f32()?,
             Operator::I64ReinterpretFromF64 => ctx.i64_reinterpret_from_f64()?,
