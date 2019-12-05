@@ -23,3 +23,28 @@ pub fn open_scratch_directory(path: &str) -> Result<wasi_unstable::Fd, String> {
         Ok(dir_fd)
     }
 }
+
+pub fn open_scratch_directory_new(path: &str) -> Result<wasi::Fd, String> {
+    unsafe {
+        for i in 3.. {
+            let stat = match wasi::fd_prestat_get(i) {
+                Ok(s) => s,
+                Err(_) => break,
+            };
+            if stat.pr_type != wasi::PREOPENTYPE_DIR {
+                continue;
+            }
+            let mut dst = Vec::with_capacity(stat.u.dir.pr_name_len);
+            if wasi::fd_prestat_dir_name(i, dst.as_mut_ptr(), dst.capacity()).is_err() {
+                continue;
+            }
+            dst.set_len(stat.u.dir.pr_name_len);
+            if dst == path.as_bytes() {
+                return Ok(wasi::path_open(i, 0, ".", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+                    .expect("failed to open dir"));
+            }
+        }
+
+        Err(format!("failed to find scratch dir"))
+    }
+}

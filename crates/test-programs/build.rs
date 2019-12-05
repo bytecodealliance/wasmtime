@@ -31,6 +31,7 @@ mod wasi_tests {
             }
         }
         println!("cargo:rerun-if-changed=wasi-tests/Cargo.toml");
+        println!("cargo:rerun-if-changed=wasi-tests/src/lib.rs");
         // Build tests to OUT_DIR (target/*/build/wasi-common-*/out/wasm32-wasi/release/*.wasm)
         let out_dir = PathBuf::from(
             env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
