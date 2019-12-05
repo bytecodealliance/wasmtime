@@ -4,7 +4,7 @@ pub mod wasi_wrappers;
 use libc;
 use std::ffi::CString;
 use std::io;
-use wasi::wasi_unstable;
+use wasi_old::wasi_unstable;
 
 pub fn open_scratch_directory(path: &str) -> Result<wasi_unstable::Fd, String> {
     // Open the scratch directory.

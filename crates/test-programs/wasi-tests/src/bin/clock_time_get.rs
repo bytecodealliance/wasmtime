@@ -1,5 +1,5 @@
 use more_asserts::assert_le;
-use wasi::wasi_unstable;
+use wasi_old::wasi_unstable;
 use wasi_tests::wasi_wrappers::wasi_clock_time_get;
 
 unsafe fn test_clock_time_get() {

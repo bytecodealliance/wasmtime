@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, mem, process};
-use wasi::wasi_unstable;
+use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
 use wasi_tests::utils::{cleanup_dir, close_fd, create_dir};
 use wasi_tests::wasi_wrappers::{wasi_fd_fdstat_get, wasi_fd_seek, wasi_path_open};

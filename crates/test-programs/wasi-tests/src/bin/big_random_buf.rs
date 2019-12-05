@@ -1,4 +1,4 @@
-use wasi::wasi_unstable;
+use wasi_old::wasi_unstable;
 
 fn test_big_random_buf() {
     let mut buf = Vec::new();
