@@ -1,10 +1,10 @@
 use std::cell::Cell;
 
-use super::binemit;
-use super::ir::{SourceLoc, TrapCode};
 use crate::r#ref::HostRef;
 use crate::Trap;
+use wasmtime_environ::ir::{SourceLoc, TrapCode};
 use wasmtime_environ::TrapInformation;
+use wasmtime_jit::trampoline::binemit;
 
 // Randomly selected user TrapCode magic number 13.
 pub const API_TRAP_CODE: TrapCode = TrapCode::User(13);

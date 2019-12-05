@@ -3,7 +3,7 @@
 //! instructions which compute them directly.
 
 use crate::vmcontext::VMContext;
-use cranelift_wasm::{DefinedMemoryIndex, MemoryIndex};
+use wasmtime_environ::wasm::{DefinedMemoryIndex, MemoryIndex};
 
 /// Implementation of f32.ceil
 pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {

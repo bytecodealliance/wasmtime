@@ -1,21 +1,25 @@
 //! Support for a calling of an imported function.
 
 use super::create_handle::create_handle;
-use super::ir::{ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind};
 use super::trap::{record_api_trap, TrapSink, API_TRAP_CODE};
-use super::{binemit, pretty_error, TargetIsa};
-use super::{Context, FunctionBuilder, FunctionBuilderContext};
-use crate::data_structures::ir::{self, types};
-use crate::data_structures::wasm::{DefinedFuncIndex, FuncIndex};
-use crate::data_structures::{native_isa_builder, settings, EntityRef, PrimaryMap};
 use crate::r#ref::HostRef;
 use crate::{Callable, FuncType, Store, Val};
 use anyhow::Result;
 use std::cmp;
 use std::convert::TryFrom;
 use std::rc::Rc;
-use wasmtime_environ::{CompiledFunction, Export, Module, TrapInformation};
-use wasmtime_jit::CodeMemory;
+use wasmtime_environ::entity::{EntityRef, PrimaryMap};
+use wasmtime_environ::ir::types;
+use wasmtime_environ::isa::TargetIsa;
+use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex};
+use wasmtime_environ::{ir, settings, CompiledFunction, Export, Module, TrapInformation};
+use wasmtime_jit::trampoline::ir::{
+    ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
+};
+use wasmtime_jit::trampoline::{
+    binemit, pretty_error, Context, FunctionBuilder, FunctionBuilderContext,
+};
+use wasmtime_jit::{native, CodeMemory};
 use wasmtime_runtime::{
     get_mut_trap_registry, InstanceHandle, TrapRegistrationGuard, VMContext, VMFunctionBody,
 };
@@ -232,7 +236,7 @@ pub fn create_handle_with_function(
     let sig = ft.get_wasmtime_signature().clone();
 
     let isa = {
-        let isa_builder = native_isa_builder();
+        let isa_builder = native::builder();
         let flag_builder = settings::builder();
         isa_builder.finish(settings::Flags::new(flag_builder))
     };

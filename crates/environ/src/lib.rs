@@ -26,6 +26,7 @@
 
 mod address_map;
 mod compilation;
+mod data_structures;
 mod func_environ;
 mod module;
 mod module_environ;
@@ -47,6 +48,7 @@ pub use crate::compilation::{
     Relocations, TrapInformation, Traps,
 };
 pub use crate::cranelift::Cranelift;
+pub use crate::data_structures::*;
 pub use crate::func_environ::BuiltinFunctionIndex;
 #[cfg(feature = "lightbeam")]
 pub use crate::lightbeam::Lightbeam;

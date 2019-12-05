@@ -4,7 +4,6 @@
 
 mod callable;
 mod context;
-mod data_structures;
 mod externals;
 mod instance;
 mod module;

@@ -12,17 +12,17 @@
 
 pub mod dummy;
 
-use cranelift_codegen::settings;
 use dummy::dummy_imports;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
-use wasmtime_jit::{CompilationStrategy, CompiledModule, Compiler, NullResolver};
+use wasmtime_environ::{isa, settings};
+use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler, NullResolver};
 
-fn host_isa() -> Box<dyn cranelift_codegen::isa::TargetIsa> {
+fn host_isa() -> Box<dyn isa::TargetIsa> {
     let flag_builder = settings::builder();
-    let isa_builder = cranelift_native::builder().expect("host machine is not a supported target");
+    let isa_builder = native::builder();
     isa_builder.finish(settings::Flags::new(flag_builder))
 }
 

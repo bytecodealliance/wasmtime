@@ -8,10 +8,10 @@
 #![deny(missing_docs)]
 
 use anyhow::{bail, format_err, Result};
-use cranelift_codegen::ir;
 use std::convert::TryFrom;
 use std::str;
 use wasm_webidl_bindings::ast;
+use wasmtime_environ::ir;
 use wasmtime_jit::RuntimeValue;
 use wasmtime_runtime::{Export, InstanceHandle};
 

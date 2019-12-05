@@ -1,7 +1,7 @@
-use cranelift_codegen::settings;
-use cranelift_codegen::settings::Configurable;
-use cranelift_entity::EntityRef;
 use faerie::{Artifact, Decl, Link};
+use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::settings;
+use wasmtime_environ::settings::Configurable;
 use wasmtime_environ::{Compilation, Module, RelocationTarget, Relocations};
 
 fn get_reloc_target_special_import_name(target: RelocationTarget) -> Option<&'static str> {

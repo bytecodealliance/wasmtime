@@ -1,5 +1,4 @@
 use crate::callable::{Callable, NativeCallable, WasmtimeFn, WrappedCallable};
-use crate::data_structures::wasm;
 use crate::r#ref::{AnyRef, HostRef};
 use crate::runtime::Store;
 use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
@@ -9,6 +8,7 @@ use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
 use std::fmt;
 use std::rc::Rc;
 use std::slice;
+use wasmtime_environ::wasm;
 use wasmtime_runtime::InstanceHandle;
 
 // Externals

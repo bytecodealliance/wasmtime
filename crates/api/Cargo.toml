@@ -13,11 +13,6 @@ name = "wasmtime"
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [dependencies]
-cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-native = "0.50.0"
-cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-frontend = "0.50.0"
 wasmtime-runtime = { path = "../runtime" }
 wasmtime-environ = { path = "../environ" }
 wasmtime-jit = { path = "../jit" }

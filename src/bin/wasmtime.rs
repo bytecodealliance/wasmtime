@@ -31,7 +31,6 @@
 )]
 
 use anyhow::{bail, Context as _, Result};
-use cranelift_codegen::{settings, settings::Configurable};
 use docopt::Docopt;
 use serde::Deserialize;
 use std::path::{Component, Path};
@@ -40,6 +39,7 @@ use wasi_common::preopen_dir;
 use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
+use wasmtime_environ::{settings, settings::Configurable};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 use wasmtime_wasi::create_wasi_instance;
