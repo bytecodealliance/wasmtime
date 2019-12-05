@@ -151,9 +151,14 @@ where
 
     while let Some(op) = body.next() {
         if let Some(Operator::Label(label)) = body.peek() {
-            let block = blocks
-                .get_mut(&BrTarget::Label(label.clone()))
-                .expect("Label defined before being declared");
+            let block = match blocks.get_mut(&BrTarget::Label(label.clone())) {
+                None => {
+                    return Err(Error::Microwasm(
+                        "Label defined before being declared".to_string(),
+                    ))
+                }
+                Some(o) => o,
+            };
             block.is_next = true;
         }
 
@@ -327,7 +332,8 @@ where
                         ..
                     } => {
                         let cc = if should_serialize_args {
-                            *calling_convention = Some(Left(ctx.serialize_args(block.params)));
+                            let block_conv = ctx.serialize_args(block.params)?;
+                            *calling_convention = Some(Left(block_conv));
                             None
                         } else {
                             calling_convention
@@ -337,7 +343,7 @@ where
                         };
 
                         if let Some(cc) = cc {
-                            ctx.pass_block_args(cc);
+                            ctx.pass_block_args(cc)?;
                         }
 
                         if !*is_next {
@@ -349,10 +355,10 @@ where
                         calling_convention: Some(Left(cc)),
                         ..
                     } => {
-                        ctx.pass_block_args(cc);
+                        ctx.pass_block_args(cc)?;
                         ctx.ret();
                     }
-                    _ => unimplemented!(),
+                    _ => return Err(Error::Microwasm("Br case unimplemented".to_string())),
                 }
             }
             Operator::BrIf { then, else_ } => {
@@ -379,13 +385,13 @@ where
                         (&mut else_block.calling_convention, &else_.to_drop),
                     ) {
                         ((Some(Left(ref cc)), _), ref mut other @ (None, _))
-                        | (ref mut other @ (None, _), (Some(Left(ref cc)), _)) => {
-                            let mut cc = ctx.serialize_block_args(cc, max_params);
+                        | (ref mut other @ (None, _), (Some(Left(ref cc)), _)) => Ok({
+                            let mut cc = ctx.serialize_block_args(cc, max_params)?;
                             if let Some(to_drop) = other.1 {
                                 drop_elements(&mut cc.arguments, to_drop.clone());
                             }
                             *other.0 = Some(Left(cc));
-                        }
+                        }),
                         (
                             (ref mut then_cc @ None, then_to_drop),
                             (ref mut else_cc @ None, else_to_drop),
@@ -397,13 +403,14 @@ where
                             } else {
                                 None
                             };
-                            let cc = if then_block_should_serialize_args
+
+                            let mut cc : Option<BlockCallingConvention> = None;
+                            if then_block_should_serialize_args
                                 || else_block_should_serialize_args
                             {
-                                Some(ctx.serialize_args(max_params))
-                            } else {
-                                None
-                            };
+                                let a = ctx.serialize_args(max_params)?;
+                                cc = Some(a);
+                            }
 
                             **then_cc = if then_block_should_serialize_args {
                                 let mut cc = cc.clone().unwrap();
@@ -431,26 +438,31 @@ where
                                 }
                                 Some(Right(cc))
                             };
-                        }
-                        _ => unimplemented!(
-                            "Can't pass different params to different sides of `br_if` yet"
-                        ),
+                            Ok(())
+                        },
+                        _ => return Err(Error::Microwasm(
+                            "unimplemented: Can't pass different params to different sides of `br_if` yet".to_string(),
+                        )),
                     }
                 };
 
                 match (then_block_parts, else_block_parts) {
                     ((true, _), (false, else_)) => {
-                        ctx.br_if_false(else_, f);
+                        ctx.br_if_false(else_, f)?;
                     }
                     ((false, then), (true, _)) => {
-                        ctx.br_if_true(then, f);
+                        ctx.br_if_true(then, f)?;
                     }
                     ((false, then), (false, else_)) => {
-                        ctx.br_if_true(then, f);
+                        ctx.br_if_true(then, f)?;
                         ctx.br(else_);
                     }
-                    other => unimplemented!("{:#?}", other),
-                }
+                    other => {
+                        return Err(Error::Microwasm(
+                            format!("unimplemented {:#?}", other).to_string(),
+                        ))
+                    }
+                };
             }
             Operator::BrTable(BrTable { targets, default }) => {
                 use itertools::Itertools;
@@ -514,18 +526,29 @@ where
                         );
                     }
 
-                    let cc = cc
+                    let temp: Result<
+                        Either<BlockCallingConvention, VirtualCallingConvention>,
+                        Error,
+                    > = cc
                         .map(|cc| match cc {
-                            Left(cc) => Left(ctx.serialize_block_args(&cc, max_params)),
-                            Right(cc) => Right(cc),
+                            Left(cc) => {
+                                let tmp = ctx.serialize_block_args(&cc, max_params)?;
+                                Ok(Left(tmp))
+                            }
+                            Right(cc) => Ok(Right(cc)),
                         })
                         .unwrap_or_else(|| {
                             if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
-                                Right(ctx.virtual_calling_convention())
+                                Ok(Right(ctx.virtual_calling_convention()))
                             } else {
-                                Left(ctx.serialize_args(max_params))
+                                let tmp = ctx.serialize_args(max_params)?;
+                                Ok(Left(tmp))
                             }
                         });
+                    let cc = match temp.unwrap() {
+                        Right(rr) => Right(rr),
+                        Left(l) => Left(l),
+                    };
 
                     for target in targets.iter().chain(std::iter::once(&default)).unique() {
                         let block = blocks.get_mut(&target.target).unwrap();
@@ -538,265 +561,266 @@ where
                         }
                         block.calling_convention = Some(cc);
                     }
-                });
+                    Ok(())
+                })?;
             }
             Operator::Swap(depth) => ctx.swap(depth),
             Operator::Pick(depth) => ctx.pick(depth),
-            Operator::Eq(I32) => ctx.i32_eq(),
-            Operator::Eqz(Size::_32) => ctx.i32_eqz(),
-            Operator::Ne(I32) => ctx.i32_neq(),
-            Operator::Lt(SI32) => ctx.i32_lt_s(),
-            Operator::Le(SI32) => ctx.i32_le_s(),
-            Operator::Gt(SI32) => ctx.i32_gt_s(),
-            Operator::Ge(SI32) => ctx.i32_ge_s(),
-            Operator::Lt(SU32) => ctx.i32_lt_u(),
-            Operator::Le(SU32) => ctx.i32_le_u(),
-            Operator::Gt(SU32) => ctx.i32_gt_u(),
-            Operator::Ge(SU32) => ctx.i32_ge_u(),
-            Operator::Add(I32) => ctx.i32_add(),
-            Operator::Sub(I32) => ctx.i32_sub(),
-            Operator::And(Size::_32) => ctx.i32_and(),
-            Operator::Or(Size::_32) => ctx.i32_or(),
-            Operator::Xor(Size::_32) => ctx.i32_xor(),
-            Operator::Mul(I32) => ctx.i32_mul(),
-            Operator::Div(SU32) => ctx.i32_div_u(),
-            Operator::Div(SI32) => ctx.i32_div_s(),
-            Operator::Rem(sint::I32) => ctx.i32_rem_s(),
-            Operator::Rem(sint::U32) => ctx.i32_rem_u(),
-            Operator::Shl(Size::_32) => ctx.i32_shl(),
-            Operator::Shr(sint::I32) => ctx.i32_shr_s(),
-            Operator::Shr(sint::U32) => ctx.i32_shr_u(),
-            Operator::Rotl(Size::_32) => ctx.i32_rotl(),
-            Operator::Rotr(Size::_32) => ctx.i32_rotr(),
-            Operator::Clz(Size::_32) => ctx.i32_clz(),
-            Operator::Ctz(Size::_32) => ctx.i32_ctz(),
-            Operator::Popcnt(Size::_32) => ctx.i32_popcnt(),
-            Operator::Eq(I64) => ctx.i64_eq(),
-            Operator::Eqz(Size::_64) => ctx.i64_eqz(),
-            Operator::Ne(I64) => ctx.i64_neq(),
-            Operator::Lt(SI64) => ctx.i64_lt_s(),
-            Operator::Le(SI64) => ctx.i64_le_s(),
-            Operator::Gt(SI64) => ctx.i64_gt_s(),
-            Operator::Ge(SI64) => ctx.i64_ge_s(),
-            Operator::Lt(SU64) => ctx.i64_lt_u(),
-            Operator::Le(SU64) => ctx.i64_le_u(),
-            Operator::Gt(SU64) => ctx.i64_gt_u(),
-            Operator::Ge(SU64) => ctx.i64_ge_u(),
-            Operator::Add(I64) => ctx.i64_add(),
-            Operator::Sub(I64) => ctx.i64_sub(),
-            Operator::And(Size::_64) => ctx.i64_and(),
-            Operator::Or(Size::_64) => ctx.i64_or(),
-            Operator::Xor(Size::_64) => ctx.i64_xor(),
-            Operator::Mul(I64) => ctx.i64_mul(),
-            Operator::Div(SU64) => ctx.i64_div_u(),
-            Operator::Div(SI64) => ctx.i64_div_s(),
-            Operator::Rem(sint::I64) => ctx.i64_rem_s(),
-            Operator::Rem(sint::U64) => ctx.i64_rem_u(),
-            Operator::Shl(Size::_64) => ctx.i64_shl(),
-            Operator::Shr(sint::I64) => ctx.i64_shr_s(),
-            Operator::Shr(sint::U64) => ctx.i64_shr_u(),
-            Operator::Rotl(Size::_64) => ctx.i64_rotl(),
-            Operator::Rotr(Size::_64) => ctx.i64_rotr(),
-            Operator::Clz(Size::_64) => ctx.i64_clz(),
-            Operator::Ctz(Size::_64) => ctx.i64_ctz(),
-            Operator::Popcnt(Size::_64) => ctx.i64_popcnt(),
-            Operator::Add(F32) => ctx.f32_add(),
-            Operator::Mul(F32) => ctx.f32_mul(),
-            Operator::Sub(F32) => ctx.f32_sub(),
-            Operator::Div(SF32) => ctx.f32_div(),
-            Operator::Min(Size::_32) => ctx.f32_min(),
-            Operator::Max(Size::_32) => ctx.f32_max(),
-            Operator::Copysign(Size::_32) => ctx.f32_copysign(),
+            Operator::Eq(I32) => ctx.i32_eq()?,
+            Operator::Eqz(Size::_32) => ctx.i32_eqz()?,
+            Operator::Ne(I32) => ctx.i32_neq()?,
+            Operator::Lt(SI32) => ctx.i32_lt_s()?,
+            Operator::Le(SI32) => ctx.i32_le_s()?,
+            Operator::Gt(SI32) => ctx.i32_gt_s()?,
+            Operator::Ge(SI32) => ctx.i32_ge_s()?,
+            Operator::Lt(SU32) => ctx.i32_lt_u()?,
+            Operator::Le(SU32) => ctx.i32_le_u()?,
+            Operator::Gt(SU32) => ctx.i32_gt_u()?,
+            Operator::Ge(SU32) => ctx.i32_ge_u()?,
+            Operator::Add(I32) => ctx.i32_add()?,
+            Operator::Sub(I32) => ctx.i32_sub()?,
+            Operator::And(Size::_32) => ctx.i32_and()?,
+            Operator::Or(Size::_32) => ctx.i32_or()?,
+            Operator::Xor(Size::_32) => ctx.i32_xor()?,
+            Operator::Mul(I32) => ctx.i32_mul()?,
+            Operator::Div(SU32) => ctx.i32_div_u()?,
+            Operator::Div(SI32) => ctx.i32_div_s()?,
+            Operator::Rem(sint::I32) => ctx.i32_rem_s()?,
+            Operator::Rem(sint::U32) => ctx.i32_rem_u()?,
+            Operator::Shl(Size::_32) => ctx.i32_shl()?,
+            Operator::Shr(sint::I32) => ctx.i32_shr_s()?,
+            Operator::Shr(sint::U32) => ctx.i32_shr_u()?,
+            Operator::Rotl(Size::_32) => ctx.i32_rotl()?,
+            Operator::Rotr(Size::_32) => ctx.i32_rotr()?,
+            Operator::Clz(Size::_32) => ctx.i32_clz()?,
+            Operator::Ctz(Size::_32) => ctx.i32_ctz()?,
+            Operator::Popcnt(Size::_32) => ctx.i32_popcnt()?,
+            Operator::Eq(I64) => ctx.i64_eq()?,
+            Operator::Eqz(Size::_64) => ctx.i64_eqz()?,
+            Operator::Ne(I64) => ctx.i64_neq()?,
+            Operator::Lt(SI64) => ctx.i64_lt_s()?,
+            Operator::Le(SI64) => ctx.i64_le_s()?,
+            Operator::Gt(SI64) => ctx.i64_gt_s()?,
+            Operator::Ge(SI64) => ctx.i64_ge_s()?,
+            Operator::Lt(SU64) => ctx.i64_lt_u()?,
+            Operator::Le(SU64) => ctx.i64_le_u()?,
+            Operator::Gt(SU64) => ctx.i64_gt_u()?,
+            Operator::Ge(SU64) => ctx.i64_ge_u()?,
+            Operator::Add(I64) => ctx.i64_add()?,
+            Operator::Sub(I64) => ctx.i64_sub()?,
+            Operator::And(Size::_64) => ctx.i64_and()?,
+            Operator::Or(Size::_64) => ctx.i64_or()?,
+            Operator::Xor(Size::_64) => ctx.i64_xor()?,
+            Operator::Mul(I64) => ctx.i64_mul()?,
+            Operator::Div(SU64) => ctx.i64_div_u()?,
+            Operator::Div(SI64) => ctx.i64_div_s()?,
+            Operator::Rem(sint::I64) => ctx.i64_rem_s()?,
+            Operator::Rem(sint::U64) => ctx.i64_rem_u()?,
+            Operator::Shl(Size::_64) => ctx.i64_shl()?,
+            Operator::Shr(sint::I64) => ctx.i64_shr_s()?,
+            Operator::Shr(sint::U64) => ctx.i64_shr_u()?,
+            Operator::Rotl(Size::_64) => ctx.i64_rotl()?,
+            Operator::Rotr(Size::_64) => ctx.i64_rotr()?,
+            Operator::Clz(Size::_64) => ctx.i64_clz()?,
+            Operator::Ctz(Size::_64) => ctx.i64_ctz()?,
+            Operator::Popcnt(Size::_64) => ctx.i64_popcnt()?,
+            Operator::Add(F32) => ctx.f32_add()?,
+            Operator::Mul(F32) => ctx.f32_mul()?,
+            Operator::Sub(F32) => ctx.f32_sub()?,
+            Operator::Div(SF32) => ctx.f32_div()?,
+            Operator::Min(Size::_32) => ctx.f32_min()?,
+            Operator::Max(Size::_32) => ctx.f32_max()?,
+            Operator::Copysign(Size::_32) => ctx.f32_copysign()?,
             Operator::Sqrt(Size::_32) => ctx.f32_sqrt(),
             Operator::Neg(Size::_32) => ctx.f32_neg(),
             Operator::Abs(Size::_32) => ctx.f32_abs(),
-            Operator::Floor(Size::_32) => ctx.f32_floor(),
-            Operator::Ceil(Size::_32) => ctx.f32_ceil(),
-            Operator::Nearest(Size::_32) => ctx.f32_nearest(),
-            Operator::Trunc(Size::_32) => ctx.f32_trunc(),
-            Operator::Eq(F32) => ctx.f32_eq(),
-            Operator::Ne(F32) => ctx.f32_ne(),
-            Operator::Gt(SF32) => ctx.f32_gt(),
-            Operator::Ge(SF32) => ctx.f32_ge(),
-            Operator::Lt(SF32) => ctx.f32_lt(),
-            Operator::Le(SF32) => ctx.f32_le(),
-            Operator::Add(F64) => ctx.f64_add(),
-            Operator::Mul(F64) => ctx.f64_mul(),
-            Operator::Sub(F64) => ctx.f64_sub(),
-            Operator::Div(SF64) => ctx.f64_div(),
-            Operator::Min(Size::_64) => ctx.f64_min(),
-            Operator::Max(Size::_64) => ctx.f64_max(),
-            Operator::Copysign(Size::_64) => ctx.f64_copysign(),
+            Operator::Floor(Size::_32) => ctx.f32_floor()?,
+            Operator::Ceil(Size::_32) => ctx.f32_ceil()?,
+            Operator::Nearest(Size::_32) => ctx.f32_nearest()?,
+            Operator::Trunc(Size::_32) => ctx.f32_trunc()?,
+            Operator::Eq(F32) => ctx.f32_eq()?,
+            Operator::Ne(F32) => ctx.f32_ne()?,
+            Operator::Gt(SF32) => ctx.f32_gt()?,
+            Operator::Ge(SF32) => ctx.f32_ge()?,
+            Operator::Lt(SF32) => ctx.f32_lt()?,
+            Operator::Le(SF32) => ctx.f32_le()?,
+            Operator::Add(F64) => ctx.f64_add()?,
+            Operator::Mul(F64) => ctx.f64_mul()?,
+            Operator::Sub(F64) => ctx.f64_sub()?,
+            Operator::Div(SF64) => ctx.f64_div()?,
+            Operator::Min(Size::_64) => ctx.f64_min()?,
+            Operator::Max(Size::_64) => ctx.f64_max()?,
+            Operator::Copysign(Size::_64) => ctx.f64_copysign()?,
             Operator::Sqrt(Size::_64) => ctx.f64_sqrt(),
             Operator::Neg(Size::_64) => ctx.f64_neg(),
             Operator::Abs(Size::_64) => ctx.f64_abs(),
-            Operator::Floor(Size::_64) => ctx.f64_floor(),
-            Operator::Ceil(Size::_64) => ctx.f64_ceil(),
-            Operator::Nearest(Size::_64) => ctx.f64_nearest(),
-            Operator::Trunc(Size::_64) => ctx.f64_trunc(),
-            Operator::Eq(F64) => ctx.f64_eq(),
-            Operator::Ne(F64) => ctx.f64_ne(),
-            Operator::Gt(SF64) => ctx.f64_gt(),
-            Operator::Ge(SF64) => ctx.f64_ge(),
-            Operator::Lt(SF64) => ctx.f64_lt(),
-            Operator::Le(SF64) => ctx.f64_le(),
-            Operator::Drop(range) => ctx.drop(range),
+            Operator::Floor(Size::_64) => ctx.f64_floor()?,
+            Operator::Ceil(Size::_64) => ctx.f64_ceil()?,
+            Operator::Nearest(Size::_64) => ctx.f64_nearest()?,
+            Operator::Trunc(Size::_64) => ctx.f64_trunc()?,
+            Operator::Eq(F64) => ctx.f64_eq()?,
+            Operator::Ne(F64) => ctx.f64_ne()?,
+            Operator::Gt(SF64) => ctx.f64_gt()?,
+            Operator::Ge(SF64) => ctx.f64_ge()?,
+            Operator::Lt(SF64) => ctx.f64_lt()?,
+            Operator::Le(SF64) => ctx.f64_le()?,
+            Operator::Drop(range) => ctx.drop(range)?,
             Operator::Const(val) => ctx.const_(val),
-            Operator::I32WrapFromI64 => ctx.i32_wrap_from_i64(),
-            Operator::I32ReinterpretFromF32 => ctx.i32_reinterpret_from_f32(),
-            Operator::I64ReinterpretFromF64 => ctx.i64_reinterpret_from_f64(),
-            Operator::F32ReinterpretFromI32 => ctx.f32_reinterpret_from_i32(),
-            Operator::F64ReinterpretFromI64 => ctx.f64_reinterpret_from_i64(),
+            Operator::I32WrapFromI64 => ctx.i32_wrap_from_i64()?,
+            Operator::I32ReinterpretFromF32 => ctx.i32_reinterpret_from_f32()?,
+            Operator::I64ReinterpretFromF64 => ctx.i64_reinterpret_from_f64()?,
+            Operator::F32ReinterpretFromI32 => ctx.f32_reinterpret_from_i32()?,
+            Operator::F64ReinterpretFromI64 => ctx.f64_reinterpret_from_i64()?,
             Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I32,
             } => {
-                ctx.i32_truncate_f32_s();
+                ctx.i32_truncate_f32_s()?;
             }
             Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::U32,
             } => {
-                ctx.i32_truncate_f32_u();
+                ctx.i32_truncate_f32_u()?;
             }
             Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::I32,
             } => {
-                ctx.i32_truncate_f64_s();
+                ctx.i32_truncate_f64_s()?;
             }
             Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::U32,
             } => {
-                ctx.i32_truncate_f64_u();
+                ctx.i32_truncate_f64_u()?;
             }
             Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I64,
             } => {
-                ctx.i64_truncate_f32_s();
+                ctx.i64_truncate_f32_s()?;
             }
             Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::U64,
             } => {
-                ctx.i64_truncate_f32_u();
+                ctx.i64_truncate_f32_u()?;
             }
             Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::I64,
             } => {
-                ctx.i64_truncate_f64_s();
+                ctx.i64_truncate_f64_s()?;
             }
             Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::U64,
             } => {
-                ctx.i64_truncate_f64_u();
+                ctx.i64_truncate_f64_u()?;
             }
             Operator::Extend {
                 sign: Signedness::Unsigned,
-            } => ctx.i32_extend_u(),
+            } => ctx.i32_extend_u()?,
             Operator::Extend {
                 sign: Signedness::Signed,
-            } => ctx.i32_extend_s(),
+            } => ctx.i32_extend_s()?,
             Operator::FConvertFromI {
                 input_ty: sint::I32,
                 output_ty: Size::_32,
-            } => ctx.f32_convert_from_i32_s(),
+            } => ctx.f32_convert_from_i32_s()?,
             Operator::FConvertFromI {
                 input_ty: sint::I32,
                 output_ty: Size::_64,
-            } => ctx.f64_convert_from_i32_s(),
+            } => ctx.f64_convert_from_i32_s()?,
             Operator::FConvertFromI {
                 input_ty: sint::I64,
                 output_ty: Size::_32,
-            } => ctx.f32_convert_from_i64_s(),
+            } => ctx.f32_convert_from_i64_s()?,
             Operator::FConvertFromI {
                 input_ty: sint::I64,
                 output_ty: Size::_64,
-            } => ctx.f64_convert_from_i64_s(),
+            } => ctx.f64_convert_from_i64_s()?,
             Operator::FConvertFromI {
                 input_ty: sint::U32,
                 output_ty: Size::_32,
-            } => ctx.f32_convert_from_i32_u(),
+            } => ctx.f32_convert_from_i32_u()?,
             Operator::FConvertFromI {
                 input_ty: sint::U32,
                 output_ty: Size::_64,
-            } => ctx.f64_convert_from_i32_u(),
+            } => ctx.f64_convert_from_i32_u()?,
             Operator::FConvertFromI {
                 input_ty: sint::U64,
                 output_ty: Size::_32,
-            } => ctx.f32_convert_from_i64_u(),
+            } => ctx.f32_convert_from_i64_u()?,
             Operator::FConvertFromI {
                 input_ty: sint::U64,
                 output_ty: Size::_64,
-            } => ctx.f64_convert_from_i64_u(),
-            Operator::F64PromoteFromF32 => ctx.f64_from_f32(),
-            Operator::F32DemoteFromF64 => ctx.f32_from_f64(),
+            } => ctx.f64_convert_from_i64_u()?,
+            Operator::F64PromoteFromF32 => ctx.f64_from_f32()?,
+            Operator::F32DemoteFromF64 => ctx.f32_from_f64()?,
             Operator::Load8 {
                 ty: sint::U32,
                 memarg,
-            } => ctx.i32_load8_u(memarg.offset),
+            } => ctx.i32_load8_u(memarg.offset)?,
             Operator::Load16 {
                 ty: sint::U32,
                 memarg,
-            } => ctx.i32_load16_u(memarg.offset),
+            } => ctx.i32_load16_u(memarg.offset)?,
             Operator::Load8 {
                 ty: sint::I32,
                 memarg,
-            } => ctx.i32_load8_s(memarg.offset),
+            } => ctx.i32_load8_s(memarg.offset)?,
             Operator::Load16 {
                 ty: sint::I32,
                 memarg,
-            } => ctx.i32_load16_s(memarg.offset),
+            } => ctx.i32_load16_s(memarg.offset)?,
             Operator::Load8 {
                 ty: sint::U64,
                 memarg,
-            } => ctx.i64_load8_u(memarg.offset),
+            } => ctx.i64_load8_u(memarg.offset)?,
             Operator::Load16 {
                 ty: sint::U64,
                 memarg,
-            } => ctx.i64_load16_u(memarg.offset),
+            } => ctx.i64_load16_u(memarg.offset)?,
             Operator::Load8 {
                 ty: sint::I64,
                 memarg,
-            } => ctx.i64_load8_s(memarg.offset),
+            } => ctx.i64_load8_s(memarg.offset)?,
             Operator::Load16 {
                 ty: sint::I64,
                 memarg,
-            } => ctx.i64_load16_s(memarg.offset),
+            } => ctx.i64_load16_s(memarg.offset)?,
             Operator::Load32 {
                 sign: Signedness::Unsigned,
                 memarg,
-            } => ctx.i64_load32_u(memarg.offset),
+            } => ctx.i64_load32_u(memarg.offset)?,
             Operator::Load32 {
                 sign: Signedness::Signed,
                 memarg,
-            } => ctx.i64_load32_s(memarg.offset),
-            Operator::Load { ty: I32, memarg } => ctx.i32_load(memarg.offset),
-            Operator::Load { ty: F32, memarg } => ctx.f32_load(memarg.offset),
-            Operator::Load { ty: I64, memarg } => ctx.i64_load(memarg.offset),
-            Operator::Load { ty: F64, memarg } => ctx.f64_load(memarg.offset),
-            Operator::Store8 { ty: _, memarg } => ctx.store8(memarg.offset),
-            Operator::Store16 { ty: _, memarg } => ctx.store16(memarg.offset),
+            } => ctx.i64_load32_s(memarg.offset)?,
+            Operator::Load { ty: I32, memarg } => ctx.i32_load(memarg.offset)?,
+            Operator::Load { ty: F32, memarg } => ctx.f32_load(memarg.offset)?,
+            Operator::Load { ty: I64, memarg } => ctx.i64_load(memarg.offset)?,
+            Operator::Load { ty: F64, memarg } => ctx.f64_load(memarg.offset)?,
+            Operator::Store8 { ty: _, memarg } => ctx.store8(memarg.offset)?,
+            Operator::Store16 { ty: _, memarg } => ctx.store16(memarg.offset)?,
             Operator::Store32 { memarg }
             | Operator::Store { ty: I32, memarg }
-            | Operator::Store { ty: F32, memarg } => ctx.store32(memarg.offset),
+            | Operator::Store { ty: F32, memarg } => ctx.store32(memarg.offset)?,
             Operator::Store { ty: I64, memarg } | Operator::Store { ty: F64, memarg } => {
-                ctx.store64(memarg.offset)
+                ctx.store64(memarg.offset)?
             }
-            Operator::GetGlobal(idx) => ctx.get_global(idx),
-            Operator::SetGlobal(idx) => ctx.set_global(idx),
+            Operator::GetGlobal(idx) => ctx.get_global(idx)?,
+            Operator::SetGlobal(idx) => ctx.set_global(idx)?,
             Operator::Select => {
-                ctx.select();
+                ctx.select()?;
             }
             Operator::MemorySize { reserved: _ } => {
-                ctx.memory_size();
+                ctx.memory_size()?;
             }
             Operator::MemoryGrow { reserved: _ } => {
-                ctx.memory_grow();
+                ctx.memory_grow()?;
             }
             Operator::Call { function_index } => {
                 let callee_ty = module_context.func_type(function_index);
@@ -807,20 +831,20 @@ where
                             defined_index,
                             callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                             callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
-                        );
+                        )?;
                     } else {
                         ctx.call_direct(
                             function_index,
                             callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                             callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
-                        );
+                        )?;
                     }
                 } else {
                     ctx.call_direct_imported(
                         function_index,
                         callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                         callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
-                    );
+                    )?;
                 }
             }
             Operator::CallIndirect {
@@ -837,7 +861,7 @@ where
                     type_index,
                     callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                     callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
-                );
+                )?;
             }
         }
     }
