@@ -225,6 +225,7 @@ fn struct_has_union(s: &witx::StructDatatype) -> bool {
     })
 }
 
+/// Test whether the type referred to has a target-specific size.
 fn tref_has_target_size(tref: &witx::TypeRef) -> bool {
     match tref {
         witx::TypeRef::Name(nt) => namedtype_has_target_size(&nt),
@@ -232,7 +233,7 @@ fn tref_has_target_size(tref: &witx::TypeRef) -> bool {
     }
 }
 
-/// Test whether the given type has a target-specific size.
+/// Test whether the given named type has a target-specific size.
 fn namedtype_has_target_size(nt: &witx::NamedType) -> bool {
     if nt.name.as_str() == "size" {
         true
@@ -241,7 +242,7 @@ fn namedtype_has_target_size(nt: &witx::NamedType) -> bool {
     }
 }
 
-/// Test whether the given type ident has a target-specific size.
+/// Test whether the given type has a target-specific size.
 fn type_has_target_size(ty: &witx::Type) -> bool {
     match ty {
         witx::Type::Builtin(witx::BuiltinType::String) => true,
