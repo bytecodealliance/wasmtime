@@ -24,7 +24,7 @@ pub(crate) unsafe fn iovec_to_host_mut(iovec: &mut __wasi_iovec_t) -> io::IoSlic
 #[allow(dead_code)] // trouble with sockets
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
-pub(crate) enum FileType {
+pub enum FileType {
     Unknown = __WASI_FILETYPE_UNKNOWN,
     BlockDevice = __WASI_FILETYPE_BLOCK_DEVICE,
     CharacterDevice = __WASI_FILETYPE_CHARACTER_DEVICE,
@@ -42,7 +42,7 @@ impl FileType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Dirent {
+pub struct Dirent {
     pub name: String,
     pub ftype: FileType,
     pub ino: u64,

@@ -2,7 +2,7 @@
 #![allow(unused)]
 use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
-use crate::fdentry::FdEntry;
+use crate::fdentry::{Descriptor, FdEntry};
 use crate::host::{Dirent, FileType};
 use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
 use crate::sys::fdentry_impl::{determine_type_rights, OsHandle};
@@ -119,8 +119,8 @@ pub(crate) fn fd_advise(
     Ok(())
 }
 
-pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
-    let path = resolved.concatenate()?;
+pub(crate) fn path_create_directory(file: &File, path: &str) -> Result<()> {
+    let path = concatenate(file, path)?;
     std::fs::create_dir(&path).map_err(Into::into)
 }
 
@@ -134,80 +134,91 @@ pub(crate) fn path_open(
     write: bool,
     oflags: wasi::__wasi_oflags_t,
     fdflags: wasi::__wasi_fdflags_t,
-) -> Result<File> {
-    use winx::file::{AccessMode, CreationDisposition, Flags};
+) -> Result<Descriptor> {
+    match resolved.dirfd() {
+        Descriptor::OsHandle(file) => {
+            use winx::file::{AccessMode, CreationDisposition, Flags};
 
-    let is_trunc = oflags & wasi::__WASI_OFLAGS_TRUNC != 0;
+            let is_trunc = oflags & wasi::__WASI_OFLAGS_TRUNC != 0;
 
-    if is_trunc {
-        // Windows does not support append mode when opening for truncation
-        // This is because truncation requires `GENERIC_WRITE` access, which will override the removal
-        // of the `FILE_WRITE_DATA` permission.
-        if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
-            return Err(Error::ENOTSUP);
-        }
-    }
-
-    // convert open flags
-    // note: the calls to `write(true)` are to bypass an internal OpenOption check
-    // the write flag will ultimately be ignored when `access_mode` is calculated below.
-    let mut opts = OpenOptions::new();
-    match creation_disposition_from_oflags(oflags) {
-        CreationDisposition::CREATE_ALWAYS => {
-            opts.create(true).write(true);
-        }
-        CreationDisposition::CREATE_NEW => {
-            opts.create_new(true).write(true);
-        }
-        CreationDisposition::TRUNCATE_EXISTING => {
-            opts.truncate(true).write(true);
-        }
-        _ => {}
-    }
-
-    let path = resolved.concatenate()?;
-
-    match path.symlink_metadata().map(|metadata| metadata.file_type()) {
-        Ok(file_type) => {
-            // check if we are trying to open a symlink
-            if file_type.is_symlink() {
-                return Err(Error::ELOOP);
-            }
-            // check if we are trying to open a file as a dir
-            if file_type.is_file() && oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
-                return Err(Error::ENOTDIR);
-            }
-        }
-        Err(e) => match e.raw_os_error() {
-            Some(e) => {
-                use winx::winerror::WinError;
-                log::debug!("path_open at symlink_metadata error code={:?}", e);
-                let e = WinError::from_u32(e as u32);
-
-                if e != WinError::ERROR_FILE_NOT_FOUND {
-                    return Err(e.into());
+            if is_trunc {
+                // Windows does not support append mode when opening for truncation
+                // This is because truncation requires `GENERIC_WRITE` access, which will override the removal
+                // of the `FILE_WRITE_DATA` permission.
+                if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
+                    return Err(Error::ENOTSUP);
                 }
-                // file not found, let it proceed to actually
-                // trying to open it
             }
-            None => {
-                log::debug!("Inconvertible OS error: {}", e);
-                return Err(Error::EIO);
+
+            // convert open flags
+            // note: the calls to `write(true)` are to bypass an internal OpenOption check
+            // the write flag will ultimately be ignored when `access_mode` is calculated below.
+            let mut opts = OpenOptions::new();
+            match creation_disposition_from_oflags(oflags) {
+                CreationDisposition::CREATE_ALWAYS => {
+                    opts.create(true).write(true);
+                }
+                CreationDisposition::CREATE_NEW => {
+                    opts.create_new(true).write(true);
+                }
+                CreationDisposition::TRUNCATE_EXISTING => {
+                    opts.truncate(true).write(true);
+                }
+                _ => {}
             }
-        },
+
+            let path = resolved.concatenate()?;
+
+            match path.symlink_metadata().map(|metadata| metadata.file_type()) {
+                Ok(file_type) => {
+                    // check if we are trying to open a symlink
+                    if file_type.is_symlink() {
+                        return Err(Error::ELOOP);
+                    }
+                    // check if we are trying to open a file as a dir
+                    if file_type.is_file() && oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
+                        return Err(Error::ENOTDIR);
+                    }
+                }
+                Err(e) => match e.raw_os_error() {
+                    Some(e) => {
+                        use winx::winerror::WinError;
+                        log::debug!("path_open at symlink_metadata error code={:?}", e);
+                        let e = WinError::from_u32(e as u32);
+
+                        if e != WinError::ERROR_FILE_NOT_FOUND {
+                            return Err(e.into());
+                        }
+                        // file not found, let it proceed to actually
+                        // trying to open it
+                    }
+                    None => {
+                        log::debug!("Inconvertible OS error: {}", e);
+                        return Err(Error::EIO);
+                    }
+                },
+            }
+
+            let mut access_mode = file_access_mode_from_fdflags(fdflags, read, write);
+
+            // Truncation requires the special `GENERIC_WRITE` bit set (this is why it doesn't work with append-only mode)
+            if is_trunc {
+                access_mode |= AccessMode::GENERIC_WRITE;
+            }
+
+            opts.access_mode(access_mode.bits())
+                .custom_flags(file_flags_from_fdflags(fdflags).bits())
+                .open(&path)
+                .map(|f| Descriptor::OsHandle(OsHandle::from(f)))
+                .map_err(Into::into)
+        }
+        Descriptor::VirtualFile(virt) => {
+            unimplemented!("virtual open");
+        }
+        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
     }
-
-    let mut access_mode = file_access_mode_from_fdflags(fdflags, read, write);
-
-    // Truncation requires the special `GENERIC_WRITE` bit set (this is why it doesn't work with append-only mode)
-    if is_trunc {
-        access_mode |= AccessMode::GENERIC_WRITE;
-    }
-
-    opts.access_mode(access_mode.bits())
-        .custom_flags(file_flags_from_fdflags(fdflags).bits())
-        .open(&path)
-        .map_err(Into::into)
 }
 
 fn creation_disposition_from_oflags(oflags: wasi::__wasi_oflags_t) -> CreationDisposition {
@@ -362,109 +373,141 @@ pub(crate) fn fd_readdir(
 }
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
-    use winx::file::get_file_path;
+    match resolved.dirfd() {
+        Descriptor::OsHandle(file) => {
+            use winx::file::get_file_path;
 
-    let path = resolved.concatenate()?;
-    let target_path = path.read_link()?;
+            let path = resolved.concatenate()?;
+            let target_path = path.read_link()?;
 
-    // since on Windows we are effectively emulating 'at' syscalls
-    // we need to strip the prefix from the absolute path
-    // as otherwise we will error out since WASI is not capable
-    // of dealing with absolute paths
-    let dir_path = get_file_path(resolved.dirfd())?;
-    let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
-    let target_path = target_path
-        .strip_prefix(dir_path)
-        .map_err(|_| Error::ENOTCAPABLE)
-        .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))?;
+            // since on Windows we are effectively emulating 'at' syscalls
+            // we need to strip the prefix from the absolute path
+            // as otherwise we will error out since WASI is not capable
+            // of dealing with absolute paths
+            let dir_path = get_file_path(file)?;
+            let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
+            let target_path = target_path
+                .strip_prefix(dir_path)
+                .map_err(|_| Error::ENOTCAPABLE)
+                .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))?;
 
-    if buf.len() > 0 {
-        let mut chars = target_path.chars();
-        let mut nread = 0usize;
+            if buf.len() > 0 {
+                let mut chars = target_path.chars();
+                let mut nread = 0usize;
 
-        for i in 0..buf.len() {
-            match chars.next() {
-                Some(ch) => {
-                    buf[i] = ch as u8;
-                    nread += 1;
+                for i in 0..buf.len() {
+                    match chars.next() {
+                        Some(ch) => {
+                            buf[i] = ch as u8;
+                            nread += 1;
+                        }
+                        None => break,
+                    }
                 }
-                None => break,
+
+                Ok(nread)
+            } else {
+                Ok(0)
             }
         }
-
-        Ok(nread)
-    } else {
-        Ok(0)
+        Descriptor::VirtualFile(_) => {
+            unimplemented!("virtual readlink");
+        }
+        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
     }
 }
 
 fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> Result<Option<PathBuf>> {
-    if resolved.path().ends_with('/') {
-        let suffix = resolved.path().trim_end_matches('/');
-        concatenate(resolved.dirfd(), Path::new(suffix)).map(Some)
-    } else {
-        Ok(None)
+    match resolved.dirfd() {
+        Descriptor::OsHandle(file) => {
+            if resolved.path().ends_with('/') {
+                let suffix = resolved.path().trim_end_matches('/');
+                concatenate(file, Path::new(suffix)).map(Some)
+            } else {
+                Ok(None)
+            }
+        }
+        Descriptor::VirtualFile(_virt) => {
+            panic!("concatenate with virtual base");
+        }
+        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
     }
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
-    use std::fs;
+    match (resolved_old.dirfd(), resolved_new.dirfd()) {
+        (Descriptor::OsHandle(_old_file), Descriptor::OsHandle(_new_file)) => {
+            use std::fs;
 
-    let old_path = resolved_old.concatenate()?;
-    let new_path = resolved_new.concatenate()?;
+            let old_path = resolved_old.concatenate()?;
+            let new_path = resolved_new.concatenate()?;
 
-    // First sanity check: check we're not trying to rename dir to file or vice versa.
-    // NB on Windows, the former is actually permitted [std::fs::rename].
-    //
-    // [std::fs::rename]: https://doc.rust-lang.org/std/fs/fn.rename.html
-    if old_path.is_dir() && new_path.is_file() {
-        return Err(Error::ENOTDIR);
-    }
-    // Second sanity check: check we're not trying to rename a file into a path
-    // ending in a trailing slash.
-    if old_path.is_file() && resolved_new.path().ends_with('/') {
-        return Err(Error::ENOTDIR);
-    }
-
-    // TODO handle symlinks
-
-    fs::rename(&old_path, &new_path).or_else(|e| match e.raw_os_error() {
-        Some(e) => {
-            use winx::winerror::WinError;
-
-            log::debug!("path_rename at rename error code={:?}", e);
-            match WinError::from_u32(e as u32) {
-                WinError::ERROR_ACCESS_DENIED => {
-                    // So most likely dealing with new_path == dir.
-                    // Eliminate case old_path == file first.
-                    if old_path.is_file() {
-                        Err(Error::EISDIR)
-                    } else {
-                        // Ok, let's try removing an empty dir at new_path if it exists
-                        // and is a nonempty dir.
-                        fs::remove_dir(&new_path)
-                            .and_then(|()| fs::rename(old_path, new_path))
-                            .map_err(Into::into)
-                    }
-                }
-                WinError::ERROR_INVALID_NAME => {
-                    // If source contains trailing slashes, check if we are dealing with
-                    // a file instead of a dir, and if so, throw ENOTDIR.
-                    if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved_old)? {
-                        if path.is_file() {
-                            return Err(Error::ENOTDIR);
-                        }
-                    }
-                    Err(WinError::ERROR_INVALID_NAME.into())
-                }
-                e => Err(e.into()),
+            // First sanity check: check we're not trying to rename dir to file or vice versa.
+            // NB on Windows, the former is actually permitted [std::fs::rename].
+            //
+            // [std::fs::rename]: https://doc.rust-lang.org/std/fs/fn.rename.html
+            if old_path.is_dir() && new_path.is_file() {
+                return Err(Error::ENOTDIR);
             }
+            // Second sanity check: check we're not trying to rename a file into a path
+            // ending in a trailing slash.
+            if old_path.is_file() && resolved_new.path().ends_with('/') {
+                return Err(Error::ENOTDIR);
+            }
+
+            // TODO handle symlinks
+
+            fs::rename(&old_path, &new_path).or_else(|e| match e.raw_os_error() {
+                Some(e) => {
+                    use winx::winerror::WinError;
+
+                    log::debug!("path_rename at rename error code={:?}", e);
+                    match WinError::from_u32(e as u32) {
+                        WinError::ERROR_ACCESS_DENIED => {
+                            // So most likely dealing with new_path == dir.
+                            // Eliminate case old_path == file first.
+                            if old_path.is_file() {
+                                Err(Error::EISDIR)
+                            } else {
+                                // Ok, let's try removing an empty dir at new_path if it exists
+                                // and is a nonempty dir.
+                                fs::remove_dir(&new_path)
+                                    .and_then(|()| fs::rename(old_path, new_path))
+                                    .map_err(Into::into)
+                            }
+                        }
+                        WinError::ERROR_INVALID_NAME => {
+                            // If source contains trailing slashes, check if we are dealing with
+                            // a file instead of a dir, and if so, throw ENOTDIR.
+                            if let Some(path) =
+                                strip_trailing_slashes_and_concatenate(&resolved_old)?
+                            {
+                                if path.is_file() {
+                                    return Err(Error::ENOTDIR);
+                                }
+                            }
+                            Err(WinError::ERROR_INVALID_NAME.into())
+                        }
+                        e => Err(e.into()),
+                    }
+                }
+                None => {
+                    log::debug!("Inconvertible OS error: {}", e);
+                    Err(Error::EIO)
+                }
+            })
         }
-        None => {
-            log::debug!("Inconvertible OS error: {}", e);
-            Err(Error::EIO)
+        (Descriptor::VirtualFile(_), _) | (_, Descriptor::VirtualFile(_)) => {
+            unimplemented!("path_rename with one or more virtual files");
         }
-    })
+        _ => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
+    }
 }
 
 pub(crate) fn fd_filestat_get(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
@@ -487,98 +530,135 @@ pub(crate) fn path_filestat_set_times(
     mut st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
 ) -> Result<()> {
-    use winx::file::AccessMode;
-    let path = resolved.concatenate()?;
-    let file = OpenOptions::new()
-        .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
-        .open(path)?;
-    fd_filestat_set_times_impl(&file, st_atim, st_mtim, fst_flags)
+    match resolved.dirfd() {
+        Descriptor::OsHandle(_) => {
+            use winx::file::AccessMode;
+            let path = resolved.concatenate()?;
+            // TODO: is it intentional to ignore the original access mode here?
+            let file = OpenOptions::new()
+                .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
+                .open(path)?;
+            let modifiable_fd = Descriptor::OsHandle(OsHandle::from(file));
+            fd_filestat_set_times_impl(&modifiable_fd.as_handle(), st_atim, st_mtim, fst_flags)
+        }
+        Descriptor::VirtualFile(_) => fd_filestat_set_times_impl(
+            &resolved.open_with(false, true, 0, 0)?.as_handle(),
+            st_atim,
+            st_mtim,
+            fst_flags,
+        ),
+        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
+    }
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     use std::os::windows::fs::{symlink_dir, symlink_file};
     use winx::winerror::WinError;
 
-    let old_path = concatenate(resolved.dirfd(), Path::new(old_path))?;
-    let new_path = resolved.concatenate()?;
+    match resolved.dirfd() {
+        Descriptor::OsHandle(file) => {
+            let old_path = concatenate(file, Path::new(old_path))?;
+            let new_path = resolved.concatenate()?;
 
-    // try creating a file symlink
-    symlink_file(&old_path, &new_path).or_else(|e| {
-        match e.raw_os_error() {
-            Some(e) => {
-                log::debug!("path_symlink at symlink_file error code={:?}", e);
-                match WinError::from_u32(e as u32) {
-                    WinError::ERROR_NOT_A_REPARSE_POINT => {
-                        // try creating a dir symlink instead
-                        symlink_dir(old_path, new_path).map_err(Into::into)
-                    }
-                    WinError::ERROR_ACCESS_DENIED => {
-                        // does the target exist?
-                        if new_path.exists() {
-                            Err(Error::EEXIST)
-                        } else {
-                            Err(WinError::ERROR_ACCESS_DENIED.into())
-                        }
-                    }
-                    WinError::ERROR_INVALID_NAME => {
-                        // does the target without trailing slashes exist?
-                        if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved)? {
-                            if path.exists() {
-                                return Err(Error::EEXIST);
+            // try creating a file symlink
+            symlink_file(&old_path, &new_path).or_else(|e| {
+                match e.raw_os_error() {
+                    Some(e) => {
+                        log::debug!("path_symlink at symlink_file error code={:?}", e);
+                        match WinError::from_u32(e as u32) {
+                            WinError::ERROR_NOT_A_REPARSE_POINT => {
+                                // try creating a dir symlink instead
+                                symlink_dir(old_path, new_path).map_err(Into::into)
                             }
+                            WinError::ERROR_ACCESS_DENIED => {
+                                // does the target exist?
+                                if new_path.exists() {
+                                    Err(Error::EEXIST)
+                                } else {
+                                    Err(WinError::ERROR_ACCESS_DENIED.into())
+                                }
+                            }
+                            WinError::ERROR_INVALID_NAME => {
+                                // does the target without trailing slashes exist?
+                                if let Some(path) =
+                                    strip_trailing_slashes_and_concatenate(&resolved)?
+                                {
+                                    if path.exists() {
+                                        return Err(Error::EEXIST);
+                                    }
+                                }
+                                Err(WinError::ERROR_INVALID_NAME.into())
+                            }
+                            e => Err(e.into()),
                         }
-                        Err(WinError::ERROR_INVALID_NAME.into())
                     }
-                    e => Err(e.into()),
+                    None => {
+                        log::debug!("Inconvertible OS error: {}", e);
+                        Err(Error::EIO)
+                    }
                 }
-            }
-            None => {
-                log::debug!("Inconvertible OS error: {}", e);
-                Err(Error::EIO)
-            }
+            })
         }
-    })
+        Descriptor::VirtualFile(virt) => {
+            unimplemented!("virtual path_symlink");
+        }
+        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
+    }
 }
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use std::fs;
     use winx::winerror::WinError;
 
-    let path = resolved.concatenate()?;
-    let file_type = path
-        .symlink_metadata()
-        .map(|metadata| metadata.file_type())?;
+    match &resolved.dirfd() {
+        Descriptor::OsHandle(_) => {
+            let path = resolved.concatenate()?;
+            let file_type = path
+                .symlink_metadata()
+                .map(|metadata| metadata.file_type())?;
 
-    // check if we're unlinking a symlink
-    // NB this will get cleaned up a lot when [std::os::windows::fs::FileTypeExt]
-    // stabilises
-    //
-    // [std::os::windows::fs::FileTypeExt]: https://doc.rust-lang.org/std/os/windows/fs/trait.FileTypeExt.html
-    if file_type.is_symlink() {
-        fs::remove_file(&path).or_else(|e| {
-            match e.raw_os_error() {
-                Some(e) => {
-                    log::debug!("path_unlink_file at symlink_file error code={:?}", e);
-                    match WinError::from_u32(e as u32) {
-                        WinError::ERROR_ACCESS_DENIED => {
-                            // try unlinking a dir symlink instead
-                            fs::remove_dir(path).map_err(Into::into)
+            // check if we're unlinking a symlink
+            // NB this will get cleaned up a lot when [std::os::windows::fs::FileTypeExt]
+            // stabilises
+            //
+            // [std::os::windows::fs::FileTypeExt]: https://doc.rust-lang.org/std/os/windows/fs/trait.FileTypeExt.html
+            if file_type.is_symlink() {
+                fs::remove_file(&path).or_else(|e| {
+                    match e.raw_os_error() {
+                        Some(e) => {
+                            log::debug!("path_unlink_file at symlink_file error code={:?}", e);
+                            match WinError::from_u32(e as u32) {
+                                WinError::ERROR_ACCESS_DENIED => {
+                                    // try unlinking a dir symlink instead
+                                    fs::remove_dir(path).map_err(Into::into)
+                                }
+                                e => Err(e.into()),
+                            }
                         }
-                        e => Err(e.into()),
+                        None => {
+                            log::debug!("Inconvertible OS error: {}", e);
+                            Err(Error::EIO)
+                        }
                     }
-                }
-                None => {
-                    log::debug!("Inconvertible OS error: {}", e);
-                    Err(Error::EIO)
-                }
+                })
+            } else if file_type.is_dir() {
+                Err(Error::EISDIR)
+            } else if file_type.is_file() {
+                fs::remove_file(path).map_err(Into::into)
+            } else {
+                Err(Error::EINVAL)
             }
-        })
-    } else if file_type.is_dir() {
-        Err(Error::EISDIR)
-    } else if file_type.is_file() {
-        fs::remove_file(path).map_err(Into::into)
-    } else {
-        Err(Error::EINVAL)
+        }
+        Descriptor::VirtualFile(_) => {
+            unimplemented!("virtual unlinkat");
+        }
+        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
     }
 }
 

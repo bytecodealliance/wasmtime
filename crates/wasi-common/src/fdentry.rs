@@ -2,37 +2,115 @@ use crate::sys::dev_null;
 use crate::sys::fdentry_impl::{
     descriptor_as_oshandle, determine_type_and_access_rights, OsHandle,
 };
+use crate::virtfs::VirtualFile;
 use crate::{wasi, Error, Result};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
-use std::{fs, io};
+use std::{fmt, fs, io};
 
-#[derive(Debug)]
+pub(crate) enum HandleMut<'handle> {
+    OsHandle(OsHandleRef<'handle>),
+    VirtualFile(&'handle mut dyn VirtualFile),
+}
+
+impl<'descriptor> fmt::Debug for HandleMut<'descriptor> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            HandleMut::OsHandle(file) => {
+                // coerce to the target debug-printable type
+                let file: &fs::File = file;
+                write!(f, "{:?}", file)
+            }
+            HandleMut::VirtualFile(_) => write!(f, "VirtualFile"),
+        }
+    }
+}
+
+pub(crate) enum Handle<'handle> {
+    OsHandle(OsHandleRef<'handle>),
+    VirtualFile(&'handle dyn VirtualFile),
+}
+
+impl<'descriptor> Handle<'descriptor> {
+    pub(crate) fn try_clone(&self) -> io::Result<Descriptor> {
+        match self {
+            Handle::OsHandle(file) => file
+                .try_clone()
+                .map(|f| Descriptor::OsHandle(OsHandle::from(f))),
+            Handle::VirtualFile(virt) => virt.try_clone().map(|f| Descriptor::VirtualFile(f)),
+        }
+    }
+}
+
+impl<'descriptor> fmt::Debug for Handle<'descriptor> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Handle::OsHandle(file) => {
+                // coerce to the target debug-printable type
+                let file: &fs::File = file;
+                write!(f, "{:?}", file)
+            }
+            Handle::VirtualFile(_) => write!(f, "VirtualFile"),
+        }
+    }
+}
+
 pub(crate) enum Descriptor {
     OsHandle(OsHandle),
+    VirtualFile(Box<dyn VirtualFile>),
     Stdin,
     Stdout,
     Stderr,
 }
 
-impl Descriptor {
-    /// Return a reference to the `OsHandle` treating it as an actual file/dir, and
-    /// allowing operations which require an actual file and not just a stream or
-    /// socket file descriptor.
-    pub(crate) fn as_file(&self) -> Result<&OsHandle> {
+impl fmt::Debug for Descriptor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::OsHandle(file) => Ok(file),
+            Descriptor::OsHandle(handle) => write!(f, "{:?}", handle),
+            Descriptor::VirtualFile(_) => write!(f, "VirtualFile"),
+            Descriptor::Stdin => write!(f, "Stdin"),
+            Descriptor::Stdout => write!(f, "Stdout"),
+            Descriptor::Stderr => write!(f, "Stderr"),
+        }
+    }
+}
+
+impl Descriptor {
+    /// Return a reference to the `OsHandle` or `VirtualFile` treating it as an
+    /// actual file/dir, and allowing operations which require an actual file and
+    /// not just a stream or socket file descriptor.
+    pub(crate) fn as_file<'descriptor>(&'descriptor self) -> Result<Handle<'descriptor>> {
+        match self {
+            Self::OsHandle(_) => Ok(Handle::OsHandle(descriptor_as_oshandle(self))),
+            Self::VirtualFile(virt) => Ok(Handle::VirtualFile(virt.as_ref())),
             _ => Err(Error::EBADF),
         }
     }
 
     /// Like `as_file`, but return a mutable reference.
-    pub(crate) fn as_file_mut(&mut self) -> Result<&mut OsHandle> {
+    pub(crate) fn as_file_mut<'descriptor>(
+        &'descriptor mut self,
+    ) -> Result<HandleMut<'descriptor>> {
         match self {
-            Self::OsHandle(file) => Ok(file),
+            Self::OsHandle(_) => Ok(HandleMut::OsHandle(descriptor_as_oshandle(self))),
+            Self::VirtualFile(virt) => Ok(HandleMut::VirtualFile(virt.as_mut())),
             _ => Err(Error::EBADF),
+        }
+    }
+
+    pub(crate) fn as_handle<'descriptor>(&'descriptor self) -> Handle<'descriptor> {
+        match self {
+            Self::VirtualFile(virt) => Handle::VirtualFile(virt.as_ref()),
+            other => Handle::OsHandle(other.as_os_handle()),
+        }
+    }
+
+    pub(crate) fn as_handle_mut<'descriptor>(&'descriptor mut self) -> HandleMut<'descriptor> {
+        match self {
+            Self::VirtualFile(virt) => HandleMut::VirtualFile(virt.as_mut()),
+            other => HandleMut::OsHandle(other.as_os_handle()),
         }
     }
 
@@ -61,16 +139,33 @@ pub(crate) struct FdEntry {
 }
 
 impl FdEntry {
-    pub(crate) fn from(file: fs::File) -> Result<Self> {
-        unsafe { determine_type_and_access_rights(&file) }.map(
-            |(file_type, rights_base, rights_inheriting)| Self {
-                file_type,
-                descriptor: Descriptor::OsHandle(OsHandle::from(file)),
-                rights_base,
-                rights_inheriting,
-                preopen_path: None,
-            },
-        )
+    pub(crate) fn from(file: Descriptor) -> Result<Self> {
+        match file {
+            Descriptor::OsHandle(handle) => unsafe { determine_type_and_access_rights(&handle) }
+                .map(|(file_type, rights_base, rights_inheriting)| Self {
+                    file_type,
+                    descriptor: Descriptor::OsHandle(handle),
+                    rights_base,
+                    rights_inheriting,
+                    preopen_path: None,
+                }),
+            Descriptor::VirtualFile(virt) => {
+                let file_type = virt.get_file_type();
+                let rights_base = virt.get_rights_base();
+                let rights_inheriting = virt.get_rights_inheriting();
+
+                Ok(Self {
+                    file_type,
+                    descriptor: Descriptor::VirtualFile(virt),
+                    rights_base,
+                    rights_inheriting,
+                    preopen_path: None,
+                })
+            }
+            Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+                panic!("implementation error, stdin/stdout/stderr FdEntry must not be constructed from FdEntry::from");
+            }
+        }
     }
 
     pub(crate) fn duplicate_stdin() -> Result<Self> {
@@ -110,7 +205,7 @@ impl FdEntry {
     }
 
     pub(crate) fn null() -> Result<Self> {
-        Self::from(dev_null()?)
+        Self::from(Descriptor::OsHandle(OsHandle::from(dev_null()?)))
     }
 
     /// Convert this `FdEntry` into a host `Descriptor` object provided the specified
@@ -200,6 +295,15 @@ impl<'descriptor> OsHandleRef<'descriptor> {
             handle,
             _ref: PhantomData,
         }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn handle(&self) -> &OsHandle {
+        &self.handle
+    }
+
+    pub(crate) fn handle_mut(&mut self) -> &mut OsHandle {
+        &mut self.handle
     }
 }
 

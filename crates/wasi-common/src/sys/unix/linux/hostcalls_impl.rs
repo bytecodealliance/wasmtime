@@ -1,17 +1,23 @@
+use crate::fdentry::Descriptor;
 use crate::hostcalls_impl::PathGet;
 use crate::Result;
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
-    unsafe {
-        unlinkat(
-            resolved.dirfd().as_raw_fd(),
-            resolved.path(),
-            AtFlag::empty(),
-        )
+
+    match resolved.dirfd() {
+        Descriptor::OsHandle(file) => {
+            unsafe { unlinkat(file.as_raw_fd(), resolved.path(), AtFlag::empty()) }
+                .map_err(Into::into)
+        }
+        Descriptor::VirtualFile(_) => {
+            unimplemented!("virtual unlinkat");
+        }
+        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
     }
-    .map_err(Into::into)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
@@ -20,21 +26,37 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
 
-    unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) }
-        .map_err(Into::into)
+    match resolved.dirfd() {
+        Descriptor::OsHandle(file) => {
+            unsafe { symlinkat(old_path, file.as_raw_fd(), resolved.path()) }.map_err(Into::into)
+        }
+        Descriptor::VirtualFile(_) => {
+            unimplemented!("virtual path_symlink");
+        }
+        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
+        }
+    }
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use yanix::file::renameat;
-    unsafe {
-        renameat(
-            resolved_old.dirfd().as_raw_fd(),
-            resolved_old.path(),
-            resolved_new.dirfd().as_raw_fd(),
-            resolved_new.path(),
-        )
+    match (resolved_old.dirfd(), resolved_new.dirfd()) {
+        (Descriptor::OsHandle(resolved_old_file), Descriptor::OsHandle(resolved_new_file)) => {
+            unsafe {
+                renameat(
+                    resolved_old_file.as_raw_fd(),
+                    resolved_old.path(),
+                    resolved_new_file.as_raw_fd(),
+                    resolved_new.path(),
+                )
+            }
+            .map_err(Into::into)
+        }
+        _ => {
+            unimplemented!("path_link with one or more virtual files");
+        }
     }
-    .map_err(Into::into)
 }
 
 pub(crate) mod fd_readdir_impl {

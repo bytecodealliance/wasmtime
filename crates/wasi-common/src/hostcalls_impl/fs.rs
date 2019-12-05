@@ -1,8 +1,9 @@
 #![allow(non_camel_case_types)]
 use super::fs_helpers::path_get;
 use crate::ctx::WasiCtx;
-use crate::fdentry::{Descriptor, FdEntry};
+use crate::fdentry::{Descriptor, FdEntry, Handle, HandleMut};
 use crate::helpers::*;
+use crate::host::Dirent;
 use crate::memory::*;
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use crate::sys::hostcalls_impl::fs_helpers::path_open_rights;
@@ -10,7 +11,6 @@ use crate::sys::{host_impl, hostcalls_impl};
 use crate::{helpers, host, wasi, wasi32, Error, Result};
 use filetime::{set_file_handle_times, FileTime};
 use log::trace;
-use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::DerefMut;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -40,12 +40,15 @@ pub(crate) unsafe fn fd_datasync(
 ) -> Result<()> {
     trace!("fd_datasync(fd={:?})", fd);
 
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_DATASYNC, 0)?
-        .as_file()?;
+        .as_handle();
 
-    fd.sync_data().map_err(Into::into)
+    match file {
+        Handle::OsHandle(fd) => fd.sync_data().map_err(Into::into),
+        Handle::VirtualFile(virt) => virt.datasync(),
+    }
 }
 
 pub(crate) unsafe fn fd_pread(
@@ -66,10 +69,10 @@ pub(crate) unsafe fn fd_pread(
         nread
     );
 
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_READ | wasi::__WASI_RIGHTS_FD_SEEK, 0)?
-        .as_file()?;
+        .as_handle();
 
     let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
 
@@ -78,7 +81,11 @@ pub(crate) unsafe fn fd_pread(
     }
     let buf_size = iovs.iter().map(|v| v.buf_len).sum();
     let mut buf = vec![0; buf_size];
-    let host_nread = hostcalls_impl::fd_pread(fd, &mut buf, offset)?;
+    let host_nread = match file {
+        Handle::OsHandle(fd) => hostcalls_impl::fd_pread(&fd, &mut buf, offset)?,
+        Handle::VirtualFile(virt) => virt.pread(&mut buf, offset)?,
+    };
+
     let mut buf_offset = 0;
     let mut left = host_nread;
     for iov in &iovs {
@@ -115,13 +122,13 @@ pub(crate) unsafe fn fd_pwrite(
         nwritten
     );
 
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(
             wasi::__WASI_RIGHTS_FD_WRITE | wasi::__WASI_RIGHTS_FD_SEEK,
             0,
         )?
-        .as_file()?;
+        .as_handle();
     let iovs = dec_ciovec_slice(memory, iovs_ptr, iovs_len)?;
 
     if offset > i64::max_value() as u64 {
@@ -135,7 +142,10 @@ pub(crate) unsafe fn fd_pwrite(
             iov.buf_len,
         ));
     }
-    let host_nwritten = hostcalls_impl::fd_pwrite(fd, &buf, offset)?;
+    let host_nwritten = match file {
+        Handle::OsHandle(fd) => hostcalls_impl::fd_pwrite(&fd, &buf, offset)?,
+        Handle::VirtualFile(virt) => virt.pwrite(buf.as_mut(), offset)?,
+    };
 
     trace!("     | *nwritten={:?}", host_nwritten);
 
@@ -168,8 +178,9 @@ pub(crate) unsafe fn fd_read(
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READ, 0)?
     {
-        Descriptor::OsHandle(file) => file.read_vectored(&mut iovs),
-        Descriptor::Stdin => io::stdin().read_vectored(&mut iovs),
+        Descriptor::OsHandle(file) => file.read_vectored(&mut iovs).map_err(Into::into),
+        Descriptor::VirtualFile(virt) => virt.read_vectored(&mut iovs),
+        Descriptor::Stdin => io::stdin().read_vectored(&mut iovs).map_err(Into::into),
         _ => return Err(Error::EBADF),
     };
 
@@ -232,7 +243,7 @@ pub(crate) unsafe fn fd_seek(
     } else {
         wasi::__WASI_RIGHTS_FD_SEEK | wasi::__WASI_RIGHTS_FD_TELL
     };
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(rights, 0)?
         .as_file_mut()?;
@@ -243,7 +254,10 @@ pub(crate) unsafe fn fd_seek(
         wasi::__WASI_WHENCE_SET => SeekFrom::Start(offset as u64),
         _ => return Err(Error::EINVAL),
     };
-    let host_newoffset = fd.seek(pos)?;
+    let host_newoffset = match file {
+        HandleMut::OsHandle(mut fd) => fd.seek(pos)?,
+        HandleMut::VirtualFile(virt) => virt.seek(pos)?,
+    };
 
     trace!("     | *newoffset={:?}", host_newoffset);
 
@@ -258,12 +272,15 @@ pub(crate) unsafe fn fd_tell(
 ) -> Result<()> {
     trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
 
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_TELL, 0)?
-        .as_file_mut()?;
+        .as_handle_mut();
 
-    let host_offset = fd.seek(SeekFrom::Current(0))?;
+    let host_offset = match file {
+        HandleMut::OsHandle(mut fd) => fd.seek(SeekFrom::Current(0))?,
+        HandleMut::VirtualFile(virt) => virt.seek(SeekFrom::Current(0))?,
+    };
 
     trace!("     | *newoffset={:?}", host_offset);
 
@@ -279,12 +296,12 @@ pub(crate) unsafe fn fd_fdstat_get(
     trace!("fd_fdstat_get(fd={:?}, fdstat_ptr={:#x?})", fd, fdstat_ptr);
 
     let mut fdstat = dec_fdstat_byref(memory, fdstat_ptr)?;
-    let host_fd = wasi_ctx
-        .get_fd_entry(fd)?
-        .as_descriptor(0, 0)?
-        .as_os_handle();
+    let wasi_file = wasi_ctx.get_fd_entry(fd)?.as_descriptor(0, 0)?.as_handle();
 
-    let fs_flags = hostcalls_impl::fd_fdstat_get(&host_fd)?;
+    let fs_flags = match wasi_file {
+        Handle::OsHandle(wasi_fd) => hostcalls_impl::fd_fdstat_get(&wasi_fd)?,
+        Handle::VirtualFile(virt) => virt.fdstat_get(),
+    };
 
     let fe = wasi_ctx.get_fd_entry(fd)?;
     fdstat.fs_filetype = fe.file_type;
@@ -309,11 +326,19 @@ pub(crate) unsafe fn fd_fdstat_set_flags(
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_FDSTAT_SET_FLAGS, 0)?;
 
-    if let Some(new_handle) =
-        hostcalls_impl::fd_fdstat_set_flags(&descriptor.as_os_handle(), fdflags)?
-    {
-        *descriptor = Descriptor::OsHandle(new_handle);
-    }
+    match descriptor.as_handle_mut() {
+        HandleMut::OsHandle(handle) => {
+            let set_result =
+                hostcalls_impl::fd_fdstat_set_flags(&handle, fdflags)?.map(Descriptor::OsHandle);
+
+            if let Some(new_descriptor) = set_result {
+                *descriptor = new_descriptor;
+            }
+        }
+        HandleMut::VirtualFile(handle) => {
+            handle.fdstat_set_flags(fdflags)?;
+        }
+    };
 
     Ok(())
 }
@@ -351,11 +376,14 @@ pub(crate) unsafe fn fd_sync(
 ) -> Result<()> {
     trace!("fd_sync(fd={:?})", fd);
 
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_SYNC, 0)?
-        .as_file()?;
-    fd.sync_all().map_err(Into::into)
+        .as_handle();
+    match file {
+        Handle::OsHandle(fd) => fd.sync_all().map_err(Into::into),
+        Handle::VirtualFile(virt) => virt.sync(),
+    }
 }
 
 pub(crate) unsafe fn fd_write(
@@ -387,6 +415,13 @@ pub(crate) unsafe fn fd_write(
                 SandboxedTTYWriter::new(file.deref_mut()).write_vectored(&iovs)?
             } else {
                 file.write_vectored(&iovs)?
+            }
+        }
+        Descriptor::VirtualFile(virt) => {
+            if isatty {
+                unimplemented!("writes to virtual tty");
+            } else {
+                virt.write_vectored(&iovs)?
             }
         }
         Descriptor::Stdin => return Err(Error::EBADF),
@@ -430,12 +465,15 @@ pub(crate) unsafe fn fd_advise(
         advice
     );
 
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_ADVISE, 0)?
-        .as_file()?;
+        .as_handle();
 
-    hostcalls_impl::fd_advise(fd, advice, offset, len)
+    match file {
+        Handle::OsHandle(fd) => hostcalls_impl::fd_advise(&fd, advice, offset, len),
+        Handle::VirtualFile(virt) => virt.advise(advice, offset, len),
+    }
 }
 
 pub(crate) unsafe fn fd_allocate(
@@ -447,24 +485,29 @@ pub(crate) unsafe fn fd_allocate(
 ) -> Result<()> {
     trace!("fd_allocate(fd={:?}, offset={}, len={})", fd, offset, len);
 
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_ALLOCATE, 0)?
-        .as_file()?;
+        .as_handle();
 
-    let metadata = fd.metadata()?;
+    match file {
+        Handle::OsHandle(fd) => {
+            let metadata = fd.metadata()?;
 
-    let current_size = metadata.len();
-    let wanted_size = offset.checked_add(len).ok_or(Error::E2BIG)?;
-    // This check will be unnecessary when rust-lang/rust#63326 is fixed
-    if wanted_size > i64::max_value() as u64 {
-        return Err(Error::E2BIG);
-    }
+            let current_size = metadata.len();
+            let wanted_size = offset.checked_add(len).ok_or(Error::E2BIG)?;
+            // This check will be unnecessary when rust-lang/rust#63326 is fixed
+            if wanted_size > i64::max_value() as u64 {
+                return Err(Error::E2BIG);
+            }
 
-    if wanted_size > current_size {
-        fd.set_len(wanted_size).map_err(Into::into)
-    } else {
-        Ok(())
+            if wanted_size > current_size {
+                fd.set_len(wanted_size).map_err(Into::into)
+            } else {
+                Ok(())
+            }
+        }
+        Handle::VirtualFile(virt) => virt.allocate(offset, len),
     }
 }
 
@@ -490,7 +533,7 @@ pub(crate) unsafe fn path_create_directory(
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(fe, rights, 0, 0, path, false)?;
 
-    hostcalls_impl::path_create_directory(resolved)
+    resolved.path_create_directory()
 }
 
 pub(crate) unsafe fn path_link(
@@ -607,7 +650,7 @@ pub(crate) unsafe fn path_open(
         read,
         write
     );
-    let fd = hostcalls_impl::path_open(resolved, read, write, oflags, fs_flags)?;
+    let fd = resolved.open_with(read, write, oflags, fs_flags)?;
 
     let mut fe = FdEntry::from(fd)?;
     // We need to manually deny the rights which are not explicitly requested
@@ -726,8 +769,11 @@ pub(crate) unsafe fn fd_filestat_get(
     let fd = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_GET, 0)?
-        .as_file()?;
-    let host_filestat = hostcalls_impl::fd_filestat_get(fd)?;
+        .as_handle();
+    let host_filestat = match fd {
+        Handle::OsHandle(fd) => hostcalls_impl::fd_filestat_get(&fd)?,
+        Handle::VirtualFile(virt) => virt.filestat_get()?,
+    };
 
     trace!("     | *filestat_ptr={:?}", host_filestat);
 
@@ -755,11 +801,11 @@ pub(crate) unsafe fn fd_filestat_set_times(
         .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_SET_TIMES, 0)?
         .as_file()?;
 
-    fd_filestat_set_times_impl(fd, st_atim, st_mtim, fst_flags)
+    fd_filestat_set_times_impl(&fd, st_atim, st_mtim, fst_flags)
 }
 
 pub(crate) fn fd_filestat_set_times_impl(
-    fd: &File,
+    file: &Handle,
     st_atim: wasi::__wasi_timestamp_t,
     st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
@@ -791,7 +837,10 @@ pub(crate) fn fd_filestat_set_times_impl(
     } else {
         None
     };
-    set_file_handle_times(fd, atim, mtim).map_err(Into::into)
+    match file {
+        Handle::OsHandle(fd) => set_file_handle_times(fd, atim, mtim).map_err(Into::into),
+        Handle::VirtualFile(virt) => virt.filestat_set_times(atim, mtim),
+    }
 }
 
 pub(crate) unsafe fn fd_filestat_set_size(
@@ -802,16 +851,19 @@ pub(crate) unsafe fn fd_filestat_set_size(
 ) -> Result<()> {
     trace!("fd_filestat_set_size(fd={:?}, st_size={})", fd, st_size);
 
-    let fd = wasi_ctx
+    let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_SET_SIZE, 0)?
-        .as_file()?;
+        .as_handle();
 
     // This check will be unnecessary when rust-lang/rust#63326 is fixed
     if st_size > i64::max_value() as u64 {
         return Err(Error::E2BIG);
     }
-    fd.set_len(st_size).map_err(Into::into)
+    match file {
+        Handle::OsHandle(fd) => fd.set_len(st_size).map_err(Into::into),
+        Handle::VirtualFile(virt) => virt.filestat_set_size(st_size),
+    }
 }
 
 pub(crate) unsafe fn path_filestat_get(
@@ -1067,24 +1119,37 @@ pub(crate) unsafe fn fd_readdir(
     let file = wasi_ctx
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READDIR, 0)?
-        .as_file_mut()?;
-    let mut host_buf = dec_slice_of_mut_u8(memory, buf, buf_len)?;
+        .as_handle_mut();
+    let host_buf = dec_slice_of_mut_u8(memory, buf, buf_len)?;
 
     trace!("     | (buf,buf_len)={:?}", host_buf);
 
-    let iter = hostcalls_impl::fd_readdir(file, cookie)?;
-    let mut host_bufused = 0;
-    for dirent in iter {
-        let dirent_raw = dirent?.to_wasi_raw()?;
-        let offset = dirent_raw.len();
-        if host_buf.len() < offset {
-            break;
-        } else {
-            host_buf[0..offset].copy_from_slice(&dirent_raw);
-            host_bufused += offset;
-            host_buf = &mut host_buf[offset..];
+    fn copy_entities<T: Iterator<Item = Result<Dirent>>>(
+        iter: T,
+        mut host_buf: &mut [u8],
+    ) -> Result<usize> {
+        let mut host_bufused = 0;
+        for dirent in iter {
+            let dirent_raw = dirent?.to_wasi_raw()?;
+            let offset = dirent_raw.len();
+            if host_buf.len() < offset {
+                break;
+            } else {
+                host_buf[0..offset].copy_from_slice(&dirent_raw);
+                host_bufused += offset;
+                host_buf = &mut host_buf[offset..];
+            }
         }
+        Ok(host_bufused)
     }
+
+    let host_bufused = match file {
+        HandleMut::OsHandle(mut file) => copy_entities(
+            hostcalls_impl::fd_readdir(file.handle_mut(), cookie)?,
+            host_buf,
+        )?,
+        HandleMut::VirtualFile(virt) => copy_entities(virt.readdir(cookie)?, host_buf)?,
+    };
 
     trace!("     | *buf_used={:?}", host_bufused);
 

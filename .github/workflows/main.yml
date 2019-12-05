@@ -186,6 +186,7 @@ jobs:
     # Build and test all features except for lightbeam
     - run: cargo test --features test_programs --all --exclude lightbeam --exclude wasmtime-c-api -- --nocapture
       env:
+        RUST_LOG: "wasi_common=trace"
         RUST_BACKTRACE: 1
         RUSTFLAGS: "-D warnings"
 

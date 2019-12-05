@@ -1,4 +1,6 @@
-use crate::fdentry::FdEntry;
+use crate::fdentry::{Descriptor, FdEntry};
+use crate::sys::fdentry_impl::OsHandle;
+use crate::virtfs::VirtualFile;
 use crate::{wasi, Error, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -61,7 +63,7 @@ impl PendingCString {
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
     fds: Option<HashMap<wasi::__wasi_fd_t, PendingFdEntry>>,
-    preopens: Option<Vec<(PathBuf, File)>>,
+    preopens: Option<Vec<(PathBuf, Descriptor)>>,
     args: Option<Vec<PendingCString>>,
     env: Option<HashMap<PendingCString, PendingCString>>,
 }
@@ -225,7 +227,20 @@ impl WasiCtxBuilder {
         self.preopens
             .as_mut()
             .unwrap()
-            .push((guest_path.as_ref().to_owned(), dir));
+            .push((guest_path.as_ref().to_owned(), Descriptor::OsHandle(OsHandle::from(dir))));
+        self
+    }
+
+    /// Add a preopened virtual directory.
+    pub fn preopened_virt<P: AsRef<Path>>(
+        mut self,
+        dir: Box<dyn VirtualFile>,
+        guest_path: P,
+    ) -> Self {
+        self.preopens
+            .as_mut()
+            .unwrap()
+            .push((guest_path.as_ref().to_owned(), Descriptor::VirtualFile(dir)));
         self
     }
 
@@ -271,7 +286,7 @@ impl WasiCtxBuilder {
                     fds.insert(fd, f()?);
                 }
                 PendingFdEntry::File(f) => {
-                    fds.insert(fd, FdEntry::from(f)?);
+                    fds.insert(fd, FdEntry::from(Descriptor::OsHandle(OsHandle::from(f)))?);
                 }
             }
         }
@@ -284,8 +299,20 @@ impl WasiCtxBuilder {
             // unnecessarily if we have exactly the maximum number of file descriptors.
             preopen_fd = preopen_fd.checked_add(1).ok_or(Error::ENFILE)?;
 
-            if !dir.metadata()?.is_dir() {
-                return Err(Error::EBADF);
+            match &dir {
+                Descriptor::OsHandle(handle) => {
+                    if !handle.metadata()?.is_dir() {
+                        return Err(Error::EBADF);
+                    }
+                }
+                Descriptor::VirtualFile(virt) => {
+                    if virt.get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY {
+                        return Err(Error::EBADF);
+                    }
+                }
+                Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+                    panic!("implementation error, stdin/stdout/stderr shouldn't be in the list of preopens");
+                }
             }
 
             // We don't currently allow setting file descriptors other than 0-2, but this will avoid
