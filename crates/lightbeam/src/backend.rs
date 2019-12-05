@@ -9,7 +9,7 @@ use dynasm::dynasm;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use either::Either;
-use more_asserts::assert_le;
+
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
@@ -2081,7 +2081,9 @@ macro_rules! store {
                 Ok(())
             }
 
-            assert_le!(offset, i32::max_value() as u32);
+            if !(offset <= i32::max_value() as u32) {
+                return Err(Error::Microwasm(format!("store: offset value too big {}", offset).to_string()))
+            }
 
             let mut src = self.pop()?;
             let base = self.pop()?;
@@ -4822,8 +4824,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         do_div(self, &mut divisor)?;
         self.free_value(divisor)?;
 
-        assert!(!self.block_state.regs.is_free(RAX));
-        assert!(!self.block_state.regs.is_free(RDX));
+        if self.block_state.regs.is_free(RAX) {
+            return Err(Error::Microwasm("full_div: RAX is not free".to_string()))
+        }
+        if self.block_state.regs.is_free(RDX) {
+            return Err(Error::Microwasm("full_div: RDX is not free".to_string()))
+        }
 
         Ok((ValueLocation::Reg(RAX), ValueLocation::Reg(RDX), saved))
     }
