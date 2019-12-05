@@ -468,7 +468,7 @@ where
                     }
                     other => {
                         return Err(Error::Microwasm(
-                            format!("unimplemented {:#?}", other).to_string(),
+                            format!("br_if unimplemented case: {:#?}", other).to_string(),
                         ))
                     }
                 };
