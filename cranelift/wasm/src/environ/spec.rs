@@ -103,12 +103,8 @@ pub enum ReturnMode {
     FallthroughReturn,
 }
 
-/// Environment affecting the translation of a single WebAssembly function.
-///
-/// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cranelift
-/// IR. The function environment provides information about the WebAssembly module as well as the
-/// runtime environment.
-pub trait FuncEnvironment {
+/// Environment affecting the translation of a WebAssembly.
+pub trait TargetEnvironment {
     /// Get the information needed to produce Cranelift IR for the given target.
     fn target_config(&self) -> TargetFrontendConfig;
 
@@ -124,13 +120,6 @@ pub trait FuncEnvironment {
         self.target_config().pointer_bytes()
     }
 
-    /// Should the code be structured to use a single `fallthrough_return` instruction at the end
-    /// of the function body, rather than `return` instructions as needed? This is used by VMs
-    /// to append custom epilogues.
-    fn return_mode(&self) -> ReturnMode {
-        ReturnMode::NormalReturns
-    }
-
     /// Get the Cranelift reference type to use for native references.
     ///
     /// This returns `R64` for 64-bit architectures and `R32` for 32-bit architectures.
@@ -140,6 +129,20 @@ pub trait FuncEnvironment {
             ir::types::I64 => ir::types::R64,
             _ => panic!("unsupported pointer type"),
         }
+    }
+}
+
+/// Environment affecting the translation of a single WebAssembly function.
+///
+/// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cranelift
+/// IR. The function environment provides information about the WebAssembly module as well as the
+/// runtime environment.
+pub trait FuncEnvironment: TargetEnvironment {
+    /// Should the code be structured to use a single `fallthrough_return` instruction at the end
+    /// of the function body, rather than `return` instructions as needed? This is used by VMs
+    /// to append custom epilogues.
+    fn return_mode(&self) -> ReturnMode {
+        ReturnMode::NormalReturns
     }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable
@@ -384,10 +387,7 @@ pub trait FuncEnvironment {
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cranelift-wasm` internal use.
-pub trait ModuleEnvironment<'data> {
-    /// Get the information needed to produce Cranelift IR for the current target.
-    fn target_config(&self) -> TargetFrontendConfig;
-
+pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Provides the number of signatures up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
     fn reserve_signatures(&mut self, _num: u32) -> WasmResult<()> {

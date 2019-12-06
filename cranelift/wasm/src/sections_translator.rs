@@ -44,14 +44,15 @@ pub fn parse_type_section(
                 params,
                 returns,
             } => {
-                let mut sig = Signature::new(environ.target_config().default_call_conv);
+                let mut sig =
+                    Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
                 sig.params.extend(params.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(*ty)
+                    let cret_arg: ir::Type = type_to_type(*ty, environ)
                         .expect("only numeric types are supported in function signatures");
                     AbiParam::new(cret_arg)
                 }));
                 sig.returns.extend(returns.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(*ty)
+                    let cret_arg: ir::Type = type_to_type(*ty, environ)
                         .expect("only numeric types are supported in function signatures");
                     AbiParam::new(cret_arg)
                 }));
@@ -106,7 +107,7 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Global(ref ty) => {
                 environ.declare_global_import(
                     Global {
-                        ty: type_to_type(ty.content_type).unwrap(),
+                        ty: type_to_type(ty.content_type, environ).unwrap(),
                         mutability: ty.mutable,
                         initializer: GlobalInit::Import,
                     },
@@ -117,7 +118,7 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Table(ref tab) => {
                 environ.declare_table_import(
                     Table {
-                        ty: match tabletype_to_type(tab.element_type)? {
+                        ty: match tabletype_to_type(tab.element_type, environ)? {
                             Some(t) => TableElementType::Val(t),
                             None => TableElementType::Func,
                         },
@@ -160,7 +161,7 @@ pub fn parse_table_section(
     for entry in tables {
         let table = entry?;
         environ.declare_table(Table {
-            ty: match tabletype_to_type(table.element_type)? {
+            ty: match tabletype_to_type(table.element_type, environ)? {
                 Some(t) => TableElementType::Val(t),
                 None => TableElementType::Func,
             },
@@ -215,6 +216,7 @@ pub fn parse_global_section(
             Operator::V128Const { value } => {
                 GlobalInit::V128Const(V128Imm::from(value.bytes().to_vec().as_slice()))
             }
+            Operator::RefNull => GlobalInit::RefNullConst,
             Operator::GetGlobal { global_index } => {
                 GlobalInit::GetGlobal(GlobalIndex::from_u32(global_index))
             }
@@ -226,7 +228,7 @@ pub fn parse_global_section(
             }
         };
         let global = Global {
-            ty: type_to_type(content_type).unwrap(),
+            ty: type_to_type(content_type, environ).unwrap(),
             mutability: mutable,
             initializer,
         };

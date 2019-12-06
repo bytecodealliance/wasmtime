@@ -193,6 +193,7 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
             builder.ins().vconst(ir::types::I8X16, constant_handle)
         }
         AnyRef => builder.ins().null(environ.reference_type()),
+        AnyFunc => builder.ins().null(environ.reference_type()),
         ty => return Err(wasm_unsupported!("unsupported local type {:?}", ty)),
     };
 

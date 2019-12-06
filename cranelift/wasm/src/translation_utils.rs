@@ -1,5 +1,5 @@
 //! Helper functions and structures for the translation.
-use crate::environ::WasmResult;
+use crate::environ::{TargetEnvironment, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::wasm_unsupported;
 use core::u32;
@@ -83,6 +83,8 @@ pub enum GlobalInit {
     V128Const(V128Imm),
     /// A `get_global` of another global.
     GetGlobal(GlobalIndex),
+    /// A `ref.null`.
+    RefNullConst,
     ///< The global is imported from, and thus initialized by, a different module.
     Import,
 }
@@ -119,26 +121,34 @@ pub struct Memory {
 }
 
 /// Helper function translating wasmparser types to Cranelift types when possible.
-pub fn type_to_type(ty: wasmparser::Type) -> WasmResult<ir::Type> {
+pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
+    ty: wasmparser::Type,
+    environ: &PE,
+) -> WasmResult<ir::Type> {
     match ty {
         wasmparser::Type::I32 => Ok(ir::types::I32),
         wasmparser::Type::I64 => Ok(ir::types::I64),
         wasmparser::Type::F32 => Ok(ir::types::F32),
         wasmparser::Type::F64 => Ok(ir::types::F64),
         wasmparser::Type::V128 => Ok(ir::types::I8X16),
+        wasmparser::Type::AnyRef | wasmparser::Type::AnyFunc => Ok(environ.reference_type()),
         ty => Err(wasm_unsupported!("type_to_type: wasm type {:?}", ty)),
     }
 }
 
 /// Helper function translating wasmparser possible table types to Cranelift types when possible,
 /// or None for Func tables.
-pub fn tabletype_to_type(ty: wasmparser::Type) -> WasmResult<Option<ir::Type>> {
+pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
+    ty: wasmparser::Type,
+    environ: &PE,
+) -> WasmResult<Option<ir::Type>> {
     match ty {
         wasmparser::Type::I32 => Ok(Some(ir::types::I32)),
         wasmparser::Type::I64 => Ok(Some(ir::types::I64)),
         wasmparser::Type::F32 => Ok(Some(ir::types::F32)),
         wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
         wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
+        wasmparser::Type::AnyRef => Ok(Some(environ.reference_type())),
         wasmparser::Type::AnyFunc => Ok(None),
         ty => Err(wasm_unsupported!(
             "tabletype_to_type: table wasm type {:?}",
@@ -159,6 +169,8 @@ pub fn blocktype_params_results(
             wasmparser::Type::F32 => (&[], &[wasmparser::Type::F32]),
             wasmparser::Type::F64 => (&[], &[wasmparser::Type::F64]),
             wasmparser::Type::V128 => (&[], &[wasmparser::Type::V128]),
+            wasmparser::Type::AnyRef => (&[], &[wasmparser::Type::AnyRef]),
+            wasmparser::Type::AnyFunc => (&[], &[wasmparser::Type::AnyFunc]),
             wasmparser::Type::EmptyBlockType => (&[], &[]),
             ty => return Err(wasm_unsupported!("blocktype_params_results: type {:?}", ty)),
         },
@@ -171,9 +183,10 @@ pub fn blocktype_params_results(
 }
 
 /// Create an `Ebb` with the given Wasm parameters.
-pub fn ebb_with_params(
+pub fn ebb_with_params<PE: TargetEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     params: &[wasmparser::Type],
+    environ: &PE,
 ) -> WasmResult<ir::Ebb> {
     let ebb = builder.create_ebb();
     for ty in params.iter() {
@@ -189,6 +202,9 @@ pub fn ebb_with_params(
             }
             wasmparser::Type::F64 => {
                 builder.append_ebb_param(ebb, ir::types::F64);
+            }
+            wasmparser::Type::AnyRef | wasmparser::Type::AnyFunc => {
+                builder.append_ebb_param(ebb, environ.reference_type());
             }
             wasmparser::Type::V128 => {
                 builder.append_ebb_param(ebb, ir::types::I8X16);
