@@ -8,13 +8,26 @@
 //! wrapper over an external tool, such that the wrapper implements the
 //! `Arbitrary` trait for the wrapped external tool.
 
+pub mod api;
+
 use arbitrary::{Arbitrary, Unstructured};
+use std::fmt;
 
 /// A Wasm test case generator that is powered by Binaryen's `wasm-opt -ttf`.
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct WasmOptTtf {
     /// The raw, encoded Wasm bytes.
     pub wasm: Vec<u8>,
+}
+
+impl fmt::Debug for WasmOptTtf {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WasmOptTtf {{ wasm: wat::parse_str(r###\"\n{}\n\"###).unwrap() }}",
+            wasmprinter::print_bytes(&self.wasm).expect("valid wasm should always disassemble")
+        )
+    }
 }
 
 impl Arbitrary for WasmOptTtf {
