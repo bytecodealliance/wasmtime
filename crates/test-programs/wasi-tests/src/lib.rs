@@ -6,6 +6,10 @@ use std::ffi::CString;
 use std::io;
 use wasi_old::wasi_unstable;
 
+/// Opens a fresh file descriptor for `path` where `path` should be a preopened
+/// directory. This is intended to be used with `wasi_unstable`, not with
+/// `wasi_snapshot_preview1`. This is getting phased out and will likely be
+/// deleted soon.
 pub fn open_scratch_directory(path: &str) -> Result<wasi_unstable::Fd, String> {
     // Open the scratch directory.
     let dir_fd: wasi_unstable::Fd = unsafe {
@@ -24,6 +28,11 @@ pub fn open_scratch_directory(path: &str) -> Result<wasi_unstable::Fd, String> {
     }
 }
 
+/// Same as `open_scratch_directory` above, except uses `wasi_snapshot_preview1`
+/// APIs instead of `wasi_unstable` ones.
+///
+/// This is intended to replace `open_scratch_directory` once all the tests are
+/// updated.
 pub fn open_scratch_directory_new(path: &str) -> Result<wasi::Fd, String> {
     unsafe {
         for i in 3.. {
