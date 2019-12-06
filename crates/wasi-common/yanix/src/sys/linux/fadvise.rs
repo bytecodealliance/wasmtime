@@ -12,11 +12,11 @@ pub enum PosixFadviseAdvice {
     DontNeed = libc::POSIX_FADV_DONTNEED,
 }
 
-pub fn posix_fadvise(
+pub unsafe fn posix_fadvise(
     fd: RawFd,
     offset: libc::off_t,
     len: libc::off_t,
     advice: PosixFadviseAdvice,
 ) -> Result<()> {
-    Errno::from_success_code(unsafe { libc::posix_fadvise(fd, offset, len, advice as libc::c_int) })
+    Errno::from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
 }

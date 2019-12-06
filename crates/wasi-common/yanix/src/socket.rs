@@ -11,19 +11,17 @@ pub enum SockType {
     Rdm = libc::SOCK_RDM,
 }
 
-pub fn get_socket_type(fd: RawFd) -> Result<SockType> {
+pub unsafe fn get_socket_type(fd: RawFd) -> Result<SockType> {
     use std::mem::{self, MaybeUninit};
-    let mut buffer = unsafe { MaybeUninit::<SockType>::zeroed().assume_init() };
+    let mut buffer = MaybeUninit::<SockType>::zeroed().assume_init();
     let mut out_len = mem::size_of::<SockType>() as libc::socklen_t;
-    Errno::from_success_code(unsafe {
-        libc::getsockopt(
-            fd,
-            libc::SOL_SOCKET,
-            libc::SO_TYPE,
-            &mut buffer as *mut SockType as *mut _,
-            &mut out_len,
-        )
-    })?;
+    Errno::from_success_code(libc::getsockopt(
+        fd,
+        libc::SOL_SOCKET,
+        libc::SO_TYPE,
+        &mut buffer as *mut SockType as *mut _,
+        &mut out_len,
+    ))?;
     assert_eq!(
         out_len as usize,
         mem::size_of::<SockType>(),

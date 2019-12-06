@@ -22,7 +22,7 @@ bitflags! {
 pub struct PollFd(libc::pollfd);
 
 impl PollFd {
-    pub fn new(fd: RawFd, events: PollFlags) -> Self {
+    pub unsafe fn new(fd: RawFd, events: PollFlags) -> Self {
         Self(libc::pollfd {
             fd,
             events: events.bits(),

@@ -38,16 +38,14 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
-    unsafe {
-        yanix::fcntl::get_status_flags(fd.as_raw_fd())
-            .map(host_impl::fdflags_from_nix)
-            .map_err(Into::into)
-    }
+    unsafe { yanix::fcntl::get_status_flags(fd.as_raw_fd()) }
+        .map(host_impl::fdflags_from_nix)
+        .map_err(Into::into)
 }
 
 pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
     let nix_flags = host_impl::nix_from_fdflags(fdflags);
-    unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), nix_flags).map_err(Into::into) }
+    unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), nix_flags) }.map_err(Into::into)
 }
 
 pub(crate) fn fd_advise(
@@ -68,28 +66,32 @@ pub(crate) fn fd_advise(
         wasi::__WASI_ADVICE_NORMAL => PosixFadviseAdvice::Normal,
         _ => return Err(Error::EINVAL),
     };
-    posix_fadvise(file.as_raw_fd(), offset, len, host_advice).map_err(Into::into)
+    unsafe { posix_fadvise(file.as_raw_fd(), offset, len, host_advice) }.map_err(Into::into)
 }
 
 pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
     use yanix::file::{mkdirat, Mode};
-    mkdirat(
-        resolved.dirfd().as_raw_fd(),
-        resolved.path(),
-        Mode::from_bits_truncate(0o777),
-    )
+    unsafe {
+        mkdirat(
+            resolved.dirfd().as_raw_fd(),
+            resolved.path(),
+            Mode::from_bits_truncate(0o777),
+        )
+    }
     .map_err(Into::into)
 }
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use yanix::file::{linkat, AtFlag};
-    linkat(
-        resolved_old.dirfd().as_raw_fd(),
-        resolved_old.path(),
-        resolved_new.dirfd().as_raw_fd(),
-        resolved_new.path(),
-        AtFlag::SYMLINK_FOLLOW,
-    )
+    unsafe {
+        linkat(
+            resolved_old.dirfd().as_raw_fd(),
+            resolved_old.path(),
+            resolved_new.dirfd().as_raw_fd(),
+            resolved_new.path(),
+            AtFlag::SYMLINK_FOLLOW,
+        )
+    }
     .map_err(Into::into)
 }
 
@@ -129,23 +131,27 @@ pub(crate) fn path_open(
     log::debug!("path_open resolved = {:?}", resolved);
     log::debug!("path_open oflags = {:?}", nix_all_oflags);
 
-    let new_fd = match openat(
-        resolved.dirfd().as_raw_fd(),
-        resolved.path(),
-        nix_all_oflags,
-        Mode::from_bits_truncate(0o666),
-    ) {
+    let new_fd = match unsafe {
+        openat(
+            resolved.dirfd().as_raw_fd(),
+            resolved.path(),
+            nix_all_oflags,
+            Mode::from_bits_truncate(0o666),
+        )
+    } {
         Ok(fd) => fd,
         Err(e) => {
             if let yanix::YanixError::Errno(errno) = e {
                 match errno {
                     // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
                     Errno::ENXIO => {
-                        if let Ok(stat) = fstatat(
-                            resolved.dirfd().as_raw_fd(),
-                            resolved.path(),
-                            AtFlag::SYMLINK_NOFOLLOW,
-                        ) {
+                        if let Ok(stat) = unsafe {
+                            fstatat(
+                                resolved.dirfd().as_raw_fd(),
+                                resolved.path(),
+                                AtFlag::SYMLINK_NOFOLLOW,
+                            )
+                        } {
                             if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFSOCK) {
                                 return Err(Error::ENOTSUP);
                             } else {
@@ -160,11 +166,13 @@ pub(crate) fn path_open(
                     Errno::ENOTDIR
                         if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
                     {
-                        if let Ok(stat) = fstatat(
-                            resolved.dirfd().as_raw_fd(),
-                            resolved.path(),
-                            AtFlag::SYMLINK_NOFOLLOW,
-                        ) {
+                        if let Ok(stat) = unsafe {
+                            fstatat(
+                                resolved.dirfd().as_raw_fd(),
+                                resolved.path(),
+                                AtFlag::SYMLINK_NOFOLLOW,
+                            )
+                        } {
                             if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFLNK) {
                                 return Err(Error::ELOOP);
                             }
@@ -193,7 +201,7 @@ pub(crate) fn path_open(
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
     use std::cmp::min;
     use yanix::file::readlinkat;
-    let read_link = readlinkat(resolved.dirfd().as_raw_fd(), resolved.path())
+    let read_link = unsafe { readlinkat(resolved.dirfd().as_raw_fd(), resolved.path()) }
         .map_err(Into::into)
         .and_then(host_impl::path_from_host)?;
     let copy_len = min(read_link.len(), buf.len());
@@ -234,7 +242,7 @@ fn filetype(file: &File, metadata: &Metadata) -> Result<FileType> {
     } else if ftype.is_block_device() {
         Ok(FileType::BlockDevice)
     } else if ftype.is_socket() {
-        match get_socket_type(file.as_raw_fd())? {
+        match unsafe { get_socket_type(file.as_raw_fd())? } {
             SockType::Datagram => Ok(FileType::SocketDgram),
             SockType::Stream => Ok(FileType::SocketStream),
             _ => Ok(FileType::Unknown),
@@ -253,7 +261,7 @@ pub(crate) fn path_filestat_get(
         0 => AtFlag::empty(),
         _ => AtFlag::SYMLINK_NOFOLLOW,
     };
-    fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), atflags)
+    unsafe { fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), atflags) }
         .map_err(Into::into)
         .and_then(host_impl::filestat_from_nix)
 }
@@ -307,11 +315,13 @@ pub(crate) fn path_filestat_set_times(
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
-    unlinkat(
-        resolved.dirfd().as_raw_fd(),
-        resolved.path(),
-        AtFlag::REMOVEDIR,
-    )
+    unsafe {
+        unlinkat(
+            resolved.dirfd().as_raw_fd(),
+            resolved.path(),
+            AtFlag::REMOVEDIR,
+        )
+    }
     .map_err(Into::into)
 }
 

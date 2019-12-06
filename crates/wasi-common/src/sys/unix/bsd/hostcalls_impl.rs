@@ -8,11 +8,13 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
         file::{unlinkat, AtFlag},
         Errno, YanixError,
     };
-    unlinkat(
-        resolved.dirfd().as_raw_fd(),
-        resolved.path(),
-        AtFlag::empty(),
-    )
+    unsafe {
+        unlinkat(
+            resolved.dirfd().as_raw_fd(),
+            resolved.path(),
+            AtFlag::empty(),
+        )
+    }
     .map_err(|err| {
         if let YanixError::Errno(mut errno) = err {
             // Non-Linux implementations may return EPERM when attempting to remove a
@@ -25,11 +27,13 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
             use yanix::file::{fstatat, SFlag};
 
             if errno == Errno::EPERM {
-                if let Ok(stat) = fstatat(
-                    resolved.dirfd().as_raw_fd(),
-                    resolved.path(),
-                    AtFlag::SYMLINK_NOFOLLOW,
-                ) {
+                if let Ok(stat) = unsafe {
+                    fstatat(
+                        resolved.dirfd().as_raw_fd(),
+                        resolved.path(),
+                        AtFlag::SYMLINK_NOFOLLOW,
+                    )
+                } {
                     if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFDIR) {
                         errno = Errno::EISDIR;
                     }
@@ -54,7 +58,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
 
-    symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()).or_else(|err| {
+    unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) }.or_else(|err| {
         if let YanixError::Errno(errno) = err {
             match errno {
                 Errno::ENOTDIR => {
@@ -64,11 +68,13 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                     // the trailing slash and check if the path exists, and
                     // adjust the error code appropriately.
                     let new_path = resolved.path().trim_end_matches('/');
-                    if let Ok(_) = fstatat(
-                        resolved.dirfd().as_raw_fd(),
-                        new_path,
-                        AtFlag::SYMLINK_NOFOLLOW,
-                    ) {
+                    if let Ok(_) = unsafe {
+                        fstatat(
+                            resolved.dirfd().as_raw_fd(),
+                            new_path,
+                            AtFlag::SYMLINK_NOFOLLOW,
+                        )
+                    } {
                         Err(Error::EEXIST)
                     } else {
                         Err(Error::ENOTDIR)
@@ -87,12 +93,14 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
         file::{fstatat, renameat, AtFlag},
         Errno, YanixError,
     };
-    renameat(
-        resolved_old.dirfd().as_raw_fd(),
-        resolved_old.path(),
-        resolved_new.dirfd().as_raw_fd(),
-        resolved_new.path(),
-    )
+    unsafe {
+        renameat(
+            resolved_old.dirfd().as_raw_fd(),
+            resolved_old.path(),
+            resolved_new.dirfd().as_raw_fd(),
+            resolved_new.path(),
+        )
+    }
     .or_else(|err| {
         // Currently, this is verified to be correct on macOS, where
         // ENOENT can be returned in case when we try to rename a file
@@ -107,11 +115,13 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
             match errno {
                 Errno::ENOENT => {
                     // check if the source path exists
-                    if let Ok(_) = fstatat(
-                        resolved_old.dirfd().as_raw_fd(),
-                        resolved_old.path(),
-                        AtFlag::SYMLINK_NOFOLLOW,
-                    ) {
+                    if let Ok(_) = unsafe {
+                        fstatat(
+                            resolved_old.dirfd().as_raw_fd(),
+                            resolved_old.path(),
+                            AtFlag::SYMLINK_NOFOLLOW,
+                        )
+                    } {
                         // check if destination contains a trailing slash
                         if resolved_new.path().contains('/') {
                             Err(Error::ENOTDIR)

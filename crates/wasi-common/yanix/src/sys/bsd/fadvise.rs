@@ -15,7 +15,7 @@ pub enum PosixFadviseAdvice {
 // There's no posix_fadvise on macOS but we can use fcntl with F_RDADVISE
 // command instead to achieve the same
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-pub fn posix_fadvise(
+pub unsafe fn posix_fadvise(
     fd: RawFd,
     offset: libc::off_t,
     len: libc::off_t,
@@ -35,13 +35,13 @@ pub fn posix_fadvise(
         ra_offset: offset,
         ra_count: len.try_into()?,
     };
-    Errno::from_success_code(unsafe { libc::fcntl(fd, libc::F_RDADVISE, &advisory) })
+    Errno::from_success_code(libc::fcntl(fd, libc::F_RDADVISE, &advisory))
 }
 
 // TODO
 // On non-macOS BSD's we leave it as no-op for now
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-pub fn posix_fadvise(
+pub unsafe fn posix_fadvise(
     _fd: RawFd,
     _offset: libc::off_t,
     _len: libc::off_t,

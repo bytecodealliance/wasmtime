@@ -76,7 +76,7 @@ pub(crate) fn poll_oneoff(
                 // events we filtered before. If we get something else here, the code has a serious bug.
                 _ => unreachable!(),
             };
-            PollFd::new(event.descriptor.as_raw_fd(), flags)
+            unsafe { PollFd::new(event.descriptor.as_raw_fd(), flags) }
         })
         .collect();
 
@@ -142,7 +142,7 @@ fn poll_oneoff_handle_fd_event<'a>(
         log::debug!("poll_oneoff_handle_fd_event revents = {:?}", revents);
 
         let nbytes = if fd_event.r#type == wasi::__WASI_EVENTTYPE_FD_READ {
-            fionread(fd_event.descriptor.as_raw_fd())?
+            unsafe { fionread(fd_event.descriptor.as_raw_fd())? }
         } else {
             0
         };
