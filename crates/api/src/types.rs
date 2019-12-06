@@ -4,35 +4,43 @@ use wasmtime_environ::{ir, wasm};
 
 // Type attributes
 
+/// Indicator of whether a global is mutable or not
 #[derive(Debug, Clone, Copy)]
 pub enum Mutability {
+    /// The global is constant and its value does not change
     Const,
+    /// The value of the global can change over time
     Var,
 }
 
+/// Limits of tables/memories where the units of the limits are defined by the
+/// table/memory types.
+///
+/// A minimum is always available but the maximum may not be present.
 #[derive(Debug, Clone)]
 pub struct Limits {
     min: u32,
-    max: u32,
+    max: Option<u32>,
 }
 
 impl Limits {
-    pub fn new(min: u32, max: u32) -> Limits {
+    /// Creates a new set of limits with the minimum and maximum both specified.
+    pub fn new(min: u32, max: Option<u32>) -> Limits {
         Limits { min, max }
     }
 
+    /// Creates a new `Limits` with the `min` specified and no maximum specified.
     pub fn at_least(min: u32) -> Limits {
-        Limits {
-            min,
-            max: ::std::u32::MAX,
-        }
+        Limits::new(min, None)
     }
 
+    /// Returns the minimum amount for these limits.
     pub fn min(&self) -> u32 {
         self.min
     }
 
-    pub fn max(&self) -> u32 {
+    /// Returs the maximum amount for these limits, if specified.
+    pub fn max(&self) -> Option<u32> {
         self.max
     }
 }
@@ -90,52 +98,63 @@ impl ValType {
 
 // External Types
 
+/// A list of all possible types which can be externally referenced from a
+/// WebAssembly module.
+///
+/// This list can be found in [`ImportType`] or [`ExportType`], so these types
+/// can either be imported or exported.
 #[derive(Debug, Clone)]
 pub enum ExternType {
-    ExternFunc(FuncType),
-    ExternGlobal(GlobalType),
-    ExternTable(TableType),
-    ExternMemory(MemoryType),
+    Func(FuncType),
+    Global(GlobalType),
+    Table(TableType),
+    Memory(MemoryType),
+}
+
+macro_rules! accessors {
+    ($(($variant:ident($ty:ty) $get:ident $unwrap:ident))*) => ($(
+		/// Attempt to return the underlying type of this external type,
+		/// returning `None` if it is a different type.
+        pub fn $get(&self) -> Option<&$ty> {
+            if let ExternType::$variant(e) = self {
+                Some(e)
+            } else {
+                None
+            }
+        }
+
+		/// Returns the underlying descriptor of this [`ExternType`], panicking
+        /// if it is a different type.
+        ///
+        /// # Panics
+        ///
+        /// Panics if `self` is not of the right type.
+        pub fn $unwrap(&self) -> &$ty {
+            self.$get().expect(concat!("expected ", stringify!($ty)))
+        }
+    )*)
 }
 
 impl ExternType {
-    pub fn func(&self) -> &FuncType {
-        match self {
-            ExternType::ExternFunc(func) => func,
-            _ => panic!("ExternType::ExternFunc expected"),
-        }
-    }
-    pub fn global(&self) -> &GlobalType {
-        match self {
-            ExternType::ExternGlobal(func) => func,
-            _ => panic!("ExternType::ExternGlobal expected"),
-        }
-    }
-    pub fn table(&self) -> &TableType {
-        match self {
-            ExternType::ExternTable(table) => table,
-            _ => panic!("ExternType::ExternTable expected"),
-        }
-    }
-    pub fn memory(&self) -> &MemoryType {
-        match self {
-            ExternType::ExternMemory(memory) => memory,
-            _ => panic!("ExternType::ExternMemory expected"),
-        }
+    accessors! {
+        (Func(FuncType) func unwrap_func)
+        (Global(GlobalType) global unwrap_global)
+        (Table(TableType) table unwrap_table)
+        (Memory(MemoryType) memory unwrap_memory)
     }
     pub(crate) fn from_wasmtime_export(export: &wasmtime_runtime::Export) -> Self {
         match export {
             wasmtime_runtime::Export::Function { signature, .. } => {
-                ExternType::ExternFunc(FuncType::from_wasmtime_signature(signature.clone()))
+                ExternType::Func(FuncType::from_wasmtime_signature(signature.clone()))
             }
             wasmtime_runtime::Export::Memory { memory, .. } => {
-                ExternType::ExternMemory(MemoryType::from_wasmtime_memory(&memory.memory))
+                ExternType::Memory(MemoryType::from_wasmtime_memory(&memory.memory))
             }
             wasmtime_runtime::Export::Global { global, .. } => {
-                ExternType::ExternGlobal(GlobalType::from_wasmtime_global(&global))
+                ExternType::Global(GlobalType::from_wasmtime_global(&global))
             }
             wasmtime_runtime::Export::Table { table, .. } => {
-                ExternType::ExternTable(TableType::from_wasmtime_table(&table.table))
+                ExternType::Table(TableType::from_wasmtime_table(&table.table))
             }
         }
     }
@@ -147,6 +166,9 @@ fn from_wasmtime_abiparam(param: &ir::AbiParam) -> ValType {
     ValType::from_wasmtime_type(param.value_type)
 }
 
+/// A descriptor for a function in a WebAssembly module.
+///
+/// WebAssembly functions can have 0 or more parameters and results.
 #[derive(Debug, Clone)]
 pub struct FuncType {
     params: Box<[ValType]>,
@@ -155,6 +177,10 @@ pub struct FuncType {
 }
 
 impl FuncType {
+    /// Creates a new function descriptor from the given parameters and results.
+    ///
+    /// The function descriptor returned will represent a function which takes
+    /// `params` as arguments and returns `results` when it is finished.
     pub fn new(params: Box<[ValType]>, results: Box<[ValType]>) -> FuncType {
         use wasmtime_environ::ir::{types, AbiParam, ArgumentPurpose, Signature};
         use wasmtime_jit::native;
@@ -182,9 +208,13 @@ impl FuncType {
             signature,
         }
     }
+
+    /// Returns the list of parameter types for this function.
     pub fn params(&self) -> &[ValType] {
         &self.params
     }
+
+    /// Returns the list of result types for this function.
     pub fn results(&self) -> &[ValType] {
         &self.results
     }
@@ -215,6 +245,11 @@ impl FuncType {
 
 // Global Types
 
+/// A WebAssembly global descriptor.
+///
+/// This type describes an instance of a global in a WebAssembly module. Globals
+/// are local to an [`Instance`](crate::Instance) and are either immutable or
+/// mutable.
 #[derive(Debug, Clone)]
 pub struct GlobalType {
     content: ValType,
@@ -222,15 +257,21 @@ pub struct GlobalType {
 }
 
 impl GlobalType {
+    /// Creates a new global descriptor of the specified `content` type and
+    /// whether or not it's mutable.
     pub fn new(content: ValType, mutability: Mutability) -> GlobalType {
         GlobalType {
             content,
             mutability,
         }
     }
+
+    /// Returns the value type of this global descriptor.
     pub fn content(&self) -> &ValType {
         &self.content
     }
+
+    /// Returns whether or not this global is mutable.
     pub fn mutability(&self) -> Mutability {
         self.mutability
     }
@@ -248,6 +289,11 @@ impl GlobalType {
 
 // Table Types
 
+/// A descriptor for a table in a WebAssembly module.
+///
+/// Tables are contiguous chunks of a specific element, typically a `funcref` or
+/// an `anyref`. The most common use for tables is a function table through
+/// which `call_indirect` can invoke other functions.
 #[derive(Debug, Clone)]
 pub struct TableType {
     element: ValType,
@@ -255,12 +301,18 @@ pub struct TableType {
 }
 
 impl TableType {
+    /// Creates a new table descriptor which will contain the specified
+    /// `element` and have the `limits` applied to its length.
     pub fn new(element: ValType, limits: Limits) -> TableType {
         TableType { element, limits }
     }
+
+    /// Returns the element value type of this table.
     pub fn element(&self) -> &ValType {
         &self.element
     }
+
+    /// Returns the limits, in units of elements, of this table.
     pub fn limits(&self) -> &Limits {
         &self.limits
     }
@@ -272,103 +324,113 @@ impl TableType {
             false
         });
         let ty = ValType::FuncRef;
-        let limits = Limits::new(table.minimum, table.maximum.unwrap_or(::std::u32::MAX));
+        let limits = Limits::new(table.minimum, table.maximum);
         TableType::new(ty, limits)
     }
 }
 
 // Memory Types
 
+/// A descriptor for a WebAssembly memory type.
+///
+/// Memories are described in units of pages (64KB) and represent contiguous
+/// chunks of addressable memory.
 #[derive(Debug, Clone)]
 pub struct MemoryType {
     limits: Limits,
 }
 
 impl MemoryType {
+    /// Creates a new descriptor for a WebAssembly memory given the specified
+    /// limits of the memory.
     pub fn new(limits: Limits) -> MemoryType {
         MemoryType { limits }
     }
+
+    /// Returns the limits (in pages) that are configured for this memory.
     pub fn limits(&self) -> &Limits {
         &self.limits
     }
 
     pub(crate) fn from_wasmtime_memory(memory: &wasm::Memory) -> MemoryType {
-        MemoryType::new(Limits::new(
-            memory.minimum,
-            memory.maximum.unwrap_or(::std::u32::MAX),
-        ))
+        MemoryType::new(Limits::new(memory.minimum, memory.maximum))
     }
 }
 
 // Import Types
 
-#[derive(Debug, Clone)]
-pub struct Name(String);
-
-impl Name {
-    pub fn new(value: &str) -> Self {
-        Name(value.to_owned())
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl From<String> for Name {
-    fn from(s: String) -> Name {
-        Name(s)
-    }
-}
-
-impl ToString for Name {
-    fn to_string(&self) -> String {
-        self.0.to_owned()
-    }
-}
-
+/// A descriptor for an imported value into a wasm module.
+///
+/// This type is primarily accessed from the
+/// [`Module::imports`](crate::Module::imports) API. Each [`ImportType`]
+/// describes an import into the wasm module with the module/name that it's
+/// imported from as well as the type of item that's being imported.
 #[derive(Debug, Clone)]
 pub struct ImportType {
-    module: Name,
-    name: Name,
-    r#type: ExternType,
+    module: String,
+    name: String,
+    ty: ExternType,
 }
 
 impl ImportType {
-    pub fn new(module: Name, name: Name, r#type: ExternType) -> ImportType {
+    /// Creates a new import descriptor which comes from `module` and `name` and
+    /// is of type `ty`.
+    pub fn new(module: &str, name: &str, ty: ExternType) -> ImportType {
         ImportType {
-            module,
-            name,
-            r#type,
+            module: module.to_string(),
+            name: name.to_string(),
+            ty,
         }
     }
-    pub fn module(&self) -> &Name {
+
+    /// Returns the module name that this import is expected to come from.
+    pub fn module(&self) -> &str {
         &self.module
     }
-    pub fn name(&self) -> &Name {
+
+    /// Returns the field name of the module that this import is expected to
+    /// come from.
+    pub fn name(&self) -> &str {
         &self.name
     }
-    pub fn r#type(&self) -> &ExternType {
-        &self.r#type
+
+    /// Returns the expected type of this import.
+    pub fn ty(&self) -> &ExternType {
+        &self.ty
     }
 }
 
 // Export Types
 
+/// A descriptor for an exported WebAssembly value.
+///
+/// This type is primarily accessed from the
+/// [`Module::exports`](crate::Module::exports) accessor and describes what
+/// names are exported from a wasm module and the type of the item that is
+/// exported.
 #[derive(Debug, Clone)]
 pub struct ExportType {
-    name: Name,
-    r#type: ExternType,
+    name: String,
+    ty: ExternType,
 }
 
 impl ExportType {
-    pub fn new(name: Name, r#type: ExternType) -> ExportType {
-        ExportType { name, r#type }
+    /// Creates a new export which is exported with the given `name` and has the
+    /// given `ty`.
+    pub fn new(name: &str, ty: ExternType) -> ExportType {
+        ExportType {
+            name: name.to_string(),
+            ty,
+        }
     }
-    pub fn name(&self) -> &Name {
+
+    /// Returns the name by which this export is known by.
+    pub fn name(&self) -> &str {
         &self.name
     }
-    pub fn r#type(&self) -> &ExternType {
-        &self.r#type
+
+    /// Returns the type of this export.
+    pub fn ty(&self) -> &ExternType {
+        &self.ty
     }
 }

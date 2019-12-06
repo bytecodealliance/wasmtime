@@ -68,9 +68,9 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .imports()
         .iter()
         .map(|i| {
-            let module_name = i.module().as_str();
+            let module_name = i.module();
             if let Some(instance) = module_registry.get(module_name) {
-                let field_name = i.name().as_str();
+                let field_name = i.name();
                 if let Some(export) = instance.find_export_by_name(field_name) {
                     Ok(export.clone())
                 } else {

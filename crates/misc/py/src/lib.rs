@@ -111,21 +111,18 @@ pub fn instantiate(
 
     let mut imports: Vec<wasmtime::Extern> = Vec::new();
     for i in module.borrow().imports() {
-        let module_name = i.module().as_str();
+        let module_name = i.module();
         if let Some(m) = import_obj.get_item(module_name) {
-            let e = find_export_in(m, &store, i.name().as_str())?;
+            let e = find_export_in(m, &store, i.name())?;
             imports.push(e);
         } else if wasi.is_some() && module_name == wasi.as_ref().unwrap().0 {
             let e = wasi
                 .as_ref()
                 .unwrap()
                 .1
-                .find_export_by_name(i.name().as_str())
+                .find_export_by_name(i.name())
                 .ok_or_else(|| {
-                    PyErr::new::<Exception, _>(format!(
-                        "wasi export {} is not found",
-                        i.name().as_str()
-                    ))
+                    PyErr::new::<Exception, _>(format!("wasi export {} is not found", i.name(),))
                 })?;
             imports.push(e.clone());
         } else {

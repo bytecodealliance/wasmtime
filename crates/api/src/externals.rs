@@ -49,10 +49,10 @@ impl Extern {
 
     pub fn r#type(&self) -> ExternType {
         match self {
-            Extern::Func(ft) => ExternType::ExternFunc(ft.borrow().r#type().clone()),
-            Extern::Memory(ft) => ExternType::ExternMemory(ft.borrow().r#type().clone()),
-            Extern::Table(tt) => ExternType::ExternTable(tt.borrow().r#type().clone()),
-            Extern::Global(gt) => ExternType::ExternGlobal(gt.borrow().r#type().clone()),
+            Extern::Func(ft) => ExternType::Func(ft.borrow().r#type().clone()),
+            Extern::Memory(ft) => ExternType::Memory(ft.borrow().r#type().clone()),
+            Extern::Table(tt) => ExternType::Table(tt.borrow().r#type().clone()),
+            Extern::Global(gt) => ExternType::Global(gt.borrow().r#type().clone()),
         }
     }
 

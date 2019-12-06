@@ -69,13 +69,13 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
                 let wasi_instance = #root::wasmtime_wasi::create_wasi_instance(&store, &[], &[], &[])
                     .map_err(|e| format_err!("wasm instantiation error: {:?}", e))?;
                 for i in module.borrow().imports().iter() {
-                    if i.module().as_str() != module_name {
-                        bail!("unknown import module {}", i.module().as_str());
+                    if i.module() != module_name {
+                        bail!("unknown import module {}", i.module());
                     }
-                    if let Some(export) = wasi_instance.find_export_by_name(i.name().as_str()) {
+                    if let Some(export) = wasi_instance.find_export_by_name(i.name()) {
                         imports.push(export.clone());
                     } else {
-                        bail!("unknown import {}:{}", i.module().as_str(), i.name().as_str())
+                        bail!("unknown import {}:{}", i.module(), i.name())
                     }
                 }
             }

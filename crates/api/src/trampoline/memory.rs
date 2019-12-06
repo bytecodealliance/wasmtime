@@ -12,11 +12,7 @@ pub fn create_handle_with_memory(memory: &MemoryType) -> Result<InstanceHandle> 
 
     let memory = wasm::Memory {
         minimum: memory.limits().min(),
-        maximum: if memory.limits().max() == std::u32::MAX {
-            None
-        } else {
-            Some(memory.limits().max())
-        },
+        maximum: memory.limits().max(),
         shared: false, // TODO
     };
     let tunable = Default::default();
