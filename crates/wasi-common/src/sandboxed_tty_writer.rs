@@ -135,14 +135,14 @@ mod tests {
 
     #[test]
     fn basic() -> Result<()> {
-        let mut safe = SandboxedTTYWriter::new(Vec::new());
+        let mut buffer = Vec::new();
+        let mut safe = SandboxedTTYWriter::new(&mut buffer);
         safe.write_str("a\0b\u{0080}")?;
         safe.write_char('\u{0007}')?;
         safe.write(&[0x80])?;
         safe.write(&[0xed, 0xa0, 0x80, 0xff, 0xfe])?;
-        let output = safe.into_inner_writer();
         assert_eq!(
-            output,
+            buffer,
             "a\u{2400}b\u{FFFD}\u{2407}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}".as_bytes()
         );
         Ok(())
@@ -152,25 +152,25 @@ mod tests {
     fn how_many_replacements() -> Result<()> {
         // See https://hsivonen.fi/broken-utf-8/ for background.
 
-        let mut safe = SandboxedTTYWriter::new(Vec::new());
+        let mut buffer = Vec::new();
+        let mut safe = SandboxedTTYWriter::new(&mut buffer);
         safe.write(&[0x80, 0x80, 0x80, 0x80])?;
-        let output = safe.into_inner_writer();
-        assert_eq!(output, "\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}".as_bytes());
+        assert_eq!(buffer, "\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}".as_bytes());
 
-        let mut safe = SandboxedTTYWriter::new(Vec::new());
+        let mut buffer = Vec::new();
+        let mut safe = SandboxedTTYWriter::new(&mut buffer);
         safe.write(&[0xF0, 0x80, 0x80, 0x41])?;
-        let output = safe.into_inner_writer();
-        assert_eq!(output, "\u{FFFD}\u{FFFD}\u{FFFD}A".as_bytes());
+        assert_eq!(buffer, "\u{FFFD}\u{FFFD}\u{FFFD}A".as_bytes());
 
-        let mut safe = SandboxedTTYWriter::new(Vec::new());
+        let mut buffer = Vec::new();
+        let mut safe = SandboxedTTYWriter::new(&mut buffer);
         safe.write(&[0xF0, 0x80, 0x80])?;
-        let output = safe.into_inner_writer();
-        assert_eq!(output, "\u{FFFD}\u{FFFD}\u{FFFD}".as_bytes());
+        assert_eq!(buffer, "\u{FFFD}\u{FFFD}\u{FFFD}".as_bytes());
 
-        let mut safe = SandboxedTTYWriter::new(Vec::new());
+        let mut buffer = Vec::new();
+        let mut safe = SandboxedTTYWriter::new(&mut buffer);
         safe.write(&[0xF4, 0x80, 0x80, 0xC0])?;
-        let output = safe.into_inner_writer();
-        assert_eq!(output, "\u{FFFD}\u{FFFD}".as_bytes());
+        assert_eq!(buffer, "\u{FFFD}\u{FFFD}".as_bytes());
 
         Ok(())
     }
