@@ -266,6 +266,89 @@ pub trait FuncEnvironment {
         heap: ir::Heap,
     ) -> WasmResult<ir::Value>;
 
+    /// Translate a `memory.copy` WebAssembly instruction.
+    ///
+    /// The `index` provided identifies the linear memory to query, and `heap` is the heap reference
+    /// returned by `make_heap` for the same index.
+    fn translate_memory_copy(
+        &mut self,
+        pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate a `memory.fill` WebAssembly instruction.
+    ///
+    /// The `index` provided identifies the linear memory to query, and `heap` is the heap reference
+    /// returned by `make_heap` for the same index.
+    fn translate_memory_fill(
+        &mut self,
+        pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        dst: ir::Value,
+        val: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate a `memory.init` WebAssembly instruction.
+    ///
+    /// The `index` provided identifies the linear memory to query, and `heap` is the heap reference
+    /// returned by `make_heap` for the same index. `seg_index` is the index of the segment to copy
+    /// from.
+    fn translate_memory_init(
+        &mut self,
+        pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        seg_index: u32,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate a `data.drop` WebAssembly instruction.
+    fn translate_data_drop(&mut self, pos: FuncCursor, seg_index: u32) -> WasmResult<()>;
+
+    /// Translate a `table.size` WebAssembly instruction.
+    fn translate_table_size(
+        &mut self,
+        pos: FuncCursor,
+        index: TableIndex,
+        table: ir::Table,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate a `table.copy` WebAssembly instruction.
+    fn translate_table_copy(
+        &mut self,
+        pos: FuncCursor,
+        dst_table_index: TableIndex,
+        dst_table: ir::Table,
+        src_table_index: TableIndex,
+        src_table: ir::Table,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate a `table.init` WebAssembly instruction.
+    fn translate_table_init(
+        &mut self,
+        pos: FuncCursor,
+        seg_index: u32,
+        table_index: TableIndex,
+        table: ir::Table,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate a `elem.drop` WebAssembly instruction.
+    fn translate_elem_drop(&mut self, pos: FuncCursor, seg_index: u32) -> WasmResult<()>;
+
     /// Emit code at the beginning of every wasm loop.
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at

@@ -371,6 +371,87 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, -1))
     }
+
+    fn translate_memory_copy(
+        &mut self,
+        _pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+        _dst: ir::Value,
+        _src: ir::Value,
+        _len: ir::Value,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
+
+    fn translate_memory_fill(
+        &mut self,
+        _pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+        _dst: ir::Value,
+        _val: ir::Value,
+        _len: ir::Value,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
+
+    fn translate_memory_init(
+        &mut self,
+        _pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+        _seg_index: u32,
+        _dst: ir::Value,
+        _src: ir::Value,
+        _len: ir::Value,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
+
+    fn translate_data_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
+        Ok(())
+    }
+
+    fn translate_table_size(
+        &mut self,
+        mut pos: FuncCursor,
+        _index: TableIndex,
+        _table: ir::Table,
+    ) -> WasmResult<ir::Value> {
+        Ok(pos.ins().iconst(I32, -1))
+    }
+
+    fn translate_table_copy(
+        &mut self,
+        _pos: FuncCursor,
+        _dst_index: TableIndex,
+        _dst_table: ir::Table,
+        _src_index: TableIndex,
+        _src_table: ir::Table,
+        _dst: ir::Value,
+        _src: ir::Value,
+        _len: ir::Value,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
+
+    fn translate_table_init(
+        &mut self,
+        _pos: FuncCursor,
+        _seg_index: u32,
+        _table_index: TableIndex,
+        _table: ir::Table,
+        _dst: ir::Value,
+        _src: ir::Value,
+        _len: ir::Value,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
+
+    fn translate_elem_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
+        Ok(())
+    }
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
