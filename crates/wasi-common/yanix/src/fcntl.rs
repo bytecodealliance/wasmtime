@@ -16,18 +16,18 @@ pub unsafe fn dup_fd(fd: RawFd, close_on_exec: bool) -> Result<RawFd> {
     })
 }
 
-pub fn get_fd_flags(fd: RawFd) -> Result<FdFlag> {
-    Errno::from_result(unsafe { libc::fcntl(fd, libc::F_GETFD) }).map(FdFlag::from_bits_truncate)
+pub unsafe fn get_fd_flags(fd: RawFd) -> Result<FdFlag> {
+    Errno::from_result(libc::fcntl(fd, libc::F_GETFD)).map(FdFlag::from_bits_truncate)
 }
 
-pub fn set_fd_flags(fd: RawFd, flags: FdFlag) -> Result<()> {
-    Errno::from_success_code(unsafe { libc::fcntl(fd, libc::F_SETFD, flags.bits()) })
+pub unsafe fn set_fd_flags(fd: RawFd, flags: FdFlag) -> Result<()> {
+    Errno::from_success_code(libc::fcntl(fd, libc::F_SETFD, flags.bits()))
 }
 
-pub fn get_status_flags(fd: RawFd) -> Result<OFlag> {
-    Errno::from_result(unsafe { libc::fcntl(fd, libc::F_GETFL) }).map(OFlag::from_bits_truncate)
+pub unsafe fn get_status_flags(fd: RawFd) -> Result<OFlag> {
+    Errno::from_result(libc::fcntl(fd, libc::F_GETFL)).map(OFlag::from_bits_truncate)
 }
 
-pub fn set_status_flags(fd: RawFd, flags: OFlag) -> Result<()> {
-    Errno::from_success_code(unsafe { libc::fcntl(fd, libc::F_SETFL, flags.bits()) })
+pub unsafe fn set_status_flags(fd: RawFd, flags: OFlag) -> Result<()> {
+    Errno::from_success_code(libc::fcntl(fd, libc::F_SETFL, flags.bits()))
 }

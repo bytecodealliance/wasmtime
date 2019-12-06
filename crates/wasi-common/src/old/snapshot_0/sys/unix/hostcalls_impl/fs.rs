@@ -38,16 +38,16 @@ pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t
 }
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
-    use yanix::fcntl;
-    fcntl::get_status_flags(fd.as_raw_fd())
-        .map(host_impl::fdflags_from_nix)
-        .map_err(Into::into)
+    unsafe {
+        yanix::fcntl::get_status_flags(fd.as_raw_fd())
+            .map(host_impl::fdflags_from_nix)
+            .map_err(Into::into)
+    }
 }
 
 pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
-    use yanix::fcntl;
     let nix_flags = host_impl::nix_from_fdflags(fdflags);
-    fcntl::set_status_flags(fd.as_raw_fd(), nix_flags).map_err(Into::into)
+    unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), nix_flags).map_err(Into::into) }
 }
 
 pub(crate) fn fd_advise(
