@@ -91,7 +91,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .borrow()
         .call(&[])
     {
-        bail!("trapped: {:?}", trap.borrow());
+        bail!("trapped: {:?}", trap);
     }
 
     Ok(())

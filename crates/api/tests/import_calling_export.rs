@@ -20,7 +20,7 @@ fn test_import_calling_export() {
     }
 
     impl Callable for Callback {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
             self.other
                 .borrow()
                 .as_ref()

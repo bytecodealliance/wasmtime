@@ -4,8 +4,9 @@ use crate::module::Module;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trampoline::take_api_trap;
+use crate::trap::Trap;
 use crate::types::{ExportType, ExternType};
-use anyhow::Result;
+use anyhow::{Error, Result};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -31,7 +32,7 @@ pub fn instantiate_in_context(
     imports: Vec<(String, String, Extern)>,
     mut context: Context,
     exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
-) -> Result<(InstanceHandle, HashSet<Context>)> {
+) -> Result<(InstanceHandle, HashSet<Context>), Error> {
     let mut contexts = HashSet::new();
     let debug_info = context.debug_info();
     let mut resolver = SimpleResolver { imports };
@@ -42,10 +43,12 @@ pub fn instantiate_in_context(
         exports,
         debug_info,
     )
-    .map_err(|e| {
-        // TODO wrap HostRef<Trap> into Error
-        drop(take_api_trap());
-        e
+    .map_err(|e| -> Error {
+        if let Some(trap) = take_api_trap() {
+            Trap::from(trap).into()
+        } else {
+            e.into()
+        }
     })?;
     contexts.insert(context);
     Ok((instance, contexts))
@@ -68,7 +71,7 @@ impl Instance {
         store: &HostRef<Store>,
         module: &HostRef<Module>,
         externs: &[Extern],
-    ) -> Result<Instance> {
+    ) -> Result<Instance, Error> {
         let context = store.borrow_mut().context().clone();
         let exports = store.borrow_mut().global_exports().clone();
         let imports = module

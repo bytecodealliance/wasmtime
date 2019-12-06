@@ -82,7 +82,7 @@ impl wasmtime::Callable for WrappedFn {
         &self,
         params: &[wasmtime::Val],
         returns: &mut [wasmtime::Val],
-    ) -> Result<(), wasmtime::HostRef<wasmtime::Trap>> {
+    ) -> Result<(), wasmtime::Trap> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 

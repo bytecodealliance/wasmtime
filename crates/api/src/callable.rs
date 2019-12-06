@@ -1,7 +1,7 @@
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trampoline::{generate_func_export, take_api_trap};
-use crate::trap::Trap;
+use crate::trap::{Trap, TrapInfo};
 use crate::types::FuncType;
 use crate::values::Val;
 use std::rc::Rc;
@@ -18,7 +18,7 @@ use wasmtime_runtime::Export;
 /// struct TimesTwo;
 ///
 /// impl wasmtime::Callable for TimesTwo {
-///     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<wasmtime::Trap>> {
+///     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), wasmtime::Trap> {
 ///         let mut value = params[0].unwrap_i32();
 ///         value *= 2;
 ///         results[0] = value.into();
@@ -75,7 +75,7 @@ use wasmtime_runtime::Export;
 /// let results = run_function
 ///     .borrow()
 ///     .call(&[original.into()])
-///     .map_err(|trap| trap.borrow().to_string())?;
+///     .map_err(|trap| trap.to_string())?;
 ///
 /// // Compare that the results returned matches what we expect.
 /// assert_eq!(original * 2, results[0].unwrap_i32());
@@ -87,11 +87,11 @@ pub trait Callable {
     /// `params` is an immutable list of parameters provided to the function.
     /// `results` is mutable list of results to be potentially set by your
     /// function. Produces a `Trap` if the function encounters any errors.
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>>;
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap>;
 }
 
 pub(crate) trait WrappedCallable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>>;
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap>;
     fn signature(&self) -> &ir::Signature {
         match self.wasmtime_export() {
             Export::Function { signature, .. } => signature,
@@ -119,7 +119,7 @@ impl WasmtimeFn {
 }
 
 impl WrappedCallable for WasmtimeFn {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         use std::cmp::max;
         use std::mem;
 
@@ -150,7 +150,7 @@ impl WrappedCallable for WasmtimeFn {
             .context()
             .compiler()
             .get_published_trampoline(body, &signature, value_size)
-            .map_err(|_| HostRef::new(Trap::fake()))?; //was ActionError::Setup)?;
+            .map_err(|e| Trap::new(format!("trampoline error: {:?}", e)))?;
 
         // Call the trampoline.
         if let Err(message) = unsafe {
@@ -160,8 +160,9 @@ impl WrappedCallable for WasmtimeFn {
                 values_vec.as_mut_ptr() as *mut u8,
             )
         } {
-            let trap = take_api_trap().unwrap_or_else(|| HostRef::new(Trap::new(message)));
-            return Err(trap);
+            let trap = take_api_trap()
+                .unwrap_or_else(|| HostRef::new(TrapInfo::new(format!("call error: {}", message))));
+            return Err(trap.into());
         }
 
         // Load the return values out of `values_vec`.
@@ -206,7 +207,7 @@ impl NativeCallable {
 }
 
 impl WrappedCallable for NativeCallable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         self.callable.call(params, results)
     }
     fn wasmtime_handle(&self) -> &InstanceHandle {
