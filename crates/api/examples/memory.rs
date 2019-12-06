@@ -51,7 +51,7 @@ macro_rules! call {
   ($func:expr, $($p:expr),*) => {
     match $func.borrow().call(&[$($p.into()),*]) {
       Ok(result) => {
-        let result: i32 = result[0].clone().into();
+        let result: i32 = result[0].unwrap_i32();
         result
       }
       Err(_) => { bail!("> Error on result, expected return"); }

@@ -148,7 +148,7 @@ impl Func {
     }
 
     pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, HostRef<Trap>> {
-        let mut results = vec![Val::default(); self.result_arity()];
+        let mut results = vec![Val::null(); self.result_arity()];
         self.callable.call(params, &mut results)?;
         Ok(results.into_boxed_slice())
     }
@@ -215,8 +215,8 @@ impl Global {
             match self.r#type().content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
-                ValType::F32 => Val::from_f32_bits(*definition.as_u32()),
-                ValType::F64 => Val::from_f64_bits(*definition.as_u64()),
+                ValType::F32 => Val::F32(*definition.as_u32()),
+                ValType::F64 => Val::F64(*definition.as_u64()),
                 _ => unimplemented!("Global::get for {:?}", self.r#type().content()),
             }
         }
