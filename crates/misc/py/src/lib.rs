@@ -122,10 +122,7 @@ pub fn instantiate(
                 .1
                 .find_export_by_name(i.name())
                 .ok_or_else(|| {
-                    PyErr::new::<Exception, _>(format!(
-                        "wasi export {} is not found",
-                        i.name(),
-                    ))
+                    PyErr::new::<Exception, _>(format!("wasi export {} is not found", i.name(),))
                 })?;
             imports.push(e.clone());
         } else {
