@@ -80,7 +80,7 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
         (args, signature.returns.len())
     };
 
-    let mut returns = vec![Val::default(); returns_len];
+    let mut returns = vec![Val::null(); returns_len];
     let func = &instance
         .host_state()
         .downcast_mut::<TrampolineState>()

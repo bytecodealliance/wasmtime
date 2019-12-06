@@ -1553,7 +1553,11 @@ unsafe fn into_funcref(val: Val) -> *mut wasm_ref_t {
     if let Val::AnyRef(AnyRef::Null) = val {
         return ptr::null_mut();
     }
-    let r = Box::new(wasm_ref_t { r: val.into() });
+    let anyref = match val.anyref() {
+        Some(anyref) => anyref,
+        None => return ptr::null_mut(),
+    };
+    let r = Box::new(wasm_ref_t { r: anyref });
     Box::into_raw(r)
 }
 
