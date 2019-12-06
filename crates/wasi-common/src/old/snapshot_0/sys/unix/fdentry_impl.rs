@@ -50,7 +50,7 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(fd)?;
 
     use yanix::{fcntl, file::OFlag};
-    let flags = fcntl::get_fl(fd.as_raw_fd())?;
+    let flags = fcntl::get_status_flags(fd.as_raw_fd())?;
     let accmode = flags & OFlag::ACCMODE;
     if accmode == OFlag::RDONLY {
         rights_base &= !wasi::__WASI_RIGHTS_FD_WRITE;
