@@ -10,11 +10,7 @@ pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
 
     let table = wasm::Table {
         minimum: table.limits().min(),
-        maximum: if table.limits().max() == std::u32::MAX {
-            None
-        } else {
-            Some(table.limits().max())
-        },
+        maximum: table.limits().max(),
         ty: match table.element() {
             ValType::FuncRef => wasm::TableElementType::Func,
             _ => wasm::TableElementType::Val(table.element().get_wasmtime_type()),

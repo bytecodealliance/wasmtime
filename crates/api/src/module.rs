@@ -12,10 +12,7 @@ use wasmparser::{
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
     assert!(!mt.shared);
-    MemoryType::new(Limits::new(
-        mt.limits.initial,
-        mt.limits.maximum.unwrap_or(std::u32::MAX),
-    ))
+    MemoryType::new(Limits::new(mt.limits.initial, mt.limits.maximum))
 }
 
 fn into_global_type(gt: &wasmparser::GlobalType) -> GlobalType {
@@ -53,10 +50,7 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
         tt.element_type == wasmparser::Type::AnyFunc || tt.element_type == wasmparser::Type::AnyRef
     );
     let ty = into_valtype(&tt.element_type);
-    let limits = Limits::new(
-        tt.limits.initial,
-        tt.limits.maximum.unwrap_or(std::u32::MAX),
-    );
+    let limits = Limits::new(tt.limits.initial, tt.limits.maximum);
     TableType::new(ty, limits)
 }
 
@@ -112,31 +106,29 @@ fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[Ex
                 imports.reserve_exact(section.get_count() as usize);
                 for entry in section {
                     let entry = entry?;
-                    let module = String::from(entry.module).into();
-                    let name = String::from(entry.field).into();
                     let r#type = match entry.ty {
                         ImportSectionEntryType::Function(index) => {
                             func_sig.push(index);
                             let sig = &sigs[index as usize];
-                            ExternType::ExternFunc(sig.clone())
+                            ExternType::Func(sig.clone())
                         }
                         ImportSectionEntryType::Table(tt) => {
                             let table = into_table_type(tt);
                             tables.push(table.clone());
-                            ExternType::ExternTable(table)
+                            ExternType::Table(table)
                         }
                         ImportSectionEntryType::Memory(mt) => {
                             let memory = into_memory_type(mt);
                             memories.push(memory.clone());
-                            ExternType::ExternMemory(memory)
+                            ExternType::Memory(memory)
                         }
                         ImportSectionEntryType::Global(gt) => {
                             let global = into_global_type(&gt);
                             globals.push(global.clone());
-                            ExternType::ExternGlobal(global)
+                            ExternType::Global(global)
                         }
                     };
-                    imports.push(ImportType::new(module, name, r#type));
+                    imports.push(ImportType::new(entry.module, entry.field, r#type));
                 }
             }
             SectionCode::Export => {
@@ -144,24 +136,23 @@ fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[Ex
                 exports.reserve_exact(section.get_count() as usize);
                 for entry in section {
                     let entry = entry?;
-                    let name = String::from(entry.field).into();
                     let r#type = match entry.kind {
                         ExternalKind::Function => {
                             let sig_index = func_sig[entry.index as usize] as usize;
                             let sig = &sigs[sig_index];
-                            ExternType::ExternFunc(sig.clone())
+                            ExternType::Func(sig.clone())
                         }
                         ExternalKind::Table => {
-                            ExternType::ExternTable(tables[entry.index as usize].clone())
+                            ExternType::Table(tables[entry.index as usize].clone())
                         }
                         ExternalKind::Memory => {
-                            ExternType::ExternMemory(memories[entry.index as usize].clone())
+                            ExternType::Memory(memories[entry.index as usize].clone())
                         }
                         ExternalKind::Global => {
-                            ExternType::ExternGlobal(globals[entry.index as usize].clone())
+                            ExternType::Global(globals[entry.index as usize].clone())
                         }
                     };
-                    exports.push(ExportType::new(name, r#type));
+                    exports.push(ExportType::new(entry.field, r#type));
                 }
             }
             _ => {

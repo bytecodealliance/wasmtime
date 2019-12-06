@@ -13,17 +13,17 @@ pub fn dummy_imports(
 ) -> Result<Vec<Extern>, HostRef<Trap>> {
     let mut imports = Vec::with_capacity(import_tys.len());
     for imp in import_tys {
-        imports.push(match imp.r#type() {
-            ExternType::ExternFunc(func_ty) => {
+        imports.push(match imp.ty() {
+            ExternType::Func(func_ty) => {
                 Extern::Func(HostRef::new(DummyFunc::new(&store, func_ty.clone())))
             }
-            ExternType::ExternGlobal(global_ty) => {
+            ExternType::Global(global_ty) => {
                 Extern::Global(HostRef::new(dummy_global(&store, global_ty.clone())?))
             }
-            ExternType::ExternTable(table_ty) => {
+            ExternType::Table(table_ty) => {
                 Extern::Table(HostRef::new(dummy_table(&store, table_ty.clone())?))
             }
-            ExternType::ExternMemory(mem_ty) => {
+            ExternType::Memory(mem_ty) => {
                 Extern::Memory(HostRef::new(dummy_memory(&store, mem_ty.clone())))
             }
         });

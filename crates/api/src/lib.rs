@@ -1,4 +1,10 @@
-//! Wasmtime embed API. Based on wasm-c-api.
+//! Wasmtime's embedding API
+//!
+//! This crate contains a high-level API used to interact with WebAssembly
+//! modules. The API here is intended to mirror the proposed [WebAssembly C
+//! API](https://github.com/WebAssembly/wasm-c-api), with small extensions here
+//! and there to implement Rust idioms. This crate also defines the actual C API
+//! itself for consumption from other languages.
 
 #![allow(improper_ctypes)]
 
