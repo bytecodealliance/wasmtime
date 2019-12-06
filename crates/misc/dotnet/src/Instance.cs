@@ -17,8 +17,10 @@ namespace Wasmtime
             Host = host;
             Module = module;
 
-            var bindings = host.GetImportBindings(module);
-            var handles = bindings.Select(b => b.Bind(module.Store, host)).ToList();
+            //Save the bindings to root the objects.
+            //Otherwise the GC may collect the delegates from ExternFunction for example.
+            _bindings = host.GetImportBindings(module);
+            var handles = _bindings.Select(b => b.Bind(module.Store, host)).ToList();
 
             unsafe
             {
@@ -141,5 +143,6 @@ namespace Wasmtime
         private Interop.wasm_extern_vec_t _externs;
         private Dictionary<string, ExternFunction> _functions;
         private Dictionary<string, ExternGlobal> _globals;
+        private List<Bindings.Binding> _bindings;
     }
 }
