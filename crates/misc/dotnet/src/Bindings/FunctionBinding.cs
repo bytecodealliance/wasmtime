@@ -240,7 +240,7 @@ namespace Wasmtime.Bindings
                 {
                     SetArgs(arguments, args);
 
-                    var result = Method.Invoke(host, args);
+                    var result = Method.Invoke(host, BindingFlags.DoNotWrapExceptions, null, args, null);
 
                     if (hasReturn)
                     {
@@ -248,9 +248,9 @@ namespace Wasmtime.Bindings
                     }
                     return IntPtr.Zero;
                 }
-                catch (TargetInvocationException ex)
+                catch (Exception ex)
                 {
-                    var bytes = Encoding.UTF8.GetBytes(ex.InnerException.Message + "\0" /* exception messages need a null */);
+                    var bytes = Encoding.UTF8.GetBytes(ex.Message + "\0" /* exception messages need a null */);
 
                     fixed (byte* ptr = bytes)
                     {
