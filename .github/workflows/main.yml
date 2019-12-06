@@ -92,7 +92,6 @@ jobs:
     name: Test
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         build: [stable, beta, nightly, windows, macos]
         include:
@@ -165,7 +164,6 @@ jobs:
     name: Python Wheel
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
@@ -262,7 +260,6 @@ jobs:
     name: Build wasmtime
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
