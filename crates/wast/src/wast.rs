@@ -255,12 +255,12 @@ impl WastContext {
                                         bail!("{}\nunexpected vector in NaN test", context(span))
                                     }
                                     RuntimeValue::F32(x) => {
-                                        if (x & 0x7fffffff) != 0x7fc00000 {
+                                        if !is_canonical_f32_nan(x) {
                                             bail!("{}\nexpected canonical NaN", context(span))
                                         }
                                     }
                                     RuntimeValue::F64(x) => {
-                                        if (x & 0x7fffffffffffffff) != 0x7ff8000000000000 {
+                                        if !is_canonical_f64_nan(x) {
                                             bail!("{}\nexpected canonical NaN", context(span))
                                         }
                                     }
@@ -346,12 +346,12 @@ impl WastContext {
                                         bail!("{}\nunexpected vector in NaN test", context(span))
                                     }
                                     RuntimeValue::F32(x) => {
-                                        if (x & 0x00400000) != 0x00400000 {
+                                        if !is_arithmetic_f32_nan(x) {
                                             bail!("{}\nexpected arithmetic NaN", context(span))
                                         }
                                     }
                                     RuntimeValue::F64(x) => {
-                                        if (x & 0x0008000000000000) != 0x0008000000000000 {
+                                        if !is_arithmetic_f64_nan(x) {
                                             bail!("{}\nexpected arithmetic NaN", context(span))
                                         }
                                     }
