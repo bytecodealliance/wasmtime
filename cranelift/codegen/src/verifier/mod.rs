@@ -107,7 +107,7 @@ pub struct VerifierError {
 fn format_context(context: &Option<String>) -> String {
     match context {
         None => "".to_string(),
-        Some(c) => format!(" ({})", c).to_string(),
+        Some(c) => format!(" ({})", c),
     }
 }
 

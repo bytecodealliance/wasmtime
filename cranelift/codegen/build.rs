@@ -61,7 +61,7 @@ fn main() {
         process::exit(1);
     }
 
-    if let Ok(_) = env::var("CRANELIFT_VERBOSE") {
+    if env::var("CRANELIFT_VERBOSE").is_ok() {
         for isa in &isas {
             println!("cargo:warning=Includes support for {} ISA", isa.to_string());
         }

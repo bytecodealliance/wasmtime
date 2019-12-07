@@ -938,7 +938,7 @@ fn insert_common_epilogue(
             .entry(fp_pop_inst)
             .and_modify(|insts| {
                 *insts = insts
-                    .into_iter()
+                    .iter()
                     .cloned()
                     .chain(std::iter::once(new_cfa))
                     .collect::<Box<[_]>>();

@@ -27,6 +27,10 @@ where
 {
     /// Create a new slice from a raw pointer. A safer way to create slices is
     /// to use `PrimaryMap::into_boxed_slice()`.
+    ///
+    /// # Safety
+    ///
+    /// This relies on `raw` pointing to a valid slice of `V`s.
     pub unsafe fn from_raw(raw: *mut [V]) -> Self {
         Self {
             elems: Box::from_raw(raw),

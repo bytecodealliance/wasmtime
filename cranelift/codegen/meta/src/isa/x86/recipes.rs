@@ -1381,7 +1381,7 @@ pub(crate) fn define<'shared>(
         recipes.add_template_recipe(
             EncodingRecipeBuilder::new("fst", &formats.store, 1)
                 .operands_in(vec![fpr, gpr])
-                .inst_predicate(has_no_offset.clone())
+                .inst_predicate(has_no_offset)
                 .clobbers_flags(false)
                 .compute_size("size_plus_maybe_sib_or_offset_for_in_reg_1")
                 .emit(
@@ -1465,7 +1465,7 @@ pub(crate) fn define<'shared>(
         recipes.add_template_recipe(
             EncodingRecipeBuilder::new("fstDisp8", &formats.store, 2)
                 .operands_in(vec![fpr, gpr])
-                .inst_predicate(has_small_offset.clone())
+                .inst_predicate(has_small_offset)
                 .clobbers_flags(false)
                 .compute_size("size_plus_maybe_sib_for_in_reg_1")
                 .emit(
@@ -1628,7 +1628,7 @@ pub(crate) fn define<'shared>(
         recipes.add_template_recipe(
             EncodingRecipeBuilder::new("fstWithIndex", &formats.store_complex, 2)
                 .operands_in(vec![fpr, gpr, gpr])
-                .inst_predicate(has_no_offset.clone())
+                .inst_predicate(has_no_offset)
                 .clobbers_flags(false)
                 .compute_size("size_plus_maybe_offset_for_in_reg_1")
                 .emit(
@@ -1698,7 +1698,7 @@ pub(crate) fn define<'shared>(
         recipes.add_template_recipe(
             EncodingRecipeBuilder::new("fstWithIndexDisp8", &formats.store_complex, 3)
                 .operands_in(vec![fpr, gpr, gpr])
-                .inst_predicate(has_small_offset.clone())
+                .inst_predicate(has_small_offset)
                 .clobbers_flags(false)
                 .emit(
                     r#"
@@ -1762,7 +1762,7 @@ pub(crate) fn define<'shared>(
         recipes.add_template_recipe(
             EncodingRecipeBuilder::new("fstWithIndexDisp32", &formats.store_complex, 6)
                 .operands_in(vec![fpr, gpr, gpr])
-                .inst_predicate(has_big_offset.clone())
+                .inst_predicate(has_big_offset)
                 .clobbers_flags(false)
                 .emit(
                     r#"
@@ -1892,7 +1892,7 @@ pub(crate) fn define<'shared>(
             EncodingRecipeBuilder::new("fld", &formats.load, 1)
                 .operands_in(vec![gpr])
                 .operands_out(vec![fpr])
-                .inst_predicate(has_no_offset.clone())
+                .inst_predicate(has_no_offset)
                 .clobbers_flags(false)
                 .compute_size("size_plus_maybe_sib_or_offset_for_in_reg_0")
                 .emit(
@@ -1948,7 +1948,7 @@ pub(crate) fn define<'shared>(
             EncodingRecipeBuilder::new("fldDisp8", &formats.load, 2)
                 .operands_in(vec![gpr])
                 .operands_out(vec![fpr])
-                .inst_predicate(has_small_offset.clone())
+                .inst_predicate(has_small_offset)
                 .clobbers_flags(false)
                 .compute_size("size_plus_maybe_sib_for_in_reg_0")
                 .emit(
@@ -2003,7 +2003,7 @@ pub(crate) fn define<'shared>(
             EncodingRecipeBuilder::new("fldDisp32", &formats.load, 5)
                 .operands_in(vec![gpr])
                 .operands_out(vec![fpr])
-                .inst_predicate(has_big_offset.clone())
+                .inst_predicate(has_big_offset)
                 .clobbers_flags(false)
                 .compute_size("size_plus_maybe_sib_for_in_reg_0")
                 .emit(
@@ -2064,7 +2064,7 @@ pub(crate) fn define<'shared>(
             EncodingRecipeBuilder::new("fldWithIndex", &formats.load_complex, 2)
                 .operands_in(vec![gpr, gpr])
                 .operands_out(vec![fpr])
-                .inst_predicate(has_no_offset.clone())
+                .inst_predicate(has_no_offset)
                 .clobbers_flags(false)
                 .compute_size("size_plus_maybe_offset_for_in_reg_0")
                 .emit(
@@ -2115,7 +2115,7 @@ pub(crate) fn define<'shared>(
             EncodingRecipeBuilder::new("fldWithIndexDisp8", &formats.load_complex, 3)
                 .operands_in(vec![gpr, gpr])
                 .operands_out(vec![fpr])
-                .inst_predicate(has_small_offset.clone())
+                .inst_predicate(has_small_offset)
                 .clobbers_flags(false)
                 .emit(
                     r#"
@@ -2160,7 +2160,7 @@ pub(crate) fn define<'shared>(
             EncodingRecipeBuilder::new("fldWithIndexDisp32", &formats.load_complex, 6)
                 .operands_in(vec![gpr, gpr])
                 .operands_out(vec![fpr])
-                .inst_predicate(has_big_offset.clone())
+                .inst_predicate(has_big_offset)
                 .clobbers_flags(false)
                 .emit(
                     r#"

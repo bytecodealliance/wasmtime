@@ -73,7 +73,6 @@ fn create_pre_header(
     let pool = &mut ListPool::<Value>::new();
     let header_args_values = func.dfg.ebb_params(header).to_vec();
     let header_args_types: Vec<Type> = header_args_values
-        .clone()
         .into_iter()
         .map(|val| func.dfg.value_type(val))
         .collect();

@@ -459,7 +459,7 @@ fn constrain_fixpoint(tv1: &TypeVar, tv2: &TypeVar) {
         }
     }
 
-    let old_tv2_ts = tv2.get_typeset().clone();
+    let old_tv2_ts = tv2.get_typeset();
     tv1.constrain_types(tv2.clone());
     // The above loop should ensure that all reference cycles have been handled.
     assert!(old_tv2_ts == tv2.get_typeset());
@@ -627,7 +627,7 @@ pub(crate) fn infer_transform(
         .map(|&var_index| {
             let var = var_pool.get_mut(var_index);
             let tv = type_env.get_equivalent(&var.get_or_create_typevar());
-            (var_index, tv.get_typeset().clone())
+            (var_index, tv.get_typeset())
         })
         .collect::<Vec<_>>();
 

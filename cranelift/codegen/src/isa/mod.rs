@@ -22,7 +22,6 @@
 //! ```
 //! # extern crate cranelift_codegen;
 //! # #[macro_use] extern crate target_lexicon;
-//! # fn main() {
 //! use cranelift_codegen::isa;
 //! use cranelift_codegen::settings::{self, Configurable};
 //! use std::str::FromStr;
@@ -40,7 +39,6 @@
 //!         let isa = isa_builder.finish(shared_flags);
 //!     }
 //! }
-//! # }
 //! ```
 //!
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
