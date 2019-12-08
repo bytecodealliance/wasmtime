@@ -3,30 +3,31 @@ use crate::{
     Errno, Result,
 };
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
-use std::{ffi, ops::Deref, ptr};
+use std::{ffi::CStr, ops::Deref, ptr};
 
 pub use crate::sys::EntryExt;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Dir(pub ptr::NonNull<libc::DIR>);
+pub struct Dir(pub(crate) ptr::NonNull<libc::DIR>);
 
 impl Dir {
-    /// Converts from a descriptor-based object, closing the descriptor on success or failure.
+    /// Takes the ownership of the passed-in descriptor-based object,
+    /// and creates a new instance of `Dir`.
     #[inline]
     pub fn from<F: IntoRawFd>(fd: F) -> Result<Self> {
-        unsafe { Self::from_fd(fd.into_raw_fd()) }
+        let fd = fd.into_raw_fd();
+        unsafe { Self::from_fd(fd) }
     }
 
-    /// Converts from a file descriptor, closing it on success or failure.
     unsafe fn from_fd(fd: RawFd) -> Result<Self> {
         let d = libc::fdopendir(fd);
-        if d.is_null() {
+        if let Some(d) = ptr::NonNull::new(d) {
+            Ok(Self(d))
+        } else {
             let e = Errno::last();
             libc::close(fd);
-            return Err(e.into());
-        };
-        // Always guaranteed to be non-null by the previous check
-        Ok(Self(ptr::NonNull::new(d).unwrap()))
+            Err(e.into())
+        }
     }
 
     /// Set the position of the directory stream, see `seekdir(3)`.
@@ -52,12 +53,6 @@ impl Dir {
     }
 }
 
-// `Dir` is not `Sync`. With the current implementation, it could be, but according to
-// https://www.gnu.org/software/libc/manual/html_node/Reading_002fClosing-Directory.html,
-// future versions of POSIX are likely to obsolete `readdir_r` and specify that it's unsafe to
-// call `readdir` simultaneously from multiple threads.
-//
-// `Dir` is safe to pass from one thread to another, as it's not reference-counted.
 unsafe impl Send for Dir {}
 
 impl AsRawFd for Dir {
@@ -76,16 +71,12 @@ impl Drop for Dir {
 pub struct Entry(pub(crate) EntryImpl);
 
 impl Entry {
-    /// Returns the bare file name of this directory entry without any other leading path component.
-    pub fn file_name(&self) -> &ffi::CStr {
-        unsafe { ffi::CStr::from_ptr(self.0.d_name.as_ptr()) }
+    /// Returns the file name of this directory entry.
+    pub fn file_name(&self) -> &CStr {
+        unsafe { CStr::from_ptr(self.0.d_name.as_ptr()) }
     }
 
-    /// Returns the type of this directory entry, if known.
-    ///
-    /// See platform `readdir(3)` or `dirent(5)` manpage for when the file type is known;
-    /// notably, some Linux filesystems don't implement this. The caller should use `stat` or
-    /// `fstat` if this returns `None`.
+    /// Returns the type of this directory entry.
     pub fn file_type(&self) -> FileType {
         unsafe { FileType::from_raw(self.0.d_type) }
     }
