@@ -41,5 +41,5 @@ pub mod wasi32;
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use sys::preopen_dir;
 
-pub type Error = error::Error;
-pub(crate) type Result<T> = std::result::Result<T, Error>;
+pub use error::Error;
+pub(crate) use error::Result;

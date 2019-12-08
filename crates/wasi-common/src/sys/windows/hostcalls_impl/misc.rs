@@ -81,12 +81,41 @@ fn stdin_nonempty() -> bool {
     std::io::stdin().bytes().peekable().peek().is_some()
 }
 
+fn make_read_event(event: &FdEventData, nbytes: Result<u64>) -> wasi::__wasi_event_t {
+    use crate::error::WasiErrno;
+    let error = nbytes.as_wasi_errno();
+    let nbytes = nbytes.unwrap_or_default();
+    wasi::__wasi_event_t {
+        userdata: event.userdata,
+        r#type: event.r#type,
+        error,
+        u: wasi::__wasi_event_u_t {
+            fd_readwrite: wasi::__wasi_event_fd_readwrite_t { nbytes, flags: 0 },
+        },
+    }
+}
+
+fn make_timeout_event(event: &FdEventData, timeout: &ClockEventData) -> wasi::__wasi_event_t {
+    wasi::__wasi_event_t {
+        userdata: timeout.userdata,
+        r#type: wasi::__WASI_EVENTTYPE_CLOCK,
+        error: wasi::__WASI_ERRNO_SUCCESS,
+        u: wasi::__wasi_event_u_t {
+            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                nbytes: 0,
+                flags: 0,
+            },
+        },
+    }
+}
+
 pub(crate) fn poll_oneoff(
     timeout: Option<ClockEventData>,
     fd_events: Vec<FdEventData>,
     events: &mut Vec<wasi::__wasi_event_t>,
 ) -> Result<()> {
     use crate::fdentry::Descriptor;
+    use std::fs::Metadata;
     if fd_events.is_empty() && timeout.is_none() {
         return Ok(());
     }
@@ -100,52 +129,51 @@ pub(crate) fn poll_oneoff(
     // Therefore, we only poll the stdin.
     let mut stdin_events = vec![];
     let mut immediate_events = vec![];
+    let mut stdin_ready = None;
 
     for event in fd_events {
         match event.descriptor {
             Descriptor::Stdin if event.r#type == wasi::__WASI_EVENTTYPE_FD_READ => {
-                stdin_events.push(event)
+                // Cache the non-emptiness for better performance.
+                let immediate = stdin_ready.get_or_insert_with(stdin_nonempty);
+                if *immediate {
+                    immediate_events.push(event)
+                } else {
+                    stdin_events.push(event)
+                }
             }
             _ => immediate_events.push(event),
         }
     }
 
-    // we have at least one immediate event, so we don't need to care about stdin
-    if immediate_events.len() > 0 {
-        for event in immediate_events {
+    // Process all the events that do not require waiting.
+    if !immediate_events.is_empty() {
+        for mut event in immediate_events {
             let size = match event.descriptor {
-                Descriptor::OsHandle(os_handle)
-                    if event.r#type == wasi::__WASI_EVENTTYPE_FD_READ =>
-                {
-                    os_handle
-                        .metadata()
-                        .expect("FIXME return a proper error")
-                        .len()
+                Descriptor::OsHandle(os_handle) => {
+                    if event.r#type == wasi::__WASI_EVENTTYPE_FD_READ {
+                        os_handle.metadata().map(|m| m.len()).map_err(Into::into)
+                    } else {
+                        // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
+                        // the implementation on Unix just returns 0 here, so it's probably fine
+                        // to do the same on Windows for now.
+                        // cf. https://github.com/WebAssembly/WASI/issues/148
+                        Ok(0)
+                    }
                 }
-                Descriptor::Stdin => panic!("Descriptor::Stdin should have been filtered out"),
+                // We return the only universally correct lower bound, see the comment later in the function.
+                Descriptor::Stdin => Ok(1),
                 // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
-                //
-                // Besides, the spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
-                // the implementation on Unix just returns 0 here, so it's probably fine to do the same on Windows for now.
-                // cf. https://github.com/WebAssembly/WASI/issues/148
-                _ => 0,
+                Descriptor::Stdout | Descriptor::Stderr => Ok(0),
             };
 
-            events.push(wasi::__wasi_event_t {
-                userdata: event.userdata,
-                r#type: event.r#type,
-                error: wasi::__WASI_ERRNO_SUCCESS,
-                u: wasi::__wasi_event_u_t {
-                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                        nbytes: size,
-                        flags: 0,
-                    },
-                },
-            })
+            let new_event = make_read_event(&event, size);
+            events.push(new_event)
         }
-    } else {
-        assert_ne!(stdin_events.len(), 0, "stdin_events should not be empty");
+    }
 
+    // There are some stdin poll requests and there's no data available immediately
+    if !stdin_events.is_empty() {
         // We are busy-polling the stdin with delay, unfortunately.
         //
         // We'd like to do the following:
@@ -172,58 +200,43 @@ pub(crate) fn poll_oneoff(
         let timeout_duration = timeout
             .map(|t| t.delay.try_into().map(Duration::from_nanos))
             .transpose()?;
-        let timeout = loop {
+
+        let timeout_occurred: Option<ClockEventData> = loop {
+            // Even though we assume that stdin is not ready, it's better to check it
+            // sooner than later, as we're going to wait anyway if it's the case.
+            if stdin_nonempty() {
+                break None;
+            }
             if let Some(timeout_duration) = timeout_duration {
                 if poll_start.elapsed() >= timeout_duration {
                     break timeout;
                 }
             }
-            if stdin_nonempty() {
-                break None;
-            }
             std::thread::sleep(poll_interval);
         };
 
-        // TODO try refactoring pushing to events
-        match timeout {
-            // timeout occurred
-            Some(timeout) => {
+        match timeout_occurred {
+            Some(timeout_info) => {
                 for event in stdin_events {
-                    events.push(wasi::__wasi_event_t {
-                        userdata: timeout.userdata,
-                        r#type: wasi::__WASI_EVENTTYPE_CLOCK,
-                        error: wasi::__WASI_ERRNO_SUCCESS,
-                        u: wasi::__wasi_event_u_t {
-                            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                                nbytes: 0,
-                                flags: 0,
-                            },
-                        },
-                    });
+                    let new_event = make_timeout_event(&event, &timeout_info);
+                    events.push(new_event);
                 }
             }
-            // stdin is ready for reading
             None => {
+                // stdin became ready for reading
                 for event in stdin_events {
                     assert_eq!(
                         event.r#type,
                         wasi::__WASI_EVENTTYPE_FD_READ,
                         "stdin was expected to be polled for reading"
                     );
-                    events.push(wasi::__wasi_event_t {
-                        userdata: event.userdata,
-                        r#type: event.r#type,
-                        error: wasi::__WASI_ERRNO_SUCCESS,
-                        // Another limitation is that `std::io::BufRead` doesn't allow us
-                        // to find out the number bytes available in the buffer,
-                        // so we return the only universally correct lower bound.
-                        u: wasi::__wasi_event_u_t {
-                            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                                nbytes: 1,
-                                flags: 0,
-                            },
-                        },
-                    });
+
+                    // Another limitation is that `std::io::BufRead` doesn't allow us
+                    // to find out the number bytes available in the buffer,
+                    // so we return the only universally correct lower bound,
+                    // which is 1 byte.
+                    let new_event = make_read_event(&event, Ok(1));
+                    events.push(new_event);
                 }
             }
         }

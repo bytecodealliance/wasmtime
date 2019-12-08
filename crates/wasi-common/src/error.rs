@@ -158,6 +158,7 @@ impl Error {
             Self::Winx(err) => crate::sys::host_impl::errno_from_win(*err),
         }
     }
+
     pub const ESUCCESS: Self = Error::Wasi(WasiError::ESUCCESS);
     pub const E2BIG: Self = Error::Wasi(WasiError::E2BIG);
     pub const EACCES: Self = Error::Wasi(WasiError::EACCES);
@@ -244,5 +245,20 @@ fn errno_from_ioerror(e: &std::io::Error) -> wasi::__wasi_errno_t {
             log::debug!("Inconvertible OS error: {}", e);
             wasi::__WASI_ERRNO_IO
         }
+    }
+}
+
+pub(crate) type Result<T> = std::result::Result<T, Error>;
+
+pub(crate) trait WasiErrno {
+    fn as_wasi_errno(&self) -> wasi::__wasi_errno_t;
+}
+
+impl<T> WasiErrno for Result<T> {
+    fn as_wasi_errno(&self) -> wasi::__wasi_errno_t {
+        self.as_ref()
+            .err()
+            .unwrap_or(&Error::ESUCCESS)
+            .as_wasi_errno()
     }
 }
