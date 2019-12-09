@@ -116,8 +116,26 @@ pub(crate) fn poll_oneoff(
 ) -> Result<()> {
     use crate::fdentry::Descriptor;
     use std::fs::Metadata;
-    if fd_events.is_empty() && timeout.is_none() {
-        return Ok(());
+    use std::thread;
+
+    let timeout_duration = timeout
+        .map(|t| t.delay.try_into().map(Duration::from_nanos))
+        .transpose()?;
+
+    // With no events to listen, poll_oneoff just becomes a sleep.
+    if fd_events.is_empty() {
+        match timeout_duration {
+            Some(t) => {
+                thread::sleep(t);
+                return Ok(());
+            }
+            None => {
+                // The thread is not guanteed to remain parked forever, so we need to loop
+                loop {
+                    thread::park();
+                }
+            }
+        }
     }
 
     // Currently WASI file support is only (a) regular files (b) directories (c) symlinks on Windows,
@@ -197,9 +215,6 @@ pub(crate) fn poll_oneoff(
         // a major issue.
         let poll_interval = Duration::from_millis(10);
         let poll_start = Instant::now();
-        let timeout_duration = timeout
-            .map(|t| t.delay.try_into().map(Duration::from_nanos))
-            .transpose()?;
 
         let timeout_occurred: Option<ClockEventData> = loop {
             // Even though we assume that stdin is not ready, it's better to check it
@@ -212,7 +227,7 @@ pub(crate) fn poll_oneoff(
                     break timeout;
                 }
             }
-            std::thread::sleep(poll_interval);
+            thread::sleep(poll_interval);
         };
 
         match timeout_occurred {
