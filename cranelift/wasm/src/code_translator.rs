@@ -1226,14 +1226,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8AnyTrue
         | Operator::I32x4AnyTrue
         | Operator::I64x2AnyTrue => {
-            let bool_result = builder.ins().vany_true(state.pop1());
+            let a = pop1_with_bitcast(state, type_of(op), builder);
+            let bool_result = builder.ins().vany_true(a);
             state.push1(builder.ins().bint(I32, bool_result))
         }
         Operator::I8x16AllTrue
         | Operator::I16x8AllTrue
         | Operator::I32x4AllTrue
         | Operator::I64x2AllTrue => {
-            let bool_result = builder.ins().vall_true(state.pop1());
+            let a = pop1_with_bitcast(state, type_of(op), builder);
+            let bool_result = builder.ins().vall_true(a);
             state.push1(builder.ins().bint(I32, bool_result))
         }
         Operator::I8x16Eq | Operator::I16x8Eq | Operator::I32x4Eq => {
