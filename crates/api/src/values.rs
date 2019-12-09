@@ -37,7 +37,7 @@ pub enum Val {
     FuncRef(HostRef<Func>),
 
     /// A 128-bit number
-    V128([u8; 16]),
+    V128(u128),
 }
 
 macro_rules! accessors {
@@ -110,7 +110,7 @@ impl Val {
         (F32(f32) f32 unwrap_f32 f32::from_bits(*e))
         (F64(f64) f64 unwrap_f64 f64::from_bits(*e))
         (FuncRef(&HostRef<Func>) funcref unwrap_funcref e)
-        (V128(&[u8; 16]) v128 unwrap_v128 e)
+        (V128(u128) v128 unwrap_v128 *e)
     }
 
     /// Attempt to access the underlying value of this `Val`, returning
@@ -188,7 +188,7 @@ impl From<RuntimeValue> for Val {
             RuntimeValue::I64(i) => Val::I64(i),
             RuntimeValue::F32(u) => Val::F32(u),
             RuntimeValue::F64(u) => Val::F64(u),
-            RuntimeValue::V128(u) => Val::V128(u),
+            RuntimeValue::V128(u) => Val::V128(u128::from_le_bytes(u)),
         }
     }
 }

@@ -157,7 +157,7 @@ impl ModuleData {
                     wasmtime::Val::I64(i) => RuntimeValue::I64(i),
                     wasmtime::Val::F32(i) => RuntimeValue::F32(i),
                     wasmtime::Val::F64(i) => RuntimeValue::F64(i),
-                    wasmtime::Val::V128(i) => RuntimeValue::V128(i),
+                    wasmtime::Val::V128(i) => RuntimeValue::V128(i.to_le_bytes()),
                     _ => panic!("unsupported value {:?}", v),
                 })
                 .collect::<Vec<RuntimeValue>>(),
