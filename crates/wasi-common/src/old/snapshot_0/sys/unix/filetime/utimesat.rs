@@ -1,5 +1,5 @@
 use super::FileTime;
-use crate::Result;
+use crate::old::snapshot_0::Result;
 use std::{fs, io};
 
 /// Combines `openat` with `utimes` to emulate `utimensat` on platforms where it is
