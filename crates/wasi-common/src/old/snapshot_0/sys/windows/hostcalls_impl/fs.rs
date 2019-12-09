@@ -4,9 +4,8 @@ use super::fs_helpers::*;
 use crate::old::snapshot_0::ctx::WasiCtx;
 use crate::old::snapshot_0::fdentry::FdEntry;
 use crate::old::snapshot_0::helpers::systemtime_to_timestamp;
-use crate::old::snapshot_0::hostcalls_impl::{
-    fd_filestat_set_times_impl, Dirent, FileType, PathGet,
-};
+use crate::old::snapshot_0::host::{Dirent, FileType};
+use crate::old::snapshot_0::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
 use crate::old::snapshot_0::sys::fdentry_impl::determine_type_rights;
 use crate::old::snapshot_0::sys::host_impl::{self, path_from_host};
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::PathGetExt;

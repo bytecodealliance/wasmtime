@@ -24,7 +24,7 @@ num = { version = "0.2.0", default-features = false }
 wig = { path = "wig" }
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.15"
+yanix = { path = "yanix" }
 
 [target.'cfg(windows)'.dependencies]
 winx = { path = "winx" }
