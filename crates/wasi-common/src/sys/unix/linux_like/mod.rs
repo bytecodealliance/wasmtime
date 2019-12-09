@@ -1,9 +1,8 @@
-pub(crate) mod filetime;
 pub(crate) mod hostcalls_impl;
 pub(crate) mod oshandle;
 
 pub(crate) mod host_impl {
-    use crate::old::snapshot_0::{wasi, Result};
+    use crate::{wasi, Result};
 
     pub(crate) const O_RSYNC: yanix::file::OFlag = yanix::file::OFlag::RSYNC;
 
@@ -15,3 +14,15 @@ pub(crate) mod host_impl {
         Ok(wasi::__wasi_device_t::from(ino))
     }
 }
+
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "emscripten")] {
+        mod emscripten;
+        use self::emscripten as imp;
+    } else if #[cfg(target_os = "linux")] {
+        mod linux;
+        use self::linux as imp;
+    }
+}
+
+pub(crate) use imp::filetime;

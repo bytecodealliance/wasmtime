@@ -15,4 +15,8 @@ pub(crate) mod host_impl {
     pub(crate) fn stino_from_nix(ino: libc::ino_t) -> Result<wasi::__wasi_inode_t> {
         wasi::__wasi_device_t::try_from(ino).map_err(Into::into)
     }
+
+    pub(crate) fn stnlink_from_nix(nlink: libc::nlink_t) -> Result<wasi::__wasi_linkcount_t> {
+        Ok(nlink.into())
+    }
 }

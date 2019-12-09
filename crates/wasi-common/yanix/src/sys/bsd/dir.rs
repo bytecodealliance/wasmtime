@@ -46,7 +46,14 @@ impl EntryExt for Entry {
         self.0.d_ino.into()
     }
 
-    fn seek_loc(&self) -> SeekLoc {
-        self.0.loc
+    fn seek_loc(&self) -> Result<SeekLoc> {
+        Ok(self.0.loc)
+    }
+}
+
+impl SeekLoc {
+    pub unsafe fn from_raw(loc: i64) -> Result<Self> {
+        let loc = loc.into();
+        Ok(Self(loc))
     }
 }

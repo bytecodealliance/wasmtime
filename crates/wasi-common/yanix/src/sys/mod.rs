@@ -1,12 +1,12 @@
-use crate::dir::SeekLoc;
+use crate::{dir::SeekLoc, Result};
 use cfg_if::cfg_if;
 
 cfg_if! {
     if #[cfg(any(target_os = "linux",
                  target_os = "android",
                  target_os = "emscripten"))] {
-        mod linux;
-        pub(crate) use self::linux::*;
+        mod linux_like;
+        pub(crate) use self::linux_like::*;
     }
     else if #[cfg(any(target_os = "macos",
                       target_os = "ios",
@@ -23,5 +23,5 @@ cfg_if! {
 
 pub trait EntryExt {
     fn ino(&self) -> u64;
-    fn seek_loc(&self) -> SeekLoc;
+    fn seek_loc(&self) -> Result<SeekLoc>;
 }
