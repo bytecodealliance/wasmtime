@@ -13,7 +13,6 @@ use filetime::{set_file_handle_times, FileTime};
 use log::trace;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::mem;
 use std::ops::DerefMut;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
