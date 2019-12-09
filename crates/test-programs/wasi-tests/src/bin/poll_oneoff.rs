@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, mem::MaybeUninit, process};
-use wasi::wasi_unstable;
+use wasi_old::wasi_unstable;
 use wasi_tests::{
     open_scratch_directory,
     utils::{cleanup_file, close_fd},

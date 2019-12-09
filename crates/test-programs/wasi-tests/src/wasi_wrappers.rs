@@ -6,7 +6,7 @@
 //! interfaces so that we can test whether they are stored to. In the future,
 //! WASI should switch to multi-value and eliminate out parameters altogether.
 
-use wasi::wasi_unstable;
+use wasi_old::wasi_unstable;
 
 pub unsafe fn wasi_path_create_directory(
     dir_fd: wasi_unstable::Fd,

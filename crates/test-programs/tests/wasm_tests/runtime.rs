@@ -1,6 +1,6 @@
 use anyhow::{bail, Context};
 use std::fs::File;
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_environ::settings::{self, Configurable};
 
@@ -18,7 +18,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     let engine = HostRef::new(Engine::new(&config));
     let store = HostRef::new(Store::new(&engine));
 
-    let mut module_registry = HashMap::new();
     let global_exports = store.borrow().global_exports().clone();
     let get_preopens = |workspace: Option<&Path>| -> anyhow::Result<Vec<_>> {
         if let Some(workspace) = workspace {
@@ -33,7 +32,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
 
     // Create our wasi context with pretty standard arguments/inheritance/etc.
     // Additionally register andy preopened directories if we have them.
-    let mut builder = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
+    let mut builder = wasi_common::WasiCtxBuilder::new()
         .arg(bin_name)
         .arg(".")
         .inherit_stdio();
@@ -47,19 +46,33 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     // stdin is closed which causes tests to fail.
     let (reader, _writer) = os_pipe::pipe()?;
     builder = builder.stdin(reader_to_file(reader));
+    let snapshot1 = Instance::from_handle(
+        &store,
+        wasmtime_wasi::instantiate_wasi_with_context(
+            global_exports.clone(),
+            builder.build().context("failed to build wasi context")?,
+        )
+        .context("failed to instantiate wasi")?,
+    );
 
-    // The current stable Rust toolchain uses the old `wasi_unstable` ABI,
-    // aka `snapshot_0`.
-    module_registry.insert(
-        "wasi_unstable".to_owned(),
-        Instance::from_handle(
-            &store,
-            wasmtime_wasi::old::snapshot_0::instantiate_wasi_with_context(
-                global_exports.clone(),
-                builder.build().context("failed to build wasi context")?,
-            )
-            .context("failed to instantiate wasi")?,
-        ),
+    // ... and then do the same as above but for the old snapshot of wasi, since
+    // a few tests still test that
+    let mut builder = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
+        .arg(bin_name)
+        .arg(".")
+        .inherit_stdio();
+    for (dir, file) in get_preopens(workspace)? {
+        builder = builder.preopened_dir(file, dir);
+    }
+    let (reader, _writer) = os_pipe::pipe()?;
+    builder = builder.stdin(reader_to_file(reader));
+    let snapshot0 = Instance::from_handle(
+        &store,
+        wasmtime_wasi::old::snapshot_0::instantiate_wasi_with_context(
+            global_exports.clone(),
+            builder.build().context("failed to build wasi context")?,
+        )
+        .context("failed to instantiate wasi")?,
     );
 
     let module = HostRef::new(Module::new(&store, &data).context("failed to create wasm module")?);
@@ -68,20 +81,22 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .imports()
         .iter()
         .map(|i| {
-            let module_name = i.module();
-            if let Some(instance) = module_registry.get(module_name) {
-                let field_name = i.name();
-                if let Some(export) = instance.find_export_by_name(field_name) {
-                    Ok(export.clone())
-                } else {
-                    bail!(
-                        "import {} was not found in module {}",
-                        field_name,
-                        module_name
-                    )
-                }
+            let instance = if i.module() == "wasi_unstable" {
+                &snapshot0
+            } else if i.module() == "wasi_snapshot_preview1" {
+                &snapshot1
             } else {
-                bail!("import module {} was not found", module_name)
+                bail!("import module {} was not found", i.module())
+            };
+            let field_name = i.name();
+            if let Some(export) = instance.find_export_by_name(field_name) {
+                Ok(export.clone())
+            } else {
+                bail!(
+                    "import {} was not found in module {}",
+                    field_name,
+                    i.module(),
+                )
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
