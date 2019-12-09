@@ -81,21 +81,21 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .imports()
         .iter()
         .map(|i| {
-            let instance = if i.module().as_str() == "wasi_unstable" {
+            let instance = if i.module() == "wasi_unstable" {
                 &snapshot0
-            } else if i.module().as_str() == "wasi_snapshot_preview1" {
+            } else if i.module() == "wasi_snapshot_preview1" {
                 &snapshot1
             } else {
-                bail!("import module {} was not found", i.module().as_str())
+                bail!("import module {} was not found", i.module())
             };
-            let field_name = i.name().as_str();
+            let field_name = i.name();
             if let Some(export) = instance.find_export_by_name(field_name) {
                 Ok(export.clone())
             } else {
                 bail!(
                     "import {} was not found in module {}",
                     field_name,
-                    i.module().as_str(),
+                    i.module(),
                 )
             }
         })
