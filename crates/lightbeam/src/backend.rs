@@ -3178,11 +3178,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn pop(&mut self) -> Result<ValueLocation, Error> {
         match self.block_state.stack.pop() {
             Some(v) => Ok(v),
-            None => {
-                Err(Error::Microwasm(
-                    "Stack is empty - pop impossible".to_string(),
-                ))
-            }
+            None => Err(Error::Microwasm(
+                "Stack is empty - pop impossible".to_string(),
+            )),
         }
     }
 
