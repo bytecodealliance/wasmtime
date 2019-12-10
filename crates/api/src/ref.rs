@@ -46,14 +46,19 @@ impl Drop for AnyAndHostInfo {
 #[derive(Clone)]
 pub struct OtherRef(Rc<RefCell<AnyAndHostInfo>>);
 
+/// Represents an opaque reference to any data within WebAssembly.
 #[derive(Clone)]
 pub enum AnyRef {
+    /// A reference to no data.
     Null,
+    /// A reference to data stored internally in `wasmtime`.
     Ref(InternalRef),
+    /// A reference to data located outside of `wasmtime`.
     Other(OtherRef),
 }
 
 impl AnyRef {
+    /// Creates a new instance of `AnyRef` from `Box<dyn Any>`.
     pub fn new(data: Box<dyn Any>) -> Self {
         let info = AnyAndHostInfo {
             any: data,
@@ -62,10 +67,14 @@ impl AnyRef {
         AnyRef::Other(OtherRef(Rc::new(RefCell::new(info))))
     }
 
+    /// Creates a `Null` reference.
     pub fn null() -> Self {
         AnyRef::Null
     }
 
+    /// Returns the data stored in the reference if available.
+    /// # Panics
+    /// Panics if the variant isn't `AnyRef::Other`.
     pub fn data(&self) -> cell::Ref<Box<dyn Any>> {
         match self {
             AnyRef::Other(OtherRef(r)) => cell::Ref::map(r.borrow(), |r| &r.any),
@@ -73,6 +82,8 @@ impl AnyRef {
         }
     }
 
+    /// Returns true if the two `AnyRef<T>`'s point to the same value (not just
+    /// values that compare as equal).
     pub fn ptr_eq(&self, other: &AnyRef) -> bool {
         match (self, other) {
             (AnyRef::Null, AnyRef::Null) => true,
@@ -84,6 +95,9 @@ impl AnyRef {
         }
     }
 
+    /// Returns a mutable reference to the host information if available.
+    /// # Panics
+    /// Panics if `AnyRef` is already borrowed or `AnyRef` is `Null`.
     pub fn host_info(&self) -> Option<cell::RefMut<Box<dyn HostInfo>>> {
         match self {
             AnyRef::Null => panic!("null"),
@@ -98,6 +112,9 @@ impl AnyRef {
         }
     }
 
+    /// Sets the host information for an `AnyRef`.
+    /// # Panics
+    /// Panics if `AnyRef` is already borrowed or `AnyRef` is `Null`.
     pub fn set_host_info(&self, info: Option<Box<dyn HostInfo>>) {
         match self {
             AnyRef::Null => panic!("null"),
@@ -133,9 +150,11 @@ impl<T> Drop for ContentBox<T> {
     }
 }
 
+/// Represents a piece of data located in the host environment.
 pub struct HostRef<T>(Rc<RefCell<ContentBox<T>>>);
 
 impl<T: 'static> HostRef<T> {
+    /// Creates a new `HostRef<T>` from `T`.
     pub fn new(item: T) -> HostRef<T> {
         let anyref_data: Weak<HostRef<T>> = Weak::new();
         let content = ContentBox {
@@ -146,18 +165,30 @@ impl<T: 'static> HostRef<T> {
         HostRef(Rc::new(RefCell::new(content)))
     }
 
+    /// Immutably borrows the wrapped data.
+    /// # Panics
+    /// Panics if the value is currently mutably borrowed.
     pub fn borrow(&self) -> cell::Ref<T> {
         cell::Ref::map(self.0.borrow(), |b| &b.content)
     }
 
+    /// Mutably borrows the wrapped data.
+    /// # Panics
+    /// Panics if the `HostRef<T>` is already borrowed.
     pub fn borrow_mut(&self) -> cell::RefMut<T> {
         cell::RefMut::map(self.0.borrow_mut(), |b| &mut b.content)
     }
 
+    /// Returns true if the two `HostRef<T>`'s point to the same value (not just
+    /// values that compare as equal).
     pub fn ptr_eq(&self, other: &HostRef<T>) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
 
+    /// Returns an opaque reference to the wrapped data in the form of
+    /// an `AnyRef`.
+    /// # Panics
+    /// Panics if `HostRef<T>` is already mutably borrowed.
     pub fn anyref(&self) -> AnyRef {
         let r = self.0.borrow_mut().anyref_data.upgrade();
         if let Some(r) = r {
