@@ -821,8 +821,8 @@ where
             Operator::Store { ty: I64, memarg } | Operator::Store { ty: F64, memarg } => {
                 ctx.store64(memarg.offset)?
             }
-            Operator::GetGlobal(idx) => ctx.get_global(idx)?,
-            Operator::SetGlobal(idx) => ctx.set_global(idx)?,
+            Operator::GlobalGet(idx) => ctx.get_global(idx)?,
+            Operator::GlobalSet(idx) => ctx.set_global(idx)?,
             Operator::Select => {
                 ctx.select()?;
             }
