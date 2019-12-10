@@ -258,7 +258,11 @@ pub extern "C" fn InstanceSignalHandler(
             return false;
         } else {
             unsafe {
-                let f = &current_instance[0].as_ref().signal_handler;
+                let f = &current_instance
+                    .last()
+                    .expect("current instance not none")
+                    .as_ref()
+                    .signal_handler;
                 f(signum, siginfo, context)
             }
         }
