@@ -15,7 +15,7 @@ fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
     MemoryType::new(Limits::new(mt.limits.initial, mt.limits.maximum))
 }
 
-fn into_global_type(gt: &wasmparser::GlobalType) -> GlobalType {
+fn into_global_type(gt: wasmparser::GlobalType) -> GlobalType {
     let mutability = if gt.mutable {
         Mutability::Var
     } else {
@@ -24,6 +24,8 @@ fn into_global_type(gt: &wasmparser::GlobalType) -> GlobalType {
     GlobalType::new(into_valtype(&gt.content_type), mutability)
 }
 
+// `into_valtype` is used for `map` which requires `&T`.
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn into_valtype(ty: &wasmparser::Type) -> ValType {
     use wasmparser::Type::*;
     match ty {
@@ -91,7 +93,7 @@ fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[Ex
                 let section = section.get_global_section_reader()?;
                 globals.reserve_exact(section.get_count() as usize);
                 for entry in section {
-                    globals.push(into_global_type(&entry?.ty));
+                    globals.push(into_global_type(entry?.ty));
                 }
             }
             SectionCode::Table => {
@@ -123,7 +125,7 @@ fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[Ex
                             ExternType::Memory(memory)
                         }
                         ImportSectionEntryType::Global(gt) => {
-                            let global = into_global_type(&gt);
+                            let global = into_global_type(gt);
                             globals.push(global.clone());
                             ExternType::Global(global)
                         }

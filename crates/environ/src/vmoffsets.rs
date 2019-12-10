@@ -17,10 +17,7 @@ fn cast_to_u32(sz: usize) -> u32 {
 }
 #[cfg(target_pointer_width = "64")]
 fn cast_to_u32(sz: usize) -> u32 {
-    match u32::try_from(sz) {
-        Ok(x) => x,
-        Err(_) => panic!("overflow in cast from usize to u32"),
-    }
+    u32::try_from(sz).expect("overflow in cast from usize to u32")
 }
 
 /// Align an offset used in this module to a specific byte-width by rounding up

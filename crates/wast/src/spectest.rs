@@ -86,11 +86,11 @@ pub fn instantiate_spectest(store: &HostRef<Store>) -> HashMap<&'static str, Ext
     ret.insert("global_i64", Extern::Global(HostRef::new(g)));
 
     let ty = GlobalType::new(ValType::F32, Mutability::Const);
-    let g = Global::new(store, ty, Val::F32(0x44268000));
+    let g = Global::new(store, ty, Val::F32(0x4426_8000));
     ret.insert("global_f32", Extern::Global(HostRef::new(g)));
 
     let ty = GlobalType::new(ValType::F64, Mutability::Const);
-    let g = Global::new(store, ty, Val::F64(0x4084d00000000000));
+    let g = Global::new(store, ty, Val::F64(0x4084_d000_0000_0000));
     ret.insert("global_f64", Extern::Global(HostRef::new(g)));
 
     let ty = TableType::new(ValType::FuncRef, Limits::new(10, Some(20)));

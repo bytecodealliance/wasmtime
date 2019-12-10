@@ -129,16 +129,14 @@ pub fn link_module(
 
                     // Sanity-check: Ensure that the imported memory has at least
                     // guard-page protections the importing module expects it to have.
-                    match (memory.style, &import_memory.style) {
-                        (
-                            MemoryStyle::Static { bound },
-                            MemoryStyle::Static {
-                                bound: import_bound,
-                            },
-                        ) => {
-                            assert_ge!(bound, *import_bound);
-                        }
-                        _ => (),
+                    if let (
+                        MemoryStyle::Static { bound },
+                        MemoryStyle::Static {
+                            bound: import_bound,
+                        },
+                    ) = (memory.style, &import_memory.style)
+                    {
+                        assert_ge!(bound, *import_bound);
                     }
                     assert_ge!(memory.offset_guard_size, import_memory.offset_guard_size);
 

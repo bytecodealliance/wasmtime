@@ -601,6 +601,7 @@ pub struct VMContext {}
 impl VMContext {
     /// Return a mutable reference to the associated `Instance`.
     ///
+    /// # Safety
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
     #[allow(clippy::cast_ptr_alignment)]
@@ -610,6 +611,7 @@ impl VMContext {
 
     /// Return a mutable reference to the host state associated with this `Instance`.
     ///
+    /// # Safety
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
     pub unsafe fn host_state(&mut self) -> &mut dyn Any {
@@ -617,6 +619,9 @@ impl VMContext {
     }
 
     /// Lookup an export in the global exports namespace.
+    /// # Safety
+    /// This is unsafe because it doesn't work on just any `VMContext`, it must
+    /// be a `VMContext` allocated as part of an `Instance`.
     pub unsafe fn lookup_global_export(&mut self, field: &str) -> Option<crate::export::Export> {
         self.instance().lookup_global_export(field)
     }

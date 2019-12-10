@@ -89,9 +89,9 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
 
     match func.call(&args, &mut returns) {
         Ok(()) => {
-            for i in 0..returns_len {
+            for (i, r#return) in returns.iter_mut().enumerate() {
                 // TODO check signature.returns[i].value_type ?
-                returns[i].write_value_to(values_vec.add(i));
+                r#return.write_value_to(values_vec.add(i));
             }
             0
         }
@@ -172,7 +172,7 @@ fn make_trampoline(
 
         let callee_args = vec![vmctx_ptr_val, call_id_val, values_vec_ptr_val];
 
-        let new_sig = builder.import_signature(stub_sig.clone());
+        let new_sig = builder.import_signature(stub_sig);
 
         let callee_value = builder
             .ins()

@@ -1,12 +1,9 @@
 //! Support for compiling with Cranelift.
 
-use crate::address_map::{
-    FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ValueLabelsRanges,
-};
-use crate::cache::{ModuleCacheData, ModuleCacheEntry};
+use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
+use crate::cache::{ModuleCacheData, ModuleCacheDataTupleType, ModuleCacheEntry};
 use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, Relocations,
-    TrapInformation, Traps,
+    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, TrapInformation,
 };
 use crate::func_environ::{
     get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
@@ -14,12 +11,9 @@ use crate::func_environ::{
 };
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
-use cranelift_codegen::binemit;
-use cranelift_codegen::ir;
-use cranelift_codegen::ir::ExternalName;
-use cranelift_codegen::isa;
+use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::Context;
+use cranelift_codegen::{binemit, isa, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -181,17 +175,7 @@ impl crate::compilation::Compiler for Cranelift {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
-    ) -> Result<
-        (
-            Compilation,
-            Relocations,
-            ModuleAddressMap,
-            ValueLabelsRanges,
-            PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
-            Traps,
-        ),
-        CompileError,
-    > {
+    ) -> Result<ModuleCacheDataTupleType, CompileError> {
         let cache_entry = ModuleCacheEntry::new(
             module,
             &function_body_inputs,
@@ -214,82 +198,75 @@ impl crate::compilation::Compiler for Cranelift {
                     .into_iter()
                     .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'data>)>>()
                     .par_iter()
-                    .map_init(
-                        || FuncTranslator::new(),
-                        |func_translator, (i, input)| {
-                            let func_index = module.func_index(*i);
-                            let mut context = Context::new();
-                            context.func.name = get_func_name(func_index);
-                            context.func.signature =
-                                module.signatures[module.functions[func_index]].clone();
-                            if generate_debug_info {
-                                context.func.collect_debug_info();
-                            }
+                    .map_init(FuncTranslator::new, |func_translator, (i, input)| {
+                        let func_index = module.func_index(*i);
+                        let mut context = Context::new();
+                        context.func.name = get_func_name(func_index);
+                        context.func.signature =
+                            module.signatures[module.functions[func_index]].clone();
+                        if generate_debug_info {
+                            context.func.collect_debug_info();
+                        }
 
-                            func_translator.translate(
-                                module_translation,
-                                input.data,
-                                input.module_offset,
-                                &mut context.func,
-                                &mut FuncEnvironment::new(isa.frontend_config(), module),
-                            )?;
+                        func_translator.translate(
+                            module_translation,
+                            input.data,
+                            input.module_offset,
+                            &mut context.func,
+                            &mut FuncEnvironment::new(isa.frontend_config(), module),
+                        )?;
 
-                            let mut code_buf: Vec<u8> = Vec::new();
-                            let mut unwind_info = Vec::new();
-                            let mut reloc_sink = RelocSink::new(func_index);
-                            let mut trap_sink = TrapSink::new();
-                            let mut stackmap_sink = binemit::NullStackmapSink {};
-                            context
-                                .compile_and_emit(
-                                    isa,
-                                    &mut code_buf,
-                                    &mut reloc_sink,
-                                    &mut trap_sink,
-                                    &mut stackmap_sink,
-                                )
-                                .map_err(|error| {
+                        let mut code_buf: Vec<u8> = Vec::new();
+                        let mut unwind_info = Vec::new();
+                        let mut reloc_sink = RelocSink::new(func_index);
+                        let mut trap_sink = TrapSink::new();
+                        let mut stackmap_sink = binemit::NullStackmapSink {};
+                        context
+                            .compile_and_emit(
+                                isa,
+                                &mut code_buf,
+                                &mut reloc_sink,
+                                &mut trap_sink,
+                                &mut stackmap_sink,
+                            )
+                            .map_err(|error| {
+                                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+                            })?;
+
+                        context.emit_unwind_info(isa, &mut unwind_info);
+
+                        let address_transform = if generate_debug_info {
+                            let body_len = code_buf.len();
+                            Some(get_function_address_map(&context, input, body_len, isa))
+                        } else {
+                            None
+                        };
+
+                        let ranges = if generate_debug_info {
+                            let ranges =
+                                context.build_value_labels_ranges(isa).map_err(|error| {
                                     CompileError::Codegen(pretty_error(
                                         &context.func,
                                         Some(isa),
                                         error,
                                     ))
                                 })?;
+                            Some(ranges)
+                        } else {
+                            None
+                        };
 
-                            context.emit_unwind_info(isa, &mut unwind_info);
-
-                            let address_transform = if generate_debug_info {
-                                let body_len = code_buf.len();
-                                Some(get_function_address_map(&context, input, body_len, isa))
-                            } else {
-                                None
-                            };
-
-                            let ranges = if generate_debug_info {
-                                let ranges =
-                                    context.build_value_labels_ranges(isa).map_err(|error| {
-                                        CompileError::Codegen(pretty_error(
-                                            &context.func,
-                                            Some(isa),
-                                            error,
-                                        ))
-                                    })?;
-                                Some(ranges)
-                            } else {
-                                None
-                            };
-
-                            Ok((
-                                code_buf,
-                                context.func.jt_offsets,
-                                reloc_sink.func_relocs,
-                                address_transform,
-                                ranges,
-                                context.func.stack_slots,
-                                trap_sink.traps,
-                                unwind_info,
-                            ))
-                        },
-                    )
+                        Ok((
+                            code_buf,
+                            context.func.jt_offsets,
+                            reloc_sink.func_relocs,
+                            address_transform,
+                            ranges,
+                            context.func.stack_slots,
+                            trap_sink.traps,
+                            unwind_info,
+                        ))
+                    })
                     .collect::<Result<Vec<_>, CompileError>>()?
                     .into_iter()
                     .for_each(
@@ -333,6 +310,6 @@ impl crate::compilation::Compiler for Cranelift {
             }
         };
 
-        Ok(data.to_tuple())
+        Ok(data.into_tuple())
     }
 }

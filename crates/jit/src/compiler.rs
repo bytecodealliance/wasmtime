@@ -175,14 +175,14 @@ impl Compiler {
                 };
                 let bytes = emit_debugsections_image(
                     self.isa.triple().clone(),
-                    &target_config,
+                    target_config,
                     &debug_data,
                     &module_vmctx_info,
                     &address_transform,
                     &value_ranges,
                     &funcs,
                 )
-                .map_err(|e| SetupError::DebugInfo(e))?;
+                .map_err(SetupError::DebugInfo)?;
                 Some(bytes)
             } else {
                 None

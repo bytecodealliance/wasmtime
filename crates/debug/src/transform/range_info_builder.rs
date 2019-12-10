@@ -67,10 +67,10 @@ impl RangeInfoBuilder {
             result.push((range.begin, range.end));
         }
 
-        Ok(if result.len() > 0 {
-            RangeInfoBuilder::Ranges(result)
-        } else {
+        Ok(if result.is_empty() {
             RangeInfoBuilder::Undefined
+        } else {
+            RangeInfoBuilder::Ranges(result)
         })
     }
 

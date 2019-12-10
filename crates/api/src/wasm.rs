@@ -547,7 +547,7 @@ impl Callable for wasm_func_callback_t {
         let mut out_results = vec![wasm_val_t::default(); results.len()];
         let func = self.expect("wasm_func_callback_t fn");
         let out = unsafe { func(params.as_ptr(), out_results.as_mut_ptr()) };
-        if out != ptr::null_mut() {
+        if !out.is_null() {
             let trap: Box<wasm_trap_t> = unsafe { Box::from_raw(out) };
             return Err((*trap).into());
         }
@@ -579,7 +579,7 @@ impl Callable for CallbackWithEnv {
         let mut out_results = vec![wasm_val_t::default(); results.len()];
         let func = self.callback.expect("wasm_func_callback_with_env_t fn");
         let out = unsafe { func(self.env, params.as_ptr(), out_results.as_mut_ptr()) };
-        if out != ptr::null_mut() {
+        if !out.is_null() {
             let trap: Box<wasm_trap_t> = unsafe { Box::from_raw(out) };
             return Err((*trap).into());
         }
@@ -827,7 +827,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
 #[no_mangle]
 pub unsafe extern "C" fn wasm_val_copy(out: *mut wasm_val_t, source: *const wasm_val_t) {
     *out = match into_valtype((*source).kind) {
-        ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 => (*source).clone(),
+        ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 => *source,
         _ => unimplemented!("wasm_val_copy arg"),
     };
 }

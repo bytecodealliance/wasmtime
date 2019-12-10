@@ -1,5 +1,6 @@
 //! Support for compiling with Lightbeam.
 
+use crate::cache::ModuleCacheDataTupleType;
 use crate::compilation::{Compilation, CompileError, Relocations, Traps};
 use crate::func_environ::FuncEnvironment;
 use crate::module::Module;
@@ -24,17 +25,7 @@ impl crate::compilation::Compiler for Lightbeam {
         isa: &dyn isa::TargetIsa,
         // TODO
         generate_debug_info: bool,
-    ) -> Result<
-        (
-            Compilation,
-            Relocations,
-            ModuleAddressMap,
-            ValueLabelsRanges,
-            PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
-            Traps,
-        ),
-        CompileError,
-    > {
+    ) -> Result<ModuleCacheDataTupleType, CompileError> {
         if generate_debug_info {
             return Err(CompileError::DebugInfoNotSupported);
         }

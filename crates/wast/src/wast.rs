@@ -301,12 +301,12 @@ impl WastContext {
                             for v in values.iter() {
                                 match v {
                                     Val::F32(x) => {
-                                        if !is_canonical_f32_nan(x) {
+                                        if !is_canonical_f32_nan(*x) {
                                             bail!("{}\nexpected canonical NaN", context(span))
                                         }
                                     }
                                     Val::F64(x) => {
-                                        if !is_canonical_f64_nan(x) {
+                                        if !is_canonical_f64_nan(*x) {
                                             bail!("{}\nexpected canonical NaN", context(span))
                                         }
                                     }
@@ -329,7 +329,7 @@ impl WastContext {
                                     other => bail!("expected v128, got {:?}", other),
                                 };
                                 for l in 0..4 {
-                                    if !is_canonical_f32_nan(&extract_lane_as_u32(val, l)?) {
+                                    if !is_canonical_f32_nan(extract_lane_as_u32(val, l)?) {
                                         bail!(
                                             "{}\nexpected f32x4 canonical NaN in lane {}",
                                             context(span),
@@ -354,7 +354,7 @@ impl WastContext {
                                     other => bail!("expected v128, got {:?}", other),
                                 };
                                 for l in 0..2 {
-                                    if !is_canonical_f64_nan(&extract_lane_as_u64(val, l)?) {
+                                    if !is_canonical_f64_nan(extract_lane_as_u64(val, l)?) {
                                         bail!(
                                             "{}\nexpected f64x2 canonical NaN in lane {}",
                                             context(span),
@@ -376,12 +376,12 @@ impl WastContext {
                             for v in values.iter() {
                                 match v {
                                     Val::F32(x) => {
-                                        if !is_arithmetic_f32_nan(x) {
+                                        if !is_arithmetic_f32_nan(*x) {
                                             bail!("{}\nexpected arithmetic NaN", context(span))
                                         }
                                     }
                                     Val::F64(x) => {
-                                        if !is_arithmetic_f64_nan(x) {
+                                        if !is_arithmetic_f64_nan(*x) {
                                             bail!("{}\nexpected arithmetic NaN", context(span))
                                         }
                                     }
@@ -404,7 +404,7 @@ impl WastContext {
                                     other => bail!("expected v128, got {:?}", other),
                                 };
                                 for l in 0..4 {
-                                    if !is_arithmetic_f32_nan(&extract_lane_as_u32(val, l)?) {
+                                    if !is_arithmetic_f32_nan(extract_lane_as_u32(val, l)?) {
                                         bail!(
                                             "{}\nexpected f32x4 arithmetic NaN in lane {}",
                                             context(span),
@@ -429,7 +429,7 @@ impl WastContext {
                                     other => bail!("expected v128, got {:?}", other),
                                 };
                                 for l in 0..2 {
-                                    if !is_arithmetic_f64_nan(&extract_lane_as_u64(val, l)?) {
+                                    if !is_arithmetic_f64_nan(extract_lane_as_u64(val, l)?) {
                                         bail!(
                                             "{}\nexpected f64x2 arithmetic NaN in lane {}",
                                             context(span),
@@ -538,20 +538,22 @@ fn extract_lane_as_u64(bytes: &u128, lane: usize) -> Result<u64> {
     Ok((*bytes >> (lane * 64)) as u64)
 }
 
-fn is_canonical_f32_nan(bits: &u32) -> bool {
-    return (bits & 0x7fffffff) == 0x7fc00000;
+fn is_canonical_f32_nan(bits: u32) -> bool {
+    (bits & 0x7fff_ffff) == 0x7fc0_0000
 }
 
-fn is_canonical_f64_nan(bits: &u64) -> bool {
-    return (bits & 0x7fffffffffffffff) == 0x7ff8000000000000;
+fn is_canonical_f64_nan(bits: u64) -> bool {
+    (bits & 0x7fff_ffff_ffff_ffff) == 0x7ff8_0000_0000_0000
 }
 
-fn is_arithmetic_f32_nan(bits: &u32) -> bool {
-    return (bits & 0x00400000) == 0x00400000;
+fn is_arithmetic_f32_nan(bits: u32) -> bool {
+    const AF32_NAN: u32 = 0x0040_0000;
+    (bits & AF32_NAN) == AF32_NAN
 }
 
-fn is_arithmetic_f64_nan(bits: &u64) -> bool {
-    return (bits & 0x0008000000000000) == 0x0008000000000000;
+fn is_arithmetic_f64_nan(bits: u64) -> bool {
+    const AF64_NAN: u64 = 0x0008_0000_0000_0000;
+    (bits & AF64_NAN) == AF64_NAN
 }
 
 fn values_equal(v1: &Val, v2: &Val) -> Result<bool> {

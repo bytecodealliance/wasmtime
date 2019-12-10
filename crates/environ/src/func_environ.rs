@@ -450,9 +450,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // allocated up front and never moved.
         let (offset_guard_size, heap_style, readonly_base) = match self.module.memory_plans[index] {
             MemoryPlan {
-                memory: _,
                 style: MemoryStyle::Dynamic,
                 offset_guard_size,
+                memory: _,
             } => {
                 let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
                     base: ptr,
@@ -469,9 +469,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 )
             }
             MemoryPlan {
-                memory: _,
                 style: MemoryStyle::Static { bound },
                 offset_guard_size,
+                memory: _,
             } => (
                 Uimm64::new(offset_guard_size),
                 ir::HeapStyle::Static {

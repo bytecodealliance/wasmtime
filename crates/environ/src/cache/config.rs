@@ -148,10 +148,10 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(
     )?;
 
     if config_file.exists() {
-        Err(format!(
+        return Err(format!(
             "Specified config file already exists! Path: {}",
             config_file.display()
-        ))?;
+        ));
     }
 
     let parent_dir = config_file

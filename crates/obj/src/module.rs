@@ -38,8 +38,8 @@ pub fn emit_module(
 ) -> Result<(), String> {
     declare_functions(obj, module, relocations)?;
 
-    for i in 0..data_initializers.len() {
-        declare_data_segment(obj, &data_initializers[i], i)?;
+    for (i, initializer) in data_initializers.iter().enumerate() {
+        declare_data_segment(obj, initializer, i)?;
     }
 
     for i in 0..module.table_plans.len() {
@@ -48,8 +48,8 @@ pub fn emit_module(
 
     emit_functions(obj, module, compilation, relocations)?;
 
-    for i in 0..data_initializers.len() {
-        emit_data_segment(obj, &data_initializers[i], i)?;
+    for (i, initializer) in data_initializers.iter().enumerate() {
+        emit_data_segment(obj, initializer, i)?;
     }
 
     for i in 0..module.table_plans.len() {

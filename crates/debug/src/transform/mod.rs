@@ -45,7 +45,7 @@ where
 }
 
 pub fn transform_dwarf(
-    target_config: &TargetFrontendConfig,
+    target_config: TargetFrontendConfig,
     di: &DebugInfoData,
     at: &ModuleAddressMap,
     vmctx_info: &ModuleVmctxInfo,

@@ -396,9 +396,12 @@ impl Instance {
         Some(self.lookup_by_declaration(&export))
     }
 
-    /// Lookup an export with the given name. This takes an immutable reference,
-    /// and the result is an `Export` that the type system doesn't prevent from
-    /// being used to mutate the instance, so this function is unsafe.
+    /// Lookup an export with the given name.
+    ///
+    /// # Safety
+    /// This takes an immutable reference, and the result is an `Export` that
+    /// the type system doesn't prevent from being used to mutate the instance,
+    /// so this function is unsafe.
     pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
         #[allow(clippy::cast_ref_to_mut)]
         let temporary_mut = &mut *(self as *const Self as *mut Self);
@@ -416,9 +419,12 @@ impl Instance {
         )
     }
 
-    /// Lookup an export with the given export declaration. This takes an immutable
-    /// reference, and the result is an `Export` that the type system doesn't prevent
-    /// from being used to mutate the instance, so this function is unsafe.
+    /// Lookup an export with the given export declaration.
+    ///
+    /// # Safety
+    /// This takes an immutable reference, and the result is an `Export` that
+    /// the type system doesn't prevent from being used to mutate the instance,
+    /// so this function is unsafe.
     pub unsafe fn lookup_immutable_by_declaration(
         &self,
         export: &wasmtime_environ::Export,
@@ -545,8 +551,9 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
     ///
-    /// TODO: This and `imported_memory_size` are currently unsafe because
-    /// they dereference the memory import's pointers.
+    /// # Safety
+    /// This and `imported_memory_size` are currently unsafe because they
+    /// dereference the memory import's pointers.
     pub(crate) unsafe fn imported_memory_grow(
         &mut self,
         memory_index: MemoryIndex,
@@ -569,6 +576,10 @@ impl Instance {
     }
 
     /// Returns the number of allocated wasm pages in an imported memory.
+    ///
+    /// # Safety
+    /// This and `imported_memory_grow` are currently unsafe because they
+    /// dereference the memory import's pointers.
     pub(crate) unsafe fn imported_memory_size(&mut self, memory_index: MemoryIndex) -> u32 {
         let import = self.imported_memory(memory_index);
         let foreign_instance = (&mut *import.vmctx).instance();
@@ -785,6 +796,10 @@ impl InstanceHandle {
 
     /// Create a new `InstanceHandle` pointing at the instance
     /// pointed to by the given `VMContext` pointer.
+    ///
+    /// # Safety
+    /// This is unsafe because it doesn't work on just any `VMContext`, it must
+    /// be a `VMContext` allocated as part of an `Instance`.
     pub unsafe fn from_vmctx(vmctx: *mut VMContext) -> Self {
         let instance = (&mut *vmctx).instance();
         instance.refcount += 1;
@@ -826,9 +841,12 @@ impl InstanceHandle {
         self.instance_mut().lookup(field)
     }
 
-    /// Lookup an export with the given name. This takes an immutable reference,
-    /// and the result is an `Export` that the type system doesn't prevent from
-    /// being used to mutate the instance, so this function is unsafe.
+    /// Lookup an export with the given name.
+    ///
+    /// # Safety
+    /// This takes an immutable reference, and the result is an `Export` that
+    /// the type system doesn't prevent from being used to mutate the instance,
+    /// so this function is unsafe.
     pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
         self.instance().lookup_immutable(field)
     }
@@ -838,9 +856,12 @@ impl InstanceHandle {
         self.instance_mut().lookup_by_declaration(export)
     }
 
-    /// Lookup an export with the given export declaration. This takes an immutable
-    /// reference, and the result is an `Export` that the type system doesn't prevent
-    /// from being used to mutate the instance, so this function is unsafe.
+    /// Lookup an export with the given export declaration.
+    ///
+    /// # Safety
+    /// This takes an immutable reference, and the result is an `Export` that
+    /// the type system doesn't prevent from being used to mutate the instance,
+    /// so this function is unsafe.
     pub unsafe fn lookup_immutable_by_declaration(
         &self,
         export: &wasmtime_environ::Export,

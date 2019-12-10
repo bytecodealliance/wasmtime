@@ -201,8 +201,8 @@ where
                                 }
                                 found_expr
                             };
-                            if found_single_expr.is_some() {
-                                write::AttributeValue::Exprloc(found_single_expr.unwrap())
+                            if let Some(expr) = found_single_expr {
+                                write::AttributeValue::Exprloc(expr)
                             } else if is_exprloc_to_loclist_allowed(attr.name()) {
                                 // Converting exprloc to loclist.
                                 let mut locs = Vec::new();

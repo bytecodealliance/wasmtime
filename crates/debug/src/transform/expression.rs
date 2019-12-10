@@ -323,7 +323,7 @@ where
             assert_eq!(ty, 0);
             let index = pc.read_sleb128()?;
             pc.read_u8()?; // consume 159
-            if code_chunk.len() > 0 {
+            if !code_chunk.is_empty() {
                 parts.push(CompiledExpressionPart::Code(code_chunk));
                 code_chunk = Vec::new();
             }
@@ -338,7 +338,7 @@ where
                     need_deref = false;
                 }
                 Operation::Deref { .. } => {
-                    if code_chunk.len() > 0 {
+                    if !code_chunk.is_empty() {
                         parts.push(CompiledExpressionPart::Code(code_chunk));
                         code_chunk = Vec::new();
                     }
@@ -353,14 +353,14 @@ where
         }
     }
 
-    if code_chunk.len() > 0 {
+    if !code_chunk.is_empty() {
         parts.push(CompiledExpressionPart::Code(code_chunk));
     }
 
     if base_len > 0 && base_len + 1 < parts.len() {
         // see if we can glue two code chunks
         if let [CompiledExpressionPart::Code(cc1), CompiledExpressionPart::Code(cc2)] =
-            &parts[base_len..base_len + 1]
+            &parts[base_len..=base_len]
         {
             let mut combined = cc1.clone();
             combined.extend_from_slice(cc2);
