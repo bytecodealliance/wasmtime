@@ -1,12 +1,12 @@
 #![allow(clippy::cast_ptr_alignment)]
 
-use cranelift_codegen::isa::TargetFrontendConfig;
-use cranelift_entity::EntityRef;
-use cranelift_wasm::GlobalInit;
 use more_asserts::assert_le;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ptr;
+use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::isa::TargetFrontendConfig;
+use wasmtime_environ::wasm::GlobalInit;
 use wasmtime_environ::{Module, TargetSharedSignatureIndex, VMOffsets};
 
 pub struct TableRelocation {

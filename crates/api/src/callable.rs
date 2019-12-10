@@ -1,4 +1,3 @@
-use crate::data_structures::ir;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trampoline::{generate_func_export, take_api_trap};
@@ -6,6 +5,7 @@ use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
 use std::rc::Rc;
+use wasmtime_environ::ir;
 use wasmtime_jit::InstanceHandle;
 use wasmtime_runtime::Export;
 

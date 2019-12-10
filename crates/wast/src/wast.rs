@@ -1,5 +1,6 @@
 use crate::spectest::instantiate_spectest;
 use anyhow::{bail, Context as _, Result};
+use std::convert::TryInto;
 use std::path::Path;
 use std::str;
 use wasmtime_jit::{
@@ -254,13 +255,75 @@ impl WastContext {
                                         bail!("{}\nunexpected vector in NaN test", context(span))
                                     }
                                     RuntimeValue::F32(x) => {
-                                        if (x & 0x7fffffff) != 0x7fc00000 {
+                                        if !is_canonical_f32_nan(x) {
                                             bail!("{}\nexpected canonical NaN", context(span))
                                         }
                                     }
                                     RuntimeValue::F64(x) => {
-                                        if (x & 0x7fffffffffffffff) != 0x7ff8000000000000 {
+                                        if !is_canonical_f64_nan(x) {
                                             bail!("{}\nexpected canonical NaN", context(span))
+                                        }
+                                    }
+                                };
+                            }
+                        }
+                        ActionOutcome::Trapped { message } => {
+                            bail!("{}\nunexpected trap: {}", context(span), message)
+                        }
+                    }
+                }
+                AssertReturnCanonicalNanF32x4 { span, invoke } => {
+                    match self.perform_invoke(invoke).with_context(|| context(span))? {
+                        ActionOutcome::Returned { values } => {
+                            for v in values.iter() {
+                                match v {
+                                    RuntimeValue::I32(_) | RuntimeValue::I64(_) => {
+                                        bail!("{}\nunexpected integer in NaN test", context(span))
+                                    }
+                                    RuntimeValue::F32(_) | RuntimeValue::F64(_) => bail!(
+                                        "{}\nunexpected scalar float in vector NaN test",
+                                        context(span)
+                                    ),
+                                    RuntimeValue::V128(x) => {
+                                        for l in 0..4 {
+                                            if !is_canonical_f32_nan(&extract_lane_as_u32(x, l)?) {
+                                                bail!(
+                                                    "{}\nexpected f32x4 canonical NaN in lane {}",
+                                                    context(span),
+                                                    l
+                                                )
+                                            }
+                                        }
+                                    }
+                                };
+                            }
+                        }
+                        ActionOutcome::Trapped { message } => {
+                            bail!("{}\nunexpected trap: {}", context(span), message)
+                        }
+                    }
+                }
+                AssertReturnCanonicalNanF64x2 { span, invoke } => {
+                    match self.perform_invoke(invoke).with_context(|| context(span))? {
+                        ActionOutcome::Returned { values } => {
+                            for v in values.iter() {
+                                match v {
+                                    RuntimeValue::I32(_) | RuntimeValue::I64(_) => {
+                                        bail!("{}\nunexpected integer in NaN test", context(span))
+                                    }
+                                    RuntimeValue::F32(_) | RuntimeValue::F64(_) => bail!(
+                                        "{}\nunexpected scalar float in vector NaN test",
+                                        context(span)
+                                    ),
+                                    RuntimeValue::V128(x) => {
+                                        for l in 0..2 {
+                                            if !is_canonical_f64_nan(&extract_lane_as_u64(x, l)?) {
+                                                bail!(
+                                                    "{}\nexpected f64x2 canonical NaN in lane {}",
+                                                    context(span),
+                                                    l
+                                                )
+                                            }
                                         }
                                     }
                                 };
@@ -283,13 +346,75 @@ impl WastContext {
                                         bail!("{}\nunexpected vector in NaN test", context(span))
                                     }
                                     RuntimeValue::F32(x) => {
-                                        if (x & 0x00400000) != 0x00400000 {
+                                        if !is_arithmetic_f32_nan(x) {
                                             bail!("{}\nexpected arithmetic NaN", context(span))
                                         }
                                     }
                                     RuntimeValue::F64(x) => {
-                                        if (x & 0x0008000000000000) != 0x0008000000000000 {
+                                        if !is_arithmetic_f64_nan(x) {
                                             bail!("{}\nexpected arithmetic NaN", context(span))
+                                        }
+                                    }
+                                };
+                            }
+                        }
+                        ActionOutcome::Trapped { message } => {
+                            bail!("{}\nunexpected trap: {}", context(span), message)
+                        }
+                    }
+                }
+                AssertReturnArithmeticNanF32x4 { span, invoke } => {
+                    match self.perform_invoke(invoke).with_context(|| context(span))? {
+                        ActionOutcome::Returned { values } => {
+                            for v in values.iter() {
+                                match v {
+                                    RuntimeValue::I32(_) | RuntimeValue::I64(_) => {
+                                        bail!("{}\nunexpected integer in NaN test", context(span))
+                                    }
+                                    RuntimeValue::F32(_) | RuntimeValue::F64(_) => bail!(
+                                        "{}\nunexpected scalar float in vector NaN test",
+                                        context(span)
+                                    ),
+                                    RuntimeValue::V128(x) => {
+                                        for l in 0..4 {
+                                            if !is_arithmetic_f32_nan(&extract_lane_as_u32(x, l)?) {
+                                                bail!(
+                                                    "{}\nexpected f32x4 arithmetic NaN in lane {}",
+                                                    context(span),
+                                                    l
+                                                )
+                                            }
+                                        }
+                                    }
+                                };
+                            }
+                        }
+                        ActionOutcome::Trapped { message } => {
+                            bail!("{}\nunexpected trap: {}", context(span), message)
+                        }
+                    }
+                }
+                AssertReturnArithmeticNanF64x2 { span, invoke } => {
+                    match self.perform_invoke(invoke).with_context(|| context(span))? {
+                        ActionOutcome::Returned { values } => {
+                            for v in values.iter() {
+                                match v {
+                                    RuntimeValue::I32(_) | RuntimeValue::I64(_) => {
+                                        bail!("{}\nunexpected integer in NaN test", context(span))
+                                    }
+                                    RuntimeValue::F32(_) | RuntimeValue::F64(_) => bail!(
+                                        "{}\nunexpected scalar float in vector NaN test",
+                                        context(span)
+                                    ),
+                                    RuntimeValue::V128(x) => {
+                                        for l in 0..2 {
+                                            if !is_arithmetic_f64_nan(&extract_lane_as_u64(x, l)?) {
+                                                bail!(
+                                                    "{}\nexpected f64x2 arithmetic NaN in lane {}",
+                                                    context(span),
+                                                    l
+                                                )
+                                            }
                                         }
                                     }
                                 };
@@ -383,4 +508,30 @@ impl WastContext {
             std::fs::read(path).with_context(|| format!("failed to read `{}`", path.display()))?;
         self.run_buffer(path.to_str().unwrap(), &bytes)
     }
+}
+
+fn extract_lane_as_u32(bytes: &[u8; 16], lane: usize) -> Result<u32> {
+    let i = lane * 4;
+    Ok(u32::from_le_bytes(bytes[i..i + 4].try_into()?))
+}
+
+fn extract_lane_as_u64(bytes: &[u8; 16], lane: usize) -> Result<u64> {
+    let i = lane * 8;
+    Ok(u64::from_le_bytes(bytes[i..i + 8].try_into()?))
+}
+
+fn is_canonical_f32_nan(bits: &u32) -> bool {
+    return (bits & 0x7fffffff) == 0x7fc00000;
+}
+
+fn is_canonical_f64_nan(bits: &u64) -> bool {
+    return (bits & 0x7fffffffffffffff) == 0x7ff8000000000000;
+}
+
+fn is_arithmetic_f32_nan(bits: &u32) -> bool {
+    return (bits & 0x00400000) == 0x00400000;
+}
+
+fn is_arithmetic_f64_nan(bits: &u64) -> bool {
+    return (bits & 0x0008000000000000) == 0x0008000000000000;
 }

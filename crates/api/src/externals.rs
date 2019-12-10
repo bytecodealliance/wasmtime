@@ -1,5 +1,4 @@
 use crate::callable::{Callable, NativeCallable, WasmtimeFn, WrappedCallable};
-use crate::data_structures::wasm;
 use crate::r#ref::{AnyRef, HostRef};
 use crate::runtime::Store;
 use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
@@ -9,6 +8,7 @@ use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
 use std::fmt;
 use std::rc::Rc;
 use std::slice;
+use wasmtime_environ::wasm;
 use wasmtime_runtime::InstanceHandle;
 
 // Externals
@@ -49,10 +49,10 @@ impl Extern {
 
     pub fn r#type(&self) -> ExternType {
         match self {
-            Extern::Func(ft) => ExternType::ExternFunc(ft.borrow().r#type().clone()),
-            Extern::Memory(ft) => ExternType::ExternMemory(ft.borrow().r#type().clone()),
-            Extern::Table(tt) => ExternType::ExternTable(tt.borrow().r#type().clone()),
-            Extern::Global(gt) => ExternType::ExternGlobal(gt.borrow().r#type().clone()),
+            Extern::Func(ft) => ExternType::Func(ft.borrow().r#type().clone()),
+            Extern::Memory(ft) => ExternType::Memory(ft.borrow().r#type().clone()),
+            Extern::Table(tt) => ExternType::Table(tt.borrow().r#type().clone()),
+            Extern::Global(gt) => ExternType::Global(gt.borrow().r#type().clone()),
         }
     }
 
@@ -148,7 +148,7 @@ impl Func {
     }
 
     pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, HostRef<Trap>> {
-        let mut results = vec![Val::default(); self.result_arity()];
+        let mut results = vec![Val::null(); self.result_arity()];
         self.callable.call(params, &mut results)?;
         Ok(results.into_boxed_slice())
     }
@@ -215,8 +215,8 @@ impl Global {
             match self.r#type().content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
-                ValType::F32 => Val::from_f32_bits(*definition.as_u32()),
-                ValType::F64 => Val::from_f64_bits(*definition.as_u64()),
+                ValType::F32 => Val::F32(*definition.as_u32()),
+                ValType::F64 => Val::F64(*definition.as_u64()),
                 _ => unimplemented!("Global::get for {:?}", self.r#type().content()),
             }
         }

@@ -31,7 +31,6 @@
 )]
 
 use anyhow::{bail, Context as _, Result};
-use cranelift_codegen::{settings, settings::Configurable};
 use docopt::Docopt;
 use serde::Deserialize;
 use std::path::{Component, Path};
@@ -40,6 +39,7 @@ use wasi_common::preopen_dir;
 use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
+use wasmtime_environ::{settings, settings::Configurable};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_jit::Features;
 use wasmtime_wasi::create_wasi_instance;
@@ -341,9 +341,9 @@ fn instantiate_module(
         .imports()
         .iter()
         .map(|i| {
-            let module_name = i.module().as_str();
+            let module_name = i.module();
             if let Some(instance) = module_registry.get(module_name) {
-                let field_name = i.name().as_str();
+                let field_name = i.name();
                 if let Some(export) = instance.borrow().find_export_by_name(field_name) {
                     Ok(export.clone())
                 } else {
@@ -370,12 +370,27 @@ fn handle_module(
     args: &Args,
     path: &Path,
 ) -> Result<()> {
-    let (instance, _module, data) = instantiate_module(store, module_registry, path)?;
+    let (instance, module, data) = instantiate_module(store, module_registry, path)?;
 
     // If a function to invoke was given, invoke it.
     if let Some(f) = &args.flag_invoke {
         let data = ModuleData::new(&data)?;
         invoke_export(instance, &data, f, args)?;
+    } else if module
+        .borrow()
+        .exports()
+        .iter()
+        .find(|export| export.name().is_empty())
+        .is_some()
+    {
+        // Launch the default command export.
+        let data = ModuleData::new(&data)?;
+        invoke_export(instance, &data, "", args)?;
+    } else {
+        // If the module doesn't have a default command export, launch the
+        // _start function if one is present, as a compatibility measure.
+        let data = ModuleData::new(&data)?;
+        invoke_export(instance, &data, "_start", args)?;
     }
 
     Ok(())

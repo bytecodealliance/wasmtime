@@ -3,12 +3,12 @@ use crate::{
     instantiate, ActionError, ActionOutcome, CompilationStrategy, CompiledModule, Compiler,
     InstanceHandle, Namespace, RuntimeValue, SetupError,
 };
-use cranelift_codegen::isa::TargetIsa;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use thiserror::Error;
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
+use wasmtime_environ::isa::TargetIsa;
 
 /// Indicates an unknown instance was specified.
 #[derive(Error, Debug)]

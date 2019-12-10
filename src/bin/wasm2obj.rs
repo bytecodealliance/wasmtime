@@ -29,10 +29,6 @@
     )
 )]
 
-use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{isa, settings};
-use cranelift_entity::EntityRef;
-use cranelift_wasm::DefinedMemoryIndex;
 use docopt::Docopt;
 use faerie::Artifact;
 use serde::Deserialize;
@@ -44,13 +40,17 @@ use std::{process, str};
 use target_lexicon::Triple;
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
+use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::settings;
+use wasmtime_environ::settings::Configurable;
+use wasmtime_environ::wasm::DefinedMemoryIndex;
 #[cfg(feature = "lightbeam")]
 use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{
     cache_create_new_config, cache_init, Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo,
     Tunables, VMOffsets,
 };
-use wasmtime_jit::CompilationStrategy;
+use wasmtime_jit::{native, CompilationStrategy};
 use wasmtime_obj::emit_module;
 
 const USAGE: &str = "
@@ -190,11 +190,9 @@ fn handle_module(
     let isa_builder = match *target {
         Some(ref target) => {
             let target = Triple::from_str(&target).map_err(|_| "could not parse --target")?;
-            isa::lookup(target).map_err(|err| format!("{:?}", err))?
+            native::lookup(target).map_err(|err| format!("{:?}", err))?
         }
-        None => cranelift_native::builder().unwrap_or_else(|_| {
-            panic!("host machine is not a supported target");
-        }),
+        None => native::builder(),
     };
     let mut flag_builder = settings::builder();
 

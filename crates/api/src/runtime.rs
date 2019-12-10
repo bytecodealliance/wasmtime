@@ -1,9 +1,9 @@
 use crate::context::Context;
-use crate::data_structures::{ir, settings};
 use crate::r#ref::HostRef;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use wasmtime_environ::{ir, settings};
 use wasmtime_jit::{CompilationStrategy, Features};
 
 // Runtime Environment

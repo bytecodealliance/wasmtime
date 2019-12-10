@@ -11,13 +11,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
 wasmtime-jit = { path = "../jit" }
 wasmtime-runtime = { path = "../runtime" }
 wasmtime-environ = { path = "../environ" }
-wast = "3.0.0"
+wast = "4.0.0"
 anyhow = "1.0.19"
 target-lexicon = "0.9.0"
 

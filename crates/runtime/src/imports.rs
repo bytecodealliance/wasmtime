@@ -1,8 +1,8 @@
 use crate::instance::InstanceHandle;
 use crate::vmcontext::{VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport};
-use cranelift_entity::{BoxedSlice, PrimaryMap};
-use cranelift_wasm::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
 use std::collections::HashSet;
+use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
+use wasmtime_environ::wasm::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
 
 /// Resolved import pointers.
 #[derive(Clone)]

@@ -7,8 +7,8 @@
 
 use super::{
     AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
-    HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Name, Store,
-    Table, TableType, Trap, Val, ValType,
+    HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Store, Table,
+    TableType, Trap, Val, ValType,
 };
 use std::rc::Rc;
 use std::{mem, ptr, slice};
@@ -56,7 +56,7 @@ macro_rules! declare_vec {
 
             #[allow(dead_code)]
             fn as_slice(&self) -> &[$elem_ty] {
-                unsafe { slice::from_raw_parts(self.data as *const $elem_ty, self.size) }
+                unsafe { slice::from_raw_parts(self.data, self.size) }
             }
         }
 
@@ -122,8 +122,8 @@ macro_rules! declare_vec {
             }
 
             #[allow(dead_code)]
-            fn as_slice(&self) -> &[$elem_ty] {
-                unsafe { slice::from_raw_parts(self.data as *const $elem_ty, self.size) }
+            fn as_slice(&self) -> &[*mut $elem_ty] {
+                unsafe { slice::from_raw_parts(self.data, self.size) }
             }
         }
 
@@ -714,11 +714,8 @@ pub unsafe extern "C" fn wasm_module_delete(module: *mut wasm_module_t) {
 }
 
 impl wasm_name_t {
-    fn from_name(name: &Name) -> wasm_name_t {
-        let s = name.to_string();
-        let mut buffer = Vec::new();
-        buffer.extend_from_slice(s.as_bytes());
-        buffer.into()
+    fn from_name(name: &str) -> wasm_name_t {
+        name.to_string().into_bytes().into()
     }
 }
 
@@ -977,7 +974,7 @@ pub unsafe extern "C" fn wasm_importtype_type(
     it: *const wasm_importtype_t,
 ) -> *const wasm_externtype_t {
     let ty = Box::new(wasm_externtype_t {
-        ty: (*it).ty.r#type().clone(),
+        ty: (*it).ty.ty().clone(),
         cache: wasm_externtype_t_type_cache::Empty,
     });
     Box::into_raw(ty)
@@ -1004,7 +1001,7 @@ pub unsafe extern "C" fn wasm_exporttype_type(
     if (*et).type_cache.is_none() {
         let et = (et as *mut wasm_exporttype_t).as_mut().unwrap();
         et.type_cache = Some(wasm_externtype_t {
-            ty: (*et).ty.r#type().clone(),
+            ty: (*et).ty.ty().clone(),
             cache: wasm_externtype_t_type_cache::Empty,
         });
     }
@@ -1018,10 +1015,10 @@ pub unsafe extern "C" fn wasm_exporttype_vec_delete(et: *mut wasm_exporttype_vec
 
 fn from_externtype(ty: &ExternType) -> wasm_externkind_t {
     match ty {
-        ExternType::ExternFunc(_) => 0,
-        ExternType::ExternGlobal(_) => 1,
-        ExternType::ExternTable(_) => 2,
-        ExternType::ExternMemory(_) => 3,
+        ExternType::Func(_) => 0,
+        ExternType::Global(_) => 1,
+        ExternType::Table(_) => 2,
+        ExternType::Memory(_) => 3,
     }
 }
 
@@ -1044,7 +1041,7 @@ pub unsafe extern "C" fn wasm_externtype_as_functype_const(
     et: *const wasm_externtype_t,
 ) -> *const wasm_functype_t {
     if let wasm_externtype_t_type_cache::Empty = (*et).cache {
-        let functype = (*et).ty.func().clone();
+        let functype = (*et).ty.unwrap_func().clone();
         let f = wasm_functype_t {
             functype,
             params_cache: None,
@@ -1064,7 +1061,7 @@ pub unsafe extern "C" fn wasm_externtype_as_globaltype_const(
     et: *const wasm_externtype_t,
 ) -> *const wasm_globaltype_t {
     if let wasm_externtype_t_type_cache::Empty = (*et).cache {
-        let globaltype = (*et).ty.global().clone();
+        let globaltype = (*et).ty.unwrap_global().clone();
         let g = wasm_globaltype_t {
             globaltype,
             content_cache: None,
@@ -1083,7 +1080,7 @@ pub unsafe extern "C" fn wasm_externtype_as_tabletype_const(
     et: *const wasm_externtype_t,
 ) -> *const wasm_tabletype_t {
     if let wasm_externtype_t_type_cache::Empty = (*et).cache {
-        let tabletype = (*et).ty.table().clone();
+        let tabletype = (*et).ty.unwrap_table().clone();
         let t = wasm_tabletype_t {
             tabletype,
             element_cache: None,
@@ -1103,7 +1100,7 @@ pub unsafe extern "C" fn wasm_externtype_as_memorytype_const(
     et: *const wasm_externtype_t,
 ) -> *const wasm_memorytype_t {
     if let wasm_externtype_t_type_cache::Empty = (*et).cache {
-        let memorytype = (*et).ty.memory().clone();
+        let memorytype = (*et).ty.unwrap_memory().clone();
         let m = wasm_memorytype_t {
             memorytype,
             limits_cache: None,
@@ -1210,7 +1207,7 @@ pub unsafe extern "C" fn wasm_memorytype_limits(
         let limits = (*mt).memorytype.limits();
         mt.limits_cache = Some(wasm_limits_t {
             min: limits.min(),
-            max: limits.max(),
+            max: limits.max().unwrap_or(u32::max_value()),
         });
     }
     (*mt).limits_cache.as_ref().unwrap()
@@ -1270,7 +1267,7 @@ pub unsafe extern "C" fn wasm_tabletype_limits(
         let limits = (*tt).tabletype.limits();
         tt.limits_cache = Some(wasm_limits_t {
             min: limits.min(),
-            max: limits.max(),
+            max: limits.max().unwrap_or(u32::max_value()),
         });
     }
     (*tt).limits_cache.as_ref().unwrap()
@@ -1469,7 +1466,12 @@ pub unsafe extern "C" fn wasm_memorytype_delete(mt: *mut wasm_memorytype_t) {
 pub unsafe extern "C" fn wasm_memorytype_new(
     limits: *const wasm_limits_t,
 ) -> *mut wasm_memorytype_t {
-    let limits = Limits::new((*limits).min, (*limits).max);
+    let max = if (*limits).max == u32::max_value() {
+        None
+    } else {
+        Some((*limits).max)
+    };
+    let limits = Limits::new((*limits).min, max);
     let mt = Box::new(wasm_memorytype_t {
         memorytype: MemoryType::new(limits),
         limits_cache: None,
@@ -1553,7 +1555,11 @@ unsafe fn into_funcref(val: Val) -> *mut wasm_ref_t {
     if let Val::AnyRef(AnyRef::Null) = val {
         return ptr::null_mut();
     }
-    let r = Box::new(wasm_ref_t { r: val.into() });
+    let anyref = match val.anyref() {
+        Some(anyref) => anyref,
+        None => return ptr::null_mut(),
+    };
+    let r = Box::new(wasm_ref_t { r: anyref });
     Box::into_raw(r)
 }
 
@@ -1615,7 +1621,12 @@ pub unsafe extern "C" fn wasm_tabletype_new(
     limits: *const wasm_limits_t,
 ) -> *mut wasm_tabletype_t {
     let ty = Box::from_raw(ty).ty;
-    let limits = Limits::new((*limits).min, (*limits).max);
+    let max = if (*limits).max == u32::max_value() {
+        None
+    } else {
+        Some((*limits).max)
+    };
+    let limits = Limits::new((*limits).min, max);
     let tt = Box::new(wasm_tabletype_t {
         tabletype: TableType::new(ty, limits),
         element_cache: None,

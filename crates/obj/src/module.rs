@@ -2,8 +2,8 @@ use crate::context::layout_vmcontext;
 use crate::data_segment::{declare_data_segment, emit_data_segment};
 use crate::function::{declare_functions, emit_functions};
 use crate::table::{declare_table, emit_table};
-use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl, Link};
+use wasmtime_environ::isa::TargetFrontendConfig;
 use wasmtime_environ::{Compilation, DataInitializer, Module, Relocations};
 
 fn emit_vmcontext_init(
