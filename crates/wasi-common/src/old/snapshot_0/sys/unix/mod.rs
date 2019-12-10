@@ -5,10 +5,12 @@ pub(crate) mod hostcalls_impl;
 mod filetime;
 
 cfg_if::cfg_if! {
-    if #[cfg(any(target_os = "linux",
-                 target_os = "emscripten"))] {
-        mod linux_like;
-        use self::linux_like as sys_impl;
+    if #[cfg(target_os = "linux")] {
+        mod linux;
+        use self::linux as sys_impl;
+    } else if #[cfg(target_os = "emscripten")] {
+        mod emscripten;
+        use self::emscripten as sys_impl;
     } else if #[cfg(any(target_os = "macos",
                         target_os = "netbsd",
                         target_os = "freebsd",

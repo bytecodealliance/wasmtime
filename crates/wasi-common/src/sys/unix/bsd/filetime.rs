@@ -42,7 +42,7 @@ pub(crate) fn utimensat(
     mtime: FileTime,
     symlink_nofollow: bool,
 ) -> Result<()> {
-    use crate::sys::unix::filetime::{to_timespec, utimesat};
+    use crate::sys::unix::filetime::to_timespec;
     use std::ffi::CString;
     use std::os::unix::prelude::*;
 
@@ -65,7 +65,7 @@ pub(crate) fn utimensat(
         }
     }
 
-    utimesat(dirfd, path, atime, mtime, symlink_nofollow)
+    super::utimesat::utimesat(dirfd, path, atime, mtime, symlink_nofollow)
 }
 
 /// Wraps `fetch` specifically targetting `utimensat` symbol. If the symbol exists

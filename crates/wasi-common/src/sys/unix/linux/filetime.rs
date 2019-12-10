@@ -1,6 +1,6 @@
 //! This internal module consists of helper types and functions for dealing
 //! with setting the file times specific to Linux.
-use crate::old::snapshot_0::{sys::unix::filetime::FileTime, Result};
+use crate::{sys::unix::filetime::FileTime, Result};
 use std::fs::File;
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
@@ -21,7 +21,7 @@ pub(crate) fn utimensat(
     mtime: FileTime,
     symlink_nofollow: bool,
 ) -> Result<()> {
-    use crate::old::snapshot_0::sys::unix::filetime::{to_timespec, utimesat};
+    use crate::sys::unix::filetime::to_timespec;
     use std::ffi::CString;
     use std::os::unix::prelude::*;
 
@@ -57,5 +57,5 @@ pub(crate) fn utimensat(
         }
     }
 
-    utimesat(dirfd, path, atime, mtime, symlink_nofollow)
+    super::utimesat::utimesat(dirfd, path, atime, mtime, symlink_nofollow)
 }

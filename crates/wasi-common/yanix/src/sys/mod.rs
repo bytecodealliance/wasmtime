@@ -3,17 +3,18 @@ use cfg_if::cfg_if;
 
 cfg_if! {
     if #[cfg(any(target_os = "linux",
-                 target_os = "android",
-                 target_os = "emscripten"))] {
-        mod linux_like;
-        pub(crate) use self::linux_like::*;
-    }
-    else if #[cfg(any(target_os = "macos",
-                      target_os = "ios",
-                      target_os = "freebsd",
-                      target_os = "netbsd",
-                      target_os = "openbsd",
-                      target_os = "dragonfly"))] {
+                 target_os = "android"))] {
+        mod linux;
+        pub(crate) use self::linux::*;
+    } else if #[cfg(target_os = "emscripten")] {
+        mod emscripten;
+        pub(crate) use self::emscripten::*;
+    } else if #[cfg(any(target_os = "macos",
+                        target_os = "ios",
+                        target_os = "freebsd",
+                        target_os = "netbsd",
+                        target_os = "openbsd",
+                        target_os = "dragonfly"))] {
         mod bsd;
         pub(crate) use self::bsd::*;
     } else {

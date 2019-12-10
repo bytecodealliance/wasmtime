@@ -1,4 +1,4 @@
-use super::FileTime;
+use crate::sys::unix::filetime::FileTime;
 use crate::Result;
 use std::{fs, io};
 

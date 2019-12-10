@@ -9,11 +9,10 @@
 use crate::old::snapshot_0::Result;
 use std::convert::TryInto;
 
+pub(crate) use super::sys_impl::filetime::*;
+
 cfg_if::cfg_if! {
     if #[cfg(not(target_os = "emscripten"))] {
-        mod utimesat;
-        pub(crate) use self::utimesat::*;
-
         fn filetime_to_timespec(ft: &filetime::FileTime) -> Result<libc::timespec> {
             Ok(
                 libc::timespec {
@@ -33,8 +32,6 @@ cfg_if::cfg_if! {
         }
     }
 }
-
-pub(crate) use crate::old::snapshot_0::sys::unix::sys_impl::filetime::*;
 
 /// A wrapper `enum` around `filetime::FileTime` struct, but unlike the original, this
 /// type allows the possibility of specifying `FileTime::Now` as a valid enumeration which,
