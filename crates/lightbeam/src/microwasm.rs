@@ -283,18 +283,14 @@ impl SignlessType {
             Type::I64 => Ok(I64),
             Type::F32 => Ok(F32),
             Type::F64 => Ok(F64),
-            Type::EmptyBlockType => {
-                return Err(BinaryReaderError {
-                    message: "SignlessType with EmptyBlockType",
-                    offset: -1isize as usize,
-                })
-            }
-            _ => {
-                return Err(BinaryReaderError {
-                    message: "SignlessType unimplemented",
-                    offset: -1isize as usize,
-                })
-            }
+            Type::EmptyBlockType => Err(BinaryReaderError {
+                message: "SignlessType with EmptyBlockType",
+                offset: -1isize as usize,
+            }),
+            _ => Err(BinaryReaderError {
+                message: "SignlessType unimplemented",
+                offset: -1isize as usize,
+            }),
         }
     }
 }
@@ -304,12 +300,10 @@ fn create_returns_from_wasm_type(
 ) -> Result<Vec<SignlessType>, BinaryReaderError> {
     match ty {
         wasmparser::TypeOrFuncType::Type(ty) => Ok(Vec::from_iter(Type::from_wasm(ty))),
-        wasmparser::TypeOrFuncType::FuncType(_) => {
-            return Err(BinaryReaderError {
-                message: "Unsupported func type",
-                offset: -1isize as usize,
-            })
-        }
+        wasmparser::TypeOrFuncType::FuncType(_) => Err(BinaryReaderError {
+            message: "Unsupported func type",
+            offset: -1isize as usize,
+        }),
     }
 }
 
