@@ -82,9 +82,10 @@ jobs:
       working-directory: ./fuzz
     # NB: the `-runs=0` means that libFuzzer won't generate new inputs, only run
     # the seeds from the corpus.
-    - run: cargo fuzz run compile -- -runs=0
-    - run: cargo fuzz run instantiate -- -runs=0
-    - run: cargo fuzz run instantiate_translated -- -runs=0
+    - run: cargo fuzz run compile                --release --debug-assertions -- -runs=0
+    - run: cargo fuzz run instantiate            --release --debug-assertions -- -runs=0
+    - run: cargo fuzz run instantiate_translated --release --debug-assertions -- -runs=0
+    - run: cargo fuzz run api_calls              --release --debug-assertions -- -runs=0
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
