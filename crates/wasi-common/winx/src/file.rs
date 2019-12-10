@@ -434,3 +434,20 @@ pub fn query_mode_information(handle: RawHandle) -> Result<FileModeInformation> 
 
     Ok(FileModeInformation::from_bits_truncate(info.Mode))
 }
+
+pub fn reopen_file(handle: RawHandle, access_mode: AccessMode, flags: Flags) -> Result<RawHandle> {
+    let new_handle = unsafe {
+        winbase::ReOpenFile(
+            handle,
+            access_mode.bits(),
+            winnt::FILE_SHARE_DELETE | winnt::FILE_SHARE_READ | winnt::FILE_SHARE_WRITE,
+            flags.bits(),
+        )
+    };
+
+    if new_handle == winapi::um::handleapi::INVALID_HANDLE_VALUE {
+        return Err(winerror::WinError::last());
+    }
+
+    Ok(new_handle)
+}

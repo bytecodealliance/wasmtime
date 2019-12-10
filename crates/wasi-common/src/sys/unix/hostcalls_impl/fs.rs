@@ -29,9 +29,14 @@ pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
         .map_err(Into::into)
 }
 
-pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
+pub(crate) fn fd_fdstat_set_flags(
+    fd: &File,
+    fdflags: wasi::__wasi_fdflags_t,
+) -> Result<Option<OsHandle>> {
     let nix_flags = host_impl::nix_from_fdflags(fdflags);
-    unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), nix_flags) }.map_err(Into::into)
+    unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), nix_flags) }
+        .map(|_| None)
+        .map_err(Into::into)
 }
 
 pub(crate) fn fd_advise(

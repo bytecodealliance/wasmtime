@@ -67,7 +67,7 @@ hostcalls! {
     ) -> wasi::__wasi_errno_t;
 
     pub unsafe fn fd_fdstat_set_flags(
-        wasi_ctx: &WasiCtx,
+        wasi_ctx: &mut WasiCtx,
         memory: &mut [u8],
         fd: wasi::__wasi_fd_t,
         fdflags: wasi::__wasi_fdflags_t,

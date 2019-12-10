@@ -298,19 +298,24 @@ pub(crate) unsafe fn fd_fdstat_get(
 }
 
 pub(crate) unsafe fn fd_fdstat_set_flags(
-    wasi_ctx: &WasiCtx,
+    wasi_ctx: &mut WasiCtx,
     _memory: &mut [u8],
     fd: wasi::__wasi_fd_t,
     fdflags: wasi::__wasi_fdflags_t,
 ) -> Result<()> {
     trace!("fd_fdstat_set_flags(fd={:?}, fdflags={:#x?})", fd, fdflags);
 
-    let fd = wasi_ctx
-        .get_fd_entry(fd)?
-        .as_descriptor(wasi::__WASI_RIGHTS_FD_FDSTAT_SET_FLAGS, 0)?
-        .as_os_handle();
+    let descriptor = wasi_ctx
+        .get_fd_entry_mut(fd)?
+        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_FDSTAT_SET_FLAGS, 0)?;
 
-    hostcalls_impl::fd_fdstat_set_flags(&fd, fdflags)
+    if let Some(new_handle) =
+        hostcalls_impl::fd_fdstat_set_flags(&descriptor.as_os_handle(), fdflags)?
+    {
+        *descriptor = Descriptor::OsHandle(new_handle);
+    }
+
+    Ok(())
 }
 
 pub(crate) unsafe fn fd_fdstat_set_rights(
