@@ -1200,8 +1200,12 @@ where
                 sig!((ty) -> (ty))
             }
 
-            WasmOperator::GlobalGet { global_index } => sig!(() -> (self.module.global_type(*global_index).to_microwasm_type())),
-            WasmOperator::GlobalSet { global_index } => sig!((self.module.global_type(*global_index).to_microwasm_type()) -> ()),
+            WasmOperator::GlobalGet { global_index } => {
+                sig!(() -> (self.module.global_type(*global_index).to_microwasm_type()))
+            }
+            WasmOperator::GlobalSet { global_index } => {
+                sig!((self.module.global_type(*global_index).to_microwasm_type()) -> ())
+            }
 
             WasmOperator::F32Load { .. } => sig!((I32) -> (F32)),
             WasmOperator::F64Load { .. } => sig!((I32) -> (F64)),
@@ -1290,8 +1294,12 @@ where
             | WasmOperator::F64Le
             | WasmOperator::F64Ge => sig!((F64, F64) -> (I32)),
 
-            WasmOperator::I32Clz | WasmOperator::I32Ctz | WasmOperator::I32Popcnt => sig!((I32) -> (I32)),
-            WasmOperator::I64Clz | WasmOperator::I64Ctz | WasmOperator::I64Popcnt => sig!((I64) -> (I64)),
+            WasmOperator::I32Clz | WasmOperator::I32Ctz | WasmOperator::I32Popcnt => {
+                sig!((I32) -> (I32))
+            }
+            WasmOperator::I64Clz | WasmOperator::I64Ctz | WasmOperator::I64Popcnt => {
+                sig!((I64) -> (I64))
+            }
 
             WasmOperator::I32Add
             | WasmOperator::I32Sub
