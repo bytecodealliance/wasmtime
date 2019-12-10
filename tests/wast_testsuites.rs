@@ -1,7 +1,7 @@
 use std::path::Path;
 use wasmtime::{Config, Engine, HostRef, Store};
-use wasmtime_environ::settings::Configurable;
 use wasmtime_environ::settings;
+use wasmtime_environ::settings::Configurable;
 use wasmtime_jit::{CompilationStrategy, Features};
 use wasmtime_wast::WastContext;
 

@@ -74,9 +74,9 @@ impl WastContext {
                     .spectest
                     .as_ref()
                     .ok_or_else(|| anyhow!("spectest module isn't instantiated"))?;
-                let export = spectest.get(import.name()).ok_or_else(|| {
-                    anyhow!("unknown import `spectest::{}`", import.name())
-                })?;
+                let export = spectest
+                    .get(import.name())
+                    .ok_or_else(|| anyhow!("unknown import `spectest::{}`", import.name()))?;
                 imports.push(export.clone());
                 continue;
             }
@@ -97,11 +97,14 @@ impl WastContext {
             // FIXME(#683) shouldn't have to reach into runtime crate
             Err(e) => {
                 use wasmtime_runtime::InstantiationError;
-                let err = e.chain().filter_map(|e| e.downcast_ref::<InstantiationError>()).next();
+                let err = e
+                    .chain()
+                    .filter_map(|e| e.downcast_ref::<InstantiationError>())
+                    .next();
                 if let Some(InstantiationError::StartTrap(msg)) = err {
                     return Ok(Outcome::Trap(HostRef::new(Trap::new(msg.clone()))));
                 }
-                return Err(e)
+                return Err(e);
             }
         };
         Ok(Outcome::Ok(HostRef::new(instance)))
