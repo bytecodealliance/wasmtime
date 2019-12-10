@@ -107,8 +107,12 @@ fn my_fuzzing_regression_test() {{
     }
 }
 
-fn scratch_dir() -> PathBuf {
+pub(crate) fn scratch_dir() -> PathBuf {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        // Pop "fuzzing".
+        .join("..")
+        // Pop "crates".
+        .join("..")
         .join("target")
         .join("scratch");
 
