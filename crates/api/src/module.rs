@@ -201,14 +201,15 @@ impl Module {
             _ => None,
         }
     }
-    pub fn validate(_store: &HostRef<Store>, binary: &[u8]) -> Result<()> {
+    pub fn validate(store: &HostRef<Store>, binary: &[u8]) -> Result<()> {
+        let features = store.borrow().engine().borrow().config.features.clone();
         let config = ValidatingParserConfig {
             operator_config: OperatorValidatorConfig {
-                enable_threads: false,
-                enable_reference_types: false,
-                enable_bulk_memory: false,
-                enable_simd: false,
-                enable_multi_value: true,
+                enable_threads: features.threads,
+                enable_reference_types: features.reference_types,
+                enable_bulk_memory: features.bulk_memory,
+                enable_simd: features.simd,
+                enable_multi_value: features.multi_value,
             },
         };
         validate(binary, Some(config)).map_err(Error::new)

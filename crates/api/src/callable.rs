@@ -181,6 +181,7 @@ impl WrappedCallable for WasmtimeFn {
                     ir::types::I64 => Val::I64(ptr::read(ptr as *const i64)),
                     ir::types::F32 => Val::F32(ptr::read(ptr as *const u32)),
                     ir::types::F64 => Val::F64(ptr::read(ptr as *const u64)),
+                    ir::types::I8X16 => Val::V128(ptr::read(ptr as *const [u8; 16])),
                     other => panic!("unsupported value type {:?}", other),
                 }
             }

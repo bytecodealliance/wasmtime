@@ -94,7 +94,7 @@ impl Default for Config {
 
 #[derive(Default)]
 pub struct Engine {
-    config: Config,
+    pub(crate) config: Config,
 }
 
 impl Engine {
