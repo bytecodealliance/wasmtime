@@ -148,8 +148,12 @@ pub struct ExecutableModule {
 }
 
 impl ExecutableModule {
-    /// Executes the function _without checking types_. This can cause undefined
-    /// memory to be accessed.
+    /// Executes the function identified by `func_idx`.
+    ///
+    /// # Safety
+    ///
+    /// Executes the function _without_ checking the argument types.
+    /// This can cause undefined memory to be accessed.
     pub unsafe fn execute_func_unchecked<Args: FunctionArgs<T>, T>(
         &self,
         func_idx: u32,

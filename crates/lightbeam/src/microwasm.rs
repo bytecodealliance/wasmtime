@@ -283,18 +283,14 @@ impl SignlessType {
             Type::I64 => Ok(I64),
             Type::F32 => Ok(F32),
             Type::F64 => Ok(F64),
-            Type::EmptyBlockType => {
-                return Err(BinaryReaderError {
-                    message: "SignlessType with EmptyBlockType",
-                    offset: -1isize as usize,
-                })
-            }
-            _ => {
-                return Err(BinaryReaderError {
-                    message: "SignlessType unimplemented",
-                    offset: -1isize as usize,
-                })
-            }
+            Type::EmptyBlockType => Err(BinaryReaderError {
+                message: "SignlessType with EmptyBlockType",
+                offset: -1isize as usize,
+            }),
+            _ => Err(BinaryReaderError {
+                message: "SignlessType unimplemented",
+                offset: -1isize as usize,
+            }),
         }
     }
 }
@@ -304,12 +300,10 @@ fn create_returns_from_wasm_type(
 ) -> Result<Vec<SignlessType>, BinaryReaderError> {
     match ty {
         wasmparser::TypeOrFuncType::Type(ty) => Ok(Vec::from_iter(Type::from_wasm(ty))),
-        wasmparser::TypeOrFuncType::FuncType(_) => {
-            return Err(BinaryReaderError {
-                message: "Unsupported func type",
-                offset: -1isize as usize,
-            })
-        }
+        wasmparser::TypeOrFuncType::FuncType(_) => Err(BinaryReaderError {
+            message: "Unsupported func type",
+            offset: -1isize as usize,
+        }),
     }
 }
 
@@ -1184,26 +1178,26 @@ where
             // `Select` pops 3 elements and pushes 1
             WasmOperator::Select => sig!((T, T, I32) -> (T)),
 
-            WasmOperator::GetLocal { local_index } => {
+            WasmOperator::LocalGet { local_index } => {
                 let ty = self.stack[*local_index as usize];
 
                 sig!(() -> (ty))
             }
-            WasmOperator::SetLocal { local_index } => {
+            WasmOperator::LocalSet { local_index } => {
                 let ty = self.stack[*local_index as usize];
 
                 sig!((ty) -> ())
             }
-            WasmOperator::TeeLocal { local_index } => {
+            WasmOperator::LocalTee { local_index } => {
                 let ty = self.stack[*local_index as usize];
 
                 sig!((ty) -> (ty))
             }
 
-            WasmOperator::GetGlobal { global_index } => {
+            WasmOperator::GlobalGet { global_index } => {
                 sig!(() -> (self.module.global_type(*global_index).to_microwasm_type()))
             }
-            WasmOperator::SetGlobal { global_index } => {
+            WasmOperator::GlobalSet { global_index } => {
                 sig!((self.module.global_type(*global_index).to_microwasm_type()) -> ())
             }
 
@@ -1366,16 +1360,16 @@ where
             | WasmOperator::F64Copysign => sig!((F64, F64) -> (F64)),
 
             WasmOperator::I32WrapI64 => sig!((I64) -> (I32)),
-            WasmOperator::I32TruncSF32 | WasmOperator::I32TruncUF32 => sig!((F32) -> (I32)),
-            WasmOperator::I32TruncSF64 | WasmOperator::I32TruncUF64 => sig!((F64) -> (I32)),
-            WasmOperator::I64ExtendSI32 | WasmOperator::I64ExtendUI32 => sig!((I32) -> (I64)),
-            WasmOperator::I64TruncSF32 | WasmOperator::I64TruncUF32 => sig!((F32) -> (I64)),
-            WasmOperator::I64TruncSF64 | WasmOperator::I64TruncUF64 => sig!((F64) -> (I64)),
-            WasmOperator::F32ConvertSI32 | WasmOperator::F32ConvertUI32 => sig!((I32) -> (F32)),
-            WasmOperator::F32ConvertSI64 | WasmOperator::F32ConvertUI64 => sig!((I64) -> (F32)),
+            WasmOperator::I32TruncF32S | WasmOperator::I32TruncF32U => sig!((F32) -> (I32)),
+            WasmOperator::I32TruncF64S | WasmOperator::I32TruncF64U => sig!((F64) -> (I32)),
+            WasmOperator::I64ExtendI32S | WasmOperator::I64ExtendI32U => sig!((I32) -> (I64)),
+            WasmOperator::I64TruncF32S | WasmOperator::I64TruncF32U => sig!((F32) -> (I64)),
+            WasmOperator::I64TruncF64S | WasmOperator::I64TruncF64U => sig!((F64) -> (I64)),
+            WasmOperator::F32ConvertI32S | WasmOperator::F32ConvertI32U => sig!((I32) -> (F32)),
+            WasmOperator::F32ConvertI64S | WasmOperator::F32ConvertI64U => sig!((I64) -> (F32)),
             WasmOperator::F32DemoteF64 => sig!((F64) -> (F32)),
-            WasmOperator::F64ConvertSI32 | WasmOperator::F64ConvertUI32 => sig!((I32) -> (F64)),
-            WasmOperator::F64ConvertSI64 | WasmOperator::F64ConvertUI64 => sig!((I64) -> (F64)),
+            WasmOperator::F64ConvertI32S | WasmOperator::F64ConvertI32U => sig!((I32) -> (F64)),
+            WasmOperator::F64ConvertI64S | WasmOperator::F64ConvertI64U => sig!((I64) -> (F64)),
             WasmOperator::F64PromoteF32 => sig!((F32) -> (F64)),
             WasmOperator::I32ReinterpretF32 => sig!((F32) -> (I32)),
             WasmOperator::I64ReinterpretF64 => sig!((F64) -> (I64)),
@@ -1893,7 +1887,7 @@ where
             WasmOperator::Drop => smallvec![Operator::Drop(0..=0)],
             WasmOperator::Select => smallvec![Operator::Select],
 
-            WasmOperator::GetLocal { local_index } => {
+            WasmOperator::LocalGet { local_index } => {
                 // `- 1` because we apply the stack difference _before_ this point
                 let depth = self.local_depth(local_index).checked_sub(1)?;
                 let depth = match depth.try_into() {
@@ -1907,7 +1901,7 @@ where
                 };
                 smallvec![Operator::Pick(depth)]
             }
-            WasmOperator::SetLocal { local_index } => {
+            WasmOperator::LocalSet { local_index } => {
                 // `+ 1` because we apply the stack difference _before_ this point
                 let depth = self.local_depth(local_index).checked_add(1)?;
                 let depth = match depth.try_into() {
@@ -1921,7 +1915,7 @@ where
                 };
                 smallvec![Operator::Swap(depth), Operator::Drop(0..=0)]
             }
-            WasmOperator::TeeLocal { local_index } => {
+            WasmOperator::LocalTee { local_index } => {
                 // `+ 1` because we `pick` before `swap`
                 let depth = self.local_depth(local_index).checked_add(1)?;
                 let depth = match depth.try_into() {
@@ -1939,10 +1933,10 @@ where
                     Operator::Drop(0..=0),
                 ]
             }
-            WasmOperator::GetGlobal { global_index } => {
+            WasmOperator::GlobalGet { global_index } => {
                 smallvec![Operator::GetGlobal(global_index)]
             }
-            WasmOperator::SetGlobal { global_index } => {
+            WasmOperator::GlobalSet { global_index } => {
                 smallvec![Operator::SetGlobal(global_index)]
             }
 
@@ -2165,73 +2159,73 @@ where
             WasmOperator::F64Max => smallvec![Operator::Max(Size::_64)],
             WasmOperator::F64Copysign => smallvec![Operator::Copysign(Size::_64)],
             WasmOperator::I32WrapI64 => smallvec![Operator::I32WrapFromI64],
-            WasmOperator::I32TruncSF32 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I32TruncF32S => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I32
             }],
-            WasmOperator::I32TruncUF32 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I32TruncF32U => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::U32
             }],
-            WasmOperator::I32TruncSF64 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I32TruncF64S => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::I32
             }],
-            WasmOperator::I32TruncUF64 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I32TruncF64U => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::U32
             }],
-            WasmOperator::I64ExtendSI32 => smallvec![Operator::Extend {
+            WasmOperator::I64ExtendI32S => smallvec![Operator::Extend {
                 sign: Signedness::Signed
             }],
-            WasmOperator::I64ExtendUI32 => smallvec![Operator::Extend {
+            WasmOperator::I64ExtendI32U => smallvec![Operator::Extend {
                 sign: Signedness::Unsigned
             }],
-            WasmOperator::I64TruncSF32 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64TruncF32S => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I64,
             }],
-            WasmOperator::I64TruncUF32 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64TruncF32U => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::U64,
             }],
-            WasmOperator::I64TruncSF64 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64TruncF64S => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::I64,
             }],
-            WasmOperator::I64TruncUF64 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64TruncF64U => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::U64,
             }],
-            WasmOperator::F32ConvertSI32 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F32ConvertI32S => smallvec![Operator::FConvertFromI {
                 input_ty: sint::I32,
                 output_ty: Size::_32
             }],
-            WasmOperator::F32ConvertUI32 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F32ConvertI32U => smallvec![Operator::FConvertFromI {
                 input_ty: sint::U32,
                 output_ty: Size::_32
             }],
-            WasmOperator::F32ConvertSI64 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F32ConvertI64S => smallvec![Operator::FConvertFromI {
                 input_ty: sint::I64,
                 output_ty: Size::_32
             }],
-            WasmOperator::F32ConvertUI64 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F32ConvertI64U => smallvec![Operator::FConvertFromI {
                 input_ty: sint::U64,
                 output_ty: Size::_32
             }],
-            WasmOperator::F64ConvertSI32 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F64ConvertI32S => smallvec![Operator::FConvertFromI {
                 input_ty: sint::I32,
                 output_ty: Size::_64
             }],
-            WasmOperator::F64ConvertUI32 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F64ConvertI32U => smallvec![Operator::FConvertFromI {
                 input_ty: sint::U32,
                 output_ty: Size::_64
             }],
-            WasmOperator::F64ConvertSI64 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F64ConvertI64S => smallvec![Operator::FConvertFromI {
                 input_ty: sint::I64,
                 output_ty: Size::_64
             }],
-            WasmOperator::F64ConvertUI64 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F64ConvertI64U => smallvec![Operator::FConvertFromI {
                 input_ty: sint::U64,
                 output_ty: Size::_64
             }],
@@ -2274,49 +2268,49 @@ where
 
             // 0xFC operators
             // Non-trapping Float-to-int Conversions
-            WasmOperator::I32TruncSSatF32 => {
+            WasmOperator::I32TruncSatF32S => {
                 return Some(Err(BinaryReaderError {
                     message: "I32TruncSSatF32 unimplemented",
                     offset: -1isize as usize,
                 }))
             }
-            WasmOperator::I32TruncUSatF32 => {
+            WasmOperator::I32TruncSatF32U => {
                 return Some(Err(BinaryReaderError {
                     message: "I32TruncUSatF32 unimplemented",
                     offset: -1isize as usize,
                 }))
             }
-            WasmOperator::I32TruncSSatF64 => {
+            WasmOperator::I32TruncSatF64S => {
                 return Some(Err(BinaryReaderError {
                     message: "I32TruncSSatF64 unimplemented",
                     offset: -1isize as usize,
                 }))
             }
-            WasmOperator::I32TruncUSatF64 => {
+            WasmOperator::I32TruncSatF64U => {
                 return Some(Err(BinaryReaderError {
                     message: "I32TruncUSatF64 unimplemented",
                     offset: -1isize as usize,
                 }))
             }
-            WasmOperator::I64TruncSSatF32 => {
+            WasmOperator::I64TruncSatF32S => {
                 return Some(Err(BinaryReaderError {
                     message: "I64TruncSSatF32 unimplemented",
                     offset: -1isize as usize,
                 }))
             }
-            WasmOperator::I64TruncUSatF32 => {
+            WasmOperator::I64TruncSatF32U => {
                 return Some(Err(BinaryReaderError {
                     message: "I64TruncUSatF32 unimplemented",
                     offset: -1isize as usize,
                 }))
             }
-            WasmOperator::I64TruncSSatF64 => {
+            WasmOperator::I64TruncSatF64S => {
                 return Some(Err(BinaryReaderError {
                     message: "I64TruncSSatF64 unimplemented",
                     offset: -1isize as usize,
                 }))
             }
-            WasmOperator::I64TruncUSatF64 => {
+            WasmOperator::I64TruncSatF64U => {
                 return Some(Err(BinaryReaderError {
                     message: "I64TruncUSatF64 unimplemented",
                     offset: -1isize as usize,

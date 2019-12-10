@@ -1,13 +1,15 @@
 use crate::backend::{
-    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, Registers, ValueLocation,
-    VirtualCallingConvention,
+    ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, VirtualCallingConvention,
 };
+#[cfg(debug_assertions)]
+use crate::backend::{Registers, ValueLocation};
 use crate::error::Error;
 use crate::microwasm::*;
 use crate::module::{ModuleContext, SigType, Signature};
 use cranelift_codegen::binemit;
 use dynasmrt::DynasmApi;
 use either::{Either, Left, Right};
+#[cfg(debug_assertions)]
 use more_asserts::assert_ge;
 use multi_mut::HashMapMultiMut;
 use std::{collections::HashMap, hash::Hash};
@@ -779,8 +781,8 @@ where
             Operator::Load { ty: F32, memarg } => ctx.f32_load(memarg.offset),
             Operator::Load { ty: I64, memarg } => ctx.i64_load(memarg.offset),
             Operator::Load { ty: F64, memarg } => ctx.f64_load(memarg.offset),
-            Operator::Store8 { ty: _, memarg } => ctx.store8(memarg.offset),
-            Operator::Store16 { ty: _, memarg } => ctx.store16(memarg.offset),
+            Operator::Store8 { memarg, .. } => ctx.store8(memarg.offset),
+            Operator::Store16 { memarg, .. } => ctx.store16(memarg.offset),
             Operator::Store32 { memarg }
             | Operator::Store { ty: I32, memarg }
             | Operator::Store { ty: F32, memarg } => ctx.store32(memarg.offset),
@@ -792,10 +794,10 @@ where
             Operator::Select => {
                 ctx.select();
             }
-            Operator::MemorySize { reserved: _ } => {
+            Operator::MemorySize { .. } => {
                 ctx.memory_size();
             }
-            Operator::MemoryGrow { reserved: _ } => {
+            Operator::MemoryGrow { .. } => {
                 ctx.memory_grow();
             }
             Operator::Call { function_index } => {
