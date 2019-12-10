@@ -21,8 +21,5 @@ wasmtime-environ = { path = '../environ' }
 wasmtime-runtime = { path = '../runtime' }
 wasmtime-wasi = { path = '../wasi' }
 
-[dev-dependencies]
-libc = "0.2"
-
 [badges]
 maintenance = { status = "actively-developed" }
