@@ -130,6 +130,7 @@ pub(crate) fn poll_oneoff(
                 return Ok(());
             }
             None => {
+                // `poll` invoked with nfds = 0, timeout = -1 appears to be an infinite sleep
                 // The thread is not guanteed to remain parked forever, so we need to loop
                 loop {
                     thread::park();
