@@ -42,11 +42,10 @@ fn main() -> Result<()> {
     let store = HostRef::new(Store::new(&engine));
 
     // Load a module.
-    let module = HostRef::new(Module::new(&store, &wasm)?);
+    let module = Module::new(&store, &wasm)?;
 
     // Find index of the `gcd` export.
     let gcd_index = module
-        .borrow()
         .exports()
         .iter()
         .enumerate()

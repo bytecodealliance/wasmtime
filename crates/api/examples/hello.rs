@@ -35,7 +35,7 @@ fn main() -> Result<()> {
 
     // Compiler the `*.wasm` binary into an in-memory instance of a `Module`.
     println!("Compiling module...");
-    let module = HostRef::new(Module::new(&store, &binary).context("> Error compiling module!")?);
+    let module = Module::new(&store, &binary).context("> Error compiling module!")?;
 
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.

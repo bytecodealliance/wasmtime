@@ -55,7 +55,7 @@ pub fn instantiate_in_context(
 pub struct Instance {
     instance_handle: InstanceHandle,
 
-    module: HostRef<Module>,
+    module: Module,
 
     // We need to keep CodeMemory alive.
     contexts: HashSet<Context>,
@@ -66,29 +66,27 @@ pub struct Instance {
 impl Instance {
     pub fn new(
         store: &HostRef<Store>,
-        module: &HostRef<Module>,
+        module: &Module,
         externs: &[Extern],
     ) -> Result<Instance> {
         let context = store.borrow_mut().context().clone();
         let exports = store.borrow_mut().global_exports().clone();
         let imports = module
-            .borrow()
             .imports()
             .iter()
             .zip(externs.iter())
             .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
             .collect::<Vec<_>>();
         let (mut instance_handle, contexts) = instantiate_in_context(
-            module.borrow().binary().expect("binary"),
+            &module.binary().expect("binary"),
             imports,
             context,
             exports,
         )?;
 
         let exports = {
-            let module = module.borrow();
             let mut exports = Vec::with_capacity(module.exports().len());
-            for export in module.exports() {
+            for export in &*module.exports() {
                 let name = export.name().to_string();
                 let export = instance_handle.lookup(&name).expect("export");
                 exports.push(Extern::from_wasmtime_export(
@@ -111,14 +109,13 @@ impl Instance {
         &self.exports
     }
 
-    pub fn module(&self) -> &HostRef<Module> {
+    pub fn module(&self) -> &Module {
         &self.module
     }
 
     pub fn find_export_by_name(&self, name: &str) -> Option<&Extern> {
         let (i, _) = self
             .module
-            .borrow()
             .exports()
             .iter()
             .enumerate()
@@ -149,10 +146,10 @@ impl Instance {
             ));
         }
 
-        let module = HostRef::new(Module::from_exports(
+        let module = Module::from_exports(
             store,
             exports_types.into_boxed_slice(),
-        ));
+        );
 
         Instance {
             instance_handle,

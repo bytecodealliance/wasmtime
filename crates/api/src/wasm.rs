@@ -327,7 +327,7 @@ pub struct wasm_foreign_t {
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_module_t {
-    module: HostRef<Module>,
+    module: Module,
     imports: Vec<wasm_importtype_t>,
     exports: Vec<wasm_exporttype_t>,
 }
@@ -748,7 +748,7 @@ pub unsafe extern "C" fn wasm_module_new(
         })
         .collect::<Vec<_>>();
     let module = Box::new(wasm_module_t {
-        module: HostRef::new(module),
+        module,
         imports,
         exports,
     });

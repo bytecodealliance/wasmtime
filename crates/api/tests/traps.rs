@@ -24,9 +24,7 @@ fn test_trap_return() -> Result<(), String> {
     )
     .map_err(|e| format!("failed to parse WebAssembly text source: {}", e))?;
 
-    let module = HostRef::new(
-        Module::new(&store, &binary).map_err(|e| format!("failed to compile module: {}", e))?,
-    );
+    let module = Module::new(&store, &binary).map_err(|e| format!("failed to compile module: {}", e))?;
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
     let hello_func = HostRef::new(Func::new(&store, hello_type, Rc::new(HelloCallback)));
 
