@@ -188,10 +188,9 @@ pub(crate) fn poll_oneoff(
             let new_event = make_read_event(&event, size);
             events.push(new_event)
         }
-    }
+    } else if !stdin_events.is_empty() {
+        // There are some stdin poll requests and there's no data available immediately
 
-    // There are some stdin poll requests and there's no data available immediately
-    if !stdin_events.is_empty() {
         // We are busy-polling the stdin with delay, unfortunately.
         //
         // We'd like to do the following:
@@ -213,6 +212,15 @@ pub(crate) fn poll_oneoff(
         //
         // However, polling stdin is a relatively infrequent use case, so this hopefully won't be
         // a major issue.
+        let timeout_duration = timeout
+            .map(|t| t.delay.try_into().map(Duration::from_nanos))
+            .transpose()?;
+
+        // avoid issuing more syscalls if we're requested to return immediately
+        if timeout_duration == Some(Duration::from_nanos(0)) {
+            return Ok(());
+        }
+
         let poll_interval = Duration::from_millis(10);
         let poll_start = Instant::now();
 
