@@ -81,7 +81,7 @@ fn stdin_nonempty() -> bool {
     std::io::stdin().bytes().peekable().peek().is_some()
 }
 
-fn make_read_event(event: &FdEventData, nbytes: Result<u64>) -> wasi::__wasi_event_t {
+fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> wasi::__wasi_event_t {
     use crate::error::WasiErrno;
     let error = nbytes.as_wasi_errno();
     let nbytes = nbytes.unwrap_or_default();
@@ -186,7 +186,7 @@ pub(crate) fn poll_oneoff(
                 Descriptor::Stdout | Descriptor::Stderr => Ok(0),
             };
 
-            let new_event = make_read_event(&event, size);
+            let new_event = make_rw_event(&event, size);
             events.push(new_event)
         }
     } else if !stdin_events.is_empty() {
@@ -259,7 +259,7 @@ pub(crate) fn poll_oneoff(
                     // to find out the number bytes available in the buffer,
                     // so we return the only universally correct lower bound,
                     // which is 1 byte.
-                    let new_event = make_read_event(&event, Ok(1));
+                    let new_event = make_rw_event(&event, Ok(1));
                     events.push(new_event);
                 }
             }
