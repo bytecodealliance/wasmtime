@@ -63,7 +63,7 @@ impl Drop for TrampolineState {
     }
 }
 
-unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *mut i64) -> u32 {
+unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *mut i128) -> u32 {
     let mut instance = InstanceHandle::from_vmctx(vmctx);
 
     let (args, returns_len) = {
@@ -130,7 +130,10 @@ fn make_trampoline(
     // Add error/trap return.
     stub_sig.returns.push(ir::AbiParam::new(types::I32));
 
-    let values_vec_len = 8 * cmp::max(signature.params.len() - 1, signature.returns.len()) as u32;
+    let value_size = 16;
+    let values_vec_len = ((value_size as usize)
+        * cmp::max(signature.params.len() - 1, signature.returns.len()))
+        as u32;
 
     let mut context = Context::new();
     context.func = Function::with_name_signature(ExternalName::user(0, 0), signature.clone());
@@ -139,7 +142,6 @@ fn make_trampoline(
         StackSlotKind::ExplicitSlot,
         values_vec_len,
     ));
-    let value_size = 8;
 
     {
         let mut builder = FunctionBuilder::new(&mut context.func, fn_builder_ctx);
