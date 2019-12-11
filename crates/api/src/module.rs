@@ -230,7 +230,6 @@ pub(crate) enum ModuleCodeSource {
     Unknown,
 }
 
-#[derive(Clone)]
 struct ModuleInner {
     store: HostRef<Store>,
     source: ModuleCodeSource,
