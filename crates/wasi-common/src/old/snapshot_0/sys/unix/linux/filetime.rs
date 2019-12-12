@@ -36,7 +36,7 @@ pub(crate) fn utimensat(
     static INVALID: AtomicBool = AtomicBool::new(false);
     if !INVALID.load(Relaxed) {
         let p = CString::new(path.as_bytes())?;
-        let times = [to_timespec(&atime), to_timespec(&mtime)];
+        let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
         let rc = unsafe {
             libc::syscall(
                 libc::SYS_utimensat,
