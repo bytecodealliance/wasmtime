@@ -3,9 +3,9 @@ use crate::ctx::WasiCtx;
 use crate::{hostcalls_impl, wasi, wasi32};
 
 hostcalls! {
-    pub unsafe fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasi::__wasi_fd_t,) -> wasi::__wasi_errno_t;
+    pub unsafe fn fd_close(wasi_ctx: &mut WasiCtx, memory: &mut [u8], fd: wasi::__wasi_fd_t,) -> wasi::__wasi_errno_t;
 
-    pub unsafe fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasi::__wasi_fd_t,) -> wasi::__wasi_errno_t;
+    pub unsafe fn fd_datasync(wasi_ctx: &WasiCtx, memory: &mut [u8], fd: wasi::__wasi_fd_t,) -> wasi::__wasi_errno_t;
 
     pub unsafe fn fd_pread(
         wasi_ctx: &WasiCtx,
@@ -38,6 +38,7 @@ hostcalls! {
 
     pub unsafe fn fd_renumber(
         wasi_ctx: &mut WasiCtx,
+        memory: &mut [u8],
         from: wasi::__wasi_fd_t,
         to: wasi::__wasi_fd_t,
     ) -> wasi::__wasi_errno_t;
@@ -67,18 +68,20 @@ hostcalls! {
 
     pub unsafe fn fd_fdstat_set_flags(
         wasi_ctx: &WasiCtx,
+        memory: &mut [u8],
         fd: wasi::__wasi_fd_t,
         fdflags: wasi::__wasi_fdflags_t,
     ) -> wasi::__wasi_errno_t;
 
     pub unsafe fn fd_fdstat_set_rights(
         wasi_ctx: &mut WasiCtx,
+        memory: &mut [u8],
         fd: wasi::__wasi_fd_t,
         fs_rights_base: wasi::__wasi_rights_t,
         fs_rights_inheriting: wasi::__wasi_rights_t,
     ) -> wasi::__wasi_errno_t;
 
-    pub unsafe fn fd_sync(wasi_ctx: &WasiCtx, fd: wasi::__wasi_fd_t,) -> wasi::__wasi_errno_t;
+    pub unsafe fn fd_sync(wasi_ctx: &WasiCtx, memory: &mut [u8], fd: wasi::__wasi_fd_t,) -> wasi::__wasi_errno_t;
 
     pub unsafe fn fd_write(
         wasi_ctx: &mut WasiCtx,
@@ -91,6 +94,7 @@ hostcalls! {
 
     pub unsafe fn fd_advise(
         wasi_ctx: &WasiCtx,
+        memory: &mut [u8],
         fd: wasi::__wasi_fd_t,
         offset: wasi::__wasi_filesize_t,
         len: wasi::__wasi_filesize_t,
@@ -99,6 +103,7 @@ hostcalls! {
 
     pub unsafe fn fd_allocate(
         wasi_ctx: &WasiCtx,
+        memory: &mut [u8],
         fd: wasi::__wasi_fd_t,
         offset: wasi::__wasi_filesize_t,
         len: wasi::__wasi_filesize_t,
@@ -179,6 +184,7 @@ hostcalls! {
 
     pub unsafe fn fd_filestat_set_times(
         wasi_ctx: &WasiCtx,
+        memory: &mut [u8],
         fd: wasi::__wasi_fd_t,
         st_atim: wasi::__wasi_timestamp_t,
         st_mtim: wasi::__wasi_timestamp_t,
@@ -187,6 +193,7 @@ hostcalls! {
 
     pub unsafe fn fd_filestat_set_size(
         wasi_ctx: &WasiCtx,
+        memory: &mut [u8],
         fd: wasi::__wasi_fd_t,
         st_size: wasi::__wasi_filesize_t,
     ) -> wasi::__wasi_errno_t;

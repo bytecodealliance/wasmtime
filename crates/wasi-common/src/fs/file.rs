@@ -35,7 +35,7 @@ impl<'ctx> File<'ctx> {
     ///
     /// [`std::fs::File::sync_all`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.sync_all
     pub fn sync_all(&self) -> io::Result<()> {
-        wasi_errno_to_io_error(unsafe { hostcalls::fd_sync(self.ctx, self.fd) })
+        wasi_errno_to_io_error(unsafe { hostcalls::fd_sync(self.ctx, &mut [], self.fd) })
     }
 
     /// This function is similar to `sync_all`, except that it may not synchronize
@@ -45,7 +45,7 @@ impl<'ctx> File<'ctx> {
     ///
     /// [`std::fs::File::sync_data`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.sync_data
     pub fn sync_data(&self) -> io::Result<()> {
-        wasi_errno_to_io_error(unsafe { hostcalls::fd_datasync(self.ctx, self.fd) })
+        wasi_errno_to_io_error(unsafe { hostcalls::fd_datasync(self.ctx, &mut [], self.fd) })
     }
 
     /// Truncates or extends the underlying file, updating the size of this file
@@ -55,7 +55,9 @@ impl<'ctx> File<'ctx> {
     ///
     /// [`std::fs::File::set_len`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.set_len
     pub fn set_len(&self, size: u64) -> io::Result<()> {
-        wasi_errno_to_io_error(unsafe { hostcalls::fd_filestat_set_size(self.ctx, self.fd, size) })
+        wasi_errno_to_io_error(unsafe {
+            hostcalls::fd_filestat_set_size(self.ctx, &mut [], self.fd, size)
+        })
     }
 
     /// Queries metadata about the underlying file.
@@ -75,7 +77,7 @@ impl<'ctx> Drop for File<'ctx> {
         // the file descriptor was closed or not, and if we retried (for
         // something like EINTR), we might close another valid file descriptor
         // opened after we closed ours.
-        let _ = unsafe { hostcalls::fd_close(self.ctx, self.fd) };
+        let _ = unsafe { hostcalls::fd_close(self.ctx, &mut [], self.fd) };
     }
 }
 
