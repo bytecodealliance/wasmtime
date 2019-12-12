@@ -1,15 +1,11 @@
-use libc;
 use more_asserts::assert_gt;
 use std::{cmp::min, env, mem, process, slice, str};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::wasi_wrappers::{wasi_fd_filestat_get, wasi_fd_readdir, wasi_path_open};
+use wasi_tests::open_scratch_directory_new;
 
 const BUF_LEN: usize = 256;
 
-#[derive(Debug)]
 struct DirEntry {
-    dirent: wasi_unstable::Dirent,
+    dirent: wasi::Dirent,
     name: String,
 }
 
@@ -35,7 +31,7 @@ impl<'a> Iterator for ReadDir<'a> {
             }
 
             // Read the data
-            let dirent_ptr = self.buf.as_ptr() as *const wasi_unstable::Dirent;
+            let dirent_ptr = self.buf.as_ptr() as *const wasi::Dirent;
             let dirent = dirent_ptr.read_unaligned();
             let name_ptr = dirent_ptr.offset(1) as *const u8;
             // NOTE Linux syscall returns a NULL-terminated name, but WASI doesn't
@@ -53,30 +49,22 @@ impl<'a> Iterator for ReadDir<'a> {
 }
 
 unsafe fn exec_fd_readdir(
-    fd: wasi_unstable::Fd,
-    cookie: wasi_unstable::DirCookie,
+    fd: wasi::Fd,
+    cookie: wasi::Dircookie,
 ) -> Vec<DirEntry> {
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
-    let mut bufused = 0;
-    let status = wasi_fd_readdir(fd, &mut buf, BUF_LEN, cookie, &mut bufused);
-    assert_eq!(status, wasi_unstable::raw::__WASI_ESUCCESS, "fd_readdir");
+    let bufused = wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
 
     let sl = slice::from_raw_parts(buf.as_ptr(), min(BUF_LEN, bufused));
     let dirs: Vec<_> = ReadDir::from_slice(sl).collect();
     dirs
 }
 
-unsafe fn test_fd_readdir(dir_fd: wasi_unstable::Fd) {
-    let mut stat: wasi_unstable::FileStat = mem::zeroed();
-    let status = wasi_fd_filestat_get(dir_fd, &mut stat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading scratch directory stats"
-    );
+unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
+    let stat = wasi::fd_filestat_get(dir_fd).expect("failed filestat");
 
     // Check the behavior in an empty directory
-    let mut dirs = exec_fd_readdir(dir_fd, wasi_unstable::DIRCOOKIE_START);
+    let mut dirs = exec_fd_readdir(dir_fd, 0);
     dirs.sort_by_key(|d| d.name.clone());
     assert_eq!(dirs.len(), 2, "expected two entries in an empty directory");
     let mut dirs = dirs.into_iter();
@@ -86,10 +74,10 @@ unsafe fn test_fd_readdir(dir_fd: wasi_unstable::Fd) {
     assert_eq!(dir.name, ".", "first name");
     assert_eq!(
         dir.dirent.d_type,
-        wasi_unstable::FILETYPE_DIRECTORY,
+        wasi::FILETYPE_DIRECTORY,
         "first type"
     );
-    assert_eq!(dir.dirent.d_ino, stat.st_ino);
+    assert_eq!(dir.dirent.d_ino, stat.ino);
     assert_eq!(dir.dirent.d_namlen, 1);
 
     // the second entry should be `..`
@@ -97,7 +85,7 @@ unsafe fn test_fd_readdir(dir_fd: wasi_unstable::Fd) {
     assert_eq!(dir.name, "..", "second name");
     assert_eq!(
         dir.dirent.d_type,
-        wasi_unstable::FILETYPE_DIRECTORY,
+        wasi::FILETYPE_DIRECTORY,
         "second type"
     );
 
@@ -107,37 +95,25 @@ unsafe fn test_fd_readdir(dir_fd: wasi_unstable::Fd) {
     );
 
     // Add a file and check the behavior
-    let mut file_fd = wasi_unstable::Fd::max_value() - 1;
-    let status = wasi_path_open(
+    let file_fd = wasi::path_open(
         dir_fd,
         0,
         "file",
-        wasi_unstable::O_CREAT,
-        wasi_unstable::RIGHT_FD_READ | wasi_unstable::RIGHT_FD_WRITE,
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
-        &mut file_fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
+    ).expect("failed to create file");
     assert_gt!(
         file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
-    let status = wasi_fd_filestat_get(file_fd, &mut stat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading file stats"
-    );
+    let stat = wasi::fd_filestat_get(file_fd).expect("failed filestat");
 
     // Execute another readdir
-    let mut dirs = exec_fd_readdir(dir_fd, wasi_unstable::DIRCOOKIE_START);
+    let mut dirs = exec_fd_readdir(dir_fd, 0);
     assert_eq!(dirs.len(), 3, "expected three entries");
     // Save the data about the last entry. We need to do it before sorting.
     let lastfile_cookie = dirs[1].dirent.d_next;
@@ -154,10 +130,10 @@ unsafe fn test_fd_readdir(dir_fd: wasi_unstable::Fd) {
     assert_eq!(dir.name, "file", "file name doesn't match");
     assert_eq!(
         dir.dirent.d_type,
-        wasi_unstable::FILETYPE_REGULAR_FILE,
+        wasi::FILETYPE_REGULAR_FILE,
         "type for the real file"
     );
-    assert_eq!(dir.dirent.d_ino, stat.st_ino);
+    assert_eq!(dir.dirent.d_ino, stat.ino);
 
     // check if cookie works as expected
     let dirs = exec_fd_readdir(dir_fd, lastfile_cookie);
@@ -176,7 +152,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory(&arg) {
+    let dir_fd = match open_scratch_directory_new(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);

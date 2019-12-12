@@ -1,54 +1,33 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_dir, cleanup_file, create_dir, create_file};
-use wasi_tests::wasi_wrappers::wasi_path_open;
+use wasi_tests::open_scratch_directory_new;
 
-unsafe fn test_dangling_fd(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_dangling_fd(dir_fd: wasi::Fd) {
     // Create a file, open it, delete it without closing the handle,
     // and then try creating it again
-    create_file(dir_fd, "file");
-    let mut file_fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(dir_fd, 0, "file", 0, 0, 0, 0, &mut file_fd);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file",
-    );
+    let fd = wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).unwrap();
+    wasi::fd_close(fd).unwrap();
+    let file_fd = wasi::path_open(dir_fd, 0, "file", 0, 0, 0, 0).expect("failed to open");
     assert_gt!(
         file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
-    cleanup_file(dir_fd, "file");
-    create_file(dir_fd, "file");
+    wasi::path_unlink_file(dir_fd, "file").expect("failed to unlink");
+    let fd = wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).unwrap();
+    wasi::fd_close(fd).unwrap();
 
     // Now, repeat the same process but for a directory
-    create_dir(dir_fd, "subdir");
-    let mut subdir_fd = wasi_unstable::Fd::max_value() - 1;
-    status = wasi_path_open(
-        dir_fd,
-        0,
-        "subdir",
-        wasi_unstable::O_DIRECTORY,
-        0,
-        0,
-        0,
-        &mut subdir_fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a directory",
-    );
+    wasi::path_create_directory(dir_fd, "subdir").expect("failed to create dir");
+    let subdir_fd = wasi::path_open(dir_fd, 0, "subdir", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+        .expect("failed to open dir");
     assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        subdir_fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
-    cleanup_dir(dir_fd, "subdir");
-    create_dir(dir_fd, "subdir");
+    wasi::path_remove_directory(dir_fd, "subdir").expect("failed to remove dir 2");
+    wasi::path_create_directory(dir_fd, "subdir").expect("failed to create dir 2");
 }
 
 fn main() {
@@ -62,7 +41,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory(&arg) {
+    let dir_fd = match open_scratch_directory_new(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);
