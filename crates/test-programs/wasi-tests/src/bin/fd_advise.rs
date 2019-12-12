@@ -1,78 +1,44 @@
 use libc;
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_file, close_fd};
-use wasi_tests::wasi_wrappers::{wasi_fd_advise, wasi_fd_filestat_get, wasi_path_open};
+use wasi_tests::open_scratch_directory_new;
 
-unsafe fn test_fd_advise(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
-    let mut file_fd = wasi_unstable::Fd::max_value() - 1;
-    let status = wasi_path_open(
+    let file_fd = wasi::path_open(
         dir_fd,
         0,
         "file",
-        wasi_unstable::O_CREAT,
-        wasi_unstable::RIGHT_FD_READ | wasi_unstable::RIGHT_FD_WRITE,
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
-        &mut file_fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
+    )
+    .expect("failed to open file");
     assert_gt!(
         file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
     // Check file size
-    let mut stat = wasi_unstable::FileStat {
-        st_dev: 0,
-        st_ino: 0,
-        st_filetype: 0,
-        st_nlink: 0,
-        st_size: 0,
-        st_atim: 0,
-        st_mtim: 0,
-        st_ctim: 0,
-    };
-    let status = wasi_fd_filestat_get(file_fd, &mut stat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading file stats"
-    );
-    assert_eq!(stat.st_size, 0, "file size should be 0");
+    let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat");
+    assert_eq!(stat.size, 0, "file size should be 0");
 
     // Allocate some size
     assert!(
-        wasi_unstable::fd_allocate(file_fd, 0, 100).is_ok(),
+        wasi::fd_allocate(file_fd, 0, 100).is_ok(),
         "allocating size"
     );
 
-    let status = wasi_fd_filestat_get(file_fd, &mut stat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading file stats after initial allocation"
-    );
-    assert_eq!(stat.st_size, 100, "file size should be 100");
+    let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat 2");
+    assert_eq!(stat.size, 100, "file size should be 100");
 
     // Advise the kernel
-    let status = wasi_fd_advise(file_fd, 10, 50, wasi_unstable::ADVICE_NORMAL);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "advising the kernel"
-    );
+    wasi::fd_advise(file_fd, 10, 50, wasi::ADVICE_NORMAL).expect("failed advise");
 
-    close_fd(file_fd);
-    cleanup_file(dir_fd, "file");
+    wasi::fd_close(file_fd).expect("failed to close");
+    wasi::path_unlink_file(dir_fd, "file").expect("failed to unlink");
 }
 fn main() {
     let mut args = env::args();
@@ -85,7 +51,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory(&arg) {
+    let dir_fd = match open_scratch_directory_new(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);

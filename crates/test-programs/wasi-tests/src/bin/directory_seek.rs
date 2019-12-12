@@ -1,68 +1,46 @@
 use more_asserts::assert_gt;
-use std::{env, mem, process};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_dir, close_fd, create_dir};
-use wasi_tests::wasi_wrappers::{wasi_fd_fdstat_get, wasi_fd_seek, wasi_path_open};
+use std::{env, process};
+use wasi_tests::open_scratch_directory_new;
 
-unsafe fn test_directory_seek(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
-    create_dir(dir_fd, "dir");
+    wasi::path_create_directory(dir_fd, "dir").expect("failed to make directory");
 
     // Open the directory and attempt to request rights for seeking.
-    let mut fd: wasi_unstable::Fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(
-        dir_fd,
-        0,
-        "dir",
-        0,
-        wasi_unstable::RIGHT_FD_SEEK,
-        0,
-        0,
-        &mut fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
+    let fd = wasi::path_open(dir_fd, 0, "dir", 0, wasi::RIGHTS_FD_SEEK, 0, 0)
+        .expect("failed to open file");
     assert_gt!(
         fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
     // Attempt to seek.
-    let mut newoffset = 1;
-    status = wasi_fd_seek(fd, 0, wasi_unstable::WHENCE_CUR, &mut newoffset);
+    let status = wasi::fd_seek(fd, 0, wasi::WHENCE_CUR)
+        .err()
+        .expect("failed to seek");
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ENOTCAPABLE,
+        status.raw_error(),
+        wasi::ERRNO_NOTCAPABLE,
         "seek on a directory"
     );
 
     // Check if we obtained the right to seek.
-    let mut fdstat: wasi_unstable::FdStat = mem::zeroed();
-    status = wasi_fd_fdstat_get(fd, &mut fdstat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "calling fd_fdstat on a directory"
-    );
+    let fdstat = wasi::fd_fdstat_get(fd).expect("failed to fdstat");
     assert_eq!(
         fdstat.fs_filetype,
-        wasi_unstable::FILETYPE_DIRECTORY,
+        wasi::FILETYPE_DIRECTORY,
         "expected the scratch directory to be a directory",
     );
     assert_eq!(
-        (fdstat.fs_rights_base & wasi_unstable::RIGHT_FD_SEEK),
+        (fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK),
         0,
         "directory has the seek right",
     );
 
     // Clean up.
-    close_fd(fd);
-    cleanup_dir(dir_fd, "dir");
+    wasi::fd_close(fd).expect("failed to close fd");
+    wasi::path_remove_directory(dir_fd, "dir").expect("failed to remove dir");
 }
 
 fn main() {
@@ -76,7 +54,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory(&arg) {
+    let dir_fd = match open_scratch_directory_new(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);
