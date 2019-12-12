@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi::wasi_unstable;
+use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
 use wasi_tests::utils::{cleanup_file, close_fd, drop_rights, fd_get_rights};
 use wasi_tests::wasi_wrappers::{wasi_fd_read, wasi_path_open};
