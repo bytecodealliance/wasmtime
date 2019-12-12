@@ -3,27 +3,14 @@
 use crate::helpers::systemtime_to_timestamp;
 use crate::host::{Dirent, FileType};
 use crate::hostcalls_impl::PathGet;
-use crate::sys::{fdentry_impl::OsHandle, host_impl};
+use crate::sys::{fdentry_impl::OsHandle, host_impl, unix::sys_impl};
 use crate::{wasi, Error, Result};
 use std::convert::TryInto;
 use std::fs::{File, Metadata};
 use std::os::unix::fs::FileExt;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
-        pub(crate) use super::super::linux::hostcalls_impl::*;
-    } else if #[cfg(any(
-            target_os = "macos",
-            target_os = "netbsd",
-            target_os = "freebsd",
-            target_os = "openbsd",
-            target_os = "ios",
-            target_os = "dragonfly"
-    ))] {
-        pub(crate) use super::super::bsd::hostcalls_impl::*;
-    }
-}
+pub(crate) use sys_impl::hostcalls_impl::*;
 
 pub(crate) fn fd_pread(
     file: &File,
@@ -342,7 +329,7 @@ pub(crate) fn fd_readdir<'a>(
         dir.rewind();
     } else {
         log::trace!("     | fd_readdir: doing seekdir to {}", cookie);
-        let loc = unsafe { SeekLoc::from_raw(cookie as i64) };
+        let loc = unsafe { SeekLoc::from_raw(cookie as i64)? };
         dir.seek(loc);
     }
 
@@ -356,7 +343,7 @@ pub(crate) fn fd_readdir<'a>(
                 .to_owned(),
             ino: entry.ino(),
             ftype: entry.file_type().into(),
-            cookie: entry.seek_loc().to_raw().try_into()?,
+            cookie: entry.seek_loc()?.to_raw().try_into()?,
         })
     }))
 }

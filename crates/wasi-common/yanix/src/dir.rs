@@ -84,14 +84,10 @@ impl Entry {
 
 #[cfg(not(target_os = "android"))]
 #[derive(Clone, Copy, Debug)]
-pub struct SeekLoc(libc::c_long);
+pub struct SeekLoc(pub(crate) libc::c_long);
 
 #[cfg(not(target_os = "android"))]
 impl SeekLoc {
-    pub unsafe fn from_raw(loc: i64) -> Self {
-        Self(loc.into())
-    }
-
     pub fn to_raw(&self) -> i64 {
         self.0.into()
     }

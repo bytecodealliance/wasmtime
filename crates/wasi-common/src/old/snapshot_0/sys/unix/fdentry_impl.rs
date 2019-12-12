@@ -1,24 +1,11 @@
 use crate::old::snapshot_0::fdentry::{Descriptor, OsHandleRef};
-use crate::old::snapshot_0::{wasi, Error, Result};
+use crate::old::snapshot_0::{sys::unix::sys_impl, wasi, Error, Result};
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
-        pub(crate) use super::linux::oshandle::*;
-    } else if #[cfg(any(
-            target_os = "macos",
-            target_os = "netbsd",
-            target_os = "freebsd",
-            target_os = "openbsd",
-            target_os = "ios",
-            target_os = "dragonfly"
-    ))] {
-        pub(crate) use super::bsd::oshandle::*;
-    }
-}
+pub(crate) use sys_impl::oshandle::*;
 
 impl AsRawFd for Descriptor {
     fn as_raw_fd(&self) -> RawFd {

@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 use crate::old::snapshot_0::host::FileType;
-use crate::old::snapshot_0::{helpers, wasi, Error, Result};
+use crate::old::snapshot_0::{helpers, sys::unix::sys_impl, wasi, Error, Result};
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
 use yanix::{
@@ -11,20 +11,7 @@ use yanix::{
     Errno,
 };
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
-        pub(crate) use super::linux::host_impl::*;
-    } else if #[cfg(any(
-            target_os = "macos",
-            target_os = "netbsd",
-            target_os = "freebsd",
-            target_os = "openbsd",
-            target_os = "ios",
-            target_os = "dragonfly"
-    ))] {
-        pub(crate) use super::bsd::host_impl::*;
-    }
-}
+pub(crate) use sys_impl::host_impl::*;
 
 pub(crate) fn errno_from_nix(errno: Errno) -> Error {
     match errno {
@@ -197,7 +184,7 @@ pub(crate) fn filestat_from_nix(filestat: libc::stat) -> Result<wasi::__wasi_fil
     Ok(wasi::__wasi_filestat_t {
         dev,
         ino,
-        nlink: filestat.st_nlink as wasi::__wasi_linkcount_t,
+        nlink: stnlink_from_nix(filestat.st_nlink)?,
         size: filestat.st_size as wasi::__wasi_filesize_t,
         atim,
         ctim,
