@@ -1093,15 +1093,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // the v128.const is typed in CLIF as a I8x16 but raw_bitcast to a different type before use
             state.push1(value)
         }
-        Operator::I8x16Splat
-        | Operator::I16x8Splat
-        | Operator::I32x4Splat
+        Operator::I8x16Splat | Operator::I16x8Splat => {
+            let reduced = builder.ins().ireduce(type_of(op).lane_type(), state.pop1());
+            let splatted = builder.ins().splat(type_of(op), reduced);
+            state.push1(splatted)
+        }
+        Operator::I32x4Splat
         | Operator::I64x2Splat
         | Operator::F32x4Splat
         | Operator::F64x2Splat => {
-            let value_to_splat = state.pop1();
-            let ty = type_of(op);
-            let splatted = builder.ins().splat(ty, value_to_splat);
+            let splatted = builder.ins().splat(type_of(op), state.pop1());
             state.push1(splatted)
         }
         Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
