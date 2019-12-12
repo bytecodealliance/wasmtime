@@ -17,7 +17,16 @@ int8_t CheckIfTrapAtAddress(const uint8_t* pc);
 // Record the Trap code and wasm bytecode offset in TLS somewhere
 void RecordTrap(const uint8_t* pc, bool reset_guard_page);
 
-bool InstanceSignalHandler(int, siginfo_t *, void *);
+#if defined(_WIN32)
+#include <windows.h>
+#include <winternl.h>
+bool InstanceSignalHandler(LPEXCEPTION_POINTERS);
+#elif defined(USE_APPLE_MACH_PORTS)
+// TODO
+#else
+#include <sys/ucontext.h>
+bool InstanceSignalHandler(int, siginfo_t *, ucontext_t *);
+#endif
 
 void* EnterScope(void*);
 void LeaveScope(void*);

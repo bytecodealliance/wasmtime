@@ -467,9 +467,13 @@ WasmTrapHandler(LPEXCEPTION_POINTERS exception)
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
-    if (!HandleTrap(exception->ContextRecord,
-                    record->ExceptionCode == EXCEPTION_STACK_OVERFLOW)) {
-        return EXCEPTION_CONTINUE_SEARCH;
+    bool handled = InstanceSignalHandler(exception);
+
+    if (!handled) {
+        if (!HandleTrap(exception->ContextRecord,
+                        record->ExceptionCode == EXCEPTION_STACK_OVERFLOW)) {
+            return EXCEPTION_CONTINUE_SEARCH;
+        }
     }
 
     return EXCEPTION_CONTINUE_EXECUTION;
@@ -634,7 +638,7 @@ WasmTrapHandler(int signum, siginfo_t* info, void* context)
         AutoHandlingTrap aht;
         assert(signum == SIGSEGV || signum == SIGBUS || signum == SIGFPE || signum == SIGILL);
 
-        if (InstanceSignalHandler(signum, info, context)) {
+        if (InstanceSignalHandler(signum, info, (ucontext_t*) context)) {
             return;
         }
 
