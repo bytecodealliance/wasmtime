@@ -19,6 +19,7 @@ memoffset = "0.5.3"
 indexmap = "1.0.2"
 thiserror = "1.0.4"
 more-asserts = "0.2.1"
+cfg-if = "0.1.9"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.7", features = ["winbase", "memoryapi"] }

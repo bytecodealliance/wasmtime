@@ -115,7 +115,7 @@ fn test_custom_signal_handler_single_instance() {
             .borrow()
             .call(&[])
             .expect("expected function not to trap");
-        assert_eq!(123i32, result[0].clone().into());
+        assert_eq!(123i32, result[0].clone().unwrap_i32());
     }
 
     {

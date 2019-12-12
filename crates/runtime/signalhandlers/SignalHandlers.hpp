@@ -22,7 +22,7 @@ void RecordTrap(const uint8_t* pc, bool reset_guard_page);
 #include <winternl.h>
 bool InstanceSignalHandler(LPEXCEPTION_POINTERS);
 #elif defined(USE_APPLE_MACH_PORTS)
-// TODO
+bool InstanceSignalHandler(int, siginfo_t *, void *);
 #else
 #include <sys/ucontext.h>
 bool InstanceSignalHandler(int, siginfo_t *, ucontext_t *);
