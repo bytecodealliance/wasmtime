@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::module::{ModuleContext, SigType, Signature};
 use smallvec::{smallvec, SmallVec};
 use std::{
@@ -7,7 +8,7 @@ use std::{
     ops::RangeInclusive,
 };
 use wasmparser::{
-    FunctionBody, Ieee32 as WasmIeee32, Ieee64 as WasmIeee64,
+    BinaryReaderError, FunctionBody, Ieee32 as WasmIeee32, Ieee64 as WasmIeee64,
     MemoryImmediate as WasmMemoryImmediate, Operator as WasmOperator, OperatorsReader,
 };
 
@@ -274,24 +275,35 @@ pub const SF32: SignfulType = Type::Float(Size::_32);
 pub const SF64: SignfulType = Type::Float(Size::_64);
 
 impl SignlessType {
-    pub fn from_wasm(other: wasmparser::Type) -> Option<Self> {
+    pub fn from_wasm(other: wasmparser::Type) -> Result<Self, BinaryReaderError> {
         use wasmparser::Type;
 
         match other {
-            Type::I32 => Some(I32),
-            Type::I64 => Some(I64),
-            Type::F32 => Some(F32),
-            Type::F64 => Some(F64),
-            Type::EmptyBlockType => None,
-            _ => unimplemented!(),
+            Type::I32 => Ok(I32),
+            Type::I64 => Ok(I64),
+            Type::F32 => Ok(F32),
+            Type::F64 => Ok(F64),
+            Type::EmptyBlockType => Err(BinaryReaderError {
+                message: "SignlessType with EmptyBlockType",
+                offset: -1isize as usize,
+            }),
+            _ => Err(BinaryReaderError {
+                message: "SignlessType unimplemented",
+                offset: -1isize as usize,
+            }),
         }
     }
 }
 
-fn create_returns_from_wasm_type(ty: wasmparser::TypeOrFuncType) -> Vec<SignlessType> {
+fn create_returns_from_wasm_type(
+    ty: wasmparser::TypeOrFuncType,
+) -> Result<Vec<SignlessType>, BinaryReaderError> {
     match ty {
-        wasmparser::TypeOrFuncType::Type(ty) => Vec::from_iter(Type::from_wasm(ty)),
-        wasmparser::TypeOrFuncType::FuncType(_) => panic!("unsupported func type"),
+        wasmparser::TypeOrFuncType::Type(ty) => Ok(Vec::from_iter(Type::from_wasm(ty))),
+        wasmparser::TypeOrFuncType::FuncType(_) => Err(BinaryReaderError {
+            message: "Unsupported func type",
+            offset: -1isize as usize,
+        }),
     }
 }
 
@@ -1046,17 +1058,19 @@ where
         params: impl IntoIterator<Item = SignlessType>,
         returns: impl IntoIterator<Item = SignlessType>,
         reader: &'a FunctionBody,
-    ) -> Self {
-        // TODO: Don't panic!
+    ) -> Result<Self, Error> {
         let locals_reader = reader
             .get_locals_reader()
-            .expect("Failed to get locals reader");
+            .map_err(|_| Error::Microwasm("Failed to get locals reader".to_string()))?;
         let mut locals = Vec::from_iter(params);
         let mut consts = Vec::new();
 
         for loc in locals_reader {
-            let (count, ty) = loc.expect("Getting local failed");
-            let ty = Type::from_wasm(ty).expect("Invalid local type");
+            let (count, ty) =
+                loc.map_err(|_| Error::Microwasm("Getting local failed".to_string()))?;
+            let ty = Type::from_wasm(ty)
+                .map_err(|_| Error::Microwasm("Invalid local type".to_string()))?;
+
             locals.extend(std::iter::repeat(ty).take(count as _));
             consts.extend(
                 std::iter::repeat(ty)
@@ -1067,14 +1081,15 @@ where
 
         let num_locals = locals.len() as _;
 
+        let operators_reader = reader
+            .get_operators_reader()
+            .map_err(|_| Error::Microwasm("Failed to get operators reader".to_string()))?;
         let mut out = Self {
             is_done: false,
             stack: locals,
             module: context,
             consts_to_emit: Some(consts),
-            internal: reader
-                .get_operators_reader()
-                .expect("Failed to get operators reader"),
+            internal: operators_reader,
             current_id: 0,
             control_frames: vec![],
             unreachable: false,
@@ -1088,10 +1103,10 @@ where
             kind: ControlFrameKind::Function,
         });
 
-        out
+        Ok(out)
     }
 
-    fn op_sig(&self, op: &WasmOperator) -> OpSig {
+    fn op_sig(&self, op: &WasmOperator) -> Result<OpSig, BinaryReaderError> {
         use self::SigT::T;
         use std::iter::{empty as none, once};
 
@@ -1132,7 +1147,7 @@ where
             };
         }
 
-        match op {
+        let o = match op {
             WasmOperator::Unreachable => OpSig::none(),
             WasmOperator::Nop => OpSig::none(),
 
@@ -1163,26 +1178,26 @@ where
             // `Select` pops 3 elements and pushes 1
             WasmOperator::Select => sig!((T, T, I32) -> (T)),
 
-            WasmOperator::GetLocal { local_index } => {
+            WasmOperator::LocalGet { local_index } => {
                 let ty = self.stack[*local_index as usize];
 
                 sig!(() -> (ty))
             }
-            WasmOperator::SetLocal { local_index } => {
+            WasmOperator::LocalSet { local_index } => {
                 let ty = self.stack[*local_index as usize];
 
                 sig!((ty) -> ())
             }
-            WasmOperator::TeeLocal { local_index } => {
+            WasmOperator::LocalTee { local_index } => {
                 let ty = self.stack[*local_index as usize];
 
                 sig!((ty) -> (ty))
             }
 
-            WasmOperator::GetGlobal { global_index } => {
+            WasmOperator::GlobalGet { global_index } => {
                 sig!(() -> (self.module.global_type(*global_index).to_microwasm_type()))
             }
-            WasmOperator::SetGlobal { global_index } => {
+            WasmOperator::GlobalSet { global_index } => {
                 sig!((self.module.global_type(*global_index).to_microwasm_type()) -> ())
             }
 
@@ -1221,8 +1236,18 @@ where
             WasmOperator::F32Const { .. } => sig!(() -> (F32)),
             WasmOperator::F64Const { .. } => sig!(() -> (F64)),
 
-            WasmOperator::RefNull => unimplemented!(),
-            WasmOperator::RefIsNull => unimplemented!(),
+            WasmOperator::RefNull => {
+                return Err(BinaryReaderError {
+                    message: "RefNull unimplemented",
+                    offset: -1isize as usize,
+                })
+            }
+            WasmOperator::RefIsNull => {
+                return Err(BinaryReaderError {
+                    message: "RefIsNull unimplemented",
+                    offset: -1isize as usize,
+                })
+            }
 
             // All comparison operators remove 2 elements and push 1
             WasmOperator::I32Eqz => sig!((I32) -> (I32)),
@@ -1335,16 +1360,16 @@ where
             | WasmOperator::F64Copysign => sig!((F64, F64) -> (F64)),
 
             WasmOperator::I32WrapI64 => sig!((I64) -> (I32)),
-            WasmOperator::I32TruncSF32 | WasmOperator::I32TruncUF32 => sig!((F32) -> (I32)),
-            WasmOperator::I32TruncSF64 | WasmOperator::I32TruncUF64 => sig!((F64) -> (I32)),
-            WasmOperator::I64ExtendSI32 | WasmOperator::I64ExtendUI32 => sig!((I32) -> (I64)),
-            WasmOperator::I64TruncSF32 | WasmOperator::I64TruncUF32 => sig!((F32) -> (I64)),
-            WasmOperator::I64TruncSF64 | WasmOperator::I64TruncUF64 => sig!((F64) -> (I64)),
-            WasmOperator::F32ConvertSI32 | WasmOperator::F32ConvertUI32 => sig!((I32) -> (F32)),
-            WasmOperator::F32ConvertSI64 | WasmOperator::F32ConvertUI64 => sig!((I64) -> (F32)),
+            WasmOperator::I32TruncF32S | WasmOperator::I32TruncF32U => sig!((F32) -> (I32)),
+            WasmOperator::I32TruncF64S | WasmOperator::I32TruncF64U => sig!((F64) -> (I32)),
+            WasmOperator::I64ExtendI32S | WasmOperator::I64ExtendI32U => sig!((I32) -> (I64)),
+            WasmOperator::I64TruncF32S | WasmOperator::I64TruncF32U => sig!((F32) -> (I64)),
+            WasmOperator::I64TruncF64S | WasmOperator::I64TruncF64U => sig!((F64) -> (I64)),
+            WasmOperator::F32ConvertI32S | WasmOperator::F32ConvertI32U => sig!((I32) -> (F32)),
+            WasmOperator::F32ConvertI64S | WasmOperator::F32ConvertI64U => sig!((I64) -> (F32)),
             WasmOperator::F32DemoteF64 => sig!((F64) -> (F32)),
-            WasmOperator::F64ConvertSI32 | WasmOperator::F64ConvertUI32 => sig!((I32) -> (F64)),
-            WasmOperator::F64ConvertSI64 | WasmOperator::F64ConvertUI64 => sig!((I64) -> (F64)),
+            WasmOperator::F64ConvertI32S | WasmOperator::F64ConvertI32U => sig!((I32) -> (F64)),
+            WasmOperator::F64ConvertI64S | WasmOperator::F64ConvertI64U => sig!((I64) -> (F64)),
             WasmOperator::F64PromoteF32 => sig!((F32) -> (F64)),
             WasmOperator::I32ReinterpretF32 => sig!((F32) -> (I32)),
             WasmOperator::I64ReinterpretF64 => sig!((F64) -> (I64)),
@@ -1357,8 +1382,14 @@ where
             WasmOperator::I64Extend16S => sig!((I32) -> (I64)),
             WasmOperator::I64Extend32S => sig!((I32) -> (I64)),
 
-            _ => unimplemented!(),
-        }
+            _ => {
+                return Err(BinaryReaderError {
+                    message: "Opcode Unimplemented",
+                    offset: -1isize as usize,
+                })
+            }
+        };
+        Ok(o)
     }
 
     fn next_id(&mut self) -> u32 {
@@ -1383,14 +1414,19 @@ where
         self.stack.len() as i32 - 1 - idx as i32
     }
 
-    fn apply_op(&mut self, sig: OpSig) {
+    fn apply_op(&mut self, sig: OpSig) -> Result<(), BinaryReaderError> {
         let mut ty_param = None;
 
         for p in sig.input.iter().rev() {
-            let stack_ty = self
-                .stack
-                .pop()
-                .unwrap_or_else(|| panic!("Stack is empty (while processing {:?})", sig));
+            let stack_ty = match self.stack.pop() {
+                Some(e) => e,
+                None => {
+                    return Err(BinaryReaderError {
+                        message: "Stack is empty",
+                        offset: -1isize as usize,
+                    })
+                }
+            };
 
             let ty = match p {
                 SigT::T => {
@@ -1409,21 +1445,34 @@ where
 
         for p in sig.output.into_iter().rev() {
             let ty = match p {
-                SigT::T => ty_param.expect("Type parameter was not set"),
+                SigT::T => match ty_param {
+                    Some(e) => e,
+                    None => {
+                        return Err(BinaryReaderError {
+                            message: "Type parameter was not set",
+                            offset: -1isize as usize,
+                        })
+                    }
+                },
                 SigT::Concrete(ty) => ty,
             };
             self.stack.push(ty);
         }
+        Ok(())
     }
 
     fn block_params(&self) -> Vec<SignlessType> {
         self.stack.clone()
     }
 
-    fn block_params_with_wasm_type(&self, ty: wasmparser::TypeOrFuncType) -> Vec<SignlessType> {
+    fn block_params_with_wasm_type(
+        &self,
+        ty: wasmparser::TypeOrFuncType,
+    ) -> Result<Vec<SignlessType>, BinaryReaderError> {
         let mut out = self.block_params();
-        out.extend(create_returns_from_wasm_type(ty));
-        out
+        let return_wasm_type = create_returns_from_wasm_type(ty)?;
+        out.extend(return_wasm_type);
+        Ok(out)
     }
 }
 
@@ -1483,7 +1532,15 @@ where
                     }
                     WasmOperator::Else => {
                         if depth == 0 {
-                            let block = self.control_frames.last_mut().expect("Failed");
+                            let block = match self.control_frames.last_mut() {
+                                Some(e) => e,
+                                None => {
+                                    return Some(Err(BinaryReaderError {
+                                        message: "unreachable Block else Failed",
+                                        offset: -1isize as usize,
+                                    }))
+                                }
+                            };
 
                             self.stack.truncate(block.arguments as _);
 
@@ -1496,7 +1553,15 @@ where
                     }
                     WasmOperator::End => {
                         if depth == 0 {
-                            let block = self.control_frames.pop().expect("Failed");
+                            let block = match self.control_frames.pop() {
+                                Some(e) => e,
+                                None => {
+                                    return Some(Err(BinaryReaderError {
+                                        message: "unreachable Block end Failed",
+                                        offset: -1isize as usize,
+                                    }))
+                                }
+                            };
 
                             if self.control_frames.is_empty() {
                                 self.is_done = true;
@@ -1536,9 +1601,15 @@ where
             Ok(o) => o,
         };
 
-        let op_sig = self.op_sig(&op);
+        let op_sig = match self.op_sig(&op) {
+            Ok(o) => o,
+            Err(e) => return Some(Err(e)),
+        };
 
-        self.apply_op(op_sig);
+        match self.apply_op(op_sig) {
+            Ok(o) => o,
+            Err(e) => return Some(Err(e)),
+        };
 
         Some(Ok(match op {
             WasmOperator::Unreachable => {
@@ -1548,31 +1619,44 @@ where
             WasmOperator::Nop => smallvec![],
             WasmOperator::Block { ty } => {
                 let id = self.next_id();
+                let return_type_wasm = match create_returns_from_wasm_type(ty) {
+                    Ok(o) => o,
+                    Err(e) => return Some(Err(e)),
+                };
+                let block_param_type_wasm = match self.block_params_with_wasm_type(ty) {
+                    Err(e) => return Some(Err(e)),
+                    Ok(o) => o,
+                };
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: create_returns_from_wasm_type(ty),
+                    returns: return_type_wasm,
                     kind: ControlFrameKind::Block {
                         needs_end_label: false,
                     },
                 });
-                smallvec![Operator::end(
-                    self.block_params_with_wasm_type(ty),
-                    (id, NameTag::End),
-                )]
+                smallvec![Operator::end(block_param_type_wasm, (id, NameTag::End))]
             }
             WasmOperator::Loop { ty } => {
                 let id = self.next_id();
+                let return_type_wasm = match create_returns_from_wasm_type(ty) {
+                    Ok(o) => o,
+                    Err(e) => return Some(Err(e)),
+                };
+                let block_param_type_wasm = match self.block_params_with_wasm_type(ty) {
+                    Ok(o) => o,
+                    Err(e) => return Some(Err(e)),
+                };
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: create_returns_from_wasm_type(ty),
+                    returns: return_type_wasm,
                     kind: ControlFrameKind::Loop,
                 });
                 let label = (id, NameTag::Header);
                 smallvec![
                     Operator::loop_(self.block_params(), label),
-                    Operator::end(self.block_params_with_wasm_type(ty), (id, NameTag::End)),
+                    Operator::end(block_param_type_wasm, (id, NameTag::End)),
                     Operator::Br {
                         target: BrTarget::Label(label),
                     },
@@ -1581,10 +1665,18 @@ where
             }
             WasmOperator::If { ty } => {
                 let id = self.next_id();
+                let return_type_wasm = match create_returns_from_wasm_type(ty) {
+                    Ok(o) => o,
+                    Err(e) => return Some(Err(e)),
+                };
+                let block_param_type_wasm = match self.block_params_with_wasm_type(ty) {
+                    Ok(o) => o,
+                    Err(e) => return Some(Err(e)),
+                };
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: create_returns_from_wasm_type(ty),
+                    returns: return_type_wasm,
                     kind: ControlFrameKind::If { has_else: false },
                 });
                 let (then, else_, end) = (
@@ -1595,7 +1687,7 @@ where
                 smallvec![
                     Operator::block(self.block_params(), then),
                     Operator::block(self.block_params(), else_),
-                    Operator::end(self.block_params_with_wasm_type(ty), end),
+                    Operator::end(block_param_type_wasm, end),
                     Operator::BrIf {
                         then: BrTarget::Label(then).into(),
                         else_: BrTarget::Label(else_).into()
@@ -1605,8 +1697,25 @@ where
             }
             WasmOperator::Else => {
                 // We don't pop it since we're still in the second block.
-                let to_drop = to_drop!(self.control_frames.last().expect("Failed"));
-                let block = self.control_frames.last_mut().expect("Failed");
+                let block = match self.control_frames.last() {
+                    Some(e) => e,
+                    None => {
+                        return Some(Err(BinaryReaderError {
+                            message: "Block else Failed",
+                            offset: -1isize as usize,
+                        }))
+                    }
+                };
+                let to_drop = to_drop!(block);
+                let block = match self.control_frames.last_mut() {
+                    Some(e) => e,
+                    None => {
+                        return Some(Err(BinaryReaderError {
+                            message: "Block else Failed",
+                            offset: -1isize as usize,
+                        }))
+                    }
+                };
 
                 if let ControlFrameKind::If { has_else, .. } = &mut block.kind {
                     *has_else = true;
@@ -1627,7 +1736,15 @@ where
                 )
             }
             WasmOperator::End => {
-                let block = self.control_frames.pop().expect("Failed");
+                let block = match self.control_frames.pop() {
+                    Some(e) => e,
+                    None => {
+                        return Some(Err(BinaryReaderError {
+                            message: "Block End Failed",
+                            offset: -1isize as usize,
+                        }))
+                    }
+                };
 
                 let to_drop = to_drop!(block);
 
@@ -1770,34 +1887,56 @@ where
             WasmOperator::Drop => smallvec![Operator::Drop(0..=0)],
             WasmOperator::Select => smallvec![Operator::Select],
 
-            WasmOperator::GetLocal { local_index } => {
+            WasmOperator::LocalGet { local_index } => {
                 // `- 1` because we apply the stack difference _before_ this point
-                let depth = self.local_depth(local_index) - 1;
-                smallvec![Operator::Pick(
-                    depth.try_into().expect("Local out of range")
-                )]
+                let depth = self.local_depth(local_index).checked_sub(1)?;
+                let depth = match depth.try_into() {
+                    Ok(o) => o,
+                    Err(_) => {
+                        return Some(Err(BinaryReaderError {
+                            message: "GetLocal - Local out of range",
+                            offset: -1isize as usize,
+                        }))
+                    }
+                };
+                smallvec![Operator::Pick(depth)]
             }
-            WasmOperator::SetLocal { local_index } => {
+            WasmOperator::LocalSet { local_index } => {
                 // `+ 1` because we apply the stack difference _before_ this point
-                let depth = self.local_depth(local_index) + 1;
-                smallvec![
-                    Operator::Swap(depth.try_into().expect("Local out of range")),
-                    Operator::Drop(0..=0)
-                ]
+                let depth = self.local_depth(local_index).checked_add(1)?;
+                let depth = match depth.try_into() {
+                    Ok(o) => o,
+                    Err(_) => {
+                        return Some(Err(BinaryReaderError {
+                            message: "SetLocal - Local out of range",
+                            offset: -1isize as usize,
+                        }))
+                    }
+                };
+                smallvec![Operator::Swap(depth), Operator::Drop(0..=0)]
             }
-            WasmOperator::TeeLocal { local_index } => {
+            WasmOperator::LocalTee { local_index } => {
                 // `+ 1` because we `pick` before `swap`
-                let depth = self.local_depth(local_index) + 1;
+                let depth = self.local_depth(local_index).checked_add(1)?;
+                let depth = match depth.try_into() {
+                    Ok(o) => o,
+                    Err(_) => {
+                        return Some(Err(BinaryReaderError {
+                            message: "SetLocal - Local out of range",
+                            offset: -1isize as usize,
+                        }))
+                    }
+                };
                 smallvec![
                     Operator::Pick(0),
-                    Operator::Swap(depth.try_into().expect("Local out of range")),
+                    Operator::Swap(depth),
                     Operator::Drop(0..=0),
                 ]
             }
-            WasmOperator::GetGlobal { global_index } => {
+            WasmOperator::GlobalGet { global_index } => {
                 smallvec![Operator::GetGlobal(global_index)]
             }
-            WasmOperator::SetGlobal { global_index } => {
+            WasmOperator::GlobalSet { global_index } => {
                 smallvec![Operator::SetGlobal(global_index)]
             }
 
@@ -1904,8 +2043,18 @@ where
             WasmOperator::F64Const { value } => {
                 smallvec![Operator::Const(Value::F64(value.into()))]
             }
-            WasmOperator::RefNull => unimplemented!("{:?}", op),
-            WasmOperator::RefIsNull => unimplemented!("{:?}", op),
+            WasmOperator::RefNull => {
+                return Some(Err(BinaryReaderError {
+                    message: "RefNull unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::RefIsNull => {
+                return Some(Err(BinaryReaderError {
+                    message: "RefIsNull unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
             WasmOperator::I32Eqz => smallvec![Operator::Eqz(Size::_32)],
             WasmOperator::I32Eq => smallvec![Operator::Eq(I32)],
             WasmOperator::I32Ne => smallvec![Operator::Ne(I32)],
@@ -2010,73 +2159,73 @@ where
             WasmOperator::F64Max => smallvec![Operator::Max(Size::_64)],
             WasmOperator::F64Copysign => smallvec![Operator::Copysign(Size::_64)],
             WasmOperator::I32WrapI64 => smallvec![Operator::I32WrapFromI64],
-            WasmOperator::I32TruncSF32 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I32TruncF32S => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I32
             }],
-            WasmOperator::I32TruncUF32 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I32TruncF32U => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::U32
             }],
-            WasmOperator::I32TruncSF64 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I32TruncF64S => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::I32
             }],
-            WasmOperator::I32TruncUF64 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I32TruncF64U => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::U32
             }],
-            WasmOperator::I64ExtendSI32 => smallvec![Operator::Extend {
+            WasmOperator::I64ExtendI32S => smallvec![Operator::Extend {
                 sign: Signedness::Signed
             }],
-            WasmOperator::I64ExtendUI32 => smallvec![Operator::Extend {
+            WasmOperator::I64ExtendI32U => smallvec![Operator::Extend {
                 sign: Signedness::Unsigned
             }],
-            WasmOperator::I64TruncSF32 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64TruncF32S => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I64,
             }],
-            WasmOperator::I64TruncUF32 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64TruncF32U => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::U64,
             }],
-            WasmOperator::I64TruncSF64 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64TruncF64S => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::I64,
             }],
-            WasmOperator::I64TruncUF64 => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64TruncF64U => smallvec![Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::U64,
             }],
-            WasmOperator::F32ConvertSI32 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F32ConvertI32S => smallvec![Operator::FConvertFromI {
                 input_ty: sint::I32,
                 output_ty: Size::_32
             }],
-            WasmOperator::F32ConvertUI32 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F32ConvertI32U => smallvec![Operator::FConvertFromI {
                 input_ty: sint::U32,
                 output_ty: Size::_32
             }],
-            WasmOperator::F32ConvertSI64 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F32ConvertI64S => smallvec![Operator::FConvertFromI {
                 input_ty: sint::I64,
                 output_ty: Size::_32
             }],
-            WasmOperator::F32ConvertUI64 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F32ConvertI64U => smallvec![Operator::FConvertFromI {
                 input_ty: sint::U64,
                 output_ty: Size::_32
             }],
-            WasmOperator::F64ConvertSI32 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F64ConvertI32S => smallvec![Operator::FConvertFromI {
                 input_ty: sint::I32,
                 output_ty: Size::_64
             }],
-            WasmOperator::F64ConvertUI32 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F64ConvertI32U => smallvec![Operator::FConvertFromI {
                 input_ty: sint::U32,
                 output_ty: Size::_64
             }],
-            WasmOperator::F64ConvertSI64 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F64ConvertI64S => smallvec![Operator::FConvertFromI {
                 input_ty: sint::I64,
                 output_ty: Size::_64
             }],
-            WasmOperator::F64ConvertUI64 => smallvec![Operator::FConvertFromI {
+            WasmOperator::F64ConvertI64U => smallvec![Operator::FConvertFromI {
                 input_ty: sint::U64,
                 output_ty: Size::_64
             }],
@@ -2086,24 +2235,94 @@ where
             WasmOperator::I64ReinterpretF64 => smallvec![Operator::I64ReinterpretFromF64],
             WasmOperator::F32ReinterpretI32 => smallvec![Operator::F32ReinterpretFromI32],
             WasmOperator::F64ReinterpretI64 => smallvec![Operator::F64ReinterpretFromI64],
-            WasmOperator::I32Extend8S => unimplemented!("{:?}", op),
-            WasmOperator::I32Extend16S => unimplemented!("{:?}", op),
-            WasmOperator::I64Extend8S => unimplemented!("{:?}", op),
-            WasmOperator::I64Extend16S => unimplemented!("{:?}", op),
-            WasmOperator::I64Extend32S => unimplemented!("{:?}", op),
+            WasmOperator::I32Extend8S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I32Extend8S unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I32Extend16S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I32Extend16S unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I64Extend8S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I64Extend8S unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I64Extend16S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I64Extend16S unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I64Extend32S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I64Extend32S unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
 
             // 0xFC operators
             // Non-trapping Float-to-int Conversions
-            WasmOperator::I32TruncSSatF32 => unimplemented!("{:?}", op),
-            WasmOperator::I32TruncUSatF32 => unimplemented!("{:?}", op),
-            WasmOperator::I32TruncSSatF64 => unimplemented!("{:?}", op),
-            WasmOperator::I32TruncUSatF64 => unimplemented!("{:?}", op),
-            WasmOperator::I64TruncSSatF32 => unimplemented!("{:?}", op),
-            WasmOperator::I64TruncUSatF32 => unimplemented!("{:?}", op),
-            WasmOperator::I64TruncSSatF64 => unimplemented!("{:?}", op),
-            WasmOperator::I64TruncUSatF64 => unimplemented!("{:?}", op),
+            WasmOperator::I32TruncSatF32S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I32TruncSSatF32 unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I32TruncSatF32U => {
+                return Some(Err(BinaryReaderError {
+                    message: "I32TruncUSatF32 unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I32TruncSatF64S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I32TruncSSatF64 unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I32TruncSatF64U => {
+                return Some(Err(BinaryReaderError {
+                    message: "I32TruncUSatF64 unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I64TruncSatF32S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I64TruncSSatF32 unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I64TruncSatF32U => {
+                return Some(Err(BinaryReaderError {
+                    message: "I64TruncUSatF32 unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I64TruncSatF64S => {
+                return Some(Err(BinaryReaderError {
+                    message: "I64TruncSSatF64 unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
+            WasmOperator::I64TruncSatF64U => {
+                return Some(Err(BinaryReaderError {
+                    message: "I64TruncUSatF64 unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
 
-            other => unimplemented!("{:?}", other),
+            _other => {
+                return Some(Err(BinaryReaderError {
+                    message: "Opcode unimplemented",
+                    offset: -1isize as usize,
+                }))
+            }
         }))
     }
 }

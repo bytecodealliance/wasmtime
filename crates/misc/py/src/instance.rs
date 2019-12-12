@@ -22,8 +22,8 @@ impl Instance {
         let exports = PyDict::new(py);
         let module = self.instance.borrow().module().clone();
         for (i, e) in module.borrow().exports().iter().enumerate() {
-            match e.r#type() {
-                wasmtime::ExternType::ExternFunc(ft) => {
+            match e.ty() {
+                wasmtime::ExternType::Func(ft) => {
                     let mut args_types = Vec::new();
                     for ty in ft.params().iter() {
                         args_types.push(ty.clone());
@@ -39,7 +39,7 @@ impl Instance {
                     )?;
                     exports.set_item(e.name().to_string(), f)?;
                 }
-                wasmtime::ExternType::ExternMemory(_) => {
+                wasmtime::ExternType::Memory(_) => {
                     let f = Py::new(
                         py,
                         Memory {

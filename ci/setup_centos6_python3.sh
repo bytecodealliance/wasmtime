@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+VERSION=${1:-3.7.3}
+
 # Python 3.6 stands in our way -- nuking it
 yum erase -y rh-python36
 rm -rf /opt/rh/rh-python36
@@ -22,11 +24,11 @@ rm -rf openssl-OpenSSL_1_1_1c
 # Fixing libssl.so.1.1: cannot open shared object file
 echo "/usr/local/lib64" >> /etc/ld.so.conf && ldconfig
 
-curl -O -L https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tgz
-tar xzf Python-3.7.3.tgz
-cd Python-3.7.3
+curl -O -L https://www.python.org/ftp/python/${VERSION}/Python-${VERSION}.tgz
+tar xzf Python-${VERSION}.tgz
+cd Python-${VERSION}
 ./configure
 make -sj4
 make install
 cd ..
-rm -rf Python-3.7.3
+rm -rf Python-${VERSION}

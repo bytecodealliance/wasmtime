@@ -1,9 +1,8 @@
-use crate::data_structures::native_isa_builder;
 use crate::Config;
 use std::cell::{RefCell, RefMut};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use wasmtime_jit::{Compiler, Features};
+use wasmtime_jit::{native, Compiler, Features};
 
 #[derive(Clone)]
 pub struct Context {
@@ -14,8 +13,7 @@ pub struct Context {
 
 impl Context {
     pub fn new(config: &Config) -> Context {
-        let isa_builder = native_isa_builder();
-        let isa = isa_builder.finish(config.flags.clone());
+        let isa = native::builder().finish(config.flags.clone());
         Context::new_with_compiler(config, Compiler::new(isa, config.strategy))
     }
 

@@ -13,15 +13,10 @@ name = "wasmtime"
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [dependencies]
-cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-native = "0.50.0"
-cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-frontend = "0.50.0"
 wasmtime-runtime = { path = "../runtime" }
 wasmtime-environ = { path = "../environ" }
 wasmtime-jit = { path = "../jit" }
-wasmparser = { version = "0.39.2", default-features = false }
+wasmparser = { version = "0.44.0", default-features = false }
 target-lexicon = { version = "0.9.0", default-features = false }
 anyhow = "1.0.19"
 thiserror = "1.0.4"
@@ -35,7 +30,7 @@ serde = { "version" = "1.0.94", features = ["derive"] }
 pretty_env_logger = "0.3.0"
 wasmtime-wast = { path = "../wast" }
 wasmtime-wasi = { path = "../wasi" }
-rayon = "1.1"
+rayon = "1.2.1"
 file-per-thread-logger = "0.1.1"
 wat = "1.0"
 

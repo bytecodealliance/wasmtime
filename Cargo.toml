@@ -15,10 +15,6 @@ publish = false
 
 [dependencies]
 # Enable all supported architectures by default.
-cranelift-codegen = { version = "0.50.0", features = ["enable-serde", "all-arch"] }
-cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-native = "0.50.0"
 wasmtime = { path = "crates/api" }
 wasmtime-debug = { path = "crates/debug" }
 wasmtime-environ = { path = "crates/environ" }
@@ -39,7 +35,7 @@ pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.1"
 wat = "1.0.2"
 libc = "0.2.60"
-rayon = "1.1"
+rayon = "1.2.1"
 wasm-webidl-bindings = "0.6"
 
 [dev-dependencies]

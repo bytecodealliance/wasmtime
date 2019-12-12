@@ -8,10 +8,10 @@
 #![deny(missing_docs)]
 
 use anyhow::{bail, format_err, Result};
-use cranelift_codegen::ir;
 use std::convert::TryFrom;
 use std::str;
 use wasm_webidl_bindings::ast;
+use wasmtime_environ::ir;
 use wasmtime_jit::RuntimeValue;
 use wasmtime_runtime::{Export, InstanceHandle};
 
@@ -152,7 +152,14 @@ impl ModuleData {
             Ok(values) => values
                 .to_vec()
                 .into_iter()
-                .map(|v: wasmtime::Val| v.into())
+                .map(|v: wasmtime::Val| match v {
+                    wasmtime::Val::I32(i) => RuntimeValue::I32(i),
+                    wasmtime::Val::I64(i) => RuntimeValue::I64(i),
+                    wasmtime::Val::F32(i) => RuntimeValue::F32(i),
+                    wasmtime::Val::F64(i) => RuntimeValue::F64(i),
+                    wasmtime::Val::V128(i) => RuntimeValue::V128(i),
+                    _ => panic!("unsupported value {:?}", v),
+                })
                 .collect::<Vec<RuntimeValue>>(),
             Err(trap) => bail!("trapped: {:?}", trap),
         };

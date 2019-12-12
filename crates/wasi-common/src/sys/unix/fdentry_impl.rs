@@ -1,26 +1,11 @@
 use crate::fdentry::{Descriptor, OsHandleRef};
-use crate::{wasi, Error, Result};
+use crate::{sys::unix::sys_impl, wasi, Error, Result};
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd, RawFd};
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
-        pub(crate) use super::linux::oshandle::*;
-        pub(crate) use super::linux::fdentry_impl::*;
-    } else if #[cfg(any(
-            target_os = "macos",
-            target_os = "netbsd",
-            target_os = "freebsd",
-            target_os = "openbsd",
-            target_os = "ios",
-            target_os = "dragonfly"
-    ))] {
-        pub(crate) use super::bsd::oshandle::*;
-        pub(crate) use super::bsd::fdentry_impl::*;
-    }
-}
+pub(crate) use sys_impl::oshandle::*;
 
 impl AsRawFd for Descriptor {
     fn as_raw_fd(&self) -> RawFd {
@@ -51,13 +36,12 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
 )> {
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(fd)?;
 
-    use nix::fcntl::{fcntl, OFlag, F_GETFL};
-    let flags_bits = fcntl(fd.as_raw_fd(), F_GETFL)?;
-    let flags = OFlag::from_bits_truncate(flags_bits);
-    let accmode = flags & OFlag::O_ACCMODE;
-    if accmode == OFlag::O_RDONLY {
+    use yanix::{fcntl, file::OFlag};
+    let flags = fcntl::get_status_flags(fd.as_raw_fd())?;
+    let accmode = flags & OFlag::ACCMODE;
+    if accmode == OFlag::RDONLY {
         rights_base &= !wasi::__WASI_RIGHTS_FD_WRITE;
-    } else if accmode == OFlag::O_WRONLY {
+    } else if accmode == OFlag::WRONLY {
         rights_base &= !wasi::__WASI_RIGHTS_FD_READ;
     }
 
@@ -85,7 +69,8 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
             )
         } else if ft.is_char_device() {
             log::debug!("Host fd {:?} is a char device", fd.as_raw_fd());
-            if isatty(fd)? {
+            use yanix::file::isatty;
+            if isatty(fd.as_raw_fd())? {
                 (
                     wasi::__WASI_FILETYPE_CHARACTER_DEVICE,
                     wasi::RIGHTS_TTY_BASE,
@@ -114,14 +99,14 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
             )
         } else if ft.is_socket() {
             log::debug!("Host fd {:?} is a socket", fd.as_raw_fd());
-            use nix::sys::socket;
-            match socket::getsockopt(fd.as_raw_fd(), socket::sockopt::SockType)? {
-                socket::SockType::Datagram => (
+            use yanix::socket::{get_socket_type, SockType};
+            match get_socket_type(fd.as_raw_fd())? {
+                SockType::Datagram => (
                     wasi::__WASI_FILETYPE_SOCKET_DGRAM,
                     wasi::RIGHTS_SOCKET_BASE,
                     wasi::RIGHTS_SOCKET_INHERITING,
                 ),
-                socket::SockType::Stream => (
+                SockType::Stream => (
                     wasi::__WASI_FILETYPE_SOCKET_STREAM,
                     wasi::RIGHTS_SOCKET_BASE,
                     wasi::RIGHTS_SOCKET_INHERITING,

@@ -3,11 +3,13 @@
 use crate::resolver::Resolver;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::JumpTableOffsets;
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType};
 use more_asserts::assert_ge;
 use std::collections::HashSet;
 use std::ptr::write_unaligned;
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::wasm::{
+    DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType,
+};
 use wasmtime_environ::{
     MemoryPlan, MemoryStyle, Module, Relocation, RelocationTarget, Relocations, TablePlan,
 };

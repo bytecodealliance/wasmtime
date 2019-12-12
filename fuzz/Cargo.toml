@@ -10,6 +10,8 @@ cargo-fuzz = true
 
 [dependencies]
 arbitrary = "0.2.0"
+env_logger = "0.7.1"
+log = "0.4.8"
 wasmtime-fuzzing = { path = "../crates/fuzzing", features = ["env_logger"] }
 wasmtime-jit = { path = "../crates/jit" }
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
@@ -29,3 +31,7 @@ path = "fuzz_targets/instantiate.rs"
 [[bin]]
 name = "instantiate_translated"
 path = "fuzz_targets/instantiate_translated.rs"
+
+[[bin]]
+name = "api_calls"
+path = "fuzz_targets/api_calls.rs"

@@ -1,7 +1,7 @@
-use cranelift_codegen::ir;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use wasmtime_environ::ir;
 
 lazy_static! {
     static ref REGISTRY: RwLock<TrapRegistry> = RwLock::new(TrapRegistry::default());

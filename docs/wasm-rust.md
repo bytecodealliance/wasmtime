@@ -4,7 +4,7 @@ The [Rust Programming Language](https://www.rust-lang.org) supports WebAssembly
 as a compilation target. If you're not familiar with Rust it's recommended to
 start [with its introductory documentation](https://www.rust-lang.org/learn).
 Compiling to WebAssembly will involve specifying the desired target via the
-`--target` flag, and to do this there are a number of "traget triples" for
+`--target` flag, and to do this there are a number of "target triples" for
 WebAssembly compilation in Rust:
 
 * `wasm32-wasi` - when using `wasmtime` this is likely what you'll be using. The

@@ -51,7 +51,7 @@ macro_rules! call {
   ($func:expr, $($p:expr),*) => {
     match $func.borrow().call(&[$($p.into()),*]) {
       Ok(result) => {
-        let result: i32 = result[0].clone().into();
+        let result: i32 = result[0].unwrap_i32();
         result
       }
       Err(_) => { bail!("> Error on result, expected return"); }
@@ -151,7 +151,7 @@ fn main() -> Result<(), Error> {
     // Create stand-alone memory.
     // TODO(wasm+): Once Wasm allows multiple memories, turn this into import.
     println!("Creating stand-alone memory...");
-    let memorytype = MemoryType::new(Limits::new(5, 5));
+    let memorytype = MemoryType::new(Limits::new(5, Some(5)));
     let mut memory2 = Memory::new(&store, memorytype);
     check!(memory2.size(), 5u32);
     check!(memory2.grow(1), false);

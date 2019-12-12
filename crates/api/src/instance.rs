@@ -3,7 +3,8 @@ use crate::externals::Extern;
 use crate::module::Module;
 use crate::r#ref::HostRef;
 use crate::runtime::Store;
-use crate::types::{ExportType, ExternType, Name};
+use crate::trampoline::take_api_trap;
+use crate::types::{ExportType, ExternType};
 use anyhow::Result;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -40,7 +41,12 @@ pub fn instantiate_in_context(
         &mut resolver,
         exports,
         debug_info,
-    )?;
+    )
+    .map_err(|e| {
+        // TODO wrap HostRef<Trap> into Error
+        drop(take_api_trap());
+        e
+    })?;
     contexts.insert(context);
     Ok((instance, contexts))
 }
@@ -116,7 +122,7 @@ impl Instance {
             .exports()
             .iter()
             .enumerate()
-            .find(|(_, e)| e.name().as_str() == name)?;
+            .find(|(_, e)| e.name() == name)?;
         Some(&self.exports()[i])
     }
 
@@ -135,7 +141,7 @@ impl Instance {
                 let _ = store.borrow_mut().register_wasmtime_signature(signature);
             }
             let extern_type = ExternType::from_wasmtime_export(&export);
-            exports_types.push(ExportType::new(Name::new(name), extern_type));
+            exports_types.push(ExportType::new(name, extern_type));
             exports.push(Extern::from_wasmtime_export(
                 store,
                 instance_handle.clone(),

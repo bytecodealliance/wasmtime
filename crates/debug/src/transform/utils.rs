@@ -1,8 +1,8 @@
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use anyhow::Error;
-use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;
+use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 pub(crate) fn add_internal_types(

@@ -1,7 +1,7 @@
 use libc;
 use more_asserts::assert_gt;
 use std::{cmp::min, env, mem, process, slice, str};
-use wasi::wasi_unstable;
+use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
 use wasi_tests::wasi_wrappers::{wasi_fd_filestat_get, wasi_fd_readdir, wasi_path_open};
 

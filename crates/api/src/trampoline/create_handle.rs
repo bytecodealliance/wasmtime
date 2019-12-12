@@ -1,13 +1,13 @@
 //! Support for a calling of an imported function.
 
-use crate::data_structures::wasm::DefinedFuncIndex;
-use crate::data_structures::PrimaryMap;
 use crate::runtime::Store;
 use anyhow::Result;
 use std::any::Any;
 use std::cell::{RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 

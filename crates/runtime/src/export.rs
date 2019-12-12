@@ -1,8 +1,8 @@
 use crate::vmcontext::{
     VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
 };
-use cranelift_codegen::ir;
-use cranelift_wasm::Global;
+use wasmtime_environ::ir;
+use wasmtime_environ::wasm::Global;
 use wasmtime_environ::{MemoryPlan, TablePlan};
 
 /// The value of an export passed from one instance to another.

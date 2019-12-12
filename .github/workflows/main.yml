@@ -12,7 +12,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -24,7 +24,7 @@ jobs:
     name: Doc - build the book
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
     - run: |
         set -e
         curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.3.1/mdbook-v0.3.1-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
@@ -42,7 +42,7 @@ jobs:
     name: Doc - build the API documentation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -62,13 +62,50 @@ jobs:
         name: doc-api
         path: target/doc
 
+  # Download our libFuzzer corpus and make sure that we can still handle all the
+  # inputs.
+  fuzz_corpora:
+    name: Fuzz Corpora
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v1
+      with:
+        repository: bytecodealliance/wasmtime-libfuzzer-corpus
+        path: ./wasmtime/fuzz/corpus
+        ref: refs/heads/master
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: nightly
+    - run: cargo install cargo-fuzz
+    - run: cargo fetch
+      working-directory: ./fuzz
+    # NB: the `-runs=0` means that libFuzzer won't generate new inputs, only run
+    # the seeds from the corpus.
+    - run: cargo fuzz run compile                --release --debug-assertions -- -runs=0
+    - run: cargo fuzz run instantiate            --release --debug-assertions -- -runs=0
+    - run: cargo fuzz run instantiate_translated --release --debug-assertions -- -runs=0
+    - run: cargo fuzz run api_calls              --release --debug-assertions -- -runs=0
+
+  # Install wasm32-unknown-emscripten target, and ensure `crates/wasi-common`
+  # compiles to Emscripten.
+  emscripten:
+    name: Emscripten
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: rustup target add wasm32-unknown-emscripten
+    - run: cargo build --target wasm32-unknown-emscripten -p wasi-common
+
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
   test:
     name: Test
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         build: [stable, beta, nightly, windows, macos]
         include:
@@ -78,9 +115,11 @@ jobs:
           - build: beta
             os: ubuntu-latest
             rust: beta
+          # FIXME need to wait for rust-lang/rust#67065 to get into nightlies,
+          # and then this can be updated to `nightly` again.
           - build: nightly
             os: ubuntu-latest
-            rust: nightly
+            rust: nightly-2019-12-03
           - build: macos
             os: macos-latest
             rust: stable
@@ -88,7 +127,7 @@ jobs:
             os: windows-latest
             rust: stable
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -120,6 +159,7 @@ jobs:
     - run: cargo test --features test_programs --all --exclude lightbeam --exclude wasmtime-wasi-c --exclude wasmtime-py -- --nocapture
       env:
         RUST_BACKTRACE: 1
+        RUSTFLAGS: "-D warnings"
 
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
@@ -133,16 +173,15 @@ jobs:
 
   # Builds a Python wheel (package) for Windows/Mac/Linux. Note that we're
   # careful to create binary-compatible releases here to old releases of
-  # Windows/Mac/Linux. This will also build wheels for Python 3.6 and 3.7.
+  # Windows/Mac/Linux. This will also build wheels for Python 3.6, 3.7 and 3.8.
   wheels:
     name: Python Wheel
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -178,7 +217,29 @@ jobs:
         architecture: x64
       if: matrix.os != 'ubuntu-latest'
     - name: Build Python 3.7
-      run: $CENTOS sh ci/setup_centos6_python37.sh
+      run: $CENTOS sh ci/setup_centos6_python3.sh 3.7.3
+      if: matrix.os == 'ubuntu-latest'
+    - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
+      shell: bash
+    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
+      shell: bash
+
+    # Clear the build directory between building different wheels for different
+    # Python versions to ensure that we don't package dynamic libraries twice by
+    # accident.
+    - run: $CENTOS rm -rf crates/misc/py/build
+      shell: bash
+
+    # Set up Python 3.8 (and build it on Linux), reinstall dependencies, then
+    # rebuild our wheels
+    - name: Setup Python 3.8
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.8'
+        architecture: x64
+      if: matrix.os != 'ubuntu-latest'
+    - name: Build Python 3.8
+      run: $CENTOS sh ci/setup_centos6_python3.sh 3.8.0
       if: matrix.os == 'ubuntu-latest'
     - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
       shell: bash
@@ -213,11 +274,10 @@ jobs:
     name: Build wasmtime
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -281,9 +341,28 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        build: [linux-debug, linux-release, macos-debug, macos-release, windows-debug, windows-release]
+        include:
+          - build: linux-debug
+            os: ubuntu-latest
+            config: debug
+          - build: linux-release
+            os: ubuntu-latest
+            config: release
+          - build: macos-debug
+            os: macos-latest
+            config: debug
+          - build: macos-release
+            os: macos-latest
+            config: release
+          - build: windows-debug
+            os: windows-latest
+            config: debug
+          - build: windows-release
+            os: windows-latest
+            config: release
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -292,12 +371,14 @@ jobs:
     - uses: actions/setup-dotnet@v1
       with:
         dotnet-version: '3.0.101'
-    - run: |
+    - name: Test
+      run: |
         cd crates/misc/dotnet/tests
-        dotnet test
-    - run: |
+        dotnet test -c ${{ matrix.config }}
+    - name: Create package
+      run: |
         cd crates/misc/dotnet/src
-        dotnet pack
+        dotnet pack -c ${{ matrix.config }}
       if: matrix.os == 'macos-latest' # Currently the pack target only supports macOS
 
   # Consumes all published artifacts from all the previous build steps, creates
@@ -309,7 +390,7 @@ jobs:
     needs: [doc_book, doc_api, wheels, build]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
       with:
         submodules: true
     - run: rustup update stable && rustup default stable

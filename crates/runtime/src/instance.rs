@@ -15,11 +15,6 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
-use cranelift_entity::{BoxedSlice, EntityRef, PrimaryMap};
-use cranelift_wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
-};
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::any::Any;
@@ -30,6 +25,11 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
+use wasmtime_environ::entity::{BoxedSlice, EntityRef, PrimaryMap};
+use wasmtime_environ::wasm::{
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
+};
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 fn signature_id(
@@ -469,37 +469,6 @@ impl Instance {
     fn invoke_start_function(&mut self) -> Result<(), InstantiationError> {
         if let Some(start_index) = self.module.start_func {
             self.invoke_function(start_index)
-        } else if let Some(start_export) = self.module.exports.get("_start") {
-            // As a compatibility measure, if the module doesn't have a start
-            // function but does have a _start function exported, call that.
-            match *start_export {
-                wasmtime_environ::Export::Function(func_index) => {
-                    let sig = &self.module.signatures[self.module.functions[func_index]];
-                    // No wasm params or returns; just the vmctx param.
-                    if sig.params.len() == 1 && sig.returns.is_empty() {
-                        self.invoke_function(func_index)
-                    } else {
-                        Ok(())
-                    }
-                }
-                _ => Ok(()),
-            }
-        } else if let Some(main_export) = self.module.exports.get("main") {
-            // As a further compatibility measure, if the module doesn't have a
-            // start function or a _start function exported, but does have a main
-            // function exported, call that.
-            match *main_export {
-                wasmtime_environ::Export::Function(func_index) => {
-                    let sig = &self.module.signatures[self.module.functions[func_index]];
-                    // No wasm params or returns; just the vmctx param.
-                    if sig.params.len() == 1 && sig.returns.is_empty() {
-                        self.invoke_function(func_index)
-                    } else {
-                        Ok(())
-                    }
-                }
-                _ => Ok(()),
-            }
         } else {
             Ok(())
         }
