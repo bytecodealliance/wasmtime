@@ -76,10 +76,12 @@ mod tests {
     fn test_custom_signal_handler_single_instance() {
         let engine = HostRef::new(Engine::new(&Config::default()));
         let store = HostRef::new(Store::new(&engine));
-        let data = std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
+        let data =
+            std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
         let module = HostRef::new(Module::new(&store, &data).expect("failed to create module"));
-        let instance =
-            HostRef::new(Instance::new(&store, &module, &[]).expect("failed to instantiate module"));
+        let instance = HostRef::new(
+            Instance::new(&store, &module, &[]).expect("failed to instantiate module"),
+        );
 
         let (base, length) = set_up_memory(&instance);
         instance
@@ -101,10 +103,9 @@ mod tests {
         {
             println!("calling read_out_of_bounds...");
             let trap = invoke_export(&instance, &data, "read_out_of_bounds").unwrap_err();
-            assert!(trap
-                .root_cause()
-                .to_string()
-                .starts_with("trapped: Ref(Trap { message: \"wasm trap: out of bounds memory access"));
+            assert!(trap.root_cause().to_string().starts_with(
+                "trapped: Ref(Trap { message: \"wasm trap: out of bounds memory access"
+            ));
         }
 
         // these invoke wasmtime_call_trampoline from callable.rs
@@ -137,13 +138,15 @@ mod tests {
     fn test_custom_signal_handler_multiple_instances() {
         let engine = HostRef::new(Engine::new(&Config::default()));
         let store = HostRef::new(Store::new(&engine));
-        let data = std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
+        let data =
+            std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
         let module = HostRef::new(Module::new(&store, &data).expect("failed to create module"));
 
         // Set up multiple instances
 
-        let instance1 =
-            HostRef::new(Instance::new(&store, &module, &[]).expect("failed to instantiate module"));
+        let instance1 = HostRef::new(
+            Instance::new(&store, &module, &[]).expect("failed to instantiate module"),
+        );
         let instance1_handler_triggered = Rc::new(AtomicBool::new(false));
 
         {
@@ -170,8 +173,9 @@ mod tests {
             });
         }
 
-        let instance2 =
-            HostRef::new(Instance::new(&store, &module, &[]).expect("failed to instantiate module"));
+        let instance2 = HostRef::new(
+            Instance::new(&store, &module, &[]).expect("failed to instantiate module"),
+        );
         let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
 
         {
@@ -240,8 +244,9 @@ mod tests {
         let data1 =
             std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
         let module1 = HostRef::new(Module::new(&store, &data1).expect("failed to create module"));
-        let instance1: HostRef<Instance> =
-            HostRef::new(Instance::new(&store, &module1, &[]).expect("failed to instantiate module"));
+        let instance1: HostRef<Instance> = HostRef::new(
+            Instance::new(&store, &module1, &[]).expect("failed to instantiate module"),
+        );
         let (base1, length1) = set_up_memory(&instance1);
         instance1
             .borrow_mut()
@@ -259,7 +264,8 @@ mod tests {
             std::fs::read("tests/custom_signal_handler_2.wasm").expect("failed to read wasm file");
         let module2 = HostRef::new(Module::new(&store, &data2).expect("failed to create module"));
         let instance2 = HostRef::new(
-            Instance::new(&store, &module2, &[instance1_read]).expect("failed to instantiate module"),
+            Instance::new(&store, &module2, &[instance1_read])
+                .expect("failed to instantiate module"),
         );
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1
