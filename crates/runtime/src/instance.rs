@@ -182,13 +182,13 @@ fn global_mut<'vmctx>(
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
-        pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::ucontext_t) -> bool;
+    if #[cfg(any(target_os = "linux", target_os = "macos"))] {
+        pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
 
         pub fn signal_handler_none(
             _signum: libc::c_int,
-            _siginfo_ptr: *const libc::siginfo_t,
-            _ucontext_ptr: *const libc::ucontext_t,
+            _siginfo: *const libc::siginfo_t,
+            _context: *const libc::c_void,
         ) -> bool {
             false
         }
@@ -197,7 +197,7 @@ cfg_if::cfg_if! {
         pub extern "C" fn InstanceSignalHandler(
             signum: libc::c_int,
             siginfo: *mut libc::siginfo_t,
-            context: *mut libc::ucontext_t,
+            context: *mut libc::c_void,
         ) -> bool {
             CURRENT_INSTANCE.with(|current_instance| {
                 let current_instance = current_instance
@@ -223,7 +223,7 @@ cfg_if::cfg_if! {
             /// Set a custom signal handler
             pub fn set_signal_handler<H>(&mut self, handler: H)
             where
-                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::ucontext_t) -> bool,
+                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
                 self.instance_mut().signal_handler = Box::new(handler) as Box<SignalHandler>;
             }
@@ -265,51 +265,6 @@ cfg_if::cfg_if! {
             pub fn set_signal_handler<H>(&mut self, handler: H)
             where
                 H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
-            {
-                self.instance_mut().signal_handler = Box::new(handler) as Box<SignalHandler>;
-            }
-        }
-    } else if #[cfg(target_os = "macos")] {
-        pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
-
-        pub fn signal_handler_none(
-            _signum: libc::c_int,
-            _siginfo_ptr: *const libc::siginfo_t,
-            _context_ptr: *const libc::c_void,
-        ) -> bool {
-            false
-        }
-
-        #[no_mangle]
-        pub extern "C" fn InstanceSignalHandler(
-            signum: libc::c_int,
-            siginfo: *mut libc::siginfo_t,
-            context: *const libc::c_void,
-        ) -> bool {
-            CURRENT_INSTANCE.with(|current_instance| {
-                let current_instance = current_instance
-                    .try_borrow()
-                    .expect("borrow current instance");
-                if current_instance.is_empty() {
-                    return false;
-                } else {
-                    unsafe {
-                        let f = &current_instance
-                            .last()
-                            .expect("current instance not none")
-                            .as_ref()
-                            .signal_handler;
-                        f(signum, siginfo, context)
-                    }
-                }
-            })
-        }
-
-        impl InstanceHandle {
-            /// Set a custom signal handler
-            pub fn set_signal_handler<H>(&mut self, handler: H)
-            where
-                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
                 self.instance_mut().signal_handler = Box::new(handler) as Box<SignalHandler>;
             }

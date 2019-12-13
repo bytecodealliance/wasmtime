@@ -180,7 +180,7 @@ cfg_if::cfg_if! {
             /// [async-signal-safe](http://man7.org/linux/man-pages/man7/signal-safety.7.html).
             pub fn set_signal_handler<H>(&mut self, handler: H)
             where
-                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::ucontext_t) -> bool,
+                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
                 self.instance_handle.set_signal_handler(handler);
             }
