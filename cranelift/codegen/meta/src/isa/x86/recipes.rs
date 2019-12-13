@@ -100,7 +100,7 @@ impl<'builder> RecipeGroup<'builder> {
 /// Given a sequence of opcode bytes, compute the recipe name prefix and encoding bits.
 fn decode_opcodes(op_bytes: &[u8], rrr: u16, w: u16) -> (&'static str, u16) {
     let enc = EncodingBits::new(op_bytes, rrr, w);
-    (enc.prefix.recipe_name_prefix(), enc.bits())
+    (enc.prefix().recipe_name_prefix(), enc.bits())
 }
 
 /// Given a snippet of Rust code (or None), replace the `PUT_OP` macro with the

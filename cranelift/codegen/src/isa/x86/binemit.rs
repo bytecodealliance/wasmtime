@@ -67,7 +67,7 @@ fn rex3(rm: RegUnit, reg: RegUnit, index: RegUnit) -> u8 {
 // extracted from `bits`.
 fn rex_prefix<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(rex & 0xf8, BASE_REX);
-    let w = EncodingBits::from(bits).rex_w;
+    let w = EncodingBits::from(bits).rex_w();
     sink.put1(rex | (u8::from(w) << 3));
 }
 

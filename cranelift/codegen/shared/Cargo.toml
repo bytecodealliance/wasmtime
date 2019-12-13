@@ -8,6 +8,4 @@ repository = "https://github.com/bytecodealliance/cranelift"
 readme = "README.md"
 edition = "2018"
 
-[dependencies]
-packed_struct = "0.3"
-packed_struct_codegen = "0.3"
+# Since this is a shared dependency of several packages, please strive to keep this dependency-free.
