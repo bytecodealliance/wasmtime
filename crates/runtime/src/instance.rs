@@ -1253,6 +1253,7 @@ fn initialize_globals(instance: &mut Instance) {
                 unsafe { *to = *from };
             }
             GlobalInit::Import => panic!("locally-defined global initialized as import"),
+            GlobalInit::RefNullConst => unimplemented!(),
         }
     }
 }

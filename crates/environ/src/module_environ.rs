@@ -7,7 +7,7 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    ModuleTranslationState, SignatureIndex, Table, TableIndex, WasmResult,
+    ModuleTranslationState, SignatureIndex, Table, TableIndex, TargetEnvironment, WasmResult,
 };
 use std::convert::TryFrom;
 
@@ -86,13 +86,15 @@ impl<'data> ModuleEnvironment<'data> {
     }
 }
 
-/// This trait is useful for `translate_module` because it tells how to translate
-/// environment-dependent wasm instructions. These functions should not be called by the user.
-impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data> {
+impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.result.target_config
     }
+}
 
+/// This trait is useful for `translate_module` because it tells how to translate
+/// environment-dependent wasm instructions. These functions should not be called by the user.
+impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data> {
     fn reserve_signatures(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
