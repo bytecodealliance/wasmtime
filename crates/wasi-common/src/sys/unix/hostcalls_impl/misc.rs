@@ -3,7 +3,7 @@
 use crate::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::sys::host_impl;
 use crate::{wasi, Error, Result};
-use yanix::clock::{clock_getres, ClockId};
+use yanix::clock::{clock_getres, clock_gettime, ClockId};
 
 fn wasi_clock_id_to_unix(clock_id: wasi::__wasi_clockid_t) -> Result<ClockId> {
     // convert the supported clocks to libc types, or return EINVAL
@@ -39,7 +39,7 @@ pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__
 
 pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
     let clock_id = wasi_clock_id_to_unix(clock_id)?;
-    let timespec = clock_getres(clock_id)?;
+    let timespec = clock_gettime(clock_id)?;
 
     // convert to nanoseconds, returning EOVERFLOW in case of overflow; this is freelancing a bit
     // from the spec but seems like it'll be an unusual situation to hit
