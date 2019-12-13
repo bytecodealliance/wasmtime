@@ -346,11 +346,7 @@ impl Registers {
         let c = &mut scratch_counts.1[gpr as usize];
         *c = match c.checked_sub(1) {
             Some(e) => e,
-            None => {
-                return Err(Error::Microwasm(
-                    format!("Double-freed register: {}", gpr).to_string(),
-                ))
-            }
+            None => return Err(Error::Microwasm(format!("Double-freed register: {}", gpr))),
         };
         if *c == 0 {
             scratch_counts.0.release(gpr);
@@ -2094,7 +2090,7 @@ macro_rules! store {
             }
 
             if !(offset <= i32::max_value() as u32) {
-                return Err(Error::Microwasm(format!("store: offset value too big {}", offset).to_string()))
+                return Err(Error::Microwasm(format!("store: offset value too big {}", offset)))
             }
 
             let mut src = self.pop()?;

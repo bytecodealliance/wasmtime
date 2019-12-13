@@ -396,13 +396,14 @@ where
                         (&mut else_block.calling_convention, &else_.to_drop),
                     ) {
                         ((Some(Left(ref cc)), _), ref mut other @ (None, _))
-                        | (ref mut other @ (None, _), (Some(Left(ref cc)), _)) => Ok({
+                        | (ref mut other @ (None, _), (Some(Left(ref cc)), _)) => {
                             let mut cc = ctx.serialize_block_args(cc, max_params)?;
                             if let Some(to_drop) = other.1 {
                                 drop_elements(&mut cc.arguments, to_drop.clone());
                             }
                             *other.0 = Some(Left(cc));
-                        }),
+                            Ok(())
+                        },
                         (
                             (ref mut then_cc @ None, then_to_drop),
                             (ref mut else_cc @ None, else_to_drop),
@@ -464,9 +465,10 @@ where
                         ctx.br(else_);
                     }
                     other => {
-                        return Err(Error::Microwasm(
-                            format!("br_if unimplemented case: {:#?}", other).to_string(),
-                        ))
+                        return Err(Error::Microwasm(format!(
+                            "br_if unimplemented case: {:#?}",
+                            other
+                        )))
                     }
                 };
             }
