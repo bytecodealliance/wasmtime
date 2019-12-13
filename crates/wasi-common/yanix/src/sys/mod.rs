@@ -5,10 +5,10 @@ cfg_if! {
     if #[cfg(any(target_os = "linux",
                  target_os = "android"))] {
         mod linux;
-        pub(crate) use self::linux::*;
+        pub(crate) use linux::*;
     } else if #[cfg(target_os = "emscripten")] {
         mod emscripten;
-        pub(crate) use self::emscripten::*;
+        pub(crate) use emscripten::*;
     } else if #[cfg(any(target_os = "macos",
                         target_os = "ios",
                         target_os = "freebsd",
@@ -16,7 +16,7 @@ cfg_if! {
                         target_os = "openbsd",
                         target_os = "dragonfly"))] {
         mod bsd;
-        pub(crate) use self::bsd::*;
+        pub(crate) use bsd::*;
     } else {
         compile_error!("yanix doesn't compile for this platform yet");
     }
