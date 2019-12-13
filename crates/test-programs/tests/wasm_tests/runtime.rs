@@ -100,10 +100,26 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let _ = HostRef::new(Instance::new(&store, &module, &imports).context(format!(
+
+    let instance = HostRef::new(Instance::new(&store, &module, &imports).context(format!(
         "error while instantiating Wasm module '{}'",
         bin_name,
     ))?);
+
+    let export = instance
+        .borrow()
+        .find_export_by_name("_start")
+        .context("expected a _start export")?
+        .clone();
+
+    if let Err(trap) = export
+        .func()
+        .context("expected export to be a func")?
+        .borrow()
+        .call(&[])
+    {
+        bail!("trapped: {:?}", trap.borrow());
+    }
 
     Ok(())
 }

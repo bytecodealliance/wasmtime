@@ -39,7 +39,7 @@ impl Limits {
         self.min
     }
 
-    /// Returs the maximum amount for these limits, if specified.
+    /// Returns the maximum amount for these limits, if specified.
     pub fn max(&self) -> Option<u32> {
         self.max
     }
@@ -47,18 +47,28 @@ impl Limits {
 
 // Value Types
 
+/// A list of all possible value types in WebAssembly.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ValType {
+    /// Signed 32 bit integer.
     I32,
+    /// Signed 64 bit integer.
     I64,
+    /// Floating point 32 bit integer.
     F32,
+    /// Floating point 64 bit integer.
     F64,
+    /// A 128 bit number.
     V128,
+    /// A reference to opaque data in the Wasm instance.
     AnyRef, /* = 128 */
+    /// A reference to a Wasm function.
     FuncRef,
 }
 
 impl ValType {
+    /// Returns true if `ValType` matches any of the numeric types. (e.g. `I32`,
+    /// `I64`, `F32`, `F64`).
     pub fn is_num(&self) -> bool {
         match self {
             ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 => true,
@@ -66,6 +76,7 @@ impl ValType {
         }
     }
 
+    /// Returns true if `ValType` matches either of the reference types.
     pub fn is_ref(&self) -> bool {
         match self {
             ValType::AnyRef | ValType::FuncRef => true,
@@ -113,8 +124,8 @@ pub enum ExternType {
 
 macro_rules! accessors {
     ($(($variant:ident($ty:ty) $get:ident $unwrap:ident))*) => ($(
-		/// Attempt to return the underlying type of this external type,
-		/// returning `None` if it is a different type.
+        /// Attempt to return the underlying type of this external type,
+        /// returning `None` if it is a different type.
         pub fn $get(&self) -> Option<&$ty> {
             if let ExternType::$variant(e) = self {
                 Some(e)
@@ -123,7 +134,7 @@ macro_rules! accessors {
             }
         }
 
-		/// Returns the underlying descriptor of this [`ExternType`], panicking
+        /// Returns the underlying descriptor of this [`ExternType`], panicking
         /// if it is a different type.
         ///
         /// # Panics

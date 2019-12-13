@@ -8,7 +8,7 @@ fn test_trap_return() -> Result<(), String> {
 
     impl Callable for HelloCallback {
         fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), HostRef<Trap>> {
-            Err(HostRef::new(Trap::new("test 123".into())))
+            Err(HostRef::new(Trap::new("test 123")))
         }
     }
 

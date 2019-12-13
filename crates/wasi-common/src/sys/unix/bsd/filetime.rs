@@ -1,6 +1,6 @@
 //! This internal module consists of helper types and functions for dealing
 //! with setting the file times specific to BSD-style *nixes.
-use super::super::filetime::FileTime;
+use crate::{sys::unix::filetime::FileTime, Result};
 use cfg_if::cfg_if;
 use std::ffi::CStr;
 use std::fs::File;
@@ -41,8 +41,8 @@ pub(crate) fn utimensat(
     atime: FileTime,
     mtime: FileTime,
     symlink_nofollow: bool,
-) -> io::Result<()> {
-    use super::super::filetime::{to_timespec, utimesat};
+) -> Result<()> {
+    use crate::sys::unix::filetime::to_timespec;
     use std::ffi::CString;
     use std::os::unix::prelude::*;
 
@@ -56,16 +56,16 @@ pub(crate) fn utimensat(
         };
 
         let p = CString::new(path.as_bytes())?;
-        let times = [to_timespec(&atime), to_timespec(&mtime)];
+        let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
         let rc = unsafe { func(dirfd.as_raw_fd(), p.as_ptr(), times.as_ptr(), flags) };
         if rc == 0 {
             return Ok(());
         } else {
-            return Err(io::Error::last_os_error());
+            return Err(io::Error::last_os_error().into());
         }
     }
 
-    utimesat(dirfd, path, atime, mtime, symlink_nofollow)
+    super::utimesat::utimesat(dirfd, path, atime, mtime, symlink_nofollow)
 }
 
 /// Wraps `fetch` specifically targetting `utimensat` symbol. If the symbol exists

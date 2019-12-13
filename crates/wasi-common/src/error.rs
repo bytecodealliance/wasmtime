@@ -149,6 +149,12 @@ impl From<str::Utf8Error> for Error {
     }
 }
 
+impl From<ffi::NulError> for Error {
+    fn from(_: ffi::NulError) -> Self {
+        Self::Wasi(WasiError::EILSEQ)
+    }
+}
+
 impl From<&ffi::NulError> for Error {
     fn from(_: &ffi::NulError) -> Self {
         Self::Wasi(WasiError::EILSEQ)
