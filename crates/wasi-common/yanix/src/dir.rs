@@ -8,7 +8,7 @@ use std::{ffi::CStr, ops::Deref, ptr};
 pub use crate::sys::EntryExt;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Dir(pub(crate) ptr::NonNull<libc::DIR>);
+pub struct Dir(ptr::NonNull<libc::DIR>);
 
 impl Dir {
     /// Takes the ownership of the passed-in descriptor-based object,
@@ -50,6 +50,12 @@ impl Dir {
     pub fn tell(&self) -> SeekLoc {
         let loc = unsafe { libc::telldir(self.0.as_ptr()) };
         SeekLoc(loc)
+    }
+
+    /// For use by platform-specific implementation code. Returns the raw
+    /// underlying state.
+    pub(crate) fn as_raw(&self) -> ptr::NonNull<libc::DIR> {
+        self.0
     }
 }
 
@@ -153,6 +159,6 @@ where
     type Item = Result<Entry>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe { iter_impl(&self.0).map(|x| x.map(Entry)) }
+        iter_impl(&self.0).map(|x| x.map(Entry))
     }
 }

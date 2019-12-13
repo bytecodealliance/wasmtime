@@ -25,9 +25,9 @@ impl EntryExt for Entry {
     }
 }
 
-pub(crate) unsafe fn iter_impl(dir: &Dir) -> Option<Result<EntryImpl>> {
+pub(crate) fn iter_impl(dir: &Dir) -> Option<Result<EntryImpl>> {
     let errno = Errno::last();
-    let dirent = libc::readdir64(dir.0.as_ptr());
+    let dirent = unsafe { libc::readdir64(dir.as_raw().as_ptr()) };
     if dirent.is_null() {
         if errno != Errno::last() {
             // TODO This should be verified on different BSD-flavours.
@@ -41,6 +41,6 @@ pub(crate) unsafe fn iter_impl(dir: &Dir) -> Option<Result<EntryImpl>> {
             None
         }
     } else {
-        Some(Ok(EntryImpl(*dirent)))
+        Some(Ok(EntryImpl(unsafe { *dirent })))
     }
 }
