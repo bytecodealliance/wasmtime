@@ -7,7 +7,7 @@ use cranelift_codegen::{
     isa,
 };
 use memoffset::offset_of;
-use more_asserts::assert_le;
+
 use std::{convert::TryInto, mem};
 use thiserror::Error;
 use wasmparser::{FuncType, MemoryType, ModuleReader, SectionCode, Type};
@@ -563,15 +563,17 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
         let memories = section.get_memory_section_reader()?;
         let mem = translate_sections::memory(memories)?;
 
-        assert_le!(
-            mem.len(),
-            1,
-            "Multiple memory sections not yet unimplemented"
-        );
+        if mem.len() > 1 {
+            return Err(Error::Input(
+                "Multiple memory sections not yet unimplemented".to_string(),
+            ));
+        }
 
         if !mem.is_empty() {
             let mem = mem[0];
-            assert_eq!(Some(mem.limits.initial), mem.limits.maximum);
+            if Some(mem.limits.initial) != mem.limits.maximum {
+                return Err(Error::Input("Memory limits not matching".to_string()));
+            }
             output.memory = Some(mem);
         }
 
@@ -642,7 +644,9 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
         translate_sections::data(data)?;
     }
 
-    assert!(reader.eof());
+    if !reader.eof() {
+        return Err(Error::Input("Module not transate completely".to_string()));
+    }
 
     Ok(output)
 }
