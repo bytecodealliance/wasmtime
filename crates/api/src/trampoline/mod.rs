@@ -22,9 +22,9 @@ pub use self::trap::take_api_trap;
 pub fn generate_func_export(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
-    store: &HostRef<Store>,
+    store: &mut Store,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
-    let mut instance = create_handle_with_function(ft, func, store)?;
+    let mut instance = create_handle_with_function(ft, func, &mut store)?;
     let export = instance.lookup("trampoline").expect("trampoline export");
     Ok((instance, export))
 }

@@ -26,13 +26,13 @@ pub(crate) trait WrappedCallable {
 }
 
 pub(crate) struct WasmtimeFn {
-    store: HostRef<Store>,
+    store: Store,
     instance: InstanceHandle,
     export: Export,
 }
 
 impl WasmtimeFn {
-    pub fn new(store: &HostRef<Store>, instance: InstanceHandle, export: Export) -> WasmtimeFn {
+    pub fn new(store: &Store, instance: InstanceHandle, export: Export) -> WasmtimeFn {
         WasmtimeFn {
             store: store.clone(),
             instance,
@@ -76,7 +76,6 @@ impl WrappedCallable for WasmtimeFn {
         // Get the trampoline to call for this function.
         let exec_code_buf = self
             .store
-            .borrow_mut()
             .context()
             .compiler()
             .get_published_trampoline(body, &signature, value_size)
@@ -129,10 +128,10 @@ impl NativeCallable {
     pub(crate) fn new(
         callable: Rc<dyn Callable + 'static>,
         ft: &FuncType,
-        store: &HostRef<Store>,
+        store: &mut Store,
     ) -> Self {
         let (instance, export) =
-            generate_func_export(ft, &callable, store).expect("generated func");
+            generate_func_export(ft, &mut callable, store).expect("generated func");
         NativeCallable {
             callable,
             instance,

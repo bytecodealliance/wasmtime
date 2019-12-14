@@ -1,6 +1,6 @@
 use crate::context::Context;
 use crate::r#ref::HostRef;
-use std::cell::RefCell;
+use std::cell::{RefCell, Ref, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
 use wasmtime_environ::{ir, settings};
@@ -106,17 +106,60 @@ impl Engine {
 }
 
 // Store
-
+#[derive(Clone)]
 pub struct Store {
+    inner: HostRef<StoreInner>,
+}
+
+impl Store {
+    pub fn new(engine: &HostRef<Engine>) -> Self {
+        Self {
+            inner: HostRef::new(StoreInner::new(engine)),
+        }
+    }
+
+    pub fn engine(&self) -> Ref<HostRef<Engine>> {
+        Ref::map(self.inner.borrow(), |i| i.engine())
+    }
+
+    pub(crate) fn context(&mut self) -> RefMut<Context> {
+        RefMut::map(self.inner.borrow_mut(), |i| i.context())
+    }
+    
+    // Specific to wasmtime: hack to pass memory around to wasi
+    pub fn global_exports(
+        &self,
+    ) -> Ref<Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>> {
+        Ref::map(self.inner.borrow(), |i| i.global_exports())
+    }
+
+    pub(crate) fn register_wasmtime_signature(
+        &mut self,
+        signature: &ir::Signature,
+    ) -> wasmtime_runtime::VMSharedSignatureIndex {
+        self.inner.borrow().register_wasmtime_signature(signature)
+    }
+
+    pub(crate) fn lookup_wasmtime_signature(
+        &self,
+        type_index: wasmtime_runtime::VMSharedSignatureIndex,
+    ) -> Option<Ref<ir::Signature>> {
+        self.inner.borrow().lookup_wasmtime_signature(type_index).map(|_| {
+            Ref::map(self.inner.borrow(), |i| i.lookup_wasmtime_signature(type_index).unwrap())
+        })
+    }
+}
+
+pub struct StoreInner {
     engine: HostRef<Engine>,
     context: Context,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     signature_cache: HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>,
 }
 
-impl Store {
-    pub fn new(engine: &HostRef<Engine>) -> Store {
-        Store {
+impl StoreInner {
+    pub fn new(engine: &HostRef<Engine>) -> Self {
+        Self {
             engine: engine.clone(),
             context: Context::new(&engine.borrow().config),
             global_exports: Rc::new(RefCell::new(HashMap::new())),

@@ -13,7 +13,7 @@ use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 
 pub(crate) fn create_handle(
     module: Module,
-    signature_registry: Option<RefMut<Store>>,
+    signature_registry: Option<&mut Store>,
     finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle> {

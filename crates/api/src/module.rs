@@ -173,7 +173,7 @@ impl Module {
     /// Validate and decode the raw wasm data in `binary` and create a new
     /// `Module` in the given `store`.
     #[inline]
-    pub fn new(store: &HostRef<Store>, binary: &[u8]) -> Result<Module> {
+    pub fn new(store: &Store, binary: &[u8]) -> Result<Module> {
         Ok(Self {
             inner: HostRef::new(ModuleInner::new(store, binary)?),
         })
@@ -181,19 +181,20 @@ impl Module {
     /// Similar to `new`, but does not perform any validation. Only use this
     /// on modules which are known to have been validated already!
     #[inline]
-    pub fn new_unchecked(store: &HostRef<Store>, binary: &[u8]) -> Result<Module> {
+    pub fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
         Ok(Self {
             inner: HostRef::new(ModuleInner::new_unchecked(store, binary)?),
         })
     }
-    pub fn from_exports(store: &HostRef<Store>, exports: Box<[ExportType]>) -> Self {
+    #[inline]
+    pub fn from_exports(store: &Store, exports: Box<[ExportType]>) -> Self {
         Self {
             inner: HostRef::new(ModuleInner::from_exports(store, exports)),
         }
     }
 
     /// Ensure that a given WASM store has valid syntax and semantics.
-    pub fn validate(_store: &HostRef<Store>, binary: &[u8]) -> Result<()> {
+    pub fn validate(_store: &Store, binary: &[u8]) -> Result<()> {
         let config = ValidatingParserConfig {
             operator_config: OperatorValidatorConfig {
                 enable_threads: false,
@@ -222,6 +223,9 @@ impl Module {
     pub fn exports(&self) -> Ref<[ExportType]> {
         Ref::map(self.inner.borrow(), |i| -> &[ExportType] { &i.exports() })
     }
+    pub fn store(&self) -> Ref<Store> {
+        Ref::map(self.inner.borrow(), |i| i.store())
+    }
 }
 
 #[derive(Clone)]
@@ -231,7 +235,7 @@ pub(crate) enum ModuleCodeSource {
 }
 
 struct ModuleInner {
-    store: HostRef<Store>,
+    store: Store,
     source: ModuleCodeSource,
     pub(crate) imports: Box<[ImportType]>,
     pub(crate) exports: Box<[ExportType]>,
@@ -239,12 +243,12 @@ struct ModuleInner {
 
 impl ModuleInner {
     /// See documentation on ModuleInner.
-    fn new(store: &HostRef<Store>, binary: &[u8]) -> Result<Self> {
+    fn new(store: &Store, binary: &[u8]) -> Result<Self> {
         Module::validate(store, binary)?;
         Self::new_unchecked(store, binary)
     }
     /// See documentation on ModuleInner.
-    fn new_unchecked(store: &HostRef<Store>, binary: &[u8]) -> Result<Self> {
+    fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Self> {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(ModuleInner {
             store: store.clone(),
@@ -253,7 +257,7 @@ impl ModuleInner {
             exports,
         })
     }
-    fn from_exports(store: &HostRef<Store>, exports: Box<[ExportType]>) -> Self {
+    fn from_exports(store: &Store, exports: Box<[ExportType]>) -> Self {
         ModuleInner {
             store: store.clone(),
             source: ModuleCodeSource::Unknown,
@@ -272,5 +276,8 @@ impl ModuleInner {
     }
     pub fn exports(&self) -> &[ExportType] {
         &self.exports
+    }
+    pub fn store(&self) -> &Store {
+        &self.store
     }
 }

@@ -195,7 +195,7 @@ impl From<RuntimeValue> for Val {
 
 pub(crate) fn into_checked_anyfunc(
     val: Val,
-    store: &HostRef<Store>,
+    store: &mut Store,
 ) -> wasmtime_runtime::VMCallerCheckedAnyfunc {
     match val {
         Val::AnyRef(AnyRef::Null) => wasmtime_runtime::VMCallerCheckedAnyfunc {
@@ -213,7 +213,7 @@ pub(crate) fn into_checked_anyfunc(
                 } => (*vmctx, *address, signature),
                 _ => panic!("expected function export"),
             };
-            let type_index = store.borrow_mut().register_wasmtime_signature(signature);
+            let type_index = store.register_wasmtime_signature(signature);
             wasmtime_runtime::VMCallerCheckedAnyfunc {
                 func_ptr,
                 type_index,
@@ -226,7 +226,7 @@ pub(crate) fn into_checked_anyfunc(
 
 pub(crate) fn from_checked_anyfunc(
     item: &wasmtime_runtime::VMCallerCheckedAnyfunc,
-    store: &HostRef<Store>,
+    store: &Store,
 ) -> Val {
     if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {
         return Val::AnyRef(AnyRef::Null);

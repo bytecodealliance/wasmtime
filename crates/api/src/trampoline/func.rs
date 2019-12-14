@@ -231,7 +231,7 @@ fn make_trampoline(
 pub fn create_handle_with_function(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
-    store: &HostRef<Store>,
+    store: &mut Store,
 ) -> Result<InstanceHandle> {
     let sig = ft.get_wasmtime_signature().clone();
 
@@ -267,7 +267,7 @@ pub fn create_handle_with_function(
 
     create_handle(
         module,
-        Some(store.borrow_mut()),
+        Some(&mut store),
         finished_functions,
         Box::new(trampoline_state),
     )
