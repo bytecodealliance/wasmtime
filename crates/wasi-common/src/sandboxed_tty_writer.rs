@@ -80,7 +80,7 @@ where
 
         for c in s.chars() {
             self.write_char(c)?;
-            // Note that use the encoding length of the given char, rather than
+            // Note that we use the encoding length of the given char, rather than
             // how many bytes we actually wrote, because our users don't know about
             // what's really being written.
             result += c.len_utf8();
