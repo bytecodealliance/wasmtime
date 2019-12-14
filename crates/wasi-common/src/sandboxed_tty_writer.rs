@@ -102,7 +102,7 @@ where
         // for more details:
         // https://doc.rust-lang.org/std/str/struct.Utf8Error.html#examples
         loop {
-            match ::std::str::from_utf8(input) {
+            match std::str::from_utf8(input) {
                 Ok(valid) => {
                     result += self.write_str(valid)?;
                     break;
