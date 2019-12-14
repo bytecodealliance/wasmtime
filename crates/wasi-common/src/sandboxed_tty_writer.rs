@@ -9,6 +9,9 @@ where
     Writer: Write,
 {
     inner: &'writer mut Writer,
+
+    /// Temporary buffer for holding UTF-8 encodings of `char`s, which
+    /// are at most 4 bytes long.
     scratch: [u8; 4],
 }
 
