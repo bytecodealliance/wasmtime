@@ -163,7 +163,7 @@ impl FdEntry {
         }
     }
 
-    /// Test whether this descriptor is a considered a tty within WASI.
+    /// Test whether this descriptor is considered a tty within WASI.
     /// Note that since WASI itself lacks an `isatty` syscall and relies
     /// on a conservative approximation, we use the same approximation here.
     pub(crate) fn isatty(&self) -> bool {
