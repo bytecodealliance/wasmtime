@@ -400,9 +400,9 @@ pub(crate) unsafe fn fd_write(
         }
         Descriptor::Stderr => {
             if isatty {
-                io::stderr().write_vectored(&iovs)?
-            } else {
                 SandboxedTTYWriter::new(&mut io::stderr()).write_vectored(&iovs)?
+            } else {
+                io::stderr().write_vectored(&iovs)?
             }
         }
     };
