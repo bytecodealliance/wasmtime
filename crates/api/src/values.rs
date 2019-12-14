@@ -232,7 +232,6 @@ pub(crate) fn from_checked_anyfunc(
         return Val::AnyRef(AnyRef::Null);
     }
     let signature = store
-        .borrow()
         .lookup_wasmtime_signature(item.type_index)
         .expect("signature")
         .clone();

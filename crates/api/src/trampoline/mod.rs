@@ -12,7 +12,6 @@ use self::global::create_global;
 use self::memory::create_handle_with_memory;
 use self::table::create_handle_with_table;
 use super::{Callable, FuncType, GlobalType, MemoryType, Store, TableType, Val};
-use crate::r#ref::HostRef;
 use anyhow::Result;
 use std::rc::Rc;
 
@@ -24,7 +23,7 @@ pub fn generate_func_export(
     func: &Rc<dyn Callable + 'static>,
     store: &mut Store,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
-    let mut instance = create_handle_with_function(ft, func, &mut store)?;
+    let mut instance = create_handle_with_function(ft, func, store)?;
     let export = instance.lookup("trampoline").expect("trampoline export");
     Ok((instance, export))
 }

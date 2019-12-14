@@ -137,7 +137,7 @@ impl Store {
         &mut self,
         signature: &ir::Signature,
     ) -> wasmtime_runtime::VMSharedSignatureIndex {
-        self.inner.borrow().register_wasmtime_signature(signature)
+        self.inner.borrow_mut().register_wasmtime_signature(signature)
     }
 
     pub(crate) fn lookup_wasmtime_signature(

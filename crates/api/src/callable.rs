@@ -14,7 +14,7 @@ pub trait Callable {
 }
 
 pub(crate) trait WrappedCallable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>>;
+    fn call(&mut self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>>;
     fn signature(&self) -> &ir::Signature {
         match self.wasmtime_export() {
             Export::Function { signature, .. } => signature,
@@ -42,7 +42,7 @@ impl WasmtimeFn {
 }
 
 impl WrappedCallable for WasmtimeFn {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&mut self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
         use std::cmp::max;
         use std::{mem, ptr};
 
@@ -131,7 +131,7 @@ impl NativeCallable {
         store: &mut Store,
     ) -> Self {
         let (instance, export) =
-            generate_func_export(ft, &mut callable, store).expect("generated func");
+            generate_func_export(ft, &callable, store).expect("generated func");
         NativeCallable {
             callable,
             instance,
@@ -141,7 +141,7 @@ impl NativeCallable {
 }
 
 impl WrappedCallable for NativeCallable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&mut self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
         self.callable.call(params, results)
     }
     fn wasmtime_handle(&self) -> &InstanceHandle {

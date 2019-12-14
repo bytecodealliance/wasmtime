@@ -148,7 +148,7 @@ impl ModuleData {
             .into_iter()
             .map(|rv| rv.into())
             .collect::<Vec<_>>();
-        let wasm_results = match f.borrow().call(&wasm_args) {
+        let wasm_results = match f.borrow_mut().call(&wasm_args) {
             Ok(values) => values
                 .to_vec()
                 .into_iter()
@@ -335,7 +335,7 @@ impl TranslateContext for InstanceTranslateContext {
             .ok_or_else(|| format_err!("`{}` is not a (alloc) function", alloc_func_name))?
             .clone();
         let alloc_args = vec![wasmtime::Val::I32(len)];
-        let results = match alloc.borrow().call(&alloc_args) {
+        let results = match alloc.borrow_mut().call(&alloc_args) {
             Ok(values) => values,
             Err(trap) => bail!("trapped: {:?}", trap),
         };

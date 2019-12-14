@@ -2,7 +2,6 @@
 
 use super::create_handle::create_handle;
 use super::trap::{record_api_trap, TrapSink, API_TRAP_CODE};
-use crate::r#ref::HostRef;
 use crate::{Callable, FuncType, Store, Val};
 use anyhow::Result;
 use std::cmp;
@@ -267,7 +266,7 @@ pub fn create_handle_with_function(
 
     create_handle(
         module,
-        Some(&mut store),
+        Some(store),
         finished_functions,
         Box::new(trampoline_state),
     )

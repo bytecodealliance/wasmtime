@@ -271,14 +271,14 @@ fn main() -> Result<()> {
         .debug_info(debug_info)
         .strategy(strategy);
     let engine = HostRef::new(Engine::new(&config));
-    let store = HostRef::new(Store::new(&engine));
+    let mut store = Store::new(&engine);
 
     let mut module_registry = HashMap::new();
 
     // Make spectest available by default.
     module_registry.insert(
         "spectest".to_owned(),
-        HostRef::new(Instance::from_handle(&store, instantiate_spectest()?)),
+        HostRef::new(Instance::from_handle(&mut store, instantiate_spectest()?)),
     );
 
     // Make wasi available by default.
@@ -289,7 +289,7 @@ fn main() -> Result<()> {
     let wasi_unstable = HostRef::new(if args.flag_wasi_c {
         #[cfg(feature = "wasi-c")]
         {
-            let global_exports = store.borrow().global_exports().clone();
+            let global_exports = store.global_exports().clone();
             let handle = instantiate_wasi_c(global_exports, &preopen_dirs, &argv, &environ)?;
             Instance::from_handle(&store, handle)
         }
@@ -298,11 +298,11 @@ fn main() -> Result<()> {
             bail!("wasi-c feature not enabled at build time")
         }
     } else {
-        create_wasi_instance_snapshot_0(&store, &preopen_dirs, &argv, &environ)?
+        create_wasi_instance_snapshot_0(&mut store, &preopen_dirs, &argv, &environ)?
     });
 
     let wasi_snapshot_preview1 = HostRef::new(create_wasi_instance(
-        &store,
+        &mut store,
         &preopen_dirs,
         &argv,
         &environ,
@@ -314,19 +314,19 @@ fn main() -> Result<()> {
     // Load the preload wasm modules.
     for filename in &args.flag_preload {
         let path = Path::new(&filename);
-        instantiate_module(&store, &module_registry, path)
+        instantiate_module(&mut store, &module_registry, path)
             .with_context(|| format!("failed to process preload at `{}`", path.display()))?;
     }
 
     // Load the main wasm module.
     let path = Path::new(&args.arg_file);
-    handle_module(&store, &module_registry, &args, path)
+    handle_module(&mut store, &module_registry, &args, path)
         .with_context(|| format!("failed to process main module `{}`", path.display()))?;
     Ok(())
 }
 
 fn instantiate_module(
-    store: &HostRef<Store>,
+    store: &mut Store,
     module_registry: &HashMap<String, HostRef<Instance>>,
     path: &Path,
 ) -> Result<(HostRef<Instance>, Module, Vec<u8>)> {
@@ -364,7 +364,7 @@ fn instantiate_module(
 }
 
 fn handle_module(
-    store: &HostRef<Store>,
+    store: &mut Store,
     module_registry: &HashMap<String, HostRef<Instance>>,
     args: &Args,
     path: &Path,

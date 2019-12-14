@@ -1,7 +1,6 @@
 use crate::context::Context;
 use crate::externals::Extern;
 use crate::module::Module;
-use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trampoline::take_api_trap;
 use crate::types::{ExportType, ExternType};

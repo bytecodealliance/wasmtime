@@ -167,7 +167,7 @@ pub struct wasm_engine_t {
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_store_t {
-    store: HostRef<Store>,
+    store: Store,
 }
 #[doc = ""]
 pub type wasm_mutability_t = u8;
@@ -454,7 +454,7 @@ pub unsafe extern "C" fn wasm_func_call(
     args: *const wasm_val_t,
     results: *mut wasm_val_t,
 ) -> *mut wasm_trap_t {
-    let func = (*func).func.borrow();
+    let mut func = (*func).func.borrow_mut();
     let mut params = Vec::with_capacity(func.param_arity());
     for i in 0..func.param_arity() {
         let val = &(*args.add(i));
@@ -606,7 +606,7 @@ pub unsafe extern "C" fn wasm_func_new(
     ty: *const wasm_functype_t,
     callback: wasm_func_callback_t,
 ) -> *mut wasm_func_t {
-    let store = &(*store).store;
+    let store = &mut (*store).store;
     let ty = (*ty).functype.clone();
     let callback = Rc::new(callback);
     let func = Box::new(wasm_func_t {
@@ -660,7 +660,7 @@ pub unsafe extern "C" fn wasm_instance_new(
     imports: *const *const wasm_extern_t,
     result: *mut *mut wasm_trap_t,
 ) -> *mut wasm_instance_t {
-    let store = &(*store).store;
+    let store = &mut (*store).store;
     let mut externs: Vec<Extern> = Vec::with_capacity((*module).imports.len());
     for i in 0..(*module).imports.len() {
         let import = *imports.add(i);
@@ -774,7 +774,7 @@ pub unsafe extern "C" fn wasm_store_delete(store: *mut wasm_store_t) {
 pub unsafe extern "C" fn wasm_store_new(engine: *mut wasm_engine_t) -> *mut wasm_store_t {
     let engine = &(*engine).engine;
     let store = Box::new(wasm_store_t {
-        store: HostRef::new(Store::new(&engine)),
+        store: Store::new(&engine),
     });
     Box::into_raw(store)
 }
@@ -810,7 +810,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
     env: *mut std::ffi::c_void,
     finalizer: std::option::Option<unsafe extern "C" fn(arg1: *mut std::ffi::c_void)>,
 ) -> *mut wasm_func_t {
-    let store = &(*store).store;
+    let store = &mut (*store).store;
     let ty = (*ty).functype.clone();
     let callback = Rc::new(CallbackWithEnv {
         callback,
@@ -1545,7 +1545,7 @@ pub unsafe extern "C" fn wasm_table_new(
         Val::AnyRef(AnyRef::Null)
     };
     let t = Box::new(wasm_table_t {
-        table: HostRef::new(Table::new(&(*store).store, (*tt).tabletype.clone(), init)),
+        table: HostRef::new(Table::new(&mut (*store).store, (*tt).tabletype.clone(), init)),
         ext: None,
     });
     Box::into_raw(t)
@@ -1587,7 +1587,7 @@ pub unsafe extern "C" fn wasm_table_set(
     r: *mut wasm_ref_t,
 ) -> bool {
     let val = from_funcref(r);
-    (*t).table.borrow().set(index, val)
+    (*t).table.borrow_mut().set(index, val)
 }
 
 #[no_mangle]

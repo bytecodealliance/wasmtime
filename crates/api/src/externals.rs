@@ -119,7 +119,7 @@ pub struct Func {
 
 impl Func {
     pub fn new(store: &mut Store, ty: FuncType, callable: Rc<dyn Callable + 'static>) -> Self {
-        let callable = Rc::new(NativeCallable::new(callable, &ty, &mut store));
+        let callable = Rc::new(NativeCallable::new(callable, &ty, store));
         Func::from_wrapped(store, ty, callable)
     }
 
@@ -147,9 +147,9 @@ impl Func {
         self.r#type.results().len()
     }
 
-    pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, HostRef<Trap>> {
+    pub fn call(&mut self, params: &[Val]) -> Result<Box<[Val]>, HostRef<Trap>> {
         let mut results = vec![Val::null(); self.result_arity()];
-        self.callable.call(params, &mut results)?;
+        Rc::get_mut(&mut self.callable).expect("couldn't get external function to call").call(params, &mut results)?;
         Ok(results.into_boxed_slice())
     }
 
@@ -287,7 +287,7 @@ fn get_table_item(
 
 fn set_table_item(
     handle: &mut InstanceHandle,
-    store: &Store,
+    store: &mut Store,
     table_index: wasm::DefinedTableIndex,
     item_index: u32,
     val: Val,
@@ -302,7 +302,7 @@ fn set_table_item(
 }
 
 impl Table {
-    pub fn new(store: &Store, r#type: TableType, init: Val) -> Table {
+    pub fn new(store: &mut Store, r#type: TableType, init: Val) -> Table {
         match r#type.element() {
             ValType::FuncRef => (),
             _ => panic!("table is not for funcref"),
@@ -350,10 +350,10 @@ impl Table {
         get_table_item(&self.wasmtime_handle, &self.store, table_index, index)
     }
 
-    pub fn set(&self, index: u32, val: Val) -> bool {
+    pub fn set(&mut self, index: u32, val: Val) -> bool {
         let table_index = self.wasmtime_table_index();
         let mut wasmtime_handle = self.wasmtime_handle.clone();
-        set_table_item(&mut wasmtime_handle, &self.store, table_index, index, val)
+        set_table_item(&mut wasmtime_handle, &mut self.store, table_index, index, val)
     }
 
     pub fn size(&self) -> u32 {
@@ -372,7 +372,7 @@ impl Table {
             for i in 0..delta {
                 let i = len - (delta - i);
                 let _success =
-                    set_table_item(&mut wasmtime_handle, &self.store, index, i, init.clone());
+                    set_table_item(&mut wasmtime_handle, &mut self.store, index, i, init.clone());
                 assert!(_success);
             }
             true
