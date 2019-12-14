@@ -113,9 +113,14 @@ where
                     self.write_char('�')?;
 
                     if let Some(invalid_sequence_length) = error.error_len() {
+                        // An invalid sequence was encountered. Tell the application we've
+                        // written those bytes (though actually, we replaced them with U+FFFD).
                         result += invalid_sequence_length;
+                        // Set up `input` to resume writing after the end of the sequence.
                         input = &after_valid[invalid_sequence_length..];
                     } else {
+                        // The end of the buffer was encountered unexpectedly. Tell the application
+                        // we've written out the remainder of the buffer.
                         result += after_valid.len();
                         break;
                     }
