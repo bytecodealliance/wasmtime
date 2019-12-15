@@ -7,4 +7,4 @@ update_configs:
     version_requirement_updates: "auto"
     allowed_updates:
     - match:
-        update_type: "all"
+        update_type: "security"

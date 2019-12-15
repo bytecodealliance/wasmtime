@@ -4,7 +4,6 @@
 *.swx
 tags
 target
-Cargo.lock
 .*.rustfmt
 cranelift.dbg*
 rusty-tags.*

@@ -1,41 +1,25 @@
 use std::{env, process};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::cleanup_file;
-use wasi_tests::wasi_wrappers::{wasi_path_open, wasi_path_symlink};
+use wasi_tests::open_scratch_directory_new;
 
-unsafe fn test_dangling_symlink(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_dangling_symlink(dir_fd: wasi::Fd) {
     // First create a dangling symlink.
     assert!(
-        wasi_path_symlink("target", dir_fd, "symlink").is_ok(),
+        wasi::path_symlink("target", dir_fd, "symlink").is_ok(),
         "creating a symlink"
     );
 
     // Try to open it as a directory with O_NOFOLLOW.
-    let mut file_fd: wasi_unstable::Fd = wasi_unstable::Fd::max_value() - 1;
-    let status = wasi_path_open(
-        dir_fd,
-        0,
-        "symlink",
-        wasi_unstable::O_DIRECTORY,
-        0,
-        0,
-        0,
-        &mut file_fd,
-    );
+    let status = wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+        .err()
+        .expect("failed to open symlink");
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ELOOP,
+        status.raw_error(),
+        wasi::ERRNO_LOOP,
         "opening a dangling symlink as a directory",
-    );
-    assert_eq!(
-        file_fd,
-        wasi_unstable::Fd::max_value(),
-        "failed open should set the file descriptor to -1",
     );
 
     // Clean up.
-    cleanup_file(dir_fd, "symlink");
+    wasi::path_unlink_file(dir_fd, "symlink").expect("failed to remove file");
 }
 
 fn main() {
@@ -49,7 +33,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory(&arg) {
+    let dir_fd = match open_scratch_directory_new(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);
