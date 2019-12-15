@@ -125,18 +125,13 @@ pub(crate) fn poll_oneoff(
     // With no events to listen, poll_oneoff just becomes a sleep.
     if fd_events.is_empty() {
         match timeout_duration {
-            Some(t) => {
-                thread::sleep(t);
-                return Ok(());
-            }
-            None => {
-                // `poll` invoked with nfds = 0, timeout = -1 appears to be an infinite sleep
-                // The thread is not guanteed to remain parked forever, so we need to loop
-                loop {
-                    thread::park();
-                }
-            }
+            Some(t) => thread::sleep(t),
+            // `poll` invoked with nfds = 0, timeout = -1 appears to be an infinite sleep
+            // Even though the thread is not guanteed to remain parked forever, `poll(2)`
+            // mentions that spurious readiness notifications may occur, so it's probably fine
+            None => thread::park(),
         }
+        return Ok(());
     }
 
     // Currently WASI file support is only (a) regular files (b) directories (c) symlinks on Windows,
