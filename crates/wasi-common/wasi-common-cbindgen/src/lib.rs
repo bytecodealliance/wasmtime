@@ -141,6 +141,7 @@ pub fn wasi_common_cbindgen_old(attr: TokenStream, function: TokenStream) -> Tok
     let result = quote! {
         #function
 
+        #[no_mangle]
         #vis unsafe extern "C" fn #c_fn_ident(
             #(
                 #arg_ident: #arg_type,
