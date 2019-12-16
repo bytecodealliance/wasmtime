@@ -565,14 +565,16 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
         if mem.len() > 1 {
             return Err(Error::Input(
-                "Multiple memory sections not yet unimplemented".to_string(),
+                "Multiple memory sections not yet implemented".to_string(),
             ));
         }
 
         if !mem.is_empty() {
             let mem = mem[0];
             if Some(mem.limits.initial) != mem.limits.maximum {
-                return Err(Error::Input("Memory limits not matching".to_string()));
+                return Err(Error::Input(
+                    "Custom memory limits not supported in lightbeam".to_string(),
+                ));
             }
             output.memory = Some(mem);
         }
@@ -645,7 +647,9 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
     }
 
     if !reader.eof() {
-        return Err(Error::Input("Module not transate completely".to_string()));
+        return Err(Error::Input(
+            "Unexpected data found after the end of the module".to_string(),
+        ));
     }
 
     Ok(output)
