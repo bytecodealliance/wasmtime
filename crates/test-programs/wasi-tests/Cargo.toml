@@ -11,8 +11,3 @@ libc = "0.2.65"
 wasi = "0.9.0"
 wasi-old = { version = "0.7.0", package = "wasi" }
 more-asserts = "0.2.1"
-
-# This crate is built with the wasm32-wasi target, so it's separate
-# from the main Wasmtime build, so use this directive to exclude it
-# from the parent directory's workspace.
-[workspace]

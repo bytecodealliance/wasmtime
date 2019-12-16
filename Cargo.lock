@@ -741,7 +741,7 @@ checksum = "e7db7ca94ed4cd01190ceee0d8a8052f08a247aa1b469a7f68c6a3b71afcf407"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi",
+ "wasi 0.7.0",
 ]
 
 [[package]]
@@ -1866,6 +1866,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b89c3ce4ce14bdc6fb6beaf9ec7928ca331de5df7e5ea278375642a2f478570d"
 
 [[package]]
+name = "wasi"
+version = "0.9.0+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
+
+[[package]]
 name = "wasi-common"
 version = "0.7.0"
 dependencies = [
@@ -1894,6 +1900,16 @@ dependencies = [
  "quote",
  "syn",
  "trybuild",
+]
+
+[[package]]
+name = "wasi-tests"
+version = "0.7.0"
+dependencies = [
+ "libc",
+ "more-asserts",
+ "wasi 0.7.0",
+ "wasi 0.9.0+wasi-snapshot-preview1",
 ]
 
 [[package]]
