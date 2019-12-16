@@ -12,7 +12,8 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
         wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
-    ).expect("failed to create file");
+    )
+    .expect("failed to create file");
     assert_gt!(
         file_fd,
         libc::STDERR_FILENO as wasi::Fd,
@@ -36,21 +37,12 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
     let old_atim = stat.atim;
     let new_mtim = stat.mtim - 100;
     assert!(
-        wasi::fd_filestat_set_times(
-            file_fd,
-            new_mtim,
-            new_mtim,
-            wasi::FSTFLAGS_MTIM,
-        )
-        .is_ok(),
+        wasi::fd_filestat_set_times(file_fd, new_mtim, new_mtim, wasi::FSTFLAGS_MTIM,).is_ok(),
         "fd_filestat_set_times"
     );
 
     let stat = wasi::fd_filestat_get(file_fd).expect("failed filestat 3");
-    assert_eq!(
-        stat.size, 100,
-        "file size should remain unchanged at 100"
-    );
+    assert_eq!(stat.size, 100, "file size should remain unchanged at 100");
     assert_eq!(stat.mtim, new_mtim, "mtim should change");
     assert_eq!(stat.atim, old_atim, "atim should not change");
 
