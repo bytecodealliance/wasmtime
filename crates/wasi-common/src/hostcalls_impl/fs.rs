@@ -398,13 +398,11 @@ pub(crate) unsafe fn fd_write(
             stdout.flush()?;
             nwritten
         }
-        Descriptor::Stderr => {
-            if isatty {
-                SandboxedTTYWriter::new(&mut io::stderr()).write_vectored(&iovs)?
-            } else {
-                io::stderr().write_vectored(&iovs)?
-            }
-        }
+        // Always sanitize stderr, even if it's not directly connected to a tty,
+        // because stderr is meant for diagnostics rather than binary output,
+        // and may be redirected to a file which could end up being displayed
+        // on a tty later.
+        Descriptor::Stderr => SandboxedTTYWriter::new(&mut io::stderr()).write_vectored(&iovs)?,
     };
 
     trace!("     | *nwritten={:?}", host_nwritten);
