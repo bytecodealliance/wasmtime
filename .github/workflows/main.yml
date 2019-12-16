@@ -115,11 +115,9 @@ jobs:
           - build: beta
             os: ubuntu-latest
             rust: beta
-          # FIXME need to wait for rust-lang/rust#67065 to get into nightlies,
-          # and then this can be updated to `nightly` again.
           - build: nightly
             os: ubuntu-latest
-            rust: nightly-2019-12-03
+            rust: nightly
           - build: macos
             os: macos-latest
             rust: stable
@@ -186,7 +184,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2019-08-15
+        toolchain: nightly
     - uses: ./.github/actions/binary-compatible-builds
     - run: mkdir crates/misc/py/wheelhouse
       shell: bash
