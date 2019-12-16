@@ -35,7 +35,7 @@ impl PollFd {
     }
 }
 
-pub fn poll(fds: &mut [PollFd], timeout: i32) -> Result<usize> {
+pub fn poll(fds: &mut [PollFd], timeout: libc::c_int) -> Result<usize> {
     Errno::from_result(unsafe {
         libc::poll(
             fds.as_mut_ptr() as *mut libc::pollfd,
