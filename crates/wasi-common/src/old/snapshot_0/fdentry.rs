@@ -162,6 +162,14 @@ impl FdEntry {
             Ok(())
         }
     }
+
+    /// Test whether this descriptor is considered a tty within WASI.
+    /// Note that since WASI itself lacks an `isatty` syscall and relies
+    /// on a conservative approximation, we use the same approximation here.
+    pub(crate) fn isatty(&self) -> bool {
+        self.file_type == wasi::__WASI_FILETYPE_CHARACTER_DEVICE
+            && (self.rights_base & (wasi::__WASI_RIGHTS_FD_SEEK | wasi::__WASI_RIGHTS_FD_TELL)) == 0
+    }
 }
 
 /// This allows an `OsHandle` to be temporarily borrowed from a
