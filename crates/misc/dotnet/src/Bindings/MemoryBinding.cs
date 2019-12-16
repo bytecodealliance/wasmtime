@@ -45,7 +45,7 @@ namespace Wasmtime.Bindings
 
         internal override SafeHandle Bind(Store store, IHost host)
         {
-            dynamic memory = Field.GetValue(host);
+            Memory memory = (Memory)Field.GetValue(host);
             if (memory.Handle != null)
             {
                 throw new InvalidOperationException("Cannot bind more than once.");

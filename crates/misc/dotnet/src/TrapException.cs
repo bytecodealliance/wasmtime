@@ -1,6 +1,6 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
+using System.Text;
 
 namespace Wasmtime
 {
@@ -27,7 +27,13 @@ namespace Wasmtime
             unsafe
             {
                 Interop.wasm_trap_message(trap, out var bytes);
-                var message = Marshal.PtrToStringUTF8((IntPtr)bytes.data, (int)bytes.size - 1 /* remove null */);
+                var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
+
+                int indexOfNull = byteSpan.IndexOf((byte)0);
+                if (indexOfNull != -1)
+                    byteSpan = byteSpan.Slice(0, indexOfNull);
+
+                var message = Encoding.UTF8.GetString(byteSpan);
                 Interop.wasm_byte_vec_delete(ref bytes);
 
                 Interop.wasm_trap_delete(trap);
