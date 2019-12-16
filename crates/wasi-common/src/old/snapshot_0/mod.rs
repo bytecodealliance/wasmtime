@@ -5,7 +5,6 @@ mod helpers;
 mod host;
 pub mod hostcalls;
 mod hostcalls_impl;
-mod sandboxed_tty_writer;
 mod memory;
 mod sys;
 pub mod wasi;
