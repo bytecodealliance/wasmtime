@@ -53,6 +53,7 @@ members = [
   "crates/fuzzing",
   "crates/misc/rust",
   "crates/misc/py",
+  "fuzz",
 ]
 
 [features]

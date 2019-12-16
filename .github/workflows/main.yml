@@ -69,6 +69,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
+      with:
+        submodules: true
     - uses: actions/checkout@v1
       with:
         repository: bytecodealliance/wasmtime-libfuzzer-corpus

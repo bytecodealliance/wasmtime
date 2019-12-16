@@ -923,6 +923,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d515b1f41455adea1313a4a2ac8a8a477634fbae63cc6100e3aebb207ce61558"
 
 [[package]]
+name = "libfuzzer-sys"
+version = "0.1.0"
+source = "git+https://github.com/rust-fuzz/libfuzzer-sys.git#0c4507533a79e85e1984f59765bdd35fbdaa7f1b"
+dependencies = [
+ "arbitrary",
+ "cc",
+]
+
+[[package]]
 name = "libloading"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2035,6 +2044,18 @@ dependencies = [
  "wasmparser 0.44.0",
  "winapi",
  "zstd",
+]
+
+[[package]]
+name = "wasmtime-fuzz"
+version = "0.7.0"
+dependencies = [
+ "arbitrary",
+ "env_logger 0.7.1",
+ "libfuzzer-sys",
+ "log",
+ "wasmtime-fuzzing",
+ "wasmtime-jit",
 ]
 
 [[package]]
