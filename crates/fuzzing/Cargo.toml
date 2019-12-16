@@ -13,7 +13,10 @@ anyhow = "1.0.22"
 arbitrary = "0.2.0"
 binaryen = "0.8.2"
 env_logger = { version = "0.7.1", optional = true }
-log = "0.4.8"
+# Set log to strict 0.4.8 as there seems to be a regression in behaviour
+# with name formatting arguments in the latest release, starting from 0.4.10
+# Tracking issue: https://github.com/rust-lang/log/issues/372
+log = "=0.4.8"
 wasmparser = "0.44.0"
 wasmprinter = "0.2.0"
 wasmtime = { path = "../api" }
