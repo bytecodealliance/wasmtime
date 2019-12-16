@@ -158,6 +158,20 @@ ebb0:
 }
 ; run
 
+
+function %icmp_ult_i16x8() -> b1 {
+ebb0:
+    v0 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
+    v1 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
+    v2 = icmp ult v0, v1
+    v3 = vconst.i16x8 0x00
+    v4 = raw_bitcast.i16x8 v2
+    v5 = icmp eq v3, v4
+    v8 = vall_true v5
+    return v8
+}
+; run
+
 function %icmp_sle_i16x8() -> b1 {
 ebb0:
     v0 = vconst.i16x8 [-1 -1 0 0 0 0 0 0]

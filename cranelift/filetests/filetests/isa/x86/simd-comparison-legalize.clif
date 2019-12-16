@@ -15,7 +15,9 @@ function %icmp_ugt_i32x4(i32x4, i32x4) -> b32x4 {
 ebb0(v0: i32x4, v1: i32x4):
     v2 = icmp ugt v0, v1
     ; check: v3 = x86_pmaxu v0, v1
-    ; nextln: v2 = icmp eq v0, v3
+    ; nextln: v4 = icmp eq v3, v1
+    ; nextln: v5 = vconst.b32x4 0xffffffffffffffffffffffffffffffff
+    ; nextln: v2 = bxor v5, v4
     return v2
 }
 

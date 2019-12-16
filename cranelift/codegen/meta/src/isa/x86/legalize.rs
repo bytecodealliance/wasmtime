@@ -335,6 +335,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let uimm8_zero = Literal::constant(&imm.uimm8, 0x00);
     let uimm8_one = Literal::constant(&imm.uimm8, 0x01);
     let u128_zeroes = constant(vec![0x00; 16]);
+    let u128_ones = constant(vec![0xff; 16]);
     let b = var("b");
     let c = var("c");
     let d = var("d");
@@ -405,12 +406,11 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     }
 
     // SIMD bnot
-    let ones = constant(vec![0xff; 16]);
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let bnot = bnot.bind(vector(ty, sse_vector_size));
         narrow.legalize(
             def!(y = bnot(x)),
-            vec![def!(a = vconst(ones)), def!(y = bxor(a, x))],
+            vec![def!(a = vconst(u128_ones)), def!(y = bxor(a, x))],
         );
     }
 
@@ -524,7 +524,11 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
         narrow.legalize(
             def!(c = icmp_(ugt, a, b)),
-            vec![def!(x = x86_pmaxu(a, b)), def!(c = icmp(eq, a, x))],
+            vec![
+                def!(x = x86_pmaxu(a, b)),
+                def!(y = icmp(eq, x, b)),
+                def!(c = bnot(y)),
+            ],
         );
         let icmp_ = icmp.bind(vector(*ty, sse_vector_size));
         narrow.legalize(
@@ -574,7 +578,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(b = fabs(a)),
             vec![
-                def!(c = vconst(ones)),
+                def!(c = vconst(u128_ones)),
                 def!(d = ushr_imm(c, uimm8_one)), // Create a mask of all 1s except the MSB.
                 def!(e = bitcast_to_float(d)),    // Cast mask to the floating-point type.
                 def!(b = band(a, e)),             // Unset the MSB.
