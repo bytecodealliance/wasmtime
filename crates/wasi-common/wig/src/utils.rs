@@ -1,4 +1,5 @@
 use proc_macro2::{Literal, TokenStream, TokenTree};
+
 /// Given the input tokens to a macro invocation, return the path to the
 /// witx file to process.
 pub(crate) fn witx_path_from_args(args: TokenStream) -> (String, String) {
@@ -26,8 +27,8 @@ pub(crate) fn witx_path_from_args(args: TokenStream) -> (String, String) {
 }
 
 fn witx_path(phase: &str, id: &str) -> String {
-    let root = std::env::var("CARGO_MANIFEST_DIR").unwrap_or(".".into());
-    format!("{}/WASI/phases/{}/witx/{}.witx", root, phase, id)
+    let root = env!("CARGO_MANIFEST_DIR");
+    format!("{}/../WASI/phases/{}/witx/{}.witx", root, phase, id)
 }
 
 // Convert a `Literal` holding a string literal into the `String`.

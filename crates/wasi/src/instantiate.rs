@@ -1,4 +1,3 @@
-use super::syscalls;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
@@ -8,9 +7,10 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::rc::Rc;
 use target_lexicon::HOST;
+use wasi_common::wasi;
 use wasi_common::{WasiCtx, WasiCtxBuilder};
 use wasmtime_environ::{translate_signature, Export, Module};
-use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMFunctionBody};
+use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMContext};
 
 /// Creates `wasmtime::Instance` object implementing the "wasi" interface.
 pub fn create_wasi_instance(
@@ -64,79 +64,19 @@ pub fn instantiate_wasi_with_context(
 ) -> Result<InstanceHandle, InstantiationError> {
     let pointer_type = types::Type::triple_pointer_type(&HOST);
     let mut module = Module::new();
-    let mut finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody> =
-        PrimaryMap::new();
+    let mut finished_functions = PrimaryMap::new();
     let call_conv = isa::CallConv::triple_default(&HOST);
 
-    macro_rules! signature {
-        ($name:ident) => {{
-            let sig = module.signatures.push(translate_signature(
-                ir::Signature {
-                    params: syscalls::$name::params()
-                        .into_iter()
-                        .map(ir::AbiParam::new)
-                        .collect(),
-                    returns: syscalls::$name::results()
-                        .into_iter()
-                        .map(ir::AbiParam::new)
-                        .collect(),
-                    call_conv,
-                },
-                pointer_type,
-            ));
-            let func = module.functions.push(sig);
-            module
-                .exports
-                .insert(stringify!($name).to_owned(), Export::Function(func));
-            finished_functions.push(syscalls::$name::SHIM as *const VMFunctionBody);
-        }};
-    }
-
-    signature!(args_get);
-    signature!(args_sizes_get);
-    signature!(clock_res_get);
-    signature!(clock_time_get);
-    signature!(environ_get);
-    signature!(environ_sizes_get);
-    signature!(fd_prestat_get);
-    signature!(fd_prestat_dir_name);
-    signature!(fd_close);
-    signature!(fd_datasync);
-    signature!(fd_pread);
-    signature!(fd_pwrite);
-    signature!(fd_read);
-    signature!(fd_renumber);
-    signature!(fd_seek);
-    signature!(fd_tell);
-    signature!(fd_fdstat_get);
-    signature!(fd_fdstat_set_flags);
-    signature!(fd_fdstat_set_rights);
-    signature!(fd_sync);
-    signature!(fd_write);
-    signature!(fd_advise);
-    signature!(fd_allocate);
-    signature!(path_create_directory);
-    signature!(path_link);
-    signature!(path_open);
-    signature!(fd_readdir);
-    signature!(path_readlink);
-    signature!(path_rename);
-    signature!(fd_filestat_get);
-    signature!(fd_filestat_set_times);
-    signature!(fd_filestat_set_size);
-    signature!(path_filestat_get);
-    signature!(path_filestat_set_times);
-    signature!(path_symlink);
-    signature!(path_unlink_file);
-    signature!(path_remove_directory);
-    signature!(poll_oneoff);
-    signature!(proc_exit);
-    signature!(proc_raise);
-    signature!(random_get);
-    signature!(sched_yield);
-    signature!(sock_recv);
-    signature!(sock_send);
-    signature!(sock_shutdown);
+    // This function is defined in the macro invocation of
+    // `define_add_wrappers_to_module` below. For more information about how
+    // this works it'd recommended to read the source in
+    // `crates/wasi-common/wig/src/wasi.rs`.
+    add_wrappers_to_module(
+        &mut module,
+        &mut finished_functions,
+        call_conv,
+        pointer_type,
+    );
 
     let imports = Imports::none();
     let data_initializers = Vec::new();
@@ -152,4 +92,41 @@ pub fn instantiate_wasi_with_context(
         None,
         Box::new(wasi_ctx),
     )
+}
+
+wig::define_add_wrappers_to_module!(
+    "snapshot" "wasi_snapshot_preview1"
+);
+
+// Used by `add_wrappers_to_module` defined in the macro above
+fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasi::__wasi_errno_t> {
+    unsafe {
+        vmctx
+            .host_state()
+            .downcast_mut::<WasiCtx>()
+            .ok_or_else(|| panic!("no host state named WasiCtx available"))
+    }
+}
+
+// Used by `add_wrappers_to_module` defined in the macro above
+fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasi::__wasi_errno_t> {
+    unsafe {
+        match vmctx.lookup_global_export("memory") {
+            Some(wasmtime_runtime::Export::Memory {
+                definition,
+                vmctx: _,
+                memory: _,
+            }) => Ok(std::slice::from_raw_parts_mut(
+                (*definition).base,
+                (*definition).current_length,
+            )),
+            x => {
+                log::error!(
+                    "no export named \"memory\", or the export isn't a mem: {:?}",
+                    x
+                );
+                Err(wasi::__WASI_ERRNO_INVAL)
+            }
+        }
+    }
 }

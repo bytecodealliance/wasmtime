@@ -21,6 +21,7 @@ cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
 target-lexicon = "0.9.0"
 log = { version = "0.4.8", default-features = false }
+wig = { path = "../wasi-common/wig" }
 
 [badges]
 maintenance = { status = "actively-developed" }
