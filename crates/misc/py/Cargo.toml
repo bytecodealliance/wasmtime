@@ -13,6 +13,7 @@ edition = "2018"
 [lib]
 name = "_wasmtime"
 crate-type = ["cdylib"]
+test = false
 
 [dependencies]
 wasmtime = { path = "../../api" }
