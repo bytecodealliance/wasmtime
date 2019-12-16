@@ -28,3 +28,7 @@ bindgen = "0.51.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[lib]
+test = false
+doctest = false
