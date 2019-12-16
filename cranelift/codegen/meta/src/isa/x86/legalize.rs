@@ -40,7 +40,6 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let fmax = insts.by_name("fmax");
     let fmin = insts.by_name("fmin");
     let fneg = insts.by_name("fneg");
-    let fsub = insts.by_name("fsub");
     let iadd = insts.by_name("iadd");
     let icmp = insts.by_name("icmp");
     let iconst = insts.by_name("iconst");
@@ -48,6 +47,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let ineg = insts.by_name("ineg");
     let insertlane = insts.by_name("insertlane");
     let ishl = insts.by_name("ishl");
+    let ishl_imm = insts.by_name("ishl_imm");
     let isub = insts.by_name("isub");
     let popcnt = insts.by_name("popcnt");
     let raw_bitcast = insts.by_name("raw_bitcast");
@@ -550,9 +550,18 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     for ty in &[F32, F64] {
         let fneg = fneg.bind(vector(*ty, sse_vector_size));
+        let lane_type_as_int = LaneType::int_from_bits(LaneType::from(*ty).lane_bits() as u16);
+        let uimm8_shift = Literal::constant(&imm.uimm8, lane_type_as_int.lane_bits() as i64 - 1);
+        let vconst = vconst.bind(vector(lane_type_as_int, sse_vector_size));
+        let bitcast_to_float = raw_bitcast.bind(vector(*ty, sse_vector_size));
         narrow.legalize(
             def!(b = fneg(a)),
-            vec![def!(c = vconst(u128_zeroes)), def!(b = fsub(c, a))],
+            vec![
+                def!(c = vconst(ones)),
+                def!(d = ishl_imm(c, uimm8_shift)), // Create a mask of all 0s except the MSB.
+                def!(e = bitcast_to_float(d)),      // Cast mask to the floating-point type.
+                def!(b = bxor(a, e)),               // Flip the MSB.
+            ],
         );
     }
 

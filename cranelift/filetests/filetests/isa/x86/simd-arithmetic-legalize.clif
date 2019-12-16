@@ -39,13 +39,17 @@ function %fneg_legalized() {
 ebb0:
     v0 = vconst.f32x4 [0x1.0 0x2.0 0x3.0 0x4.0]
     v1 = fneg v0
-    ; check: v4 = vconst.f32x4 0x00
-    ; nextln: v1 = fsub v4, v0
+    ; check: v4 = vconst.i32x4 0xffffffffffffffffffffffffffffffff
+    ; nextln: v5 = ishl_imm v4, 31
+    ; nextln: v6 = raw_bitcast.f32x4 v5
+    ; nextln: v1 = bxor v0, v6
 
     v2 = vconst.f64x2 [0x1.0 0x2.0]
     v3 = fneg v2
-    ; check: v5 = vconst.f64x2 0x00
-    ; nextln: v3 = fsub v5, v2
+    ; check: v7 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    ; nextln: v8 = ishl_imm v7, 63
+    ; nextln: v9 = raw_bitcast.f64x2 v8
+    ; nextln: v3 = bxor v2, v9
 
     return
 }
