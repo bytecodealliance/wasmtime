@@ -84,7 +84,7 @@ impl Entry {
 
     /// Returns the type of this directory entry.
     pub fn file_type(&self) -> FileType {
-        unsafe { FileType::from_raw(self.0.d_type) }
+        FileType::from_raw(self.0.d_type)
     }
 }
 
@@ -113,7 +113,7 @@ pub enum FileType {
 }
 
 impl FileType {
-    pub unsafe fn from_raw(file_type: u8) -> Self {
+    pub fn from_raw(file_type: u8) -> Self {
         match file_type {
             libc::DT_CHR => Self::CharacterDevice,
             libc::DT_DIR => Self::Directory,
