@@ -1746,10 +1746,13 @@ pub(crate) fn define(
         } else {
             let template = rec_frurm.opcodes(&MOVD_LOAD_XMM);
             if ty.lane_bits() < 64 {
-                // no 32-bit encodings for 64-bit widths
                 e.enc32(instruction.clone(), template.clone());
+                e.enc_x86_64(instruction, template);
+            } else {
+                // No 32-bit encodings for 64-bit widths.
+                assert_eq!(ty.lane_bits(), 64);
+                e.enc64(instruction, template.rex().w());
             }
-            e.enc_x86_64(instruction, template);
         }
     }
 

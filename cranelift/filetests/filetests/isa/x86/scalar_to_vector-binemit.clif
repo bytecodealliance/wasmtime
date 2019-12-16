@@ -27,6 +27,6 @@ ebb0:
 function %test_scalar_to_vector_i64() {
 ebb0:
 [-, %rdx]   v0 = iconst.i64 42
-[-, %xmm7]  v1 = scalar_to_vector.i64x2 v0    ; bin: 66 0f 6e fa
+[-, %xmm7]  v1 = scalar_to_vector.i64x2 v0    ; bin: 66 48 0f 6e fa
             return
 }
