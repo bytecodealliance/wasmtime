@@ -1,9 +1,9 @@
 # Cache Configuration of `wasmtime`
 
-The cache configuration file uses the [toml] format.
+The configuration file uses the [toml] format.
 You can create a configuration file at the default location with:
 ```
-$ wasmtime --create-cache-config
+$ wasmtime config new
 ```
 It will print the location regardless of the success.
 Please refer to the  `--help` message for using a custom location.

@@ -25,8 +25,6 @@ region = "2.0.0"
 [dev-dependencies]
 # for wasmtime.rs
 wasi-common = { path = "../wasi-common" }
-docopt = "1.0.1"
-serde = { "version" = "1.0.94", features = ["derive"] }
 pretty_env_logger = "0.3.0"
 wasmtime-wast = { path = "../wast" }
 wasmtime-wasi = { path = "../wasi" }

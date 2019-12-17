@@ -1,7 +1,37 @@
+//! The Wasmtime command line interface (CLI) crate.
+//!
+//! This crate implements the Wasmtime command line tools.
+
+#![deny(
+    missing_docs,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unstable_features
+)]
+#![warn(unused_import_braces)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(
+        clippy::float_arithmetic,
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::unicode_not_nfc,
+        clippy::use_self
+    )
+)]
+
+pub mod commands;
+
 use anyhow::{bail, Result};
+use std::path::PathBuf;
+use structopt::StructOpt;
 use wasmtime::Strategy;
 
-pub fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strategy> {
+fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strategy> {
     Ok(match (lightbeam, cranelift) {
         (true, false) => Strategy::Lightbeam,
         (false, true) => Strategy::Cranelift,
@@ -10,7 +40,7 @@ pub fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Str
     })
 }
 
-pub fn init_file_per_thread_logger(prefix: &'static str) {
+fn init_file_per_thread_logger(prefix: &'static str) {
     file_per_thread_logger::initialize(prefix);
 
     // Extending behavior of default spawner:
@@ -34,4 +64,40 @@ pub fn init_file_per_thread_logger(prefix: &'static str) {
         })
         .build_global()
         .unwrap();
+}
+
+/// Common options for commands that translate WebAssembly modules
+#[derive(StructOpt)]
+struct CommonOptions {
+    /// Use specified configuration file
+    #[structopt(long, parse(from_os_str), value_name = "CONFIG_PATH")]
+    config: Option<PathBuf>,
+
+    /// Use Cranelift for all compilation
+    #[structopt(long, conflicts_with = "lightbeam")]
+    cranelift: bool,
+
+    /// Enable debug output
+    #[structopt(short, long)]
+    debug: bool,
+
+    /// Generate debug information
+    #[structopt(short = "g")]
+    debug_info: bool,
+
+    /// Disable cache system
+    #[structopt(long)]
+    disable_cache: bool,
+
+    /// Enable support for proposed SIMD instructions
+    #[structopt(long)]
+    enable_simd: bool,
+
+    /// Use Lightbeam for all compilation
+    #[structopt(long, conflicts_with = "cranelift")]
+    lightbeam: bool,
+
+    /// Run optimization passes on translated functions
+    #[structopt(short = "O", long)]
+    optimize: bool,
 }
