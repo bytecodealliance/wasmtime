@@ -58,7 +58,7 @@ pub struct ModuleEnvironment<'data> {
 }
 
 impl<'data> ModuleEnvironment<'data> {
-    /// Allocates the enironment data structures.
+    /// Allocates the environment data structures.
     pub fn new(target_config: TargetFrontendConfig, tunables: Tunables) -> Self {
         Self {
             result: ModuleTranslation {
@@ -87,7 +87,7 @@ impl<'data> ModuleEnvironment<'data> {
 }
 
 /// This trait is useful for `translate_module` because it tells how to translate
-/// enironment-dependent wasm instructions. These functions should not be called by the user.
+/// environment-dependent wasm instructions. These functions should not be called by the user.
 impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.result.target_config
