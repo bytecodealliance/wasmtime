@@ -155,7 +155,7 @@ jobs:
     # tests
     - run: rustup target add wasm32-wasi
 
-    - run: cargo fetch
+    - run: cargo fetch --locked
 
     # Build and test all features except for lightbeam
     - run: cargo test --features test_programs --all --exclude lightbeam -- --nocapture
