@@ -15,7 +15,7 @@ edition = "2018"
 cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
-wasmparser = "0.44.0"
+wasmparser = "0.45.0"
 lightbeam = { path = "../lightbeam", optional = true }
 indexmap = "1.0.2"
 rayon = "1.2.1"
