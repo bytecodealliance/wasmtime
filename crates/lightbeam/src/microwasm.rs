@@ -505,15 +505,15 @@ pub enum Operator<Label> {
     /// the stack, otherwise discard `A` and push `B` back onto the stack.
     Select,
     /// Duplicate the element at depth `depth` to the top of the stack. This can be used to implement
-    /// `GetLocal`.
+    /// `LocalGet`.
     Pick(u32),
     /// Swap the top element of the stack with the element at depth `depth`. This can be used to implement
-    /// `SetLocal`.
+    /// `LocalSet`.
     // TODO: Is it better to have `Swap`, to have `Pull` (which moves the `nth` element instead of swapping)
     //       or to have both?
     Swap(u32),
-    GetGlobal(u32),
-    SetGlobal(u32),
+    GlobalGet(u32),
+    GlobalSet(u32),
     Load {
         ty: SignlessType,
         memarg: MemoryImmediate,
@@ -815,8 +815,8 @@ where
                 Type::Float::<Int>(*output_ty),
                 input_ty,
             ),
-            Operator::GetGlobal(index) => write!(f, "global.get {}", index),
-            Operator::SetGlobal(index) => write!(f, "global.set {}", index),
+            Operator::GlobalGet(index) => write!(f, "global.get {}", index),
+            Operator::GlobalSet(index) => write!(f, "global.set {}", index),
             Operator::ITruncFromF {
                 input_ty,
                 output_ty,
@@ -1894,7 +1894,7 @@ where
                     Ok(o) => o,
                     Err(_) => {
                         return Some(Err(BinaryReaderError {
-                            message: "GetLocal - Local out of range",
+                            message: "LocalGet - Local out of range",
                             offset: -1isize as usize,
                         }))
                     }
@@ -1908,7 +1908,7 @@ where
                     Ok(o) => o,
                     Err(_) => {
                         return Some(Err(BinaryReaderError {
-                            message: "SetLocal - Local out of range",
+                            message: "LocalSet - Local out of range",
                             offset: -1isize as usize,
                         }))
                     }
@@ -1922,7 +1922,7 @@ where
                     Ok(o) => o,
                     Err(_) => {
                         return Some(Err(BinaryReaderError {
-                            message: "SetLocal - Local out of range",
+                            message: "LocalTee - Local out of range",
                             offset: -1isize as usize,
                         }))
                     }
@@ -1934,10 +1934,10 @@ where
                 ]
             }
             WasmOperator::GlobalGet { global_index } => {
-                smallvec![Operator::GetGlobal(global_index)]
+                smallvec![Operator::GlobalGet(global_index)]
             }
             WasmOperator::GlobalSet { global_index } => {
-                smallvec![Operator::SetGlobal(global_index)]
+                smallvec![Operator::GlobalSet(global_index)]
             }
 
             WasmOperator::I32Load { memarg } => smallvec![Operator::Load {
@@ -2270,49 +2270,49 @@ where
             // Non-trapping Float-to-int Conversions
             WasmOperator::I32TruncSatF32S => {
                 return Some(Err(BinaryReaderError {
-                    message: "I32TruncSSatF32 unimplemented",
+                    message: "I32TruncSatF32S unimplemented",
                     offset: -1isize as usize,
                 }))
             }
             WasmOperator::I32TruncSatF32U => {
                 return Some(Err(BinaryReaderError {
-                    message: "I32TruncUSatF32 unimplemented",
+                    message: "I32TruncSatF32U unimplemented",
                     offset: -1isize as usize,
                 }))
             }
             WasmOperator::I32TruncSatF64S => {
                 return Some(Err(BinaryReaderError {
-                    message: "I32TruncSSatF64 unimplemented",
+                    message: "I32TruncSatF64S unimplemented",
                     offset: -1isize as usize,
                 }))
             }
             WasmOperator::I32TruncSatF64U => {
                 return Some(Err(BinaryReaderError {
-                    message: "I32TruncUSatF64 unimplemented",
+                    message: "I32TruncSatF64U unimplemented",
                     offset: -1isize as usize,
                 }))
             }
             WasmOperator::I64TruncSatF32S => {
                 return Some(Err(BinaryReaderError {
-                    message: "I64TruncSSatF32 unimplemented",
+                    message: "I64TruncSatF32S unimplemented",
                     offset: -1isize as usize,
                 }))
             }
             WasmOperator::I64TruncSatF32U => {
                 return Some(Err(BinaryReaderError {
-                    message: "I64TruncUSatF32 unimplemented",
+                    message: "I64TruncSatF32U unimplemented",
                     offset: -1isize as usize,
                 }))
             }
             WasmOperator::I64TruncSatF64S => {
                 return Some(Err(BinaryReaderError {
-                    message: "I64TruncSSatF64 unimplemented",
+                    message: "I64TruncSatF64S unimplemented",
                     offset: -1isize as usize,
                 }))
             }
             WasmOperator::I64TruncSatF64U => {
                 return Some(Err(BinaryReaderError {
-                    message: "I64TruncUSatF64 unimplemented",
+                    message: "I64TruncSatF64U unimplemented",
                     offset: -1isize as usize,
                 }))
             }
