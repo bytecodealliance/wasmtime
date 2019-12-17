@@ -231,18 +231,8 @@ impl SubTest for TestBinEmit {
                 // Send legal encodings into the emitter.
                 if enc.is_legal() {
                     // Generate a better error message if output locations are not specified.
-                    if let Some(&v) = func
-                        .dfg
-                        .inst_results(inst)
-                        .iter()
-                        .find(|&&v| !func.locations[v].is_assigned())
-                    {
-                        return Err(format!(
-                            "Missing register/stack slot for {} in {}",
-                            v,
-                            func.dfg.display_inst(inst, isa)
-                        ));
-                    }
+                    validate_location_annotations(&func, inst, isa, false)?;
+
                     let before = sink.offset;
                     isa.emit_inst(&func, inst, &mut divert, &mut sink);
                     let emitted = sink.offset - before;
@@ -260,19 +250,9 @@ impl SubTest for TestBinEmit {
                 if let Some(want) = bins.remove(&inst) {
                     if !enc.is_legal() {
                         // A possible cause of an unencoded instruction is a missing location for
-                        // one of the input operands.
-                        if let Some(&v) = func
-                            .dfg
-                            .inst_args(inst)
-                            .iter()
-                            .find(|&&v| !func.locations[v].is_assigned())
-                        {
-                            return Err(format!(
-                                "Missing register/stack slot for {} in {}",
-                                v,
-                                func.dfg.display_inst(inst, isa)
-                            ));
-                        }
+                        // one of the input/output operands.
+                        validate_location_annotations(&func, inst, isa, true)?;
+                        validate_location_annotations(&func, inst, isa, false)?;
 
                         // Do any encodings exist?
                         let encodings = isa
@@ -334,6 +314,30 @@ impl SubTest for TestBinEmit {
             ));
         }
 
+        Ok(())
+    }
+}
+
+/// Validate registers/stack slots are correctly annotated.
+fn validate_location_annotations(
+    func: &ir::Function,
+    inst: ir::Inst,
+    isa: &dyn isa::TargetIsa,
+    validate_inputs: bool,
+) -> SubtestResult<()> {
+    let values = if validate_inputs {
+        func.dfg.inst_args(inst)
+    } else {
+        func.dfg.inst_results(inst)
+    };
+
+    if let Some(&v) = values.iter().find(|&&v| !func.locations[v].is_assigned()) {
+        Err(format!(
+            "Need register/stack slot annotation for {} in {}",
+            v,
+            func.dfg.display_inst(inst, isa)
+        ))
+    } else {
         Ok(())
     }
 }
