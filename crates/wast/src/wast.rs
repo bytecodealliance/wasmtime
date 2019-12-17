@@ -558,6 +558,8 @@ fn values_equal(v1: &Val, v2: &Val) -> Result<bool> {
     Ok(match (v1, v2) {
         (Val::I32(a), Val::I32(b)) => a == b,
         (Val::I64(a), Val::I64(b)) => a == b,
+        // Note that these float comparisons are comparing bits, not float
+        // values, so we're testing for bit-for-bit equivalence
         (Val::F32(a), Val::F32(b)) => a == b,
         (Val::F64(a), Val::F64(b)) => a == b,
         (Val::V128(a), Val::V128(b)) => a == b,
