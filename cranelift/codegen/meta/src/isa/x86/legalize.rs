@@ -561,7 +561,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(b = fneg(a)),
             vec![
-                def!(c = vconst(ones)),
+                def!(c = vconst(u128_ones)),
                 def!(d = ishl_imm(c, uimm8_shift)), // Create a mask of all 0s except the MSB.
                 def!(e = bitcast_to_float(d)),      // Cast mask to the floating-point type.
                 def!(b = bxor(a, e)),               // Flip the MSB.
