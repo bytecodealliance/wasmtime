@@ -2188,6 +2188,7 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-runtime",
+ "wig",
 ]
 
 [[package]]
