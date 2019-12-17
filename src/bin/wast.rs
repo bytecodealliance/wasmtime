@@ -30,12 +30,12 @@ use pretty_env_logger;
 use serde::Deserialize;
 use std::path::Path;
 use std::process;
+use wasmtime::{Config, Engine, HostRef, Store};
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::settings;
 use wasmtime_environ::settings::Configurable;
 use wasmtime_environ::{cache_create_new_config, cache_init};
-use wasmtime_jit::native;
-use wasmtime_jit::{Compiler, Features};
+use wasmtime_jit::Features;
 use wasmtime_wast::WastContext;
 
 const USAGE: &str = "
@@ -128,7 +128,6 @@ fn main() {
         process::exit(1);
     }
 
-    let isa_builder = native::builder();
     let mut flag_builder = settings::builder();
     let mut features: Features = Default::default();
 
@@ -154,10 +153,12 @@ fn main() {
 
     // Decide how to compile.
     let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
-
-    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let engine = Compiler::new(isa, strategy);
-    let mut wast_context = WastContext::new(Box::new(engine)).with_features(features);
+    let mut cfg = Config::new();
+    cfg.strategy(strategy)
+        .flags(settings::Flags::new(flag_builder))
+        .features(features);
+    let store = HostRef::new(Store::new(&HostRef::new(Engine::new(&cfg))));
+    let mut wast_context = WastContext::new(store);
 
     wast_context
         .register_spectest()

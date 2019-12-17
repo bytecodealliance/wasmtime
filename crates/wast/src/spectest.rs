@@ -1,233 +1,105 @@
 #![allow(improper_ctypes)]
 
-use std::cell::RefCell;
-use std::collections::hash_map::HashMap;
+use anyhow::Result;
+use std::collections::HashMap;
 use std::rc::Rc;
-use target_lexicon::HOST;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::ir::types;
-use wasmtime_environ::wasm::{
-    DefinedFuncIndex, Global, GlobalInit, Memory, Table, TableElementType,
-};
-use wasmtime_environ::{ir, isa};
-use wasmtime_environ::{translate_signature, Export, MemoryPlan, Module, TablePlan};
-use wasmtime_jit::target_tunables;
-use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMContext, VMFunctionBody};
+use wasmtime::*;
 
-extern "C" fn spectest_print() {}
+struct MyCall<F>(F);
 
-#[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_i32(_vmctx: &mut VMContext, x: i32) {
-    println!("{}: i32", x);
+impl<F> Callable for MyCall<F>
+where
+    F: Fn(&[Val], &mut [Val]) -> Result<(), HostRef<Trap>>,
+{
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+        (self.0)(params, results)
+    }
 }
 
-#[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_i64(_vmctx: &mut VMContext, x: i64) {
-    println!("{}: i64", x);
-}
-
-#[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_f32(_vmctx: &mut VMContext, x: f32) {
-    println!("{}: f32", x);
-}
-
-#[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_f64(_vmctx: &mut VMContext, x: f64) {
-    println!("{}: f64", x);
-}
-
-#[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_i32_f32(_vmctx: &mut VMContext, x: i32, y: f32) {
-    println!("{}: i32", x);
-    println!("{}: f32", y);
-}
-
-#[allow(clippy::print_stdout)]
-extern "C" fn spectest_print_f64_f64(_vmctx: &mut VMContext, x: f64, y: f64) {
-    println!("{}: f64", x);
-    println!("{}: f64", y);
+fn wrap(
+    store: &HostRef<Store>,
+    ty: FuncType,
+    callable: impl Fn(&[Val], &mut [Val]) -> Result<(), HostRef<Trap>> + 'static,
+) -> Func {
+    Func::new(store, ty, Rc::new(MyCall(callable)))
 }
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
-pub fn instantiate_spectest() -> Result<InstanceHandle, InstantiationError> {
-    let call_conv = isa::CallConv::triple_default(&HOST);
-    let pointer_type = types::Type::triple_pointer_type(&HOST);
-    let mut module = Module::new();
-    let mut finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody> =
-        PrimaryMap::new();
+pub fn instantiate_spectest(store: &HostRef<Store>) -> HashMap<&'static str, Extern> {
+    let mut ret = HashMap::new();
 
-    let sig = module.signatures.push(translate_signature(
-        ir::Signature {
-            params: vec![],
-            returns: vec![],
-            call_conv,
-        },
-        pointer_type,
-    ));
-    let func = module.functions.push(sig);
-    module
-        .exports
-        .insert("print".to_owned(), Export::Function(func));
-    finished_functions.push(spectest_print as *const VMFunctionBody);
+    let ty = FuncType::new(Box::new([]), Box::new([]));
+    let func = wrap(store, ty, |_params, _results| Ok(()));
+    ret.insert("print", Extern::Func(HostRef::new(func)));
 
-    let sig = module.signatures.push(translate_signature(
-        ir::Signature {
-            params: vec![ir::AbiParam::new(types::I32)],
-            returns: vec![],
-            call_conv,
-        },
-        pointer_type,
-    ));
-    let func = module.functions.push(sig);
-    module
-        .exports
-        .insert("print_i32".to_owned(), Export::Function(func));
-    finished_functions.push(spectest_print_i32 as *const VMFunctionBody);
-
-    let sig = module.signatures.push(translate_signature(
-        ir::Signature {
-            params: vec![ir::AbiParam::new(types::I64)],
-            returns: vec![],
-            call_conv,
-        },
-        pointer_type,
-    ));
-    let func = module.functions.push(sig);
-    module
-        .exports
-        .insert("print_i64".to_owned(), Export::Function(func));
-    finished_functions.push(spectest_print_i64 as *const VMFunctionBody);
-
-    let sig = module.signatures.push(translate_signature(
-        ir::Signature {
-            params: vec![ir::AbiParam::new(types::F32)],
-            returns: vec![],
-            call_conv,
-        },
-        pointer_type,
-    ));
-    let func = module.functions.push(sig);
-    module
-        .exports
-        .insert("print_f32".to_owned(), Export::Function(func));
-    finished_functions.push(spectest_print_f32 as *const VMFunctionBody);
-
-    let sig = module.signatures.push(translate_signature(
-        ir::Signature {
-            params: vec![ir::AbiParam::new(types::F64)],
-            returns: vec![],
-            call_conv,
-        },
-        pointer_type,
-    ));
-    let func = module.functions.push(sig);
-    module
-        .exports
-        .insert("print_f64".to_owned(), Export::Function(func));
-    finished_functions.push(spectest_print_f64 as *const VMFunctionBody);
-
-    let sig = module.signatures.push(translate_signature(
-        ir::Signature {
-            params: vec![ir::AbiParam::new(types::I32), ir::AbiParam::new(types::F32)],
-            returns: vec![],
-            call_conv,
-        },
-        pointer_type,
-    ));
-    let func = module.functions.push(sig);
-    module
-        .exports
-        .insert("print_i32_f32".to_owned(), Export::Function(func));
-    finished_functions.push(spectest_print_i32_f32 as *const VMFunctionBody);
-
-    let sig = module.signatures.push(translate_signature(
-        ir::Signature {
-            params: vec![ir::AbiParam::new(types::F64), ir::AbiParam::new(types::F64)],
-            returns: vec![],
-            call_conv,
-        },
-        pointer_type,
-    ));
-    let func = module.functions.push(sig);
-    module
-        .exports
-        .insert("print_f64_f64".to_owned(), Export::Function(func));
-    finished_functions.push(spectest_print_f64_f64 as *const VMFunctionBody);
-
-    let global = module.globals.push(Global {
-        ty: types::I32,
-        mutability: false,
-        initializer: GlobalInit::I32Const(666),
+    let ty = FuncType::new(Box::new([ValType::I32]), Box::new([]));
+    let func = wrap(store, ty, |params, _results| {
+        println!("{}: i32", params[0].unwrap_i32());
+        Ok(())
     });
-    module
-        .exports
-        .insert("global_i32".to_owned(), Export::Global(global));
+    ret.insert("print_i32", Extern::Func(HostRef::new(func)));
 
-    let global = module.globals.push(Global {
-        ty: types::I64,
-        mutability: false,
-        initializer: GlobalInit::I64Const(666),
+    let ty = FuncType::new(Box::new([ValType::I64]), Box::new([]));
+    let func = wrap(store, ty, |params, _results| {
+        println!("{}: i64", params[0].unwrap_i64());
+        Ok(())
     });
-    module
-        .exports
-        .insert("global_i64".to_owned(), Export::Global(global));
+    ret.insert("print_i64", Extern::Func(HostRef::new(func)));
 
-    let global = module.globals.push(Global {
-        ty: types::F32,
-        mutability: false,
-        initializer: GlobalInit::F32Const(0x44268000),
+    let ty = FuncType::new(Box::new([ValType::F32]), Box::new([]));
+    let func = wrap(store, ty, |params, _results| {
+        println!("{}: f32", params[0].unwrap_f32());
+        Ok(())
     });
-    module
-        .exports
-        .insert("global_f32".to_owned(), Export::Global(global));
+    ret.insert("print_f32", Extern::Func(HostRef::new(func)));
 
-    let global = module.globals.push(Global {
-        ty: types::F64,
-        mutability: false,
-        initializer: GlobalInit::F64Const(0x4084d00000000000),
+    let ty = FuncType::new(Box::new([ValType::F64]), Box::new([]));
+    let func = wrap(store, ty, |params, _results| {
+        println!("{}: f64", params[0].unwrap_f64());
+        Ok(())
     });
-    module
-        .exports
-        .insert("global_f64".to_owned(), Export::Global(global));
+    ret.insert("print_f64", Extern::Func(HostRef::new(func)));
 
-    let tunables = target_tunables(&HOST);
-    let table = module.table_plans.push(TablePlan::for_table(
-        Table {
-            ty: TableElementType::Func,
-            minimum: 10,
-            maximum: Some(20),
-        },
-        &tunables,
-    ));
-    module
-        .exports
-        .insert("table".to_owned(), Export::Table(table));
+    let ty = FuncType::new(Box::new([ValType::I32, ValType::F32]), Box::new([]));
+    let func = wrap(store, ty, |params, _results| {
+        println!("{}: i32", params[0].unwrap_i32());
+        println!("{}: f32", params[1].unwrap_f32());
+        Ok(())
+    });
+    ret.insert("print_i32_f32", Extern::Func(HostRef::new(func)));
 
-    let memory = module.memory_plans.push(MemoryPlan::for_memory(
-        Memory {
-            minimum: 1,
-            maximum: Some(2),
-            shared: false,
-        },
-        &tunables,
-    ));
-    module
-        .exports
-        .insert("memory".to_owned(), Export::Memory(memory));
+    let ty = FuncType::new(Box::new([ValType::F64, ValType::F64]), Box::new([]));
+    let func = wrap(store, ty, |params, _results| {
+        println!("{}: f64", params[0].unwrap_f64());
+        println!("{}: f64", params[1].unwrap_f64());
+        Ok(())
+    });
+    ret.insert("print_f64_f64", Extern::Func(HostRef::new(func)));
 
-    let imports = Imports::none();
-    let data_initializers = Vec::new();
-    let signatures = PrimaryMap::new();
+    let ty = GlobalType::new(ValType::I32, Mutability::Const);
+    let g = Global::new(store, ty, Val::I32(666));
+    ret.insert("global_i32", Extern::Global(HostRef::new(g)));
 
-    InstanceHandle::new(
-        Rc::new(module),
-        Rc::new(RefCell::new(HashMap::new())),
-        finished_functions.into_boxed_slice(),
-        imports,
-        &data_initializers,
-        signatures.into_boxed_slice(),
-        None,
-        Box::new(()),
-    )
+    let ty = GlobalType::new(ValType::I64, Mutability::Const);
+    let g = Global::new(store, ty, Val::I64(666));
+    ret.insert("global_i64", Extern::Global(HostRef::new(g)));
+
+    let ty = GlobalType::new(ValType::F32, Mutability::Const);
+    let g = Global::new(store, ty, Val::F32(0x44268000));
+    ret.insert("global_f32", Extern::Global(HostRef::new(g)));
+
+    let ty = GlobalType::new(ValType::F64, Mutability::Const);
+    let g = Global::new(store, ty, Val::F64(0x4084d00000000000));
+    ret.insert("global_f64", Extern::Global(HostRef::new(g)));
+
+    let ty = TableType::new(ValType::FuncRef, Limits::new(10, Some(20)));
+    let table = Table::new(store, ty, Val::AnyRef(AnyRef::Null));
+    ret.insert("table", Extern::Table(HostRef::new(table)));
+
+    let ty = MemoryType::new(Limits::new(1, Some(2)));
+    let memory = Memory::new(store, ty);
+    ret.insert("memory", Extern::Memory(HostRef::new(memory)));
+
+    return ret;
 }

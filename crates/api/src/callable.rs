@@ -121,7 +121,7 @@ impl WasmtimeFn {
 impl WrappedCallable for WasmtimeFn {
     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
         use std::cmp::max;
-        use std::{mem, ptr};
+        use std::mem;
 
         let (vmctx, body, signature) = match self.wasmtime_export() {
             Export::Function {
@@ -132,21 +132,14 @@ impl WrappedCallable for WasmtimeFn {
             _ => panic!("unexpected export type in Callable"),
         };
 
-        let value_size = mem::size_of::<u64>();
-        let mut values_vec: Vec<u64> = vec![0; max(params.len(), results.len())];
+        let value_size = mem::size_of::<u128>();
+        let mut values_vec = vec![0; max(params.len(), results.len())];
 
         // Store the argument values into `values_vec`.
         for (index, arg) in params.iter().enumerate() {
             unsafe {
                 let ptr = values_vec.as_mut_ptr().add(index);
-
-                match arg {
-                    Val::I32(x) => ptr::write(ptr as *mut i32, *x),
-                    Val::I64(x) => ptr::write(ptr as *mut i64, *x),
-                    Val::F32(x) => ptr::write(ptr as *mut u32, *x),
-                    Val::F64(x) => ptr::write(ptr as *mut u64, *x),
-                    _ => unimplemented!("WasmtimeFn arg"),
-                }
+                arg.write_value_to(ptr);
             }
         }
 
@@ -176,13 +169,7 @@ impl WrappedCallable for WasmtimeFn {
             unsafe {
                 let ptr = values_vec.as_ptr().add(index);
 
-                results[index] = match abi_param.value_type {
-                    ir::types::I32 => Val::I32(ptr::read(ptr as *const i32)),
-                    ir::types::I64 => Val::I64(ptr::read(ptr as *const i64)),
-                    ir::types::F32 => Val::F32(ptr::read(ptr as *const u32)),
-                    ir::types::F64 => Val::F64(ptr::read(ptr as *const u64)),
-                    other => panic!("unsupported value type {:?}", other),
-                }
+                results[index] = Val::read_value_from(ptr, abi_param.value_type);
             }
         }
 

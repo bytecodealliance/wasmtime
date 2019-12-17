@@ -46,7 +46,6 @@ use wasmtime_wasi::create_wasi_instance;
 use wasmtime_wasi::old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0;
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
-use wasmtime_wast::instantiate_spectest;
 
 const USAGE: &str = "
 Wasm runner.
@@ -274,12 +273,6 @@ fn main() -> Result<()> {
     let store = HostRef::new(Store::new(&engine));
 
     let mut module_registry = HashMap::new();
-
-    // Make spectest available by default.
-    module_registry.insert(
-        "spectest".to_owned(),
-        HostRef::new(Instance::from_handle(&store, instantiate_spectest()?)),
-    );
 
     // Make wasi available by default.
     let preopen_dirs = compute_preopen_dirs(&args.flag_dir, &args.flag_mapdir);
