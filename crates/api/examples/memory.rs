@@ -33,7 +33,7 @@ macro_rules! check {
 
 macro_rules! check_ok {
   ($func:expr, $($p:expr),*) => {
-    if let Err(_) = $func.borrow().call(&[$($p.into()),*]) {
+    if let Err(_) = $func.borrow_mut().call(&[$($p.into()),*]) {
       bail!("> Error on result, expected return");
     }
   }
@@ -41,7 +41,7 @@ macro_rules! check_ok {
 
 macro_rules! check_trap {
   ($func:expr, $($p:expr),*) => {
-    if let Ok(_) = $func.borrow().call(&[$($p.into()),*]) {
+    if let Ok(_) = $func.borrow_mut().call(&[$($p.into()),*]) {
       bail!("> Error on result, expected trap");
     }
   }
@@ -49,7 +49,7 @@ macro_rules! check_trap {
 
 macro_rules! call {
   ($func:expr, $($p:expr),*) => {
-    match $func.borrow().call(&[$($p.into()),*]) {
+    match $func.borrow_mut().call(&[$($p.into()),*]) {
       Ok(result) => {
         let result: i32 = result[0].unwrap_i32();
         result
@@ -63,7 +63,7 @@ fn main() -> Result<(), Error> {
     // Initialize.
     println!("Initializing...");
     let engine = HostRef::new(Engine::default());
-    let store = HostRef::new(Store::new(&engine));
+    let mut store = Store::new(&engine);
 
     // Load binary.
     println!("Loading binary...");
@@ -87,11 +87,11 @@ fn main() -> Result<(), Error> {
 
     // Compile.
     println!("Compiling module...");
-    let module = Module::new(&store, &binary).context("> Error compiling module!")?;
+    let module = Module::new(&mut store, &binary).context("> Error compiling module!")?;
 
     // Instantiate.
     println!("Instantiating module...");
-    let instance = Instance::new(&store, &module, &[]).context("> Error instantiating module!")?;
+    let instance = Instance::new(&mut store, &module, &[]).context("> Error instantiating module!")?;
 
     // Extract export.
     println!("Extracting export...");

@@ -39,7 +39,7 @@ fn main() -> Result<()> {
 
     // Instantiate engine and store.
     let engine = HostRef::new(Engine::default());
-    let store = HostRef::new(Store::new(&engine));
+    let mut store = Store::new(&engine);
 
     // Load a module.
     let module = Module::new(&store, &wasm)?;
@@ -54,12 +54,12 @@ fn main() -> Result<()> {
         .0;
 
     // Instantiate the module.
-    let instance = Instance::new(&store, &module, &[])?;
+    let instance = Instance::new(&mut store, &module, &[])?;
 
     // Invoke `gcd` export
     let gcd = instance.exports()[gcd_index].func().expect("gcd");
     let result = gcd
-        .borrow()
+        .borrow_mut()
         .call(&[Val::from(6i32), Val::from(27i32)])
         .map_err(|e| format_err!("call error: {:?}", e))?;
 

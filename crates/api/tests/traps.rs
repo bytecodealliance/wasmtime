@@ -13,7 +13,7 @@ fn test_trap_return() -> Result<(), String> {
     }
 
     let engine = HostRef::new(Engine::default());
-    let store = HostRef::new(Store::new(&engine));
+    let mut store = Store::new(&engine);
     let binary = parse_str(
         r#"
                 (module
@@ -24,19 +24,19 @@ fn test_trap_return() -> Result<(), String> {
     )
     .map_err(|e| format!("failed to parse WebAssembly text source: {}", e))?;
 
-    let module = Module::new(&store, &binary).map_err(|e| format!("failed to compile module: {}", e))?;
+    let module = Module::new(&mut store, &binary).map_err(|e| format!("failed to compile module: {}", e))?;
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
-    let hello_func = HostRef::new(Func::new(&store, hello_type, Rc::new(HelloCallback)));
+    let hello_func = HostRef::new(Func::new(&mut store, hello_type, Rc::new(HelloCallback)));
 
     let imports = vec![hello_func.into()];
-    let instance = Instance::new(&store, &module, imports.as_slice())
+    let instance = Instance::new(&mut store, &module, imports.as_slice())
         .map_err(|e| format!("failed to instantiate module: {}", e))?;
     let run_func = instance.exports()[0]
         .func()
         .expect("expected function export");
 
     let e = run_func
-        .borrow()
+        .borrow_mut()
         .call(&[])
         .err()
         .expect("error calling function");
