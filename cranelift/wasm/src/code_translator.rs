@@ -65,19 +65,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
          *  disappear in the Cranelift Code
          ***********************************************************************************/
-        Operator::GetLocal { local_index } => {
+        Operator::LocalGet { local_index } => {
             let val = builder.use_var(Variable::with_u32(*local_index));
             state.push1(val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
-        Operator::SetLocal { local_index } => {
+        Operator::LocalSet { local_index } => {
             let val = state.pop1();
             builder.def_var(Variable::with_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
-        Operator::TeeLocal { local_index } => {
+        Operator::LocalTee { local_index } => {
             let val = state.peek1();
             builder.def_var(Variable::with_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
@@ -86,7 +86,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         /********************************** Globals ****************************************
          *  `get_global` and `set_global` are handled by the environment.
          ***********************************************************************************/
-        Operator::GetGlobal { global_index } => {
+        Operator::GlobalGet { global_index } => {
             let val = match state.get_global(builder.func, *global_index, environ)? {
                 GlobalVariable::Const(val) => val,
                 GlobalVariable::Memory { gv, offset, ty } => {
@@ -97,7 +97,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             };
             state.push1(val);
         }
-        Operator::SetGlobal { global_index } => {
+        Operator::GlobalSet { global_index } => {
             match state.get_global(builder.func, *global_index, environ)? {
                 GlobalVariable::Const(_) => panic!("global #{} is a constant", *global_index),
                 GlobalVariable::Memory { gv, offset, ty } => {
@@ -639,11 +639,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let arg = state.pop1();
             state.push1(builder.ins().popcnt(arg));
         }
-        Operator::I64ExtendSI32 => {
+        Operator::I64ExtendI32S => {
             let val = state.pop1();
             state.push1(builder.ins().sextend(I64, val));
         }
-        Operator::I64ExtendUI32 => {
+        Operator::I64ExtendI32U => {
             let val = state.pop1();
             state.push1(builder.ins().uextend(I64, val));
         }
@@ -679,19 +679,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let arg = state.pop1();
             state.push1(builder.ins().fneg(arg));
         }
-        Operator::F64ConvertUI64 | Operator::F64ConvertUI32 => {
+        Operator::F64ConvertI64U | Operator::F64ConvertI32U => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_from_uint(F64, val));
         }
-        Operator::F64ConvertSI64 | Operator::F64ConvertSI32 => {
+        Operator::F64ConvertI64S | Operator::F64ConvertI32S => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_from_sint(F64, val));
         }
-        Operator::F32ConvertSI64 | Operator::F32ConvertSI32 => {
+        Operator::F32ConvertI64S | Operator::F32ConvertI32S => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_from_sint(F32, val));
         }
-        Operator::F32ConvertUI64 | Operator::F32ConvertUI32 => {
+        Operator::F32ConvertI64U | Operator::F32ConvertI32U => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_from_uint(F32, val));
         }
@@ -703,35 +703,35 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = state.pop1();
             state.push1(builder.ins().fdemote(F32, val));
         }
-        Operator::I64TruncSF64 | Operator::I64TruncSF32 => {
+        Operator::I64TruncF64S | Operator::I64TruncF32S => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_sint(I64, val));
         }
-        Operator::I32TruncSF64 | Operator::I32TruncSF32 => {
+        Operator::I32TruncF64S | Operator::I32TruncF32S => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_sint(I32, val));
         }
-        Operator::I64TruncUF64 | Operator::I64TruncUF32 => {
+        Operator::I64TruncF64U | Operator::I64TruncF32U => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_uint(I64, val));
         }
-        Operator::I32TruncUF64 | Operator::I32TruncUF32 => {
+        Operator::I32TruncF64U | Operator::I32TruncF32U => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_uint(I32, val));
         }
-        Operator::I64TruncSSatF64 | Operator::I64TruncSSatF32 => {
+        Operator::I64TruncSatF64S | Operator::I64TruncSatF32S => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_sint_sat(I64, val));
         }
-        Operator::I32TruncSSatF64 | Operator::I32TruncSSatF32 => {
+        Operator::I32TruncSatF64S | Operator::I32TruncSatF32S => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_sint_sat(I32, val));
         }
-        Operator::I64TruncUSatF64 | Operator::I64TruncUSatF32 => {
+        Operator::I64TruncSatF64U | Operator::I64TruncSatF32U => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_uint_sat(I64, val));
         }
-        Operator::I32TruncUSatF64 | Operator::I32TruncUSatF32 => {
+        Operator::I32TruncSatF64U | Operator::I32TruncSatF32U => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_uint_sat(I32, val));
         }
@@ -918,9 +918,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = builder.ins().is_null(arg);
             state.push1(val);
         }
-        Operator::Wake { .. }
-        | Operator::I32Wait { .. }
-        | Operator::I64Wait { .. }
+        Operator::RefFunc { .. } => {
+            return Err(wasm_unsupported!("proposed ref operator {:?}", op))
+        }
+        Operator::AtomicNotify { .. }
+        | Operator::I32AtomicWait { .. }
+        | Operator::I64AtomicWait { .. }
         | Operator::I32AtomicLoad { .. }
         | Operator::I64AtomicLoad { .. }
         | Operator::I32AtomicLoad8U { .. }
@@ -937,54 +940,54 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64AtomicStore32 { .. }
         | Operator::I32AtomicRmwAdd { .. }
         | Operator::I64AtomicRmwAdd { .. }
-        | Operator::I32AtomicRmw8UAdd { .. }
-        | Operator::I32AtomicRmw16UAdd { .. }
-        | Operator::I64AtomicRmw8UAdd { .. }
-        | Operator::I64AtomicRmw16UAdd { .. }
-        | Operator::I64AtomicRmw32UAdd { .. }
+        | Operator::I32AtomicRmw8AddU { .. }
+        | Operator::I32AtomicRmw16AddU { .. }
+        | Operator::I64AtomicRmw8AddU { .. }
+        | Operator::I64AtomicRmw16AddU { .. }
+        | Operator::I64AtomicRmw32AddU { .. }
         | Operator::I32AtomicRmwSub { .. }
         | Operator::I64AtomicRmwSub { .. }
-        | Operator::I32AtomicRmw8USub { .. }
-        | Operator::I32AtomicRmw16USub { .. }
-        | Operator::I64AtomicRmw8USub { .. }
-        | Operator::I64AtomicRmw16USub { .. }
-        | Operator::I64AtomicRmw32USub { .. }
+        | Operator::I32AtomicRmw8SubU { .. }
+        | Operator::I32AtomicRmw16SubU { .. }
+        | Operator::I64AtomicRmw8SubU { .. }
+        | Operator::I64AtomicRmw16SubU { .. }
+        | Operator::I64AtomicRmw32SubU { .. }
         | Operator::I32AtomicRmwAnd { .. }
         | Operator::I64AtomicRmwAnd { .. }
-        | Operator::I32AtomicRmw8UAnd { .. }
-        | Operator::I32AtomicRmw16UAnd { .. }
-        | Operator::I64AtomicRmw8UAnd { .. }
-        | Operator::I64AtomicRmw16UAnd { .. }
-        | Operator::I64AtomicRmw32UAnd { .. }
+        | Operator::I32AtomicRmw8AndU { .. }
+        | Operator::I32AtomicRmw16AndU { .. }
+        | Operator::I64AtomicRmw8AndU { .. }
+        | Operator::I64AtomicRmw16AndU { .. }
+        | Operator::I64AtomicRmw32AndU { .. }
         | Operator::I32AtomicRmwOr { .. }
         | Operator::I64AtomicRmwOr { .. }
-        | Operator::I32AtomicRmw8UOr { .. }
-        | Operator::I32AtomicRmw16UOr { .. }
-        | Operator::I64AtomicRmw8UOr { .. }
-        | Operator::I64AtomicRmw16UOr { .. }
-        | Operator::I64AtomicRmw32UOr { .. }
+        | Operator::I32AtomicRmw8OrU { .. }
+        | Operator::I32AtomicRmw16OrU { .. }
+        | Operator::I64AtomicRmw8OrU { .. }
+        | Operator::I64AtomicRmw16OrU { .. }
+        | Operator::I64AtomicRmw32OrU { .. }
         | Operator::I32AtomicRmwXor { .. }
         | Operator::I64AtomicRmwXor { .. }
-        | Operator::I32AtomicRmw8UXor { .. }
-        | Operator::I32AtomicRmw16UXor { .. }
-        | Operator::I64AtomicRmw8UXor { .. }
-        | Operator::I64AtomicRmw16UXor { .. }
-        | Operator::I64AtomicRmw32UXor { .. }
+        | Operator::I32AtomicRmw8XorU { .. }
+        | Operator::I32AtomicRmw16XorU { .. }
+        | Operator::I64AtomicRmw8XorU { .. }
+        | Operator::I64AtomicRmw16XorU { .. }
+        | Operator::I64AtomicRmw32XorU { .. }
         | Operator::I32AtomicRmwXchg { .. }
         | Operator::I64AtomicRmwXchg { .. }
-        | Operator::I32AtomicRmw8UXchg { .. }
-        | Operator::I32AtomicRmw16UXchg { .. }
-        | Operator::I64AtomicRmw8UXchg { .. }
-        | Operator::I64AtomicRmw16UXchg { .. }
-        | Operator::I64AtomicRmw32UXchg { .. }
+        | Operator::I32AtomicRmw8XchgU { .. }
+        | Operator::I32AtomicRmw16XchgU { .. }
+        | Operator::I64AtomicRmw8XchgU { .. }
+        | Operator::I64AtomicRmw16XchgU { .. }
+        | Operator::I64AtomicRmw32XchgU { .. }
         | Operator::I32AtomicRmwCmpxchg { .. }
         | Operator::I64AtomicRmwCmpxchg { .. }
-        | Operator::I32AtomicRmw8UCmpxchg { .. }
-        | Operator::I32AtomicRmw16UCmpxchg { .. }
-        | Operator::I64AtomicRmw8UCmpxchg { .. }
-        | Operator::I64AtomicRmw16UCmpxchg { .. }
-        | Operator::I64AtomicRmw32UCmpxchg { .. }
-        | Operator::Fence { .. } => {
+        | Operator::I32AtomicRmw8CmpxchgU { .. }
+        | Operator::I32AtomicRmw16CmpxchgU { .. }
+        | Operator::I64AtomicRmw8CmpxchgU { .. }
+        | Operator::I64AtomicRmw16CmpxchgU { .. }
+        | Operator::I64AtomicRmw32CmpxchgU { .. }
+        | Operator::AtomicFence { .. } => {
             return Err(wasm_unsupported!("proposed thread operator {:?}", op));
         }
         Operator::MemoryCopy => {
@@ -1039,7 +1042,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 table,
             )?);
         }
-        Operator::TableCopy => {
+        Operator::TableCopy { .. } => {
             // The WebAssembly MVP only supports one table and wasmparser will
             // ensure that the table index specified is zero.
             let dst_table_index = 0;
@@ -1060,7 +1063,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 len,
             )?;
         }
-        Operator::TableInit { segment } => {
+        Operator::TableInit { segment, table: _ } => {
             // The WebAssembly MVP only supports one table and we assume it here.
             let table_index = 0;
             let table = state.get_table(builder.func, table_index, environ)?;
@@ -1076,6 +1079,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 src,
                 len,
             )?;
+        }
+        Operator::TableFill { .. } => {
+            return Err(wasm_unsupported!("proposed table operator {:?}", op));
         }
         Operator::ElemDrop { segment } => {
             environ.translate_elem_drop(builder.cursor(), *segment)?;
@@ -1330,20 +1336,42 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
         | Operator::I8x16Mul
+        | Operator::I64x2Mul
         | Operator::I64x2ShrS
-        | Operator::I32x4TruncSF32x4Sat
-        | Operator::I32x4TruncUF32x4Sat
-        | Operator::I64x2TruncSF64x2Sat
-        | Operator::I64x2TruncUF64x2Sat
-        | Operator::F32x4ConvertSI32x4
-        | Operator::F32x4ConvertUI32x4
-        | Operator::F64x2ConvertSI64x2
-        | Operator::F64x2ConvertUI64x2 { .. }
+        | Operator::I32x4TruncSatF32x4S
+        | Operator::I32x4TruncSatF32x4U
+        | Operator::I64x2TruncSatF64x2S
+        | Operator::I64x2TruncSatF64x2U
+        | Operator::F32x4ConvertI32x4S
+        | Operator::F32x4ConvertI32x4U
+        | Operator::F64x2ConvertI64x2S
+        | Operator::F64x2ConvertI64x2U { .. }
+        | Operator::I8x16NarrowI16x8S { .. }
+        | Operator::I8x16NarrowI16x8U { .. }
+        | Operator::I16x8NarrowI32x4S { .. }
+        | Operator::I16x8NarrowI32x4U { .. }
+        | Operator::I16x8WidenLowI8x16S { .. }
+        | Operator::I16x8WidenHighI8x16S { .. }
+        | Operator::I16x8WidenLowI8x16U { .. }
+        | Operator::I16x8WidenHighI8x16U { .. }
+        | Operator::I32x4WidenLowI16x8S { .. }
+        | Operator::I32x4WidenHighI16x8S { .. }
+        | Operator::I32x4WidenLowI16x8U { .. }
+        | Operator::I32x4WidenHighI16x8U { .. }
         | Operator::V8x16Swizzle
-        | Operator::I8x16LoadSplat { .. }
-        | Operator::I16x8LoadSplat { .. }
-        | Operator::I32x4LoadSplat { .. }
-        | Operator::I64x2LoadSplat { .. } => {
+        | Operator::V8x16LoadSplat { .. }
+        | Operator::V16x8LoadSplat { .. }
+        | Operator::V32x4LoadSplat { .. }
+        | Operator::V64x2LoadSplat { .. }
+        | Operator::I16x8Load8x8S { .. }
+        | Operator::I16x8Load8x8U { .. }
+        | Operator::I32x4Load16x4S { .. }
+        | Operator::I32x4Load16x4U { .. }
+        | Operator::I64x2Load32x2S { .. }
+        | Operator::I64x2Load32x2U { .. }
+        | Operator::I8x16RoundingAverageU { .. }
+        | Operator::I16x8RoundingAverageU { .. }
+        | Operator::V128AndNot { .. } => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
     };
@@ -1727,8 +1755,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4Add
         | Operator::I32x4Sub
         | Operator::I32x4Mul
-        | Operator::F32x4ConvertSI32x4
-        | Operator::F32x4ConvertUI32x4 => I32X4,
+        | Operator::F32x4ConvertI32x4S
+        | Operator::F32x4ConvertI32x4U => I32X4,
 
         Operator::I64x2Splat
         | Operator::I64x2ExtractLane { .. }
@@ -1741,8 +1769,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I64x2ShrU
         | Operator::I64x2Add
         | Operator::I64x2Sub
-        | Operator::F64x2ConvertSI64x2
-        | Operator::F64x2ConvertUI64x2 => I64X2,
+        | Operator::F64x2ConvertI64x2S
+        | Operator::F64x2ConvertI64x2U => I64X2,
 
         Operator::F32x4Splat
         | Operator::F32x4ExtractLane { .. }
@@ -1762,8 +1790,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F32x4Div
         | Operator::F32x4Min
         | Operator::F32x4Max
-        | Operator::I32x4TruncSF32x4Sat
-        | Operator::I32x4TruncUF32x4Sat => F32X4,
+        | Operator::I32x4TruncSatF32x4S
+        | Operator::I32x4TruncSatF32x4U => F32X4,
 
         Operator::F64x2Splat
         | Operator::F64x2ExtractLane { .. }
@@ -1783,8 +1811,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F64x2Div
         | Operator::F64x2Min
         | Operator::F64x2Max
-        | Operator::I64x2TruncSF64x2Sat
-        | Operator::I64x2TruncUF64x2Sat => F64X2,
+        | Operator::I64x2TruncSatF64x2S
+        | Operator::I64x2TruncSatF64x2U => F64X2,
 
         _ => unimplemented!(
             "Currently only the SIMD instructions are translated to their return type: {:?}",

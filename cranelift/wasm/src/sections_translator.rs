@@ -217,7 +217,7 @@ pub fn parse_global_section(
                 GlobalInit::V128Const(V128Imm::from(value.bytes().to_vec().as_slice()))
             }
             Operator::RefNull => GlobalInit::RefNullConst,
-            Operator::GetGlobal { global_index } => {
+            Operator::GlobalGet { global_index } => {
                 GlobalInit::GetGlobal(GlobalIndex::from_u32(global_index))
             }
             ref s => {
@@ -286,8 +286,9 @@ pub fn parse_element_section<'data>(
     environ.reserve_table_elements(elements.get_count())?;
 
     for entry in elements {
-        let Element { kind, items } = entry?;
+        let Element { kind } = entry?;
         if let ElementKind::Active {
+            items,
             table_index,
             init_expr,
         } = kind
@@ -295,7 +296,7 @@ pub fn parse_element_section<'data>(
             let mut init_expr_reader = init_expr.get_binary_reader();
             let (base, offset) = match init_expr_reader.read_operator()? {
                 Operator::I32Const { value } => (None, value as u32 as usize),
-                Operator::GetGlobal { global_index } => {
+                Operator::GlobalGet { global_index } => {
                     (Some(GlobalIndex::from_u32(global_index)), 0)
                 }
                 ref s => {
@@ -318,10 +319,7 @@ pub fn parse_element_section<'data>(
                 elems.into_boxed_slice(),
             )?
         } else {
-            return Err(wasm_unsupported!(
-                "unsupported passive elements section: {:?}",
-                kind
-            ));
+            return Err(wasm_unsupported!("unsupported passive elements section",));
         }
     }
     Ok(())
@@ -359,7 +357,7 @@ pub fn parse_data_section<'data>(
             let mut init_expr_reader = init_expr.get_binary_reader();
             let (base, offset) = match init_expr_reader.read_operator()? {
                 Operator::I32Const { value } => (None, value as u32 as usize),
-                Operator::GetGlobal { global_index } => {
+                Operator::GlobalGet { global_index } => {
                     (Some(GlobalIndex::from_u32(global_index)), 0)
                 }
                 ref s => {
