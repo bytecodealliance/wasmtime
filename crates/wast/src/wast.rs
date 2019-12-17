@@ -1,26 +1,25 @@
 use crate::spectest::instantiate_spectest;
 use anyhow::{anyhow, bail, Context as _, Result};
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::path::Path;
 use std::str;
 use wasmtime::*;
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
-fn runtime_value(v: &wast::Expression<'_>) -> Val {
+fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
     use wast::Instruction::*;
 
     if v.instrs.len() != 1 {
-        panic!("too many instructions in {:?}", v);
+        bail!("too many instructions in {:?}", v);
     }
-    match &v.instrs[0] {
+    Ok(match &v.instrs[0] {
         I32Const(x) => Val::I32(*x),
         I64Const(x) => Val::I64(*x),
         F32Const(x) => Val::F32(x.bits),
         F64Const(x) => Val::F64(x.bits),
-        V128Const(x) => Val::V128(x.to_le_bytes()),
-        other => panic!("couldn't convert {:?} to a runtime value", other),
-    }
+        V128Const(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes())),
+        other => bail!("couldn't convert {:?} to a runtime value", other),
+    })
 }
 
 /// The wast test script language allows modules to be defined and actions
@@ -163,7 +162,7 @@ impl WastContext {
         field: &str,
         args: &[wast::Expression],
     ) -> Result<Outcome> {
-        let values = args.iter().map(runtime_value).collect::<Vec<_>>();
+        let values = args.iter().map(runtime_value).collect::<Result<Vec<_>>>()?;
         let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
         let instance = instance.borrow();
         let export = instance
@@ -234,7 +233,8 @@ impl WastContext {
                 } => match self.perform_execute(exec).with_context(|| context(span))? {
                     Outcome::Ok(values) => {
                         for (v, e) in values.iter().zip(results.iter().map(runtime_value)) {
-                            if values_equal(v, &e) {
+                            let e = e?;
+                            if values_equal(v, &e)? {
                                 continue;
                             }
                             bail!("{}\nexpected {:?}, got {:?}", context(span), e, v)
@@ -310,7 +310,7 @@ impl WastContext {
                                             bail!("{}\nexpected canonical NaN", context(span))
                                         }
                                     }
-                                    other => panic!("expected float, got {:?}", other),
+                                    other => bail!("expected float, got {:?}", other),
                                 };
                             }
                         }
@@ -326,7 +326,7 @@ impl WastContext {
                             for v in values.iter() {
                                 let val = match v {
                                     Val::V128(x) => x,
-                                    other => panic!("expected v128, got {:?}", other),
+                                    other => bail!("expected v128, got {:?}", other),
                                 };
                                 for l in 0..4 {
                                     if !is_canonical_f32_nan(&extract_lane_as_u32(val, l)?) {
@@ -351,7 +351,7 @@ impl WastContext {
                             for v in values.iter() {
                                 let val = match v {
                                     Val::V128(x) => x,
-                                    other => panic!("expected v128, got {:?}", other),
+                                    other => bail!("expected v128, got {:?}", other),
                                 };
                                 for l in 0..2 {
                                     if !is_canonical_f64_nan(&extract_lane_as_u64(val, l)?) {
@@ -385,7 +385,7 @@ impl WastContext {
                                             bail!("{}\nexpected arithmetic NaN", context(span))
                                         }
                                     }
-                                    other => panic!("expected float, got {:?}", other),
+                                    other => bail!("expected float, got {:?}", other),
                                 };
                             }
                         }
@@ -401,7 +401,7 @@ impl WastContext {
                             for v in values.iter() {
                                 let val = match v {
                                     Val::V128(x) => x,
-                                    other => panic!("expected v128, got {:?}", other),
+                                    other => bail!("expected v128, got {:?}", other),
                                 };
                                 for l in 0..4 {
                                     if !is_arithmetic_f32_nan(&extract_lane_as_u32(val, l)?) {
@@ -426,7 +426,7 @@ impl WastContext {
                             for v in values.iter() {
                                 let val = match v {
                                     Val::V128(x) => x,
-                                    other => panic!("expected v128, got {:?}", other),
+                                    other => bail!("expected v128, got {:?}", other),
                                 };
                                 for l in 0..2 {
                                     if !is_arithmetic_f64_nan(&extract_lane_as_u64(val, l)?) {
@@ -515,7 +515,7 @@ impl WastContext {
                         )
                     }
                 }
-                AssertReturnFunc { .. } => panic!("need to implement assert_return_func"),
+                AssertReturnFunc { .. } => bail!("need to implement assert_return_func"),
             }
         }
 
@@ -530,14 +530,12 @@ impl WastContext {
     }
 }
 
-fn extract_lane_as_u32(bytes: &[u8; 16], lane: usize) -> Result<u32> {
-    let i = lane * 4;
-    Ok(u32::from_le_bytes(bytes[i..i + 4].try_into()?))
+fn extract_lane_as_u32(bytes: &u128, lane: usize) -> Result<u32> {
+    Ok((*bytes >> (lane * 32)) as u32)
 }
 
-fn extract_lane_as_u64(bytes: &[u8; 16], lane: usize) -> Result<u64> {
-    let i = lane * 8;
-    Ok(u64::from_le_bytes(bytes[i..i + 8].try_into()?))
+fn extract_lane_as_u64(bytes: &u128, lane: usize) -> Result<u64> {
+    Ok((*bytes >> (lane * 64)) as u64)
 }
 
 fn is_canonical_f32_nan(bits: &u32) -> bool {
@@ -556,13 +554,13 @@ fn is_arithmetic_f64_nan(bits: &u64) -> bool {
     return (bits & 0x0008000000000000) == 0x0008000000000000;
 }
 
-fn values_equal(v1: &Val, v2: &Val) -> bool {
-    match (v1, v2) {
+fn values_equal(v1: &Val, v2: &Val) -> Result<bool> {
+    Ok(match (v1, v2) {
         (Val::I32(a), Val::I32(b)) => a == b,
         (Val::I64(a), Val::I64(b)) => a == b,
         (Val::F32(a), Val::F32(b)) => a == b,
         (Val::F64(a), Val::F64(b)) => a == b,
         (Val::V128(a), Val::V128(b)) => a == b,
-        _ => panic!("don't know how to compare {:?} and {:?} yet", v1, v2),
-    }
+        _ => bail!("don't know how to compare {:?} and {:?} yet", v1, v2),
+    })
 }
