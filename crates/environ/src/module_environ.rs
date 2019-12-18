@@ -105,8 +105,15 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
-        // TODO: Deduplicate signatures.
-        self.result.module.signatures.push(sig);
+        let unique_idx = self
+            .result
+            .module
+            .signatures
+            .iter()
+            .find(|(_, v)| **v == sig)
+            .map(|(k, _)| k)
+            .unwrap_or_else(|| self.result.module.signatures.push(sig));
+        self.result.module.signature_mapping.push(unique_idx);
         Ok(())
     }
 

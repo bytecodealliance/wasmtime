@@ -3,7 +3,7 @@
 use crate::module_environ::FunctionBodyData;
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
-use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_entity::{entity_impl, EntityRef, PrimaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
@@ -11,6 +11,14 @@ use cranelift_wasm::{
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
 use std::hash::{Hash, Hasher};
+
+/// `UniqueSignatureIndex` names a signature after collapsing duplicate
+/// signatures to a single identifier, whereas SignatureIndex is directly
+/// what the original module specifies, and may specify duplicates of types
+/// that are structurally equal.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct UniqueSignatureIndex(u32);
+entity_impl!(UniqueSignatureIndex);
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug, Hash)]
@@ -133,8 +141,12 @@ impl TablePlan {
 // WARNING: when modifying, make sure that `hash_for_cache` is still valid!
 #[derive(Debug)]
 pub struct Module {
-    /// Unprocessed signatures exactly as provided by `declare_signature()`.
-    pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
+    /// This mapping lets us merge duplicate types (permitted by the wasm spec)
+    /// as they're declared.
+    pub signature_mapping: PrimaryMap<SignatureIndex, UniqueSignatureIndex>,
+
+    /// Unique signatures, provided by `declare_signature()`.
+    pub signatures: PrimaryMap<UniqueSignatureIndex, ir::Signature>,
 
     /// Names of imported functions.
     pub imported_funcs: PrimaryMap<FuncIndex, (String, String)>,
@@ -186,6 +198,7 @@ impl Module {
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
+            signature_mapping: PrimaryMap::new(),
         }
     }
 

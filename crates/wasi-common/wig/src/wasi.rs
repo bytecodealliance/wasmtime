@@ -178,15 +178,17 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
 
             let format_str = format!("{}({})", name, formats.join(", "));
             add.push(quote! {
-                let sig = module.signatures.push(translate_signature(
+                let signature = translate_signature(
                     ir::Signature {
                         params: vec![#(cranelift_codegen::ir::AbiParam::new(#params)),*],
                         returns: vec![#(cranelift_codegen::ir::AbiParam::new(#returns)),*],
                         call_conv,
                     },
                     pointer_type,
-                ));
-                let func = module.functions.push(sig);
+                );
+                let unique_idx = module.signatures.push(signature);
+                let sig_idx = module.signature_mapping.push(unique_idx);
+                let func = module.functions.push(sig_idx);
                 module
                     .exports
                     .insert(#name.to_owned(), Export::Function(func));

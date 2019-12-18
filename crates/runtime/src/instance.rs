@@ -30,12 +30,12 @@ use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
-use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
+use wasmtime_environ::{DataInitializer, Module, TableElements, UniqueSignatureIndex, VMOffsets};
 
 fn signature_id(
     vmctx: &VMContext,
     offsets: &VMOffsets,
-    index: SignatureIndex,
+    index: UniqueSignatureIndex,
 ) -> VMSharedSignatureIndex {
     #[allow(clippy::cast_ptr_alignment)]
     unsafe {
@@ -227,7 +227,7 @@ pub(crate) struct Instance {
 impl Instance {
     /// Return the indexed `VMSharedSignatureIndex`.
     #[allow(dead_code)]
-    fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
+    fn signature_id(&self, index: UniqueSignatureIndex) -> VMSharedSignatureIndex {
         signature_id(&self.vmctx, &self.offsets, index)
     }
 
@@ -974,7 +974,11 @@ fn lookup_by_declaration(
 ) -> Export {
     match export {
         wasmtime_environ::Export::Function(index) => {
-            let signature = module.signatures[module.functions[*index]].clone();
+            let signature = {
+                let sigidx = module.functions[*index];
+                let unique_idx = module.signature_mapping[sigidx];
+                module.signatures[unique_idx].clone()
+            };
             let (address, vmctx) = if let Some(def_index) = module.defined_func_index(*index) {
                 (finished_functions[def_index], vmctx as *mut VMContext)
             } else {
@@ -1169,7 +1173,8 @@ fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> 
 
         let subslice = &mut slice[start..start + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
-            let callee_sig = instance.module.functions[*func_idx];
+            let sigidx = instance.module.functions[*func_idx];
+            let callee_sig = instance.module.signature_mapping[sigidx];
             let (callee_ptr, callee_vmctx) =
                 if let Some(index) = instance.module.defined_func_index(*func_idx) {
                     (instance.finished_functions[index], vmctx)

@@ -535,7 +535,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: SignatureIndex,
     ) -> WasmResult<ir::SigRef> {
-        Ok(func.import_signature(self.module.signatures[index].clone()))
+        let unique_idx = self.module.signature_mapping[index];
+        let sig = self.module.signatures[unique_idx].clone();
+        Ok(func.import_signature(sig))
     }
 
     fn make_direct_func(
@@ -543,8 +545,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sigidx = self.module.functions[index];
-        let signature = func.import_signature(self.module.signatures[sigidx].clone());
+        let signature = {
+            let sig_idx = self.module.functions[index];
+            let unique_index = self.module.signature_mapping[sig_idx];
+            func.import_signature(self.module.signatures[unique_index].clone())
+        };
         let name = get_func_name(index);
         Ok(func.import_function(ir::ExtFuncData {
             name,
@@ -588,8 +593,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
                 let vmctx = self.vmctx(pos.func);
                 let base = pos.ins().global_value(pointer_type, vmctx);
+                let unique_sig_idx = self.module.signature_mapping[sig_index];
                 let offset =
-                    i32::try_from(self.offsets.vmctx_vmshared_signature_id(sig_index)).unwrap();
+                    i32::try_from(self.offsets.vmctx_vmshared_signature_id(unique_sig_idx))
+                        .unwrap();
 
                 // Load the caller ID.
                 let mut mem_flags = ir::MemFlags::trusted();

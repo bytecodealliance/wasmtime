@@ -67,7 +67,12 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
 
     let (args, returns_len) = {
         let module = instance.module_ref();
-        let signature = &module.signatures[module.functions[FuncIndex::new(call_id as usize)]];
+        let signature = {
+            let func_idx = FuncIndex::new(call_id as usize);
+            let sig_idx = module.functions[func_idx];
+            let unique_index = module.signature_mapping[sig_idx];
+            &module.signatures[unique_index]
+        };
 
         let mut args = Vec::new();
         for i in 1..signature.params.len() {
@@ -249,8 +254,16 @@ pub fn create_handle_with_function(
         PrimaryMap::new();
     let mut code_memory = CodeMemory::new();
 
-    let sig_id = module.signatures.push(sig.clone());
-    let func_id = module.functions.push(sig_id);
+    let func_id = {
+        let unique_sig_idx = module
+            .signatures
+            .iter()
+            .find(|(_, v)| **v == sig)
+            .map(|(k, _)| k)
+            .unwrap_or_else(|| module.signatures.push(sig.clone()));
+        let sig_idx = module.signature_mapping.push(unique_sig_idx);
+        module.functions.push(sig_idx)
+    };
     module
         .exports
         .insert("trampoline".to_string(), Export::Function(func_id));

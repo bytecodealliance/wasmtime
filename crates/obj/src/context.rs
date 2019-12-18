@@ -1,8 +1,5 @@
 #![allow(clippy::cast_ptr_alignment)]
 
-use more_asserts::assert_le;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::ptr;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::isa::TargetFrontendConfig;
@@ -22,20 +19,12 @@ pub fn layout_vmcontext(
     let out_len = ofs.size_of_vmctx() as usize;
     let mut out = vec![0; out_len];
 
-    // Assign unique indicies to unique signatures.
-    let mut signature_registry = HashMap::new();
-    let mut signature_registry_len = signature_registry.len();
-    for (index, sig) in module.signatures.iter() {
-        let offset = ofs.vmctx_vmshared_signature_id(index) as usize;
-        let target_index = match signature_registry.entry(sig) {
-            Entry::Occupied(o) => *o.get(),
-            Entry::Vacant(v) => {
-                assert_le!(signature_registry_len, std::u32::MAX as usize);
-                let id = TargetSharedSignatureIndex::new(signature_registry_len as u32);
-                signature_registry_len += 1;
-                *v.insert(id)
-            }
-        };
+    for (offset, target_index) in module.signatures.iter().map(|(index, _)| {
+        (
+            ofs.vmctx_vmshared_signature_id(index) as usize,
+            TargetSharedSignatureIndex::new(index.as_u32()),
+        )
+    }) {
         unsafe {
             let to = out.as_mut_ptr().add(offset) as *mut TargetSharedSignatureIndex;
             ptr::write(to, target_index);

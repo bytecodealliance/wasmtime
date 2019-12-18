@@ -1,12 +1,12 @@
 //! Offsets and sizes of various structs in wasmtime-runtime's vmcontext
 //! module.
 
-use crate::module::Module;
+use crate::module::{Module, UniqueSignatureIndex};
 use crate::BuiltinFunctionIndex;
 use cranelift_codegen::ir;
 use cranelift_wasm::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
-    SignatureIndex, TableIndex,
+    TableIndex,
 };
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
@@ -362,7 +362,7 @@ impl VMOffsets {
     }
 
     /// Return the offset to `VMSharedSignatureId` index `index`.
-    pub fn vmctx_vmshared_signature_id(&self, index: SignatureIndex) -> u32 {
+    pub fn vmctx_vmshared_signature_id(&self, index: UniqueSignatureIndex) -> u32 {
         assert_lt!(index.as_u32(), self.num_signature_ids);
         self.vmctx_signature_ids_begin()
             .checked_add(

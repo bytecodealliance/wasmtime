@@ -54,6 +54,7 @@ pub use crate::func_environ::BuiltinFunctionIndex;
 pub use crate::lightbeam::Lightbeam;
 pub use crate::module::{
     Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
+    UniqueSignatureIndex,
 };
 pub use crate::module_environ::{
     translate_signature, DataInitializer, DataInitializerLocation, FunctionBodyData,
