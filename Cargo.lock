@@ -960,7 +960,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "typemap",
- "wasmparser 0.44.0",
+ "wasmparser 0.45.0",
  "wat",
 ]
 
@@ -1931,9 +1931,9 @@ checksum = "1527c84a5bd585215f29c06b0e2a5274e478ad4dfc970d26ffad66fdc6cb311d"
 
 [[package]]
 name = "wasmparser"
-version = "0.44.0"
+version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "babc64a146209e9ba40dd1ab89b161d27993b274a032a2fc34e967dd43b85e3a"
+checksum = "cd242c848b25027c3e29fb2bd34c8648755b33fef66a22f65b942d06562d3020"
 
 [[package]]
 name = "wasmprinter"
@@ -1959,7 +1959,7 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasi-common",
- "wasmparser 0.44.0",
+ "wasmparser 0.45.0",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-runtime",
@@ -2008,7 +2008,7 @@ dependencies = [
  "more-asserts",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.44.0",
+ "wasmparser 0.45.0",
  "wasmtime-environ",
 ]
 
@@ -2041,7 +2041,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
- "wasmparser 0.44.0",
+ "wasmparser 0.45.0",
  "winapi",
  "zstd",
 ]
@@ -2067,7 +2067,7 @@ dependencies = [
  "binaryen",
  "env_logger 0.7.1",
  "log",
- "wasmparser 0.44.0",
+ "wasmparser 0.45.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-environ",
@@ -2082,7 +2082,7 @@ dependencies = [
  "anyhow",
  "walrus",
  "wasm-webidl-bindings",
- "wasmparser 0.44.0",
+ "wasmparser 0.45.0",
  "wasmtime",
  "wasmtime-environ",
  "wasmtime-jit",
@@ -2104,7 +2104,7 @@ dependencies = [
  "region",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.44.0",
+ "wasmparser 0.45.0",
  "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-runtime",
@@ -2128,7 +2128,7 @@ dependencies = [
  "pyo3",
  "region",
  "target-lexicon",
- "wasmparser 0.44.0",
+ "wasmparser 0.45.0",
  "wasmtime",
  "wasmtime-environ",
  "wasmtime-interface-types",

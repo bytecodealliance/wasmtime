@@ -25,7 +25,7 @@ wasmtime-wasi = { path = "../../wasi" }
 target-lexicon = { version = "0.9.0", default-features = false }
 anyhow = "1.0.19"
 region = "2.0.0"
-wasmparser = "0.44.0"
+wasmparser = "0.45.0"
 pyo3 = { version = "0.8.0", features = ["extension-module"] }
 
 [badges]
