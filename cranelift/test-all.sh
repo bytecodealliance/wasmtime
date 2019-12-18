@@ -82,8 +82,8 @@ else
     echo "nightly toolchain not found, some documentation links will not work"
 fi
 
-# Ensure fuzzer works by running it with a single input
-# Note LSAN is disabled due to https://github.com/google/sanitizers/issues/764
+# Ensure fuzzer works by running it with a single input.
+# Note LSAN is disabled due to https://github.com/google/sanitizers/issues/764.
 banner "cargo fuzz check"
 
 if ensure_installed cargo-fuzz nightly; then

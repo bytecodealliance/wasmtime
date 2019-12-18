@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-preopt"
-version = "0.51.0"
+version = "0.52.0"
 description = "Support for optimizations in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
@@ -12,8 +12,8 @@ keywords = ["optimize", "compile", "compiler", "jit"]
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.51.0", default-features = false }
-cranelift-entity = { path = "../cranelift-entity", version = "0.51.0" }
+cranelift-codegen = { path = "../cranelift-codegen", version = "0.52.0", default-features = false }
+cranelift-entity = { path = "../cranelift-entity", version = "0.52.0" }
 # This is commented out because it doesn't build on Rust 1.25.0, which
 # cranelift currently supports.
 # rustc_apfloat = { version = "0.1.2", default-features = false }
