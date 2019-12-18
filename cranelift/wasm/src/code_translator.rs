@@ -1189,6 +1189,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().imul(a, b))
         }
+        Operator::V128AndNot => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().band_not(a, b))
+        }
         Operator::V128Not => {
             let a = state.pop1();
             state.push1(builder.ins().bnot(a));
@@ -1370,8 +1374,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2Load32x2S { .. }
         | Operator::I64x2Load32x2U { .. }
         | Operator::I8x16RoundingAverageU { .. }
-        | Operator::I16x8RoundingAverageU { .. }
-        | Operator::V128AndNot { .. } => {
+        | Operator::I16x8RoundingAverageU { .. } => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
     };
