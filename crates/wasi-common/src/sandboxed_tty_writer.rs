@@ -9,10 +9,6 @@ where
     Writer: Write,
 {
     inner: &'writer mut Writer,
-
-    /// Temporary buffer for holding UTF-8 encodings of `char`s, which
-    /// are at most 4 bytes long.
-    scratch: [u8; 4],
 }
 
 impl<'writer, Writer> SandboxedTTYWriter<'writer, Writer>
@@ -23,7 +19,6 @@ where
     pub(crate) fn new(inner: &'writer mut Writer) -> Self {
         Self {
             inner,
-            scratch: [0; 4],
         }
     }
 
@@ -67,7 +62,7 @@ where
                 x if x.is_control() => '�',
                 x => x,
             }
-            .encode_utf8(&mut [0; 4])
+            .encode_utf8(&mut [0; 4]) // UTF-8 encoding of a `char` is at most 4 bytes.
             .as_bytes(),
         )?;
 
