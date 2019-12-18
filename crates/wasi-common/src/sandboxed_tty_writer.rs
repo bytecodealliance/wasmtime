@@ -67,7 +67,7 @@ where
                 x if x.is_control() => '�',
                 x => x,
             }
-            .encode_utf8(&mut self.scratch)
+            .encode_utf8(&mut [0; 4])
             .as_bytes(),
         )?;
 
