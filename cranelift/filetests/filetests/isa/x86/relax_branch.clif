@@ -21,95 +21,95 @@ function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] ba
 @0005 [-]                           fallthrough ebb3(v0, v1)
 
                                 ebb3(v8: i32 [%rdi], v19: i32 [%rsi]):
-@0005 [RexOp1ldDisp8#808b,%rax]     v7 = load.i64 v2+48
-@0005 [RexOp1rcmp_ib#f083,%rflags]  v91 = ifcmp_imm v7, 0
-@0005 [trapif#00]                   trapif ne v91, interrupt
-[Op1umr#89,%rax]                    v105 = copy v8
-@000b [Op1r_ib#83,%rax]             v10 = iadd_imm v105, 1
-                                    v80 -> v10
-@0010 [Op1umr#89,%rcx]              v92 = uextend.i64 v8
-@0010 [RexOp1ld#808b,%rdx]          v93 = load.i64 notrap aligned readonly v2
-                                    v95 -> v93
-@0010 [Op2ldWithIndex#4be,%rcx]     v12 = sload8_complex.i32 v93+v92
-[Op1umr#89,%rbx]                    v106 = copy v12
-@0017 [Op1r_ib#40c1,%rbx]           v14 = ishl_imm v106, 24
-@001a [Op1r_ib#70c1,%rbx]           v16 = sshr_imm v14, 24
-[Op1umr#89,%rdi]                    v107 = copy v16
-@001f [Op1r_ib#83,%rdi]             v18 = iadd_imm v107, 32
-[RexOp1umr#89,%r8]                  v108 = copy v19
-@0026 [RexOp1r_ib#83,%r8]           v21 = iadd_imm v108, 1
-                                    v82 -> v21
-@002b [Op1umr#89,%rsi]              v94 = uextend.i64 v19
-@002b [Op2ldWithIndex#4be,%rdx]     v23 = sload8_complex.i32 v93+v94
-                                    v55 -> v23
-[Op1umr#89,%rsi]                    v109 = copy v23
-@0032 [Op1r_ib#40c1,%rsi]           v25 = ishl_imm v109, 24
-@0035 [Op1r_ib#70c1,%rsi]           v27 = sshr_imm v25, 24
-                                    v69 -> v27
-[RexOp1umr#89,%r9]                  v110 = copy v27
-@003a [RexOp1r_ib#83,%r9]           v29 = iadd_imm v110, 32
-                                    v68 -> v29
-@0042 [Op1r_ib#83,%rcx]             v31 = iadd_imm v12, -65
-@0045 [Op1r_ib#40c1,%rcx]           v33 = ishl_imm v31, 24
-@0048 [Op1r_ib#70c1,%rcx]           v35 = sshr_imm v33, 24
-@004c [Op1r_id#4081,%rcx]           v37 = band_imm v35, 255
-[Op1rcmp_ib#7083,%rflags]           v97 = ifcmp_imm v37, 26
-@0050 [Op1brib#70]                  brif sge v97, ebb6
-@0050 [-]                           fallthrough ebb10
+@0005 [RexOp1ldDisp8#808b,%rax]        v7 = load.i64 v2+48
+@0005 [DynRexOp1rcmp_ib#f083,%rflags]  v91 = ifcmp_imm v7, 0
+@0005 [trapif#00]                      trapif ne v91, interrupt
+[DynRexOp1umr#89,%rax]                 v105 = copy v8
+@000b [DynRexOp1r_ib#83,%rax]          v10 = iadd_imm v105, 1
+                                       v80 -> v10
+@0010 [Op1umr#89,%rcx]                 v92 = uextend.i64 v8
+@0010 [RexOp1ld#808b,%rdx]             v93 = load.i64 notrap aligned readonly v2
+                                       v95 -> v93
+@0010 [Op2ldWithIndex#4be,%rcx]        v12 = sload8_complex.i32 v93+v92
+[DynRexOp1umr#89,%rbx]                 v106 = copy v12
+@0017 [DynRexOp1r_ib#40c1,%rbx]        v14 = ishl_imm v106, 24
+@001a [DynRexOp1r_ib#70c1,%rbx]        v16 = sshr_imm v14, 24
+[DynRexOp1umr#89,%rdi]                 v107 = copy v16
+@001f [DynRexOp1r_ib#83,%rdi]          v18 = iadd_imm v107, 32
+[DynRexOp1umr#89,%r8]                  v108 = copy v19
+@0026 [DynRexOp1r_ib#83,%r8]           v21 = iadd_imm v108, 1
+                                       v82 -> v21
+@002b [Op1umr#89,%rsi]                 v94 = uextend.i64 v19
+@002b [Op2ldWithIndex#4be,%rdx]        v23 = sload8_complex.i32 v93+v94
+                                       v55 -> v23
+[DynRexOp1umr#89,%rsi]                 v109 = copy v23
+@0032 [DynRexOp1r_ib#40c1,%rsi]        v25 = ishl_imm v109, 24
+@0035 [DynRexOp1r_ib#70c1,%rsi]        v27 = sshr_imm v25, 24
+                                       v69 -> v27
+[DynRexOp1umr#89,%r9]                  v110 = copy v27
+@003a [DynRexOp1r_ib#83,%r9]           v29 = iadd_imm v110, 32
+                                       v68 -> v29
+@0042 [DynRexOp1r_ib#83,%rcx]          v31 = iadd_imm v12, -65
+@0045 [DynRexOp1r_ib#40c1,%rcx]        v33 = ishl_imm v31, 24
+@0048 [DynRexOp1r_ib#70c1,%rcx]        v35 = sshr_imm v33, 24
+@004c [DynRexOp1r_id#4081,%rcx]        v37 = band_imm v35, 255
+[DynRexOp1rcmp_ib#7083,%rflags]        v97 = ifcmp_imm v37, 26
+@0050 [Op1brib#70]                     brif sge v97, ebb6
+@0050 [-]                              fallthrough ebb10
 
                                 ebb10:
-[Op1umr#89,%rcx]                    v101 = copy v18
+[DynRexOp1umr#89,%rcx]              v101 = copy v18
 @0054 [Op1jmpb#eb]                  jump ebb5(v18, v101)
 
                                 ebb6:
-[Op1umr#89,%rcx]                    v102 = copy.i32 v16
+[DynRexOp1umr#89,%rcx]              v102 = copy.i32 v16
 @0059 [RexOp1rmov#89]               regmove v102, %rcx -> %rdi
 @0059 [RexOp1rmov#89]               regmove.i32 v16, %rbx -> %rcx
 @0059 [-]                           fallthrough ebb5(v102, v16)
 
                                 ebb5(v41: i32 [%rdi], v84: i32 [%rcx]):
                                     v83 -> v84
-@005d [Op1r_id#4081,%rdi]           v43 = band_imm v41, 255
-@0062 [Op1r_ib#40c1,%rdi]           v45 = ishl_imm v43, 24
+@005d [DynRexOp1r_id#4081,%rdi]     v43 = band_imm v41, 255
+@0062 [DynRexOp1r_ib#40c1,%rdi]     v45 = ishl_imm v43, 24
                                     v52 -> v45
 @0065 [RexOp1rmov#89]               regmove v45, %rdi -> %rbx
-@0065 [Op1r_ib#70c1,%rbx]           v47 = sshr_imm v45, 24
+@0065 [DynRexOp1r_ib#70c1,%rbx]     v47 = sshr_imm v45, 24
                                     v54 -> v47
 @0068 [RexOp1rmov#89]               regmove v47, %rbx -> %rdi
-@0068 [Op1icscc_ib#7083,%rbx]       v49 = icmp_imm ne v47, 0
+@0068 [DynRexOp1icscc_ib#7083,%rbx] v49 = icmp_imm ne v47, 0
 @0068 [RexOp2urm_noflags#4b6,%r10]  v50 = bint.i32 v49
-@0076 [Op1r_ib#83,%rdx]             v57 = iadd_imm.i32 v23, -65
-@0079 [Op1r_ib#40c1,%rdx]           v59 = ishl_imm v57, 24
-@007c [Op1r_ib#70c1,%rdx]           v61 = sshr_imm v59, 24
-@0080 [Op1r_id#4081,%rdx]           v63 = band_imm v61, 255
-[Op1rcmp_ib#7083,%rflags]           v98 = ifcmp_imm v63, 26
+@0076 [DynRexOp1r_ib#83,%rdx]       v57 = iadd_imm.i32 v23, -65
+@0079 [DynRexOp1r_ib#40c1,%rdx]     v59 = ishl_imm v57, 24
+@007c [DynRexOp1r_ib#70c1,%rdx]     v61 = sshr_imm v59, 24
+@0080 [DynRexOp1r_id#4081,%rdx]     v63 = band_imm v61, 255
+[DynRexOp1rcmp_ib#7083,%rflags]     v98 = ifcmp_imm v63, 26
 @0084 [RexOp1rmov#89]               regmove v47, %rdi -> %rbx
 @0084 [Op1brib#70]                  brif sge v98, ebb8
 @0084 [-]                           fallthrough ebb11
 
                                 ebb11:
-[RexOp1umr#89,%rdx]                 v103 = copy.i32 v29
+[DynRexOp1umr#89,%rdx]              v103 = copy.i32 v29
 @0088 [Op1jmpb#eb]                  jump ebb7(v29, v10, v21, v103)
 
                                 ebb8:
-[Op1umr#89,%rdx]                    v104 = copy.i32 v27
+[DynRexOp1umr#89,%rdx]              v104 = copy.i32 v27
 @008d [RexOp1rmov#89]               regmove v104, %rdx -> %r9
 @008d [RexOp1rmov#89]               regmove.i32 v27, %rsi -> %rdx
 @008d [-]                           fallthrough ebb7(v104, v10, v21, v27)
 
                                 ebb7(v67: i32 [%r9], v79: i32 [%rax], v81: i32 [%r8], v87: i32 [%rdx]):
-@0091 [RexOp1r_id#4081,%r9]         v71 = band_imm v67, 255
-@0094 [RexOp1r_ib#40c1,%r9]         v73 = ishl_imm v71, 24
-@0097 [RexOp1r_ib#70c1,%r9]         v75 = sshr_imm v73, 24
-@0098 [RexOp1icscc#39,%rbx]         v76 = icmp.i32 eq v47, v75
-@0098 [Op2urm_noflags_abcd#4b6,%rbx] v77 = bint.i32 v76
-@0099 [RexOp1rr#21,%r10]            v78 = band.i32 v50, v77
-@009a [RexOp1tjccb#74]              brz v78, ebb9
-@009a [-]                           fallthrough ebb12
+@0091 [DynRexOp1r_id#4081,%r9]           v71 = band_imm v67, 255
+@0094 [DynRexOp1r_ib#40c1,%r9]           v73 = ishl_imm v71, 24
+@0097 [DynRexOp1r_ib#70c1,%r9]           v75 = sshr_imm v73, 24
+@0098 [DynRexOp1icscc#39,%rbx]           v76 = icmp.i32 eq v47, v75
+@0098 [Op2urm_noflags_abcd#4b6,%rbx]     v77 = bint.i32 v76
+@0099 [DynRexOp1rr#21,%r10]              v78 = band.i32 v50, v77
+@009a [DynRexOp1tjccb#74]                brz v78, ebb9
+@009a [-]                                fallthrough ebb12
 
                                 ebb12:
-[RexOp1umr#89,%rcx]                 v99 = copy v81
-[Op1umr#89,%rdx]                    v100 = copy v79
+[DynRexOp1umr#89,%rcx]              v99 = copy v81
+[DynRexOp1umr#89,%rdx]              v100 = copy v79
 @00a4 [RexOp1rmov#89]               regmove v100, %rdx -> %rdi
 @00a4 [RexOp1rmov#89]               regmove v99, %rcx -> %rsi
 @00a4 [Op1jmpd#e9]                  jump ebb3(v100, v99); bin: e9 ffffff2d
@@ -118,9 +118,9 @@ function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] ba
 @00a7 [-]                           fallthrough ebb4
 
                                 ebb4:
-@00ad [Op1r_id#4081,%rcx]           v86 = band_imm.i32 v84, 255
-@00b3 [Op1r_id#4081,%rdx]           v89 = band_imm.i32 v87, 255
-@00b4 [Op1rr#29,%rcx]               v90 = isub v86, v89
+@00ad [DynRexOp1r_id#4081,%rcx]     v86 = band_imm.i32 v84, 255
+@00b3 [DynRexOp1r_id#4081,%rdx]     v89 = band_imm.i32 v87, 255
+@00b4 [DynRexOp1rr#29,%rcx]         v90 = isub v86, v89
 @00b5 [-]                           fallthrough ebb2(v90)
 
                                 ebb2(v5: i32 [%rcx]):

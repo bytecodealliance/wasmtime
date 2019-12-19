@@ -3,7 +3,7 @@ target x86_64
 
 function %dual_loads(i64, i64) -> i64 {
 ebb0(v0: i64, v1: i64):
-[RexOp1rr#8001]    v3 = iadd v0, v1
+[DynRexOp1rr#8001] v3 = iadd v0, v1
                    v4 = load.i64 v3
                    v5 = uload8.i64 v3
                    v6 = sload8.i64 v3
@@ -29,7 +29,7 @@ ebb0(v0: i64, v1: i64):
 
 function %dual_loads2(i64, i64) -> i64 {
 ebb0(v0: i64, v1: i64):
-[RexOp1rr#8001]    v3 = iadd v0, v1
+[DynRexOp1rr#8001] v3 = iadd v0, v1
                    v4 = load.i64 v3+1
                    v5 = uload8.i64 v3+1
                    v6 = sload8.i64 v3+1
@@ -55,7 +55,7 @@ ebb0(v0: i64, v1: i64):
 
 function %dual_stores(i64, i64, i64) {
 ebb0(v0: i64, v1: i64, v2: i64):
-[RexOp1rr#8001]    v3 = iadd v0, v1
+[DynRexOp1rr#8001] v3 = iadd v0, v1
 [RexOp1st#8089]    store.i64 v2, v3
 [RexOp1st#88]      istore8.i64 v2, v3
 [RexMp1st#189]     istore16.i64 v2, v3
@@ -75,7 +75,7 @@ ebb0(v0: i64, v1: i64, v2: i64):
 
 function %dual_stores2(i64, i64, i64) {
 ebb0(v0: i64, v1: i64, v2: i64):
-[RexOp1rr#8001]         v3 = iadd v0, v1
+[DynRexOp1rr#8001] v3 = iadd v0, v1
 [RexOp1stDisp8#8089]    store.i64 v2, v3+1
 [RexOp1stDisp8#88]      istore8.i64 v2, v3+1
 [RexMp1stDisp8#189]     istore16.i64 v2, v3+1

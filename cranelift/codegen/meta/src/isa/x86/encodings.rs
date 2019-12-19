@@ -140,32 +140,59 @@ impl PerCpuModeEncodings {
         self.enc64.push(encoding);
     }
 
+    /// Adds I32/I64 encodings as appropriate for a typed instruction.
+    /// The REX prefix is always inferred at runtime.
+    ///
     /// Add encodings for `inst.i32` to X86_32.
-    /// Add encodings for `inst.i32` to X86_64 with and without REX.
+    /// Add encodings for `inst.i32` to X86_64 with optional, inferred REX.
     /// Add encodings for `inst.i64` to X86_64 with a REX.W prefix.
     fn enc_i32_i64(&mut self, inst: impl Into<InstSpec>, template: Template) {
         let inst: InstSpec = inst.into();
+
+        // I32 on x86: no REX prefix.
+        self.enc32(inst.bind(I32), template.infer_rex());
+
+        // I32 on x86_64: REX.W unset; REX.RXB determined at runtime from registers.
+        self.enc64(inst.bind(I32), template.infer_rex());
+
+        // I64 on x86_64: REX.W set; REX.RXB determined at runtime from registers.
+        self.enc64(inst.bind(I64), template.infer_rex().w());
+    }
+
+    /// Adds I32/I64 encodings as appropriate for a typed instruction.
+    /// All variants of REX prefix are explicitly emitted, not inferred.
+    ///
+    /// Add encodings for `inst.i32` to X86_32.
+    /// Add encodings for `inst.i32` to X86_64 with and without REX.
+    /// Add encodings for `inst.i64` to X86_64 with and without REX.
+    fn enc_i32_i64_explicit_rex(&mut self, inst: impl Into<InstSpec>, template: Template) {
+        let inst: InstSpec = inst.into();
         self.enc32(inst.bind(I32), template.nonrex());
 
-        // REX-less encoding must come after REX encoding so we don't use it by default. Otherwise
-        // reg-alloc would never use r8 and up.
+        // REX-less encoding must come after REX encoding so we don't use it by default.
+        // Otherwise reg-alloc would never use r8 and up.
         self.enc64(inst.bind(I32), template.rex());
         self.enc64(inst.bind(I32), template.nonrex());
         self.enc64(inst.bind(I64), template.rex().w());
     }
 
-    /// Add encodings for `inst.b32` to X86_32.
-    /// Add encodings for `inst.b32` to X86_64 with and without REX.
-    /// Add encodings for `inst.b64` to X86_64 with a REX.W prefix.
+    /// Adds B32/B64 encodings as appropriate for a typed instruction.
+    /// The REX prefix is always inferred at runtime.
+    ///
+    /// Adds encoding for `inst.b32` to X86_32.
+    /// Adds encoding for `inst.b32` to X86_64 with optional, inferred REX.
+    /// Adds encoding for `inst.b64` to X86_64 with a REX.W prefix.
     fn enc_b32_b64(&mut self, inst: impl Into<InstSpec>, template: Template) {
         let inst: InstSpec = inst.into();
-        self.enc32(inst.bind(B32), template.nonrex());
 
-        // REX-less encoding must come after REX encoding so we don't use it by default. Otherwise
-        // reg-alloc would never use r8 and up.
-        self.enc64(inst.bind(B32), template.rex());
-        self.enc64(inst.bind(B32), template.nonrex());
-        self.enc64(inst.bind(B64), template.rex().w());
+        // B32 on x86: no REX prefix.
+        self.enc32(inst.bind(B32), template.infer_rex());
+
+        // B32 on x86_64: REX.W unset; REX.RXB determined at runtime from registers.
+        self.enc64(inst.bind(B32), template.infer_rex());
+
+        // B64 on x86_64: REX.W set; REX.RXB determined at runtime from registers.
+        self.enc64(inst.bind(B64), template.infer_rex().w());
     }
 
     /// Add encodings for `inst.i32` to X86_32.
@@ -994,8 +1021,8 @@ pub(crate) fn define(
         e.enc_x86_64(istore8.bind(I64).bind(Any), recipe.opcodes(&MOV_BYTE_STORE));
     }
 
-    e.enc_i32_i64(spill, rec_spillSib32.opcodes(&MOV_STORE));
-    e.enc_i32_i64(regspill, rec_regspill32.opcodes(&MOV_STORE));
+    e.enc_i32_i64_explicit_rex(spill, rec_spillSib32.opcodes(&MOV_STORE));
+    e.enc_i32_i64_explicit_rex(regspill, rec_regspill32.opcodes(&MOV_STORE));
     e.enc_r32_r64_rex_only(spill, rec_spillSib32.opcodes(&MOV_STORE));
     e.enc_r32_r64_rex_only(regspill, rec_regspill32.opcodes(&MOV_STORE));
 
@@ -1020,8 +1047,8 @@ pub(crate) fn define(
         e.enc_i32_i64_ld_st(sload8, true, recipe.opcodes(&MOVSX_BYTE));
     }
 
-    e.enc_i32_i64(fill, rec_fillSib32.opcodes(&MOV_LOAD));
-    e.enc_i32_i64(regfill, rec_regfill32.opcodes(&MOV_LOAD));
+    e.enc_i32_i64_explicit_rex(fill, rec_fillSib32.opcodes(&MOV_LOAD));
+    e.enc_i32_i64_explicit_rex(regfill, rec_regfill32.opcodes(&MOV_LOAD));
     e.enc_r32_r64_rex_only(fill, rec_fillSib32.opcodes(&MOV_LOAD));
     e.enc_r32_r64_rex_only(regfill, rec_regfill32.opcodes(&MOV_LOAD));
 

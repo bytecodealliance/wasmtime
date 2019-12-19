@@ -5,9 +5,9 @@ target i686
 
 function %br_icmp(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
-[Op1icscc#39,%rdx]  v2 = icmp slt v0, v1
-[Op1t8jccd_long#85] brnz v2, ebb1
-[Op1jmpb#eb]        jump ebb2
+[DynRexOp1icscc#39,%rdx]  v2 = icmp slt v0, v1
+[Op1t8jccd_long#85]       brnz v2, ebb1
+[Op1jmpb#eb]              jump ebb2
 
 ebb2:
 [Op1ret#c3]         return v1
@@ -35,9 +35,9 @@ ebb1:
 
 function %br_icmp_inverse(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
-[Op1icscc#39,%rdx]  v2 = icmp slt v0, v1
-[Op1t8jccd_long#84] brz v2, ebb1
-[Op1jmpb#eb]        jump ebb2
+[DynRexOp1icscc#39,%rdx]  v2 = icmp slt v0, v1
+[Op1t8jccd_long#84]       brz v2, ebb1
+[Op1jmpb#eb]              jump ebb2
 
 ebb2:
 [Op1ret#c3]         return v1
@@ -65,9 +65,9 @@ ebb1:
 
 function %br_icmp_imm(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
-[Op1icscc_ib#7083]  v2 = icmp_imm slt v0, 2
-[Op1t8jccd_long#84] brz v2, ebb1
-[Op1jmpb#eb]        jump ebb2
+[DynRexOp1icscc_ib#7083]  v2 = icmp_imm slt v0, 2
+[Op1t8jccd_long#84]       brz v2, ebb1
+[Op1jmpb#eb]              jump ebb2
 
 ebb2:
 [Op1ret#c3]         return v1

@@ -57,6 +57,24 @@ impl EncodingBits {
         new
     }
 
+    /// Returns a copy of the EncodingBits with the RRR bits set.
+    #[inline]
+    pub fn with_rrr(self, rrr: u8) -> Self {
+        debug_assert_eq!(u8::from(self.rrr()), 0);
+        let mut enc = self.clone();
+        enc.write(RRR, rrr.into());
+        enc
+    }
+
+    /// Returns a copy of the EncodingBits with the REX.W bit set.
+    #[inline]
+    pub fn with_rex_w(self) -> Self {
+        debug_assert_eq!(self.rex_w(), 0);
+        let mut enc = self.clone();
+        enc.write(REX_W, 1);
+        enc
+    }
+
     /// Returns the raw bits.
     #[inline]
     pub fn bits(self) -> u16 {

@@ -4,7 +4,7 @@ target x86_64
 
 function %test_multiple_uses(i32 [%rdi]) -> i32 {
 ebb0(v0: i32 [%rdi]):
-[Op1rcmp_ib#7083,%rflags]           v3 = ifcmp_imm v0, 0
+[DynRexOp1rcmp_ib#7083,%rflags]     v3 = ifcmp_imm v0, 0
 [Op2seti_abcd#490,%rax]             v1 = trueif eq v3
 [RexOp2urm_noflags#4b6,%rax]        v2 = bint.i32 v1
 [Op1brib#70]                        brif eq v3, ebb1

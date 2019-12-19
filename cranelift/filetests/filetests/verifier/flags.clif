@@ -4,7 +4,7 @@ target i686
 ; Simple, correct use of CPU flags.
 function %simple(i32) -> i32 {
                     ebb0(v0: i32):
-    [Op1rcmp#39]              v1 = ifcmp v0, v0
+    [DynRexOp1rcmp#39]        v1 = ifcmp v0, v0
     [Op2seti_abcd#490]        v2 = trueif ugt v1
     [Op2urm_noflags_abcd#4b6] v3 = bint.i32 v2
     [Op1ret#c3]               return v3
@@ -13,7 +13,7 @@ function %simple(i32) -> i32 {
 ; Overlapping flag values of different types.
 function %overlap(i32, f32) -> i32 {
                     ebb0(v0: i32, v1: f32):
-    [Op1rcmp#39]              v2 = ifcmp v0, v0
+    [DynRexOp1rcmp#39]        v2 = ifcmp v0, v0
     [Op2fcmp#42e]             v3 = ffcmp v1, v1
     [Op2setf_abcd#490]        v4 = trueff gt v3 ; error: conflicting live CPU flags: v2 and v3
     [Op2seti_abcd#490]        v5 = trueif ugt v2
@@ -25,8 +25,8 @@ function %overlap(i32, f32) -> i32 {
 ; CPU flags clobbered by arithmetic.
 function %clobbered(i32) -> i32 {
                     ebb0(v0: i32):
-    [Op1rcmp#39]              v1 = ifcmp v0, v0
-    [Op1rr#01]                v2 = iadd v0, v0 ; error: encoding clobbers live CPU flags in v1
+    [DynRexOp1rcmp#39]        v1 = ifcmp v0, v0
+    [DynRexOp1rr#01]          v2 = iadd v0, v0 ; error: encoding clobbers live CPU flags in v1
     [Op2seti_abcd#490]        v3 = trueif ugt v1
     [Op2urm_noflags_abcd#4b6] v4 = bint.i32 v3
     [Op1ret#c3]               return v4
@@ -35,7 +35,7 @@ function %clobbered(i32) -> i32 {
 ; CPU flags not clobbered by load.
 function %live_across_load(i32) -> i32 {
                     ebb0(v0: i32):
-    [Op1rcmp#39]              v1 = ifcmp v0, v0
+    [DynRexOp1rcmp#39]        v1 = ifcmp v0, v0
     [Op1ld#8b]                v2 = load.i32 v0
     [Op2seti_abcd#490]        v3 = trueif ugt v1
     [Op2urm_noflags_abcd#4b6] v4 = bint.i32 v3
@@ -45,7 +45,7 @@ function %live_across_load(i32) -> i32 {
 ; Correct use of CPU flags across EBB.
 function %live_across_ebb(i32) -> i32 {
                           ebb0(v0: i32):
-    [Op1rcmp#39]              v1 = ifcmp v0, v0
+    [DynRexOp1rcmp#39]        v1 = ifcmp v0, v0
     [Op1jmpb#eb]              jump ebb1
                           ebb1:
     [Op2seti_abcd#490]        v2 = trueif ugt v1
@@ -61,14 +61,14 @@ function %live_across_ebb_backwards(i32) -> i32 {
     [Op2urm_noflags_abcd#4b6] v3 = bint.i32 v2
     [Op1ret#c3]               return v3
                           ebb2:
-    [Op1rcmp#39]              v1 = ifcmp v0, v0
+    [DynRexOp1rcmp#39]        v1 = ifcmp v0, v0
     [Op1jmpb#eb]              jump ebb1
 }
 
 ; Flags live into loop.
 function %live_into_loop(i32) -> i32 {
                     ebb0(v0: i32):
-    [Op1rcmp#39]        v1 = ifcmp v0, v0
+    [DynRexOp1rcmp#39]  v1 = ifcmp v0, v0
     [Op1jmpb#eb]        jump ebb1
                     ebb1:
     [Op2seti_abcd#490]  v2 = trueif ugt v1

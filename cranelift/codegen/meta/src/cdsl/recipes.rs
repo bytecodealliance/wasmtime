@@ -172,7 +172,7 @@ pub(crate) struct EncodingRecipeBuilder {
     pub base_size: u64,
     pub operands_in: Option<Vec<OperandConstraint>>,
     pub operands_out: Option<Vec<OperandConstraint>>,
-    compute_size: Option<&'static str>,
+    pub compute_size: Option<&'static str>,
     pub branch_range: Option<BranchRange>,
     pub emit: Option<String>,
     clobbers_flags: Option<bool>,
