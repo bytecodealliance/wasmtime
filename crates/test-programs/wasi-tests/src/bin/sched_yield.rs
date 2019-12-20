@@ -1,10 +1,8 @@
-use wasi_old::wasi_unstable;
-
-fn test_sched_yield() {
-    assert!(wasi_unstable::sched_yield().is_ok(), "sched_yield");
+unsafe fn test_sched_yield() {
+    wasi::sched_yield().expect("sched_yield");
 }
 
 fn main() {
     // Run tests
-    test_sched_yield()
+    unsafe { test_sched_yield() }
 }

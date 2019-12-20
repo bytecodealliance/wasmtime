@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory_new;
+use wasi_tests::open_scratch_directory;
 
 unsafe fn test_dangling_fd(dir_fd: wasi::Fd) {
     // Create a file, open it, delete it without closing the handle,
@@ -41,7 +41,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory_new(&arg) {
+    let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);

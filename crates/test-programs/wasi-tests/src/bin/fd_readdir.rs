@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{cmp::min, env, mem, process, slice, str};
-use wasi_tests::open_scratch_directory_new;
+use wasi_tests::open_scratch_directory;
 
 const BUF_LEN: usize = 256;
 
@@ -48,12 +48,10 @@ impl<'a> Iterator for ReadDir<'a> {
     }
 }
 
-unsafe fn exec_fd_readdir(
-    fd: wasi::Fd,
-    cookie: wasi::Dircookie,
-) -> Vec<DirEntry> {
+unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> Vec<DirEntry> {
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
-    let bufused = wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
+    let bufused =
+        wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
 
     let sl = slice::from_raw_parts(buf.as_ptr(), min(BUF_LEN, bufused));
     let dirs: Vec<_> = ReadDir::from_slice(sl).collect();
@@ -72,22 +70,14 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     // the first entry should be `.`
     let dir = dirs.next().expect("first entry is None");
     assert_eq!(dir.name, ".", "first name");
-    assert_eq!(
-        dir.dirent.d_type,
-        wasi::FILETYPE_DIRECTORY,
-        "first type"
-    );
+    assert_eq!(dir.dirent.d_type, wasi::FILETYPE_DIRECTORY, "first type");
     assert_eq!(dir.dirent.d_ino, stat.ino);
     assert_eq!(dir.dirent.d_namlen, 1);
 
     // the second entry should be `..`
     let dir = dirs.next().expect("second entry is None");
     assert_eq!(dir.name, "..", "second name");
-    assert_eq!(
-        dir.dirent.d_type,
-        wasi::FILETYPE_DIRECTORY,
-        "second type"
-    );
+    assert_eq!(dir.dirent.d_type, wasi::FILETYPE_DIRECTORY, "second type");
 
     assert!(
         dirs.next().is_none(),
@@ -103,7 +93,8 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
-    ).expect("failed to create file");
+    )
+    .expect("failed to create file");
     assert_gt!(
         file_fd,
         libc::STDERR_FILENO as wasi::Fd,
@@ -152,7 +143,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory_new(&arg) {
+    let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);

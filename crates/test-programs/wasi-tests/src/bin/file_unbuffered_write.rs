@@ -1,95 +1,57 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_file, close_fd, create_file};
-use wasi_tests::wasi_wrappers::{wasi_fd_read, wasi_fd_write, wasi_path_open};
 
-unsafe fn test_file_unbuffered_write(dir_fd: wasi_unstable::Fd) {
-    // Create file
-    create_file(dir_fd, "file");
-
-    // Open file for reading
-    let mut fd_read = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(
+unsafe fn test_file_unbuffered_write(dir_fd: wasi::Fd) {
+    // Create and open file for reading
+    let fd_read = wasi::path_open(
         dir_fd,
         0,
         "file",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ,
         0,
-        wasi_unstable::RIGHT_FD_READ,
         0,
-        0,
-        &mut fd_read,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
+    )
+    .expect("create and open file for reading");
     assert_gt!(
         fd_read,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
     // Open the same file but for writing
-    let mut fd_write = wasi_unstable::Fd::max_value() - 1;
-    status = wasi_path_open(
-        dir_fd,
-        0,
-        "file",
-        0,
-        wasi_unstable::RIGHT_FD_WRITE,
-        0,
-        0,
-        &mut fd_write,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
+    let fd_write = wasi::path_open(dir_fd, 0, "file", 0, wasi::RIGHTS_FD_WRITE, 0, 0)
+        .expect("opening file for writing");
     assert_gt!(
         fd_write,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
     // Write to file
     let contents = &[1u8];
-    let ciovec = wasi_unstable::CIoVec {
-        buf: contents.as_ptr() as *const libc::c_void,
+    let ciovec = wasi::Ciovec {
+        buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    let mut nwritten = 0;
-    status = wasi_fd_write(fd_write, &[ciovec], &mut nwritten);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "writing byte to file"
-    );
+    let nwritten = wasi::fd_write(fd_write, &[ciovec]).expect("writing byte to file");
     assert_eq!(nwritten, 1, "nwritten bytes check");
 
     // Read from file
     let contents = &mut [0u8; 1];
-    let iovec = wasi_unstable::IoVec {
-        buf: contents.as_mut_ptr() as *mut libc::c_void,
+    let iovec = wasi::Iovec {
+        buf: contents.as_mut_ptr() as *mut _,
         buf_len: contents.len(),
     };
-    let mut nread = 0;
-    status = wasi_fd_read(fd_read, &[iovec], &mut nread);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading bytes from file"
-    );
+    let nread = wasi::fd_read(fd_read, &[iovec]).expect("reading bytes from file");
     assert_eq!(nread, 1, "nread bytes check");
     assert_eq!(contents, &[1u8], "written bytes equal read bytes");
 
     // Clean up
-    close_fd(fd_write);
-    close_fd(fd_read);
-    cleanup_file(dir_fd, "file");
+    wasi::fd_close(fd_write).expect("closing a file");
+    wasi::fd_close(fd_read).expect("closing a file");
+    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 fn main() {
     let mut args = env::args();

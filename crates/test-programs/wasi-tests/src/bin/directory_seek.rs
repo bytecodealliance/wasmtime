@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory_new;
+use wasi_tests::open_scratch_directory;
 
 unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
@@ -16,13 +16,12 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     );
 
     // Attempt to seek.
-    let status = wasi::fd_seek(fd, 0, wasi::WHENCE_CUR)
-        .err()
-        .expect("failed to seek");
     assert_eq!(
-        status.raw_error(),
+        wasi::fd_seek(fd, 0, wasi::WHENCE_CUR)
+            .expect_err("seek on a directory")
+            .raw_error(),
         wasi::ERRNO_NOTCAPABLE,
-        "seek on a directory"
+        "errno should be ERRNO_NOTCAPABLE"
     );
 
     // Check if we obtained the right to seek.
@@ -54,7 +53,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory_new(&arg) {
+    let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);

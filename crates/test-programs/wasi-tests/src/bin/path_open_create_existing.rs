@@ -1,44 +1,24 @@
 use std::{env, process};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_file, close_fd};
-use wasi_tests::wasi_wrappers::wasi_path_open;
+use wasi_tests::{create_file, open_scratch_directory};
 
-unsafe fn test_path_open_create_existing(dir_fd: wasi_unstable::Fd) {
-    let mut fd: wasi_unstable::Fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(
-        dir_fd,
-        0,
-        "file",
-        wasi_unstable::O_CREAT | wasi_unstable::O_EXCL,
-        0,
-        0,
-        0,
-        &mut fd,
-    );
+unsafe fn test_path_open_create_existing(dir_fd: wasi::Fd) {
+    create_file(dir_fd, "file");
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "creating a file"
+        wasi::path_open(
+            dir_fd,
+            0,
+            "file",
+            wasi::OFLAGS_CREAT | wasi::OFLAGS_EXCL,
+            0,
+            0,
+            0,
+        )
+        .expect_err("trying to create a file that already exists")
+        .raw_error(),
+        wasi::ERRNO_EXIST,
+        "errno should be ERRNO_EXIST"
     );
-    close_fd(fd);
-    fd = wasi_unstable::Fd::max_value() - 1;
-    status = wasi_path_open(
-        dir_fd,
-        0,
-        "file",
-        wasi_unstable::O_CREAT | wasi_unstable::O_EXCL,
-        0,
-        0,
-        0,
-        &mut fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_EEXIST,
-        "trying to create a file that already exists"
-    );
-    cleanup_file(dir_fd, "file");
+    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
 fn main() {

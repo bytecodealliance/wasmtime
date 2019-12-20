@@ -1,7 +1,6 @@
-use libc;
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory_new;
+use wasi_tests::open_scratch_directory;
 
 unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
@@ -26,10 +25,7 @@ unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
     assert_eq!(stat.size, 0, "file size should be 0");
 
     // Allocate some size
-    assert!(
-        wasi::fd_allocate(file_fd, 0, 100).is_ok(),
-        "allocating size"
-    );
+    wasi::fd_allocate(file_fd, 0, 100).expect("allocating size");
 
     let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat 2");
     assert_eq!(stat.size, 100, "file size should be 100");
@@ -51,7 +47,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory_new(&arg) {
+    let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);

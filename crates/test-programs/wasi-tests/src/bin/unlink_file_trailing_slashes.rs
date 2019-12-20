@@ -1,46 +1,46 @@
 use std::{env, process};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_dir, create_dir, create_file};
-use wasi_tests::wasi_wrappers::wasi_path_unlink_file;
+use wasi_tests::{create_file, open_scratch_directory};
 
-unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
-    create_dir(dir_fd, "dir");
+    wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
     // Test that unlinking it fails.
     assert_eq!(
-        wasi_path_unlink_file(dir_fd, "dir"),
-        Err(wasi_unstable::EISDIR),
-        "unlink_file on a directory should fail"
+        wasi::path_unlink_file(dir_fd, "dir")
+            .expect_err("unlink_file on a directory should fail")
+            .raw_error(),
+        wasi::ERRNO_ISDIR,
+        "errno should be ERRNO_ISDIR"
     );
 
     // Test that unlinking it with a trailing flash fails.
     assert_eq!(
-        wasi_path_unlink_file(dir_fd, "dir/"),
-        Err(wasi_unstable::EISDIR),
-        "unlink_file on a directory should fail"
+        wasi::path_unlink_file(dir_fd, "dir/")
+            .expect_err("unlink_file on a directory should fail")
+            .raw_error(),
+        wasi::ERRNO_ISDIR,
+        "errno should be ERRNO_ISDIR"
     );
 
     // Clean up.
-    cleanup_dir(dir_fd, "dir");
+    wasi::path_remove_directory(dir_fd, "dir").expect("removing a directory");
 
     // Create a temporary file.
     create_file(dir_fd, "file");
 
     // Test that unlinking it with a trailing flash fails.
     assert_eq!(
-        wasi_path_unlink_file(dir_fd, "file/"),
-        Err(wasi_unstable::ENOTDIR),
-        "unlink_file with a trailing slash should fail"
+        wasi::path_unlink_file(dir_fd, "file/")
+            .expect_err("unlink_file with a trailing slash should fail")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_NOTDIR"
     );
 
     // Test that unlinking it with no trailing flash succeeds.
-    assert_eq!(
-        wasi_path_unlink_file(dir_fd, "file"),
-        Ok(()),
-        "unlink_file with no trailing slash should succeed"
-    );
+    wasi::path_unlink_file(dir_fd, "file")
+        .expect("unlink_file with no trailing slash should succeed");
 }
 
 fn main() {
