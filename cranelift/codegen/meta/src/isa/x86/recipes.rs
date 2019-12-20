@@ -258,7 +258,7 @@ impl<'builder> Template<'builder> {
     pub fn nonrex(&self) -> Self {
         assert!(
             self.rex_kind != RexRecipeKind::AlwaysEmitRex,
-            "Template requires REX prefix."
+            "Template {} requires REX prefix.", self.name(),
         );
         let mut copy = self.clone();
         copy.rex_kind = RexRecipeKind::NeverEmitRex;
@@ -267,7 +267,7 @@ impl<'builder> Template<'builder> {
     pub fn rex(&self) -> Self {
         assert!(
             self.rex_kind != RexRecipeKind::NeverEmitRex,
-            "Template requires no REX prefix."
+            "Template {} requires no REX prefix.", self.name(),
         );
         if let Some(prefixed) = &self.when_prefixed {
             let mut ret = prefixed.rex();
@@ -284,7 +284,11 @@ impl<'builder> Template<'builder> {
     pub fn infer_rex(&self) -> Self {
         assert!(
             self.rex_kind != RexRecipeKind::NeverEmitRex,
-            "Template requires no REX prefix."
+            "Template {} requires no REX prefix.", self.name(),
+        );
+        assert!(
+            self.rex_kind != RexRecipeKind::AlwaysEmitRex,
+            "Template {} akways requires REX prefix.", self.name(),
         );
         assert!(
             self.when_prefixed.is_none(),

@@ -17,7 +17,7 @@ use crate::cdsl::settings::SettingPredicateNumber;
 ///
 /// Register instances can be created with the constructor, or accessed as
 /// attributes on the register class: `GPR.rcx`.
-#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct Register {
     pub regclass: RegClassIndex,
     pub unit: u8,
@@ -33,7 +33,7 @@ impl Register {
 ///
 /// A `Stack` object can be used to indicate an operand constraint for a value
 /// operand that must live in a stack slot.
-#[derive(Copy, Clone, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq)]
 pub(crate) struct Stack {
     pub regclass: RegClassIndex,
 }
@@ -54,7 +54,7 @@ pub(crate) struct BranchRange {
     pub range: u64,
 }
 
-#[derive(Copy, Clone, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq)]
 pub(crate) enum OperandConstraint {
     RegClass(RegClassIndex),
     FixedReg(Register),
@@ -261,8 +261,8 @@ impl EncodingRecipeBuilder {
             assert!(
                 operands_in.len() == self.format.num_value_operands,
                 format!(
-                    "missing operand constraints for recipe {} (format {})",
-                    self.name, self.format.name
+                    "missing operand constraints for recipe {} (format {}, existing operand constraints: {:?}, required operand constraints: {})",
+                    self.name, self.format.name, operands_in, self.format.num_value_operands,
                 )
             );
         }
