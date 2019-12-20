@@ -1392,40 +1392,46 @@ pub(crate) fn define<'shared>(
             ),
     );
 
-    // Stack addresses.
+    // Stack accesses.
     //
     // TODO Alternative forms for 8-bit immediates, when applicable.
 
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("spaddr4_id", &formats.stack_load, 6)
-            .operands_out(vec![gpr])
-            .emit(
-                r#"
-                    let sp = StackRef::sp(stack_slot, &func.stack_slots);
-                    let base = stk_base(sp.base);
-                    {{PUT_OP}}(bits, rex2(out_reg0, base), sink);
-                    modrm_sib_disp8(out_reg0, sink);
-                    sib_noindex(base, sink);
-                    let imm : i32 = offset.into();
-                    sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("spaddr_ld_id", &formats.stack_load, 6)
+                .operands_out(vec![gpr])
+                .emit(
+                    r#"
+                        let sp = StackRef::sp(stack_slot, &func.stack_slots);
+                        let base = stk_base(sp.base);
+                        {{PUT_OP}}(bits, rex2(base, out_reg0), sink);
+                        modrm_sib_disp32(out_reg0, sink);
+                        sib_noindex(base, sink);
+                        let imm : i32 = offset.into();
+                        sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
+                    "#,
+                ),
+            regs
+        )
     );
 
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("spaddr8_id", &formats.stack_load, 6)
-            .operands_out(vec![gpr])
-            .emit(
-                r#"
-                    let sp = StackRef::sp(stack_slot, &func.stack_slots);
-                    let base = stk_base(sp.base);
-                    {{PUT_OP}}(bits, rex2(base, out_reg0), sink);
-                    modrm_sib_disp32(out_reg0, sink);
-                    sib_noindex(base, sink);
-                    let imm : i32 = offset.into();
-                    sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("spst_id", &formats.stack_store, 6)
+                .operands_in(vec![gpr])
+                .emit(
+                    r#"
+                        let sp = StackRef::sp(stack_slot, &func.stack_slots);
+                        let base = stk_base(sp.base);
+                        {{PUT_OP}}(bits, rex2(base, in_reg0), sink);
+                        modrm_sib_disp32(in_reg0, sink);
+                        sib_noindex(base, sink);
+                        let imm : i32 = offset.into();
+                        sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
+                    "#,
+                ),
+            regs
+        )
     );
 
     // Store recipes.

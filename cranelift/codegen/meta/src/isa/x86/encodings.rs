@@ -2089,6 +2089,8 @@ fn define_entity_ref(
     // Shorthands for instructions.
     let func_addr = shared.by_name("func_addr");
     let stack_addr = shared.by_name("stack_addr");
+    let stack_load = shared.by_name("stack_load");
+    let stack_store = shared.by_name("stack_store");
     let symbol_value = shared.by_name("symbol_value");
 
     // Shorthands for recipes.
@@ -2102,8 +2104,8 @@ fn define_entity_ref(
     let rec_gvaddr8 = r.template("gvaddr8");
     let rec_pcrel_fnaddr8 = r.template("pcrel_fnaddr8");
     let rec_pcrel_gvaddr8 = r.template("pcrel_gvaddr8");
-    let rec_spaddr4_id = r.template("spaddr4_id");
-    let rec_spaddr8_id = r.template("spaddr8_id");
+    let rec_spaddr_ld_id = r.template("spaddr_ld_id");
+    let rec_spst_id = r.template("spst_id");
 
     // Predicates shorthands.
     let all_ones_funcaddrs_and_not_is_pic =
@@ -2187,12 +2189,11 @@ fn define_entity_ref(
         is_pic,
     );
 
-    // Stack addresses.
-    //
-    // TODO: Add encoding rules for stack_load and stack_store, so that they
-    // don't get legalized to stack_addr + load/store.
-    e.enc32(stack_addr.bind(I32), rec_spaddr4_id.opcodes(&LEA));
-    e.enc64(stack_addr.bind(I64), rec_spaddr8_id.opcodes(&LEA).rex().w());
+    // Stack accesses.
+    e.enc32(stack_addr.bind(I32), rec_spaddr_ld_id.opcodes(&LEA));
+    e.enc64(stack_addr.bind(I64), rec_spaddr_ld_id.opcodes(&LEA));
+    e.enc_i32_i64_explicit_rex(stack_load, rec_spaddr_ld_id.opcodes(&MOV_LOAD));
+    e.enc_i32_i64_explicit_rex(stack_store, rec_spst_id.opcodes(&MOV_STORE));
 }
 
 /// Control flow opcodes.
