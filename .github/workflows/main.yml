@@ -109,16 +109,17 @@ jobs:
 
   # Install wasm32-unknown-emscripten target, and ensure `crates/wasi-common`
   # compiles to Emscripten.
-  emscripten:
-    name: Emscripten
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-unknown-emscripten
-    - run: cargo build --target wasm32-unknown-emscripten -p wasi-common
+  # TODO enable once rust-lang/rust#66308 is fixed
+  # emscripten:
+  #   name: Emscripten
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v1
+  #     with:
+  #       submodules: true
+  #   - uses: ./.github/actions/install-rust
+  #   - run: rustup target add wasm32-unknown-emscripten
+  #   - run: cargo build --target wasm32-unknown-emscripten -p wasi-common
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
