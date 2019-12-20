@@ -374,7 +374,7 @@ impl InstructionBuilder {
 }
 
 /// A thin wrapper like Option<ValueType>, but with more precise semantics.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum ValueTypeOrAny {
     ValueType(ValueType),
     Any,
@@ -442,7 +442,7 @@ impl From<Immediate> for BindParameter {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum Immediate {
     // When needed, this enum should be expanded to include other immediate types (e.g. u8, u128).
     IntCC(IntCC),

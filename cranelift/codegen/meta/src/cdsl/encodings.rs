@@ -69,7 +69,11 @@ impl EncodingBuilder {
                 assert_eq!(
                     inst.value_types.len(),
                     other_typevars.len() + 1,
-                    "partially bound polymorphic instruction"
+                    "partially bound polymorphic instruction {} \
+                    with value_types {:?} and immediate values {:?}",
+                    inst.inst.name,
+                    inst.value_types,
+                    inst.immediate_values,
                 );
 
                 // Add secondary type variables to the instruction predicate.
@@ -112,7 +116,8 @@ impl EncodingBuilder {
             InstSpec::Inst(inst) => {
                 assert!(
                     inst.polymorphic_info.is_none(),
-                    "unbound polymorphic instruction"
+                    "unbound polymorphic instruction {}",
+                    inst.name,
                 );
                 (None, None)
             }
