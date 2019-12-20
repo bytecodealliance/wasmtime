@@ -79,15 +79,33 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly
-    - run: cargo install cargo-fuzz
+    - run: cargo install cargo-fuzz --vers "^0.6"
     - run: cargo fetch
       working-directory: ./fuzz
-    # NB: the `-runs=0` means that libFuzzer won't generate new inputs, only run
-    # the seeds from the corpus.
-    - run: cargo fuzz run compile                --release --debug-assertions -- -runs=0
-    - run: cargo fuzz run instantiate            --release --debug-assertions -- -runs=0
-    - run: cargo fuzz run instantiate_translated --release --debug-assertions -- -runs=0
-    - run: cargo fuzz run api_calls              --release --debug-assertions -- -runs=0
+    - run: cargo fuzz build --release --debug-assertions
+    # Our corpora are too large to run in full on every pull request, they just
+    # take too long. Instead, we sample some of them and make sure that running
+    # our fuzzers over the sampled inputs still works OK.
+    - run: |
+        find fuzz/corpus/compile -type f \
+            | shuf \
+            | head -n 3000 \
+            | xargs cargo fuzz run compile --release --debug-assertions
+    - run: |
+        find fuzz/corpus/instantiate -type f \
+            | shuf \
+            | head -n 2000 \
+            | xargs cargo fuzz run instantiate --release --debug-assertions
+    - run: |
+        find fuzz/corpus/instantiate_translated -type f \
+            | shuf \
+            | head -n 1000 \
+            | xargs cargo fuzz run instantiate_translated --release --debug-assertions
+    - run: |
+        find fuzz/corpus/api_calls -type f \
+            | shuf \
+            | head -n 100 \
+            | xargs cargo fuzz run api_calls --release --debug-assertions
 
   # Install wasm32-unknown-emscripten target, and ensure `crates/wasi-common`
   # compiles to Emscripten.
