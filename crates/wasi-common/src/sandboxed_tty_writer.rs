@@ -17,9 +17,7 @@ where
 {
     /// Construct a new `SandboxedTTYWriter` with the given inner `Writer`.
     pub(crate) fn new(inner: &'writer mut Writer) -> Self {
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 
     /// Write a single character to the output.
