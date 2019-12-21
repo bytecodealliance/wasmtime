@@ -7,7 +7,7 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use crate::environ::{ModuleEnvironment, WasmResult};
+use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
     tabletype_to_type, type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory,
@@ -141,7 +141,13 @@ pub fn parse_function_section(
     functions: FunctionSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_func_types(functions.get_count())?;
+    let num_functions = functions.get_count();
+    if num_functions == std::u32::MAX {
+        // We reserve `u32::MAX` for our own use in cranelift-entity.
+        return Err(WasmError::ImplLimitExceeded);
+    }
+
+    environ.reserve_func_types(num_functions)?;
 
     for entry in functions {
         let sigindex = entry?;
@@ -415,6 +421,11 @@ fn parse_function_name_subsection(
     let mut function_names = HashMap::new();
     for _ in 0..naming_reader.get_count() {
         let Naming { index, name } = naming_reader.read().ok()?;
+        if index == std::u32::MAX {
+            // We reserve `u32::MAX` for our own use in cranelift-entity.
+            return None;
+        }
+
         if function_names
             .insert(FuncIndex::from_u32(index), name)
             .is_some()
