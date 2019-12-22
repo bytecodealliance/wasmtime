@@ -1368,10 +1368,10 @@ pub(crate) fn define(
     e.enc_both(brff, rec_brfd.opcodes(&JUMP_NEAR_IF_OVERFLOW));
 
     // Note that the tjccd opcode will be prefixed with 0x0f.
-    e.enc_i32_i64(brz, rec_tjccb.opcodes(&JUMP_SHORT_IF_EQUAL));
-    e.enc_i32_i64(brz, rec_tjccd.opcodes(&TEST_BYTE_REG));
-    e.enc_i32_i64(brnz, rec_tjccb.opcodes(&JUMP_SHORT_IF_NOT_EQUAL));
-    e.enc_i32_i64(brnz, rec_tjccd.opcodes(&TEST_REG));
+    e.enc_i32_i64_explicit_rex(brz, rec_tjccb.opcodes(&JUMP_SHORT_IF_EQUAL));
+    e.enc_i32_i64_explicit_rex(brz, rec_tjccd.opcodes(&TEST_BYTE_REG));
+    e.enc_i32_i64_explicit_rex(brnz, rec_tjccb.opcodes(&JUMP_SHORT_IF_NOT_EQUAL));
+    e.enc_i32_i64_explicit_rex(brnz, rec_tjccd.opcodes(&TEST_REG));
 
     // Branch on a b1 value in a register only looks at the low 8 bits. See also
     // bint encodings below.
