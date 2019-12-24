@@ -1,7 +1,7 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
+use crate::cache::ModuleCacheDataTupleType;
 use crate::module;
 use crate::module_environ::FunctionBodyData;
 use cranelift_codegen::{binemit, ir, isa};
@@ -64,6 +64,11 @@ impl Compilation {
     /// Gets the number of functions defined.
     pub fn len(&self) -> usize {
         self.functions.len()
+    }
+
+    /// Returns whether there are no functions defined.
+    pub fn is_empty(&self) -> bool {
+        self.functions.is_empty()
     }
 
     /// Gets functions jump table offsets.
@@ -172,15 +177,5 @@ pub trait Compiler {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
-    ) -> Result<
-        (
-            Compilation,
-            Relocations,
-            ModuleAddressMap,
-            ValueLabelsRanges,
-            PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
-            Traps,
-        ),
-        CompileError,
-    >;
+    ) -> Result<ModuleCacheDataTupleType, CompileError>;
 }

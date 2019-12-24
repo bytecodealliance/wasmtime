@@ -155,11 +155,8 @@ fn build_function_lookup(
             active_ranges.push(range_index);
             continue;
         }
-        if last_wasm_pos.is_some() {
-            index.insert(
-                last_wasm_pos.unwrap(),
-                active_ranges.clone().into_boxed_slice(),
-            );
+        if let Some(position) = last_wasm_pos {
+            index.insert(position, active_ranges.clone().into_boxed_slice());
         }
         active_ranges.retain(|r| ranges[*r].wasm_end.cmp(&wasm_start) != std::cmp::Ordering::Less);
         active_ranges.push(range_index);

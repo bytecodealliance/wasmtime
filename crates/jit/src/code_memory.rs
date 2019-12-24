@@ -77,7 +77,7 @@ impl CodeMemory {
             .expect("failed to push current memory map");
 
         for (m, t) in &mut self.mmaps[self.published..] {
-            if m.len() != 0 {
+            if !m.is_empty() {
                 unsafe {
                     region::protect(m.as_mut_ptr(), m.len(), region::Protection::ReadExecute)
                 }
@@ -179,7 +179,7 @@ impl CodeMemory {
             ),
         );
 
-        if previous.0.len() > 0 {
+        if !previous.0.is_empty() {
             self.mmaps.push(previous);
         } else {
             assert_eq!(previous.1.len(), 0);

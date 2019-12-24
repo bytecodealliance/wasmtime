@@ -29,7 +29,7 @@ impl SymbolResolver for FunctionRelocResolver {
 pub fn emit_debugsections(
     obj: &mut Artifact,
     vmctx_info: &ModuleVmctxInfo,
-    target_config: &TargetFrontendConfig,
+    target_config: TargetFrontendConfig,
     debuginfo_data: &DebugInfoData,
     at: &ModuleAddressMap,
     ranges: &ValueLabelsRanges,
@@ -53,7 +53,7 @@ impl<'a> SymbolResolver for ImageRelocResolver<'a> {
 
 pub fn emit_debugsections_image(
     triple: Triple,
-    target_config: &TargetFrontendConfig,
+    target_config: TargetFrontendConfig,
     debuginfo_data: &DebugInfoData,
     vmctx_info: &ModuleVmctxInfo,
     at: &ModuleAddressMap,

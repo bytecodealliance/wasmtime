@@ -13,10 +13,7 @@
 )]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../clippy.toml")))]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(clippy::new_without_default, clippy::new_without_default_derive)
-)]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
@@ -373,8 +370,7 @@ fn handle_module(
         .borrow()
         .exports()
         .iter()
-        .find(|export| export.name().is_empty())
-        .is_some()
+        .any(|export| export.name().is_empty())
     {
         // Launch the default command export.
         let data = ModuleData::new(&data)?;
@@ -405,7 +401,7 @@ fn invoke_export(
     // the CLI parameters and attempt to parse them into function arguments for
     // the function we'll invoke.
     let binding = data.binding_for_export(&mut handle, name)?;
-    if binding.param_types()?.len() > 0 {
+    if !binding.param_types()?.is_empty() {
         eprintln!(
             "warning: using `--invoke` with a function that takes arguments \
              is experimental and may break in the future"
@@ -443,7 +439,7 @@ fn invoke_export(
     let results = data
         .invoke_export(&instance, name, &values)
         .with_context(|| format!("failed to invoke `{}`", name))?;
-    if results.len() > 0 {
+    if !results.is_empty() {
         eprintln!(
             "warning: using `--invoke` with a function that returns values \
              is experimental and may break in the future"

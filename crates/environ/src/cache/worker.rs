@@ -120,26 +120,28 @@ impl Worker {
 
     #[inline]
     fn send_cache_event(&self, event: CacheEvent) {
-        #[cfg(test)]
-        let mut stats = self
-            .stats
-            .0
-            .lock()
-            .expect("Failed to acquire worker stats lock");
-        match self.sender.try_send(event.clone()) {
-            Ok(()) => {
-                #[cfg(test)]
-                let _ = stats.sent += 1;
-            }
-            Err(err) => {
-                info!(
-                    "Failed to send asynchronously message to worker thread, \
-                     event: {:?}, error: {}",
-                    event, err
-                );
+        let sent_event = self.sender.try_send(event.clone());
 
-                #[cfg(test)]
-                let _ = stats.dropped += 1;
+        if let Err(ref err) = sent_event {
+            info!(
+                "Failed to send asynchronously message to worker thread, \
+                 event: {:?}, error: {}",
+                event, err
+            );
+        }
+
+        #[cfg(test)]
+        {
+            let mut stats = self
+                .stats
+                .0
+                .lock()
+                .expect("Failed to acquire worker stats lock");
+
+            if sent_event.is_ok() {
+                stats.sent += 1;
+            } else {
+                stats.dropped += 1;
             }
         }
     }
@@ -192,6 +194,18 @@ enum CacheEntry {
         path: PathBuf,
         is_dir: bool,
     },
+}
+
+macro_rules! unwrap_or_warn {
+    ($result:expr, $cont:stmt, $err_msg:expr, $path:expr) => {
+        match $result {
+            Ok(val) => val,
+            Err(err) => {
+                warn!("{}, path: {}, msg: {}", $err_msg, $path.display(), err);
+                $cont
+            }
+        }
+    };
 }
 
 impl WorkerThread {
@@ -321,91 +335,85 @@ impl WorkerThread {
 
         // recompress, write to other file, rename (it's atomic file content exchange)
         // and update the stats file
-        fs::read(&path)
-            .map_err(|err| {
-                warn!(
-                    "Failed to read old cache file, path: {}, err: {}",
-                    path.display(),
-                    err
-                )
-            })
-            .ok()
-            .and_then(|compressed_cache_bytes| {
-                zstd::decode_all(&compressed_cache_bytes[..])
-                    .map_err(|err| warn!("Failed to decompress cached code: {}", err))
-                    .ok()
-            })
-            .and_then(|cache_bytes| {
-                zstd::encode_all(&cache_bytes[..], opt_compr_lvl)
-                    .map_err(|err| warn!("Failed to compress cached code: {}", err))
-                    .ok()
-            })
-            .and_then(|recompressed_cache_bytes| {
-                fs::write(&lock_path, &recompressed_cache_bytes)
-                    .map_err(|err| {
-                        warn!(
-                            "Failed to write recompressed cache, path: {}, err: {}",
-                            lock_path.display(),
-                            err
-                        )
-                    })
-                    .ok()
-            })
-            .and_then(|()| {
-                fs::rename(&lock_path, &path)
-                    .map_err(|err| {
-                        warn!(
-                            "Failed to rename recompressed cache, path from: {}, path to: {}, err: {}",
-                            lock_path.display(),
-                            path.display(),
-                            err
-                        );
-                        if let Err(err) = fs::remove_file(&lock_path) {
-                            warn!(
-                                "Failed to clean up (remove) recompressed cache, path {}, err: {}",
-                                lock_path.display(),
-                                err
-                            );
-                        }
-                    })
-                    .ok()
-            })
-            .map(|()| {
-                // update stats file (reload it! recompression can take some time)
-                if let Some(mut new_stats) = read_stats_file(stats_path.as_ref()) {
-                    if new_stats.compression_level >= opt_compr_lvl {
-                        // Rare race:
-                        //    two instances with different opt_compr_lvl: we don't know in which order they updated
-                        //    the cache file and the stats file (they are not updated together atomically)
-                        // Possible solution is to use directories per cache entry, but it complicates the system
-                        // and is not worth it.
-                        debug!(
-                            "DETECTED task did more than once (or race with new file): \
-                             recompression of {}. Note: if optimized compression level setting \
-                             has changed in the meantine, the stats file might contain \
-                             inconsistent compression level due to race.",
-                            path.display()
-                        );
-                    } else {
-                        new_stats.compression_level = opt_compr_lvl;
-                        let _ = write_stats_file(stats_path.as_ref(), &new_stats);
-                    }
+        let compressed_cache_bytes = unwrap_or_warn!(
+            fs::read(&path),
+            return,
+            "Failed to read old cache file",
+            path
+        );
 
-                    if new_stats.usages < stats.usages {
-                        debug!(
-                            "DETECTED lower usage count (new file or race with counter \
-                             increasing): file {}",
-                            path.display()
-                        );
-                    }
-                } else {
-                    debug!(
-                        "Can't read stats file again to update compression level (it might got \
-                         cleaned up): file {}",
-                        stats_path.display()
+        let cache_bytes = unwrap_or_warn!(
+            zstd::decode_all(&compressed_cache_bytes[..]),
+            return,
+            "Failed to decompress cached code",
+            path
+        );
+
+        let recompressed_cache_bytes = unwrap_or_warn!(
+            zstd::encode_all(&cache_bytes[..], opt_compr_lvl),
+            return,
+            "Failed to compress cached code",
+            path
+        );
+
+        unwrap_or_warn!(
+            fs::write(&lock_path, &recompressed_cache_bytes),
+            return,
+            "Failed to write recompressed cache",
+            lock_path
+        );
+
+        unwrap_or_warn!(
+            fs::rename(&lock_path, &path),
+            {
+                if let Err(error) = fs::remove_file(&lock_path) {
+                    warn!(
+                        "Failed to clean up (remove) recompressed cache, path {}, err: {}",
+                        lock_path.display(),
+                        error
                     );
                 }
-            });
+
+                return;
+            },
+            "Failed to rename recompressed cache",
+            lock_path
+        );
+
+        // update stats file (reload it! recompression can take some time)
+        if let Some(mut new_stats) = read_stats_file(stats_path.as_ref()) {
+            if new_stats.compression_level >= opt_compr_lvl {
+                // Rare race:
+                //    two instances with different opt_compr_lvl: we don't know in which order they updated
+                //    the cache file and the stats file (they are not updated together atomically)
+                // Possible solution is to use directories per cache entry, but it complicates the system
+                // and is not worth it.
+                debug!(
+                    "DETECTED task did more than once (or race with new file): \
+                     recompression of {}. Note: if optimized compression level setting \
+                     has changed in the meantine, the stats file might contain \
+                     inconsistent compression level due to race.",
+                    path.display()
+                );
+            } else {
+                new_stats.compression_level = opt_compr_lvl;
+                let _ = write_stats_file(stats_path.as_ref(), &new_stats);
+            }
+
+            if new_stats.usages < stats.usages {
+                debug!(
+                    "DETECTED lower usage count (new file or race with counter \
+                     increasing): file {}",
+                    path.display()
+                );
+            }
+        } else {
+            debug!(
+                "Can't read stats file again to update compression level (it might got \
+                 cleaned up): file {}",
+                stats_path.display()
+            );
+        }
 
         trace!("Task finished: recompress file: {}", path.display());
     }
@@ -508,10 +516,10 @@ impl WorkerThread {
             };
 
             total_size += size;
-            if start_delete_idx_if_deleting_recognized_items.is_none() {
-                if total_size > tsl_if_deleting || (idx + 1) as u64 > fcl_if_deleting {
-                    start_delete_idx_if_deleting_recognized_items = Some(idx);
-                }
+            if start_delete_idx_if_deleting_recognized_items.is_none()
+                && (total_size > tsl_if_deleting || (idx + 1) as u64 > fcl_if_deleting)
+            {
+                start_delete_idx_if_deleting_recognized_items = Some(idx);
             }
 
             if total_size > total_size_limit || (idx + 1) as u64 > file_count_limit {
@@ -554,26 +562,6 @@ impl WorkerThread {
             level: u8,
             cache_config: &CacheConfig,
         ) {
-            macro_rules! unwrap_or {
-                ($result:expr, $cont:stmt, $err_msg:expr) => {
-                    unwrap_or!($result, $cont, $err_msg, dir_path)
-                };
-                ($result:expr, $cont:stmt, $err_msg:expr, $path:expr) => {
-                    match $result {
-                        Ok(val) => val,
-                        Err(err) => {
-                            warn!(
-                                "{}, level: {}, path: {}, msg: {}",
-                                $err_msg,
-                                level,
-                                $path.display(),
-                                err
-                            );
-                            $cont
-                        }
-                    }
-                };
-            }
             macro_rules! add_unrecognized {
                 (file: $path:expr) => {
                     add_unrecognized!(false, $path)
@@ -591,8 +579,22 @@ impl WorkerThread {
             macro_rules! add_unrecognized_and {
                 ([ $( $ty:ident: $path:expr ),* ], $cont:stmt) => {{
                     $( add_unrecognized!($ty: $path); )*
-                    $cont
+                        $cont
                 }};
+            }
+
+            macro_rules! unwrap_or {
+                ($result:expr, $cont:stmt, $err_msg:expr) => {
+                    unwrap_or!($result, $cont, $err_msg, dir_path)
+                };
+                ($result:expr, $cont:stmt, $err_msg:expr, $path:expr) => {
+                    unwrap_or_warn!(
+                        $result,
+                        $cont,
+                        format!("{}, level: {}", $err_msg, level),
+                        $path
+                    )
+                };
             }
 
             // If we fail to list a directory, something bad is happening anyway
@@ -619,43 +621,41 @@ impl WorkerThread {
                 match (level, path.is_dir()) {
                     (0..=1, true) => enter_dir(vec, &path, level + 1, cache_config),
                     (0..=1, false) => {
-                        if level == 0 && path.file_stem() == Some(OsStr::new(".cleanup")) {
-                            if path.extension().is_some() {
+                        if level == 0
+                            && path.file_stem() == Some(OsStr::new(".cleanup"))
+                                && path.extension().is_some()
                                 // assume it's cleanup lock
-                                if !is_fs_lock_expired(
+                                && !is_fs_lock_expired(
                                     Some(&entry),
                                     &path,
                                     cache_config.cleanup_interval(),
                                     cache_config.allowed_clock_drift_for_files_from_future(),
-                                ) {
-                                    continue; // skip active lock
-                                }
-                            }
+                                )
+                        {
+                            continue; // skip active lock
                         }
                         add_unrecognized!(file: path);
                     }
                     (2, false) => {
-                        let ext = path.extension();
-                        if ext.is_none() || ext == Some(OsStr::new("stats")) {
+                        match path.extension().and_then(OsStr::to_str) {
                             // mod or stats file
-                            cache_files.insert(path, entry);
-                        } else {
-                            let recognized = if let Some(ext_str) = ext.unwrap().to_str() {
+                            None | Some("stats") => {
+                                cache_files.insert(path, entry);
+                            }
+
+                            Some(ext) => {
                                 // check if valid lock
-                                ext_str.starts_with("wip-")
+                                let recognized = ext.starts_with("wip-")
                                     && !is_fs_lock_expired(
                                         Some(&entry),
                                         &path,
                                         cache_config.optimizing_compression_task_timeout(),
                                         cache_config.allowed_clock_drift_for_files_from_future(),
-                                    )
-                            } else {
-                                // if it's None, i.e. not valid UTF-8 string, then that's not our lock for sure
-                                false
-                            };
+                                    );
 
-                            if !recognized {
-                                add_unrecognized!(file: path);
+                                if !recognized {
+                                    add_unrecognized!(file: path);
+                                }
                             }
                         }
                     }

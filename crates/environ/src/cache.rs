@@ -56,6 +56,7 @@ struct ModuleCacheEntryInner<'config, 'worker> {
     worker: &'worker Worker,
 }
 
+/// Cached compilation data of a Wasm module.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ModuleCacheData {
     compilation: Compilation,
@@ -66,7 +67,8 @@ pub struct ModuleCacheData {
     traps: Traps,
 }
 
-type ModuleCacheDataTupleType = (
+/// A type alias over the module cache data as a tuple.
+pub type ModuleCacheDataTupleType = (
     Compilation,
     Relocations,
     ModuleAddressMap,
@@ -102,7 +104,7 @@ impl<'config, 'worker> ModuleCacheEntry<'config, 'worker> {
     }
 
     #[cfg(test)]
-    fn from_inner<'data>(inner: ModuleCacheEntryInner<'config, 'worker>) -> Self {
+    fn from_inner(inner: ModuleCacheEntryInner<'config, 'worker>) -> Self {
         Self(Some(inner))
     }
 
@@ -119,10 +121,9 @@ impl<'config, 'worker> ModuleCacheEntry<'config, 'worker> {
 
     pub fn update_data(&self, data: &ModuleCacheData) {
         if let Some(inner) = &self.0 {
-            inner.update_data(data).map(|val| {
+            if inner.update_data(data).is_some() {
                 inner.worker.on_cache_update_async(&inner.mod_cache_path); // call on success
-                val
-            });
+            }
         }
     }
 }
@@ -236,7 +237,7 @@ impl ModuleCacheData {
         }
     }
 
-    pub fn to_tuple(self) -> ModuleCacheDataTupleType {
+    pub fn into_tuple(self) -> ModuleCacheDataTupleType {
         (
             self.compilation,
             self.relocations,

@@ -12,10 +12,7 @@
 )]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../clippy.toml")))]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(clippy::new_without_default, clippy::new_without_default_derive)
-)]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
@@ -287,7 +284,7 @@ fn handle_module(
         emit_debugsections(
             &mut obj,
             &module_vmctx_info,
-            &target_config,
+            target_config,
             &debug_data,
             &address_transform,
             &value_ranges,

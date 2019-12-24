@@ -51,37 +51,34 @@ where
     R: Reader,
 {
     // FIXME remove recursion.
-    match type_entry.attr_value(gimli::DW_AT_type)? {
-        Some(AttributeValue::UnitRef(ref offset)) => {
-            let mut entries = unit.entries_at_offset(*offset)?;
-            entries.next_entry()?;
-            if let Some(die) = entries.current() {
-                if let Some(AttributeValue::DebugStrRef(str_offset)) =
-                    die.attr_value(gimli::DW_AT_name)?
-                {
-                    return Ok(String::from(
-                        context.debug_str.get_str(str_offset)?.to_string()?,
-                    ));
+    if let Some(AttributeValue::UnitRef(ref offset)) = type_entry.attr_value(gimli::DW_AT_type)? {
+        let mut entries = unit.entries_at_offset(*offset)?;
+        entries.next_entry()?;
+        if let Some(die) = entries.current() {
+            if let Some(AttributeValue::DebugStrRef(str_offset)) =
+                die.attr_value(gimli::DW_AT_name)?
+            {
+                return Ok(String::from(
+                    context.debug_str.get_str(str_offset)?.to_string()?,
+                ));
+            }
+            match die.tag() {
+                gimli::DW_TAG_const_type => {
+                    return Ok(format!("const {}", get_base_type_name(die, unit, context)?));
                 }
-                match die.tag() {
-                    gimli::DW_TAG_const_type => {
-                        return Ok(format!("const {}", get_base_type_name(die, unit, context)?));
-                    }
-                    gimli::DW_TAG_pointer_type => {
-                        return Ok(format!("{}*", get_base_type_name(die, unit, context)?));
-                    }
-                    gimli::DW_TAG_reference_type => {
-                        return Ok(format!("{}&", get_base_type_name(die, unit, context)?));
-                    }
-                    gimli::DW_TAG_array_type => {
-                        return Ok(format!("{}[]", get_base_type_name(die, unit, context)?));
-                    }
-                    _ => (),
+                gimli::DW_TAG_pointer_type => {
+                    return Ok(format!("{}*", get_base_type_name(die, unit, context)?));
                 }
+                gimli::DW_TAG_reference_type => {
+                    return Ok(format!("{}&", get_base_type_name(die, unit, context)?));
+                }
+                gimli::DW_TAG_array_type => {
+                    return Ok(format!("{}[]", get_base_type_name(die, unit, context)?));
+                }
+                _ => (),
             }
         }
-        _ => (),
-    };
+    }
     Ok(String::from("??"))
 }
 
@@ -121,11 +118,8 @@ where
         gimli::DW_AT_type,
         write::AttributeValue::ThisUnitEntryRef(wp_die_id),
     );
-    match entry.attr_value(gimli::DW_AT_type)? {
-        Some(AttributeValue::UnitRef(ref offset)) => {
-            pending_die_refs.push((p_die_id, gimli::DW_AT_type, *offset))
-        }
-        _ => (),
+    if let Some(AttributeValue::UnitRef(ref offset)) = entry.attr_value(gimli::DW_AT_type)? {
+        pending_die_refs.push((p_die_id, gimli::DW_AT_type, *offset))
     }
 
     let m_die_id = comp_unit.add(die_id, gimli::DW_TAG_member);

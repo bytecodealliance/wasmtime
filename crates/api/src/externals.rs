@@ -167,7 +167,7 @@ impl Func {
         } else {
             panic!("expected function export")
         };
-        let callable = WasmtimeFn::new(store, instance_handle, export.clone());
+        let callable = WasmtimeFn::new(store, instance_handle, export);
         Func::from_wrapped(store, ty, Rc::new(callable))
     }
 }
@@ -435,8 +435,10 @@ impl Memory {
         }
     }
 
-    // Marked unsafe due to posibility that wasmtime can resize internal memory
-    // from other threads.
+    /// Returns a mutable slice the current memory.
+    /// # Safety
+    /// Marked unsafe due to posibility that wasmtime can resize internal memory
+    /// from other threads.
     pub unsafe fn data(&self) -> &mut [u8] {
         let definition = &*self.wasmtime_memory_definition();
         slice::from_raw_parts_mut(definition.base, definition.current_length)

@@ -244,6 +244,6 @@ impl Context {
     pub fn get_global_exports(
         &mut self,
     ) -> Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> {
-        Rc::clone(&mut self.global_exports)
+        Rc::clone(&self.global_exports)
     }
 }

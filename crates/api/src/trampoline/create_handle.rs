@@ -31,16 +31,14 @@ pub(crate) fn create_handle(
 
     // Compute indices into the shared signature table.
     let signatures = signature_registry
-        .and_then(|mut signature_registry| {
-            Some(
-                module
-                    .signatures
-                    .values()
-                    .map(|sig| signature_registry.register_wasmtime_signature(sig))
-                    .collect::<PrimaryMap<_, _>>(),
-            )
+        .map(|mut signature_registry| {
+            module
+                .signatures
+                .values()
+                .map(|sig| signature_registry.register_wasmtime_signature(sig))
+                .collect::<PrimaryMap<_, _>>()
         })
-        .unwrap_or_else(|| PrimaryMap::new());
+        .unwrap_or_else(PrimaryMap::new);
 
     Ok(InstanceHandle::new(
         Rc::new(module),

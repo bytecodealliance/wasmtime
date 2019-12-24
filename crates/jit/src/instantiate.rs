@@ -190,7 +190,7 @@ impl CompiledModule {
             imports,
             data_initializers,
             signatures,
-            dbg_jit_registration: dbg_jit_registration.map(|r| Rc::new(r)),
+            dbg_jit_registration: dbg_jit_registration.map(Rc::new),
         }
     }
 
@@ -254,6 +254,7 @@ impl OwnedDataInitializer {
 ///
 /// This is equivalent to createing a `CompiledModule` and calling `instantiate()` on it,
 /// but avoids creating an intermediate copy of the data initializers.
+#[allow(clippy::implicit_hasher)]
 pub fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
@@ -270,7 +271,7 @@ pub fn instantiate(
         raw.imports,
         &*raw.data_initializers,
         raw.signatures,
-        raw.dbg_jit_registration.map(|r| Rc::new(r)),
+        raw.dbg_jit_registration.map(Rc::new),
         Box::new(()),
     )
     .map_err(SetupError::Instantiate)
