@@ -35,7 +35,7 @@ mod target_tunables;
 pub mod native;
 pub mod trampoline;
 
-pub use crate::action::{ActionError, ActionOutcome, RuntimeValue};
+pub use crate::action::{invoke, ActionError, ActionOutcome, RuntimeValue};
 pub use crate::code_memory::CodeMemory;
 pub use crate::compiler::{CompilationStrategy, Compiler};
 pub use crate::context::{Context, ContextError, Features, UnknownInstance};
