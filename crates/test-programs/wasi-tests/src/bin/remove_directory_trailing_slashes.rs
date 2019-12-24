@@ -1,47 +1,42 @@
 use std::{env, process};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_file, create_dir, create_file};
-use wasi_tests::wasi_wrappers::wasi_path_remove_directory;
+use wasi_tests::{create_file, open_scratch_directory};
 
-unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
-    create_dir(dir_fd, "dir");
+    wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
     // Test that removing it succeeds.
-    assert_eq!(
-        wasi_path_remove_directory(dir_fd, "dir"),
-        Ok(()),
-        "remove_directory on a directory should succeed"
-    );
+    wasi::path_remove_directory(dir_fd, "dir")
+        .expect("remove_directory on a directory should succeed");
 
-    create_dir(dir_fd, "dir");
+    wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
     // Test that removing it with a trailing flash succeeds.
-    assert_eq!(
-        wasi_path_remove_directory(dir_fd, "dir/"),
-        Ok(()),
-        "remove_directory with a trailing slash on a directory should succeed"
-    );
+    wasi::path_remove_directory(dir_fd, "dir/")
+        .expect("remove_directory with a trailing slash on a directory should succeed");
 
     // Create a temporary file.
     create_file(dir_fd, "file");
 
     // Test that removing it with no trailing flash fails.
     assert_eq!(
-        wasi_path_remove_directory(dir_fd, "file"),
-        Err(wasi_unstable::ENOTDIR),
-        "remove_directory without a trailing slash on a file should fail"
+        wasi::path_remove_directory(dir_fd, "file")
+            .expect_err("remove_directory without a trailing slash on a file should fail")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_NOTDIR"
     );
 
     // Test that removing it with a trailing flash fails.
     assert_eq!(
-        wasi_path_remove_directory(dir_fd, "file/"),
-        Err(wasi_unstable::ENOTDIR),
-        "remove_directory with a trailing slash on a file should fail"
+        wasi::path_remove_directory(dir_fd, "file/")
+            .expect_err("remove_directory with a trailing slash on a file should fail")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_NOTDIR"
     );
 
-    cleanup_file(dir_fd, "file");
+    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
 fn main() {

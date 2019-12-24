@@ -1,169 +1,124 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_file, close_fd};
-use wasi_tests::wasi_wrappers::{
-    wasi_fd_fdstat_get, wasi_path_filestat_get, wasi_path_filestat_set_times, wasi_path_open,
-};
 
-unsafe fn test_path_filestat(dir_fd: wasi_unstable::Fd) {
-    let mut fdstat: wasi_unstable::FdStat = std::mem::zeroed();
-    let status = wasi_fd_fdstat_get(dir_fd, &mut fdstat);
-    assert_eq!(status, wasi_unstable::raw::__WASI_ESUCCESS, "fd_fdstat_get");
-
+unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
+    let mut fdstat = wasi::fd_fdstat_get(dir_fd).expect("fd_fdstat_get");
     assert_ne!(
-        fdstat.fs_rights_base & wasi_unstable::RIGHT_PATH_FILESTAT_GET,
+        fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_GET,
         0,
         "the scratch directory should have RIGHT_PATH_FILESTAT_GET as base right",
     );
     assert_ne!(
-        fdstat.fs_rights_inheriting & wasi_unstable::RIGHT_PATH_FILESTAT_GET,
+        fdstat.fs_rights_inheriting & wasi::RIGHTS_PATH_FILESTAT_GET,
         0,
         "the scratch directory should have RIGHT_PATH_FILESTAT_GET as base right",
     );
 
     // Create a file in the scratch directory.
-    let mut file_fd = wasi_unstable::Fd::max_value() - 1;
-    let filename = "file";
-    let status = wasi_path_open(
+    let file_fd = wasi::path_open(
         dir_fd,
         0,
-        filename,
-        wasi_unstable::O_CREAT,
-        wasi_unstable::RIGHT_FD_READ
-            | wasi_unstable::RIGHT_FD_WRITE
-            | wasi_unstable::RIGHT_PATH_FILESTAT_GET,
+        "file",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_PATH_FILESTAT_GET,
         0,
         // Pass some flags for later retrieval
-        wasi_unstable::FDFLAG_APPEND | wasi_unstable::FDFLAG_SYNC,
-        &mut file_fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
+        wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC,
+    )
+    .expect("opening a file");
     assert_gt!(
         file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
-    let status = wasi_fd_fdstat_get(file_fd, &mut fdstat);
-    assert_eq!(status, wasi_unstable::raw::__WASI_ESUCCESS, "fd_fdstat_get");
-
+    fdstat = wasi::fd_fdstat_get(file_fd).expect("fd_fdstat_get");
     assert_eq!(
-        fdstat.fs_rights_base & wasi_unstable::RIGHT_PATH_FILESTAT_GET,
+        fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_GET,
         0,
         "files shouldn't have rights for path_* syscalls even if manually given",
     );
     assert_eq!(
-        fdstat.fs_rights_inheriting & wasi_unstable::RIGHT_PATH_FILESTAT_GET,
+        fdstat.fs_rights_inheriting & wasi::RIGHTS_PATH_FILESTAT_GET,
         0,
         "files shouldn't have rights for path_* syscalls even if manually given",
     );
     assert_ne!(
-        fdstat.fs_flags & (wasi_unstable::FDFLAG_APPEND | wasi_unstable::FDFLAG_SYNC),
+        fdstat.fs_flags & (wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC),
         0,
         "file should have the same flags used to create the file"
     );
 
     // Check file size
-    let mut stat = wasi_unstable::FileStat {
-        st_dev: 0,
-        st_ino: 0,
-        st_filetype: 0,
-        st_nlink: 0,
-        st_size: 0,
-        st_atim: 0,
-        st_mtim: 0,
-        st_ctim: 0,
-    };
-    let status = wasi_path_filestat_get(dir_fd, 0, filename, filename.len(), &mut stat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading file stats"
-    );
-    assert_eq!(stat.st_size, 0, "file size should be 0");
+    let mut stat = wasi::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
+    assert_eq!(stat.size, 0, "file size should be 0");
 
     // Check path_filestat_set_times
-    let old_atim = stat.st_atim;
-    let new_mtim = stat.st_mtim - 100;
-    assert!(
-        wasi_path_filestat_set_times(
+    let old_atim = stat.atim;
+    let new_mtim = stat.mtim - 100;
+    wasi::path_filestat_set_times(
+        dir_fd,
+        0,
+        "file",
+        // on purpose: the syscall should not touch atim, because
+        // neither of the ATIM flags is set
+        new_mtim,
+        new_mtim,
+        wasi::FSTFLAGS_MTIM,
+    )
+    .expect("path_filestat_set_times should succeed");
+
+    stat = wasi::path_filestat_get(dir_fd, 0, "file")
+        .expect("reading file stats after path_filestat_set_times");
+    assert_eq!(stat.mtim, new_mtim, "mtim should change");
+    assert_eq!(stat.atim, old_atim, "atim should not change");
+
+    assert_eq!(
+        wasi::path_filestat_set_times(
             dir_fd,
             0,
-            filename,
-            // on purpose: the syscall should not touch atim, because
-            // neither of the ATIM flags is set
+            "file",
             new_mtim,
             new_mtim,
-            wasi_unstable::FILESTAT_SET_MTIM,
+            wasi::FSTFLAGS_MTIM | wasi::FSTFLAGS_MTIM_NOW,
         )
-        .is_ok(),
-        "path_filestat_set_times should succeed"
-    );
-
-    let status = wasi_path_filestat_get(dir_fd, 0, filename, filename.len(), &mut stat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading file stats after path_filestat_set_times"
-    );
-    assert_eq!(stat.st_mtim, new_mtim, "mtim should change");
-    assert_eq!(stat.st_atim, old_atim, "atim should not change");
-
-    assert_eq!(
-        wasi_path_filestat_set_times(
-            dir_fd,
-            0,
-            filename,
-            new_mtim,
-            new_mtim,
-            wasi_unstable::FILESTAT_SET_MTIM | wasi_unstable::FILESTAT_SET_MTIM_NOW,
-        ),
-        Err(wasi_unstable::EINVAL),
-        "MTIM & MTIM_NOW can't both be set"
+        .expect_err("MTIM and MTIM_NOW can't both be set")
+        .raw_error(),
+        wasi::ERRNO_INVAL,
+        "errno should be ERRNO_INVAL"
     );
 
     // check if the times were untouched
-    let status = wasi_path_filestat_get(dir_fd, 0, filename, filename.len(), &mut stat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading file stats after EINVAL fd_filestat_set_times"
-    );
-    assert_eq!(stat.st_mtim, new_mtim, "mtim should not change");
-    assert_eq!(stat.st_atim, old_atim, "atim should not change");
+    stat = wasi::path_filestat_get(dir_fd, 0, "file")
+        .expect("reading file stats after ERRNO_INVAL fd_filestat_set_times");
+    assert_eq!(stat.mtim, new_mtim, "mtim should not change");
+    assert_eq!(stat.atim, old_atim, "atim should not change");
 
     let new_atim = old_atim - 100;
     assert_eq!(
-        wasi_path_filestat_set_times(
+        wasi::path_filestat_set_times(
             dir_fd,
             0,
-            filename,
+            "file",
             new_atim,
             new_atim,
-            wasi_unstable::FILESTAT_SET_ATIM | wasi_unstable::FILESTAT_SET_ATIM_NOW,
-        ),
-        Err(wasi_unstable::EINVAL),
-        "ATIM & ATIM_NOW can't both be set"
+            wasi::FSTFLAGS_ATIM | wasi::FSTFLAGS_ATIM_NOW,
+        )
+        .expect_err("ATIM & ATIM_NOW can't both be set")
+        .raw_error(),
+        wasi::ERRNO_INVAL,
+        "errno should be ERRNO_INVAL"
     );
 
     // check if the times were untouched
-    let status = wasi_path_filestat_get(dir_fd, 0, filename, filename.len(), &mut stat);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "reading file stats after EINVAL path_filestat_set_times"
-    );
-    assert_eq!(stat.st_mtim, new_mtim, "mtim should not change");
-    assert_eq!(stat.st_atim, old_atim, "atim should not change");
+    stat = wasi::path_filestat_get(dir_fd, 0, "file")
+        .expect("reading file stats after ERRNO_INVAL path_filestat_set_times");
+    assert_eq!(stat.mtim, new_mtim, "mtim should not change");
+    assert_eq!(stat.atim, old_atim, "atim should not change");
 
-    close_fd(file_fd);
-    cleanup_file(dir_fd, "file");
+    wasi::fd_close(file_fd).expect("closing a file");
+    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 fn main() {
     let mut args = env::args();

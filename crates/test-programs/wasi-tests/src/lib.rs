@@ -1,39 +1,14 @@
-pub mod utils;
-pub mod wasi_wrappers;
+use more_asserts::assert_gt;
 
-use libc;
-use std::ffi::CString;
-use std::io;
-use wasi_old::wasi_unstable;
+// The `wasi` crate version 0.9.0 and beyond, doesn't
+// seem to define these constants, so we do it ourselves.
+pub const STDIN_FD: wasi::Fd = 0x0;
+pub const STDOUT_FD: wasi::Fd = 0x1;
+pub const STDERR_FD: wasi::Fd = 0x2;
 
 /// Opens a fresh file descriptor for `path` where `path` should be a preopened
-/// directory. This is intended to be used with `wasi_unstable`, not with
-/// `wasi_snapshot_preview1`. This is getting phased out and will likely be
-/// deleted soon.
-pub fn open_scratch_directory(path: &str) -> Result<wasi_unstable::Fd, String> {
-    // Open the scratch directory.
-    let dir_fd: wasi_unstable::Fd = unsafe {
-        let cstr = CString::new(path.as_bytes()).unwrap();
-        libc::open(cstr.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY)
-    } as wasi_unstable::Fd;
-
-    if (dir_fd as std::os::raw::c_int) < 0 {
-        Err(format!(
-            "error opening scratch directory '{}': {}",
-            path,
-            io::Error::last_os_error()
-        ))
-    } else {
-        Ok(dir_fd)
-    }
-}
-
-/// Same as `open_scratch_directory` above, except uses `wasi_snapshot_preview1`
-/// APIs instead of `wasi_unstable` ones.
-///
-/// This is intended to replace `open_scratch_directory` once all the tests are
-/// updated.
-pub fn open_scratch_directory_new(path: &str) -> Result<wasi::Fd, String> {
+/// directory.
+pub fn open_scratch_directory(path: &str) -> Result<wasi::Fd, String> {
     unsafe {
         for i in 3.. {
             let stat = match wasi::fd_prestat_get(i) {
@@ -56,4 +31,15 @@ pub fn open_scratch_directory_new(path: &str) -> Result<wasi::Fd, String> {
 
         Err(format!("failed to find scratch dir"))
     }
+}
+
+pub unsafe fn create_file(dir_fd: wasi::Fd, filename: &str) {
+    let file_fd =
+        wasi::path_open(dir_fd, 0, filename, wasi::OFLAGS_CREAT, 0, 0, 0).expect("creating a file");
+    assert_gt!(
+        file_fd,
+        libc::STDERR_FILENO as wasi::Fd,
+        "file descriptor range check",
+    );
+    wasi::fd_close(file_fd).expect("closing a file");
 }

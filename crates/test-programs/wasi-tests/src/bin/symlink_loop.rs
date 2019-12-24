@@ -1,26 +1,21 @@
 use std::{env, process};
-use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::cleanup_file;
-use wasi_tests::wasi_wrappers::{wasi_path_open, wasi_path_symlink};
 
-unsafe fn test_symlink_loop(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_symlink_loop(dir_fd: wasi::Fd) {
     // Create a self-referencing symlink.
-    assert!(
-        wasi_path_symlink("symlink", dir_fd, "symlink").is_ok(),
-        "creating a symlink"
-    );
+    wasi::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink");
 
     // Try to open it.
-    let mut file_fd: wasi_unstable::Fd = wasi_unstable::Fd::max_value() - 1;
     assert_eq!(
-        wasi_path_open(dir_fd, 0, "symlink", 0, 0, 0, 0, &mut file_fd),
-        wasi_unstable::raw::__WASI_ELOOP,
-        "opening a self-referencing symlink",
+        wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
+            .expect_err("opening a self-referencing symlink")
+            .raw_error(),
+        wasi::ERRNO_LOOP,
+        "errno should be ERRNO_LOOP",
     );
 
     // Clean up.
-    cleanup_file(dir_fd, "symlink");
+    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
 }
 
 fn main() {

@@ -1,154 +1,99 @@
 use libc;
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_file, close_fd, create_dir, create_file};
-use wasi_tests::wasi_wrappers::{wasi_path_open, wasi_path_remove_directory, wasi_path_symlink};
 
-unsafe fn test_nofollow_errors(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
     // Create a directory for the symlink to point to.
-    create_dir(dir_fd, "target");
+    wasi::path_create_directory(dir_fd, "target").expect("creating a dir");
 
     // Create a symlink.
-    assert!(
-        wasi_path_symlink("target", dir_fd, "symlink").is_ok(),
-        "creating a symlink"
-    );
+    wasi::path_symlink("target", dir_fd, "symlink").expect("creating a symlink");
 
     // Try to open it as a directory with O_NOFOLLOW again.
-    let mut file_fd: wasi_unstable::Fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(
-        dir_fd,
-        0,
-        "symlink",
-        wasi_unstable::O_DIRECTORY,
-        0,
-        0,
-        0,
-        &mut file_fd,
-    );
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ELOOP,
-        "opening a directory symlink as a directory",
-    );
-    assert_eq!(
-        file_fd,
-        wasi_unstable::Fd::max_value(),
-        "failed open should set the file descriptor to -1",
+        wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+            .expect_err("opening a directory symlink as a directory should fail")
+            .raw_error(),
+        wasi::ERRNO_LOOP,
+        "errno should be ERRNO_LOOP",
     );
 
     // Try to open it with just O_NOFOLLOW.
-    status = wasi_path_open(dir_fd, 0, "symlink", 0, 0, 0, 0, &mut file_fd);
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ELOOP,
-        "opening a symlink with O_NOFOLLOW should return ELOOP",
-    );
-    assert_eq!(
-        file_fd,
-        wasi_unstable::Fd::max_value(),
-        "failed open should set the file descriptor to -1",
+        wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
+            .expect_err("opening a symlink with O_NOFOLLOW should fail")
+            .raw_error(),
+        wasi::ERRNO_LOOP,
+        "errno should be ERRNO_LOOP",
     );
 
     // Try to open it as a directory without O_NOFOLLOW.
-    status = wasi_path_open(
+    let file_fd = wasi::path_open(
         dir_fd,
-        wasi_unstable::LOOKUP_SYMLINK_FOLLOW,
+        wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
         "symlink",
-        wasi_unstable::O_DIRECTORY,
+        wasi::OFLAGS_DIRECTORY,
         0,
         0,
         0,
-        &mut file_fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a symlink as a directory"
-    );
+    )
+    .expect("opening a symlink as a directory");
     assert_gt!(
         file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
-    close_fd(file_fd);
+    wasi::fd_close(file_fd).expect("closing a file");
 
     // Replace the target directory with a file.
-    cleanup_file(dir_fd, "symlink");
+    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
+    wasi::path_remove_directory(dir_fd, "target")
+        .expect("remove_directory on a directory should succeed");
 
-    assert!(
-        wasi_path_remove_directory(dir_fd, "target").is_ok(),
-        "remove_directory on a directory should succeed"
-    );
-    create_file(dir_fd, "target");
-
-    assert!(
-        wasi_path_symlink("target", dir_fd, "symlink").is_ok(),
-        "creating a symlink"
-    );
+    let file_fd =
+        wasi::path_open(dir_fd, 0, "target", wasi::OFLAGS_CREAT, 0, 0, 0).expect("creating a file");
+    wasi::fd_close(file_fd).expect("closing a file");
+    wasi::path_symlink("target", dir_fd, "symlink").expect("creating a symlink");
 
     // Try to open it as a directory with O_NOFOLLOW again.
-    status = wasi_path_open(
-        dir_fd,
-        0,
-        "symlink",
-        wasi_unstable::O_DIRECTORY,
-        0,
-        0,
-        0,
-        &mut file_fd,
-    );
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ELOOP,
-        "opening a directory symlink as a directory",
-    );
-    assert_eq!(
-        file_fd,
-        wasi_unstable::Fd::max_value(),
-        "failed open should set the file descriptor to -1",
+        wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+            .expect_err("opening a directory symlink as a directory should fail")
+            .raw_error(),
+        wasi::ERRNO_LOOP,
+        "errno should be ERRNO_LOOP",
     );
 
     // Try to open it with just O_NOFOLLOW.
-    status = wasi_path_open(dir_fd, 0, "symlink", 0, 0, 0, 0, &mut file_fd);
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ELOOP,
-        "opening a symlink with O_NOFOLLOW should return ELOOP",
-    );
-    assert_eq!(
-        file_fd,
-        wasi_unstable::Fd::max_value(),
-        "failed open should set the file descriptor to -1",
+        wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
+            .expect_err("opening a symlink with NOFOLLOW should fail")
+            .raw_error(),
+        wasi::ERRNO_LOOP,
+        "errno should be ERRNO_LOOP",
     );
 
     // Try to open it as a directory without O_NOFOLLOW.
-    status = wasi_path_open(
-        dir_fd,
-        wasi_unstable::LOOKUP_SYMLINK_FOLLOW,
-        "symlink",
-        wasi_unstable::O_DIRECTORY,
-        0,
-        0,
-        0,
-        &mut file_fd,
-    );
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ENOTDIR,
-        "opening a symlink to a file as a directory",
-    );
-    assert_eq!(
-        file_fd,
-        wasi_unstable::Fd::max_value(),
-        "failed open should set the file descriptor to -1",
+        wasi::path_open(
+            dir_fd,
+            wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
+            "symlink",
+            wasi::OFLAGS_DIRECTORY,
+            0,
+            0,
+            0,
+        )
+        .expect_err("opening a symlink to a file as a directory")
+        .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_NOTDIR",
     );
 
     // Clean up.
-    cleanup_file(dir_fd, "target");
-    cleanup_file(dir_fd, "symlink");
+    wasi::path_unlink_file(dir_fd, "target").expect("removing a file");
+    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
 }
 
 fn main() {

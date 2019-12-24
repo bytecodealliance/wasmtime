@@ -55,41 +55,14 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .context("failed to instantiate wasi")?,
     );
 
-    // ... and then do the same as above but for the old snapshot of wasi, since
-    // a few tests still test that
-    let mut builder = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
-        .arg(bin_name)
-        .arg(".")
-        .inherit_stdio();
-    for (dir, file) in get_preopens(workspace)? {
-        builder = builder.preopened_dir(file, dir);
-    }
-    let (reader, _writer) = os_pipe::pipe()?;
-    builder = builder.stdin(reader_to_file(reader));
-    let snapshot0 = Instance::from_handle(
-        &store,
-        wasmtime_wasi::old::snapshot_0::instantiate_wasi_with_context(
-            global_exports.clone(),
-            builder.build().context("failed to build wasi context")?,
-        )
-        .context("failed to instantiate wasi")?,
-    );
-
     let module = HostRef::new(Module::new(&store, &data).context("failed to create wasm module")?);
     let imports = module
         .borrow()
         .imports()
         .iter()
         .map(|i| {
-            let instance = if i.module() == "wasi_unstable" {
-                &snapshot0
-            } else if i.module() == "wasi_snapshot_preview1" {
-                &snapshot1
-            } else {
-                bail!("import module {} was not found", i.module())
-            };
             let field_name = i.name();
-            if let Some(export) = instance.find_export_by_name(field_name) {
+            if let Some(export) = snapshot1.find_export_by_name(field_name) {
                 Ok(export.clone())
             } else {
                 bail!(

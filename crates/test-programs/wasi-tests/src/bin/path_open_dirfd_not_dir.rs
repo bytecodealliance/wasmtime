@@ -1,46 +1,19 @@
 use std::{env, process};
-use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::close_fd;
-use wasi_tests::wasi_wrappers::wasi_path_open;
 
-unsafe fn test_dirfd_not_dir(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_dirfd_not_dir(dir_fd: wasi::Fd) {
     // Open a file.
-    let mut file_fd: wasi_unstable::Fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(
-        dir_fd,
-        0,
-        "file",
-        wasi_unstable::O_CREAT,
-        0,
-        0,
-        0,
-        &mut file_fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
-
+    let file_fd =
+        wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).expect("opening a file");
     // Now try to open a file underneath it as if it were a directory.
-    let mut new_file_fd: wasi_unstable::Fd = wasi_unstable::Fd::max_value() - 1;
-    status = wasi_path_open(
-        file_fd,
-        0,
-        "foo",
-        wasi_unstable::O_CREAT,
-        0,
-        0,
-        0,
-        &mut new_file_fd,
-    );
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ENOTDIR,
-        "non-directory base fd should get ENOTDIR"
+        wasi::path_open(file_fd, 0, "foo", wasi::OFLAGS_CREAT, 0, 0, 0)
+            .expect_err("non-directory base fd should get ERRNO_NOTDIR")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_NOTDIR"
     );
-    close_fd(file_fd);
+    wasi::fd_close(file_fd).expect("closing a file");
 }
 
 fn main() {

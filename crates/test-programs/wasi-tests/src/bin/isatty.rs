@@ -1,31 +1,14 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_file, close_fd};
-use wasi_tests::wasi_wrappers::wasi_path_open;
 
-unsafe fn test_isatty(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_isatty(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory and test if it's a tty.
-    let mut file_fd: wasi_unstable::Fd = wasi_unstable::Fd::max_value() - 1;
-    let status = wasi_path_open(
-        dir_fd,
-        0,
-        "file",
-        wasi_unstable::O_CREAT,
-        0,
-        0,
-        0,
-        &mut file_fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
+    let file_fd =
+        wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).expect("opening a file");
     assert_gt!(
         file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     assert_eq!(
@@ -33,9 +16,8 @@ unsafe fn test_isatty(dir_fd: wasi_unstable::Fd) {
         0,
         "file is a tty"
     );
-    close_fd(file_fd);
-
-    cleanup_file(dir_fd, "file");
+    wasi::fd_close(file_fd).expect("closing a file");
+    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
 fn main() {

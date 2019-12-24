@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory_new;
+use wasi_tests::open_scratch_directory;
 
 unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
@@ -12,7 +12,8 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
         wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
-    ).expect("failed to create file");
+    )
+    .expect("failed to create file");
     assert_gt!(
         file_fd,
         libc::STDERR_FILENO as wasi::Fd,
@@ -24,10 +25,7 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
     assert_eq!(stat.size, 0, "file size should be 0");
 
     // Check fd_filestat_set_size
-    assert!(
-        wasi::fd_filestat_set_size(file_fd, 100).is_ok(),
-        "fd_filestat_set_size"
-    );
+    wasi::fd_filestat_set_size(file_fd, 100).expect("fd_filestat_set_size");
 
     let stat = wasi::fd_filestat_get(file_fd).expect("failed filestat 2");
     assert_eq!(stat.size, 100, "file size should be 100");
@@ -35,22 +33,11 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
     // Check fd_filestat_set_times
     let old_atim = stat.atim;
     let new_mtim = stat.mtim - 100;
-    assert!(
-        wasi::fd_filestat_set_times(
-            file_fd,
-            new_mtim,
-            new_mtim,
-            wasi::FSTFLAGS_MTIM,
-        )
-        .is_ok(),
-        "fd_filestat_set_times"
-    );
+    wasi::fd_filestat_set_times(file_fd, new_mtim, new_mtim, wasi::FSTFLAGS_MTIM)
+        .expect("fd_filestat_set_times");
 
     let stat = wasi::fd_filestat_get(file_fd).expect("failed filestat 3");
-    assert_eq!(
-        stat.size, 100,
-        "file size should remain unchanged at 100"
-    );
+    assert_eq!(stat.size, 100, "file size should remain unchanged at 100");
     assert_eq!(stat.mtim, new_mtim, "mtim should change");
     assert_eq!(stat.atim, old_atim, "atim should not change");
 
@@ -71,7 +58,7 @@ fn main() {
     };
 
     // Open scratch directory
-    let dir_fd = match open_scratch_directory_new(&arg) {
+    let dir_fd = match open_scratch_directory(&arg) {
         Ok(dir_fd) => dir_fd,
         Err(err) => {
             eprintln!("{}", err);

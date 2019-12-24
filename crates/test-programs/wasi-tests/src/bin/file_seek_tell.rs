@@ -1,113 +1,72 @@
-use libc;
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_file, close_fd};
-use wasi_tests::wasi_wrappers::{wasi_fd_seek, wasi_fd_tell, wasi_fd_write, wasi_path_open};
 
-unsafe fn test_file_seek_tell(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
-    let mut file_fd = wasi_unstable::Fd::max_value() - 1;
-    let mut status = wasi_path_open(
+    let file_fd = wasi::path_open(
         dir_fd,
         0,
         "file",
-        wasi_unstable::O_CREAT,
-        wasi_unstable::RIGHT_FD_READ | wasi_unstable::RIGHT_FD_WRITE,
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
-        &mut file_fd,
-    );
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "opening a file"
-    );
+    )
+    .expect("opening a file");
     assert_gt!(
         file_fd,
-        libc::STDERR_FILENO as wasi_unstable::Fd,
+        libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
     // Check current offset
-    let mut offset: wasi_unstable::FileSize = 0;
-    status = wasi_fd_tell(file_fd, &mut offset);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "getting initial file offset"
-    );
+    let mut offset = wasi::fd_tell(file_fd).expect("getting initial file offset");
     assert_eq!(offset, 0, "current offset should be 0");
 
     // Write to file
     let buf = &[0u8; 100];
-    let iov = wasi_unstable::CIoVec {
+    let iov = wasi::Ciovec {
         buf: buf.as_ptr() as *const _,
         buf_len: buf.len(),
     };
-    let iovs = &[iov];
-    let mut nwritten = 0;
-    status = wasi_fd_write(file_fd, iovs, &mut nwritten);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "writing to a file"
-    );
+    let nwritten = wasi::fd_write(file_fd, &[iov]).expect("writing to a file");
     assert_eq!(nwritten, 100, "should write 100 bytes to file");
 
     // Check current offset
-    status = wasi_fd_tell(file_fd, &mut offset);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "getting file offset after writing"
-    );
+    offset = wasi::fd_tell(file_fd).expect("getting file offset after writing");
     assert_eq!(offset, 100, "offset after writing should be 100");
 
     // Seek to middle of the file
-    let mut newoffset = 1;
-    status = wasi_fd_seek(file_fd, -50, wasi_unstable::WHENCE_CUR, &mut newoffset);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "seeking to the middle of a file"
-    );
+    let mut newoffset =
+        wasi::fd_seek(file_fd, -50, wasi::WHENCE_CUR).expect("seeking to the middle of a file");
     assert_eq!(
         newoffset, 50,
         "offset after seeking to the middle should be at 50"
     );
 
     // Seek to the beginning of the file
-    status = wasi_fd_seek(file_fd, 0, wasi_unstable::WHENCE_SET, &mut newoffset);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "seeking to the beginning of the file"
-    );
+    newoffset =
+        wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking to the beginning of the file");
     assert_eq!(
         newoffset, 0,
         "offset after seeking to the beginning of the file should be at 0"
     );
 
     // Seek beyond the file should be possible
-    status = wasi_fd_seek(file_fd, 1000, wasi_unstable::WHENCE_CUR, &mut newoffset);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "seeking beyond the end of the file"
-    );
+    wasi::fd_seek(file_fd, 1000, wasi::WHENCE_CUR).expect("seeking beyond the end of the file");
 
     // Seek before byte 0 is an error though
-    status = wasi_fd_seek(file_fd, -2000, wasi_unstable::WHENCE_CUR, &mut newoffset);
     assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_EINVAL,
-        "seeking before byte 0 is an error"
+        wasi::fd_seek(file_fd, -2000, wasi::WHENCE_CUR)
+            .expect_err("seeking before byte 0 should be an error")
+            .raw_error(),
+        wasi::ERRNO_INVAL,
+        "errno should be ERRNO_INVAL",
     );
 
-    close_fd(file_fd);
-    cleanup_file(dir_fd, "file");
+    wasi::fd_close(file_fd).expect("closing a file");
+    wasi::path_unlink_file(dir_fd, "file").expect("deleting a file");
 }
 fn main() {
     let mut args = env::args();

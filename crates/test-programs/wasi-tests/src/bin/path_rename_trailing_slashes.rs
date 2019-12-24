@@ -1,47 +1,42 @@
 use std::{env, process};
-use wasi_old::wasi_unstable;
-use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::{cleanup_dir, cleanup_file, create_dir, create_file};
-use wasi_tests::wasi_wrappers::wasi_path_rename;
+use wasi_tests::{create_file, open_scratch_directory};
 
-unsafe fn test_path_rename_trailing_slashes(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_path_rename_trailing_slashes(dir_fd: wasi::Fd) {
     // Test renaming a file with a trailing slash in the name.
     create_file(dir_fd, "source");
+
     assert_eq!(
-        wasi_path_rename(dir_fd, "source/", dir_fd, "target"),
-        Err(wasi_unstable::ENOTDIR),
-        "renaming a file with a trailing slash in the source name"
+        wasi::path_rename(dir_fd, "source/", dir_fd, "target")
+            .expect_err("renaming a file with a trailing slash in the source name should fail")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_NOTDIR"
     );
     assert_eq!(
-        wasi_path_rename(dir_fd, "source", dir_fd, "target/"),
-        Err(wasi_unstable::ENOTDIR),
-        "renaming a file with a trailing slash in the destination name"
+        wasi::path_rename(dir_fd, "source", dir_fd, "target/")
+            .expect_err("renaming a file with a trailing slash in the destination name should fail")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_NOTDIR"
     );
     assert_eq!(
-        wasi_path_rename(dir_fd, "source/", dir_fd, "target/"),
-        Err(wasi_unstable::ENOTDIR),
-        "renaming a file with a trailing slash in the source and destination names"
+        wasi::path_rename(dir_fd, "source/", dir_fd, "target/")
+            .expect_err("renaming a file with a trailing slash in the source and destination names should fail")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_NOTDIR"
     );
-    cleanup_file(dir_fd, "source");
+    wasi::path_unlink_file(dir_fd, "source").expect("removing a file");
 
     // Test renaming a directory with a trailing slash in the name.
-    create_dir(dir_fd, "source");
-    assert_eq!(
-        wasi_path_rename(dir_fd, "source/", dir_fd, "target"),
-        Ok(()),
-        "renaming a directory with a trailing slash in the source name"
-    );
-    assert_eq!(
-        wasi_path_rename(dir_fd, "target", dir_fd, "source/"),
-        Ok(()),
-        "renaming a directory with a trailing slash in the destination name"
-    );
-    assert_eq!(
-        wasi_path_rename(dir_fd, "source/", dir_fd, "target/"),
-        Ok(()),
-        "renaming a directory with a trailing slash in the source and destination names"
-    );
-    cleanup_dir(dir_fd, "target");
+    wasi::path_create_directory(dir_fd, "source").expect("creating a directory");
+    wasi::path_rename(dir_fd, "source/", dir_fd, "target")
+        .expect("renaming a directory with a trailing slash in the source name");
+    wasi::path_rename(dir_fd, "target", dir_fd, "source/")
+        .expect("renaming a directory with a trailing slash in the destination name");
+    wasi::path_rename(dir_fd, "source/", dir_fd, "target/")
+        .expect("renaming a directory with a trailing slash in the source and destination names");
+    wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
 }
 
 fn main() {

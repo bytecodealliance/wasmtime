@@ -1,32 +1,22 @@
 use std::{env, process};
-use wasi_old::wasi_unstable;
 use wasi_tests::open_scratch_directory;
-use wasi_tests::utils::cleanup_file;
-use wasi_tests::wasi_wrappers::{wasi_path_readlink, wasi_path_symlink};
 
-unsafe fn test_readlink_no_buffer(dir_fd: wasi_unstable::Fd) {
+unsafe fn test_readlink_no_buffer(dir_fd: wasi::Fd) {
     // First create a dangling symlink.
-    assert!(
-        wasi_path_symlink("target", dir_fd, "symlink").is_ok(),
-        "creating a symlink"
-    );
+    wasi::path_symlink("target", dir_fd, "symlink").expect("creating a symlink");
 
     // Readlink it into a non-existent buffer.
-    let mut bufused: usize = 1;
-    let status = wasi_path_readlink(dir_fd, "symlink", &mut [], &mut bufused);
-    assert_eq!(
-        status,
-        wasi_unstable::raw::__WASI_ESUCCESS,
-        "readlink with a 0-sized buffer should succeed"
-    );
+    let bufused = wasi::path_readlink(dir_fd, "symlink", (&mut []).as_mut_ptr(), 0)
+        .expect("readlink with a 0-sized buffer should succeed");
     assert_eq!(
         bufused, 0,
         "readlink with a 0-sized buffer should return 'bufused' 0"
     );
 
     // Clean up.
-    cleanup_file(dir_fd, "symlink");
+    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
 }
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();

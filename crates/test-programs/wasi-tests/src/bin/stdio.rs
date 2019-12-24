@@ -1,25 +1,9 @@
-use std::mem::MaybeUninit;
-use wasi_old::wasi_unstable;
-use wasi_tests::wasi_wrappers::wasi_fd_fdstat_get;
+use wasi_tests::{STDERR_FD, STDIN_FD, STDOUT_FD};
 
 unsafe fn test_stdio() {
-    for fd in &[
-        wasi_unstable::STDIN_FD,
-        wasi_unstable::STDOUT_FD,
-        wasi_unstable::STDERR_FD,
-    ] {
-        let mut fdstat: wasi_unstable::FdStat = MaybeUninit::zeroed().assume_init();
-        let status = wasi_fd_fdstat_get(*fd, &mut fdstat);
-        assert_eq!(
-            status,
-            wasi_unstable::raw::__WASI_ESUCCESS,
-            "fd_fdstat_get on stdio"
-        );
-
-        assert!(
-            wasi_unstable::fd_renumber(*fd, *fd + 100).is_ok(),
-            "renumbering stdio",
-        );
+    for fd in &[STDIN_FD, STDOUT_FD, STDERR_FD] {
+        wasi::fd_fdstat_get(*fd).expect("fd_fdstat_get on stdio");
+        wasi::fd_renumber(*fd, *fd + 100).expect("renumbering stdio");
     }
 }
 
