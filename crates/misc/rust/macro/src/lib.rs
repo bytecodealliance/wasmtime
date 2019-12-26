@@ -45,9 +45,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
     let name = &item.ident;
     let root = root();
     Ok(quote! {
-        #vis fn load_file(path: impl AsRef<std::path::Path>) -> #root::anyhow::Result<#name> {
-            let bytes = std::fs::read(path)?;
-
+        #vis fn load_bytes<T: AsRef<[u8]>>(bytes: T) -> #root::anyhow::Result<#name> {
             use #root::wasmtime::{HostRef, Config, Extern, Engine, Store, Instance, Module};
             use #root::anyhow::{bail, format_err};
 
@@ -60,9 +58,9 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
             let store = HostRef::new(Store::new(&engine));
             let global_exports = store.borrow().global_exports().clone();
 
-            let data = #root::wasmtime_interface_types::ModuleData::new(&bytes)?;
+            let data = #root::wasmtime_interface_types::ModuleData::new(bytes.as_ref())?;
 
-            let module = HostRef::new(Module::new(&store, &bytes)?);
+            let module = HostRef::new(Module::new(&store, bytes.as_ref())?);
 
             let mut imports: Vec<Extern> = Vec::new();
             if let Some(module_name) = data.find_wasi_module_name() {
