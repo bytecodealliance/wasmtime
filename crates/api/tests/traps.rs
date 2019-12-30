@@ -7,8 +7,8 @@ fn test_trap_return() -> Result<(), String> {
     struct HelloCallback;
 
     impl Callable for HelloCallback {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), HostRef<Trap>> {
-            Err(HostRef::new(Trap::new("test 123")))
+        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
+            Err(Trap::new("test 123"))
         }
     }
 
@@ -32,7 +32,7 @@ fn test_trap_return() -> Result<(), String> {
 
     let imports = vec![hello_func.into()];
     let instance = Instance::new(&store, &module, imports.as_slice())
-        .map_err(|e| format!("failed to instantiate module: {}", e))?;
+        .map_err(|e| format!("failed to instantiate module: {:?}", e))?;
     let run_func = instance.exports()[0]
         .func()
         .expect("expected function export");
@@ -43,7 +43,7 @@ fn test_trap_return() -> Result<(), String> {
         .err()
         .expect("error calling function");
 
-    assert_eq!(e.borrow().message(), "test 123");
+    assert_eq!(e.message(), "test 123");
 
     Ok(())
 }

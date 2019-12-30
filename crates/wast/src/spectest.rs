@@ -9,9 +9,9 @@ struct MyCall<F>(F);
 
 impl<F> Callable for MyCall<F>
 where
-    F: Fn(&[Val], &mut [Val]) -> Result<(), HostRef<Trap>>,
+    F: Fn(&[Val], &mut [Val]) -> Result<(), Trap>,
 {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         (self.0)(params, results)
     }
 }
@@ -19,7 +19,7 @@ where
 fn wrap(
     store: &HostRef<Store>,
     ty: FuncType,
-    callable: impl Fn(&[Val], &mut [Val]) -> Result<(), HostRef<Trap>> + 'static,
+    callable: impl Fn(&[Val], &mut [Val]) -> Result<(), Trap> + 'static,
 ) -> Func {
     Func::new(store, ty, Rc::new(MyCall(callable)))
 }

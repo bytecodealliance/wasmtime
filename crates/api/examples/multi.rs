@@ -7,7 +7,7 @@ use wasmtime::*;
 struct Callback;
 
 impl Callable for Callback {
-    fn call(&self, args: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&self, args: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         println!("Calling back...");
         println!("> {} {}", args[0].unwrap_i32(), args[1].unwrap_i64());
 

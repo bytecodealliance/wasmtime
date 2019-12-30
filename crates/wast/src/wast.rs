@@ -36,7 +36,7 @@ pub struct WastContext {
 
 enum Outcome<T = Vec<Val>> {
     Ok(T),
-    Trap(HostRef<Trap>),
+    Trap(Trap),
 }
 
 impl WastContext {
@@ -101,7 +101,7 @@ impl WastContext {
                     .filter_map(|e| e.downcast_ref::<InstantiationError>())
                     .next();
                 if let Some(InstantiationError::StartTrap(msg)) = err {
-                    return Ok(Outcome::Trap(HostRef::new(Trap::new(msg.clone()))));
+                    return Ok(Outcome::Trap(Trap::new(msg.clone())));
                 }
                 return Err(e);
             }
@@ -139,7 +139,7 @@ impl WastContext {
     fn module(&mut self, instance_name: Option<&str>, module: &[u8]) -> Result<()> {
         let instance = match self.instantiate(module)? {
             Outcome::Ok(i) => i,
-            Outcome::Trap(e) => bail!("instantiation failed with: {}", e.borrow().message()),
+            Outcome::Trap(e) => bail!("instantiation failed with: {}", e.message()),
         };
         if let Some(name) = instance_name {
             self.instances.insert(name.to_string(), instance.clone());
@@ -241,7 +241,6 @@ impl WastContext {
                         }
                     }
                     Outcome::Trap(t) => {
-                        let t = t.borrow();
                         bail!("{}\nunexpected trap: {}", context(span), t.message())
                     }
                 },
@@ -254,7 +253,6 @@ impl WastContext {
                         bail!("{}\nexpected trap, got {:?}", context(span), values)
                     }
                     Outcome::Trap(t) => {
-                        let t = t.borrow();
                         if t.message().contains(message) {
                             continue;
                         }
@@ -283,7 +281,6 @@ impl WastContext {
                         bail!("{}\nexpected trap, got {:?}", context(span), values)
                     }
                     Outcome::Trap(t) => {
-                        let t = t.borrow();
                         if t.message().contains(message) {
                             continue;
                         }
@@ -315,7 +312,6 @@ impl WastContext {
                             }
                         }
                         Outcome::Trap(t) => {
-                            let t = t.borrow();
                             bail!("{}\nunexpected trap: {}", context(span), t.message())
                         }
                     }
@@ -340,7 +336,6 @@ impl WastContext {
                             }
                         }
                         Outcome::Trap(t) => {
-                            let t = t.borrow();
                             bail!("{}\nunexpected trap: {}", context(span), t.message())
                         }
                     }
@@ -365,7 +360,6 @@ impl WastContext {
                             }
                         }
                         Outcome::Trap(t) => {
-                            let t = t.borrow();
                             bail!("{}\nunexpected trap: {}", context(span), t.message())
                         }
                     }
@@ -390,7 +384,6 @@ impl WastContext {
                             }
                         }
                         Outcome::Trap(t) => {
-                            let t = t.borrow();
                             bail!("{}\nunexpected trap: {}", context(span), t.message())
                         }
                     }
@@ -415,7 +408,6 @@ impl WastContext {
                             }
                         }
                         Outcome::Trap(t) => {
-                            let t = t.borrow();
                             bail!("{}\nunexpected trap: {}", context(span), t.message())
                         }
                     }
@@ -440,7 +432,6 @@ impl WastContext {
                             }
                         }
                         Outcome::Trap(t) => {
-                            let t = t.borrow();
                             bail!("{}\nunexpected trap: {}", context(span), t.message())
                         }
                     }

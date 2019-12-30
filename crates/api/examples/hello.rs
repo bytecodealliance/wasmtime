@@ -7,7 +7,7 @@ use wasmtime::*;
 struct HelloCallback;
 
 impl Callable for HelloCallback {
-    fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
         println!("Calling back...");
         println!("> Hello World!");
         Ok(())

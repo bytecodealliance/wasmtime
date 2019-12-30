@@ -147,7 +147,7 @@ impl Func {
         self.r#type.results().len()
     }
 
-    pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, HostRef<Trap>> {
+    pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Trap> {
         let mut results = vec![Val::null(); self.result_arity()];
         self.callable.call(params, &mut results)?;
         Ok(results.into_boxed_slice())

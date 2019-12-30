@@ -349,7 +349,10 @@ fn instantiate_module(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let instance = HostRef::new(Instance::new(store, &module, &imports)?);
+    let instance = HostRef::new(match Instance::new(store, &module, &imports) {
+        Ok(instance) => instance,
+        Err(trap) => bail!("Failed to instantiate {:?}: {:?}", path, trap),
+    });
 
     Ok((instance, module, data))
 }
