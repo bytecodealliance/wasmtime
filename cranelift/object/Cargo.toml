@@ -11,8 +11,8 @@ edition = "2018"
 
 [dependencies]
 cranelift-module = { path = "../cranelift-module", version = "0.52.0" }
-object = { version = "0.16", default-features = false, features = ["write"] }
-target-lexicon = "0.9"
+object = { version = "0.17", default-features = false, features = ["write"] }
+target-lexicon = "0.10"
 
 [dependencies.cranelift-codegen]
 path = "../cranelift-codegen"

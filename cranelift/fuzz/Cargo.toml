@@ -15,7 +15,7 @@ libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
 cranelift-codegen = { path = "../cranelift-codegen" }
 cranelift-wasm = { path = "../cranelift-wasm" }
 cranelift-reader = { path = "../cranelift-reader" }
-target-lexicon = "0.9"
+target-lexicon = "0.10"
 
 # Prevent this from interfering with workspaces
 [workspace]

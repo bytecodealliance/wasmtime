@@ -22,7 +22,7 @@ thiserror = "1.0.4"
 
 [dev-dependencies]
 wabt = "0.9.1"
-target-lexicon = "0.9"
+target-lexicon = "0.10"
 
 [features]
 default = ["std", "basic-blocks"]

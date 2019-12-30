@@ -11,10 +11,10 @@ edition = "2018"
 
 [dependencies]
 cranelift-module = { path = "../cranelift-module", version = "0.52.0" }
-faerie = "0.12.0"
+faerie = "0.14.0"
 goblin = "0.1.0"
-failure = "0.1.2"
-target-lexicon = "0.9"
+anyhow = "1.0"
+target-lexicon = "0.10"
 
 [dependencies.cranelift-codegen]
 path = "../cranelift-codegen"

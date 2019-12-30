@@ -2,6 +2,7 @@
 
 use crate::container;
 use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
+use anyhow::Error;
 use cranelift_codegen::binemit::{
     Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink, Stackmap, StackmapSink,
 };
@@ -12,7 +13,6 @@ use cranelift_module::{
     ModuleNamespace, ModuleResult,
 };
 use faerie;
-use failure::Error;
 use std::fs::File;
 use target_lexicon::Triple;
 

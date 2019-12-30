@@ -12,7 +12,7 @@ edition = "2018"
 
 [dependencies]
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.52.0", default-features = false }
-target-lexicon = "0.9"
+target-lexicon = "0.10"
 log = { version = "0.4.6", default-features = false }
 hashbrown = { version = "0.6", optional = true }
 smallvec = { version = "1.0.0" }

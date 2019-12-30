@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.52.0" }
-target-lexicon = "0.9"
+target-lexicon = "0.10"
 
 [badges]
 maintenance = { status = "experimental" }

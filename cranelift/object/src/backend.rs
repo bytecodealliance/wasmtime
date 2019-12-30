@@ -11,8 +11,10 @@ use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
     ModuleResult,
 };
-use object::write::{Object, Relocation, SectionId, StandardSection, Symbol, SymbolId};
-use object::{RelocationEncoding, RelocationKind, SymbolKind, SymbolScope};
+use object::write::{
+    Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
+};
+use object::{RelocationEncoding, RelocationKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
 use target_lexicon::PointerWidth;
 
@@ -133,7 +135,8 @@ impl Backend for ObjectBackend {
                 kind: SymbolKind::Text,
                 scope,
                 weak,
-                section: None,
+                section: SymbolSection::Undefined,
+                flags: SymbolFlags::None,
             });
             self.functions[id] = Some(symbol_id);
         }
@@ -161,7 +164,8 @@ impl Backend for ObjectBackend {
                 kind: SymbolKind::Data,
                 scope,
                 weak,
-                section: None,
+                section: SymbolSection::Undefined,
+                flags: SymbolFlags::None,
             });
             self.data_objects[id] = Some(symbol_id);
         }
@@ -432,7 +436,8 @@ impl ObjectBackend {
                         kind: SymbolKind::Text,
                         scope: SymbolScope::Unknown,
                         weak: false,
-                        section: None,
+                        section: SymbolSection::Undefined,
+                        flags: SymbolFlags::None,
                     });
                     self.libcalls.insert(*libcall, symbol);
                     symbol
