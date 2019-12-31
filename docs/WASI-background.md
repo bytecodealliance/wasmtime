@@ -87,9 +87,9 @@ do we want to? It'd add a bunch of complexity, inefficiency, subtle behavioral
 differences, or realistically, a combination of all three.
 
 Ok, so maybe we can encourage applications to use `posix_spawn` instead. And
-some already do, but in doing so we do loose some of the value of POSIX's
+some already do, but in doing so we do lose some of the value of POSIX's
 momentum. And even with `posix_spawn`, many applications will explicitly do
-things like `waidpid` on the resulting PID. We can make this work too, but
+things like `waitpid` on the resulting PID. We can make this work too, but
 we should also take a moment and step back to think about IPC in general.
 
 In WebAssembly, instances can synchronously call each other, and it can be
