@@ -16,9 +16,9 @@ wasmtime-runtime = { path = "../runtime" }
 wasmtime-environ = { path = "../environ" }
 wasmtime-jit = { path = "../jit" }
 wasi-common = { path = "../wasi-common" }
-cranelift-codegen = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.50.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.50.0", features = ["enable-serde"] }
+cranelift-codegen = { version = "0.52.0", features = ["enable-serde"] }
+cranelift-entity = { version = "0.52.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.52.0", features = ["enable-serde"] }
 target-lexicon = "0.9.0"
 log = { version = "0.4.8", default-features = false }
 wig = { path = "../wasi-common/wig" }
