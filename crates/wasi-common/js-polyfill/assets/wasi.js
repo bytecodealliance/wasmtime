@@ -186,7 +186,7 @@ var WASIPolyfill = {
 
   clock_res_get: function(clock_id, resolution) {
     let host_resolution = _malloc(8);
-    let ret = _old_wasi_common_clock_res_get(
+    let ret = _wasi_common_clock_res_get(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -199,7 +199,7 @@ var WASIPolyfill = {
 
   clock_time_get: function(clock_id, precision, time) {
     let host_time = _malloc(8);
-    let ret = _old_wasi_common_clock_time_get(
+    let ret = _wasi_common_clock_time_get(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -226,7 +226,7 @@ var WASIPolyfill = {
 
   fd_prestat_get: function(fd, buf) {
     let host_buf = _malloc(8); // sizeof __wasi_prestat_t
-    let ret = _old_wasi_common_fd_prestat_get(
+    let ret = _wasi_common_fd_prestat_get(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -239,7 +239,7 @@ var WASIPolyfill = {
 
   fd_prestat_dir_name: function(fd, path, path_len) {
     let host_buf = _malloc(path_len);
-    let ret = _old_wasi_common_fd_prestat_get(
+    let ret = _wasi_common_fd_prestat_get(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -252,17 +252,17 @@ var WASIPolyfill = {
   },
 
   fd_close: function(fd) {
-    return _old_wasi_common_fd_close(_get_wasi_context(), fd);
+    return _wasi_common_fd_close(_get_wasi_context(), fd);
   },
 
   fd_datasync: function(fd) {
-    return _old_wasi_common_fd_datasync(_get_wasi_context(), fd);
+    return _wasi_common_fd_datasync(_get_wasi_context(), fd);
   },
 
   fd_pread: function(fd, iovs, iovs_len, offset, nread) {
     let host_iovs = translate_iovs(iovs, iovs_len);
     let host_nread = _malloc(4);
-    let ret = _old_wasi_common_fd_pread(
+    let ret = _wasi_common_fd_pread(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -280,7 +280,7 @@ var WASIPolyfill = {
   fd_pwrite: function(fd, iovs, iovs_len, offset, nwritten) {
     let host_iovs = translate_ciovs(iovs, iovs_len);
     let host_nwritten = _malloc(4);
-    let ret = _old_wasi_common_fd_pwrite(
+    let ret = _wasi_common_fd_pwrite(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -298,7 +298,7 @@ var WASIPolyfill = {
   fd_read: function(fd, iovs, iovs_len, nread) {
     let host_iovs = translate_iovs(iovs, iovs_len);
     let host_nread = _malloc(4);
-    let ret = _old_wasi_common_fd_read(
+    let ret = _wasi_common_fd_read(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -313,12 +313,12 @@ var WASIPolyfill = {
   },
 
   fd_renumber: function(from, to) {
-    return _old_wasi_common_fd_renumber(_get_wasi_context(), from, to);
+    return _wasi_common_fd_renumber(_get_wasi_context(), from, to);
   },
 
   fd_seek: function(fd, offset, whence, newoffset) {
     let host_newoffset = _malloc(8);
-    let ret = _old_wasi_common_fd_seek(
+    let ret = _wasi_common_fd_seek(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -333,7 +333,7 @@ var WASIPolyfill = {
 
   fd_tell: function(fd, newoffset) {
     let host_newoffset = _malloc(8);
-    let ret = _old_wasi_common_fd_seek(
+    let ret = _wasi_common_fd_seek(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -346,7 +346,7 @@ var WASIPolyfill = {
 
   fd_fdstat_get: function(fd, buf) {
     let host_buf = _malloc(24); // sizeof __wasi_fdstat_t
-    let ret = _old_wasi_common_fd_fdstat_get(
+    let ret = _wasi_common_fd_fdstat_get(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -358,11 +358,11 @@ var WASIPolyfill = {
   },
 
   fd_fdstat_set_flags: function(fd, flags) {
-    return _old_wasi_common_fd_fdstat_set_flags(_get_wasi_context(), fd, flags);
+    return _wasi_common_fd_fdstat_set_flags(_get_wasi_context(), fd, flags);
   },
 
   fd_fdstat_set_rights: function(fd, fs_rights_base, fs_rights_inheriting) {
-    return _old_wasi_common_fd_fdstat_set_rights(
+    return _wasi_common_fd_fdstat_set_rights(
       _get_wasi_context(),
       fd,
       fs_rights_base,
@@ -371,13 +371,13 @@ var WASIPolyfill = {
   },
 
   fd_sync: function(fd) {
-    return _old_wasi_common_fd_sync(_get_wasi_context(), fd);
+    return _wasi_common_fd_sync(_get_wasi_context(), fd);
   },
 
   fd_write: function(fd, iovs, iovs_len, nwritten) {
     let host_iovs = translate_ciovs(iovs, iovs_len);
     let host_nwritten = _malloc(4);
-    let ret = _old_wasi_common_fd_write(
+    let ret = _wasi_common_fd_write(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -392,22 +392,16 @@ var WASIPolyfill = {
   },
 
   fd_advise: function(fd, offset, len, advice) {
-    return _old_wasi_common_fd_advise(
-      _get_wasi_context(),
-      fd,
-      offset,
-      len,
-      advice
-    );
+    return _wasi_common_fd_advise(_get_wasi_context(), fd, offset, len, advice);
   },
 
   fd_allocate: function(fd, offset, len) {
-    return _old_wasi_common_fd_allocate(_get_wasi_context(), fd, offset, len);
+    return _wasi_common_fd_allocate(_get_wasi_context(), fd, offset, len);
   },
 
   path_create_directory: function(fd, path, path_len) {
     let host_path = copyin_bytes(path, path_len);
-    let ret = _old_wasi_common_path_create_directory(
+    let ret = _wasi_common_path_create_directory(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -422,7 +416,7 @@ var WASIPolyfill = {
   path_link: function(fd0, path0, path_len0, fd1, path1, path_len1) {
     let host_path0 = copyin_bytes(path0, path_len0);
     let host_path1 = copyin_bytes(path1, path_len1);
-    let ret = _old_wasi_common_path_link(
+    let ret = _wasi_common_path_link(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -451,7 +445,7 @@ var WASIPolyfill = {
   ) {
     let host_path = copyin_bytes(path, path_len);
     let host_fd = _malloc(4);
-    let ret = _old_wasi_common_path_open(
+    let ret = _wasi_common_path_open(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -473,7 +467,7 @@ var WASIPolyfill = {
   fd_readdir: function(fd, buf, buf_len, cookie, buf_used) {
     let host_buf = _malloc(buf_len);
     let host_buf_used = _malloc(4);
-    let ret = _old_wasi_common_fd_readdir(
+    let ret = _wasi_common_fd_readdir(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -492,7 +486,7 @@ var WASIPolyfill = {
     let host_path = copyin_bytes(path, path_len);
     let host_buf = _malloc(buf_len);
     let host_buf_used = _malloc(4);
-    let ret = _old_wasi_common_path_readlink(
+    let ret = _wasi_common_path_readlink(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -512,7 +506,7 @@ var WASIPolyfill = {
   path_rename: function(fd0, path0, path_len0, fd1, path1, path_len1) {
     let host_path0 = copyin_bytes(path0, path_len0);
     let host_path1 = copyin_bytes(path1, path_len1);
-    let ret = _old_wasi_common_path_rename(
+    let ret = _wasi_common_path_rename(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -530,7 +524,7 @@ var WASIPolyfill = {
 
   fd_filestat_get: function(fd, buf) {
     let host_buf = _malloc(56); // sizeof __wasi_filestat_t
-    let ret = _old_wasi_common_fd_filestat_get(
+    let ret = _wasi_common_fd_filestat_get(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -542,7 +536,7 @@ var WASIPolyfill = {
   },
 
   fd_filestat_set_size: function(fd, size) {
-    return _old_wasi_common_fd_filestat_set_size(
+    return _wasi_common_fd_filestat_set_size(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -552,7 +546,7 @@ var WASIPolyfill = {
   },
 
   fd_filestat_set_times: function(fd, st_atim, st_mtim, fstflags) {
-    return _old_wasi_common_fd_filestat_set_times(
+    return _wasi_common_fd_filestat_set_times(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -566,7 +560,7 @@ var WASIPolyfill = {
   path_filestat_get: function(fd, path, path_len, buf) {
     let host_path = copyin_bytes(path, path_len);
     let host_buf = _malloc(56); // sizeof __wasi_filestat_t
-    let ret = _old_wasi_common_path_filestat_get(
+    let ret = _wasi_common_path_filestat_get(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -589,7 +583,7 @@ var WASIPolyfill = {
     flags
   ) {
     let host_path = copyin_bytes(path, path_len);
-    let ret = _old_wasi_common_path_filestat_set_times(
+    let ret = _wasi_common_path_filestat_set_times(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -606,7 +600,7 @@ var WASIPolyfill = {
   path_symlink: function(path0, path_len0, fd, path1, path_len1) {
     let host_path0 = copyin_bytes(path0, path0_len);
     let host_path1 = copyin_bytes(path1, path1_len);
-    let ret = _old_wasi_common_path_symlink(
+    let ret = _wasi_common_path_symlink(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -623,7 +617,7 @@ var WASIPolyfill = {
 
   path_unlink_file: function(fd, path, path_len, flags) {
     let host_path = copyin_bytes(path, path_len);
-    let ret = _old_wasi_common_path_unlink_file(
+    let ret = _wasi_common_path_unlink_file(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -638,7 +632,7 @@ var WASIPolyfill = {
 
   path_remove_directory: function(fd, path, path_len, flags) {
     let host_path = copyin_bytes(path, path_len);
-    let ret = _old_wasi_common_path_remove_directory(
+    let ret = _wasi_common_path_remove_directory(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -655,7 +649,7 @@ var WASIPolyfill = {
     let host_in = copyin_bytes(in_, nsubscriptions * 56); // sizeof __wasi_subscription_t
     let host_out = _malloc(nsubscriptions * 32); // sizeof __wasi_event_t
     let host_nevents = _malloc(4);
-    let ret = _old_wasi_common_poll_oneoff(
+    let ret = _wasi_common_poll_oneoff(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -699,18 +693,13 @@ var WASIPolyfill = {
 
   random_get: function(buf, buf_len) {
     let host_buf = _malloc(buf_len);
-    let ret = _old_wasi_common_random_get(
-      HEAP8,
-      HEAP8.length,
-      host_buf,
-      buf_len
-    );
+    let ret = _wasi_common_random_get(HEAP8, HEAP8.length, host_buf, buf_len);
     copyout_bytes(buf, host_buf, buf_len);
     return ret;
   },
 
   sched_yield: function() {
-    return _old_wasi_common_sched_yield();
+    return _wasi_common_sched_yield();
   },
 
   sock_recv: function(
@@ -723,7 +712,7 @@ var WASIPolyfill = {
   ) {
     let host_ri_data = translate_iovs(ri_data, ri_data_len);
     let host_ro_datalen = _malloc(4);
-    let ret = _old_wasi_common_sock_recv(
+    let ret = _wasi_common_sock_recv(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -742,7 +731,7 @@ var WASIPolyfill = {
   sock_send: function(sock, si_data, si_data_len, si_flags, so_datalen) {
     let host_si_data = translate_ciovs(si_data, si_data_len);
     let host_so_datalen = _malloc(4);
-    let ret = _old_wasi_common_sock_send(
+    let ret = _wasi_common_sock_send(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,
@@ -758,7 +747,7 @@ var WASIPolyfill = {
   },
 
   sock_shutdown: function(sock, how) {
-    return _old_wasi_common_sock_shutdown(
+    return _wasi_common_sock_shutdown(
       _get_wasi_context(),
       HEAP8,
       HEAP8.length,

@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use wasi_common::old::snapshot_0::{WasiCtx, WasiCtxBuilder};
+use wasi_common::{WasiCtx, WasiCtxBuilder};
 
 extern "C" {
     fn loadFiles();
