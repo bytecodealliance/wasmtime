@@ -55,9 +55,6 @@ members = [
   "crates/misc/py",
   "fuzz",
 ]
-exclude = [
-  "crates/wasi-common/js-polyfill",
-]
 
 [features]
 lightbeam = [
