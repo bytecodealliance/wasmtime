@@ -4,6 +4,7 @@ use crate::ctx::WasiCtx;
 use crate::fdentry::{Descriptor, FdEntry};
 use crate::helpers::*;
 use crate::memory::*;
+use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::hostcalls_impl::fs_helpers::path_open_rights;
 use crate::sys::{host_impl, hostcalls_impl};
@@ -12,6 +13,7 @@ use filetime::{set_file_handle_times, FileTime};
 use log::trace;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::ops::DerefMut;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) unsafe fn fd_close(
@@ -168,7 +170,7 @@ pub(crate) unsafe fn fd_read(
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READ, 0)?
     {
         Descriptor::OsHandle(file) => file.read_vectored(&mut iovs),
-        Descriptor::Stdin => io::stdin().lock().read_vectored(&mut iovs),
+        Descriptor::Stdin => io::stdin().read_vectored(&mut iovs),
         _ => return Err(Error::EBADF),
     };
 
@@ -372,21 +374,35 @@ pub(crate) unsafe fn fd_write(
     let iovs: Vec<io::IoSlice> = iovs.iter().map(|vec| host::ciovec_to_host(vec)).collect();
 
     // perform unbuffered writes
-    let host_nwritten = match wasi_ctx
-        .get_fd_entry_mut(fd)?
-        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_WRITE, 0)?
-    {
-        Descriptor::OsHandle(file) => file.write_vectored(&iovs)?,
+    let entry = wasi_ctx.get_fd_entry_mut(fd)?;
+    let isatty = entry.isatty();
+    let desc = entry.as_descriptor_mut(wasi::__WASI_RIGHTS_FD_WRITE, 0)?;
+    let host_nwritten = match desc {
+        Descriptor::OsHandle(file) => {
+            if isatty {
+                SandboxedTTYWriter::new(file.deref_mut()).write_vectored(&iovs)?
+            } else {
+                file.write_vectored(&iovs)?
+            }
+        }
         Descriptor::Stdin => return Err(Error::EBADF),
         Descriptor::Stdout => {
             // lock for the duration of the scope
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
-            let nwritten = stdout.write_vectored(&iovs)?;
+            let nwritten = if isatty {
+                SandboxedTTYWriter::new(&mut stdout).write_vectored(&iovs)?
+            } else {
+                stdout.write_vectored(&iovs)?
+            };
             stdout.flush()?;
             nwritten
         }
-        Descriptor::Stderr => io::stderr().lock().write_vectored(&iovs)?,
+        // Always sanitize stderr, even if it's not directly connected to a tty,
+        // because stderr is meant for diagnostics rather than binary output,
+        // and may be redirected to a file which could end up being displayed
+        // on a tty later.
+        Descriptor::Stderr => SandboxedTTYWriter::new(&mut io::stderr()).write_vectored(&iovs)?,
     };
 
     trace!("     | *nwritten={:?}", host_nwritten);
