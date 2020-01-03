@@ -1,7 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 #![allow(unused)]
-use crate::helpers::systemtime_to_timestamp;
 use crate::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::memory::*;
 use crate::sys::host_impl;
