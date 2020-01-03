@@ -13,6 +13,9 @@ edition = "2018"
 default-run = "wasmtime"
 publish = false
 
+[lib]
+doctest = false
+
 [dependencies]
 # Enable all supported architectures by default.
 wasmtime = { path = "crates/api" }
