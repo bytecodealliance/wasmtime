@@ -3,7 +3,6 @@
 use super::fs_helpers::*;
 use crate::old::snapshot_0::ctx::WasiCtx;
 use crate::old::snapshot_0::fdentry::FdEntry;
-use crate::old::snapshot_0::helpers::systemtime_to_timestamp;
 use crate::old::snapshot_0::host::{Dirent, FileType};
 use crate::old::snapshot_0::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
 use crate::old::snapshot_0::sys::fdentry_impl::determine_type_rights;
@@ -249,10 +248,10 @@ fn dirent_from_path<P: AsRef<Path>>(
         .open(path)?;
     let ty = file.metadata()?.file_type();
     Ok(Dirent {
-        ftype: filetype_from_std(&ty),
+        ftype: host_impl::filetype_from_std(&ty),
         name: name.to_owned(),
         cookie,
-        ino: file_serial_no(&file)?,
+        ino: host_impl::file_serial_no(&file)?,
     })
 }
 
@@ -305,8 +304,8 @@ pub(crate) fn fd_readdir(
 
         Ok(Dirent {
             name: path_from_host(dir.file_name())?,
-            ftype: filetype_from_std(&dir.file_type()?),
-            ino: File::open(dir.path()).and_then(|f| file_serial_no(&f))?,
+            ftype: host_impl::filetype_from_std(&dir.file_type()?),
+            ino: File::open(dir.path()).and_then(|f| host_impl::file_serial_no(&f))?,
             cookie: no,
         })
     });
@@ -429,50 +428,8 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
     })
 }
 
-pub(crate) fn num_hardlinks(file: &File, _metadata: &Metadata) -> io::Result<u64> {
-    Ok(winx::file::get_fileinfo(file)?.nNumberOfLinks.into())
-}
-
-pub(crate) fn device_id(file: &File, _metadata: &Metadata) -> io::Result<u64> {
-    Ok(winx::file::get_fileinfo(file)?.dwVolumeSerialNumber.into())
-}
-
-pub(crate) fn file_serial_no(file: &File) -> io::Result<u64> {
-    let info = winx::file::get_fileinfo(file)?;
-    let high = info.nFileIndexHigh;
-    let low = info.nFileIndexLow;
-    let no = ((high as u64) << 32) | (low as u64);
-    Ok(no)
-}
-
-pub(crate) fn change_time(file: &File, _metadata: &Metadata) -> io::Result<i64> {
-    winx::file::change_time(file)
-}
-
-pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
-    let metadata = file.metadata()?;
-    Ok(wasi::__wasi_filestat_t {
-        dev: device_id(file, &metadata)?,
-        ino: file_serial_no(file)?,
-        nlink: num_hardlinks(file, &metadata)?.try_into()?, // u64 doesn't fit into u32
-        size: metadata.len(),
-        atim: systemtime_to_timestamp(metadata.accessed()?)?,
-        ctim: change_time(file, &metadata)?.try_into()?, // i64 doesn't fit into u64
-        mtim: systemtime_to_timestamp(metadata.modified()?)?,
-        filetype: filetype_from_std(&metadata.file_type()).to_wasi(),
-    })
-}
-
-pub(crate) fn filetype_from_std(ftype: &std::fs::FileType) -> FileType {
-    if ftype.is_file() {
-        FileType::RegularFile
-    } else if ftype.is_dir() {
-        FileType::Directory
-    } else if ftype.is_symlink() {
-        FileType::Symlink
-    } else {
-        FileType::Unknown
-    }
+pub(crate) fn fd_filestat_get(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
+    host_impl::filestat_from_win(file)
 }
 
 pub(crate) fn path_filestat_get(
@@ -481,7 +438,7 @@ pub(crate) fn path_filestat_get(
 ) -> Result<wasi::__wasi_filestat_t> {
     let path = resolved.concatenate()?;
     let file = File::open(path)?;
-    fd_filestat_get_impl(&file)
+    host_impl::filestat_from_win(&file)
 }
 
 pub(crate) fn path_filestat_set_times(
