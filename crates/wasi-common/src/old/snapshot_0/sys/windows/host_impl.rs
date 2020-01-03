@@ -127,7 +127,7 @@ pub(crate) fn file_serial_no(file: &File) -> io::Result<u64> {
     let info = winx::file::get_fileinfo(file)?;
     let high = info.nFileIndexHigh;
     let low = info.nFileIndexLow;
-    let no = ((high as u64) << 32) | (low as u64);
+    let no = (u64::from(high) << 32) | u64::from(low);
     Ok(no)
 }
 
