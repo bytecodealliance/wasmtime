@@ -6,8 +6,8 @@ use crate::types::{
 use anyhow::{Error, Result};
 use std::rc::Rc;
 use wasmparser::{
-    validate, ExternalKind, ImportSectionEntryType, ModuleReader, OperatorValidatorConfig,
-    SectionCode, ValidatingParserConfig,
+    validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
+    OperatorValidatorConfig, SectionCode, ValidatingParserConfig,
 };
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
@@ -56,7 +56,9 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
     TableType::new(ty, limits)
 }
 
-fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[ExportType]>)> {
+fn read_imports_and_exports(
+    binary: &[u8],
+) -> Result<(Box<[ImportType]>, Box<[ExportType]>, Option<String>)> {
     let mut reader = ModuleReader::new(binary)?;
     let mut imports = Vec::new();
     let mut exports = Vec::new();
@@ -65,6 +67,7 @@ fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[Ex
     let mut func_sig = Vec::new();
     let mut sigs = Vec::new();
     let mut globals = Vec::new();
+    let mut module_name = None;
     while !reader.eof() {
         let section = reader.read()?;
         match section.code {
@@ -157,12 +160,32 @@ fn read_imports_and_exports(binary: &[u8]) -> Result<(Box<[ImportType]>, Box<[Ex
                     exports.push(ExportType::new(entry.field, r#type));
                 }
             }
+            SectionCode::Custom {
+                kind: CustomSectionKind::Name,
+                ..
+            } => {
+                // Read name section. Per spec, ignore invalid custom section.
+                if let Ok(mut reader) = section.get_name_section_reader() {
+                    while let Ok(entry) = reader.read() {
+                        if let Name::Module(name) = entry {
+                            if let Ok(name) = name.get_name() {
+                                module_name = Some(name.to_string());
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
             _ => {
                 // skip other sections
             }
         }
     }
-    Ok((imports.into_boxed_slice(), exports.into_boxed_slice()))
+    Ok((
+        imports.into_boxed_slice(),
+        exports.into_boxed_slice(),
+        module_name,
+    ))
 }
 
 #[derive(Clone)]
@@ -196,6 +219,7 @@ struct ModuleInner {
     source: ModuleCodeSource,
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
+    name: Option<String>,
 }
 
 impl Module {
@@ -239,7 +263,16 @@ impl Module {
         // Note that the call to `unsafe` here should be ok because we
         // previously validated the binary, meaning we're guaranteed to pass a
         // valid binary for `store`.
-        unsafe { Self::new_unchecked(store, binary) }
+        unsafe { Self::create(store, binary, None) }
+    }
+
+    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
+    /// data. The provided `name` will be used in traps/backtrace details.
+    ///
+    /// See [`Module::new`] for other details.
+    pub fn new_with_name(store: &Store, binary: &[u8], name: String) -> Result<Module> {
+        Self::validate(store, binary)?;
+        unsafe { Self::create(store, binary, Some(name)) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -269,13 +302,22 @@ impl Module {
     /// be somewhat valid for decoding purposes, and the basics of decoding can
     /// still fail.
     pub unsafe fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
-        let (imports, exports) = read_imports_and_exports(binary)?;
+        Self::create(store, binary, None)
+    }
+
+    unsafe fn create(
+        store: &Store,
+        binary: &[u8],
+        name_override: Option<String>,
+    ) -> Result<Module> {
+        let (imports, exports, name) = read_imports_and_exports(binary)?;
         Ok(Module {
             inner: Rc::new(ModuleInner {
                 store: store.clone(),
                 source: ModuleCodeSource::Binary(binary.into()),
                 imports,
                 exports,
+                name: name_override.or(name),
             }),
         })
     }
@@ -320,6 +362,7 @@ impl Module {
                 source: ModuleCodeSource::Unknown,
                 imports: Box::new([]),
                 exports,
+                name: None,
             }),
         }
     }
@@ -329,6 +372,12 @@ impl Module {
             ModuleCodeSource::Binary(b) => Some(b),
             _ => None,
         }
+    }
+
+    /// Returns identifier/name that this [`Module`] has. This name
+    /// is used in traps/backtrace details.
+    pub fn name(&self) -> Option<&String> {
+        self.inner.name.as_ref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be

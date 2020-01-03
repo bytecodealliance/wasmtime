@@ -60,12 +60,13 @@ impl<'data> RawCompiledModule<'data> {
     fn new(
         compiler: &mut Compiler,
         data: &'data [u8],
+        module_name: Option<String>,
         resolver: &mut dyn Resolver,
         debug_info: bool,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
-        let translation = environ
+        let mut translation = environ
             .translate(data)
             .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
@@ -74,6 +75,8 @@ impl<'data> RawCompiledModule<'data> {
         } else {
             None
         };
+
+        translation.module.name = module_name;
 
         let (allocated_functions, jt_offsets, relocations, dbg_image) = compiler.compile(
             &translation.module,
@@ -152,11 +155,13 @@ impl CompiledModule {
     pub fn new<'data>(
         compiler: &mut Compiler,
         data: &'data [u8],
+        module_name: Option<String>,
         resolver: &mut dyn Resolver,
         global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
         debug_info: bool,
     ) -> Result<Self, SetupError> {
-        let raw = RawCompiledModule::<'data>::new(compiler, data, resolver, debug_info)?;
+        let raw =
+            RawCompiledModule::<'data>::new(compiler, data, module_name, resolver, debug_info)?;
 
         Ok(Self::from_parts(
             raw.module,
@@ -258,11 +263,12 @@ impl OwnedDataInitializer {
 pub fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
+    module_name: Option<String>,
     resolver: &mut dyn Resolver,
     global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
     debug_info: bool,
 ) -> Result<InstanceHandle, SetupError> {
-    let raw = RawCompiledModule::new(compiler, data, resolver, debug_info)?;
+    let raw = RawCompiledModule::new(compiler, data, module_name, resolver, debug_info)?;
 
     InstanceHandle::new(
         Rc::new(raw.module),

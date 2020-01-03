@@ -29,6 +29,7 @@ impl Resolver for SimpleResolver {
 pub fn instantiate_in_context(
     data: &[u8],
     imports: Vec<(String, String, Extern)>,
+    module_name: Option<String>,
     context: Context,
     exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
 ) -> Result<(InstanceHandle, HashSet<Context>), Error> {
@@ -38,6 +39,7 @@ pub fn instantiate_in_context(
     let instance = instantiate(
         &mut context.compiler(),
         data,
+        module_name,
         &mut resolver,
         exports,
         debug_info,
@@ -77,8 +79,13 @@ impl Instance {
             .zip(externs.iter())
             .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
             .collect::<Vec<_>>();
-        let (mut instance_handle, contexts) =
-            instantiate_in_context(module.binary().expect("binary"), imports, context, exports)?;
+        let (mut instance_handle, contexts) = instantiate_in_context(
+            module.binary().expect("binary"),
+            imports,
+            module.name().cloned(),
+            context,
+            exports,
+        )?;
 
         let exports = {
             let mut exports = Vec::with_capacity(module.exports().len());
