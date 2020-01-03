@@ -3,11 +3,12 @@
 use crate::old::snapshot_0::wasi;
 use std::convert::Infallible;
 use std::num::TryFromIntError;
-use std::{ffi, fmt, str};
+use std::{ffi, str};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 #[repr(u16)]
+#[error("{}", self)]
 pub enum WasiError {
     ESUCCESS = wasi::__WASI_ERRNO_SUCCESS,
     E2BIG = wasi::__WASI_ERRNO_2BIG,
@@ -91,14 +92,6 @@ pub enum WasiError {
 impl WasiError {
     pub fn as_raw_errno(self) -> wasi::__wasi_errno_t {
         self as wasi::__wasi_errno_t
-    }
-}
-
-impl fmt::Display for WasiError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            _ => write!(f, "{}", self),
-        }
     }
 }
 
