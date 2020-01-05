@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 use crate::ctx::WasiCtx;
-use crate::{hostcalls_impl, wasi, wasi32};
+use crate::{wasi, wasi32};
 
 hostcalls! {
     pub unsafe fn fd_close(wasi_ctx: &mut WasiCtx, memory: &mut [u8], fd: wasi::__wasi_fd_t,) -> wasi::__wasi_errno_t;
