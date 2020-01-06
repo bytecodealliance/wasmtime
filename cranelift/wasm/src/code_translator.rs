@@ -1151,7 +1151,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             segment,
             table: table_index,
         } => {
-            // The WebAssembly MVP only supports one table and we assume it here.
             let table = state.get_table(builder.func, *table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();

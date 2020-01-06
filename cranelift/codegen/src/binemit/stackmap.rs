@@ -6,10 +6,19 @@ use alloc::vec::Vec;
 type Num = u32;
 const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 
-/// Wrapper class for longer bit vectors that cannot be represented by a single BitSet.
+/// A stack map is a bitmap with one bit per machine word on the stack. Stack
+/// maps are created at `safepoint` instructions and record all live reference
+/// values that are on the stack. All slot kinds, except `OutgoingArg` are
+/// captured in a stack map. The `OutgoingArg`'s will be captured in the callee
+/// function as `IncomingArg`'s.
+///
+/// The first value in the bitmap is of the lowest addressed slot on the stack.
+/// As all stacks in Isa's supported by Cranelift grow down, this means that
+/// first value is of the top of the stack and values proceed down the stack.
 #[derive(Clone, Debug)]
 pub struct Stackmap {
     bitmap: Vec<BitSet<Num>>,
+    mapped_words: u32,
 }
 
 impl Stackmap {
@@ -27,32 +36,37 @@ impl Stackmap {
         for val in args {
             if let Some(value_loc) = loc.get(*val) {
                 match *value_loc {
-                    ir::ValueLoc::Stack(stack_slot) => live_ref_in_stack_slot.insert(stack_slot),
-                    _ => false,
-                };
+                    ir::ValueLoc::Stack(stack_slot) => {
+                        live_ref_in_stack_slot.insert(stack_slot);
+                    }
+                    _ => {}
+                }
             }
         }
 
-        // SpiderMonkey stackmap structure:
-        // <trap reg dump> + <general spill> + <frame> + <inbound args>
-        // Bit vector goes from lower addresses to higher addresses.
-
-        // TODO: Get trap register layout from Spidermonkey and prepend to bitvector below.
         let stack = &func.stack_slots;
-        let frame_size = stack.frame_size.unwrap();
-        let word_size = ir::stackslot::StackSize::from(isa.pointer_bytes());
-        let num_words = (frame_size / word_size) as usize;
-        let mut vec = alloc::vec::Vec::with_capacity(num_words);
+        let info = func.stack_slots.layout_info.unwrap();
 
+        // Refer to the doc comment for `Stackmap` above to understand the
+        // bitmap representation used here.
+        let map_size = (info.frame_size + info.inbound_args_size) as usize;
+        let word_size = isa.pointer_bytes() as usize;
+        let num_words = map_size / word_size;
+
+        let mut vec = alloc::vec::Vec::with_capacity(num_words);
         vec.resize(num_words, false);
 
-        // Frame (includes spills and inbound args).
         for (ss, ssd) in stack.iter() {
-            if live_ref_in_stack_slot.contains(&ss) {
-                // Assumption: greater magnitude of offset imply higher address.
-                let index = (((ssd.offset.unwrap().abs() as u32) - ssd.size) / word_size) as usize;
-                vec[index] = true;
+            if !live_ref_in_stack_slot.contains(&ss)
+                || ssd.kind == ir::stackslot::StackSlotKind::OutgoingArg
+            {
+                continue;
             }
+
+            debug_assert!(ssd.size as usize == word_size);
+            let bytes_from_bottom = info.frame_size as i32 + ssd.offset.unwrap();
+            let words_from_bottom = (bytes_from_bottom as usize) / word_size;
+            vec[words_from_bottom] = true;
         }
 
         Self::from_slice(&vec)
@@ -73,7 +87,10 @@ impl Stackmap {
             }
             bitmap.push(BitSet(curr_word));
         }
-        Self { bitmap }
+        Self {
+            mapped_words: len as u32,
+            bitmap,
+        }
     }
 
     /// Returns a specified bit.
@@ -82,6 +99,16 @@ impl Stackmap {
         let word_index = bit_index / NUM_BITS;
         let word_offset = (bit_index % NUM_BITS) as u8;
         self.bitmap[word_index].contains(word_offset)
+    }
+
+    /// Returns the raw bitmap that represents this stack map.
+    pub fn as_slice(&self) -> &[BitSet<u32>] {
+        &self.bitmap
+    }
+
+    /// Returns the number of words represented by this stack map.
+    pub fn mapped_words(&self) -> u32 {
+        self.mapped_words
     }
 }
 

@@ -142,7 +142,10 @@ impl SubTest for TestBinEmit {
             .values()
             .map(|slot| slot.offset.unwrap())
             .min();
-        func.stack_slots.frame_size = min_offset.map(|off| (-off) as u32);
+        func.stack_slots.layout_info = min_offset.map(|off| ir::StackLayoutInfo {
+            frame_size: (-off) as u32,
+            inbound_args_size: 0,
+        });
 
         let opt_level = isa.flags().opt_level();
 

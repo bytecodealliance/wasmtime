@@ -53,7 +53,7 @@ pub use crate::ir::libcall::{get_libcall_funcref, get_probestack_funcref, LibCal
 pub use crate::ir::memflags::MemFlags;
 pub use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint};
 pub use crate::ir::sourceloc::SourceLoc;
-pub use crate::ir::stackslot::{StackSlotData, StackSlotKind, StackSlots};
+pub use crate::ir::stackslot::{StackLayoutInfo, StackSlotData, StackSlotKind, StackSlots};
 pub use crate::ir::table::TableData;
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
