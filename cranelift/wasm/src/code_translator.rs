@@ -28,7 +28,7 @@ use crate::state::{ControlStackFrame, ElseData, FuncTranslationState, ModuleTran
 use crate::translation_utils::{
     blocktype_params_results, ebb_with_params, f32_translation, f64_translation,
 };
-use crate::translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
+use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
 use crate::wasm_unsupported;
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
@@ -95,6 +95,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     let flags = ir::MemFlags::trusted();
                     builder.ins().load(ty, flags, addr, offset)
                 }
+                GlobalVariable::Custom => environ.translate_custom_global_get(
+                    builder.cursor(),
+                    GlobalIndex::from_u32(*global_index),
+                )?,
             };
             state.push1(val);
         }
@@ -107,6 +111,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     let val = state.pop1();
                     debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                     builder.ins().store(flags, val, addr, offset);
+                }
+                GlobalVariable::Custom => {
+                    let val = state.pop1();
+                    environ.translate_custom_global_set(
+                        builder.cursor(),
+                        GlobalIndex::from_u32(*global_index),
+                        val,
+                    )?;
                 }
             }
         }

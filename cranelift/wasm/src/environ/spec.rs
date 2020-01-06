@@ -36,6 +36,9 @@ pub enum GlobalVariable {
         /// The global variable's type.
         ty: ir::Type,
     },
+
+    /// This is a global variable that needs to be handled by the environment.
+    Custom,
 }
 
 /// A WebAssembly translation error.
@@ -405,6 +408,23 @@ pub trait FuncEnvironment: TargetEnvironment {
 
     /// Translate a `ref.func` WebAssembly instruction.
     fn translate_ref_func(&mut self, pos: FuncCursor, func_index: u32) -> WasmResult<ir::Value>;
+
+    /// Translate a `global.get` WebAssembly instruction at `pos` for a global
+    /// that is custom.
+    fn translate_custom_global_get(
+        &mut self,
+        pos: FuncCursor,
+        global_index: GlobalIndex,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate a `global.set` WebAssembly instruction at `pos` for a global
+    /// that is custom.
+    fn translate_custom_global_set(
+        &mut self,
+        pos: FuncCursor,
+        global_index: GlobalIndex,
+        val: ir::Value,
+    ) -> WasmResult<()>;
 
     /// Emit code at the beginning of every wasm loop.
     ///

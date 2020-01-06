@@ -504,6 +504,23 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().null(self.reference_type()))
     }
+
+    fn translate_custom_global_get(
+        &mut self,
+        mut pos: FuncCursor,
+        _global_index: GlobalIndex,
+    ) -> WasmResult<ir::Value> {
+        Ok(pos.ins().iconst(I32, -1))
+    }
+
+    fn translate_custom_global_set(
+        &mut self,
+        _pos: FuncCursor,
+        _global_index: GlobalIndex,
+        _val: ir::Value,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
 }
 
 impl TargetEnvironment for DummyEnvironment {
