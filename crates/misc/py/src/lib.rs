@@ -10,7 +10,6 @@ use pyo3::types::{PyAny, PyBytes, PyDict, PySet};
 use pyo3::wrap_pyfunction;
 use std::rc::Rc;
 use wasmtime_interface_types::ModuleData;
-use wasmtime_jit::Features;
 
 mod function;
 mod instance;
@@ -86,13 +85,7 @@ pub fn instantiate(
 ) -> PyResult<Py<InstantiateResultObject>> {
     let wasm_data = buffer_source.as_bytes();
 
-    let mut config = wasmtime::Config::new();
-    config.features(Features {
-        multi_value: true,
-        ..Default::default()
-    });
-
-    let engine = wasmtime::Engine::new(&config);
+    let engine = wasmtime::Engine::new(&wasmtime::Config::new().wasm_multi_value(true));
     let store = wasmtime::HostRef::new(wasmtime::Store::new(&engine));
 
     let module = wasmtime::HostRef::new(wasmtime::Module::new(&store, wasm_data).map_err(err2py)?);

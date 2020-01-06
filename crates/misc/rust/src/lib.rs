@@ -6,7 +6,6 @@ pub mod __rt {
     pub use anyhow;
     pub use wasmtime;
     pub use wasmtime_interface_types;
-    pub use wasmtime_jit;
     pub use wasmtime_wasi;
 
     use std::convert::{TryFrom, TryInto};

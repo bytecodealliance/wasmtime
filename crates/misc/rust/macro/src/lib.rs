@@ -51,12 +51,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
             use #root::wasmtime::{HostRef, Config, Extern, Engine, Store, Instance, Module};
             use #root::anyhow::{bail, format_err};
 
-            let mut config = Config::new();
-            config.features(#root::wasmtime_jit::Features {
-                multi_value: true,
-                ..Default::default()
-            });
-            let engine = Engine::new(&config);
+            let engine = Engine::new(Config::new().wasm_multi_value(true));
             let store = HostRef::new(Store::new(&engine));
             let global_exports = store.borrow().global_exports().clone();
 

@@ -38,7 +38,6 @@ use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_environ::{settings, settings::Configurable};
 use wasmtime_interface_types::ModuleData;
-use wasmtime_jit::Features;
 use wasmtime_wasi::create_wasi_instance;
 use wasmtime_wasi::old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0;
 #[cfg(feature = "wasi-c")]
@@ -231,15 +230,15 @@ fn main() -> Result<()> {
         exit(1);
     }
 
+    let mut config = Config::new();
     let mut flag_builder = settings::builder();
-    let mut features: Features = Default::default();
 
     // There are two possible traps for division, and this way
     // we get the proper one if code traps.
     flag_builder.enable("avoid_div_traps")?;
 
     // Enable/disable producing of debug info.
-    let debug_info = args.flag_g;
+    config.debug_info(args.flag_g);
 
     // Enable verifier passes in debug mode.
     if cfg!(debug_assertions) {
@@ -249,7 +248,7 @@ fn main() -> Result<()> {
     // Enable SIMD if requested
     if args.flag_enable_simd {
         flag_builder.enable("enable_simd")?;
-        features.simd = true;
+        config.wasm_simd(true);
     }
 
     // Enable optimization if requested.
@@ -260,11 +259,8 @@ fn main() -> Result<()> {
     // Decide how to compile.
     let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
 
-    let mut config = Config::new();
     config
-        .features(features)
         .flags(settings::Flags::new(flag_builder))
-        .debug_info(debug_info)
         .strategy(strategy);
     let engine = Engine::new(&config);
     let store = HostRef::new(Store::new(&engine));
