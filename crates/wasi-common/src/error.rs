@@ -3,11 +3,12 @@
 use crate::wasi;
 use std::convert::Infallible;
 use std::num::TryFromIntError;
-use std::{ffi, fmt, str};
+use std::{ffi, str};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 #[repr(u16)]
+#[error("{:?}", self)]
 pub enum WasiError {
     ESUCCESS = wasi::__WASI_ERRNO_SUCCESS,
     E2BIG = wasi::__WASI_ERRNO_2BIG,
@@ -94,41 +95,18 @@ impl WasiError {
     }
 }
 
-impl fmt::Display for WasiError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            _ => write!(f, "{:?}", self),
-        }
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum Error {
-    Wasi(WasiError),
-    Io(std::io::Error),
+    #[error("WASI error code: {0}")]
+    Wasi(#[from] WasiError),
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
     #[cfg(unix)]
-    Nix(yanix::YanixError),
+    #[error("Yanix error: {0}")]
+    Yanix(#[from] yanix::YanixError),
     #[cfg(windows)]
-    Win(winx::winerror::WinError),
-}
-
-impl From<WasiError> for Error {
-    fn from(err: WasiError) -> Self {
-        Self::Wasi(err)
-    }
-}
-
-#[cfg(unix)]
-impl From<yanix::YanixError> for Error {
-    fn from(err: yanix::YanixError) -> Self {
-        Self::Nix(err)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
+    #[error("Winx error: {0}")]
+    Winx(#[from] winx::winerror::WinError),
 }
 
 impl From<TryFromIntError> for Error {
@@ -161,20 +139,13 @@ impl From<&ffi::NulError> for Error {
     }
 }
 
-#[cfg(windows)]
-impl From<winx::winerror::WinError> for Error {
-    fn from(err: winx::winerror::WinError) -> Self {
-        Self::Win(err)
-    }
-}
-
 impl Error {
     pub(crate) fn as_wasi_errno(&self) -> wasi::__wasi_errno_t {
         match self {
             Self::Wasi(no) => no.as_raw_errno(),
             Self::Io(e) => errno_from_ioerror(e.to_owned()),
             #[cfg(unix)]
-            Self::Nix(err) => {
+            Self::Yanix(err) => {
                 use yanix::YanixError::*;
                 let err = match err {
                     Errno(errno) => crate::sys::host_impl::errno_from_nix(*errno),
@@ -184,7 +155,7 @@ impl Error {
                 err.as_wasi_errno()
             }
             #[cfg(windows)]
-            Self::Win(err) => crate::sys::host_impl::errno_from_win(*err),
+            Self::Winx(err) => crate::sys::host_impl::errno_from_win(*err),
         }
     }
     pub const ESUCCESS: Self = Error::Wasi(WasiError::ESUCCESS);
@@ -264,19 +235,6 @@ impl Error {
     pub const ETXTBSY: Self = Error::Wasi(WasiError::ETXTBSY);
     pub const EXDEV: Self = Error::Wasi(WasiError::EXDEV);
     pub const ENOTCAPABLE: Self = Error::Wasi(WasiError::ENOTCAPABLE);
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Io(e) => e.fmt(f),
-            Self::Wasi(e) => e.fmt(f),
-            #[cfg(unix)]
-            Self::Nix(e) => e.fmt(f),
-            #[cfg(windows)]
-            Self::Win(e) => e.fmt(f),
-        }
-    }
 }
 
 fn errno_from_ioerror(e: &std::io::Error) -> wasi::__wasi_errno_t {
