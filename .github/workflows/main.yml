@@ -408,7 +408,7 @@ jobs:
   # github releases and/or tags for pushes.
   publish:
     name: Publish
-    needs: [doc_book, doc_api, wheels, build, wheels]
+    needs: [doc_book, doc_api, wheels, build]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
@@ -504,7 +504,7 @@ jobs:
         find dist/ -name '*.whl' -type f -exec cp '{}' tmp/whl -v \;
 
     - name: Publish Python wheels on Pypi
-      uses: pypa/gh-action-pypi-publish@master
+      uses: pypa/gh-action-pypi-publish@v1.0.0a0
       if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
       with:
         user: __token__
