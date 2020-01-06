@@ -132,6 +132,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (arg1, arg2, cond) = state.pop3();
             state.push1(builder.ins().select(cond, arg1, arg2));
         }
+        Operator::TypedSelect { ty: _ } => {
+            // We ignore the explicit type parameter as it is only needed for
+            // validation, which we require to have been performed before
+            // translation.
+            let (arg1, arg2, cond) = state.pop3();
+            state.push1(builder.ins().select(cond, arg1, arg2));
+        }
         Operator::Nop => {
             // We do nothing
         }
@@ -967,9 +974,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::F32Lt | Operator::F64Lt => translate_fcmp(FloatCC::LessThan, builder, state),
         Operator::F32Le | Operator::F64Le => {
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
-        }
-        Operator::TypedSelect { .. } => {
-            return Err(wasm_unsupported!("proposed typed select operator {:?}", op))
         }
         Operator::RefNull => state.push1(builder.ins().null(environ.reference_type())),
         Operator::RefIsNull => {
