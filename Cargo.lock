@@ -2055,6 +2055,7 @@ dependencies = [
  "env_logger 0.7.1",
  "libfuzzer-sys",
  "log",
+ "wasmtime",
  "wasmtime-fuzzing",
  "wasmtime-jit",
 ]
