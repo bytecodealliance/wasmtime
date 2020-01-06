@@ -267,12 +267,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
+            let next_ebb = frame.following_code();
 
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let return_count = frame.num_return_values();
-                builder
-                    .ins()
-                    .jump(frame.following_code(), state.peekn(return_count));
+                let return_args = state.peekn_mut(return_count);
+                let next_ebb_types = builder.func.dfg.ebb_param_types(next_ebb);
+                bitcast_arguments(return_args, &next_ebb_types, builder);
+                builder.ins().jump(frame.following_code(), return_args);
                 // You might expect that if we just finished an `if` block that
                 // didn't have a corresponding `else` block, then we would clean
                 // up our duplicate set of parameters that we pushed earlier
@@ -280,16 +282,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // since we truncate the stack back to the original height
                 // below.
             }
-            builder.switch_to_block(frame.following_code());
-            builder.seal_block(frame.following_code());
+            builder.switch_to_block(next_ebb);
+            builder.seal_block(next_ebb);
             // If it is a loop we also have to seal the body loop block
             if let ControlStackFrame::Loop { header, .. } = frame {
                 builder.seal_block(header)
             }
             state.stack.truncate(frame.original_stack_size());
-            state
-                .stack
-                .extend_from_slice(builder.ebb_params(frame.following_code()));
+            state.stack.extend_from_slice(builder.ebb_params(next_ebb));
         }
         /**************************** Branch instructions *********************************
          * The branch instructions all have as arguments a target nesting level, which
@@ -325,9 +325,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 };
                 (return_count, frame.br_destination())
             };
-            builder
-                .ins()
-                .jump(br_destination, state.peekn(return_count));
+
+            // Bitcast any vector arguments to their default type, I8X16, before jumping.
+            let destination_args = state.peekn_mut(return_count);
+            let destination_types = builder.func.dfg.ebb_param_types(br_destination);
+            bitcast_arguments(
+                destination_args,
+                &destination_types[..return_count],
+                builder,
+            );
+
+            builder.ins().jump(br_destination, destination_args);
             state.popn(return_count);
             state.reachable = false;
         }
@@ -406,7 +414,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                         frame.set_branched_to_exit();
                         frame.br_destination()
                     };
-                    builder.ins().jump(real_dest_ebb, state.peekn(return_count));
+
+                    // Bitcast any vector arguments to their default type, I8X16, before jumping.
+                    let destination_args = state.peekn_mut(return_count);
+                    let destination_types = builder.func.dfg.ebb_param_types(real_dest_ebb);
+                    bitcast_arguments(
+                        destination_args,
+                        &destination_types[..return_count],
+                        builder,
+                    );
+
+                    builder.ins().jump(real_dest_ebb, destination_args);
                 }
                 state.popn(return_count);
             }
@@ -420,10 +438,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 (return_count, frame.br_destination())
             };
             {
-                let args = state.peekn(return_count);
+                let return_args = state.peekn_mut(return_count);
+                let return_types = &builder.func.signature.return_types();
+                bitcast_arguments(return_args, &return_types, builder);
                 match environ.return_mode() {
-                    ReturnMode::NormalReturns => builder.ins().return_(args),
-                    ReturnMode::FallthroughReturn => builder.ins().jump(br_destination, args),
+                    ReturnMode::NormalReturns => builder.ins().return_(return_args),
+                    ReturnMode::FallthroughReturn => {
+                        builder.ins().jump(br_destination, return_args)
+                    }
                 };
             }
             state.popn(return_count);
@@ -436,11 +458,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ************************************************************************************/
         Operator::Call { function_index } => {
             let (fref, num_args) = state.get_direct_func(builder.func, *function_index, environ)?;
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let callee_signature =
+                &builder.func.dfg.signatures[builder.func.dfg.ext_funcs[fref].signature];
+            let args = state.peekn_mut(num_args);
+            bitcast_arguments(args, &callee_signature.param_types(), builder);
+
             let call = environ.translate_call(
                 builder.cursor(),
                 FuncIndex::from_u32(*function_index),
                 fref,
-                state.peekn(num_args),
+                args,
             )?;
             let inst_results = builder.inst_results(call);
             debug_assert_eq!(
@@ -459,6 +488,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (sigref, num_args) = state.get_indirect_sig(builder.func, *index, environ)?;
             let table = state.get_table(builder.func, *table_index, environ)?;
             let callee = state.pop1();
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let callee_signature = &builder.func.dfg.signatures[sigref];
+            let args = state.peekn_mut(num_args);
+            bitcast_arguments(args, &callee_signature.param_types(), builder);
+
             let call = environ.translate_call_indirect(
                 builder.cursor(),
                 TableIndex::from_u32(*table_index),
@@ -1635,6 +1670,11 @@ fn translate_br_if(
 ) {
     let val = state.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, state);
+
+    // Bitcast any vector arguments to their default type, I8X16, before jumping.
+    let destination_types = builder.func.dfg.ebb_param_types(br_destination);
+    bitcast_arguments(inputs, &destination_types[..inputs.len()], builder);
+
     builder.ins().brnz(val, br_destination, inputs);
 
     #[cfg(feature = "basic-blocks")]
@@ -1649,7 +1689,7 @@ fn translate_br_if(
 fn translate_br_if_args(
     relative_depth: u32,
     state: &mut FuncTranslationState,
-) -> (ir::Ebb, &[ir::Value]) {
+) -> (ir::Ebb, &mut [ir::Value]) {
     let i = state.control_stack.len() - 1 - (relative_depth as usize);
     let (return_count, br_destination) = {
         let frame = &mut state.control_stack[i];
@@ -1663,7 +1703,7 @@ fn translate_br_if_args(
         };
         (return_count, frame.br_destination())
     };
-    let inputs = state.peekn(return_count);
+    let inputs = state.peekn_mut(return_count);
     (br_destination, inputs)
 }
 
@@ -1826,7 +1866,7 @@ fn type_of(operator: &Operator) -> Type {
 
 /// Some SIMD operations only operate on I8X16 in CLIF; this will convert them to that type by
 /// adding a raw_bitcast if necessary.
-fn optionally_bitcast_vector(
+pub fn optionally_bitcast_vector(
     value: Value,
     needed_type: Type,
     builder: &mut FunctionBuilder,
@@ -1861,4 +1901,29 @@ fn pop2_with_bitcast(
     let bitcast_a = optionally_bitcast_vector(a, needed_type, builder);
     let bitcast_b = optionally_bitcast_vector(b, needed_type, builder);
     (bitcast_a, bitcast_b)
+}
+
+/// A helper for bitcasting a sequence of values (e.g. function arguments). If a value is a
+/// vector type that does not match its expected type, this will modify the value in place to point
+/// to the result of a `raw_bitcast`. This conversion is necessary to translate Wasm code that
+/// uses `V128` as function parameters (or implicitly in EBB parameters) and still use specific
+/// CLIF types (e.g. `I32X4`) in the function body.
+pub fn bitcast_arguments(
+    arguments: &mut [Value],
+    expected_types: &[Type],
+    builder: &mut FunctionBuilder,
+) {
+    assert_eq!(arguments.len(), expected_types.len());
+    for (i, t) in expected_types.iter().enumerate() {
+        if t.is_vector() {
+            assert!(
+                builder.func.dfg.value_type(arguments[i]).is_vector(),
+                "unexpected type mismatch: expected {}, argument {} was actually of type {}",
+                t,
+                arguments[i],
+                builder.func.dfg.value_type(arguments[i])
+            );
+            arguments[i] = optionally_bitcast_vector(arguments[i], *t, builder)
+        }
+    }
 }

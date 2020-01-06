@@ -14,6 +14,7 @@ use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
 use crate::HashMap;
+use alloc::vec::Vec;
 use core::fmt;
 use core::iter;
 use core::mem;
@@ -774,6 +775,14 @@ impl DataFlowGraph {
     /// Get the parameters on `ebb`.
     pub fn ebb_params(&self, ebb: Ebb) -> &[Value] {
         self.ebbs[ebb].params.as_slice(&self.value_lists)
+    }
+
+    /// Get the types of the parameters on `ebb`.
+    pub fn ebb_param_types(&self, ebb: Ebb) -> Vec<Type> {
+        self.ebb_params(ebb)
+            .iter()
+            .map(|&v| self.value_type(v))
+            .collect()
     }
 
     /// Append a parameter with type `ty` to `ebb`.
