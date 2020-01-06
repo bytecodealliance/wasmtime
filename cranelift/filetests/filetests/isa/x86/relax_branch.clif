@@ -104,7 +104,7 @@ function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] ba
 @0098 [DynRexOp1icscc#39,%rbx]           v76 = icmp.i32 eq v47, v75
 @0098 [Op2urm_noflags_abcd#4b6,%rbx]     v77 = bint.i32 v76
 @0099 [DynRexOp1rr#21,%r10]              v78 = band.i32 v50, v77
-@009a [DynRexOp1tjccb#74]                brz v78, ebb9
+@009a [RexOp1tjccb#74]                   brz v78, ebb9
 @009a [-]                                fallthrough ebb12
 
                                 ebb12:

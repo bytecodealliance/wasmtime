@@ -8,7 +8,7 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
                           ebb0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i64):
 [RexOp1pu_id#b8]              v5 = iconst.i32 0
 [RexOp1pu_id#b8]              v6 = iconst.i32 0
-[DynRexOp1tjccb#74]           brz v6, ebb10
+[RexOp1tjccb#74]              brz v6, ebb10
 [Op1jmpb#eb]                  jump ebb3(v5, v5, v5, v5, v5, v5, v0, v1, v2, v3)
 
                           ebb3(v15: i32, v17: i32, v25: i32, v31: i32, v40: i32, v47: i32, v54: i32, v61: i32, v68: i32, v75: i32):
@@ -16,7 +16,7 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
 
                           ebb6:
 [RexOp1pu_id#b8]              v8 = iconst.i32 0
-[DynRexOp1tjccb#75]           brnz v8, ebb5
+[RexOp1tjccb#75]              brnz v8, ebb5
 [Op1jmpb#eb]                  jump ebb20
 
                           ebb20:
@@ -25,16 +25,16 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
 [DynRexOp1icscc#39]           v12 = icmp.i32 eq v15, v11
 [RexOp2urm_noflags#4b6]       v13 = bint.i32 v12
 [DynRexOp1rr#21]              v14 = band v9, v13
-[DynRexOp1tjccb#75]           brnz v14, ebb6
+[RexOp1tjccb#75]              brnz v14, ebb6
 [Op1jmpb#eb]                  jump ebb7
 
                           ebb7:
-[DynRexOp1tjccb#74]           brz.i32 v17, ebb8
+[RexOp1tjccb#74]              brz.i32 v17, ebb8
 [Op1jmpb#eb]                  jump ebb17
 
                           ebb17:
 [RexOp1pu_id#b8]              v18 = iconst.i32 0
-[DynRexOp1tjccb#74]           brz v18, ebb9
+[RexOp1tjccb#74]              brz v18, ebb9
 [Op1jmpb#eb]                  jump ebb16
 
                           ebb16:
@@ -53,7 +53,7 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
 [RexOp1pu_id#b8]              v27 = iconst.i32 3
 [RexOp1pu_id#b8]              v28 = iconst.i32 4
 [DynRexOp1rr#09]              v35 = bor.i32 v31, v13
-[DynRexOp1tjccb#75]           brnz v35, ebb15(v27)
+[RexOp1tjccb#75]              brnz v35, ebb15(v27)
 [Op1jmpb#eb]                  jump ebb15(v28)
 
                           ebb15(v36: i32):
@@ -71,12 +71,12 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
 
                           ebb2(v7: i32, v45: i32, v52: i32, v59: i32, v66: i32, v73: i32):
 [RexOp1pu_id#b8]              v44 = iconst.i32 0
-[DynRexOp1tjccb#74]           brz v44, ebb12
+[RexOp1tjccb#74]              brz v44, ebb12
 [Op1jmpb#eb]                  jump ebb18
 
                           ebb18:
 [RexOp1pu_id#b8]              v50 = iconst.i32 11
-[DynRexOp1tjccb#74]           brz v50, ebb14
+[RexOp1tjccb#74]              brz v50, ebb14
 [Op1jmpb#eb]                  jump ebb19
 
                           ebb19:
