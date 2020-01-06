@@ -11,6 +11,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0"
 wasmtime-environ = { path = "../environ" }
 faerie = "0.13.0"
 more-asserts = "0.2.1"

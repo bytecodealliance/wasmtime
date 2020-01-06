@@ -12,6 +12,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0"
 cranelift-codegen = { version = "0.52.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.52.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.52.0", features = ["enable-serde"] }

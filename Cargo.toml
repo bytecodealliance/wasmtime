@@ -60,7 +60,8 @@ members = [
 lightbeam = [
     "wasmtime-environ/lightbeam",
     "wasmtime-jit/lightbeam",
-    "wasmtime-wast/lightbeam"
+    "wasmtime-wast/lightbeam",
+    "wasmtime/lightbeam",
 ]
 wasi-c = ["wasmtime-wasi-c"]
 test_programs = ["test-programs/test_programs"]

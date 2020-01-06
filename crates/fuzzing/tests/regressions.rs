@@ -5,10 +5,11 @@
 //! use the Wasm binary by including it via
 //! `include_bytes!("./regressions/some-descriptive-name.wasm")`.
 
+use wasmtime::Strategy;
 use wasmtime_fuzzing::oracles;
 
 #[test]
 fn instantiate_empty_module() {
     let data = wat::parse_str(include_str!("./regressions/empty.wat")).unwrap();
-    oracles::instantiate(&data, wasmtime_jit::CompilationStrategy::Auto);
+    oracles::instantiate(&data, Strategy::Auto);
 }

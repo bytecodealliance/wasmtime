@@ -2016,6 +2016,7 @@ dependencies = [
 name = "wasmtime-environ"
 version = "0.7.0"
 dependencies = [
+ "anyhow",
  "base64 0.11.0",
  "bincode",
  "cranelift-codegen",
@@ -2115,6 +2116,7 @@ dependencies = [
 name = "wasmtime-obj"
 version = "0.7.0"
 dependencies = [
+ "anyhow",
  "faerie",
  "more-asserts",
  "wasmtime-environ",

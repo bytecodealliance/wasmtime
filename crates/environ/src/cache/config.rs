@@ -1,6 +1,7 @@
 //! Module for configuring the cache system.
 
 use super::worker;
+use anyhow::{anyhow, bail, Context, Result};
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
@@ -137,32 +138,32 @@ pub fn init<P: AsRef<Path> + Debug>(
 
 /// Creates a new configuration file at specified path, or default path if None is passed.
 /// Fails if file already exists.
-pub fn create_new_config<P: AsRef<Path> + Debug>(
-    config_file: Option<P>,
-) -> Result<PathBuf, String> {
+pub fn create_new_config<P: AsRef<Path> + Debug>(config_file: Option<P>) -> Result<PathBuf> {
     trace!("Creating new config file, path: {:?}", config_file);
 
-    let config_file = config_file.as_ref().map_or_else(
-        || DEFAULT_CONFIG_PATH.as_ref().map(|p| p.as_ref()),
-        |p| Ok(p.as_ref()),
-    )?;
+    let config_file = config_file
+        .as_ref()
+        .map_or_else(
+            || DEFAULT_CONFIG_PATH.as_ref().map(|p| p.as_ref()),
+            |p| Ok(p.as_ref()),
+        )
+        .map_err(|s| anyhow!("{}", s))?;
 
     if config_file.exists() {
-        return Err(format!(
+        bail!(
             "Specified config file already exists! Path: {}",
             config_file.display()
-        ));
+        );
     }
 
     let parent_dir = config_file
         .parent()
-        .ok_or_else(|| format!("Invalid cache config path: {}", config_file.display()))?;
+        .ok_or_else(|| anyhow!("Invalid cache config path: {}", config_file.display()))?;
 
-    fs::create_dir_all(parent_dir).map_err(|err| {
+    fs::create_dir_all(parent_dir).with_context(|| {
         format!(
-            "Failed to create config directory, config path: {}, error: {}",
+            "Failed to create config directory, config path: {}",
             config_file.display(),
-            err
         )
     })?;
 
@@ -175,11 +176,10 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(
 enabled = true
 ";
 
-    fs::write(&config_file, &content).map_err(|err| {
+    fs::write(&config_file, &content).with_context(|| {
         format!(
-            "Failed to flush config to the disk, path: {}, msg: {}",
+            "Failed to flush config to the disk, path: {}",
             config_file.display(),
-            err
         )
     })?;
 

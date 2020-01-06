@@ -1,4 +1,5 @@
 use crate::context::Context;
+use anyhow::Result;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -158,15 +159,29 @@ impl Config {
         self
     }
 
-    /// Configures the compilation `strategy` provided, indicating which
-    /// backend will be used for compiling WebAssembly to native code.
+    /// Configures which compilation strategy will be used for wasm modules.
     ///
-    /// Currently the primary strategies are with cranelift (an optimizing
-    /// compiler) or lightbeam (a fast single-pass JIT which produces code
-    /// quickly).
-    pub fn strategy(&mut self, strategy: CompilationStrategy) -> &mut Self {
-        self.strategy = strategy;
-        self
+    /// This method can be used to configure which compiler is used for wasm
+    /// modules, and for more documentation consult the [`Strategy`] enumeration
+    /// and its documentation.
+    ///
+    /// # Errors
+    ///
+    /// Some compilation strategies require compile-time options of `wasmtime`
+    /// itself to be set, but if they're not set and the strategy is specified
+    /// here then an error will be returned.
+    pub fn strategy(&mut self, strategy: Strategy) -> Result<&mut Self> {
+        self.strategy = match strategy {
+            Strategy::Auto => CompilationStrategy::Auto,
+            Strategy::Cranelift => CompilationStrategy::Cranelift,
+            #[cfg(feature = "lightbeam")]
+            Strategy::Lightbeam => CompilationStrategy::Lightbeam,
+            #[cfg(not(feature = "lightbeam"))]
+            Strategy::Lightbeam => {
+                anyhow::bail!("lightbeam compilation strategy wasn't enabled at compile time");
+            }
+        };
+        Ok(self)
     }
 }
 
@@ -174,6 +189,30 @@ impl Default for Config {
     fn default() -> Config {
         Config::new()
     }
+}
+
+/// Possible Compilation strategies for a wasm module.
+#[non_exhaustive]
+#[derive(Clone, Debug)]
+pub enum Strategy {
+    /// An indicator that the compilation strategy should be automatically
+    /// selected.
+    ///
+    /// This is generally what you want for most projects and indicates that the
+    /// `wasmtime` crate itself should make the decision about what the best
+    /// code generator for a wasm module is.
+    ///
+    /// Currently this always defaults to Cranelift, but the default value will
+    /// change over time.
+    Auto,
+
+    /// Currently the default backend, Cranelift aims to be a reasonably fast
+    /// code generator which generates high quality machine code.
+    Cranelift,
+
+    /// A single-pass code generator that is faster than Cranelift but doesn't
+    /// produce as high-quality code.
+    Lightbeam,
 }
 
 // Engine

@@ -1,16 +1,13 @@
-use wasmtime_jit::CompilationStrategy;
+use anyhow::{bail, Result};
+use wasmtime::Strategy;
 
-pub fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> CompilationStrategy {
-    // Decide how to compile.
-    match (lightbeam, cranelift) {
-        #[cfg(feature = "lightbeam")]
-        (true, false) => CompilationStrategy::Lightbeam,
-        #[cfg(not(feature = "lightbeam"))]
-        (true, false) => panic!("--lightbeam given, but Lightbeam support is not enabled"),
-        (false, true) => CompilationStrategy::Cranelift,
-        (false, false) => CompilationStrategy::Auto,
-        (true, true) => panic!("Can't enable --cranelift and --lightbeam at the same time"),
-    }
+pub fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strategy> {
+    Ok(match (lightbeam, cranelift) {
+        (true, false) => Strategy::Lightbeam,
+        (false, true) => Strategy::Cranelift,
+        (false, false) => Strategy::Auto,
+        (true, true) => bail!("Can't enable --cranelift and --lightbeam at the same time"),
+    })
 }
 
 pub fn init_file_per_thread_logger(prefix: &'static str) {
