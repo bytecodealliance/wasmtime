@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [master, deploy-python-wheel-to-pypi]
+    branches: [master]
     tags-ignore: [dev]
   pull_request:
     branches: [master]
@@ -510,7 +510,6 @@ jobs:
         user: __token__
         password: ${{ secrets.pypi_password }}
         packages_dir: tmp/whl
-        repository_url: https://test.pypi.org/legacy/
 
     # ... and if this was an actual push (tag or `master`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`
