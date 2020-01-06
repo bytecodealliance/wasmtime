@@ -580,6 +580,7 @@ pub(crate) fn define(
             .ints(Interval::All)
             .floats(Interval::All)
             .simd_lanes(Interval::All)
+            .refs(Interval::All)
             .build(),
     );
 

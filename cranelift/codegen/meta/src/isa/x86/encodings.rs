@@ -239,6 +239,22 @@ impl PerCpuModeEncodings {
         self.enc64(inst.bind(R64), template.rex().w());
     }
 
+    fn enc_r32_r64_ld_st(&mut self, inst: &Instruction, w_bit: bool, template: Template) {
+        self.enc32(inst.clone().bind(R32).bind(Any), template.clone());
+
+        // REX-less encoding must come after REX encoding so we don't use it by
+        // default. Otherwise reg-alloc would never use r8 and up.
+        self.enc64(inst.clone().bind(R32).bind(Any), template.clone().rex());
+        self.enc64(inst.clone().bind(R32).bind(Any), template.clone());
+
+        if w_bit {
+            self.enc64(inst.clone().bind(R64).bind(Any), template.rex().w());
+        } else {
+            self.enc64(inst.clone().bind(R64).bind(Any), template.clone().rex());
+            self.enc64(inst.clone().bind(R64).bind(Any), template);
+        }
+    }
+
     /// Add encodings for `inst` to X86_64 with and without a REX prefix.
     fn enc_x86_64(&mut self, inst: impl Into<InstSpec> + Clone, template: Template) {
         // See above comment about the ordering of rex vs non-rex encodings.
@@ -858,6 +874,7 @@ fn define_memory(
 
     for recipe in &[rec_st, rec_stDisp8, rec_stDisp32] {
         e.enc_i32_i64_ld_st(store, true, recipe.opcodes(&MOV_STORE));
+        e.enc_r32_r64_ld_st(store, true, recipe.opcodes(&MOV_STORE));
         e.enc_x86_64(istore32.bind(I64).bind(Any), recipe.opcodes(&MOV_STORE));
         e.enc_i32_i64_ld_st(istore16, false, recipe.opcodes(&MOV_STORE_16));
     }
@@ -889,6 +906,7 @@ fn define_memory(
 
     for recipe in &[rec_ld, rec_ldDisp8, rec_ldDisp32] {
         e.enc_i32_i64_ld_st(load, true, recipe.opcodes(&MOV_LOAD));
+        e.enc_r32_r64_ld_st(load, true, recipe.opcodes(&MOV_LOAD));
         e.enc_x86_64(uload32.bind(I64), recipe.opcodes(&MOV_LOAD));
         e.enc64(sload32.bind(I64), recipe.opcodes(&MOVSXD).rex().w());
         e.enc_i32_i64_ld_st(uload16, true, recipe.opcodes(&MOVZX_WORD));

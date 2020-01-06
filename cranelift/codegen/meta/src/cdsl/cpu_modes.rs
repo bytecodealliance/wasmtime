@@ -37,6 +37,12 @@ impl CpuMode {
         assert!(self.default_legalize.is_none());
         self.default_legalize = Some(group.id);
     }
+    pub fn legalize_value_type(&mut self, lane_type: impl Into<ValueType>, group: &TransformGroup) {
+        assert!(self
+            .typed_legalize
+            .insert(lane_type.into(), group.id)
+            .is_none());
+    }
     pub fn legalize_type(&mut self, lane_type: impl Into<LaneType>, group: &TransformGroup) {
         assert!(self
             .typed_legalize
