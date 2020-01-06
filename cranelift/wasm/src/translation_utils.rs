@@ -131,7 +131,9 @@ pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::F32 => Ok(ir::types::F32),
         wasmparser::Type::F64 => Ok(ir::types::F64),
         wasmparser::Type::V128 => Ok(ir::types::I8X16),
-        wasmparser::Type::AnyRef | wasmparser::Type::AnyFunc => Ok(environ.reference_type()),
+        wasmparser::Type::AnyRef | wasmparser::Type::AnyFunc | wasmparser::Type::NullRef => {
+            Ok(environ.reference_type())
+        }
         ty => Err(wasm_unsupported!("type_to_type: wasm type {:?}", ty)),
     }
 }
@@ -171,6 +173,7 @@ pub fn blocktype_params_results(
             wasmparser::Type::V128 => (&[], &[wasmparser::Type::V128]),
             wasmparser::Type::AnyRef => (&[], &[wasmparser::Type::AnyRef]),
             wasmparser::Type::AnyFunc => (&[], &[wasmparser::Type::AnyFunc]),
+            wasmparser::Type::NullRef => (&[], &[wasmparser::Type::NullRef]),
             wasmparser::Type::EmptyBlockType => (&[], &[]),
             ty => return Err(wasm_unsupported!("blocktype_params_results: type {:?}", ty)),
         },
@@ -203,7 +206,7 @@ pub fn ebb_with_params<PE: TargetEnvironment + ?Sized>(
             wasmparser::Type::F64 => {
                 builder.append_ebb_param(ebb, ir::types::F64);
             }
-            wasmparser::Type::AnyRef | wasmparser::Type::AnyFunc => {
+            wasmparser::Type::AnyRef | wasmparser::Type::AnyFunc | wasmparser::Type::NullRef => {
                 builder.append_ebb_param(ebb, environ.reference_type());
             }
             wasmparser::Type::V128 => {
