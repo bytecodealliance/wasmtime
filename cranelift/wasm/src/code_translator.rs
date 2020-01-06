@@ -965,8 +965,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = builder.ins().is_null(arg);
             state.push1(val);
         }
-        Operator::RefFunc { .. } => {
-            return Err(wasm_unsupported!("proposed ref operator {:?}", op))
+        Operator::RefFunc { function_index } => {
+            state.push1(environ.translate_ref_func(builder.cursor(), *function_index)?);
         }
         Operator::AtomicNotify { .. }
         | Operator::I32AtomicWait { .. }
@@ -1089,55 +1089,72 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 table,
             )?);
         }
-        Operator::TableCopy { .. } => {
-            // The WebAssembly MVP only supports one table and wasmparser will
-            // ensure that the table index specified is zero.
-            let dst_table_index = 0;
-            let dst_table = state.get_table(builder.func, dst_table_index, environ)?;
-            let src_table_index = 0;
-            let src_table = state.get_table(builder.func, src_table_index, environ)?;
+        Operator::TableGrow { table } => {
+            let delta = state.pop1();
+            let init_value = state.pop1();
+            state.push1(environ.translate_table_grow(
+                builder.cursor(),
+                *table,
+                delta,
+                init_value,
+            )?);
+        }
+        Operator::TableGet { table } => {
+            let index = state.pop1();
+            state.push1(environ.translate_table_get(builder.cursor(), *table, index)?);
+        }
+        Operator::TableSet { table } => {
+            let value = state.pop1();
+            let index = state.pop1();
+            environ.translate_table_set(builder.cursor(), *table, value, index)?;
+        }
+        Operator::TableCopy {
+            dst_table: dst_table_index,
+            src_table: src_table_index,
+        } => {
+            let dst_table = state.get_table(builder.func, *dst_table_index, environ)?;
+            let src_table = state.get_table(builder.func, *src_table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();
             environ.translate_table_copy(
                 builder.cursor(),
-                TableIndex::from_u32(dst_table_index),
+                TableIndex::from_u32(*dst_table_index),
                 dst_table,
-                TableIndex::from_u32(src_table_index),
+                TableIndex::from_u32(*src_table_index),
                 src_table,
                 dest,
                 src,
                 len,
             )?;
         }
-        Operator::TableInit { segment, table: _ } => {
+        Operator::TableFill { table } => {
+            let len = state.pop1();
+            let val = state.pop1();
+            let dest = state.pop1();
+            environ.translate_table_fill(builder.cursor(), *table, dest, val, len)?;
+        }
+        Operator::TableInit {
+            segment,
+            table: table_index,
+        } => {
             // The WebAssembly MVP only supports one table and we assume it here.
-            let table_index = 0;
-            let table = state.get_table(builder.func, table_index, environ)?;
+            let table = state.get_table(builder.func, *table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();
             environ.translate_table_init(
                 builder.cursor(),
                 *segment,
-                TableIndex::from_u32(table_index),
+                TableIndex::from_u32(*table_index),
                 table,
                 dest,
                 src,
                 len,
             )?;
         }
-        Operator::TableFill { .. } => {
-            return Err(wasm_unsupported!("proposed table operator {:?}", op));
-        }
         Operator::ElemDrop { segment } => {
             environ.translate_elem_drop(builder.cursor(), *segment)?;
-        }
-        Operator::TableGet { .. } | Operator::TableSet { .. } | Operator::TableGrow { .. } => {
-            return Err(wasm_unsupported!(
-                "proposed reference types operator {:?}",
-                op
-            ));
         }
         Operator::V128Const { value } => {
             let data = value.bytes().to_vec().into();

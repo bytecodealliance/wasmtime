@@ -337,6 +337,32 @@ pub trait FuncEnvironment: TargetEnvironment {
         table: ir::Table,
     ) -> WasmResult<ir::Value>;
 
+    /// Translate a `table.grow` WebAssembly instruction.
+    fn translate_table_grow(
+        &mut self,
+        pos: FuncCursor,
+        table_index: u32,
+        delta: ir::Value,
+        init_value: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate a `table.get` WebAssembly instruction.
+    fn translate_table_get(
+        &mut self,
+        pos: FuncCursor,
+        table_index: u32,
+        index: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate a `table.set` WebAssembly instruction.
+    fn translate_table_set(
+        &mut self,
+        pos: FuncCursor,
+        table_index: u32,
+        value: ir::Value,
+        index: ir::Value,
+    ) -> WasmResult<()>;
+
     /// Translate a `table.copy` WebAssembly instruction.
     #[allow(clippy::too_many_arguments)]
     fn translate_table_copy(
@@ -348,6 +374,16 @@ pub trait FuncEnvironment: TargetEnvironment {
         src_table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()>;
+
+    /// Translate a `table.fill` WebAssembly instruction.
+    fn translate_table_fill(
+        &mut self,
+        pos: FuncCursor,
+        table_index: u32,
+        dst: ir::Value,
+        val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()>;
 
@@ -366,6 +402,9 @@ pub trait FuncEnvironment: TargetEnvironment {
 
     /// Translate a `elem.drop` WebAssembly instruction.
     fn translate_elem_drop(&mut self, pos: FuncCursor, seg_index: u32) -> WasmResult<()>;
+
+    /// Translate a `ref.func` WebAssembly instruction.
+    fn translate_ref_func(&mut self, pos: FuncCursor, func_index: u32) -> WasmResult<ir::Value>;
 
     /// Emit code at the beginning of every wasm loop.
     ///
