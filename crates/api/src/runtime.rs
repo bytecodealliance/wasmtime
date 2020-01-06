@@ -59,16 +59,102 @@ impl Config {
         self
     }
 
-    /// Indicates which WebAssembly features are enabled for this compilation
-    /// session.
+    /// Configures whether the WebAssembly threads proposal will be enabled for
+    /// compilation.
     ///
-    /// By default only stable features are enabled by default (and none are
-    /// fully stabilized yet at this time). If you're loading wasm modules
-    /// which may use non-MVP features you'll want to be sure to call this
-    /// method and enable the appropriate feature in the [`Features`]
-    /// structure.
-    pub fn features(&mut self, features: Features) -> &mut Self {
-        self.features = features;
+    /// The [WebAssembly threads proposal][threads] is not currently fully
+    /// standardized and is undergoing development. Additionally the support in
+    /// wasmtime itself is still being worked on. Support for this feature can
+    /// be enabled through this method for appropriate wasm modules.
+    ///
+    /// This feature gates items such as shared memories and atomic
+    /// instructions.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [threads]: https://github.com/webassembly/threads
+    pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
+        self.features.threads = enable;
+        self
+    }
+
+    /// Configures whether the WebAssembly reference types proposal will be
+    /// enabled for compilation.
+    ///
+    /// The [WebAssembly reference types proposal][proposal] is not currently
+    /// fully standardized and is undergoing development. Additionally the
+    /// support in wasmtime itself is still being worked on. Support for this
+    /// feature can be enabled through this method for appropriate wasm
+    /// modules.
+    ///
+    /// This feature gates items such as the `anyref` type and multiple tables
+    /// being in a module.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/reference-types
+    pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
+        self.features.reference_types = enable;
+        self
+    }
+
+    /// Configures whether the WebAssembly SIMD proposal will be
+    /// enabled for compilation.
+    ///
+    /// The [WebAssembly SIMD proposal][proposal] is not currently
+    /// fully standardized and is undergoing development. Additionally the
+    /// support in wasmtime itself is still being worked on. Support for this
+    /// feature can be enabled through this method for appropriate wasm
+    /// modules.
+    ///
+    /// This feature gates items such as the `v128` type and all of its
+    /// operators being in a module.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/simd
+    pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
+        self.features.simd = enable;
+        self
+    }
+
+    /// Configures whether the WebAssembly bulk memory operations proposal will
+    /// be enabled for compilation.
+    ///
+    /// The [WebAssembly bulk memory operations proposal][proposal] is not
+    /// currently fully standardized and is undergoing development.
+    /// Additionally the support in wasmtime itself is still being worked on.
+    /// Support for this feature can be enabled through this method for
+    /// appropriate wasm modules.
+    ///
+    /// This feature gates items such as the `memory.copy` instruction, passive
+    /// data/table segments, etc, being in a module.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/bulk-memory-operations
+    pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
+        self.features.bulk_memory = enable;
+        self
+    }
+
+    /// Configures whether the WebAssembly multi-value proposal will
+    /// be enabled for compilation.
+    ///
+    /// The [WebAssembly multi-value proposal][proposal] is not
+    /// currently fully standardized and is undergoing development.
+    /// Additionally the support in wasmtime itself is still being worked on.
+    /// Support for this feature can be enabled through this method for
+    /// appropriate wasm modules.
+    ///
+    /// This feature gates functions and blocks returning multiple values in a
+    /// module, for example.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/multi-value
+    pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
+        self.features.multi_value = enable;
         self
     }
 

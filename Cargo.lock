@@ -2132,7 +2132,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-environ",
  "wasmtime-interface-types",
- "wasmtime-jit",
  "wasmtime-runtime",
  "wasmtime-wasi",
 ]
@@ -2160,7 +2159,6 @@ dependencies = [
  "anyhow",
  "wasmtime",
  "wasmtime-interface-types",
- "wasmtime-jit",
  "wasmtime-rust-macro",
  "wasmtime-wasi",
 ]

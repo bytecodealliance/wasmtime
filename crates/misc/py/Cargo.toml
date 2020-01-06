@@ -19,7 +19,6 @@ test = false
 wasmtime = { path = "../../api" }
 wasmtime-environ = { path = "../../environ" }
 wasmtime-interface-types = { path = "../../interface-types" }
-wasmtime-jit = { path = "../../jit" }
 wasmtime-runtime = { path = "../../runtime" }
 wasmtime-wasi = { path = "../../wasi" }
 target-lexicon = { version = "0.9.0", default-features = false }

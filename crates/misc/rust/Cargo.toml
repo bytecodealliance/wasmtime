@@ -16,7 +16,6 @@ doctest = false
 
 [dependencies]
 wasmtime-interface-types = { path = "../../interface-types" }
-wasmtime-jit = { path = "../../jit" }
 wasmtime-rust-macro = { path = "./macro" }
 wasmtime-wasi = { path = "../../wasi" }
 wasmtime = { path = "../../api" }

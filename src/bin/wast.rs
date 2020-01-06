@@ -32,7 +32,6 @@ use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::settings;
 use wasmtime_environ::settings::Configurable;
 use wasmtime_environ::{cache_create_new_config, cache_init};
-use wasmtime_jit::Features;
 use wasmtime_wast::WastContext;
 
 const USAGE: &str = "
@@ -125,8 +124,8 @@ fn main() {
         process::exit(1);
     }
 
+    let mut cfg = Config::new();
     let mut flag_builder = settings::builder();
-    let mut features: Features = Default::default();
 
     // There are two possible traps for division, and this way
     // we get the proper one if code traps.
@@ -145,15 +144,13 @@ fn main() {
     // Enable SIMD if requested
     if args.flag_enable_simd {
         flag_builder.enable("enable_simd").unwrap();
-        features.simd = true;
+        cfg.wasm_simd(true);
     }
 
     // Decide how to compile.
     let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
-    let mut cfg = Config::new();
     cfg.strategy(strategy)
-        .flags(settings::Flags::new(flag_builder))
-        .features(features);
+        .flags(settings::Flags::new(flag_builder));
     let store = HostRef::new(Store::new(&Engine::new(&cfg)));
     let mut wast_context = WastContext::new(store);
 

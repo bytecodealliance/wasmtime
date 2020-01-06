@@ -45,12 +45,7 @@ const WAT: &str = r#"
 fn main() -> Result<()> {
     // Initialize.
     println!("Initializing...");
-    let mut cfg = Config::new();
-    cfg.features(wasmtime_jit::Features {
-        multi_value: true,
-        ..Default::default()
-    });
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(Config::new().wasm_multi_value(true));
     let store = HostRef::new(Store::new(&engine));
 
     // Load binary.
