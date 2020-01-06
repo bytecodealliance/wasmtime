@@ -15,7 +15,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
 
     let mut config = Config::new();
     config.flags(settings::Flags::new(flag_builder));
-    let engine = HostRef::new(Engine::new(&config));
+    let engine = Engine::new(&config);
     let store = HostRef::new(Store::new(&engine));
 
     let global_exports = store.borrow().global_exports().clone();

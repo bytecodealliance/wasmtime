@@ -92,7 +92,7 @@ pub fn instantiate(
         ..Default::default()
     });
 
-    let engine = wasmtime::HostRef::new(wasmtime::Engine::new(&config));
+    let engine = wasmtime::Engine::new(&config);
     let store = wasmtime::HostRef::new(wasmtime::Store::new(&engine));
 
     let module = wasmtime::HostRef::new(wasmtime::Module::new(&store, wasm_data).map_err(err2py)?);

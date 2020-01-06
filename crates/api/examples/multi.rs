@@ -50,7 +50,7 @@ fn main() -> Result<()> {
         multi_value: true,
         ..Default::default()
     });
-    let engine = HostRef::new(Engine::new(&cfg));
+    let engine = Engine::new(&cfg);
     let store = HostRef::new(Store::new(&engine));
 
     // Load binary.

@@ -38,7 +38,7 @@ fn main() -> Result<()> {
     let wasm = wat::parse_str(WAT)?;
 
     // Instantiate engine and store.
-    let engine = HostRef::new(Engine::default());
+    let engine = Engine::default();
     let store = HostRef::new(Store::new(&engine));
 
     // Load a module.

@@ -266,7 +266,7 @@ fn main() -> Result<()> {
         .flags(settings::Flags::new(flag_builder))
         .debug_info(debug_info)
         .strategy(strategy);
-    let engine = HostRef::new(Engine::new(&config));
+    let engine = Engine::new(&config);
     let store = HostRef::new(Store::new(&engine));
 
     let mut module_registry = HashMap::new();

@@ -56,7 +56,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
                 multi_value: true,
                 ..Default::default()
             });
-            let engine = HostRef::new(Engine::new(&config));
+            let engine = Engine::new(&config);
             let store = HostRef::new(Store::new(&engine));
             let global_exports = store.borrow().global_exports().clone();
 

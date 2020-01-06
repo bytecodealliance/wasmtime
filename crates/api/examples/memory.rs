@@ -62,7 +62,7 @@ macro_rules! call {
 fn main() -> Result<(), Error> {
     // Initialize.
     println!("Initializing...");
-    let engine = HostRef::new(Engine::default());
+    let engine = Engine::default();
     let store = HostRef::new(Store::new(&engine));
 
     // Load binary.
