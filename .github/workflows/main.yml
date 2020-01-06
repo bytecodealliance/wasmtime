@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [master]
+    branches: [master, deploy-python-wheel-to-pypi]
     tags-ignore: [dev]
   pull_request:
     branches: [master]
@@ -408,7 +408,7 @@ jobs:
   # github releases and/or tags for pushes.
   publish:
     name: Publish
-    needs: [doc_book, doc_api, wheels, build]
+    needs: [doc_book, doc_api, wheels, build, wheels]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
@@ -493,6 +493,25 @@ jobs:
         name: tarballs
         path: dist
 
+    # The action 'pypa/gh-action-pypi-publish' will try to upload all files in the
+    # dist/ folder. This folder also contains non-package files, and therefore the
+    # action fails.
+    #
+    # To prevent the action from failing all .whl files are copied into a new
+    # directory.
+    - run: |
+        mkdir -p tmp/whl
+        find dist/ -name '*.whl' -type f -exec cp '{}' tmp/whl -v \;
+
+    - name: Publish Python wheels on Pypi
+      uses: pypa/gh-action-pypi-publish@master
+      if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+      with:
+        user: __token__
+        password: ${{ secrets.pypi_password }}
+        packages_dir: tmp/whl
+        repository_url: https://test.pypi.org/legacy/
+
     # ... and if this was an actual push (tag or `master`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`
     # with this `sha`
@@ -503,3 +522,4 @@ jobs:
         files: "dist/*"
         name: ${{ steps.tagname.outputs.val }}
         token: ${{ secrets.GITHUB_TOKEN }}
+
