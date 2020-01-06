@@ -38,7 +38,7 @@ It is time to add code to the `src/main.rs`. First, the engine and storage need 
 ```rust
 use wasmtime::*;
 
-let engine = HostRef::new(Engine::default());
+let engine = Engine::default();
 let store = HostRef::new(Store::new(&engine));
 ```
 
@@ -87,7 +87,7 @@ use std::fs::read;
 use wasmtime::*;
 
 fn main() {
-    let engine = HostRef::new(Engine::default());
+    let engine = Engine::default();
     let store = HostRef::new(Store::new(&engine));
 
     let wasm = read("hello.wasm").expect("wasm file");

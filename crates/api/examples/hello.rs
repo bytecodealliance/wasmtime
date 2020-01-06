@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     // Configure the initial compilation environment, creating more global
     // structures such as an `Engine` and a `Store`.
     println!("Initializing...");
-    let engine = HostRef::new(Engine::default());
+    let engine = Engine::default();
     let store = HostRef::new(Store::new(&engine));
 
     // Next upload the `*.wasm` binary file, which in this case we're going to

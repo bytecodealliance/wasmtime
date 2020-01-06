@@ -43,7 +43,7 @@ use wasmtime_runtime::Export;
 /// "#)?;
 ///
 /// // Initialise environment and our module.
-/// let engine = HostRef::new(wasmtime::Engine::default());
+/// let engine = wasmtime::Engine::default();
 /// let store = HostRef::new(wasmtime::Store::new(&engine));
 /// let module = HostRef::new(wasmtime::Module::new(&store, &binary)?);
 ///

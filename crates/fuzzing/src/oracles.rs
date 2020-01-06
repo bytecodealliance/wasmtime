@@ -40,7 +40,7 @@ pub fn instantiate(wasm: &[u8], compilation_strategy: CompilationStrategy) {
     let mut config = Config::new();
     config.strategy(compilation_strategy);
 
-    let engine = HostRef::new(Engine::new(&config));
+    let engine = Engine::new(&config);
     let store = HostRef::new(Store::new(&engine));
 
     let module =
@@ -89,7 +89,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     use crate::generators::api::ApiCall;
 
     let mut config: Option<Config> = None;
-    let mut engine: Option<HostRef<Engine>> = None;
+    let mut engine: Option<Engine> = None;
     let mut store: Option<HostRef<Store>> = None;
     let mut modules: HashMap<usize, HostRef<Module>> = Default::default();
     let mut instances: HashMap<usize, HostRef<Instance>> = Default::default();
@@ -107,7 +107,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
             ApiCall::EngineNew => {
                 assert!(engine.is_none());
-                engine = Some(HostRef::new(Engine::new(config.as_ref().unwrap())));
+                engine = Some(Engine::new(config.as_ref().unwrap()));
             }
 
             ApiCall::StoreNew => {

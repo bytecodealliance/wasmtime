@@ -1,8 +1,8 @@
 use crate::context::Context;
-use crate::r#ref::HostRef;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 use wasmtime_environ::{ir, settings};
 use wasmtime_jit::{CompilationStrategy, Features};
 
@@ -92,15 +92,38 @@ impl Default for Config {
 
 // Engine
 
-#[derive(Default)]
+/// An `Engine` which is a global context for compilation and management of wasm
+/// modules.
+///
+/// An engine can be safely shared across threads and is a cheap cloneable
+/// handle to the actual engine. The engine itself will be deallocate once all
+/// references to it have gone away.
+///
+/// Engines store global configuration preferences such as compilation settings,
+/// enabled features, etc. You'll likely only need at most one of these for a
+/// program.
+///
+/// ## Engines and `Clone`
+///
+/// Using `clone` on an `Engine` is a cheap operation. It will not create an
+/// entirely new engine, but rather just a new reference to the existing engine.
+///
+/// ## Engines and `Default`
+///
+/// You can create an engine with default settings using `Engine::default()`.
+/// This engine will not have any unstable wasm features enabled and will use
+/// the default compilation backend configured at this crate's compile time.
+#[derive(Default, Clone)]
 pub struct Engine {
-    pub(crate) config: Config,
+    pub(crate) config: Arc<Config>,
 }
 
 impl Engine {
+    /// Creates a new [`Engine`] with the specified compilation and
+    /// configuration settings.
     pub fn new(config: &Config) -> Engine {
         Engine {
-            config: config.clone(),
+            config: Arc::new(config.clone()),
         }
     }
 }
@@ -108,23 +131,23 @@ impl Engine {
 // Store
 
 pub struct Store {
-    engine: HostRef<Engine>,
+    engine: Engine,
     context: Context,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     signature_cache: HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>,
 }
 
 impl Store {
-    pub fn new(engine: &HostRef<Engine>) -> Store {
+    pub fn new(engine: &Engine) -> Store {
         Store {
             engine: engine.clone(),
-            context: Context::new(&engine.borrow().config),
+            context: Context::new(&engine.config),
             global_exports: Rc::new(RefCell::new(HashMap::new())),
             signature_cache: HashMap::new(),
         }
     }
 
-    pub fn engine(&self) -> &HostRef<Engine> {
+    pub fn engine(&self) -> &Engine {
         &self.engine
     }
 
@@ -160,4 +183,9 @@ impl Store {
     ) -> Option<&ir::Signature> {
         self.signature_cache.get(&type_index)
     }
+}
+
+fn _assert_send_sync() {
+    fn _assert<T: Send + Sync>() {}
+    _assert::<Engine>();
 }

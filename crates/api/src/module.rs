@@ -204,7 +204,7 @@ impl Module {
         }
     }
     pub fn validate(store: &HostRef<Store>, binary: &[u8]) -> Result<()> {
-        let features = store.borrow().engine().borrow().config.features.clone();
+        let features = store.borrow().engine().config.features.clone();
         let config = ValidatingParserConfig {
             operator_config: OperatorValidatorConfig {
                 enable_threads: features.threads,

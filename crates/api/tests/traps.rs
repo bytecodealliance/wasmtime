@@ -12,7 +12,7 @@ fn test_trap_return() -> Result<(), String> {
         }
     }
 
-    let engine = HostRef::new(Engine::default());
+    let engine = Engine::default();
     let store = HostRef::new(Store::new(&engine));
     let binary = parse_str(
         r#"

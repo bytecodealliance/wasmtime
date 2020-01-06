@@ -27,7 +27,7 @@ fn run_wast(wast: &str, strategy: CompilationStrategy) -> anyhow::Result<()> {
     cfg.strategy(strategy)
         .flags(settings::Flags::new(flag_builder))
         .features(features);
-    let store = HostRef::new(Store::new(&HostRef::new(Engine::new(&cfg))));
+    let store = HostRef::new(Store::new(&Engine::new(&cfg)));
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest()?;
     wast_context.run_file(wast)?;
