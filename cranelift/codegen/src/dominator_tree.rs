@@ -448,61 +448,6 @@ impl DominatorTree {
     }
 }
 
-impl DominatorTree {
-    /// When splitting an `Ebb` using `Layout::split_ebb`, you can use this method to update
-    /// the dominator tree locally rather than recomputing it.
-    ///
-    /// `old_ebb` is the `Ebb` before splitting, and `new_ebb` is the `Ebb` which now contains
-    /// the second half of `old_ebb`. `split_jump_inst` is the terminator jump instruction of
-    /// `old_ebb` that points to `new_ebb`.
-    pub fn recompute_split_ebb(&mut self, old_ebb: Ebb, new_ebb: Ebb, split_jump_inst: Inst) {
-        if !self.is_reachable(old_ebb) {
-            // old_ebb is unreachable, it stays so and new_ebb is unreachable too
-            self.nodes[new_ebb] = Default::default();
-            return;
-        }
-        // We use the RPO comparison on the postorder list so we invert the operands of the
-        // comparison
-        let old_ebb_postorder_index = self
-            .postorder
-            .as_slice()
-            .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
-            .expect("the old ebb is not declared to the dominator tree");
-        let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index, new_ebb);
-        self.nodes[new_ebb] = DomNode {
-            rpo_number: new_ebb_rpo,
-            idom: Some(split_jump_inst).into(),
-        };
-    }
-
-    // Insert new_ebb just after ebb in the RPO. This function checks
-    // if there is a gap in rpo numbers; if yes it returns the number in the gap and if
-    // not it renumbers.
-    fn insert_after_rpo(&mut self, ebb: Ebb, ebb_postorder_index: usize, new_ebb: Ebb) -> u32 {
-        let ebb_rpo_number = self.nodes[ebb].rpo_number;
-        let inserted_rpo_number = ebb_rpo_number + 1;
-        // If there is no gaps in RPo numbers to insert this new number, we iterate
-        // forward in RPO numbers and backwards in the postorder list of EBBs, renumbering the Ebbs
-        // until we find a gap
-        for (&current_ebb, current_rpo) in self.postorder[0..ebb_postorder_index]
-            .iter()
-            .rev()
-            .zip(inserted_rpo_number + 1..)
-        {
-            if self.nodes[current_ebb].rpo_number < current_rpo {
-                // There is no gap, we renumber
-                self.nodes[current_ebb].rpo_number = current_rpo;
-            } else {
-                // There is a gap, we stop the renumbering and exit
-                break;
-            }
-        }
-        // TODO: insert in constant time?
-        self.postorder.insert(ebb_postorder_index, new_ebb);
-        inserted_rpo_number
-    }
-}
-
 /// Optional pre-order information that can be computed for a dominator tree.
 ///
 /// This data structure is computed from a `DominatorTree` and provides:
@@ -681,8 +626,6 @@ mod tests {
     use crate::flowgraph::ControlFlowGraph;
     use crate::ir::types::*;
     use crate::ir::{Function, InstBuilder, TrapCode};
-    use crate::settings;
-    use crate::verifier::{verify_context, VerifierErrors};
 
     #[test]
     fn empty() {
@@ -885,65 +828,5 @@ mod tests {
         assert!(dt.dominates(jmp21, trap, &cur.func.layout));
         assert!(!dt.dominates(jmp21, ebb2, &cur.func.layout));
         assert!(dt.dominates(jmp21, jmp21, &cur.func.layout));
-    }
-
-    #[test]
-    fn renumbering() {
-        let mut func = Function::new();
-        let entry = func.dfg.make_ebb();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb100 = func.dfg.make_ebb();
-
-        let mut cur = FuncCursor::new(&mut func);
-
-        cur.insert_ebb(entry);
-        cur.ins().jump(ebb0, &[]);
-
-        cur.insert_ebb(ebb0);
-        let cond = cur.ins().iconst(I32, 0);
-        let inst2 = cur.ins().brz(cond, ebb0, &[]);
-        let inst3 = cur.ins().brz(cond, ebb0, &[]);
-        let inst4 = cur.ins().brz(cond, ebb0, &[]);
-        let inst5 = cur.ins().brz(cond, ebb0, &[]);
-        cur.ins().jump(ebb100, &[]);
-        cur.insert_ebb(ebb100);
-        cur.ins().return_(&[]);
-
-        let mut cfg = ControlFlowGraph::with_function(cur.func);
-        let mut dt = DominatorTree::with_function(cur.func, &cfg);
-
-        let ebb1 = cur.func.dfg.make_ebb();
-        cur.func.layout.split_ebb(ebb1, inst2);
-        cur.goto_bottom(ebb0);
-        let middle_jump_inst = cur.ins().jump(ebb1, &[]);
-
-        dt.recompute_split_ebb(ebb0, ebb1, middle_jump_inst);
-
-        let ebb2 = cur.func.dfg.make_ebb();
-        cur.func.layout.split_ebb(ebb2, inst3);
-        cur.goto_bottom(ebb1);
-        let middle_jump_inst = cur.ins().jump(ebb2, &[]);
-        dt.recompute_split_ebb(ebb1, ebb2, middle_jump_inst);
-
-        let ebb3 = cur.func.dfg.make_ebb();
-        cur.func.layout.split_ebb(ebb3, inst4);
-        cur.goto_bottom(ebb2);
-        let middle_jump_inst = cur.ins().jump(ebb3, &[]);
-        dt.recompute_split_ebb(ebb2, ebb3, middle_jump_inst);
-
-        let ebb4 = cur.func.dfg.make_ebb();
-        cur.func.layout.split_ebb(ebb4, inst5);
-        cur.goto_bottom(ebb3);
-        let middle_jump_inst = cur.ins().jump(ebb4, &[]);
-        dt.recompute_split_ebb(ebb3, ebb4, middle_jump_inst);
-
-        cfg.compute(cur.func);
-
-        let flags = settings::Flags::new(settings::builder());
-        let mut errors = VerifierErrors::default();
-
-        verify_context(cur.func, &cfg, &dt, &flags, &mut errors).unwrap();
-
-        assert!(errors.0.is_empty());
     }
 }
