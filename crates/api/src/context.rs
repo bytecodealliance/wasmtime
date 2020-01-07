@@ -2,6 +2,7 @@ use crate::Config;
 use std::cell::{RefCell, RefMut};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use wasmtime_environ::settings;
 use wasmtime_jit::{native, Compiler, Features};
 
 #[derive(Clone)]
@@ -13,7 +14,7 @@ pub struct Context {
 
 impl Context {
     pub fn new(config: &Config) -> Context {
-        let isa = native::builder().finish(config.flags.clone());
+        let isa = native::builder().finish(settings::Flags::new(config.flags.clone()));
         Context::new_with_compiler(config, Compiler::new(isa, config.strategy))
     }
 

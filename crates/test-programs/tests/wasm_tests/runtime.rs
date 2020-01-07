@@ -1,21 +1,10 @@
 use anyhow::{bail, Context};
 use std::fs::File;
 use std::path::Path;
-use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
-use wasmtime_environ::settings::{self, Configurable};
+use wasmtime::{Engine, HostRef, Instance, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
-    // Prepare runtime
-    let mut flag_builder = settings::builder();
-
-    // Enable proper trap for division
-    flag_builder
-        .enable("avoid_div_traps")
-        .context("error while enabling proper division trap")?;
-
-    let mut config = Config::new();
-    config.flags(settings::Flags::new(flag_builder));
-    let engine = Engine::new(&config);
+    let engine = Engine::default();
     let store = HostRef::new(Store::new(&engine));
 
     let global_exports = store.borrow().global_exports().clone();
