@@ -155,8 +155,21 @@ impl FdEntry {
         rights_base: wasi::__wasi_rights_t,
         rights_inheriting: wasi::__wasi_rights_t,
     ) -> Result<()> {
-        if !self.rights_base & rights_base != 0 || !self.rights_inheriting & rights_inheriting != 0
-        {
+        let missing_base = !self.rights_base & rights_base;
+        let missing_inheriting = !self.rights_inheriting & rights_inheriting;
+        if missing_base != 0 || missing_inheriting != 0 {
+            log::trace!(
+                "     | validate_rights failed: required: \
+                 rights_base = {:#x}, rights_inheriting = {:#x}; \
+                 actual: rights_base = {:#x}, rights_inheriting = {:#x}; \
+                 missing_base = {:#x}, missing_inheriting = {:#x}",
+                rights_base,
+                rights_inheriting,
+                self.rights_base,
+                self.rights_inheriting,
+                missing_base,
+                missing_inheriting
+            );
             Err(Error::ENOTCAPABLE)
         } else {
             Ok(())

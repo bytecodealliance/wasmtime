@@ -1,22 +1,8 @@
 use std::{env, process};
 use wasi_tests::open_scratch_directory;
-use wasi_tests::{drop_rights, fd_get_rights};
+use wasi_tests::{drop_rights, fd_get_rights, create_file};
 
 const TEST_FILENAME: &'static str = "file";
-
-unsafe fn create_testfile(dir_fd: wasi::Fd) {
-    let fd = wasi::path_open(
-        dir_fd,
-        0,
-        TEST_FILENAME,
-        wasi::OFLAGS_CREAT | wasi::OFLAGS_EXCL,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
-        0,
-        0,
-    )
-    .expect("creating a file");
-    wasi::fd_close(fd).expect("closing a file");
-}
 
 unsafe fn try_read_file(dir_fd: wasi::Fd) {
     let fd = wasi::path_open(dir_fd, 0, TEST_FILENAME, 0, 0, 0, 0).expect("opening the file");
@@ -46,7 +32,7 @@ unsafe fn try_read_file(dir_fd: wasi::Fd) {
 }
 
 unsafe fn test_read_rights(dir_fd: wasi::Fd) {
-    create_testfile(dir_fd);
+    create_file(dir_fd, TEST_FILENAME);
     drop_rights(dir_fd, wasi::RIGHTS_FD_READ, wasi::RIGHTS_FD_READ);
 
     let (rbase, rinher) = fd_get_rights(dir_fd);

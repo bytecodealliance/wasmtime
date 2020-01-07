@@ -242,9 +242,9 @@ pub(crate) fn poll_oneoff(
             {
                 let wasi_fd = unsafe { subscription.u.fd_readwrite.file_descriptor };
                 let rights = if r#type == wasi::__WASI_EVENTTYPE_FD_READ {
-                    wasi::__WASI_RIGHTS_FD_READ
+                    wasi::__WASI_RIGHTS_FD_READ | wasi::__WASI_RIGHTS_POLL_FD_READWRITE
                 } else {
-                    wasi::__WASI_RIGHTS_FD_WRITE
+                    wasi::__WASI_RIGHTS_FD_WRITE | wasi::__WASI_RIGHTS_POLL_FD_READWRITE
                 };
 
                 match unsafe {
