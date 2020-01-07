@@ -3,7 +3,7 @@
 use crate::runtime::Store;
 use anyhow::Result;
 use std::any::Any;
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use wasmtime_environ::entity::PrimaryMap;
@@ -13,7 +13,7 @@ use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 
 pub(crate) fn create_handle(
     module: Module,
-    signature_registry: Option<RefMut<Store>>,
+    signature_registry: Option<&Store>,
     finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle> {
@@ -31,7 +31,7 @@ pub(crate) fn create_handle(
 
     // Compute indices into the shared signature table.
     let signatures = signature_registry
-        .map(|mut signature_registry| {
+        .map(|signature_registry| {
             module
                 .signatures
                 .values()

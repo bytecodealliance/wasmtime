@@ -30,7 +30,7 @@ pub struct WastContext {
     current: Option<HostRef<Instance>>,
 
     instances: HashMap<String, HostRef<Instance>>,
-    store: HostRef<Store>,
+    store: Store,
     spectest: Option<HashMap<&'static str, Extern>>,
 }
 
@@ -41,7 +41,7 @@ enum Outcome<T = Vec<Val>> {
 
 impl WastContext {
     /// Construct a new instance of `WastContext`.
-    pub fn new(store: HostRef<Store>) -> Self {
+    pub fn new(store: Store) -> Self {
         Self {
             current: None,
             store,

@@ -66,7 +66,7 @@ impl Extern {
     }
 
     pub(crate) fn from_wasmtime_export(
-        store: &HostRef<Store>,
+        store: &Store,
         instance_handle: InstanceHandle,
         export: wasmtime_runtime::Export,
     ) -> Extern {
@@ -112,19 +112,19 @@ impl From<HostRef<Table>> for Extern {
 }
 
 pub struct Func {
-    _store: HostRef<Store>,
+    _store: Store,
     callable: Rc<dyn WrappedCallable + 'static>,
     r#type: FuncType,
 }
 
 impl Func {
-    pub fn new(store: &HostRef<Store>, ty: FuncType, callable: Rc<dyn Callable + 'static>) -> Self {
+    pub fn new(store: &Store, ty: FuncType, callable: Rc<dyn Callable + 'static>) -> Self {
         let callable = Rc::new(NativeCallable::new(callable, &ty, &store));
         Func::from_wrapped(store, ty, callable)
     }
 
     fn from_wrapped(
-        store: &HostRef<Store>,
+        store: &Store,
         r#type: FuncType,
         callable: Rc<dyn WrappedCallable + 'static>,
     ) -> Func {
@@ -159,7 +159,7 @@ impl Func {
 
     pub(crate) fn from_wasmtime_function(
         export: wasmtime_runtime::Export,
-        store: &HostRef<Store>,
+        store: &Store,
         instance_handle: InstanceHandle,
     ) -> Self {
         let ty = if let wasmtime_runtime::Export::Function { signature, .. } = &export {
@@ -179,7 +179,7 @@ impl fmt::Debug for Func {
 }
 
 pub struct Global {
-    _store: HostRef<Store>,
+    _store: Store,
     r#type: GlobalType,
     wasmtime_export: wasmtime_runtime::Export,
     #[allow(dead_code)]
@@ -187,7 +187,7 @@ pub struct Global {
 }
 
 impl Global {
-    pub fn new(store: &HostRef<Store>, r#type: GlobalType, val: Val) -> Global {
+    pub fn new(store: &Store, r#type: GlobalType, val: Val) -> Global {
         let (wasmtime_export, wasmtime_state) =
             generate_global_export(&r#type, val).expect("generated global");
         Global {
@@ -246,10 +246,7 @@ impl Global {
         &self.wasmtime_export
     }
 
-    pub(crate) fn from_wasmtime_global(
-        export: wasmtime_runtime::Export,
-        store: &HostRef<Store>,
-    ) -> Global {
+    pub(crate) fn from_wasmtime_global(export: wasmtime_runtime::Export, store: &Store) -> Global {
         let global = if let wasmtime_runtime::Export::Global { ref global, .. } = export {
             global
         } else {
@@ -266,7 +263,7 @@ impl Global {
 }
 
 pub struct Table {
-    store: HostRef<Store>,
+    store: Store,
     r#type: TableType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::Export,
@@ -274,7 +271,7 @@ pub struct Table {
 
 fn get_table_item(
     handle: &InstanceHandle,
-    store: &HostRef<Store>,
+    store: &Store,
     table_index: wasm::DefinedTableIndex,
     item_index: u32,
 ) -> Val {
@@ -287,7 +284,7 @@ fn get_table_item(
 
 fn set_table_item(
     handle: &mut InstanceHandle,
-    store: &HostRef<Store>,
+    store: &Store,
     table_index: wasm::DefinedTableIndex,
     item_index: u32,
     val: Val,
@@ -302,7 +299,7 @@ fn set_table_item(
 }
 
 impl Table {
-    pub fn new(store: &HostRef<Store>, r#type: TableType, init: Val) -> Table {
+    pub fn new(store: &Store, r#type: TableType, init: Val) -> Table {
         match r#type.element() {
             ValType::FuncRef => (),
             _ => panic!("table is not for funcref"),
@@ -387,7 +384,7 @@ impl Table {
 
     pub(crate) fn from_wasmtime_table(
         export: wasmtime_runtime::Export,
-        store: &HostRef<Store>,
+        store: &Store,
         instance_handle: wasmtime_runtime::InstanceHandle,
     ) -> Table {
         let table = if let wasmtime_runtime::Export::Table { ref table, .. } = export {
@@ -406,14 +403,14 @@ impl Table {
 }
 
 pub struct Memory {
-    _store: HostRef<Store>,
+    _store: Store,
     r#type: MemoryType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::Export,
 }
 
 impl Memory {
-    pub fn new(store: &HostRef<Store>, r#type: MemoryType) -> Memory {
+    pub fn new(store: &Store, r#type: MemoryType) -> Memory {
         let (wasmtime_handle, wasmtime_export) =
             generate_memory_export(&r#type).expect("generated memory");
         Memory {
@@ -473,7 +470,7 @@ impl Memory {
 
     pub(crate) fn from_wasmtime_memory(
         export: wasmtime_runtime::Export,
-        store: &HostRef<Store>,
+        store: &Store,
         instance_handle: wasmtime_runtime::InstanceHandle,
     ) -> Memory {
         let memory = if let wasmtime_runtime::Export::Memory { ref memory, .. } = export {

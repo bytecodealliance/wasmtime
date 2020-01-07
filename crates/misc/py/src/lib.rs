@@ -44,11 +44,7 @@ impl InstantiateResultObject {
     }
 }
 
-fn find_export_in(
-    obj: &PyAny,
-    store: &wasmtime::HostRef<wasmtime::Store>,
-    name: &str,
-) -> PyResult<wasmtime::Extern> {
+fn find_export_in(obj: &PyAny, store: &wasmtime::Store, name: &str) -> PyResult<wasmtime::Extern> {
     let obj = obj.cast_as::<PyDict>()?;
 
     Ok(if let Some(item) = obj.get_item(name) {
@@ -86,7 +82,7 @@ pub fn instantiate(
     let wasm_data = buffer_source.as_bytes();
 
     let engine = wasmtime::Engine::new(&wasmtime::Config::new().wasm_multi_value(true));
-    let store = wasmtime::HostRef::new(wasmtime::Store::new(&engine));
+    let store = wasmtime::Store::new(&engine);
 
     let module = wasmtime::HostRef::new(wasmtime::Module::new(&store, wasm_data).map_err(err2py)?);
 

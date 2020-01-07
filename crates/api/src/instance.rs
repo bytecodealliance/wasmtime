@@ -30,7 +30,7 @@ impl Resolver for SimpleResolver {
 pub fn instantiate_in_context(
     data: &[u8],
     imports: Vec<(String, String, Extern)>,
-    mut context: Context,
+    context: Context,
     exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
 ) -> Result<(InstanceHandle, HashSet<Context>), Error> {
     let mut contexts = HashSet::new();
@@ -70,12 +70,12 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(
-        store: &HostRef<Store>,
+        store: &Store,
         module: &HostRef<Module>,
         externs: &[Extern],
     ) -> Result<Instance, Error> {
-        let context = store.borrow_mut().context().clone();
-        let exports = store.borrow_mut().global_exports().clone();
+        let context = store.context().clone();
+        let exports = store.global_exports().clone();
         let imports = module
             .borrow()
             .imports()
@@ -131,7 +131,7 @@ impl Instance {
         Some(&self.exports()[i])
     }
 
-    pub fn from_handle(store: &HostRef<Store>, instance_handle: InstanceHandle) -> Instance {
+    pub fn from_handle(store: &Store, instance_handle: InstanceHandle) -> Instance {
         let contexts = HashSet::new();
 
         let mut exports = Vec::new();
@@ -143,7 +143,7 @@ impl Instance {
                 // HACK ensure all handles, instantiated outside Store, present in
                 // the store's SignatureRegistry, e.g. WASI instances that are
                 // imported into this store using the from_handle() method.
-                let _ = store.borrow_mut().register_wasmtime_signature(signature);
+                let _ = store.register_wasmtime_signature(signature);
             }
             let extern_type = ExternType::from_wasmtime_export(&export);
             exports_types.push(ExportType::new(name, extern_type));

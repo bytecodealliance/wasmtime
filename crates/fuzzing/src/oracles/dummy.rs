@@ -7,10 +7,7 @@ use wasmtime::{
 };
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_imports(
-    store: &HostRef<Store>,
-    import_tys: &[ImportType],
-) -> Result<Vec<Extern>, Trap> {
+pub fn dummy_imports(store: &Store, import_tys: &[ImportType]) -> Result<Vec<Extern>, Trap> {
     let mut imports = Vec::with_capacity(import_tys.len());
     for imp in import_tys {
         imports.push(match imp.ty() {
@@ -38,7 +35,7 @@ pub struct DummyFunc(FuncType);
 
 impl DummyFunc {
     /// Construct a new dummy `Func`.
-    pub fn new(store: &HostRef<Store>, ty: FuncType) -> Func {
+    pub fn new(store: &Store, ty: FuncType) -> Func {
         let callable = DummyFunc(ty.clone());
         Func::new(store, ty, Rc::new(callable) as _)
     }
@@ -80,18 +77,18 @@ pub fn dummy_value(val_ty: &ValType) -> Result<Val, Trap> {
 }
 
 /// Construct a dummy global for the given global type.
-pub fn dummy_global(store: &HostRef<Store>, ty: GlobalType) -> Result<Global, Trap> {
+pub fn dummy_global(store: &Store, ty: GlobalType) -> Result<Global, Trap> {
     let val = dummy_value(ty.content())?;
     Ok(Global::new(store, ty, val))
 }
 
 /// Construct a dummy table for the given table type.
-pub fn dummy_table(store: &HostRef<Store>, ty: TableType) -> Result<Table, Trap> {
+pub fn dummy_table(store: &Store, ty: TableType) -> Result<Table, Trap> {
     let init_val = dummy_value(&ty.element())?;
     Ok(Table::new(store, ty, init_val))
 }
 
 /// Construct a dummy memory for the given memory type.
-pub fn dummy_memory(store: &HostRef<Store>, ty: MemoryType) -> Memory {
+pub fn dummy_memory(store: &Store, ty: MemoryType) -> Memory {
     Memory::new(store, ty)
 }

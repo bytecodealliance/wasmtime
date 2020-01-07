@@ -17,7 +17,7 @@ where
 }
 
 fn wrap(
-    store: &HostRef<Store>,
+    store: &Store,
     ty: FuncType,
     callable: impl Fn(&[Val], &mut [Val]) -> Result<(), Trap> + 'static,
 ) -> Func {
@@ -26,7 +26,7 @@ fn wrap(
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
-pub fn instantiate_spectest(store: &HostRef<Store>) -> HashMap<&'static str, Extern> {
+pub fn instantiate_spectest(store: &Store) -> HashMap<&'static str, Extern> {
     let mut ret = HashMap::new();
 
     let ty = FuncType::new(Box::new([]), Box::new([]));

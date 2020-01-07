@@ -126,7 +126,7 @@ impl wasmtime::Callable for WrappedFn {
 }
 
 pub fn wrap_into_pyfunction(
-    store: &wasmtime::HostRef<wasmtime::Store>,
+    store: &wasmtime::Store,
     callable: &PyAny,
 ) -> PyResult<wasmtime::HostRef<wasmtime::Func>> {
     if !callable.hasattr("__annotations__")? {

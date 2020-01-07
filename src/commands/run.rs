@@ -141,7 +141,7 @@ impl RunCommand {
         }
 
         let engine = Engine::new(&config);
-        let store = HostRef::new(Store::new(&engine));
+        let store = Store::new(&engine);
         let mut module_registry = HashMap::new();
 
         // Make wasi available by default.
@@ -151,7 +151,7 @@ impl RunCommand {
         let wasi_unstable = HostRef::new(if self.enable_wasi_c {
             #[cfg(feature = "wasi-c")]
             {
-                let global_exports = store.borrow().global_exports().clone();
+                let global_exports = store.global_exports().clone();
                 let handle = instantiate_wasi_c(global_exports, &preopen_dirs, &argv, &self.vars)?;
                 Instance::from_handle(&store, handle)
             }
@@ -231,12 +231,12 @@ impl RunCommand {
     }
 
     fn instantiate_module(
-        store: &HostRef<Store>,
+        store: &Store,
         module_registry: &HashMap<String, HostRef<Instance>>,
         path: &Path,
     ) -> Result<(HostRef<Instance>, HostRef<Module>, Vec<u8>)> {
         // Read the wasm module binary either as `*.wat` or a raw binary
-        let data = wat::parse_file(path.to_path_buf())?;
+        let data = wat::parse_file(path)?;
 
         let module = HostRef::new(Module::new(store, &data)?);
 
@@ -274,7 +274,7 @@ impl RunCommand {
 
     fn handle_module(
         &self,
-        store: &HostRef<Store>,
+        store: &Store,
         module_registry: &HashMap<String, HostRef<Instance>>,
     ) -> Result<()> {
         let (instance, module, data) =

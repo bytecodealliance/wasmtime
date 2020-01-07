@@ -1,13 +1,12 @@
 use anyhow::{bail, Context};
 use std::fs::File;
 use std::path::Path;
-use wasmtime::{Engine, HostRef, Instance, Module, Store};
+use wasmtime::{HostRef, Instance, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
-    let engine = Engine::default();
-    let store = HostRef::new(Store::new(&engine));
+    let store = Store::default();
 
-    let global_exports = store.borrow().global_exports().clone();
+    let global_exports = store.global_exports().clone();
     let get_preopens = |workspace: Option<&Path>| -> anyhow::Result<Vec<_>> {
         if let Some(workspace) = workspace {
             let preopen_dir = wasi_common::preopen_dir(workspace)

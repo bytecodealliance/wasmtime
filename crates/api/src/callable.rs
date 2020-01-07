@@ -43,8 +43,7 @@ use wasmtime_runtime::Export;
 /// "#)?;
 ///
 /// // Initialise environment and our module.
-/// let engine = wasmtime::Engine::default();
-/// let store = HostRef::new(wasmtime::Store::new(&engine));
+/// let store = wasmtime::Store::default();
 /// let module = HostRef::new(wasmtime::Module::new(&store, &binary)?);
 ///
 /// // Define the type of the function we're going to call.
@@ -103,13 +102,13 @@ pub(crate) trait WrappedCallable {
 }
 
 pub(crate) struct WasmtimeFn {
-    store: HostRef<Store>,
+    store: Store,
     instance: InstanceHandle,
     export: Export,
 }
 
 impl WasmtimeFn {
-    pub fn new(store: &HostRef<Store>, instance: InstanceHandle, export: Export) -> WasmtimeFn {
+    pub fn new(store: &Store, instance: InstanceHandle, export: Export) -> WasmtimeFn {
         WasmtimeFn {
             store: store.clone(),
             instance,
@@ -146,7 +145,6 @@ impl WrappedCallable for WasmtimeFn {
         // Get the trampoline to call for this function.
         let exec_code_buf = self
             .store
-            .borrow_mut()
             .context()
             .compiler()
             .get_published_trampoline(body, &signature, value_size)
@@ -191,11 +189,7 @@ pub struct NativeCallable {
 }
 
 impl NativeCallable {
-    pub(crate) fn new(
-        callable: Rc<dyn Callable + 'static>,
-        ft: &FuncType,
-        store: &HostRef<Store>,
-    ) -> Self {
+    pub(crate) fn new(callable: Rc<dyn Callable + 'static>, ft: &FuncType, store: &Store) -> Self {
         let (instance, export) =
             generate_func_export(ft, &callable, store).expect("generated func");
         NativeCallable {

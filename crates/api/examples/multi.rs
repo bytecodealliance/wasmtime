@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     // Initialize.
     println!("Initializing...");
     let engine = Engine::new(Config::new().wasm_multi_value(true));
-    let store = HostRef::new(Store::new(&engine));
+    let store = Store::new(&engine);
 
     // Load binary.
     println!("Loading binary...");

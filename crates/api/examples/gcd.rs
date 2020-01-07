@@ -1,7 +1,6 @@
 //! Example of instantiating of the WebAssembly module and
 //! invoking its exported function.
 
-use anyhow::{format_err, Result};
 use wasmtime::*;
 
 const WAT: &str = r#"
@@ -34,14 +33,11 @@ const WAT: &str = r#"
 )
 "#;
 
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
+    // Load our WebAssembly (parsed WAT in our case), and then load it into a
+    // `Module` which is attached to a `Store` cache.
     let wasm = wat::parse_str(WAT)?;
-
-    // Instantiate engine and store.
-    let engine = Engine::default();
-    let store = HostRef::new(Store::new(&engine));
-
-    // Load a module.
+    let store = Store::default();
     let module = HostRef::new(Module::new(&store, &wasm)?);
 
     // Find index of the `gcd` export.
@@ -59,10 +55,7 @@ fn main() -> Result<()> {
 
     // Invoke `gcd` export
     let gcd = instance.exports()[gcd_index].func().expect("gcd");
-    let result = gcd
-        .borrow()
-        .call(&[Val::from(6i32), Val::from(27i32)])
-        .map_err(|e| format_err!("call error: {:?}", e))?;
+    let result = gcd.borrow().call(&[Val::from(6i32), Val::from(27i32)])?;
 
     println!("{:?}", result);
     Ok(())

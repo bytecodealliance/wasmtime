@@ -288,12 +288,13 @@ pub enum OptLevel {
 ///
 /// Using `clone` on an `Engine` is a cheap operation. It will not create an
 /// entirely new engine, but rather just a new reference to the existing engine.
+/// In other words it's a shallow copy, not a deep copy.
 ///
 /// ## Engines and `Default`
 ///
-/// You can create an engine with default settings using `Engine::default()`.
-/// This engine will not have any unstable wasm features enabled and will use
-/// the default compilation backend configured at this crate's compile time.
+/// You can create an engine with default configuration settings using
+/// `Engine::default()`. Be sure to consult the documentation of [`Config`] for
+/// default settings.
 #[derive(Default, Clone)]
 pub struct Engine {
     pub(crate) config: Arc<Config>,
@@ -311,45 +312,72 @@ impl Engine {
 
 // Store
 
+/// A `Store` is a shared cache of information between WebAssembly modules.
+///
+/// Each `Module` is compiled into a `Store` and a `Store` is associated with an
+/// [`Engine`]. You'll use a `Store` to attach to a number of global items in
+/// the production of various items for wasm modules.
+///
+/// # Stores and `Clone`
+///
+/// Using `clone` on a `Store` is a cheap operation. It will not create an
+/// entirely new store, but rather just a new reference to the existing object.
+/// In other words it's a shallow copy, not a deep copy.
+///
+/// ## Stores and `Default`
+///
+/// You can create a store with default configuration settings using
+/// `Store::default()`. This will create a brand new [`Engine`] with default
+/// ocnfiguration (see [`Config`] for more information).
+#[derive(Clone)]
 pub struct Store {
+    inner: Rc<StoreInner>,
+}
+
+struct StoreInner {
     engine: Engine,
     context: Context,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
-    signature_cache: HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>,
+    signature_cache: RefCell<HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>>,
 }
 
 impl Store {
+    /// Creates a new store to be associated with the given [`Engine`].
     pub fn new(engine: &Engine) -> Store {
         Store {
-            engine: engine.clone(),
-            context: Context::new(&engine.config),
-            global_exports: Rc::new(RefCell::new(HashMap::new())),
-            signature_cache: HashMap::new(),
+            inner: Rc::new(StoreInner {
+                engine: engine.clone(),
+                context: Context::new(&engine.config),
+                global_exports: Rc::new(RefCell::new(HashMap::new())),
+                signature_cache: RefCell::new(HashMap::new()),
+            }),
         }
     }
 
+    /// Returns the [`Engine`] that this store is associated with.
     pub fn engine(&self) -> &Engine {
-        &self.engine
+        &self.inner.engine
     }
 
-    pub(crate) fn context(&mut self) -> &mut Context {
-        &mut self.context
+    pub(crate) fn context(&self) -> &Context {
+        &self.inner.context
     }
 
     // Specific to wasmtime: hack to pass memory around to wasi
+    #[doc(hidden)]
     pub fn global_exports(
         &self,
     ) -> &Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> {
-        &self.global_exports
+        &self.inner.global_exports
     }
 
     pub(crate) fn register_wasmtime_signature(
-        &mut self,
+        &self,
         signature: &ir::Signature,
     ) -> wasmtime_runtime::VMSharedSignatureIndex {
         use std::collections::hash_map::Entry;
         let index = self.context().compiler().signatures().register(signature);
-        match self.signature_cache.entry(index) {
+        match self.inner.signature_cache.borrow_mut().entry(index) {
             Entry::Vacant(v) => {
                 v.insert(signature.clone());
             }
@@ -361,8 +389,18 @@ impl Store {
     pub(crate) fn lookup_wasmtime_signature(
         &self,
         type_index: wasmtime_runtime::VMSharedSignatureIndex,
-    ) -> Option<&ir::Signature> {
-        self.signature_cache.get(&type_index)
+    ) -> Option<ir::Signature> {
+        self.inner
+            .signature_cache
+            .borrow()
+            .get(&type_index)
+            .cloned()
+    }
+}
+
+impl Default for Store {
+    fn default() -> Store {
+        Store::new(&Engine::default())
     }
 }
 

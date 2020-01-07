@@ -30,7 +30,7 @@ impl Context {
         self.debug_info
     }
 
-    pub(crate) fn compiler(&mut self) -> RefMut<Compiler> {
+    pub(crate) fn compiler(&self) -> RefMut<Compiler> {
         self.compiler.borrow_mut()
     }
 }
