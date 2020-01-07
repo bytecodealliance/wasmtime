@@ -93,15 +93,10 @@ impl WastContext {
         }
         let instance = match Instance::new(&self.store, &module, &imports) {
             Ok(i) => i,
-            // FIXME(#683) shouldn't have to reach into runtime crate
             Err(e) => {
-                use wasmtime_runtime::InstantiationError;
-                let err = e
-                    .chain()
-                    .filter_map(|e| e.downcast_ref::<InstantiationError>())
-                    .next();
-                if let Some(InstantiationError::StartTrap(msg)) = err {
-                    return Ok(Outcome::Trap(Trap::new(msg.clone())));
+                let err = e.chain().filter_map(|e| e.downcast_ref::<Trap>()).next();
+                if let Some(trap) = err {
+                    return Ok(Outcome::Trap(trap.clone()));
                 }
                 return Err(e);
             }

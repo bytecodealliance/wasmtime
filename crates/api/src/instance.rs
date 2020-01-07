@@ -10,8 +10,8 @@ use anyhow::{Error, Result};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use wasmtime_jit::{instantiate, Resolver};
-use wasmtime_runtime::{Export, InstanceHandle};
+use wasmtime_jit::{instantiate, Resolver, SetupError};
+use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
 struct SimpleResolver {
     imports: Vec<(String, String, Extern)>,
@@ -46,6 +46,8 @@ pub fn instantiate_in_context(
     .map_err(|e| -> Error {
         if let Some(trap) = take_api_trap() {
             Trap::from(trap).into()
+        } else if let SetupError::Instantiate(InstantiationError::StartTrap(msg)) = e {
+            Trap::new(msg).into()
         } else {
             e.into()
         }

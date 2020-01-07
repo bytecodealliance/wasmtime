@@ -13,7 +13,6 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.19"
 wasmtime = { path = "../api" }
-wasmtime-runtime = { path = "../runtime" }
 wast = "4.0.0"
 
 [badges]
