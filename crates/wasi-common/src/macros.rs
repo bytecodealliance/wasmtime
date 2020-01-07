@@ -6,6 +6,7 @@ macro_rules! hostcalls {
                     Ok(()) => wasi::__WASI_ERRNO_SUCCESS,
                     Err(e) => e.as_wasi_errno(),
                 };
+                log::trace!("{} -> {}", stringify!($name), ret);
 
                 ret
             }
@@ -22,6 +23,7 @@ macro_rules! hostcalls_old {
                     Ok(()) => wasi::__WASI_ERRNO_SUCCESS,
                     Err(e) => e.as_wasi_errno(),
                 };
+                log::trace!("{} -> {}", stringify!($name), ret);
 
                 ret
             }
