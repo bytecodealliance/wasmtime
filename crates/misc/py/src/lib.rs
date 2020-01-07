@@ -44,11 +44,7 @@ impl InstantiateResultObject {
     }
 }
 
-fn find_export_in(
-    obj: &PyAny,
-    store: &wasmtime::Store,
-    name: &str,
-) -> PyResult<wasmtime::Extern> {
+fn find_export_in(obj: &PyAny, store: &wasmtime::Store, name: &str) -> PyResult<wasmtime::Extern> {
     let obj = obj.cast_as::<PyDict>()?;
 
     Ok(if let Some(item) = obj.get_item(name) {

@@ -189,11 +189,7 @@ pub struct NativeCallable {
 }
 
 impl NativeCallable {
-    pub(crate) fn new(
-        callable: Rc<dyn Callable + 'static>,
-        ft: &FuncType,
-        store: &Store,
-    ) -> Self {
+    pub(crate) fn new(callable: Rc<dyn Callable + 'static>, ft: &FuncType, store: &Store) -> Self {
         let (instance, export) =
             generate_func_export(ft, &callable, store).expect("generated func");
         NativeCallable {

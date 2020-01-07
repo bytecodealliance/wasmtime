@@ -246,10 +246,7 @@ impl Global {
         &self.wasmtime_export
     }
 
-    pub(crate) fn from_wasmtime_global(
-        export: wasmtime_runtime::Export,
-        store: &Store,
-    ) -> Global {
+    pub(crate) fn from_wasmtime_global(export: wasmtime_runtime::Export, store: &Store) -> Global {
         let global = if let wasmtime_runtime::Export::Global { ref global, .. } = export {
             global
         } else {

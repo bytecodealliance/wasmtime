@@ -390,7 +390,11 @@ impl Store {
         &self,
         type_index: wasmtime_runtime::VMSharedSignatureIndex,
     ) -> Option<ir::Signature> {
-        self.inner.signature_cache.borrow().get(&type_index).cloned()
+        self.inner
+            .signature_cache
+            .borrow()
+            .get(&type_index)
+            .cloned()
     }
 }
 

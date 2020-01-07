@@ -7,10 +7,7 @@ use wasmtime::{
 };
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_imports(
-    store: &Store,
-    import_tys: &[ImportType],
-) -> Result<Vec<Extern>, Trap> {
+pub fn dummy_imports(store: &Store, import_tys: &[ImportType]) -> Result<Vec<Extern>, Trap> {
     let mut imports = Vec::with_capacity(import_tys.len());
     for imp in import_tys {
         imports.push(match imp.ty() {

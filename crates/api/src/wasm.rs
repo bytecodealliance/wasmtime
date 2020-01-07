@@ -1456,7 +1456,10 @@ pub unsafe extern "C" fn wasm_memory_new(
     store: *mut wasm_store_t,
     mt: *const wasm_memorytype_t,
 ) -> *mut wasm_memory_t {
-    let memory = HostRef::new(Memory::new(&(*store).store.borrow(), (*mt).memorytype.clone()));
+    let memory = HostRef::new(Memory::new(
+        &(*store).store.borrow(),
+        (*mt).memorytype.clone(),
+    ));
     let m = Box::new(wasm_memory_t { memory, ext: None });
     Box::into_raw(m)
 }
@@ -1549,7 +1552,11 @@ pub unsafe extern "C" fn wasm_table_new(
         Val::AnyRef(AnyRef::Null)
     };
     let t = Box::new(wasm_table_t {
-        table: HostRef::new(Table::new(&(*store).store.borrow(), (*tt).tabletype.clone(), init)),
+        table: HostRef::new(Table::new(
+            &(*store).store.borrow(),
+            (*tt).tabletype.clone(),
+            init,
+        )),
         ext: None,
     });
     Box::into_raw(t)
